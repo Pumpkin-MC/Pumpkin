@@ -91,49 +91,78 @@ impl PlacedFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let mut stream: Vec<BlockPos> = vec![pos];
-        for modifier in &self.placement {
-            let mut new_stream = Vec::with_capacity(stream.len());
+        let feature = match &self.feature {
+            Feature::Named(name) => CONFIGURED_FEATURES.get(name),
+            Feature::Inlined(feature) => Some(feature.as_ref()),
+        };
 
-            for block_pos in stream {
-                let positions = modifier.get_positions(
+        generate_with_modifiers(
+            chunk,
+            0,
+            self.placement.len(),
+            random,
+            pos,
+            &|chunk, modifier_index, random, pos| {
+                self.placement[modifier_index].get_positions(
                     chunk,
                     block_registry,
                     min_y,
                     height,
                     feature_name,
                     random,
-                    block_pos,
-                );
-                new_stream.extend(positions);
-            }
-
-            stream = new_stream;
-        }
-
-        let Some(feature) = (match &self.feature {
-            Feature::Named(name) => CONFIGURED_FEATURES.get(name),
-            Feature::Inlined(feature) => Some(feature.as_ref()),
-        }) else {
-            return false;
-        };
-
-        let mut ret = false;
-        for pos in stream {
-            if feature.generate(
-                chunk,
-                block_registry,
-                min_y,
-                height,
-                feature_name,
-                random,
-                pos,
-            ) {
-                ret = true;
-            }
-        }
-        ret
+                    pos,
+                )
+            },
+            &|chunk, random, pos| {
+                feature.is_some_and(|feature| {
+                    feature.generate(
+                        chunk,
+                        block_registry,
+                        min_y,
+                        height,
+                        feature_name,
+                        random,
+                        pos,
+                    )
+                })
+            },
+        )
     }
+}
+
+fn generate_with_modifiers<T, P, G>(
+    state: &mut T,
+    modifier_index: usize,
+    modifier_count: usize,
+    random: &mut RandomGenerator,
+    pos: BlockPos,
+    get_positions: &P,
+    generate: &G,
+) -> bool
+where
+    P: Fn(&T, usize, &mut RandomGenerator, BlockPos) -> Box<dyn Iterator<Item = BlockPos>>,
+    G: Fn(&mut T, &mut RandomGenerator, BlockPos) -> bool,
+{
+    if modifier_index == modifier_count {
+        return generate(state, random, pos);
+    }
+
+    let positions = get_positions(state, modifier_index, random, pos);
+    let mut generated = false;
+    for next_pos in positions {
+        if generate_with_modifiers(
+            state,
+            modifier_index + 1,
+            modifier_count,
+            random,
+            next_pos,
+            get_positions,
+            generate,
+        ) {
+            generated = true;
+        }
+    }
+    generated
 }
 
 pub enum PlacementModifier {
@@ -570,3 +599,44 @@ pub const fn all_placed_feature_names() -> &'static [&'static str] {
     pumpkin_data::placed_feature::PlacedFeature::all_names()
 }
 include!("../../../../pumpkin-data/src/generated/placed_features_generated.rs");
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::random::xoroshiro128::Xoroshiro;
+
+    use super::*;
+
+    #[test]
+    fn modifier_candidates_interleave_with_feature_rng() {
+        let seed = 0x5EED_CAFEu64;
+        let mut expected_random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed));
+        let expected = vec![
+            (expected_random.next_i32(), expected_random.next_i32()),
+            (expected_random.next_i32(), expected_random.next_i32()),
+        ];
+
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed));
+        let mut generated = Vec::new();
+        let result = generate_with_modifiers(
+            &mut generated,
+            0,
+            2,
+            &mut random,
+            BlockPos::new(0, 0, 0),
+            &|_, modifier_index, random, pos| -> Box<dyn Iterator<Item = BlockPos>> {
+                match modifier_index {
+                    0 => Box::new([pos, pos].into_iter()),
+                    1 => Box::new(iter::once(BlockPos::new(random.next_i32(), 0, 0))),
+                    _ => unreachable!(),
+                }
+            },
+            &|generated, random, pos| {
+                generated.push((pos.0.x, random.next_i32()));
+                true
+            },
+        );
+
+        assert!(result);
+        assert_eq!(generated, expected);
+    }
+}

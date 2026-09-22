@@ -1,11 +1,10 @@
-use std::collections::HashSet;
-
 use pumpkin_data::Block;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
+use rustc_hash::FxHashSet;
 
 use crate::entity::effect::MobEffect;
 use crate::entity::living::LivingEntity;
@@ -25,7 +24,7 @@ impl MobEffect for WeavingMobEffect {
         let center_pos = living.entity.block_pos.load();
         let cobweb_count = (rand::random::<u32>() % 2 + 2) as usize; // 2 to 3 cobwebs
 
-        let mut positions_to_transform = HashSet::new();
+        let mut positions_to_transform = FxHashSet::default();
 
         // Sample up to 15 random positions in a cube of radius 1
         for _ in 0..15 {

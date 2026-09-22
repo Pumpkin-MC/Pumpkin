@@ -8,6 +8,7 @@ use std::{
     io::{Read, SeekFrom, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::{
@@ -19,7 +20,7 @@ use tracing::{debug, trace};
 use crate::chunk::{
     ChunkParsingError, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
     CompressionError,
-    io::{ChunkSerializer, Dirtiable, LoadedData},
+    io::{ChunkSerializer, Dirtiable, LoadedData, run_blocking},
 };
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
@@ -246,8 +247,16 @@ impl AnvilChunkData {
 
     fn from_bytes(bytes: Bytes) -> Result<Self, ChunkReadingError> {
         let mut bytes = bytes;
-        // Minus one for the compression byte
-        let length = bytes.get_u32() as usize - 1;
+        // Minus one for the compression byte, which the length covers, so
+        // anything below one does not describe a chunk at all.
+        let declared_length = bytes.get_u32() as usize;
+        let Some(length) = declared_length.checked_sub(1) else {
+            return Err(ChunkReadingError::ParsingError(
+                ChunkParsingError::ErrorDeserializingChunk(
+                    "Chunk length does not cover its compression byte".to_string(),
+                ),
+            ));
+        };
 
         if length > bytes.len() {
             return Err(ChunkReadingError::ParsingError(
@@ -560,8 +569,9 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
             let sector_offset = (location >> 8) as usize;
             let end_offset = sector_offset + sector_count;
 
-            // If the sector offset or count is 0, the chunk is not present (we should not parse empty chunks)
-            if sector_offset == 0 || sector_count == 0 {
+            // If the sector offset or count is 0, the chunk is not present (we should not parse empty chunks).
+            // Sector 1 is the timestamp table, so a chunk cannot start there either.
+            if sector_offset < 2 || sector_count == 0 {
                 continue;
             }
 
@@ -603,7 +613,7 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
     #[expect(clippy::too_many_lines)]
     async fn update_chunk(
         &mut self,
-        chunk: &Self::Data,
+        chunk: Arc<Self::Data>,
         chunk_config: &Self::ChunkConfig,
     ) -> Result<(), ChunkWritingError> {
         let epoch = SystemTime::now()
@@ -616,7 +626,14 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
         let compression_type = self.chunks_data[index]
             .as_ref()
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
-        let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type, chunk_config)?;
+        let chunk_config_snapshot = chunk_config.clone();
+        let new_chunk_data = run_blocking(move || {
+            AnvilChunkData::from_chunk(&*chunk, compression_type, &chunk_config_snapshot)
+        })
+        .await
+        .map_err(|_| {
+            ChunkWritingError::IoError(std::io::Error::other("chunk serialization task failed"))
+        })??;
 
         let mut write_action = self.write_action.lock().await;
         if !chunk_config.write_in_place {
@@ -777,24 +794,37 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
         chunks: Vec<Vector2<i32>>,
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
-        // Don't par iter here so we can prevent backpressure with the await in the async
-        // runtime
-        for chunk in chunks {
-            let index = Self::get_chunk_index(chunk.x, chunk.y);
-            let is_ok = match &self.chunks_data[index] {
-                None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
-                Some(chunk_metadata) => {
-                    let result = match chunk_metadata.serialized_data.to_chunk(chunk) {
-                        Ok(chunk_res) => LoadedData::Loaded(chunk_res),
-                        Err(err) => LoadedData::Error((chunk, err)),
-                    };
+        let chunk_items: Vec<(Vector2<i32>, Option<AnvilChunkData>)> = chunks
+            .into_iter()
+            .map(|chunk| {
+                let index = Self::get_chunk_index(chunk.x, chunk.y);
+                let data = self.chunks_data[index]
+                    .as_ref()
+                    .map(|chunk_metadata| chunk_metadata.serialized_data.clone());
+                (chunk, data)
+            })
+            .collect();
 
-                    stream.send(result).await.is_ok()
-                }
-            };
+        let (tx, mut rx) = tokio::sync::mpsc::channel(chunk_items.len().max(1));
 
-            if !is_ok {
-                // Stream is closed. Stop unneeded work and IO
+        rayon::spawn(move || {
+            use rayon::prelude::*;
+            chunk_items
+                .into_par_iter()
+                .for_each(|(chunk, serialized_data)| {
+                    let result = serialized_data.map_or_else(
+                        || LoadedData::Missing(chunk),
+                        |data| match data.to_chunk(chunk) {
+                            Ok(chunk_res) => LoadedData::Loaded(chunk_res),
+                            Err(err) => LoadedData::Error((chunk, err)),
+                        },
+                    );
+                    let _ = tx.blocking_send(result);
+                });
+        });
+
+        while let Some(item) = rx.recv().await {
+            if stream.send(item).await.is_err() {
                 return;
             }
         }
@@ -1314,7 +1344,57 @@ mod tests {
  */
 #[cfg(test)]
 mod tests {
-    use super::{Compression, CompressionError};
+    use super::{AnvilChunkFile, Compression, CompressionError, SECTOR_BYTES};
+    use crate::chunk::ChunkData;
+    use crate::chunk::io::ChunkSerializer;
+    use bytes::{BufMut, Bytes, BytesMut};
+
+    /// A region file whose first location entry is `location`, whose other
+    /// 1023 entries are absent, and whose single payload sector starts with
+    /// `declared_len` followed by the "no compression" marker.
+    fn region_with_first_location(location: u32, declared_len: u32) -> Bytes {
+        let mut buf = BytesMut::with_capacity(SECTOR_BYTES * 3);
+        buf.put_u32(location);
+        buf.put_bytes(0, SECTOR_BYTES - 4);
+        buf.put_bytes(0, SECTOR_BYTES);
+
+        buf.put_u32(declared_len);
+        buf.put_u8(3);
+        buf.put_bytes(0, SECTOR_BYTES - 5);
+
+        buf.freeze()
+    }
+
+    #[test]
+    fn a_chunk_pointing_into_the_header_is_skipped() {
+        // Sectors 0 and 1 hold the location and timestamp tables, so a chunk
+        // cannot start before sector 2. Offset 0 is already skipped; offset 1
+        // is just as impossible and used to be subtracted from anyway.
+        let file = AnvilChunkFile::<ChunkData>::read(region_with_first_location((1 << 8) | 1, 1))
+            .expect("one bad location entry should not fail the whole region");
+
+        assert!(file.chunks_data[0].is_none());
+    }
+
+    #[test]
+    fn a_chunk_at_the_first_free_sector_is_read() {
+        // The control for the test above: sector 2 is the first legal one, and
+        // a chunk there must not be skipped.
+        let file = AnvilChunkFile::<ChunkData>::read(region_with_first_location((2 << 8) | 1, 1))
+            .expect("a chunk at the first free sector is well formed");
+
+        assert!(file.chunks_data[0].is_some());
+    }
+
+    #[test]
+    fn a_chunk_declaring_no_length_is_an_error_not_a_panic() {
+        // The length covers the compression byte, so the smallest legal value
+        // is 1 and the byte count is that minus one. Zero came from a file, so
+        // it has to be rejected rather than subtracted from.
+        let file = AnvilChunkFile::<ChunkData>::read(region_with_first_location((2 << 8) | 1, 0));
+
+        assert!(file.is_err());
+    }
 
     #[test]
     fn custom_compression_returns_unknown_compression_error() {

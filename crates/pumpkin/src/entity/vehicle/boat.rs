@@ -9,7 +9,6 @@ use crate::server::Server;
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item_stack::ItemStack;
-
 use pumpkin_protocol::java::client::play::Metadata;
 
 use pumpkin_util::math::vector3::Vector3;

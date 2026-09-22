@@ -2,10 +2,10 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_player_input(
+    pub fn handle_player_input(
         &self,
         player: &Arc<Player>,
-        input: SPlayerInput,
+        input: &SPlayerInput,
         server: &Arc<Server>,
     ) {
         let mut input_event =
@@ -13,7 +13,9 @@ impl JavaClient {
                 player.clone(),
                 format!("{:b}", input.input),
             );
-        server.plugin_manager.fire(server, &mut input_event).await;
+        server
+            .plugin_manager
+            .fire_blocking(server, &mut input_event);
         if input_event.cancelled {
             return;
         }
@@ -26,13 +28,11 @@ impl JavaClient {
             && player.camera_target_id.load().is_some()
         {
             player.camera_target_id.store(None);
-            player
-                .send_client_packet(&CSetCamera::new(player.entity_id().into()))
-                .await;
+            player.try_send_client_packet(&CSetCamera::new(player.entity_id().into()));
         }
 
         if player.get_entity().is_sneaking() != sneak {
-            send_cancellable! {{
+            send_cancellable_blocking! {{
                 server;
                 PlayerToggleSneakEvent::new(player.clone(), sneak);
                 'after: {
@@ -45,10 +45,7 @@ impl JavaClient {
                             .unwrap_or_else(std::sync::PoisonError::into_inner)
                             .clone();
                         if let Some(vehicle) = vehicle {
-                            vehicle
-                                .get_entity()
-                                .remove_passenger(player.entity_id())
-                                .await;
+                            vehicle.get_entity().remove_passenger(player.entity_id());
                         }
                     }
                 }
@@ -61,10 +58,7 @@ impl JavaClient {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .clone();
             if let Some(vehicle) = vehicle {
-                vehicle
-                    .get_entity()
-                    .remove_passenger(player.entity_id())
-                    .await;
+                vehicle.get_entity().remove_passenger(player.entity_id());
             }
         }
     }

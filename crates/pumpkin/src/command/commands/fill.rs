@@ -1,355 +1,339 @@
-use std::sync::Arc;
-
-use crate::command::args::block::{
-    BlockArgumentConsumer, BlockPredicate, BlockPredicateArgumentConsumer,
-};
-use crate::command::args::position_block::BlockPosArgumentConsumer;
-use crate::command::args::{ConsumedArgs, FindArg};
-use crate::command::tree::CommandTree;
-use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
-use crate::world::World;
-
 use pumpkin_data::translation;
 use pumpkin_data::{Block, BlockStateId};
+use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
 
-const NAMES: [&str; 1] = ["fill"];
+use crate::command::argument_builder::{
+    ArgumentBuilder, RequiredArgumentBuilder, argument, command, literal,
+};
+use crate::command::argument_types::block::BlockArgumentType;
+use crate::command::argument_types::block_predicate::{BlockPredicate, BlockPredicateArgumentType};
+use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::context::command_source::CommandSource;
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
 const DESCRIPTION: &str = "Fills all or parts of a region with a specific block.";
+const PERMISSION: &str = "minecraft:command.fill";
 
-const ARG_BLOCK: &str = "block";
-const ARG_FROM: &str = "from";
-const ARG_TO: &str = "to";
-const ARG_FILTER: &str = "filter";
+const ERROR_AREA_TOO_LARGE: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_FILL_TOOBIG,
+    translation::java::COMMANDS_FILL_TOOBIG,
+);
 
-#[derive(Clone, Copy, Default)]
-enum Mode {
-    /// Destroys blocks with particles and item drops
-    Destroy,
-    /// Leaves only the outer layer of blocks, removes the inner ones (creates a hollow space)
-    Hollow,
-    /// Only replaces air blocks, keeping non-air blocks unchanged
-    Keep,
-    /// Like Hollow but doesn't replace inner blocks with air, just the outline
-    Outline,
-    /// Replaces all blocks with the new block state, without particles
-    #[default]
+const ERROR_FAILED: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_FILL_FAILED,
+    translation::java::COMMANDS_FILL_FAILED,
+);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FillMode {
     Replace,
-    /// Replaces all blocks with the new block state, without particles and neighbors update
-    Strict,
+    Outline,
+    Hollow,
+    Destroy,
+    Keep,
 }
 
-struct Executor(Mode);
+#[derive(Clone, Copy)]
+enum FilterMode {
+    None,
+    WithFilter,
+    KeepAir,
+}
 
-fn not_in_filter(filter: &BlockPredicate, old_block: &Block) -> bool {
-    match filter {
-        BlockPredicate::Tag(tag) => !tag.contains(&old_block.id.as_u16()),
-        BlockPredicate::Block(block) => *block != old_block.id,
+#[expect(clippy::too_many_lines)]
+fn fill_blocks(
+    source: &CommandSource,
+    from: BlockPos,
+    to: BlockPos,
+    target_block: &'static Block,
+    mode: FillMode,
+    filter: Option<&BlockPredicate>,
+    _strict: bool,
+) -> Result<i32, CommandSyntaxError> {
+    let min_x = from.0.x.min(to.0.x);
+    let min_y = from.0.y.min(to.0.y);
+    let min_z = from.0.z.min(to.0.z);
+    let max_x = from.0.x.max(to.0.x);
+    let max_y = from.0.y.max(to.0.y);
+    let max_z = from.0.z.max(to.0.z);
+
+    let x_span = i64::from(max_x - min_x + 1);
+    let y_span = i64::from(max_y - min_y + 1);
+    let z_span = i64::from(max_z - min_z + 1);
+    let area = x_span * y_span * z_span;
+
+    let world = source.world().clone();
+    let max_block_modifications = {
+        let level_info = world.level_info.load();
+        level_info.game_rules.max_block_modifications
+    };
+
+    if area > max_block_modifications {
+        return Err(ERROR_AREA_TOO_LARGE.create_without_context(
+            TextComponent::text(max_block_modifications.to_string()),
+            TextComponent::text(area.to_string()),
+        ));
     }
-}
 
-enum FillerResult {
-    DidNotPlaceBlock = 0,
-    PlacedBlock = 1,
-    PlacedBlockWithoutUpdate = 2,
-}
+    let target_state_id = target_block.default_state.id;
+    let mut changed_positions = Vec::new();
 
-struct Context {
-    block_state_id: BlockStateId,
-    option_filter: Option<BlockPredicate>,
-    world: Arc<World>,
-    placed_blocks: i32,
-    to_update: Vec<BlockPos>,
+    let min_chunk_x = min_x >> 4;
+    let max_chunk_x = max_x >> 4;
+    let min_chunk_z = min_z >> 4;
+    let max_chunk_z = max_z >> 4;
 
-    start_x: i32,
-    start_y: i32,
-    start_z: i32,
-    end_x: i32,
-    end_y: i32,
-    end_z: i32,
-}
+    for chunk_x in min_chunk_x..=max_chunk_x {
+        for chunk_z in min_chunk_z..=max_chunk_z {
+            let chunk_pos = Vector2::new(chunk_x, chunk_z);
+            let local_start_x = (min_x - (chunk_x << 4)).clamp(0, 15) as usize;
+            let local_end_x = (max_x - (chunk_x << 4)).clamp(0, 15) as usize;
+            let local_start_z = (min_z - (chunk_z << 4)).clamp(0, 15) as usize;
+            let local_end_z = (max_z - (chunk_z << 4)).clamp(0, 15) as usize;
 
-impl Context {
-    /// Checks whether the block position is at the edge of the region stored by this context.
-    #[inline]
-    const fn is_edge(&self, block_position: BlockPos) -> bool {
-        let pos = block_position.0;
-        pos.x == self.start_x
-            || pos.x == self.end_x
-            || pos.y == self.start_y
-            || pos.y == self.end_y
-            || pos.z == self.start_z
-            || pos.z == self.end_z
-    }
-}
+            let result = world.level.read_chunk_sync(&chunk_pos, |chunk| {
+                let mut updates_for_chunk = Vec::new();
+                let mut block_entities_to_remove = Vec::new();
+                let min_y_chunk = chunk.section.min_y;
 
-trait Filler {
-    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult;
+                {
+                    let block_sections = chunk
+                        .section
+                        .block_sections
+                        .read()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    fn execute_for_region(context: &mut Context) {
-        for x in context.start_x..=context.end_x {
-            for y in context.start_y..=context.end_y {
-                for z in context.start_z..=context.end_z {
-                    let block_position = BlockPos(Vector3::new(x, y, z));
-                    let filler_result = Self::execute_for_pos(context, block_position);
-                    match filler_result {
-                        FillerResult::PlacedBlock => {
-                            context.placed_blocks += 1;
-                            context.to_update.push(block_position);
+                    for y in min_y..=max_y {
+                        let y_rel = y - min_y_chunk;
+                        if y_rel < 0 {
+                            continue;
                         }
-                        FillerResult::PlacedBlockWithoutUpdate => {
-                            context.placed_blocks += 1;
+                        let rel_y = y_rel as usize;
+                        let section_index = rel_y / pumpkin_world::chunk::CHUNK_WIDTH;
+                        let sub_y = rel_y % pumpkin_world::chunk::CHUNK_WIDTH;
+
+                        let Some(section) = block_sections.get(section_index) else {
+                            continue;
+                        };
+
+                        for rel_z in local_start_z..=local_end_z {
+                            for rel_x in local_start_x..=local_end_x {
+                                let global_x = (chunk_x << 4) + rel_x as i32;
+                                let global_z = (chunk_z << 4) + rel_z as i32;
+                                let pos = BlockPos(Vector3::new(global_x, y, global_z));
+
+                                let current_state_id = section.get(rel_x, sub_y, rel_z);
+                                let current_block = Block::from_state_id(current_state_id);
+
+                                match mode {
+                                    FillMode::Keep => {
+                                        if !current_block.is_air() {
+                                            continue;
+                                        }
+                                    }
+                                    _ => {
+                                        if let Some(f) = filter
+                                            && !f.test(current_block)
+                                        {
+                                            continue;
+                                        }
+                                    }
+                                }
+
+                                let is_edge = global_x == min_x
+                                    || global_x == max_x
+                                    || y == min_y
+                                    || y == max_y
+                                    || global_z == min_z
+                                    || global_z == max_z;
+
+                                let block_to_place = match mode {
+                                    FillMode::Outline => is_edge.then_some(target_state_id),
+                                    FillMode::Hollow => {
+                                        if is_edge {
+                                            Some(target_state_id)
+                                        } else {
+                                            Some(BlockStateId::AIR)
+                                        }
+                                    }
+                                    FillMode::Destroy => {
+                                        if current_state_id != target_state_id {
+                                            world.break_block(
+                                                &pos,
+                                                None,
+                                                BlockFlags::SKIP_DROPS
+                                                    | BlockFlags::NOTIFY_ALL
+                                                    | BlockFlags::FORCE_STATE,
+                                            );
+                                        }
+                                        Some(target_state_id)
+                                    }
+                                    FillMode::Replace | FillMode::Keep => Some(target_state_id),
+                                };
+
+                                if let Some(state_id) = block_to_place {
+                                    if current_block.default_state.block_entity_type != u16::MAX {
+                                        block_entities_to_remove.push(pos);
+                                    }
+                                    updates_for_chunk.push((rel_x, y, rel_z, state_id, pos));
+                                }
+                            }
                         }
-                        FillerResult::DidNotPlaceBlock => {}
                     }
                 }
+
+                if updates_for_chunk.is_empty() {
+                    return (Vec::new(), block_entities_to_remove);
+                }
+
+                let batch_inputs = updates_for_chunk
+                    .iter()
+                    .map(|&(rx, y, rz, sid, _)| (rx, y, rz, sid));
+                chunk.set_blocks_batch(batch_inputs);
+
+                let chunk_changed = updates_for_chunk
+                    .into_iter()
+                    .map(|(_, _, _, new_id, pos)| (pos, new_id))
+                    .collect::<Vec<_>>();
+
+                (chunk_changed, block_entities_to_remove)
+            });
+
+            if let Some((chunk_changed, be_to_remove)) = result {
+                for pos in be_to_remove {
+                    world.remove_block_entity(&pos);
+                }
+                changed_positions.extend(chunk_changed);
             }
         }
     }
-}
 
-struct DestroyFiller;
-impl Filler for DestroyFiller {
-    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
-        if let Some(filter) = &context.option_filter
-            && not_in_filter(filter, context.world.get_block(&block_position))
-        {
-            return FillerResult::DidNotPlaceBlock;
-        }
-        context.world.break_block(
-            &block_position,
-            None,
-            BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE,
-        );
-        context.world.set_block_state(
-            &block_position,
-            context.block_state_id,
-            BlockFlags::FORCE_STATE,
-        );
-        FillerResult::PlacedBlock
+    let count = changed_positions.len() as i32;
+    if count == 0 {
+        return Err(ERROR_FAILED.create_without_context());
     }
-}
 
-struct HollowFiller;
-impl Filler for HollowFiller {
-    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
-        if let Some(filter) = &context.option_filter
-            && not_in_filter(filter, context.world.get_block(&block_position))
-        {
-            return FillerResult::DidNotPlaceBlock;
-        }
-        if context.is_edge(block_position) {
-            context.world.set_block_state(
-                &block_position,
-                context.block_state_id,
-                BlockFlags::FORCE_STATE,
-            );
-        } else {
-            context.world.set_block_state(
-                &block_position,
-                BlockStateId::AIR,
-                BlockFlags::FORCE_STATE,
-            );
-        }
-        FillerResult::PlacedBlock
-    }
-}
+    world.queue_block_updates(&changed_positions);
+    world.flush_block_updates();
 
-struct KeepFiller;
-impl Filler for KeepFiller {
-    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
-        let (old_block, old_state) = context.world.get_block_and_state(&block_position);
-        if old_state.is_air() {
-            if let Some(filter) = &context.option_filter
-                && not_in_filter(filter, old_block)
-            {
-                return FillerResult::DidNotPlaceBlock;
-            }
-            context.world.set_block_state(
-                &block_position,
-                context.block_state_id,
-                BlockFlags::FORCE_STATE,
-            );
-            FillerResult::PlacedBlock
-        } else {
-            FillerResult::DidNotPlaceBlock
-        }
-    }
-}
-
-struct OutlineFiller;
-impl Filler for OutlineFiller {
-    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
-        if !context.is_edge(block_position) {
-            return FillerResult::DidNotPlaceBlock;
-        }
-        if let Some(filter) = &context.option_filter
-            && not_in_filter(filter, context.world.get_block(&block_position))
-        {
-            return FillerResult::DidNotPlaceBlock;
-        }
-        context.world.set_block_state(
-            &block_position,
-            context.block_state_id,
-            BlockFlags::FORCE_STATE,
-        );
-        FillerResult::PlacedBlock
-    }
-}
-
-struct ReplaceFiller;
-impl Filler for ReplaceFiller {
-    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
-        if let Some(filter) = &context.option_filter
-            && not_in_filter(filter, context.world.get_block(&block_position))
-        {
-            return FillerResult::DidNotPlaceBlock;
-        }
-        context.world.set_block_state(
-            &block_position,
-            context.block_state_id,
-            BlockFlags::FORCE_STATE,
-        );
-        FillerResult::PlacedBlock
-    }
-}
-
-struct StrictFiller;
-impl Filler for StrictFiller {
-    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
-        if let Some(filter) = &context.option_filter
-            && not_in_filter(filter, context.world.get_block(&block_position))
-        {
-            return FillerResult::DidNotPlaceBlock;
-        }
-        context.world.set_block_state(
-            &block_position,
-            context.block_state_id,
-            BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
-        );
-        FillerResult::PlacedBlockWithoutUpdate
-    }
-}
-
-impl CommandExecutor for Executor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
-        let block_state_id = block.default_state.id;
-        let from = BlockPosArgumentConsumer::find_arg(args, ARG_FROM)?;
-        let to = BlockPosArgumentConsumer::find_arg(args, ARG_TO)?;
-        let mode = self.0;
-
-        let mut context = Context {
-            block_state_id,
-            option_filter: BlockPredicateArgumentConsumer::find_arg(args, ARG_FILTER)?,
-            world: sender
-                .world_or_first(server)
-                .ok_or(CommandError::InvalidRequirement)?,
-            placed_blocks: 0,
-            to_update: Vec::new(),
-
-            start_x: from.0.x.min(to.0.x),
-            start_y: from.0.y.min(to.0.y),
-            start_z: from.0.z.min(to.0.z),
-
-            end_x: from.0.x.max(to.0.x),
-            end_y: from.0.y.max(to.0.y),
-            end_z: from.0.z.max(to.0.z),
-        };
-
-        if !context.world.is_in_build_limit(from) || !context.world.is_in_build_limit(to) {
-            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                translation::java::ARGUMENT_POS_OUTOFBOUNDS,
-                translation::java::ARGUMENT_POS_OUTOFBOUNDS,
-                [],
-            )));
-        }
-
-        let max_block_modifications = {
-            let level_info = server.level_info.load();
-            level_info.game_rules.max_block_modifications
-        };
-
-        let total_blocks = (context.end_x - context.start_x + 1) as i64
-            * (context.end_y - context.start_y + 1) as i64
-            * (context.end_z - context.start_z + 1) as i64;
-
-        if total_blocks > max_block_modifications {
-            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                translation::java::COMMANDS_FILL_TOOBIG,
-                translation::java::COMMANDS_FILL_TOOBIG,
-                [
-                    TextComponent::text(max_block_modifications.to_string()),
-                    TextComponent::text(total_blocks.to_string()),
-                ],
-            )));
-        }
-
-        match mode {
-            Mode::Destroy => DestroyFiller::execute_for_region(&mut context),
-            Mode::Replace => ReplaceFiller::execute_for_region(&mut context),
-            Mode::Keep => KeepFiller::execute_for_region(&mut context),
-            Mode::Hollow => HollowFiller::execute_for_region(&mut context),
-            Mode::Outline => OutlineFiller::execute_for_region(&mut context),
-            Mode::Strict => StrictFiller::execute_for_region(&mut context),
-        }
-
-        for i in context.to_update {
-            context.world.update_neighbors(&i, None);
-        }
-
-        if context.placed_blocks == 0 {
-            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                translation::java::COMMANDS_FILL_FAILED,
-                translation::bedrock::COMMANDS_FILL_FAILED,
-                [],
-            )));
-        }
-
-        sender.send_message(TextComponent::translate_cross(
+    source.send_feedback(
+        TextComponent::translate_cross(
             translation::java::COMMANDS_FILL_SUCCESS,
-            translation::bedrock::COMMANDS_FILL_SUCCESS,
-            [TextComponent::text(context.placed_blocks.to_string())],
-        ));
+            translation::java::COMMANDS_FILL_SUCCESS,
+            [TextComponent::text(count.to_string())],
+        ),
+        true,
+    );
 
-        Ok(context.placed_blocks)
+    Ok(count)
+}
+
+struct FillExecutor {
+    mode: FillMode,
+    filter_mode: FilterMode,
+    strict: bool,
+}
+
+impl CommandExecutor for FillExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let from = BlockPosArgumentType::get_loaded_block_pos(context, "from")?;
+        let to = BlockPosArgumentType::get_loaded_block_pos(context, "to")?;
+        let block = BlockArgumentType::get(context, "block")?;
+
+        let filter = if matches!(self.filter_mode, FilterMode::WithFilter) {
+            Some(BlockPredicateArgumentType::get(context, "filter")?)
+        } else {
+            None
+        };
+
+        fill_blocks(
+            &context.source,
+            from,
+            to,
+            block,
+            self.mode,
+            filter.as_ref(),
+            self.strict,
+        )
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument(ARG_FROM, BlockPosArgumentConsumer).then(
-            argument(ARG_TO, BlockPosArgumentConsumer).then(
-                argument(ARG_BLOCK, BlockArgumentConsumer)
-                    .then(literal("destroy").execute(Executor(Mode::Destroy)))
-                    .then(literal("hollow").execute(Executor(Mode::Hollow)))
-                    .then(literal("keep").execute(Executor(Mode::Keep)))
-                    .then(literal("outline").execute(Executor(Mode::Outline)))
-                    .then(
-                        literal("replace")
-                            .then(
-                                argument(ARG_FILTER, BlockPredicateArgumentConsumer)
-                                    .then(literal("destroy").execute(Executor(Mode::Destroy)))
-                                    .then(literal("hollow").execute(Executor(Mode::Hollow)))
-                                    .then(literal("keep").execute(Executor(Mode::Keep)))
-                                    .then(literal("outline").execute(Executor(Mode::Outline)))
-                                    .then(literal("strict").execute(Executor(Mode::Strict)))
-                                    .execute(Executor(Mode::Replace)),
-                            )
-                            .execute(Executor(Mode::Replace)),
-                    )
-                    .then(literal("strict").execute(Executor(Mode::Strict)))
-                    .execute(Executor(Mode::Replace)),
-            ),
+fn wrap_with_mode(builder: RequiredArgumentBuilder, has_filter: bool) -> RequiredArgumentBuilder {
+    let filter_mode = if has_filter {
+        FilterMode::WithFilter
+    } else {
+        FilterMode::None
+    };
+
+    builder
+        .executes(FillExecutor {
+            mode: FillMode::Replace,
+            filter_mode,
+            strict: false,
+        })
+        .then(literal("outline").executes(FillExecutor {
+            mode: FillMode::Outline,
+            filter_mode,
+            strict: false,
+        }))
+        .then(literal("hollow").executes(FillExecutor {
+            mode: FillMode::Hollow,
+            filter_mode,
+            strict: false,
+        }))
+        .then(literal("destroy").executes(FillExecutor {
+            mode: FillMode::Destroy,
+            filter_mode,
+            strict: false,
+        }))
+        .then(literal("strict").executes(FillExecutor {
+            mode: FillMode::Replace,
+            filter_mode,
+            strict: true,
+        }))
+}
+
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    let filter_arg = wrap_with_mode(argument("filter", BlockPredicateArgumentType), true);
+
+    let replace_literal = literal("replace")
+        .executes(FillExecutor {
+            mode: FillMode::Replace,
+            filter_mode: FilterMode::None,
+            strict: false,
+        })
+        .then(filter_arg);
+
+    let keep_literal = literal("keep").executes(FillExecutor {
+        mode: FillMode::Keep,
+        filter_mode: FilterMode::KeepAir,
+        strict: false,
+    });
+
+    let block_arg = wrap_with_mode(argument("block", BlockArgumentType), false)
+        .then(replace_literal)
+        .then(keep_literal);
+
+    dispatcher.register(
+        command("fill", DESCRIPTION).requires(PERMISSION).then(
+            argument("from", BlockPosArgumentType)
+                .then(argument("to", BlockPosArgumentType).then(block_arg)),
         ),
-    )
+    );
 }

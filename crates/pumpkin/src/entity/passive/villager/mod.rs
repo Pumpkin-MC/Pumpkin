@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering};
 use std::sync::{Arc, Weak};
 use uuid::Uuid;
@@ -6,9 +6,7 @@ use uuid::Uuid;
 use crate::block::blocks::bed::BedBlock;
 use pumpkin_data::Enchantment;
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::block_properties::{
-    BedPart, BlockProperties, WhiteBedLikeProperties as BedProperties,
-};
+use pumpkin_data::block_properties::{BedPart, WhiteBedLikeProperties as BedProperties};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::item::{Item, JavaToBedrockItemMapping};
@@ -16,6 +14,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{Enchantment as EnchantmentTag, Taggable};
 use pumpkin_data::tracked_data;
+use pumpkin_inventory::SimpleInventory;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
@@ -31,7 +30,6 @@ use pumpkin_protocol::java::client::play::{CMerchantOffers, Metadata};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
-use pumpkin_world::inventory::SimpleInventory;
 
 use crate::entity::player::Player;
 use crate::entity::{
@@ -253,6 +251,85 @@ pub(crate) fn apply_potion(stack: &mut ItemStack, potion_name: &str) {
     ));
 }
 
+/// Resolves a trade destination to its structure set, structure, fallback map
+/// name and decoration. 26.3 prefixes these with `#` and renamed several, so
+/// both spellings are accepted.
+fn explorer_map_target(
+    destination: &str,
+) -> Option<(
+    &'static str,
+    pumpkin_data::structures::StructureKeys,
+    &'static str,
+    i32,
+)> {
+    use pumpkin_data::structures::StructureKeys;
+
+    let destination = destination.strip_prefix('#').unwrap_or(destination);
+    Some(match destination {
+        "minecraft:on_jungle_pyramid_maps" | "minecraft:on_jungle_explorer_maps" => (
+            "jungle_temples",
+            StructureKeys::JunglePyramid,
+            "filled_map.explorer_jungle",
+            32,
+        ),
+        "minecraft:on_swamp_hut_maps" | "minecraft:on_swamp_explorer_maps" => (
+            "swamp_huts",
+            StructureKeys::SwampHut,
+            "filled_map.explorer_swamp",
+            33,
+        ),
+        "minecraft:on_desert_village_maps" => (
+            "villages",
+            StructureKeys::VillageDesert,
+            "filled_map.village_desert",
+            27,
+        ),
+        "minecraft:on_plains_village_maps" => (
+            "villages",
+            StructureKeys::VillagePlains,
+            "filled_map.village_plains",
+            28,
+        ),
+        "minecraft:on_savanna_village_maps" => (
+            "villages",
+            StructureKeys::VillageSavanna,
+            "filled_map.village_savanna",
+            29,
+        ),
+        "minecraft:on_snowy_village_maps" => (
+            "villages",
+            StructureKeys::VillageSnowy,
+            "filled_map.village_snowy",
+            30,
+        ),
+        "minecraft:on_taiga_village_maps" => (
+            "villages",
+            StructureKeys::VillageTaiga,
+            "filled_map.village_taiga",
+            31,
+        ),
+        "minecraft:on_ocean_monument_maps" | "minecraft:on_ocean_explorer_maps" => (
+            "ocean_monuments",
+            StructureKeys::Monument,
+            "filled_map.monument",
+            9,
+        ),
+        "minecraft:on_buried_trial_chambers_maps" | "minecraft:on_trial_chambers_maps" => (
+            "trial_chambers",
+            StructureKeys::TrialChambers,
+            "filled_map.trial_chambers",
+            34,
+        ),
+        "minecraft:on_woodland_mansion_maps" | "minecraft:on_woodland_explorer_maps" => (
+            "woodland_mansions",
+            StructureKeys::Mansion,
+            "filled_map.mansion",
+            8,
+        ),
+        _ => return None,
+    })
+}
+
 pub struct VillagerEntity {
     pub mob_entity: MobEntity,
     pub villager_data: std::sync::Mutex<VillagerData>,
@@ -264,7 +341,7 @@ pub struct VillagerEntity {
     pub restocks_today: AtomicI32,
     pub last_gossip_decay_time: AtomicI64,
     pub last_gossip_share_time: AtomicI64,
-    pub gossips: std::sync::Mutex<HashMap<Uuid, HashMap<GossipType, i32>>>,
+    pub gossips: std::sync::Mutex<FxHashMap<Uuid, FxHashMap<GossipType, i32>>>,
     pub inventory: std::sync::Mutex<Vec<ItemStack>>,
     pub merchant_inventory: Arc<SimpleInventory>,
     pub offers: std::sync::Mutex<Vec<pumpkin_protocol::java::client::play::MerchantOffer>>,
@@ -333,7 +410,7 @@ impl VillagerEntity {
             restocks_today: AtomicI32::new(0),
             last_gossip_decay_time: AtomicI64::new(0),
             last_gossip_share_time: AtomicI64::new(0),
-            gossips: std::sync::Mutex::new(HashMap::new()),
+            gossips: std::sync::Mutex::new(FxHashMap::default()),
             inventory,
             merchant_inventory: Arc::new(SimpleInventory::new(3)),
             offers: std::sync::Mutex::new(Vec::new()),
@@ -416,7 +493,7 @@ impl VillagerEntity {
                 Box::new(AvoidEntityGoal::new(&EntityType::VEX, 12.0, 0.5, 0.5)),
             );
 
-            goal_selector.add_goal(2, Box::new(TradeWithPlayerGoal::new(0.5)));
+            goal_selector.add_goal(2, Box::new(TradeWithPlayerGoal::new()));
             // Basic movement and looking (Vanilla uses 0.5 speed)
             goal_selector.add_goal(3, Box::new(WorkAtJobSiteGoal::new(0.5)));
             goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(0.5)));
@@ -433,13 +510,12 @@ impl VillagerEntity {
 
         // Send initial metadata
         let bedrock_metadata = Self::bedrock_metadata(villager_data, 0);
-        mob_arc.get_entity().send_meta_data(
-            &[Metadata::new(
-                tracked_data::villager::VILLAGER_DATA,
-                villager_data,
-            )],
-            Some(&bedrock_metadata),
-        );
+        mob_arc
+            .get_entity()
+            .set_synced_data(tracked_data::villager::VILLAGER_DATA, villager_data);
+        mob_arc
+            .get_entity()
+            .send_bedrock_actor_data(&bedrock_metadata);
 
         mob_arc
     }
@@ -508,10 +584,9 @@ impl VillagerEntity {
             old_profession
         };
         let bedrock_metadata = Self::bedrock_metadata(data, self.xp.load(Ordering::Relaxed));
-        self.get_entity().send_meta_data(
-            &[Metadata::new(tracked_data::villager::VILLAGER_DATA, data)],
-            Some(&bedrock_metadata),
-        );
+        self.get_entity()
+            .set_synced_data(tracked_data::villager::VILLAGER_DATA, data);
+        self.get_entity().send_bedrock_actor_data(&bedrock_metadata);
 
         if old_profession != data.profession {
             self.offers
@@ -521,76 +596,13 @@ impl VillagerEntity {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
-    fn create_explorer_map(&self, destination: &str) -> Option<ItemStack> {
+    fn create_explorer_map(&self, destination: &str, given: &ItemStack) -> Option<ItemStack> {
         use pumpkin_data::data_component::DataComponent;
         use pumpkin_data::data_component_impl::{DataComponentImpl, ItemNameImpl, MapIdImpl};
-        use pumpkin_data::structures::{StructureKeys, StructureSet};
+        use pumpkin_data::structures::StructureSet;
         use pumpkin_world::generation::generator::structure_finder::find_nearest_structure_start;
 
-        let (structure_set, structure, name, icon_type) = match destination {
-            "minecraft:on_jungle_explorer_maps" => (
-                "jungle_temples",
-                StructureKeys::JunglePyramid,
-                "filled_map.explorer_jungle",
-                32,
-            ),
-            "minecraft:on_swamp_explorer_maps" => (
-                "swamp_huts",
-                StructureKeys::SwampHut,
-                "filled_map.explorer_swamp",
-                33,
-            ),
-            "minecraft:on_desert_village_maps" => (
-                "villages",
-                StructureKeys::VillageDesert,
-                "filled_map.village_desert",
-                27,
-            ),
-            "minecraft:on_plains_village_maps" => (
-                "villages",
-                StructureKeys::VillagePlains,
-                "filled_map.village_plains",
-                28,
-            ),
-            "minecraft:on_savanna_village_maps" => (
-                "villages",
-                StructureKeys::VillageSavanna,
-                "filled_map.village_savanna",
-                29,
-            ),
-            "minecraft:on_snowy_village_maps" => (
-                "villages",
-                StructureKeys::VillageSnowy,
-                "filled_map.village_snowy",
-                30,
-            ),
-            "minecraft:on_taiga_village_maps" => (
-                "villages",
-                StructureKeys::VillageTaiga,
-                "filled_map.village_taiga",
-                31,
-            ),
-            "minecraft:on_ocean_explorer_maps" => (
-                "ocean_monuments",
-                StructureKeys::Monument,
-                "filled_map.monument",
-                9,
-            ),
-            "minecraft:on_trial_chambers_maps" => (
-                "trial_chambers",
-                StructureKeys::TrialChambers,
-                "filled_map.trial_chambers",
-                34,
-            ),
-            "minecraft:on_woodland_explorer_maps" => (
-                "woodland_mansions",
-                StructureKeys::Mansion,
-                "filled_map.mansion",
-                8,
-            ),
-            _ => return None,
-        };
+        let (structure_set, structure, name, icon_type) = explorer_map_target(destination)?;
 
         let world = self.get_entity().world.load().clone();
         let generator = world.level.world_gen();
@@ -621,14 +633,21 @@ impl VillagerEntity {
                 display_name: None,
             });
 
-        let mut stack = ItemStack::new(1, &Item::FILLED_MAP);
+        // 26.3 trades hand out a dedicated map item that already carries its own
+        // name; older data trades a plain filled map that has to be named here.
+        let mut stack = if given.is_empty() || given.item.id == Item::FILLED_MAP.id {
+            let mut stack = ItemStack::new(1, &Item::FILLED_MAP);
+            stack.patch.push((
+                DataComponent::ItemName,
+                Some(ItemNameImpl { name: name.into() }.to_dyn()),
+            ));
+            stack
+        } else {
+            given.clone()
+        };
         stack.patch.push((
             DataComponent::MapId,
             Some(MapIdImpl { id: map_id }.to_dyn()),
-        ));
-        stack.patch.push((
-            DataComponent::ItemName,
-            Some(ItemNameImpl { name: name.into() }.to_dyn()),
         ));
         Some(stack)
     }
@@ -689,7 +708,7 @@ impl VillagerEntity {
                         base_cost_a.set_count(count as u8);
                     }
                     VillagerTradeModifier::ExplorationMap { destination } => {
-                        let Some(map) = self.create_explorer_map(destination) else {
+                        let Some(map) = self.create_explorer_map(destination, &output) else {
                             continue;
                         };
                         output = map;
@@ -831,13 +850,9 @@ impl VillagerEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let bedrock_metadata = Self::bedrock_metadata(villager_data, current_xp);
-        self.get_entity().send_meta_data(
-            &[Metadata::new(
-                tracked_data::villager::VILLAGER_DATA,
-                villager_data,
-            )],
-            Some(&bedrock_metadata),
-        );
+        self.get_entity()
+            .set_synced_data(tracked_data::villager::VILLAGER_DATA, villager_data);
+        self.get_entity().send_bedrock_actor_data(&bedrock_metadata);
 
         if reward_exp {
             ExperienceOrbEntity::spawn(world, self.get_entity().pos.load(), xp_gain as u32);
@@ -1280,13 +1295,7 @@ impl VillagerEntity {
     pub fn set_unhappy(&self) {
         let entity = self.get_entity();
         self.unhappy_counter.store(40, Ordering::Relaxed);
-        entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::villager::UNHAPPY_COUNTER,
-                VarInt(40),
-            )],
-            None,
-        );
+        entity.set_synced_data(tracked_data::villager::UNHAPPY_COUNTER, VarInt(40));
         entity.world.load().send_entity_status(
             entity,
             pumpkin_data::entity::EntityStatus::VillagerAngry,
@@ -1550,12 +1559,9 @@ impl VillagerEntity {
             let unhappy_counter = unhappy_counter - 1;
             self.unhappy_counter
                 .store(unhappy_counter, Ordering::Relaxed);
-            self.get_entity().send_meta_data(
-                &[Metadata::new(
-                    tracked_data::villager::UNHAPPY_COUNTER,
-                    VarInt(unhappy_counter),
-                )],
-                None,
+            self.get_entity().set_synced_data(
+                tracked_data::villager::UNHAPPY_COUNTER,
+                VarInt(unhappy_counter),
             );
         }
         self.trade_sound_cooldown
@@ -1638,7 +1644,7 @@ impl VillagerEntity {
         if let Some(current_home) = self.get_home_pos() {
             let (block, state) = world.get_block_and_state(&current_home);
             let valid = if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-                let bed_props = BedProperties::from_state_id(state.id, block);
+                let bed_props = BedProperties::from_state_id(state.id);
                 bed_props.part == BedPart::Head
             } else {
                 false
@@ -1652,12 +1658,9 @@ impl VillagerEntity {
                 if is_sleeping {
                     // Wake up if bed was broken
                     self.get_entity().set_pose(EntityPose::Standing);
-                    self.get_entity().send_meta_data(
-                        &[Metadata::new(
-                            pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
-                            None::<BlockPos>,
-                        )],
-                        None,
+                    self.get_entity().set_synced_data(
+                        pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
+                        None::<BlockPos>,
                     );
                 }
             }
@@ -1700,7 +1703,7 @@ impl VillagerEntity {
             for p in BlockPos::iterate(start, end) {
                 let (block, state) = world.get_block_and_state(&p);
                 if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-                    let bed_props = BedProperties::from_state_id(state.id, block);
+                    let bed_props = BedProperties::from_state_id(state.id);
                     let bed_head_pos = if bed_props.part == BedPart::Head {
                         p
                     } else {
@@ -1745,18 +1748,15 @@ impl VillagerEntity {
                         // Within 2 blocks (squared distance 4.0)
                         let (block, state) = world.get_block_and_state(&home_pos);
                         if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-                            let bed_props = BedProperties::from_state_id(state.id, block);
+                            let bed_props = BedProperties::from_state_id(state.id);
                             if !bed_props.occupied {
                                 // Make bed occupied
                                 BedBlock::set_occupied(true, &world, block, &home_pos, state.id);
 
                                 self.get_entity().set_pose(EntityPose::Sleeping);
-                                self.get_entity().send_meta_data(
-                                    &[Metadata::new(
-                                        pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
-                                        Some(home_pos),
-                                    )],
-                                    None,
+                                self.get_entity().set_synced_data(
+                                    pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
+                                    Some(home_pos),
                                 );
                             }
                         }
@@ -1766,30 +1766,24 @@ impl VillagerEntity {
                 // It is day, wake up!
                 let (block, state) = world.get_block_and_state(&home_pos);
                 if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-                    let bed_props = BedProperties::from_state_id(state.id, block);
+                    let bed_props = BedProperties::from_state_id(state.id);
                     if bed_props.occupied {
                         BedBlock::set_occupied(false, &world, block, &home_pos, state.id);
                     }
                 }
 
                 self.get_entity().set_pose(EntityPose::Standing);
-                self.get_entity().send_meta_data(
-                    &[Metadata::new(
-                        pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
-                        None::<BlockPos>,
-                    )],
-                    None,
+                self.get_entity().set_synced_data(
+                    pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
+                    None::<BlockPos>,
                 );
             }
         } else if is_sleeping {
             // Wake up during the day
             self.get_entity().set_pose(EntityPose::Standing);
-            self.get_entity().send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
-                    None::<BlockPos>,
-                )],
-                None,
+            self.get_entity().set_synced_data(
+                pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
+                None::<BlockPos>,
             );
         }
 
@@ -2170,6 +2164,9 @@ impl Mob for VillagerEntity {
     }
 
     fn mob_java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+        if version < JavaMinecraftVersion::V_1_9 {
+            return None;
+        }
         let mut metadata = Vec::new();
         Metadata::new(
             tracked_data::villager::VILLAGER_DATA,
@@ -2225,6 +2222,13 @@ impl Mob for VillagerEntity {
         }
     }
 
+    fn clear_trading_player(&self) {
+        *self
+            .trading_player
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
+
     fn get_trading_player(&self) -> Option<Arc<Player>> {
         let trading_player = *self
             .trading_player
@@ -2251,15 +2255,10 @@ impl Mob for VillagerEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let bedrock_metadata = Self::bedrock_metadata(data, self.xp.load(Ordering::Relaxed));
-        entity.send_meta_data(
-            &[Metadata::new(tracked_data::villager::VILLAGER_DATA, data)],
-            Some(&bedrock_metadata),
-        );
+        entity.set_synced_data(tracked_data::villager::VILLAGER_DATA, data);
+        entity.send_bedrock_actor_data(&bedrock_metadata);
         if entity.age.load(Ordering::Relaxed) < 0 {
-            entity.send_meta_data(
-                &[Metadata::new(tracked_data::villager::BABY_ID, true)],
-                None,
-            );
+            entity.set_synced_data(tracked_data::villager::BABY_ID, true);
         }
     }
 
@@ -2368,7 +2367,7 @@ mod tests {
         let mut bytes = Vec::new();
 
         metadata
-            .write(&mut bytes, &JavaMinecraftVersion::V_26_2)
+            .write(&mut bytes, &JavaMinecraftVersion::V_26_3)
             .unwrap();
 
         assert_eq!(bytes, [19, 18, 2, 9, 1]);
@@ -2409,7 +2408,7 @@ mod tests {
         let mut bytes = Vec::new();
 
         metadata
-            .write(&mut bytes, &JavaMinecraftVersion::V_26_2)
+            .write(&mut bytes, &JavaMinecraftVersion::V_26_3)
             .unwrap();
 
         assert_eq!(bytes, [18, 1, 40]);
@@ -2437,6 +2436,33 @@ mod tests {
     }
 
     #[test]
+    fn every_exploration_map_destination_resolves() {
+        // An unresolved destination makes the trade get skipped silently, so the
+        // generated data and the lookup have to stay in step.
+        let mut checked = 0;
+        for id in 0..=14 {
+            let Some(profession) = VillagerProfession::from_i32(id) else {
+                continue;
+            };
+            for level in 1..=5 {
+                let Some(trade_set) = profession.trade_set(level) else {
+                    continue;
+                };
+                for trade in trade_set.trades {
+                    if let VillagerTradeModifier::ExplorationMap { destination } = trade.modifier {
+                        assert!(
+                            explorer_map_target(destination).is_some(),
+                            "unresolved exploration map destination: {destination}"
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert!(checked > 0, "no exploration map trades found");
+    }
+
+    #[test]
     fn generated_trades_keep_dynamic_modifiers_and_secondary_costs() {
         let librarian = VillagerProfession::Librarian.trade_set(1).unwrap();
         let enchanted_book = librarian
@@ -2444,8 +2470,8 @@ mod tests {
             .iter()
             .find(|trade| trade.modifier == VillagerTradeModifier::EnchantRandomly)
             .unwrap();
-        assert!(enchanted_book.wants.item == &Item::EMERALD);
-        assert!(enchanted_book.wants_b.unwrap().item == &Item::BOOK);
+        assert_eq!(enchanted_book.wants.item, &Item::EMERALD);
+        assert_eq!(enchanted_book.wants_b.unwrap().item, &Item::BOOK);
         assert_eq!(enchanted_book.price_multiplier, 0.2);
 
         let cartographer = VillagerProfession::Cartographer.trade_set(2).unwrap();

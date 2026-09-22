@@ -54,22 +54,8 @@ impl WorldPortalExt for BlockRegistry {
 
 fn bench_chunk_deserialization(c: &mut Criterion) {
     let dimension = Dimension::OVERWORLD;
-    let world_gen = get_world_gen(
-        Seed(42),
-        dimension.clone(),
-        false,
-        Vec::new(),
-        String::new(),
-    );
-    let chunk = generate_single_chunk(
-        &dimension,
-        0,
-        &world_gen,
-        &BlockRegistry,
-        0,
-        0,
-        StagedChunkEnum::Full,
-    );
+    let world_gen = get_world_gen(Seed(42), dimension, false, Vec::new(), String::new());
+    let chunk = generate_single_chunk(&world_gen, &BlockRegistry, 0, 0, StagedChunkEnum::Full);
     let Chunk::Level(chunk) = chunk else {
         panic!("full generation must return a level chunk");
     };

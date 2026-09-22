@@ -37,26 +37,15 @@ pub struct TreeNode {
 }
 
 impl TreeFeature {
-    #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
         block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
-        min_y: i8,
-        height: u16,
-        feature_name: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let (log_positions, root_positions, foliage_positions) = self.generate_main(
-            block_registry,
-            chunk,
-            min_y,
-            height,
-            feature_name,
-            random,
-            pos,
-        );
+        let (log_positions, root_positions, foliage_positions) =
+            self.generate_main(block_registry, chunk, random, pos);
 
         if log_positions.is_empty() && foliage_positions.is_empty() {
             return false;
@@ -149,7 +138,7 @@ impl TreeFeature {
                 if smallest_distance != 0 {
                     let (block, state) = chunk.get_block_and_state(&pos);
                     if OakLeavesLikeProperties::handles_block_id(block.id) {
-                        let mut props = OakLeavesLikeProperties::from_state_id(state.id, block);
+                        let mut props = OakLeavesLikeProperties::from_state_id(state.id);
                         props.distance = smallest_distance as u8;
                         let new_state = &block.states[props.to_index() as usize];
                         chunk.set_block_state(&pos.0, new_state);
@@ -171,8 +160,8 @@ impl TreeFeature {
                                 Some(0)
                             } else if OakLeavesLikeProperties::handles_block_id(n_block.id) {
                                 Some(
-                                    OakLeavesLikeProperties::from_state_id(n_state.id, n_block)
-                                        .distance as usize,
+                                    OakLeavesLikeProperties::from_state_id(n_state.id).distance
+                                        as usize,
                                 )
                             } else {
                                 None
@@ -193,26 +182,25 @@ impl TreeFeature {
         }
     }
 
+    #[must_use]
     pub fn can_replace_or_log(state: &BlockState, id: BlockId) -> bool {
         Self::can_replace(state, id) || id.has_tag(tag::Block::MINECRAFT_LOGS)
     }
 
+    #[must_use]
     pub fn is_air_or_leaves(state: &BlockState, id: BlockId) -> bool {
         state.is_air() || id.has_tag(tag::Block::MINECRAFT_LEAVES)
     }
 
+    #[must_use]
     pub fn can_replace(state: &BlockState, id: BlockId) -> bool {
         state.is_air() || id.has_tag(tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
     }
 
-    #[expect(clippy::too_many_arguments)]
     fn generate_main<T: GenerationCache>(
         &self,
         block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
-        _min_y: i8,
-        _height: u16,
-        _feature_name: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> (Vec<BlockPos>, Vec<BlockPos>, Vec<BlockPos>) {

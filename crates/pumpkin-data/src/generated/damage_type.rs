@@ -1,6 +1,6 @@
 /* This file is generated. Do not edit manually. */
 use crate::tag::{RegistryKey, Tag, Taggable};
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct DamageType {
     pub death_message_type: DeathMessageType,
     pub exhaustion: f32,
@@ -9,13 +9,13 @@ pub struct DamageType {
     pub scaling: DamageScaling,
     pub id: u8,
 }
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum DeathMessageType {
     Default,
     FallVariants,
     IntentionalGameDesign,
 }
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum DamageEffects {
     Hurt,
     Thorns,
@@ -24,7 +24,7 @@ pub enum DamageEffects {
     Poking,
     Freezing,
 }
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum DamageScaling {
     Never,
     WhenCausedByLivingNonPlayer,

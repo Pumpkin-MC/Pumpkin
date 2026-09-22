@@ -1,5 +1,4 @@
 use super::{Entity, EntityBase, living::LivingEntity};
-use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
 use pumpkin_protocol::java::client::play::CEntityVelocity;
@@ -27,6 +26,8 @@ pub mod trident;
 pub mod wind_charge;
 pub mod wither_skull;
 
+use pumpkin_data::item_stack::ItemStack;
+
 #[must_use]
 pub fn is_projectile(entity_type: &EntityType) -> bool {
     *entity_type == EntityType::ARROW
@@ -44,6 +45,30 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::FISHING_BOBBER
         || *entity_type == EntityType::WITHER_SKULL
         || *entity_type == EntityType::LLAMA_SPIT
+}
+
+/// Helper to apply projectile spawned enchantment effects matching vanilla `Projectile::applyOnProjectileSpawned`.
+pub fn apply_on_projectile_spawned(
+    projectile_entity: &Entity,
+    pickup_item_stack: &ItemStack,
+    weapon: Option<&ItemStack>,
+    arrow: Option<&arrow::ArrowEntity>,
+) {
+    crate::enchantment::EnchantmentHelper::on_projectile_spawned(
+        pickup_item_stack,
+        projectile_entity,
+        arrow,
+    );
+    if let Some(weapon) = weapon
+        && weapon.item_count > 0
+        && weapon.item.id != pickup_item_stack.item.id
+    {
+        crate::enchantment::EnchantmentHelper::on_projectile_spawned(
+            weapon,
+            projectile_entity,
+            arrow,
+        );
+    }
 }
 
 pub struct ThrownItemEntity {
@@ -68,15 +93,7 @@ impl ThrownItemEntity {
         }
     }
 
-    pub fn set_velocity_from(
-        &self,
-        _shooter: &Entity,
-        pitch: f32,
-        yaw: f32,
-        roll: f32,
-        speed: f32,
-        divergence: f32,
-    ) {
+    pub fn set_velocity_from(&self, pitch: f32, yaw: f32, roll: f32, speed: f32, divergence: f32) {
         let yaw_rad = yaw.to_radians();
         let pitch_rad = pitch.to_radians();
         let roll_rad = (pitch + roll).to_radians();
@@ -118,7 +135,7 @@ impl ThrownItemEntity {
 
 impl ThrownItemEntity {
     /// Process a tick for projectile movement and collisions
-    pub fn process_tick(&self, caller: &dyn EntityBase, _server: &Server) {
+    pub fn process_tick(&self, caller: &dyn EntityBase) {
         let entity = self.get_entity();
         let world = entity.world.load();
 
@@ -221,6 +238,16 @@ impl ThrownItemEntity {
                 return;
             }
 
+            if let ProjectileHit::Block { pos, hit_pos, .. } = &h {
+                let block = world.get_block(pos);
+                let state = world.get_block_state(pos);
+                if let Some(server) = world.server.upgrade() {
+                    world
+                        .block_registry
+                        .on_projectile_hit(block, &world, caller, pos, state, hit_pos, &server);
+                }
+            }
+
             // Just trigger hit effects and remove
             caller.on_hit(h);
             entity.remove();
@@ -292,7 +319,7 @@ fn calculate_ray_intersection(
         }
     }
 
-    (0.0..=1.0).contains(&t_min).then_some(t_min)
+    (t_min <= t_max && (0.0..=1.0).contains(&t_min)).then_some(t_min)
 }
 
 /// Get the face of the block that was hit

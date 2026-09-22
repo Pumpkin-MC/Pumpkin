@@ -2,11 +2,7 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_set_command_block(
-        &self,
-        player: &Arc<Player>,
-        command: SSetCommandBlock<'_>,
-    ) {
+    pub fn handle_set_command_block(&self, player: &Arc<Player>, command: &SSetCommandBlock<'_>) {
         if !player.is_creative() {
             return;
         }
@@ -22,14 +18,13 @@ impl JavaClient {
             }
 
             let Ok(command_block_mode) = CommandBlockMode::try_from(command.mode) else {
-                self.kick(TextComponent::text("Invalid Command block mode"))
-                    .await;
+                self.try_kick(&TextComponent::text("Invalid Command block mode"));
                 return;
             };
 
-            let block = player.world().get_block(&pos);
+            let _block = player.world().get_block(&pos);
             let old_state_id = player.world().get_block_state_id(&pos);
-            let mut props = CommandBlockLikeProperties::from_state_id(old_state_id, block);
+            let mut props = CommandBlockLikeProperties::from_state_id(old_state_id);
 
             let block_type = match command_block_mode {
                 CommandBlockMode::Chain => Block::CHAIN_COMMAND_BLOCK,
@@ -49,7 +44,7 @@ impl JavaClient {
             player.world().set_block_state(
                 &command.pos,
                 new_state_id,
-                BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+                BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
             );
 
             let mut cmd = command.command;

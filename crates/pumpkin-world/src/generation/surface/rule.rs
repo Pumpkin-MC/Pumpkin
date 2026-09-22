@@ -1,6 +1,6 @@
 use pumpkin_data::{
     BlockState,
-    chunk_gen_settings::{ConditionMaterialRule, MaterialRule, SequenceMaterialRule},
+    material_rule::{ConditionMaterialRule, MaterialRule, SequenceMaterialRule},
 };
 
 use super::MaterialRuleContext;

@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::item::Item;
-use pumpkin_data::{
-    Block, BlockDirection, BlockStateId,
-    block_properties::{BlockProperties, HorizontalFacing},
-};
+use pumpkin_data::{Block, BlockDirection, BlockStateId, block_properties::HorizontalFacing};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
@@ -27,7 +24,7 @@ pub struct TripwireBlock;
 
 impl BlockBehaviour for TripwireBlock {
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
-        let mut props = TripwireProperties::from_state_id(args.state.id, args.block);
+        let mut props = TripwireProperties::from_state_id(args.state.id);
         if props.powered {
             return;
         }
@@ -56,7 +53,7 @@ impl BlockBehaviour for TripwireBlock {
             Self::should_connect_to(state_id, dir)
         });
 
-        let mut props = TripwireProperties::from_state_id(args.block.default_state.id, args.block);
+        let mut props = TripwireProperties::from_state_id(args.block.default_state.id);
 
         props.north = connect_north;
         props.south = connect_south;
@@ -77,7 +74,7 @@ impl BlockBehaviour for TripwireBlock {
     fn broken(&self, args: BrokenArgs<'_>) {
         let has_shears = args.player.inventory().held_item().get_item() == &Item::SHEARS;
         if has_shears {
-            let mut props = TripwireProperties::from_state_id(args.state.id, args.block);
+            let mut props = TripwireProperties::from_state_id(args.state.id);
             props.disarmed = true;
             args.world.set_block_state(
                 args.position,
@@ -96,7 +93,7 @@ impl BlockBehaviour for TripwireBlock {
         args.direction
             .to_horizontal_facing()
             .map_or(args.state_id, |facing| {
-                let mut props = TripwireProperties::from_state_id(args.state_id, args.block);
+                let mut props = TripwireProperties::from_state_id(args.state_id);
                 *match facing {
                     HorizontalFacing::North => &mut props.north,
                     HorizontalFacing::South => &mut props.south,
@@ -110,7 +107,7 @@ impl BlockBehaviour for TripwireBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state_id = args.world.get_block_state_id(args.position);
 
-        let mut props = TripwireProperties::from_state_id(state_id, args.block);
+        let mut props = TripwireProperties::from_state_id(state_id);
         if !props.powered {
             return;
         }
@@ -147,8 +144,7 @@ impl TripwireBlock {
                 let current_pos = pos.offset_dir(dir.to_offset(), i);
                 let (current_block, current_state) = world.get_block_and_state_id(&current_pos);
                 if current_block == &Block::TRIPWIRE_HOOK {
-                    let current_props =
-                        TripwireHookProperties::from_state_id(current_state, &Block::TRIPWIRE_HOOK);
+                    let current_props = TripwireHookProperties::from_state_id(current_state);
                     if dir
                         .opposite()
                         .to_horizontal_facing()
@@ -177,7 +173,7 @@ impl TripwireBlock {
     pub fn should_connect_to(state_id: BlockStateId, facing: BlockDirection) -> bool {
         let block = Block::from_state_id(state_id);
         if block == &Block::TRIPWIRE_HOOK {
-            let props = TripwireHookProperties::from_state_id(state_id, block);
+            let props = TripwireHookProperties::from_state_id(state_id);
             Some(props.facing) == facing.opposite().to_horizontal_facing()
         } else {
             block == &Block::TRIPWIRE

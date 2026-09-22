@@ -10,7 +10,7 @@ pub struct BushBlock;
 
 impl BlockMetadata for BushBlock {
     fn ids() -> Box<[BlockId]> {
-        [BlockId::BUSH, BlockId::FIREFLY_BUSH].into()
+        [BlockId::BUSH, BlockId::FIREFLY_BUSH, BlockId::RED_SHRUB].into()
     }
 }
 

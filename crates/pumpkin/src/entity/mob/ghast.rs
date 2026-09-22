@@ -6,7 +6,6 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -92,13 +91,7 @@ impl GhastEntity {
     pub fn set_charging(&self, charging: bool) {
         self.is_charging.store(charging, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::ghast::DATA_IS_CHARGING,
-                charging,
-            )],
-            None,
-        );
+        entity.set_synced_data(tracked_data::ghast::DATA_IS_CHARGING, charging);
     }
 
     #[must_use]
@@ -144,10 +137,7 @@ impl Mob for GhastEntity {
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         if self.is_charging() {
-            entity.send_meta_data(
-                &[Metadata::new(tracked_data::ghast::DATA_IS_CHARGING, true)],
-                None,
-            );
+            entity.set_synced_data(tracked_data::ghast::DATA_IS_CHARGING, true);
         }
     }
 
@@ -257,7 +247,7 @@ impl Goal for GhastShootFireballGoal {
         target.is_some_and(|t| t.get_entity().is_alive())
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         let Some(ghast) = self.ghast.upgrade() else {
             return false;
         };
@@ -388,7 +378,7 @@ impl Goal for RandomFloatAroundGoal {
         wanted.is_none_or(|target| {
             let pos = ghast.mob_entity.living_entity.entity.pos.load();
             let dist_sq = pos.squared_distance_to_vec(&target);
-            dist_sq < 1.0 || dist_sq > 3600.0
+            !dist_sq.is_nan() && !(1.0..=3600.0).contains(&dist_sq)
         })
     }
 
@@ -410,7 +400,7 @@ impl Goal for RandomFloatAroundGoal {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(new_target);
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         let Some(ghast) = self.ghast.upgrade() else {
             return false;
         };

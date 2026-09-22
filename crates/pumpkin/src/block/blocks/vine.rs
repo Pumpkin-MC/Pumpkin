@@ -8,7 +8,7 @@ use crate::{
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId, FacingExt,
-    block_properties::{BlockProperties, VineLikeProperties},
+    block_properties::VineLikeProperties,
     block_rotation::{Mirror, Rotation},
     game_rules::{GameRule, GameRuleValue},
     item::Item,
@@ -58,7 +58,7 @@ pub fn can_support_at_face(
 
     let (above_block, above_state) = world.get_block_and_state(&pos.up());
     if above_block == &Block::VINE {
-        let above_props = VineLikeProperties::from_state_id(above_state.id, above_block);
+        let above_props = VineLikeProperties::from_state_id(above_state.id);
         has_face_property(&above_props, direction)
     } else {
         false
@@ -71,7 +71,6 @@ pub fn get_updated_state(
     mut props: VineLikeProperties,
     world: &dyn BlockAccessor,
     pos: &BlockPos,
-    _block: &Block,
 ) -> VineLikeProperties {
     let above_pos = pos.up();
     if props.up {
@@ -93,7 +92,7 @@ pub fn get_updated_state(
                 let above_p = above_props.get_or_insert_with(|| {
                     let (above_block, above_state) = world.get_block_and_state(&above_pos);
                     if above_block == &Block::VINE {
-                        VineLikeProperties::from_state_id(above_state.id, above_block)
+                        VineLikeProperties::from_state_id(above_state.id)
                     } else {
                         VineLikeProperties {
                             north: false,
@@ -231,7 +230,7 @@ impl BlockBehaviour for VineBlock {
         let (clicked_block, clicked_state_id) = args.world.get_block_and_state_id(args.position);
         let clicked_is_vine = clicked_block == &Block::VINE;
         let mut result = if clicked_is_vine {
-            VineLikeProperties::from_state_id(clicked_state_id, args.block)
+            VineLikeProperties::from_state_id(clicked_state_id)
         } else {
             VineLikeProperties::default(args.block)
         };
@@ -260,7 +259,7 @@ impl BlockBehaviour for VineBlock {
         let (clicked_block, clicked_state) = args.block_accessor.get_block_and_state(args.position);
         let clicked_is_vine = clicked_block == &Block::VINE;
         let result = if clicked_is_vine {
-            VineLikeProperties::from_state_id(clicked_state.id, args.block)
+            VineLikeProperties::from_state_id(clicked_state.id)
         } else {
             VineLikeProperties::default(args.block)
         };
@@ -321,10 +320,9 @@ impl BlockBehaviour for VineBlock {
         }
 
         let updated_props = get_updated_state(
-            VineLikeProperties::from_state_id(args.state_id, args.block),
+            VineLikeProperties::from_state_id(args.state_id),
             args.world,
             args.position,
-            args.block,
         );
         if count_faces(&updated_props) == 0 {
             Block::AIR.default_state.id
@@ -338,7 +336,7 @@ impl BlockBehaviour for VineBlock {
         if clicked_block != &Block::VINE {
             return false;
         }
-        let props = VineLikeProperties::from_state_id(clicked_state.id, clicked_block);
+        let props = VineLikeProperties::from_state_id(clicked_state.id);
         count_faces(&props) < 5
     }
 
@@ -349,7 +347,7 @@ impl BlockBehaviour for VineBlock {
             }
 
             let state = args.world.get_block_state(args.position);
-            let mut props = VineLikeProperties::from_state_id(state.id, args.block);
+            let mut props = VineLikeProperties::from_state_id(state.id);
             if count_faces(&props) >= 5 {
                 return BlockActionResult::Pass;
             }
@@ -399,7 +397,7 @@ impl BlockBehaviour for VineBlock {
         let test_direction = BlockDirection::all()[rand::rng().random_range(0..6)];
         let above_pos = args.position.up();
         let state_id = args.world.get_block_state_id(args.position);
-        let state_props = VineLikeProperties::from_state_id(state_id, args.block);
+        let state_props = VineLikeProperties::from_state_id(state_id);
 
         if test_direction.is_horizontal() && !has_face_property(&state_props, test_direction) {
             if can_spread(args.world, args.position) {
@@ -549,7 +547,7 @@ impl BlockBehaviour for VineBlock {
                 let before_props = if below_block.default_state.is_air() {
                     VineLikeProperties::default(args.block)
                 } else {
-                    VineLikeProperties::from_state_id(below_state.id, below_block)
+                    VineLikeProperties::from_state_id(below_state.id)
                 };
 
                 let mut after_props = before_props;
@@ -583,7 +581,7 @@ impl BlockBehaviour for VineBlock {
         state_id: BlockStateId,
         rotation: Rotation,
     ) -> &'static BlockState {
-        let props = VineLikeProperties::from_state_id(state_id, block);
+        let props = VineLikeProperties::from_state_id(state_id);
         let mut rotated_props = props;
         match rotation {
             Rotation::Rotate180 => {
@@ -610,7 +608,7 @@ impl BlockBehaviour for VineBlock {
     }
 
     fn mirror(&self, block: &Block, state_id: BlockStateId, mirror: Mirror) -> &'static BlockState {
-        let props = VineLikeProperties::from_state_id(state_id, block);
+        let props = VineLikeProperties::from_state_id(state_id);
         let mut mirrored_props = props;
         match mirror {
             Mirror::LeftRight => {

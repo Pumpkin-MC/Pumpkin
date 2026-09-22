@@ -142,7 +142,7 @@ fn report_resolved_profile(
     source.send_feedback(msg, false);
 }
 
-fn fetch_profile_by_name_helper(server: &Server, name: &str) -> Option<GameProfile> {
+async fn fetch_profile_by_name_helper(server: &Server, name: &str) -> Option<GameProfile> {
     if let Some(player) = server.get_player_by_name(name) {
         return Some(player.gameprofile.clone());
     }
@@ -155,7 +155,10 @@ fn fetch_profile_by_name_helper(server: &Server, name: &str) -> Option<GameProfi
         .java
         .authentication
         .clone();
-    let mojang_res = lookup_profile_by_name(name, &auth_config).ok().flatten();
+    let mojang_res = lookup_profile_by_name(name, &auth_config)
+        .await
+        .ok()
+        .flatten();
 
     if let Some((uuid, resolved_name)) = mojang_res {
         server
@@ -171,6 +174,7 @@ fn fetch_profile_by_name_helper(server: &Server, name: &str) -> Option<GameProfi
             .authentication
             .clone();
         let full_profile = fetch_profile_by_uuid(uuid, &auth_config_clone)
+            .await
             .ok()
             .flatten();
 
@@ -212,7 +216,7 @@ fn fetch_profile_by_name_helper(server: &Server, name: &str) -> Option<GameProfi
     None
 }
 
-fn fetch_profile_by_id_helper(server: &Server, id: Uuid) -> Option<GameProfile> {
+async fn fetch_profile_by_id_helper(server: &Server, id: Uuid) -> Option<GameProfile> {
     if let Some(player) = server.get_player_by_uuid(id) {
         return Some(player.gameprofile.clone());
     }
@@ -223,7 +227,7 @@ fn fetch_profile_by_id_helper(server: &Server, id: Uuid) -> Option<GameProfile> 
         .java
         .authentication
         .clone();
-    let mojang_res = fetch_profile_by_uuid(id, &auth_config).ok().flatten();
+    let mojang_res = fetch_profile_by_uuid(id, &auth_config).await.ok().flatten();
 
     if let Some(profile) = mojang_res {
         server
@@ -258,8 +262,8 @@ impl CommandExecutor for ResolveNameExecutor {
         let name_owned = name.to_string();
 
         let name_component = TextComponent::text(name_owned.clone());
-        rayon::spawn(move || {
-            let result = fetch_profile_by_name_helper(&server, &name_owned);
+        tokio::spawn(async move {
+            let result = fetch_profile_by_name_helper(&server, &name_owned).await;
             match result {
                 Some(profile) => {
                     report_resolved_profile(
@@ -292,8 +296,8 @@ impl CommandExecutor for ResolveIdExecutor {
         let source = context.source.clone();
 
         let id_component = TextComponent::text(id.to_string());
-        rayon::spawn(move || {
-            let result = fetch_profile_by_id_helper(&server, id);
+        tokio::spawn(async move {
+            let result = fetch_profile_by_id_helper(&server, id).await;
             match result {
                 Some(profile) => {
                     report_resolved_profile(

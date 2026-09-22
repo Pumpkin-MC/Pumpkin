@@ -9,14 +9,14 @@ impl BedrockClient {
         packet: SText<'_>,
     ) {
         player.update_last_action_time();
-        if player.check_chat_spam(server) {
+        if player.check_chat_spam(server, crate::entity::player::SpamType::Chat) {
             return;
         }
         let gameprofile = &player.gameprofile;
 
         send_cancellable! {{
             server;
-            PlayerChatEvent::new(player.clone(), packet.message.into_owned(), vec![]);
+            PlayerChatEvent::new(player.clone(), packet.message.into_owned(), vec![], None);
 
             'after: {
                 info!("<chat> {}: {}", gameprofile.name, event.message);

@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockStateId, FacingExt,
-    block_properties::{AmethystClusterLikeProperties, BlockProperties},
+    block_properties::AmethystClusterLikeProperties,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
@@ -36,8 +36,7 @@ impl BlockMetadata for AmethystBlock {
 
 impl BlockBehaviour for AmethystBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props =
-            AmethystClusterLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        let mut props = AmethystClusterLikeProperties::from_state_id(args.block.default_state.id);
         props.facing = args.direction.to_facing();
         props.waterlogged = args.replacing.water_source();
         props.to_state_id(args.block)
@@ -61,8 +60,8 @@ impl BlockBehaviour for AmethystBlock {
 }
 
 impl WallMountedBlock for AmethystBlock {
-    fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection {
-        let props = AmethystClusterLikeProperties::from_state_id(state_id, block);
+    fn get_direction(&self, state_id: BlockStateId, _block: &Block) -> BlockDirection {
+        let props = AmethystClusterLikeProperties::from_state_id(state_id);
         props.facing.to_block_direction().opposite()
     }
 }
@@ -85,24 +84,15 @@ impl BlockBehaviour for BuddingAmethystBlock {
                 if can_cluster_grow_at_state(relative_block, relative_state_id) {
                     Some((&Block::SMALL_AMETHYST_BUD, relative_block == &Block::WATER))
                 } else if relative_block == &Block::SMALL_AMETHYST_BUD {
-                    let props = AmethystClusterLikeProperties::from_state_id(
-                        relative_state_id,
-                        &Block::SMALL_AMETHYST_BUD,
-                    );
+                    let props = AmethystClusterLikeProperties::from_state_id(relative_state_id);
                     (props.facing == grow_direction.to_facing())
                         .then_some((&Block::MEDIUM_AMETHYST_BUD, props.waterlogged))
                 } else if relative_block == &Block::MEDIUM_AMETHYST_BUD {
-                    let props = AmethystClusterLikeProperties::from_state_id(
-                        relative_state_id,
-                        &Block::MEDIUM_AMETHYST_BUD,
-                    );
+                    let props = AmethystClusterLikeProperties::from_state_id(relative_state_id);
                     (props.facing == grow_direction.to_facing())
                         .then_some((&Block::LARGE_AMETHYST_BUD, props.waterlogged))
                 } else if relative_block == &Block::LARGE_AMETHYST_BUD {
-                    let props = AmethystClusterLikeProperties::from_state_id(
-                        relative_state_id,
-                        &Block::LARGE_AMETHYST_BUD,
-                    );
+                    let props = AmethystClusterLikeProperties::from_state_id(relative_state_id);
                     (props.facing == grow_direction.to_facing())
                         .then_some((&Block::AMETHYST_CLUSTER, props.waterlogged))
                 } else {

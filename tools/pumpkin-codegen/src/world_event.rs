@@ -21,6 +21,7 @@ pub fn build() -> TokenStream {
         .collect();
 
     quote! {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         #[repr(u16)]
         pub enum WorldEvent {
             #(#variants)*

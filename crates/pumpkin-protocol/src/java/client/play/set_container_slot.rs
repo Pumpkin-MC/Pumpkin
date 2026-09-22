@@ -2,7 +2,8 @@ use std::io::Write;
 
 use crate::VarInt;
 use crate::codec::item_stack_seralizer::ItemStackSerializer;
-use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
+use crate::ser::{NetworkReadExt, ReadingError};
+use crate::{ClientPacket, ServerPacket, WritingError, ser::NetworkWriteExt};
 
 use pumpkin_data::packet::clientbound::play::CONTAINER_SET_SLOT;
 use pumpkin_macros::java_packet;
@@ -49,5 +50,24 @@ impl ClientPacket for CSetContainerSlot<'_> {
         self.slot_data.write_with_version(&mut write, version)?;
 
         Ok(())
+    }
+}
+
+impl<'a> ServerPacket<'a> for CSetContainerSlot<'a> {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let window_id = bytebuf.get_container_id(version)?.0 as i8;
+        let state_id = if *version >= JavaMinecraftVersion::V_1_17_1 {
+            bytebuf.get_var_int()?
+        } else {
+            VarInt(0)
+        };
+        let slot = bytebuf.get_i16_be()?;
+        let slot_data = ItemStackSerializer::read_with_version(bytebuf, version)?;
+        Ok(Self {
+            window_id,
+            state_id,
+            slot,
+            slot_data: Box::leak(Box::new(slot_data)),
+        })
     }
 }

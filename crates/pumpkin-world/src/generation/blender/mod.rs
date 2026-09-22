@@ -90,12 +90,8 @@ impl Blender {
         let cell_x = biome_coords::from_block(block_x);
         let cell_z = biome_coords::from_block(block_z);
 
-        let fixed_height = self.get_blending_data_value(
-            cell_x,
-            0,
-            cell_z,
-            blending_data::BlendingData::get_height,
-        );
+        let fixed_height =
+            self.get_blending_data_value(cell_x, 0, cell_z, |data, x, _, z| data.get_height(x, z));
 
         if fixed_height != f64::MAX {
             return BlendingOutput {
@@ -275,7 +271,6 @@ impl Blender {
     pub fn blend_biome(
         &self,
         quart_x: i32,
-        quart_y: i32,
         quart_z: i32,
         shift_noise: &DoublePerlinNoiseSampler,
     ) -> Option<&'static Biome> {
@@ -288,7 +283,6 @@ impl Blender {
 
             blending_data.iterate_biomes(
                 biome_coords::from_chunk(chunk_x),
-                quart_y,
                 biome_coords::from_chunk(chunk_z),
                 |test_cell_x, test_cell_z, biome| {
                     let dx = (quart_x - test_cell_x) as f64;
@@ -307,7 +301,7 @@ impl Blender {
         if closest_distance == f64::INFINITY {
             None
         } else {
-            let shift = shift_noise.sample(quart_x as f64, 0.0, quart_z as f64) * 12.0;
+            let shift = (shift_noise.sample(quart_x as f64, 0.0, quart_z as f64) * 12.0) as f64;
             let alpha = ((closest_distance + shift) / (HEIGHT_BLENDING_RANGE_CELLS + 1) as f64)
                 .clamp(0.0, 1.0);
             if alpha > 0.5 { None } else { closest_biome }
@@ -324,7 +318,7 @@ pub struct BlenderBiomeSupplier<'a> {
 impl BiomeSupplier for BlenderBiomeSupplier<'_> {
     fn biome(&self, x: i32, y: i32, z: i32, sampler: &mut MultiNoiseSampler<'_>) -> &'static Biome {
         self.blender
-            .blend_biome(x, y, z, &self.shift_noise)
+            .blend_biome(x, z, &self.shift_noise)
             .unwrap_or_else(|| self.base.biome(x, y, z, sampler))
     }
 }

@@ -14,10 +14,9 @@ impl JavaClient {
     fn sync_position(
         player: &Arc<Player>,
         world: &World,
+        entity: &Entity,
         pos: Vector3<f64>,
         last_pos: Vector3<f64>,
-        yaw: f32,
-        pitch: f32,
         on_ground: bool,
     ) -> bool {
         let delta = Vector3::new(pos.x - last_pos.x, pos.y - last_pos.y, pos.z - last_pos.z);
@@ -27,31 +26,40 @@ impl JavaClient {
         if delta.length_squared() < 64.0 {
             return false;
         }
-        // Sync position with all other players.
-        world.broadcast_packet_except(
-            &[player.gameprofile.id],
+        // Sync position with tracking players only.
+        world.send_to_tracking_players_editioned(
+            entity,
             &CEntityPositionSync::new(
                 entity_id.into(),
                 pos,
                 Vector3::new(0.0, 0.0, 0.0),
-                yaw,
-                pitch,
+                entity.yaw.load(),
+                entity.pitch.load(),
                 on_ground,
             ),
+            &bedrock_move_player_packet(entity, pos, CMovePlayer::MODE_TELEPORT, on_ground),
+        );
+        // Bedrock ignores head yaw on teleport -> follow-up normal move re-asserts.
+        world.send_to_tracking_players_bedrock(
+            entity,
+            &bedrock_move_player_packet(entity, pos, CMovePlayer::MODE_NORMAL, on_ground),
         );
         true
     }
 
     #[expect(clippy::too_many_lines)]
-    pub async fn handle_position(
+    pub fn handle_position(
         &self,
         player: &Arc<Player>,
         server: &Arc<Server>,
-        packet: SPlayerPosition,
+        packet: &SPlayerPosition,
     ) {
         if !player.has_client_loaded() {
             return;
         }
+        // A movement packet was received this tick — tracked for SClientTickEnd zeroing.
+        self.received_movement_this_tick
+            .store(true, Ordering::Relaxed);
         if player.get_entity().has_vehicle() {
             return;
         }
@@ -64,15 +72,18 @@ impl JavaClient {
         {
             return;
         }
+        if player.is_movement_locked.load(Ordering::Relaxed) {
+            self.force_tp(player, player.get_entity().pos.load());
+            return;
+        }
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
-            self.kick(TextComponent::translate_cross(
+            self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
-            ))
-            .await;
+            ));
             return;
         }
         let position = Vector3::new(
@@ -81,7 +92,7 @@ impl JavaClient {
             Self::clamp_horizontal(position.z),
         );
 
-        send_cancellable! {{
+        send_cancellable_blocking! {{
             server;
             PlayerMoveEvent {
                 player: player.clone(),
@@ -116,10 +127,10 @@ impl JavaClient {
                 let world = &player.world();
 
                 // TODO: Warn when player moves to quickly
-                if !Self::sync_position(player, world, pos, last_pos, entity.yaw.load(), entity.pitch.load(), packet.collision & FLAG_ON_GROUND != 0) {
-                    // Send the new position to all other players.
-                    world.broadcast_packet_except_editioned(
-                        &[player.gameprofile.id],
+                if !Self::sync_position(player, world, entity, pos, last_pos, packet.collision & FLAG_ON_GROUND != 0) {
+                    // Send the new position to tracking players only.
+                    world.send_to_tracking_players_editioned(
+                        entity,
                         &CUpdateEntityPos::new(
                             player.entity_id().into(),
                             Vector3::new(
@@ -129,18 +140,11 @@ impl JavaClient {
                             ),
                             packet.collision & FLAG_ON_GROUND != 0,
                         ),
-                        &CMovePlayer::new(
-                            VarULong(player.entity_id() as u64),
-                            Vector3::new(pos.x as f32, pos.y as f32 + player.get_entity().entity_type.eye_height, pos.z as f32),
-                            entity.pitch.load(),
-                            entity.yaw.load(),
-                            entity.yaw.load(),
+                        &bedrock_move_player_packet(
+                            entity,
+                            pos,
                             CMovePlayer::MODE_NORMAL,
-                            (packet.collision & FLAG_ON_GROUND) != 0,
-                            VarULong(0),
-                            0,
-                            0,
-                            VarULong(0),
+                            packet.collision & FLAG_ON_GROUND != 0,
                         ),
                     );
                 }
@@ -157,7 +161,7 @@ impl JavaClient {
                         player.gamemode.load() == GameMode::Creative,
                     );
                 }
-                chunker::update_position(player).await;
+                chunker::update_position(player);
                 let delta = Vector3::new(
                     pos.x - last_pos.x,
                     pos.y - last_pos.y,
@@ -166,26 +170,30 @@ impl JavaClient {
                 // Only update idle timeout if there's actual movement (vanilla threshold)
                 if delta.length_squared() > 1.0E-5 {
                     player.update_last_action_time();
+                    player.check_location_enchantments(pos, packet.collision & FLAG_ON_GROUND != 0);
                 }
                 player.progress_motion(delta);
             }
 
             'cancelled: {
-                self.force_tp(player, player.get_entity().pos.load()).await;
+                self.force_tp(player, player.get_entity().pos.load());
             }
         }}
     }
 
     #[expect(clippy::too_many_lines)]
-    pub async fn handle_position_rotation(
+    pub fn handle_position_rotation(
         &self,
         player: &Arc<Player>,
         server: &Arc<Server>,
-        packet: SPlayerPositionRotation,
+        packet: &SPlayerPositionRotation,
     ) {
         if !player.has_client_loaded() {
             return;
         }
+        // A movement packet was received this tick — tracked for SClientTickEnd zeroing.
+        self.received_movement_this_tick
+            .store(true, Ordering::Relaxed);
         if player.get_entity().has_vehicle() {
             return;
         }
@@ -198,6 +206,12 @@ impl JavaClient {
         {
             return;
         }
+        if player.is_movement_locked.load(Ordering::Relaxed) {
+            let entity = player.get_entity();
+            entity.set_rotation(packet.yaw, packet.pitch);
+            self.force_tp(player, entity.pos.load());
+            return;
+        }
         // y = feet Y
         let position = packet.position;
         if !position.x.is_finite()
@@ -206,12 +220,11 @@ impl JavaClient {
             || !packet.yaw.is_finite()
             || !packet.pitch.is_finite()
         {
-            self.kick(TextComponent::translate_cross(
+            self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
-            ))
-            .await;
+            ));
             return;
         }
 
@@ -221,7 +234,7 @@ impl JavaClient {
             Self::clamp_horizontal(position.z),
         );
 
-        send_cancellable! {{
+        send_cancellable_blocking! {{
             server;
             PlayerMoveEvent::new(
                 player.clone(),
@@ -257,18 +270,23 @@ impl JavaClient {
 
                 let entity_id = entity.entity_id;
 
+                // TODO: use `pumpkin_util::math::pack_degrees`.
                 let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
                 let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
-                // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
                 let world = entity.world.load_full();
 
                 // TODO: Warn when player moves to quickly
-                if !Self::
-                    sync_position(player, &world, pos, last_pos, yaw, pitch, (packet.collision & FLAG_ON_GROUND) != 0)
-                {
-                    // Send the new position to all other players.
-                    world.broadcast_packet_except_editioned(
-                        &[player.gameprofile.id],
+                if !Self::sync_position(
+                    player,
+                    &world,
+                    entity,
+                    pos,
+                    last_pos,
+                    (packet.collision & FLAG_ON_GROUND) != 0,
+                ) {
+                    // Send the new position to tracking players only.
+                    world.send_to_tracking_players_editioned(
+                        entity,
                         &CUpdateEntityPosRot::new(
                             entity_id.into(),
                             Vector3::new(
@@ -280,28 +298,16 @@ impl JavaClient {
                             pitch as u8,
                             (packet.collision & FLAG_ON_GROUND) != 0,
                         ),
-                        &CMovePlayer::new(
-                            VarULong(entity_id as u64),
-                            Vector3::new(pos.x as f32, pos.y as f32 + player.get_entity().entity_type.eye_height, pos.z as f32),
-                            entity.pitch.load(),
-                            entity.yaw.load(),
-                            entity.yaw.load(),
+                        &bedrock_move_player_packet(
+                            entity,
+                            pos,
                             CMovePlayer::MODE_NORMAL,
                             (packet.collision & FLAG_ON_GROUND) != 0,
-                            VarULong(0),
-                            0,
-                            0,
-                            VarULong(0),
                         ),
                     );
                 }
 
-                world
-                    .broadcast_packet_except(
-                        &[player.gameprofile.id],
-                        &CHeadRot::new(entity_id.into(), yaw as u8),
-                    )
-                   ;
+                world.send_to_tracking_players(entity, &CHeadRot::new(entity_id.into(), yaw as u8));
                 // Only process fall damage if player is alive
                 if !player.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying
                     && player.living_entity.health.load() > 0.0
@@ -314,7 +320,7 @@ impl JavaClient {
                         player.gamemode.load() == GameMode::Creative,
                     );
                 }
-                chunker::update_position(player).await;
+                chunker::update_position(player);
                 let delta = Vector3::new(
                     pos.x - last_pos.x,
                     pos.y - last_pos.y,
@@ -323,31 +329,31 @@ impl JavaClient {
                 // Only update idle timeout if there's actual movement (vanilla threshold)
                 if delta.length_squared() > 1.0E-5 {
                     player.update_last_action_time();
+                    player.check_location_enchantments(pos, (packet.collision & FLAG_ON_GROUND) != 0);
                 }
                 player.progress_motion(delta);
             }
 
             'cancelled: {
-                self.force_tp(player, position).await;
+                self.force_tp(player, position);
             }
         }}
     }
 
-    pub async fn force_tp(&self, player: &Arc<Player>, position: Vector3<f64>) {
+    pub fn force_tp(&self, player: &Arc<Player>, position: Vector3<f64>) {
         let teleport_id = player.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
         *player
             .awaiting_teleport
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) =
             Some((teleport_id.into(), position));
-        self.enqueue_client_packet(&CPlayerPosition::new(
+        player.try_send_client_packet(&CPlayerPosition::new(
             teleport_id.into(),
             player.get_entity().pos.load(),
             Vector3::new(0.0, 0.0, 0.0),
             player.get_entity().yaw.load(),
             player.get_entity().pitch.load(),
             Vec::new(),
-        ))
-        .await;
+        ));
     }
 }

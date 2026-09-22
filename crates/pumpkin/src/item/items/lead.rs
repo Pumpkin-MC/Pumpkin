@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::decoration::leash_knot::LeashKnotEntity;
 use crate::entity::player::Player;
@@ -33,9 +34,9 @@ impl ItemBehaviour for LeadItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FENCES) {
-            return;
+            return BlockActionResult::Pass;
         }
 
         let world = player.world();
@@ -88,6 +89,9 @@ impl ItemBehaviour for LeadItem {
                 item.decrement(1);
             }
             world.play_sound(Sound::ItemLeadTied, SoundCategory::Neutral, &center);
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Pass
         }
     }
 

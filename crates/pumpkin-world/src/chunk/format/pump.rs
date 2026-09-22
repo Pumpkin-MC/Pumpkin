@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::chunk::format::anvil::SingleChunkDataSerializer;
-use crate::chunk::io::{ChunkSerializer, LoadedData};
+use crate::chunk::io::{ChunkSerializer, LoadedData, run_blocking};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::Bytes;
 use pumpkin_util::math::vector2::Vector2;
@@ -16,11 +17,11 @@ pub struct PumpFile<D> {
     _phantom: PhantomData<D>,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct PumpData {
     pub x: i32,
     pub z: i32,
-    pub chunks: BTreeMap<String, Vec<u8>>,
+    pub chunks: BTreeMap<String, Bytes>,
 }
 
 impl<D> Default for PumpFile<D> {
@@ -51,17 +52,21 @@ where
     }
 
     async fn write(&self, backend: &Self::WriteBackend) -> Result<(), std::io::Error> {
-        let mut root = pumpkin_nbt::compound::NbtCompound::new();
-        root.put_int("x", self.data.x);
-        root.put_int("z", self.data.z);
-        let mut chunks_comp = pumpkin_nbt::compound::NbtCompound::new();
-        for (k, v) in &self.data.chunks {
-            let i8_vec: Vec<i8> = v.iter().map(|&b| b as i8).collect();
-            chunks_comp.put(k, pumpkin_nbt::tag::NbtTag::ByteArray(i8_vec.into()));
-        }
-        root.put_compound("chunks", chunks_comp);
-
-        let bytes = pumpkin_nbt::Nbt::from(root).write_unnamed();
+        let data = self.data.clone();
+        let bytes = run_blocking(move || {
+            let mut root = pumpkin_nbt::compound::NbtCompound::new();
+            root.put_int("x", data.x);
+            root.put_int("z", data.z);
+            let mut chunks_comp = pumpkin_nbt::compound::NbtCompound::new();
+            for (k, v) in data.chunks {
+                let i8_vec: Vec<i8> = v.iter().map(|&b| b as i8).collect();
+                chunks_comp.put(&k, pumpkin_nbt::tag::NbtTag::ByteArray(i8_vec.into()));
+            }
+            root.put_compound("chunks", chunks_comp);
+            pumpkin_nbt::Nbt::from(root).write_unnamed()
+        })
+        .await
+        .map_err(|_| std::io::Error::other("pump serialization task failed"))?;
         tokio::fs::write(backend, bytes).await
     }
 
@@ -83,7 +88,7 @@ where
             for (k, v) in &chunks_tag.child_tags {
                 if let pumpkin_nbt::tag::NbtTag::ByteArray(arr) = v {
                     let u8_vec: Vec<u8> = arr.iter().map(|&b| b as u8).collect();
-                    chunks.insert(k.to_string(), u8_vec);
+                    chunks.insert(k.to_string(), u8_vec.into());
                 }
             }
         }
@@ -96,7 +101,7 @@ where
 
     async fn update_chunk(
         &mut self,
-        chunk_data: &Self::Data,
+        chunk_data: Arc<Self::Data>,
         _chunk_config: &Self::ChunkConfig,
     ) -> Result<(), ChunkWritingError> {
         let (x, z) = chunk_data.position();
@@ -106,13 +111,20 @@ where
         let rel_z = z.rem_euclid(32);
         let index = (rel_x + rel_z * 32) as usize;
 
-        let bytes = chunk_data
-            .to_bytes()
-            .map_err(|e| ChunkWritingError::ChunkSerializingError(e.to_string()))?;
+        let compressed = run_blocking(move || {
+            let bytes = chunk_data
+                .to_bytes()
+                .map_err(|e| ChunkWritingError::ChunkSerializingError(e.to_string()))?;
+            Ok::<_, ChunkWritingError>(compress_to_vec(&bytes[..], CompressionLevel::Fastest))
+        })
+        .await
+        .map_err(|_| {
+            ChunkWritingError::IoError(std::io::Error::other("chunk serialization task failed"))
+        })??;
 
-        let compressed = compress_to_vec(&bytes[..], CompressionLevel::Fastest);
-
-        self.data.chunks.insert(index.to_string(), compressed);
+        self.data
+            .chunks
+            .insert(index.to_string(), compressed.into());
 
         Ok(())
     }
@@ -122,33 +134,49 @@ where
         chunks: Vec<Vector2<i32>>,
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
-        for pos in chunks {
-            let rel_x = pos.x.rem_euclid(32);
-            let rel_z = pos.y.rem_euclid(32);
-            let index = (rel_x + rel_z * 32) as usize;
+        let chunk_items: Vec<(Vector2<i32>, Option<Bytes>)> = chunks
+            .into_iter()
+            .map(|pos| {
+                let rel_x = pos.x.rem_euclid(32);
+                let rel_z = pos.y.rem_euclid(32);
+                let index = (rel_x + rel_z * 32) as usize;
+                let data = self.data.chunks.get(&index.to_string()).cloned();
+                (pos, data)
+            })
+            .collect();
 
-            if let Some(chunk_bytes) = self.data.chunks.get(&index.to_string()) {
-                let res = (|| {
-                    let mut decoder = StreamingDecoder::new(&chunk_bytes[..]).map_err(|e| {
-                        ChunkReadingError::IoError(std::io::Error::other(e.to_string()))
-                    })?;
-                    let mut decompressed = Vec::new();
-                    std::io::Read::read_to_end(&mut decoder, &mut decompressed)
-                        .map_err(ChunkReadingError::IoError)?;
-                    let bytes = Bytes::from(decompressed);
-                    D::from_bytes(&bytes, pos)
-                })();
+        let (tx, mut rx) = tokio::sync::mpsc::channel(chunk_items.len().max(1));
 
-                let data_res = match res {
-                    Ok(data) => LoadedData::Loaded(data),
-                    Err(e) => LoadedData::Error((pos, e)),
-                };
+        rayon::spawn(move || {
+            use rayon::prelude::*;
+            chunk_items.into_par_iter().for_each(|(pos, chunk_bytes)| {
+                let data_res = chunk_bytes.map_or_else(
+                    || LoadedData::Missing(pos),
+                    |chunk_bytes| {
+                        let res = (|| {
+                            let mut decoder =
+                                StreamingDecoder::new(&chunk_bytes[..]).map_err(|e| {
+                                    ChunkReadingError::IoError(std::io::Error::other(e.to_string()))
+                                })?;
+                            let mut decompressed = Vec::new();
+                            std::io::Read::read_to_end(&mut decoder, &mut decompressed)
+                                .map_err(ChunkReadingError::IoError)?;
+                            let bytes = Bytes::from(decompressed);
+                            D::from_bytes(&bytes, pos)
+                        })();
+                        match res {
+                            Ok(data) => LoadedData::Loaded(data),
+                            Err(e) => LoadedData::Error((pos, e)),
+                        }
+                    },
+                );
+                let _ = tx.blocking_send(data_res);
+            });
+        });
 
-                if stream.send(data_res).await.is_err() {
-                    return;
-                }
-            } else {
-                let _ = stream.send(LoadedData::Missing(pos)).await;
+        while let Some(item) = rx.recv().await {
+            if stream.send(item).await.is_err() {
+                return;
             }
         }
     }
@@ -229,7 +257,7 @@ mod tests {
             data: vec![1, 2, 3],
         };
 
-        pump_file.update_chunk(&chunk, &()).await.unwrap();
+        pump_file.update_chunk(Arc::new(chunk), &()).await.unwrap();
         pump_file.write(&file_path).await.unwrap();
 
         let bytes = tokio::fs::read(&file_path).await.unwrap();

@@ -21,14 +21,9 @@ impl BlockBehaviour for EndPortalBlock {
         if Arc::ptr_eq(&target_world, args.world) {
             return;
         }
-        tracing::info!(
-            "End portal collision at {:?}, targeting world {:?}",
-            args.position,
-            target_world.dimension.minecraft_name
-        );
         args.entity
             .get_entity()
-            .try_use_portal(0, target_world, *args.position);
+            .try_use_portal(target_world, *args.position);
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {

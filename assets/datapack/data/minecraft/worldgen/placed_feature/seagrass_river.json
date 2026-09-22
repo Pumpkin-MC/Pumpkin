@@ -1,0 +1,47 @@
+{
+  "feature": "minecraft:seagrass_slightly_less_short",
+  "placement": [
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "minecraft:count",
+      "count": 48
+    },
+    {
+      "type": "minecraft:offset",
+      "x": {
+        "type": "minecraft:trapezoid",
+        "max": 7,
+        "min": -7,
+        "plateau": 0
+      },
+      "y": {
+        "type": "minecraft:trapezoid",
+        "max": 0,
+        "min": 0,
+        "plateau": 0
+      },
+      "z": {
+        "type": "minecraft:trapezoid",
+        "max": 7,
+        "min": -7,
+        "plateau": 0
+      }
+    },
+    {
+      "type": "minecraft:heightmap",
+      "heightmap": "OCEAN_FLOOR"
+    },
+    {
+      "type": "minecraft:block_predicate_filter",
+      "predicate": {
+        "type": "minecraft:matching_blocks",
+        "blocks": "minecraft:water"
+      }
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

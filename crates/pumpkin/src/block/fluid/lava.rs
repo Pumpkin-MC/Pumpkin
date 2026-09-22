@@ -7,8 +7,8 @@ use crate::{
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId,
     damage::DamageType,
-    dimension::Dimension,
     fluid::{Falling, Fluid, FluidProperties, Level},
+    tag::Taggable,
     world::WorldEvent,
 };
 use pumpkin_util::math::position::BlockPos;
@@ -88,7 +88,7 @@ impl FlowingLava {
         world.set_block_state(pos, fire_state_id, BlockFlags::NOTIFY_ALL);
     }
 
-    fn receive_neighbor_fluids(world: &Arc<World>, _fluid: &Fluid, block_pos: &BlockPos) -> bool {
+    fn receive_neighbor_fluids(world: &Arc<World>, block_pos: &BlockPos) -> bool {
         // Logic to determine if we should replace the fluid with any of (cobble, obsidian, stone, etc.)
         let below_is_soul_soil = world
             .get_block(&block_pos.offset(BlockDirection::Down.to_offset()))
@@ -96,21 +96,25 @@ impl FlowingLava {
         let is_still = world.get_block_state_id(block_pos) == Block::LAVA.default_state.id;
 
         for dir in BlockDirection::all() {
+            // Vanilla tests every direction but Down here. Lava landing in water
+            // below is turned to stone by `spread_to`, not by this scan, so Down
+            // is skipped rather than ending it - a lava block with water beneath
+            // *and* water beside it still forms cobblestone.
+            if dir == BlockDirection::Down {
+                continue;
+            }
+
             let neighbor_pos = block_pos.offset(dir.to_offset());
-            if world.get_block(&neighbor_pos) == &Block::WATER {
-                if dir == BlockDirection::Down {
-                    return true;
-                }
+            if world
+                .get_fluid(&neighbor_pos)
+                .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER)
+            {
                 let block = if is_still {
                     Block::OBSIDIAN
                 } else {
                     Block::COBBLESTONE
                 };
-                world.set_block_state(
-                    block_pos,
-                    block.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
-                );
+                world.set_block_state(block_pos, block.default_state.id, BlockFlags::NOTIFY_ALL);
                 world.sync_world_event(WorldEvent::LavaFizz, *block_pos, 0);
                 return false;
             }
@@ -129,7 +133,7 @@ impl FlowingLava {
                 world.set_block_state(
                     block_pos,
                     Block::BASALT.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
+                    BlockFlags::NOTIFY_ALL,
                 );
                 world.sync_world_event(WorldEvent::LavaFizz, *block_pos, 0);
                 return false;
@@ -152,7 +156,7 @@ impl FluidBehaviour for FlowingLava {
         old_state_id: BlockStateId,
         _notify: bool,
     ) {
-        if old_state_id != state_id && Self::receive_neighbor_fluids(world, fluid, block_pos) {
+        if old_state_id != state_id && Self::receive_neighbor_fluids(world, block_pos) {
             let flow_speed = self.get_flow_speed(world);
             world.schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal);
         }
@@ -169,7 +173,7 @@ impl FluidBehaviour for FlowingLava {
         block_pos: &BlockPos,
         _notify: bool,
     ) {
-        if Self::receive_neighbor_fluids(world, fluid, block_pos) {
+        if Self::receive_neighbor_fluids(world, block_pos) {
             let flow_speed = self.get_flow_speed(world);
             world.schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal);
         }
@@ -244,17 +248,12 @@ impl FluidBehaviour for FlowingLava {
 
 impl FlowingFluid for FlowingLava {
     fn get_level_decrease_per_block(&self, world: &World) -> i32 {
-        // Ultrawarm logic
-        if world.dimension == Dimension::THE_NETHER {
-            1
-        } else {
-            2
-        }
+        if world.dimension.fast_lava { 1 } else { 2 }
     }
 
     fn get_flow_speed(&self, world: &World) -> u8 {
-        // Ultrawarm logic - lava flows faster in the Nether
-        if world.dimension == Dimension::THE_NETHER {
+        // EnvironmentAttributes.FAST_LAVA
+        if world.dimension.fast_lava {
             LAVA_FLOW_SPEED_NETHER
         } else {
             LAVA_FLOW_SPEED_SLOW
@@ -262,12 +261,7 @@ impl FlowingFluid for FlowingLava {
     }
 
     fn get_max_flow_distance(&self, world: &World) -> i32 {
-        // Ultrawarm logic
-        if world.dimension == Dimension::THE_NETHER {
-            5
-        } else {
-            3
-        }
+        if world.dimension.fast_lava { 5 } else { 3 }
     }
 
     /// Determines if lava can convert to source blocks based on game rules.

@@ -22,7 +22,7 @@ impl Ignition {
     where
         F: FnOnce(Arc<World>, BlockPos, BlockStateId),
     {
-        if world.get_fluid(&location).name != Fluid::EMPTY.name {
+        if *world.get_fluid(&location) != Fluid::EMPTY {
             return false;
         }
         let fire_block = FireBlockBase::get_fire_type(world, &fire_pos);
@@ -56,15 +56,13 @@ fn can_be_lit(block: &Block, state_id: BlockStateId) -> Option<BlockStateId> {
         return None;
     }
 
-    let mut props = {
-        let props = &block.properties(state_id)?;
-        props.to_props()
-    };
+    let mut props = block.properties(state_id)?.to_props();
 
     let (_, value) = props.iter_mut().find(|(k, _)| *k == "lit")?;
+    if *value == "true" {
+        return None;
+    }
+
     *value = "true";
-
-    let new_state_id = block.from_properties(&props).to_state_id(block);
-
-    (new_state_id != state_id).then_some(new_state_id)
+    Some(block.from_properties(&props).to_state_id(block))
 }

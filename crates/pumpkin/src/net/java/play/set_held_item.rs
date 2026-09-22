@@ -2,17 +2,11 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_set_held_item(
-        &self,
-        server: &Arc<Server>,
-
-        player: &Player,
-        held: SSetHeldItem,
-    ) {
+    pub fn handle_set_held_item(&self, server: &Arc<Server>, player: &Player, held: &SSetHeldItem) {
         player.update_last_action_time();
         let slot = held.slot;
         if !(0..=8).contains(&slot) {
-            self.kick(TextComponent::text("Invalid held slot")).await;
+            self.try_kick(&TextComponent::text("Invalid held slot"));
             return;
         }
         let slot = slot as u8;
@@ -21,11 +15,9 @@ impl JavaClient {
             return;
         };
         let mut event = PlayerItemHeldEvent::new(player_arc, previous_slot, slot);
-        server.plugin_manager.fire(server, &mut event).await;
+        server.plugin_manager.fire_blocking(server, &mut event);
         if event.cancelled {
-            player
-                .send_client_packet(&CSetSelectedSlot::new(previous_slot as i8))
-                .await;
+            player.try_send_client_packet(&CSetSelectedSlot::new(previous_slot as i8));
             return;
         }
 

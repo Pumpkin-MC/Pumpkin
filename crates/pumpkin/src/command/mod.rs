@@ -5,16 +5,13 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use crate::block::entities::BlockEntity;
+use crate::block::entities::command_block::CommandBlockEntity;
+pub use crate::command::context::command_source::CommandSource;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
-use args::ConsumedArgs;
-
-use crate::block::entities::BlockEntity;
-use crate::block::entities::command_block::CommandBlockEntity;
-use crate::command::context::command_source::CommandSource;
-use crate::entity::EntityBase;
-use dispatcher::CommandError;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
@@ -26,20 +23,69 @@ use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::translation::Locale;
 
-pub mod args;
+pub use pumpkin_command::*;
+
 pub mod argument_builder;
 pub mod argument_types;
 pub mod client_suggestions;
 pub mod commands;
 pub mod context;
-pub mod dispatcher;
-pub mod errors;
 pub mod node;
-pub mod parser;
-pub mod snbt;
-pub mod string_reader;
-pub mod suggestion;
-pub mod tree;
+
+pub mod dispatcher {
+    pub use pumpkin_command::dispatcher::*;
+    pub type CommandDispatcher =
+        pumpkin_command::dispatcher::CommandDispatcher<crate::command::CommandSource>;
+}
+pub mod errors {
+    pub use pumpkin_command::errors::*;
+}
+pub mod parser {
+    pub use pumpkin_command::parser::*;
+}
+pub mod snbt {
+    pub use pumpkin_command::snbt::*;
+}
+pub mod string_reader {
+    pub use pumpkin_command::string_reader::*;
+}
+pub mod suggestion {
+    pub use pumpkin_command::suggestion::*;
+
+    pub mod provider {
+        use crate::command::context::command_context::CommandContext;
+        use crate::command::context::command_source::CommandSource;
+        use pumpkin_command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
+
+        pub type SuggestionProviderResult = Suggestions;
+
+        pub trait SuggestionProvider: Send + Sync {
+            fn suggest(
+                &self,
+                context: &CommandContext,
+                builder: SuggestionsBuilder,
+            ) -> SuggestionProviderResult;
+        }
+
+        pub struct SuggestionProviderAdapter<T>(pub T);
+
+        impl<T: SuggestionProvider>
+            pumpkin_command::suggestion::provider::SuggestionProvider<CommandSource>
+            for SuggestionProviderAdapter<T>
+        {
+            fn suggest(
+                &self,
+                context: &pumpkin_command::context::command_context::CommandContext<
+                    '_,
+                    CommandSource,
+                >,
+                builder: SuggestionsBuilder,
+            ) -> SuggestionProviderResult {
+                self.0.suggest(context, builder)
+            }
+        }
+    }
+}
 
 /// Whether console and RCON command output is broadcast to online operators.
 ///
@@ -220,7 +266,7 @@ impl CommandSender {
                     return None;
                 }
 
-                let props = CommandBlockLikeProperties::from_state_id(state_id, block);
+                let props = CommandBlockLikeProperties::from_state_id(state_id);
                 Some((0.0, command_block_y_rot(props.facing)))
             }
         }
@@ -340,9 +386,8 @@ impl CommandSender {
             Self::CommandBlock(command_entity, world) => {
                 let pos = command_entity.position;
 
-                let (block, state_id) = world.get_block_and_state_id(&pos);
-                let command_block_props =
-                    CommandBlockLikeProperties::from_state_id(state_id, block);
+                let (_block, state_id) = world.get_block_and_state_id(&pos);
+                let command_block_props = CommandBlockLikeProperties::from_state_id(state_id);
                 let facing = command_block_props.facing;
 
                 let horizontal_direction = match facing {
@@ -403,27 +448,6 @@ const fn command_block_y_rot(facing: Facing) -> f32 {
     }
 }
 
-/// Represents the result of running a command after completion.
-///
-/// If the command **ran successfully**, an [`Ok`] is returned containing an [`i32`].
-/// This represents the 'output value' of the command, which is *homologous* to the
-/// `int` that command executors in vanilla return **upon success**.
-///
-/// **You should choose the successful result as `1` if**:
-/// - you don't know what value to use for a success for your
-///   own commands, or
-/// - you don't understand what this value means, or
-/// - you just simply don't care about this value at all
-///
-/// If the command **fails**, an [`Err`] is returned, containing the [`CommandError`]
-/// that led to this result.
-pub type CommandResult = Result<i32, CommandError>;
-
-pub trait CommandExecutor: Sync + Send {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult;
-}
+pub use context::command_context::CommandContext;
+pub use node::dispatcher::CommandDispatcher;
+pub use node::{Command, CommandExecutor, CommandExecutorResult};

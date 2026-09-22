@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::block_properties::{BlockProperties, BubbleColumnLikeProperties};
+use pumpkin_data::block_properties::BubbleColumnLikeProperties;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockId, BlockStateId};
@@ -72,7 +72,7 @@ fn kind_from_support(block: &Block) -> Option<BubbleColumnKind> {
 }
 
 fn kind_from_state(state: BlockStateId) -> BubbleColumnKind {
-    let props = BubbleColumnLikeProperties::from_state_id(state, &Block::BUBBLE_COLUMN);
+    let props = BubbleColumnLikeProperties::from_state_id(state);
     if props.r#drag {
         BubbleColumnKind::Downward
     } else {

@@ -5,17 +5,15 @@ use crate::block::entities::bell::BellBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BlockHitResult, BrokenArgs, CanPlaceAtArgs, NormalUseArgs,
-    OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs, OnProjectileHitArgs, PathComputationType, PlacedArgs,
 };
 use crate::world::World;
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::{AttachFace, BellAttachment, BellLikeProperties};
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_data::{HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -41,9 +39,9 @@ fn ring_bell(
         return false;
     }
 
-    let (block, state_id) = world.get_block_and_state_id(&position);
+    let (_block, state_id) = world.get_block_and_state_id(&position);
 
-    let props = BellLikeProperties::from_state_id(state_id, block);
+    let props = BellLikeProperties::from_state_id(state_id);
     let direction = hit_direction.unwrap_or(props.facing);
 
     if let Some(block_entity) = world.get_block_entity(&position)
@@ -97,8 +95,8 @@ fn is_single_wall(position: BlockPos, facing: HorizontalFacing, world: &World) -
 pub struct BellBlock;
 
 impl WallMountedBlock for BellBlock {
-    fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection {
-        let props = BellLikeProperties::from_state_id(state_id, block);
+    fn get_direction(&self, state_id: BlockStateId, _block: &Block) -> BlockDirection {
+        let props = BellLikeProperties::from_state_id(state_id);
         match props.attachment {
             BellAttachment::Ceiling => BlockDirection::Down,
             BellAttachment::Floor => BlockDirection::Up,
@@ -143,7 +141,7 @@ impl BlockBehaviour for BellBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.position);
 
-        let props = BellLikeProperties::from_state_id(state.id, args.block);
+        let props = BellLikeProperties::from_state_id(state.id);
 
         if !is_point_on_bell(args.hit, props.attachment, props.facing) {
             return BlockActionResult::Pass; // Pass if Crosshair wasn't correctly positioned
@@ -200,7 +198,7 @@ impl BlockBehaviour for BellBlock {
         let is_receiving_power = block_receives_redstone_power(world, args.position);
         let state = args.world.get_block_state(args.position);
 
-        let mut props = BellLikeProperties::from_state_id(state.id, args.block);
+        let mut props = BellLikeProperties::from_state_id(state.id);
 
         if props.powered != is_receiving_power {
             props.powered = is_receiving_power;
@@ -215,5 +213,31 @@ impl BlockBehaviour for BellBlock {
                 ring_bell(*args.position, args.world, None, None);
             }
         }
+    }
+
+    fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
+        let player = args
+            .projectile
+            .get_owner_id()
+            .and_then(|id| args.world.get_player_by_id(id));
+        if ring_bell(
+            *args.position,
+            args.world,
+            None,
+            player
+                .as_ref()
+                .map(|p| p.clone() as Arc<dyn crate::entity::EntityBase>),
+        ) && let Some(player) = player
+        {
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::BellRing as i32,
+                1,
+            );
+        }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

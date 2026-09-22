@@ -9,7 +9,7 @@ use pumpkin_codecs::codec::list::validate_fixed_size;
 use pumpkin_codecs::{DataResult, FlatTryFrom, IntStream, comap_flat_map_codec_impl};
 
 /// Represents an axis-aligned 3D block bounding box in integer coordinates.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BlockBox {
     /// The minimum corner of the box (inclusive).
     pub min: Vector3<i32>,

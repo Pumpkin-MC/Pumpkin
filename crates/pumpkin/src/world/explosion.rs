@@ -303,15 +303,7 @@ impl Explosion {
 
                         let (_fluid, fluid_state) = Fluid::from_state_id(state_id).map_or_else(
                             || {
-                                let is_waterlogged =
-                                    block.properties(state_id).is_some_and(|props| {
-                                        props
-                                            .to_props()
-                                            .into_iter()
-                                            .any(|(k, v)| k == "waterlogged" && v == "true")
-                                    });
-
-                                if is_waterlogged {
+                                if block.is_waterlogged(state_id) {
                                     (&Fluid::FLOWING_WATER, &Fluid::FLOWING_WATER.states[0])
                                 } else {
                                     (&Fluid::EMPTY, &Fluid::EMPTY.states[0])
@@ -541,9 +533,6 @@ impl Explosion {
                 let explosion_radius = decay_drops.then_some(self.power);
 
                 for (pos, (block, state)) in &blocks {
-                    world.set_block_state(pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
-                    world.close_container_screens_at(pos);
-
                     let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
 
                     if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
@@ -562,8 +551,12 @@ impl Explosion {
                             is_thundering: Some(is_thundering),
                             ..Default::default()
                         };
-                        drop_loot(world, block, pos, false, params);
+                        drop_loot(world, block, pos, false, &params);
                     }
+
+                    world.set_block_state(pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
+                    world.close_container_screens_at(pos);
+
                     if let Some(pumpkin_block) = pumpkin_block {
                         pumpkin_block.explode(ExplodeArgs {
                             world,

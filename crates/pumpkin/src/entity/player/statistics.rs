@@ -1,12 +1,12 @@
 pub use pumpkin_data::statistic::{CustomStatistic, StatisticCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 #[derive(Default)]
 pub struct Statistics {
     /// (Category ID, Statistic ID) -> Value
-    pub stats: HashMap<(i32, i32), i32>,
+    pub stats: FxHashMap<(i32, i32), i32>,
 }
 
 impl Statistics {

@@ -1,15 +1,16 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use crate::inventory::Inventory;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component_impl::EnchantableImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::statistic::{CustomStatistic, StatisticCategory};
 use pumpkin_data::tag::{Enchantment as EnchantmentTag, Taggable};
 use pumpkin_util::random::{RandomImpl, legacy_rand::LegacyRand};
-use pumpkin_world::inventory::Inventory;
 
 use crate::{
     player::player_inventory::PlayerInventory,
@@ -114,7 +115,7 @@ impl EnchantingTableScreenHandler {
                 let mut random = LegacyRand::from_seed(self.enchantment_seed as u64);
 
                 for i in 0..3 {
-                    let level = self.calculate_level_requirement(&mut random, i, enchantability);
+                    let level = self.calculate_level_requirement(&mut random, i);
                     self.level_requirements[i] = level;
                 }
 
@@ -124,7 +125,6 @@ impl EnchantingTableScreenHandler {
                         let enchantments = Self::get_enchantment_list(
                             &mut random,
                             &item,
-                            i,
                             self.level_requirements[i],
                         );
                         if enchantments.is_empty() {
@@ -161,12 +161,7 @@ impl EnchantingTableScreenHandler {
         self.send_property_updates();
     }
 
-    fn calculate_level_requirement(
-        &self,
-        random: &mut LegacyRand,
-        slot: usize,
-        _enchantability: i32,
-    ) -> i32 {
+    fn calculate_level_requirement(&self, random: &mut LegacyRand, slot: usize) -> i32 {
         let b = self.bookshelf_count;
         let level = random.next_bounded_i32(8) + 1 + (b >> 1) + random.next_bounded_i32(b + 1);
 
@@ -185,7 +180,6 @@ impl EnchantingTableScreenHandler {
     fn get_enchantment_list(
         random: &mut LegacyRand,
         item: &ItemStack,
-        _slot: usize,
         level: i32,
     ) -> Vec<(&'static Enchantment, i32)> {
         let enchantability = item
@@ -363,8 +357,7 @@ impl ScreenHandler for EnchantingTableScreenHandler {
         }
 
         let mut random = self.create_enchantment_random(id as usize);
-        let mut enchantments =
-            Self::get_enchantment_list(&mut random, &item_stack, id as usize, level_req);
+        let mut enchantments = Self::get_enchantment_list(&mut random, &item_stack, level_req);
 
         if enchantments.is_empty() {
             return false;
@@ -393,6 +386,10 @@ impl ScreenHandler for EnchantingTableScreenHandler {
 
         self.update_enchantments(player);
         self.send_content_updates();
+
+        // Vanilla plays the table use sound at a random pitch in [0.9, 1.0)
+        let pitch = rand::random::<f32>().mul_add(0.1, 0.9);
+        player.play_block_sound(Sound::BlockEnchantmentTableUse, pitch);
 
         player.increment_stat(
             StatisticCategory::Custom,

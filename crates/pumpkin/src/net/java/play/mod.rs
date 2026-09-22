@@ -1,4 +1,3 @@
-use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_util::{Hand, PermissionLvl};
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
@@ -13,6 +12,7 @@ use tracing::{Level, debug, error, info, trace, warn};
 use crate::block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self};
+use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::equipment_break_status;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
@@ -35,11 +35,10 @@ use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
 
 use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::jigsaw_block::JigsawBlockEntity;
-use crate::block::entities::sign::SignBlockEntity;
 use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{BlockBreakingProgress, World, chunker};
-use pumpkin_data::block_properties::{BlockProperties, CommandBlockLikeProperties};
+use pumpkin_data::block_properties::CommandBlockLikeProperties;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, DataComponentImpl, EquipmentSlot, EquippableImpl, FoodImpl,
@@ -58,14 +57,13 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, CPingResponse,
-    CPlayerInfoUpdate, CPlayerPosition, CSetCamera, CSetSelectedSlot, CSystemChatMessage,
-    CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction,
-    PlayerInfoFlags,
+    CPlayerInfoUpdate, CPlayerPosition, CSetCamera, CSetSelectedSlot, CUpdateEntityPos,
+    CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction, PlayerInfoFlags,
 };
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SAttack, SBundleItemSelected,
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClientCommand,
-    SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
+    SClientInformationPlay, SCommandSuggestion, SConfirmTeleport,
     SCookieResponse as SPCookieResponse, SEditBook, SInteract, SJigsawGenerate, SKeepAlive,
     SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPickItemFromEntity, SPlaceRecipe,
     SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput,
@@ -84,6 +82,32 @@ use pumpkin_world::world::BlockFlags;
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
 const CHAT_MESSAGE_MAX_AGE: i64 = 1000 * 60 * 2;
+
+/// Bedrock move/rotate for another player's tracked entity. Client lerps, no delta packet needed.
+fn bedrock_move_player_packet(
+    entity: &Entity,
+    pos: Vector3<f64>,
+    mode: u8,
+    on_ground: bool,
+) -> CMovePlayer {
+    CMovePlayer::new(
+        VarULong(entity.entity_id as u64),
+        Vector3::new(
+            pos.x as f32,
+            pos.y as f32 + entity.entity_type.eye_height,
+            pos.z as f32,
+        ),
+        entity.pitch.load(),
+        entity.yaw.load(),
+        entity.head_yaw.load(),
+        mode,
+        on_ground,
+        VarULong(0),
+        0,
+        0,
+        VarULong(0),
+    )
+}
 
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
@@ -226,6 +250,7 @@ pub mod chat_message;
 pub mod chunk_batch;
 pub mod client_command;
 pub mod client_information;
+pub mod client_tick_end;
 pub mod close_container;
 pub mod command_suggestion;
 pub mod configuration_acknowledged;

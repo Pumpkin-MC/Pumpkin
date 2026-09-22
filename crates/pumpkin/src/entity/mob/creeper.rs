@@ -10,15 +10,15 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
+use pumpkin_protocol::codec::var_int::VarInt;
 
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::ActiveTargetGoal, creeper_ignite::CreeperIgniteGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal,
+        creeper_ignite::CreeperIgniteGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     player::Player,
@@ -71,6 +71,14 @@ impl CreeperEntity {
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, Box::new(CreeperIgniteGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(
+                3,
+                Box::new(AvoidEntityGoal::new(&EntityType::OCELOT, 6.0, 1.0, 1.2)),
+            );
+            goal_selector.add_goal(
+                3,
+                Box::new(AvoidEntityGoal::new(&EntityType::CAT, 6.0, 1.0, 1.2)),
+            );
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, false)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
 
@@ -92,13 +100,10 @@ impl CreeperEntity {
 
     pub fn set_fuse_speed(&self, speed: i32) {
         self.fuse_speed.store(speed, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::creeper::FUSE_ID,
-                VarInt(speed),
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::creeper::FUSE_ID, VarInt(speed));
     }
 
     pub fn explode(&self) {
@@ -162,13 +167,10 @@ impl Mob for CreeperEntity {
         lightning: &crate::entity::lightning::LightningBoltEntity,
     ) {
         self.charged.store(true, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::creeper::CHARGED,
-                true,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::creeper::CHARGED, true);
         self.mob_entity
             .living_entity
             .on_lightning_strike(caller, lightning);
@@ -231,16 +233,9 @@ impl Mob for CreeperEntity {
         );
 
         self.ignited.store(true, Ordering::Relaxed);
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::creeper::IS_IGNITED,
-                true,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::creeper::IS_IGNITED, true);
 
         if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-            // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
             let _ = item_stack.damage_item(1);
         }
 
@@ -256,13 +251,7 @@ impl CreeperEntity {
     pub fn set_charged(&self, charged: bool) {
         self.charged.store(charged, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::creeper::CHARGED,
-                charged,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::creeper::CHARGED, charged);
     }
 
     pub fn is_ignited(&self) -> bool {
@@ -272,13 +261,7 @@ impl CreeperEntity {
     pub fn set_ignited(&self, ignited: bool) {
         self.ignited.store(ignited, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::creeper::IS_IGNITED,
-                ignited,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::creeper::IS_IGNITED, ignited);
     }
 
     pub fn get_fuse(&self) -> i32 {

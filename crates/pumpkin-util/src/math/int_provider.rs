@@ -20,6 +20,9 @@ pub enum NormalIntProvider {
     /// Returns values biased toward the lower end of the range (triangular distribution).
     #[serde(rename = "minecraft:biased_to_bottom")]
     BiasedToBottom(BiasedToBottomIntProvider),
+    /// Returns values very biased toward the lower end of the range.
+    #[serde(rename = "minecraft:very_biased_to_bottom")]
+    VeryBiasedToBottom(VeryBiasedToBottomIntProvider),
     /// Wraps another provider and clamps its output to a specified range.
     #[serde(rename = "minecraft:clamped")]
     Clamped(ClampedIntProvider),
@@ -50,6 +53,11 @@ impl ToTokens for NormalIntProvider {
             Self::BiasedToBottom(biased) => {
                 tokens.extend(quote! {
                     NormalIntProvider::BiasedToBottom(#biased)
+                });
+            }
+            Self::VeryBiasedToBottom(very_biased) => {
+                tokens.extend(quote! {
+                    NormalIntProvider::VeryBiasedToBottom(#very_biased)
                 });
             }
             Self::Clamped(clamped) => {
@@ -114,6 +122,7 @@ impl IntProvider {
                 NormalIntProvider::Constant(constant) => constant.get_min(),
                 NormalIntProvider::Uniform(uniform) => uniform.get_min(),
                 NormalIntProvider::BiasedToBottom(biased) => biased.get_min(),
+                NormalIntProvider::VeryBiasedToBottom(very_biased) => very_biased.get_min(),
                 NormalIntProvider::Clamped(clamped) => clamped.get_min(),
                 NormalIntProvider::Trapezoid(trapezoid) => trapezoid.get_min(),
                 NormalIntProvider::ClampedNormal(clamped_normal) => clamped_normal.get_min(),
@@ -136,6 +145,7 @@ impl IntProvider {
                 NormalIntProvider::Constant(constant) => constant.get(random),
                 NormalIntProvider::Uniform(uniform) => uniform.get(random),
                 NormalIntProvider::BiasedToBottom(biased) => biased.get(random),
+                NormalIntProvider::VeryBiasedToBottom(very_biased) => very_biased.get(random),
                 NormalIntProvider::Clamped(clamped) => clamped.get(random),
                 NormalIntProvider::ClampedNormal(clamped_normal) => clamped_normal.get(random),
                 NormalIntProvider::WeightedList(weighted_list) => weighted_list.get(random),
@@ -158,6 +168,7 @@ impl IntProvider {
                 NormalIntProvider::Constant(constant) => constant.get_max(),
                 NormalIntProvider::Uniform(uniform) => uniform.get_max(),
                 NormalIntProvider::BiasedToBottom(biased) => biased.get_max(),
+                NormalIntProvider::VeryBiasedToBottom(very_biased) => very_biased.get_max(),
                 NormalIntProvider::Clamped(clamped) => clamped.get_max(),
                 NormalIntProvider::ClampedNormal(clamped_normal) => clamped_normal.get_max(),
                 NormalIntProvider::WeightedList(weighted_list) => weighted_list.get_max(),
@@ -284,17 +295,83 @@ impl BiasedToBottomIntProvider {
     /// # Returns
     /// A random integer in the range [`min_inclusive`, `max_inclusive`], with lower values more likely.
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
-        // Similar to uniform but biased toward lower values
-        // Uses triangular distribution with mode at min
-        let range = f64::from(self.max_inclusive - self.min_inclusive + 1);
-        let triangular = random.next_triangular(0.0, range);
-        self.min_inclusive + (triangular.abs() as i32).min(self.max_inclusive - self.min_inclusive)
+        if self.min_inclusive >= self.max_inclusive {
+            return self.min_inclusive;
+        }
+        let range = self.max_inclusive - self.min_inclusive + 1;
+        let bound = random.next_bounded_i32(range) + 1;
+        self.min_inclusive + random.next_bounded_i32(bound)
     }
 
     /// Returns the maximum inclusive value.
     ///
     /// # Returns
     /// The maximum value that can be generated (inclusive).
+    #[must_use]
+    pub const fn get_max(&self) -> i32 {
+        self.max_inclusive
+    }
+}
+
+/// An integer provider that generates values very biased toward the lower end of the range.
+#[derive(Deserialize, Clone, Debug)]
+pub struct VeryBiasedToBottomIntProvider {
+    /// The minimum value (inclusive) that can be generated.
+    pub min_inclusive: i32,
+    /// The maximum value (inclusive) that can be generated.
+    pub max_inclusive: i32,
+    /// The number of additional random bounds steps (default 1).
+    #[serde(default = "default_very_biased_inner")]
+    pub inner: i32,
+}
+
+const fn default_very_biased_inner() -> i32 {
+    1
+}
+
+#[cfg(feature = "codegen")]
+impl ToTokens for VeryBiasedToBottomIntProvider {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let min_inclusive = LitInt::new(&self.min_inclusive.to_string(), Span::call_site());
+        let max_inclusive = LitInt::new(&self.max_inclusive.to_string(), Span::call_site());
+        let inner = LitInt::new(&self.inner.to_string(), Span::call_site());
+        tokens.extend(quote! {
+            VeryBiasedToBottomIntProvider {
+                min_inclusive: #min_inclusive,
+                max_inclusive: #max_inclusive,
+                inner: #inner,
+            }
+        });
+    }
+}
+
+impl VeryBiasedToBottomIntProvider {
+    #[must_use]
+    pub const fn new(min_inclusive: i32, max_inclusive: i32, inner: i32) -> Self {
+        Self {
+            min_inclusive,
+            max_inclusive,
+            inner,
+        }
+    }
+
+    #[must_use]
+    pub const fn get_min(&self) -> i32 {
+        self.min_inclusive
+    }
+
+    pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
+        if self.min_inclusive >= self.max_inclusive {
+            return self.min_inclusive;
+        }
+        let range = self.max_inclusive - self.min_inclusive + 1;
+        let mut bound = range;
+        for _ in 0..=self.inner {
+            bound = random.next_bounded_i32(bound) + 1;
+        }
+        self.min_inclusive + bound - 1
+    }
+
     #[must_use]
     pub const fn get_max(&self) -> i32 {
         self.max_inclusive
@@ -439,14 +516,12 @@ impl TrapezoidIntProvider {
     /// # Returns
     /// A random integer from the source provider, clamped to [`min_inclusive`, `max_inclusive`].
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
-        if self.plateau == 0 && self.max_inclusive == -self.min_inclusive {
-            return random.next_bounded_i32(self.max_inclusive + 1)
-                - random.next_bounded_i32(self.max_inclusive + 1);
+        if self.min_inclusive >= self.max_inclusive {
+            return self.min_inclusive;
         }
         let range = self.max_inclusive - self.min_inclusive;
-        if self.plateau == range {
-            return random.next_bounded_i32(self.max_inclusive - self.min_inclusive + 1)
-                + self.min_inclusive;
+        if self.plateau >= range {
+            return self.min_inclusive + random.next_bounded_i32(range + 1);
         }
         let plateau_start = (range - self.plateau) / 2;
         let plateau_end = range - plateau_start;

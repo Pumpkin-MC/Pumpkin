@@ -39,6 +39,8 @@ impl BoatItem {
             val if val == Item::CHERRY_CHEST_BOAT.id => &EntityType::CHERRY_CHEST_BOAT,
             val if val == Item::PALE_OAK_BOAT.id => &EntityType::PALE_OAK_BOAT,
             val if val == Item::PALE_OAK_CHEST_BOAT.id => &EntityType::PALE_OAK_CHEST_BOAT,
+            val if val == Item::POPLAR_BOAT.id => &EntityType::POPLAR_BOAT,
+            val if val == Item::POPLAR_CHEST_BOAT.id => &EntityType::POPLAR_CHEST_BOAT,
             val if val == Item::BAMBOO_RAFT.id => &EntityType::BAMBOO_RAFT,
             val if val == Item::BAMBOO_CHEST_RAFT.id => &EntityType::BAMBOO_CHEST_RAFT,
             _ => {
@@ -79,6 +81,8 @@ impl ItemMetadata for BoatItem {
             Item::CHERRY_CHEST_BOAT.id,
             Item::PALE_OAK_BOAT.id,
             Item::PALE_OAK_CHEST_BOAT.id,
+            Item::POPLAR_BOAT.id,
+            Item::POPLAR_CHEST_BOAT.id,
             Item::BAMBOO_RAFT.id,
             Item::BAMBOO_CHEST_RAFT.id,
         ]
@@ -174,13 +178,24 @@ impl ItemBehaviour for BoatItem {
         let boat_entity = Arc::new(BoatEntity::new(entity));
         world.spawn_entity(boat_entity);
 
-        // Decrement item unless in creative mode
-        let mut stack = player.inventory.held_item();
-        stack.decrement_unless_creative(player.gamemode.load(), 1);
-        player.inventory.set_held_item(stack);
+        let mut main_hand = player.inventory.held_item();
+        let consumed = if !main_hand.is_empty() && main_hand.item.id == item.id {
+            main_hand.decrement_unless_creative(player.gamemode.load(), 1);
+            player.inventory.set_held_item(main_hand);
+            true
+        } else {
+            false
+        };
 
-        // TODO: world.emitGameEvent(user, GameEvent.ENTITY_PLACE, hitResult.getPos())
-        // TODO: user.incrementStat(Stats.USED.getOrCreateStat(this))
+        if !consumed {
+            let mut off_hand = player.inventory.off_hand_item();
+            if !off_hand.is_empty() && off_hand.item.id == item.id {
+                off_hand.decrement_unless_creative(player.gamemode.load(), 1);
+                player
+                    .inventory
+                    .set_stack_in_hand(pumpkin_util::Hand::Left, off_hand);
+            }
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

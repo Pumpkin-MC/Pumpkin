@@ -1,12 +1,10 @@
 use std::sync::Arc;
 
-use pumpkin_data::block_properties::{
-    Axis, BlockProperties, CreakingHeartLikeProperties, CreakingHeartState,
-};
+use pumpkin_data::block_properties::{Axis, CreakingHeartLikeProperties, CreakingHeartState};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, BlockStateId};
+use pumpkin_data::{BlockId, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
@@ -17,8 +15,8 @@ use crate::block::{BlockBehaviour, BrokenArgs, OnNeighborUpdateArgs, OnPlaceArgs
 pub struct CreakingHeartBlock;
 
 impl CreakingHeartBlock {
-    fn is_pale_oak_log(block: &Block) -> bool {
-        block.name == "pale_oak_log" || block.name == "stripped_pale_oak_log"
+    const fn is_pale_oak_log(id: BlockId) -> bool {
+        matches!(id, BlockId::PALE_OAK_LOG | BlockId::STRIPPED_PALE_OAK_LOG)
     }
 
     fn check_active_logs(
@@ -32,11 +30,8 @@ impl CreakingHeartBlock {
             Axis::Z => (pos.north(), pos.south()),
         };
 
-        let state_a = world.get_block_state(&pos_a);
-        let state_b = world.get_block_state(&pos_b);
-
-        let block_a = Block::from_state_id(state_a.id);
-        let block_b = Block::from_state_id(state_b.id);
+        let block_a = world.get_block_state_id(&pos_a).to_block_id();
+        let block_b = world.get_block_state_id(&pos_b).to_block_id();
 
         Self::is_pale_oak_log(block_a) && Self::is_pale_oak_log(block_b)
     }
@@ -44,8 +39,7 @@ impl CreakingHeartBlock {
 
 impl BlockBehaviour for CreakingHeartBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props =
-            CreakingHeartLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        let mut props = CreakingHeartLikeProperties::from_state_id(args.block.default_state.id);
         props.axis = match args.direction {
             pumpkin_data::BlockDirection::North | pumpkin_data::BlockDirection::South => Axis::Z,
             pumpkin_data::BlockDirection::East | pumpkin_data::BlockDirection::West => Axis::X,
@@ -61,7 +55,7 @@ impl BlockBehaviour for CreakingHeartBlock {
             args.world.add_block_entity(Arc::new(entity));
 
             let state_id = args.world.get_block_state_id(args.position);
-            let mut props = CreakingHeartLikeProperties::from_state_id(state_id, args.block);
+            let mut props = CreakingHeartLikeProperties::from_state_id(state_id);
 
             if Self::check_active_logs(args.world.as_ref(), args.position, props.axis) {
                 props.creaking_heart_state = CreakingHeartState::Dormant;
@@ -83,7 +77,7 @@ impl BlockBehaviour for CreakingHeartBlock {
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         {
             let state_id = args.world.get_block_state_id(args.position);
-            let mut props = CreakingHeartLikeProperties::from_state_id(state_id, args.block);
+            let mut props = CreakingHeartLikeProperties::from_state_id(state_id);
 
             let active_logs =
                 Self::check_active_logs(args.world.as_ref(), args.position, props.axis);

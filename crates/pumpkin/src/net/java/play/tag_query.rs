@@ -7,11 +7,7 @@ use pumpkin_protocol::java::{
 };
 
 impl JavaClient {
-    pub async fn handle_block_entity_tag_query(
-        &self,
-        player: &Player,
-        packet: SBlockEntityTagQuery,
-    ) {
+    pub fn handle_block_entity_tag_query(&self, player: &Player, packet: &SBlockEntityTagQuery) {
         if player.permission_lvl.load() < PermissionLvl::Two {
             return;
         }
@@ -22,11 +18,10 @@ impl JavaClient {
         }
 
         let nbt_bytes = Nbt::new(String::new(), compound).write_unnamed();
-        self.send_packet(&CTagQueryResponse::new(packet.transaction_id, &nbt_bytes))
-            .await;
+        self.try_send_packet(&CTagQueryResponse::new(packet.transaction_id, &nbt_bytes));
     }
 
-    pub async fn handle_entity_tag_query(&self, player: &Player, packet: SEntityTagQuery) {
+    pub fn handle_entity_tag_query(&self, player: &Player, packet: &SEntityTagQuery) {
         if player.permission_lvl.load() < PermissionLvl::Two {
             return;
         }
@@ -37,7 +32,6 @@ impl JavaClient {
         }
 
         let nbt_bytes = Nbt::new(String::new(), compound).write_unnamed();
-        self.send_packet(&CTagQueryResponse::new(packet.transaction_id, &nbt_bytes))
-            .await;
+        self.try_send_packet(&CTagQueryResponse::new(packet.transaction_id, &nbt_bytes));
     }
 }

@@ -2,13 +2,13 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_select_trade(&self, player: &Arc<Player>, packet: SSelectTrade) {
+    pub fn handle_select_trade(&self, player: &Arc<Player>, packet: &SSelectTrade) {
         let mut event = crate::plugin::api::events::inventory::trade_select::TradeSelectEvent::new(
             player.clone(),
             packet.selected_slot.0 as u8,
         );
         if let Some(server) = player.world().server.upgrade() {
-            server.plugin_manager.fire(&server, &mut event).await;
+            server.plugin_manager.fire_blocking(&server, &mut event);
         }
         if event.cancelled {
             return;

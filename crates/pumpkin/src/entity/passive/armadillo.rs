@@ -11,7 +11,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -149,7 +148,7 @@ impl ArmadilloEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, ARMADILLO_FOOD)));
+            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, ARMADILLO_FOOD, false)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -171,12 +170,9 @@ impl ArmadilloEntity {
         self.state.store(state.id(), Ordering::Relaxed);
         self.in_state_ticks.store(0, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::armadillo::ARMADILLO_STATE,
-                VarInt(state.id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::armadillo::ARMADILLO_STATE,
+            VarInt(state.id()),
         );
     }
 
@@ -412,20 +408,11 @@ impl Mob for ArmadilloEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::armadillo::BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::armadillo::BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::armadillo::ARMADILLO_STATE,
-                VarInt(self.get_state().id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::armadillo::ARMADILLO_STATE,
+            VarInt(self.get_state().id()),
         );
     }
 

@@ -1,9 +1,11 @@
 use std::sync::atomic::AtomicBool;
 
+use pumpkin_util::math::vector3::Vector3;
+
 use crate::{
     entity::{
         Entity, EntityBase,
-        projectile::{ProjectileHit, ThrownItemEntity},
+        projectile::{ProjectileHit, ThrownItemEntity, fireball::INITIAL_ACCELERATION_POWER},
     },
     server::Server,
 };
@@ -29,15 +31,24 @@ impl SmallFireballEntity {
     }
 
     #[must_use]
-    pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
+    pub fn new_shot(entity: Entity, shooter: &Entity, direction: Vector3<f64>) -> Self {
         let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
+        let accel = INITIAL_ACCELERATION_POWER;
+        thrown
+            .entity
+            .velocity
+            .store(direction.normalize().multiply(accel, accel, accel));
         Self { thrown }
     }
 }
 
 impl EntityBase for SmallFireballEntity {
-    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
-        self.thrown.process_tick(caller, server);
+    fn get_owner_id(&self) -> Option<i32> {
+        self.thrown.owner_id
+    }
+
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.thrown.process_tick(caller);
     }
 
     fn get_entity(&self) -> &Entity {

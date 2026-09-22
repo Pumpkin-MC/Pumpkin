@@ -19,15 +19,23 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
+use pumpkin_data::AttributeModifierSlot;
 use pumpkin_data::Enchantment;
-use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::attributes::Attributes;
+use pumpkin_data::data_component_impl::{
+    AttributeModifiersImpl, CustomNameImpl, EnchantmentsImpl, EquipmentSlot, EquipmentType,
+    EquippableImpl, IDSet, Operation,
+};
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{Tag, Taggable};
 use pumpkin_util::difficulty::Difficulty;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::EntityBase;
+use crate::entity::mob::{Mob, MobEntity};
 
 // ══════════════════════════════════════════════════════════════════
 // Global constants extracted from vanilla Minecraft 26.2
@@ -661,11 +669,7 @@ impl RegionalDifficulty {
 #[must_use]
 fn moon_brightness(time_of_day: i64) -> f32 {
     let phase = (time_of_day / 24000 % 8) as i32;
-    if phase == 0 {
-        1.0
-    } else {
-        1.0 - (phase - 4).abs() as f32 / 4.0
-    }
+    (phase - 4).abs() as f32 / 4.0
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -868,7 +872,7 @@ fn select_vanilla_armor(difficulty: &RegionalDifficulty) -> Vec<(EquipmentSlot, 
         first = false;
         pieces.push((
             slot.clone(),
-            create_equipment_item(tier[i], difficulty),
+            create_equipment_item(tier[i]),
             DEFAULT_EQUIPMENT_DROP_CHANCE,
         ));
     }
@@ -878,7 +882,7 @@ fn select_vanilla_armor(difficulty: &RegionalDifficulty) -> Vec<(EquipmentSlot, 
 /// Creates a fresh, full-durability `ItemStack` for mob equipment.
 /// Vanilla mobs always spawn with equipment at full durability.
 #[must_use]
-fn create_equipment_item(item: &'static Item, _difficulty: &RegionalDifficulty) -> ItemStack {
+fn create_equipment_item(item: &'static Item) -> ItemStack {
     ItemStack::new(1, item)
 }
 
@@ -897,7 +901,7 @@ fn equip_mob_from_def(
     // ── Weapon ──
     match def.weapon {
         WeaponConfig::Always(item) => {
-            let mut stack = create_equipment_item(item, difficulty);
+            let mut stack = create_equipment_item(item);
             if def.enchanted && difficulty.should_happen(WEAPON_ENCHANT_CHANCE) {
                 apply_vanilla_enchantments(
                     &mut stack,
@@ -913,7 +917,7 @@ fn equip_mob_from_def(
         }
         WeaponConfig::AlwaysWeighted(items) => {
             let item = weighted_select_item(items);
-            let mut stack = create_equipment_item(item, difficulty);
+            let mut stack = create_equipment_item(item);
             if def.enchanted && difficulty.should_happen(WEAPON_ENCHANT_CHANCE) {
                 apply_vanilla_enchantments(
                     &mut stack,
@@ -939,7 +943,7 @@ fn equip_mob_from_def(
             };
             if rand::random::<f32>() < chance {
                 let item = weighted_select_item(items);
-                let mut stack = create_equipment_item(item, difficulty);
+                let mut stack = create_equipment_item(item);
                 if def.enchanted && difficulty.should_happen(WEAPON_ENCHANT_CHANCE) {
                     apply_vanilla_enchantments(
                         &mut stack,
@@ -977,7 +981,7 @@ fn equip_mob_from_def(
         ArmorConfig::CustomPerSlot(entries) => {
             for entry in entries {
                 if rand::random::<f32>() < entry.chance {
-                    let mut stack = create_equipment_item(entry.item, difficulty);
+                    let mut stack = create_equipment_item(entry.item);
                     if def.enchanted && difficulty.should_happen(ARMOR_ENCHANT_CHANCE) {
                         apply_vanilla_enchantments(
                             &mut stack,
@@ -1045,4 +1049,249 @@ pub fn equip_mob_on_spawn(mob: &dyn EntityBase, world: &Arc<crate::world::World>
     drop(drop_chances);
 
     living.send_equipment_changes(&equipment_changes);
+}
+
+#[must_use]
+pub fn is_equippable_in_slot(
+    entity_type: &EntityType,
+    stack: &ItemStack,
+    slot: &EquipmentSlot,
+) -> bool {
+    stack.get_data_component::<EquippableImpl>().map_or_else(
+        || *slot == EquipmentSlot::MAIN_HAND,
+        |equippable| {
+            *equippable.slot == *slot
+                && equippable
+                    .allowed_entities
+                    .as_ref()
+                    .is_none_or(|allowed| match allowed {
+                        IDSet::Tag(tag) => entity_type.is_tagged_with(tag).unwrap_or(false),
+                        IDSet::IDs(ids) => ids.iter().any(|id| id.id == entity_type.id),
+                    })
+        },
+    )
+}
+
+#[must_use]
+pub fn get_equipment_slot_for_item(stack: &ItemStack) -> EquipmentSlot {
+    stack
+        .get_data_component::<EquippableImpl>()
+        .map_or(EquipmentSlot::MAIN_HAND, |equippable| {
+            equippable.slot.clone()
+        })
+}
+
+#[must_use]
+/// Whether `new_item` is an upgrade over `current_item` in `slot`.
+pub fn can_replace_current_item(
+    mob: &MobEntity,
+    preferred_weapon_type: Option<&'static Tag>,
+    new_item: &ItemStack,
+    current_item: &ItemStack,
+    slot: &EquipmentSlot,
+) -> bool {
+    if current_item.is_empty() {
+        return true;
+    }
+    if slot.is_armor_slot() {
+        compare_armor(mob, new_item, current_item, slot)
+    } else {
+        *slot == EquipmentSlot::MAIN_HAND
+            && compare_weapons(mob, preferred_weapon_type, new_item, current_item, slot)
+    }
+}
+
+fn compare_armor(
+    mob: &MobEntity,
+    new_item: &ItemStack,
+    current_item: &ItemStack,
+    slot: &EquipmentSlot,
+) -> bool {
+    if current_item.get_enchantment_level(&Enchantment::BINDING_CURSE) > 0 {
+        return false;
+    }
+    let new_defense = approximate_attribute_with(mob, new_item, &Attributes::ARMOR, slot);
+    let old_defense = approximate_attribute_with(mob, current_item, &Attributes::ARMOR, slot);
+    let new_toughness =
+        approximate_attribute_with(mob, new_item, &Attributes::ARMOR_TOUGHNESS, slot);
+    let old_toughness =
+        approximate_attribute_with(mob, current_item, &Attributes::ARMOR_TOUGHNESS, slot);
+    if new_defense != old_defense {
+        return new_defense > old_defense;
+    }
+    if new_toughness != old_toughness {
+        return new_toughness > old_toughness;
+    }
+    can_replace_equal_item(new_item, current_item)
+}
+
+fn compare_weapons(
+    mob: &MobEntity,
+    preferred_weapon_type: Option<&'static Tag>,
+    new_item: &ItemStack,
+    current_item: &ItemStack,
+    slot: &EquipmentSlot,
+) -> bool {
+    if let Some(preferred) = preferred_weapon_type {
+        let current_preferred = current_item.item.has_tag(preferred);
+        let new_preferred = new_item.item.has_tag(preferred);
+        if current_preferred && !new_preferred {
+            return false;
+        }
+        if !current_preferred && new_preferred {
+            return true;
+        }
+    }
+    let new_damage = approximate_attribute_with(mob, new_item, &Attributes::ATTACK_DAMAGE, slot);
+    let old_damage =
+        approximate_attribute_with(mob, current_item, &Attributes::ATTACK_DAMAGE, slot);
+    if new_damage != old_damage {
+        return new_damage > old_damage;
+    }
+    can_replace_equal_item(new_item, current_item)
+}
+
+fn approximate_attribute_with(
+    mob: &MobEntity,
+    stack: &ItemStack,
+    attribute: &Attributes,
+    slot: &EquipmentSlot,
+) -> f64 {
+    let base_value = mob.living_entity.get_attribute_base(attribute);
+    let mut add_value = 0.0;
+    let mut add_multiplied_base = 0.0;
+    let mut multiplied_total = 1.0;
+    if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
+        for modifier in modifiers.attribute_modifiers.iter() {
+            if modifier.r#type.id != attribute.id || !attribute_slot_matches(&modifier.slot, slot) {
+                continue;
+            }
+            match modifier.operation {
+                Operation::AddValue => add_value += modifier.amount,
+                Operation::AddMultipliedBase => add_multiplied_base += modifier.amount,
+                Operation::AddMultipliedTotal => multiplied_total *= 1.0 + modifier.amount,
+            }
+        }
+    }
+    (base_value + add_value) * (1.0 + add_multiplied_base) * multiplied_total
+}
+
+fn attribute_slot_matches(group: &AttributeModifierSlot, slot: &EquipmentSlot) -> bool {
+    match group {
+        AttributeModifierSlot::Any => true,
+        AttributeModifierSlot::MainHand => *slot == EquipmentSlot::MAIN_HAND,
+        AttributeModifierSlot::OffHand => *slot == EquipmentSlot::OFF_HAND,
+        AttributeModifierSlot::Hand => slot.slot_type() == EquipmentType::Hand,
+        AttributeModifierSlot::Feet => *slot == EquipmentSlot::FEET,
+        AttributeModifierSlot::Legs => *slot == EquipmentSlot::LEGS,
+        AttributeModifierSlot::Chest => *slot == EquipmentSlot::CHEST,
+        AttributeModifierSlot::Head => *slot == EquipmentSlot::HEAD,
+        AttributeModifierSlot::Armor => slot.slot_type() == EquipmentType::HumanoidArmor,
+        AttributeModifierSlot::Body => *slot == EquipmentSlot::BODY,
+        AttributeModifierSlot::Saddle => *slot == EquipmentSlot::SADDLE,
+    }
+}
+
+#[must_use]
+pub fn can_replace_equal_item(new_item: &ItemStack, current_item: &ItemStack) -> bool {
+    let enchantment_count = |stack: &ItemStack| {
+        stack
+            .get_data_component::<EnchantmentsImpl>()
+            .map_or(0, |enchantments| enchantments.enchantment.len())
+    };
+    let new_enchantments = enchantment_count(new_item);
+    let current_enchantments = enchantment_count(current_item);
+    if new_enchantments != current_enchantments {
+        return new_enchantments > current_enchantments;
+    }
+    let new_damage = new_item.get_damage();
+    let current_damage = current_item.get_damage();
+    if new_damage != current_damage {
+        return new_damage < current_damage;
+    }
+    new_item.get_data_component::<CustomNameImpl>().is_some()
+        && current_item
+            .get_data_component::<CustomNameImpl>()
+            .is_none()
+}
+
+#[must_use]
+/// Equips `stack` if it beats what is worn, returning what got equipped.
+pub fn equip_item_if_possible(mob: &dyn Mob, stack: ItemStack) -> ItemStack {
+    let mob_entity = mob.get_mob_entity();
+    let entity = &mob_entity.living_entity.entity;
+    let mut slot = get_equipment_slot_for_item(&stack);
+    if !is_equippable_in_slot(entity.entity_type, &stack, &slot) {
+        return ItemStack::EMPTY.clone();
+    }
+
+    let item_in = |slot: &EquipmentSlot| {
+        mob_entity
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(slot)
+    };
+    let mut current = item_in(&slot);
+    let mut can_replace = mob.can_replace_current_item(&stack, &current, &slot);
+    if slot.is_armor_slot() && !can_replace {
+        slot = EquipmentSlot::MAIN_HAND;
+        current = item_in(&slot);
+        can_replace = current.is_empty();
+    }
+    if !can_replace {
+        return ItemStack::EMPTY.clone();
+    }
+
+    let drop_chance = mob_entity.drop_chance(&slot);
+    if !current.is_empty() && (rand::random::<f32>() - 0.1).max(0.0) < drop_chance {
+        mob_entity.spawn_at_location(current);
+    }
+
+    let mut stack = stack;
+    let to_equip = limit_for_slot(&slot, &mut stack);
+    mob_entity.set_item_slot_and_drop_when_killed(&slot, to_equip.clone());
+    mob_entity
+        .persistence_required
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    to_equip
+}
+
+// Hand slots have no count limit, every other slot holds one item.
+fn limit_for_slot(slot: &EquipmentSlot, stack: &mut ItemStack) -> ItemStack {
+    if slot.slot_type() == EquipmentType::Hand {
+        std::mem::replace(stack, ItemStack::EMPTY.clone())
+    } else {
+        stack.split(1)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::moon_brightness;
+
+    #[test]
+    fn moon_brightness_matches_the_vanilla_phase_table() {
+        let expected = [1.0, 0.75, 0.5, 0.25, 0.0, 0.25, 0.5, 0.75];
+        for (phase, want) in expected.into_iter().enumerate() {
+            let time_of_day = phase as i64 * 24000;
+            assert!(
+                (moon_brightness(time_of_day) - want).abs() < f32::EPSILON,
+                "phase {phase}: got {}, want {want}",
+                moon_brightness(time_of_day)
+            );
+        }
+    }
+
+    #[test]
+    fn moon_brightness_wraps_every_eight_days() {
+        for phase in 0..8i64 {
+            assert!(
+                (moon_brightness(phase * 24000) - moon_brightness((phase + 8) * 24000)).abs()
+                    < f32::EPSILON,
+                "phase {phase} does not wrap"
+            );
+        }
+    }
 }

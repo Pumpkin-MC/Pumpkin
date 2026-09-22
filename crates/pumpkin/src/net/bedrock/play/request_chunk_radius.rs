@@ -2,18 +2,13 @@
 use super::*;
 
 impl BedrockClient {
-    pub async fn handle_request_chunk_radius(
-        &self,
-        player: &Arc<Player>,
-        packet: SRequestChunkRadius,
-    ) {
+    pub fn handle_request_chunk_radius(&self, player: &Arc<Player>, packet: &SRequestChunkRadius) {
         let chunk_radius = packet.chunk_radius;
         if chunk_radius.0 < 1 {
-            self.kick(
+            self.try_kick(
                 DisconnectReason::Kicked,
                 "Cannot have zero or negative view distance!".to_string(),
-            )
-            .await;
+            );
             return;
         }
         let Some(server) = player.world().server.upgrade() else {
@@ -25,10 +20,9 @@ impl BedrockClient {
             NonZero::<i32>::from(server.advanced_config.networking.bedrock.view_distance).get(),
         );
 
-        self.enqueue_client_packet(&CChunkRadiusUpdated {
+        self.try_enqueue_client_packet(&CChunkRadiusUpdated {
             chunk_radius: VarInt(view_distance),
-        })
-        .await;
+        });
 
         let old_view_distance = {
             let current_config = player.config.load();
@@ -46,6 +40,6 @@ impl BedrockClient {
             "Player {} updated their render distance: {} -> {}.",
             player.gameprofile.name, old_view_distance, view_distance
         );
-        chunker::update_position(player).await;
+        chunker::update_position(player);
     }
 }

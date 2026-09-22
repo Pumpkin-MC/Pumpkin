@@ -40,8 +40,7 @@ impl ItemBehaviour for EggItem {
         egg.set_item_stack(item_stack);
 
         let (yaw, pitch) = player.rotation();
-        egg.thrown
-            .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
+        egg.thrown.set_velocity_from(pitch, yaw, 0.0, POWER, 1.0);
         world.spawn_entity(Arc::new(egg));
 
         // Consume item

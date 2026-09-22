@@ -3,18 +3,14 @@ use std::sync::Arc;
 use crate::{
     block::{
         BlockBehaviour, GetComparatorOutputArgs, NormalUseArgs, OnScheduledTickArgs,
-        UseWithItemArgs, registry::BlockActionResult,
+        PathComputationType, UseWithItemArgs, registry::BlockActionResult,
     },
     entity::{Entity, item::ItemEntity},
     world::World,
 };
 use pumpkin_data::{
-    Block, BlockStateId,
-    block_properties::{BlockProperties, ComposterLikeProperties},
-    composter_increase_chance::get_composter_increase_chance_from_item_id,
-    entity::EntityType,
-    item::Item,
-    item_stack::ItemStack,
+    Block, BlockState, BlockStateId, block_properties::ComposterLikeProperties,
+    data_component_impl::CompostableImpl, entity::EntityType, item::Item, item_stack::ItemStack,
     world::WorldEvent,
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
@@ -30,7 +26,7 @@ impl BlockBehaviour for ComposterBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         {
             let state_id = args.world.get_block_state_id(args.position);
-            let props = ComposterLikeProperties::from_state_id(state_id, args.block);
+            let props = ComposterLikeProperties::from_state_id(state_id);
             if props.level == 8 {
                 self.clear_composter(args.world, args.position, state_id, args.block);
             }
@@ -42,7 +38,7 @@ impl BlockBehaviour for ComposterBlock {
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         {
             let state_id = args.world.get_block_state_id(args.position);
-            let props = ComposterLikeProperties::from_state_id(state_id, args.block);
+            let props = ComposterLikeProperties::from_state_id(state_id);
             let level = props.level;
 
             // Check if the composter is full
@@ -52,12 +48,10 @@ impl BlockBehaviour for ComposterBlock {
             }
 
             let item_stack = &mut *args.item_stack;
-            let item_id = item_stack.item.id;
-
-            // Check if the item is consumable by the composter
-            let Some(chance) = get_composter_increase_chance_from_item_id(item_id) else {
+            let Some(compostable) = item_stack.get_data_component::<CompostableImpl>() else {
                 return BlockActionResult::Pass;
             };
+            let chance = compostable.chance;
 
             // Consume one item from the stack (if in survival mode)
             if !args.player.has_infinite_materials() {
@@ -84,7 +78,7 @@ impl BlockBehaviour for ComposterBlock {
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state_id = args.world.get_block_state_id(args.position);
-        let props = ComposterLikeProperties::from_state_id(state_id, args.block);
+        let props = ComposterLikeProperties::from_state_id(state_id);
         let level = props.level;
         if level == 7 {
             self.update_level_composter(args.world, args.position, state_id, args.block, level + 1);
@@ -93,9 +87,13 @@ impl BlockBehaviour for ComposterBlock {
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
         {
-            let props = ComposterLikeProperties::from_state_id(args.state.id, args.block);
+            let props = ComposterLikeProperties::from_state_id(args.state.id);
             Some(props.level)
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 
@@ -108,7 +106,7 @@ impl ComposterBlock {
         block: &Block,
         level: u8,
     ) {
-        let mut props = ComposterLikeProperties::from_state_id(state_id, block);
+        let mut props = ComposterLikeProperties::from_state_id(state_id);
         props.level = level;
         world.set_block_state(location, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
         if level == 7 {

@@ -96,35 +96,8 @@ impl ToTokens for EnumCreator {
                 }
 
                 #[must_use]
-                pub const fn is_valid_for_version(&self, version: JavaMinecraftVersion) -> bool {
-                    if !self.is_network_synced() {
-                        return false;
-                    }
-                    match self {
-                        Self::Block | Self::Item | Self::Fluid => {
-                            (version as u32) >= (JavaMinecraftVersion::V_1_13 as u32)
-                        }
-                        Self::EntityType => {
-                            (version as u32) >= (JavaMinecraftVersion::V_1_14 as u32)
-                        }
-                        Self::GameEvent => (version as u32) >= (JavaMinecraftVersion::V_1_17 as u32),
-                        Self::WorldgenBiome => (version as u32) >= (JavaMinecraftVersion::V_1_18 as u32),
-                        Self::BannerPattern
-                        | Self::Instrument
-                        | Self::PaintingVariant
-                        | Self::PointOfInterestType => {
-                            (version as u32) >= (JavaMinecraftVersion::V_1_19 as u32)
-                        }
-                        Self::DamageType => (version as u32) >= (JavaMinecraftVersion::V_1_20 as u32),
-                        Self::Enchantment | Self::Potion => {
-                            (version as u32) >= (JavaMinecraftVersion::V_1_20_5 as u32)
-                        }
-                        Self::Dialog => (version as u32) >= (JavaMinecraftVersion::V_1_21_6 as u32),
-                        Self::Timeline => {
-                            (version as u32) >= (JavaMinecraftVersion::V_1_21_11 as u32)
-                        }
-                        _ => (version as u32) >= (JavaMinecraftVersion::V_26_1 as u32),
-                    }
+                pub const fn is_valid_for_version(&self, _version: JavaMinecraftVersion) -> bool {
+                    self.is_network_synced()
                 }
 
                 #[must_use]
@@ -204,6 +177,7 @@ fn load_datapack_tags(
                         if components[0] == "worldgen" && components.len() >= 2 {
                             let sub = match components[1].as_str() {
                                 "biomes" => "biome",
+                                "feature" => "configured_feature",
                                 s => s,
                             };
                             let cat = format!("worldgen/{sub}");
@@ -316,69 +290,9 @@ fn load_datapack_tags(
 /// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, tag
 /// modules, and the `Taggable` trait with its lookup helpers.
 pub(crate) fn build() -> TokenStream {
-    let versions = [
-        ("1_13", "V_1_13"),
-        ("1_14", "V_1_14"),
-        ("1_15", "V_1_15"),
-        ("1_16", "V_1_16"),
-        ("1_16_2", "V_1_16_2"),
-        ("1_17", "V_1_17"),
-        ("1_18", "V_1_18"),
-        ("1_19", "V_1_19"),
-        ("1_20", "V_1_20"),
-        ("1_20_2", "V_1_20_2"),
-        ("1_21", "V_1_21"),
-        ("1_21_2", "V_1_21_2"),
-        ("1_21_4", "V_1_21_4"),
-        ("1_21_5", "V_1_21_5"),
-        ("1_21_6", "V_1_21_6"),
-        ("1_21_7", "V_1_21_7"),
-        ("1_21_9", "V_1_21_9"),
-        ("1_21_11", "V_1_21_11"),
-        ("26_1", "V_26_1"),
-        ("26_2", "V_26_2"),
-    ];
+    let versions = [("26_3", "V_26_3")];
 
-    let version_mapping = [
-        ("V_1_13", "V_1_13"),
-        ("V_1_13_1", "V_1_13"),
-        ("V_1_13_2", "V_1_13"),
-        ("V_1_14", "V_1_14"),
-        ("V_1_14_1", "V_1_14"),
-        ("V_1_14_2", "V_1_14"),
-        ("V_1_14_3", "V_1_14"),
-        ("V_1_14_4", "V_1_14"),
-        ("V_1_15", "V_1_15"),
-        ("V_1_15_1", "V_1_15"),
-        ("V_1_15_2", "V_1_15"),
-        ("V_1_16", "V_1_16"),
-        ("V_1_16_1", "V_1_16"),
-        ("V_1_16_2", "V_1_16_2"),
-        ("V_1_16_3", "V_1_16_2"),
-        ("V_1_16_4", "V_1_16_2"),
-        ("V_1_17", "V_1_17"),
-        ("V_1_17_1", "V_1_17"),
-        ("V_1_18", "V_1_18"),
-        ("V_1_18_2", "V_1_18"),
-        ("V_1_19", "V_1_19"),
-        ("V_1_19_1", "V_1_19"),
-        ("V_1_19_3", "V_1_19"),
-        ("V_1_19_4", "V_1_20"),
-        ("V_1_20", "V_1_20"),
-        ("V_1_20_2", "V_1_20_2"),
-        ("V_1_20_3", "V_1_20_2"),
-        ("V_1_20_5", "V_1_21"),
-        ("V_1_21", "V_1_21"),
-        ("V_1_21_2", "V_1_21_2"),
-        ("V_1_21_4", "V_1_21_4"),
-        ("V_1_21_5", "V_1_21_5"),
-        ("V_1_21_6", "V_1_21_6"),
-        ("V_1_21_7", "V_1_21_7"),
-        ("V_1_21_9", "V_1_21_9"),
-        ("V_1_21_11", "V_1_21_11"),
-        ("V_26_1", "V_26_1"),
-        ("V_26_2", "V_26_2"),
-    ];
+    let version_mapping = [("V_26_3", "V_26_3")];
 
     // --- Load Global Assets ---
     let blocks_assets: BlockAssets =
@@ -471,7 +385,6 @@ pub(crate) fn build() -> TokenStream {
 
     let mut datapack_id_maps: BTreeMap<String, BTreeMap<String, u16>> = BTreeMap::new();
     let mut all_registry_keys = HashSet::new();
-    all_registry_keys.insert("dimension_type".to_string());
 
     let mut latest_tag_modules = Vec::new();
     let mut latest_match_arms = Vec::new();
@@ -479,13 +392,11 @@ pub(crate) fn build() -> TokenStream {
     let mut version_fn_match_arms = Vec::new();
 
     for (ver_folder, ver_ident_str) in versions {
-        let datapack_data_dir = std::path::Path::new("../../assets/datapacks")
-            .join(ver_folder)
-            .join("data");
+        let datapack_data_dir = std::path::Path::new("../../assets/datapack/data");
         let datapack_base = datapack_data_dir.join("minecraft");
 
         let tags = load_datapack_tags(&datapack_data_dir);
-        let is_latest = ver_folder == "26_2";
+        let is_latest = ver_folder == "26_3";
 
         let mut ver_cat_match_arms = Vec::new();
         let fn_name = format_ident!("get_tags_{}", ver_ident_str);
@@ -507,8 +418,7 @@ pub(crate) fn build() -> TokenStream {
             let mut tag_map_entries = Vec::new();
 
             if !datapack_id_maps.contains_key(&key) {
-                let dir =
-                    std::path::Path::new("../../assets/datapacks/26_2/data/minecraft").join(&key);
+                let dir = std::path::Path::new("../../assets/datapack/data/minecraft").join(&key);
                 if dir.is_dir() {
                     datapack_id_maps.insert(key.clone(), load_datapack_registry_ids(&dir));
                 }
@@ -555,7 +465,7 @@ pub(crate) fn build() -> TokenStream {
                         #(#tag_map_entries),*
                     };
                 });
-                latest_match_arms.push(quote! { RegistryKey::#key_pascal => Some(&#dict_name) });
+                latest_match_arms.push(quote! { RegistryKey::#key_pascal => &#dict_name });
             } else {
                 all_version_code.push(quote! {
                     static #dict_name: phf::Map<&'static str, &'static Tag> = phf::phf_map! {
@@ -581,7 +491,7 @@ pub(crate) fn build() -> TokenStream {
 
     for (ver_variant, ver_ident_str) in version_mapping {
         let ver_ident = format_ident!("{ver_variant}");
-        if ver_ident_str == "V_26_2" {
+        if ver_ident_str == "V_26_3" {
             version_fn_match_arms.push(quote! {
                 JavaMinecraftVersion::#ver_ident => get_latest_map(tag_category)
             });
@@ -611,23 +521,21 @@ pub(crate) fn build() -> TokenStream {
 
         #(#all_version_code)*
 
-        #[allow(unreachable_patterns)]
         #[must_use]
-        pub const fn get_latest_map(key: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
+        pub const fn get_latest_map(key: RegistryKey) -> &'static phf::Map<&'static str, &'static Tag> {
             match key {
                 #(#latest_match_arms,)*
-                _ => None,
             }
         }
 
         #[must_use]
         pub fn get_tag_values(tag_category: RegistryKey, tag: &str) -> Option<&'static [&'static str]> {
-            get_latest_map(tag_category).and_then(|m| m.get(tag)).map(|t| t.0)
+            get_latest_map(tag_category).get(tag).map(|t| t.0)
         }
 
         #[must_use]
         pub fn get_tag_ids(tag_category: RegistryKey, tag: &str) -> Option<&'static [u16]> {
-            get_latest_map(tag_category).and_then(|m| m.get(tag)).map(|t| t.1)
+            get_latest_map(tag_category).get(tag).map(|t| t.1)
         }
 
         #[must_use]
@@ -635,21 +543,30 @@ pub(crate) fn build() -> TokenStream {
             if !tag_category.is_valid_for_version(version) {
                 return None;
             }
-            match version {
-                #(#version_fn_match_arms,)*
-                _ => get_latest_map(tag_category),
-            }
+            Some(get_latest_map(tag_category))
         }
+
 
         pub trait Taggable {
             fn tag_key() -> RegistryKey;
             fn registry_key(&self) -> &str;
             fn registry_id(&self) -> u16;
 
-           #[must_use]
-           fn is_tagged_with(&self, tag: &str) -> Option<bool> {
-                let tag = tag.strip_prefix("#").unwrap_or(tag);
-                let items = get_tag_ids(Self::tag_key(), tag)?;
+            #[must_use]
+            fn is_tagged_with(&self, tag: &str) -> Option<bool> {
+                let tag = tag.strip_prefix('#').unwrap_or(tag);
+                let items = get_tag_ids(Self::tag_key(), tag).or_else(|| {
+                    if !tag.contains(':') {
+                        let mut full = String::with_capacity(10 + tag.len());
+                        full.push_str("minecraft:");
+                        full.push_str(tag);
+                        get_tag_ids(Self::tag_key(), &full)
+                    } else if let Some(stripped) = tag.strip_prefix("minecraft:") {
+                        get_tag_ids(Self::tag_key(), stripped)
+                    } else {
+                        None
+                    }
+                })?;
                 Some(items.contains(&self.registry_id()))
             }
 
@@ -660,8 +577,19 @@ pub(crate) fn build() -> TokenStream {
 
             #[must_use]
             fn get_tag_values(tag: &str) -> Option<&'static [&'static str]> {
-                let tag = tag.strip_prefix("#").unwrap_or(tag);
-                get_tag_values(Self::tag_key(), tag)
+                let tag = tag.strip_prefix('#').unwrap_or(tag);
+                get_tag_values(Self::tag_key(), tag).or_else(|| {
+                    if !tag.contains(':') {
+                        let mut full = String::with_capacity(10 + tag.len());
+                        full.push_str("minecraft:");
+                        full.push_str(tag);
+                        get_tag_values(Self::tag_key(), &full)
+                    } else if let Some(stripped) = tag.strip_prefix("minecraft:") {
+                        get_tag_values(Self::tag_key(), stripped)
+                    } else {
+                        None
+                    }
+                })
             }
         }
     }

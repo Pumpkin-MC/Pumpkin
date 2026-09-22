@@ -90,7 +90,7 @@ impl EntityBase for ExperienceOrbEntity {
 
         entity.move_entity(caller, velo);
 
-        entity.tick_block_collisions(caller, server);
+        entity.tick_block_collisions(caller);
 
         let age = self.orb_age.fetch_add(1, Ordering::Relaxed);
         if age >= 6000 {

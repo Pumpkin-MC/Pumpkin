@@ -46,8 +46,12 @@ impl EnderPearlEntity {
 }
 
 impl EntityBase for EnderPearlEntity {
-    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
-        self.thrown.process_tick(caller, server);
+    fn get_owner_id(&self) -> Option<i32> {
+        self.thrown.owner_id
+    }
+
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.thrown.process_tick(caller);
     }
 
     fn get_entity(&self) -> &Entity {

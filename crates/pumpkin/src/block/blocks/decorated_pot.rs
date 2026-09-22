@@ -1,17 +1,17 @@
 use std::sync::Arc;
 
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, DecoratedPotLikeProperties};
+use pumpkin_data::block_properties::DecoratedPotLikeProperties;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 
 use crate::block::entities::decorated_pot::DecoratedPotBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
-    UseWithItemArgs,
+    BlockBehaviour, BrokenArgs, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
+    PathComputationType, PlacedArgs, UseWithItemArgs,
 };
 
 #[pumpkin_block("minecraft:decorated_pot")]
@@ -19,8 +19,7 @@ pub struct DecoratedPotBlock;
 
 impl BlockBehaviour for DecoratedPotBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props =
-            DecoratedPotLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        let mut props = DecoratedPotLikeProperties::from_state_id(args.block.default_state.id);
         props.facing = args
             .player
             .living_entity
@@ -58,6 +57,9 @@ impl BlockBehaviour for DecoratedPotBlock {
                     SoundCategory::Blocks,
                     &args.position.to_f64(),
                 );
+                // Vanilla `BlockEntity.setChanged` notifies comparators.
+                args.world
+                    .update_neighbour_for_output_signal(args.position, args.block);
             } else {
                 args.world.play_sound(
                     Sound::BlockDecoratedPotInsertFail,
@@ -109,5 +111,9 @@ impl BlockBehaviour for DecoratedPotBlock {
         } else {
             Some(0)
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

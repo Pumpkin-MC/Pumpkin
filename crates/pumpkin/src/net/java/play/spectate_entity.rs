@@ -4,11 +4,11 @@ use pumpkin_protocol::java::{client::play::CSetCamera, server::play::SSpectateEn
 use pumpkin_util::GameMode;
 
 impl JavaClient {
-    pub async fn handle_spectate_entity(
+    pub fn handle_spectate_entity(
         &self,
         player: &Arc<Player>,
         server: &Server,
-        packet: SSpectateEntity,
+        packet: &SSpectateEntity,
     ) {
         if !player.has_client_loaded() {
             return;
@@ -27,9 +27,7 @@ impl JavaClient {
             let target_id = target.get_entity().entity_id;
 
             player.camera_target_id.store(Some(target_id));
-            player
-                .send_client_packet(&CSetCamera::new(target_id.into()))
-                .await;
+            player.try_send_client_packet(&CSetCamera::new(target_id.into()));
 
             player.request_teleport(target_pos, target_yaw, target_pitch);
         } else if let Some(target_player) = server.get_player_by_uuid(packet.target) {
@@ -39,9 +37,7 @@ impl JavaClient {
             let target_id = target_player.living_entity.entity.entity_id;
 
             player.camera_target_id.store(Some(target_id));
-            player
-                .send_client_packet(&CSetCamera::new(target_id.into()))
-                .await;
+            player.try_send_client_packet(&CSetCamera::new(target_id.into()));
 
             player.request_teleport(target_pos, target_yaw, target_pitch);
         }

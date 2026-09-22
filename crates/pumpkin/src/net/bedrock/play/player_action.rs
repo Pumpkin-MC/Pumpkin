@@ -4,7 +4,7 @@ use super::*;
 impl BedrockClient {
     #[expect(clippy::match_same_arms)]
     #[expect(clippy::too_many_lines)]
-    pub async fn handle_player_action(
+    pub fn handle_player_action(
         &self,
         player: &Arc<Player>,
         server: &Server,
@@ -46,7 +46,7 @@ impl BedrockClient {
                     let new_state = world.break_block(
                         &location,
                         Some(player),
-                        BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS,
+                        BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
                     );
                     if new_state.is_some() {
                         server
@@ -60,9 +60,9 @@ impl BedrockClient {
                         let broken_state = world.get_block_state(&location);
                         let can_harvest = player.can_harvest(broken_state, block);
                         let flags = if can_harvest {
-                            BlockFlags::NOTIFY_NEIGHBORS
+                            BlockFlags::NOTIFY_ALL
                         } else {
-                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                         };
                         let new_state = world.break_block(&location, Some(player), flags);
                         if new_state.is_some() {
@@ -78,6 +78,17 @@ impl BedrockClient {
                             if can_harvest {
                                 player.add_exhaustion(MINE_BLOCK_EXHAUSTION);
                             }
+                            let item_id = player.inventory().held_item().item.id;
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Used,
+                                item_id as i32,
+                                1,
+                            );
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Mined,
+                                block.id.as_u16() as i32,
+                                1,
+                            );
                         }
                     } else {
                         let mut mining_pos = player
@@ -102,6 +113,20 @@ impl BedrockClient {
                             .current_block_breaking_speed
                             .swap(speed.to_bits(), Ordering::Relaxed);
                         if starts_breaking {
+                            if block == &pumpkin_data::Block::NOTE_BLOCK {
+                                let props =
+                                    pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
+                                        state.id,
+                                    );
+                                crate::block::blocks::note::NoteBlock::play_note(
+                                    &props, &world, &location,
+                                );
+                                player.increment_stat(
+                                    pumpkin_data::statistic::StatisticCategory::Custom,
+                                    pumpkin_data::statistic::CustomStatistic::PlayNoteblock as i32,
+                                    1,
+                                );
+                            }
                             world.set_block_breaking(
                                 entity,
                                 location,
@@ -154,9 +179,9 @@ impl BedrockClient {
 
                         let can_harvest = player.can_harvest(state, block);
                         let flags = if can_harvest {
-                            BlockFlags::NOTIFY_NEIGHBORS
+                            BlockFlags::NOTIFY_ALL
                         } else {
-                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                         };
                         if world.break_block(&location, Some(player), flags).is_some() {
                             server
@@ -166,11 +191,21 @@ impl BedrockClient {
                             if can_harvest {
                                 player.add_exhaustion(MINE_BLOCK_EXHAUSTION);
                             }
+                            let item_id = player.inventory().held_item().item.id;
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Used,
+                                item_id as i32,
+                                1,
+                            );
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Mined,
+                                block.id.as_u16() as i32,
+                                1,
+                            );
                         }
                     } else {
                         let runtime_id = pumpkin_data::BlockState::to_be_network_id(state.id);
-                        self.enqueue_client_packet(&CUpdateBlock::new(location, runtime_id as u32))
-                            .await;
+                        self.try_enqueue_client_packet(&CUpdateBlock::new(location, runtime_id));
                         if matches!(action, PlayerAction::StopDestroyBlock) {
                             player.stop_mining();
                         } else {
@@ -198,13 +233,16 @@ impl BedrockClient {
                 player.stop_mining();
             }
             PlayerAction::DropItem => {
-                player.drop_held_item(false).await;
+                player.drop_held_item(false);
             }
             PlayerAction::Respawn
                 if player.living_entity.dead.load(Ordering::Relaxed)
                     || player.living_entity.health.load() <= 0.0 =>
             {
-                player.world().respawn_player(player, false).await;
+                let player_c = player.clone();
+                player.spawn_task(async move {
+                    player_c.world().respawn_player(&player_c, false).await;
+                });
             }
             // TODO
             _ => {}

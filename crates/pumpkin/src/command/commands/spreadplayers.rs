@@ -5,10 +5,11 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::chunk::ChunkHeightmapType;
 
-use crate::command::argument_builder::{ArgumentBuilder, argument, command};
-use crate::command::argument_types::coordinates::column_pos::ColumnPosArgumentType;
+use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::coordinates::vec2::Vec2ArgumentType;
 use crate::command::argument_types::core::bool::BoolArgumentType;
 use crate::command::argument_types::core::float::FloatArgumentType;
+use crate::command::argument_types::core::integer::IntegerArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
@@ -23,6 +24,7 @@ const PERMISSION: &str = "minecraft:command.spreadplayers";
 const ARG_CENTER: &str = "center";
 const ARG_SPREAD_DISTANCE: &str = "spreadDistance";
 const ARG_MAX_RANGE: &str = "maxRange";
+const ARG_MAX_HEIGHT: &str = "maxHeight";
 const ARG_RESPECT_TEAMS: &str = "respectTeams";
 const ARG_TARGETS: &str = "targets";
 
@@ -37,6 +39,11 @@ const FAILED_ENTITIES_ERROR_TYPE: CommandErrorType<4> = CommandErrorType::new(
 const FAILED_TEAMS_ERROR_TYPE: CommandErrorType<4> = CommandErrorType::new(
     translation::java::COMMANDS_SPREADPLAYERS_FAILED_TEAMS,
     translation::bedrock::COMMANDS_SPREADPLAYERS_FAILURE_TEAMS,
+);
+
+const INVALID_MAX_HEIGHT_ERROR_TYPE: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_SPREADPLAYERS_FAILED_INVALID_HEIGHT,
+    translation::java::COMMANDS_SPREADPLAYERS_FAILED_INVALID_HEIGHT,
 );
 
 /// A candidate spread location, equivalent to Vanilla's
@@ -80,11 +87,15 @@ impl Pile {
     }
 
     /// Returns the y coordinate an entity should stand at for this pile, or
-    /// `None` if the location is unsafe (on top of a liquid).
-    fn surface_y(&self, world: &World) -> Option<i32> {
+    /// `None` if the location is unsafe (on top of a liquid or out of height bounds).
+    fn surface_y(&self, world: &World, max_height: i32) -> Option<i32> {
         let block_x = self.x.floor() as i32;
         let block_z = self.z.floor() as i32;
         let top = world.get_heightmap_height(ChunkHeightmapType::WorldSurface, block_x, block_z);
+
+        if top >= max_height {
+            return None;
+        }
 
         let ground = pumpkin_util::math::position::BlockPos(Vector3::new(block_x, top, block_z));
         let state = world.get_block_state(&ground);
@@ -163,6 +174,7 @@ fn find_spread_positions(
     world: &World,
     pile_count: usize,
     spread_distance: f64,
+    max_height: i32,
     area: &SpreadArea,
 ) -> Option<(Vec<Pile>, Vec<i32>)> {
     let mut piles = vec![Pile::default(); pile_count];
@@ -171,8 +183,6 @@ fn find_spread_positions(
     }
 
     let mut surface_ys = vec![0; pile_count];
-    // A handful of surface retries is plenty; each retry re-runs the
-    // full relaxation, so this loop must stay small.
     for _ in 0..16 {
         if !spread_piles(
             &mut piles,
@@ -187,7 +197,7 @@ fn find_spread_positions(
 
         let mut all_safe = true;
         for (pile, y) in piles.iter_mut().zip(&mut surface_ys) {
-            if let Some(surface) = pile.surface_y(world) {
+            if let Some(surface) = pile.surface_y(world, max_height) {
                 *y = surface;
             } else {
                 pile.randomize(area.min_x, area.min_z, area.max_x, area.max_z);
@@ -221,19 +231,20 @@ fn average_min_distance(piles: &[Pile]) -> f64 {
     total / count
 }
 
-struct SpreadPlayersExecutor;
+struct SpreadPlayersExecutor {
+    has_max_height: bool,
+}
 
 impl CommandExecutor for SpreadPlayersExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let center = ColumnPosArgumentType::get_column_pos(context, ARG_CENTER)?;
+        let center = Vec2ArgumentType::get_vector2(context, ARG_CENTER)?;
         let spread_distance = f64::from(FloatArgumentType::get(context, ARG_SPREAD_DISTANCE)?);
         let max_range = f64::from(FloatArgumentType::get(context, ARG_MAX_RANGE)?);
         let respect_teams = BoolArgumentType::get(context, ARG_RESPECT_TEAMS)?;
         let targets = EntityArgumentType::get_entities(context, ARG_TARGETS)?;
 
-        // Vanilla center-corrects the vec2 argument to the middle of the block.
-        let center_x = f64::from(center.0.x) + 0.5;
-        let center_z = f64::from(center.0.y) + 0.5;
+        let center_x = center.x;
+        let center_z = center.y;
         let area = SpreadArea {
             min_x: center_x - max_range,
             min_z: center_z - max_range,
@@ -241,15 +252,25 @@ impl CommandExecutor for SpreadPlayersExecutor {
             max_z: center_z + max_range,
         };
 
-        // Teams are not implemented yet, so every target is teamless. With
-        // respectTeams=true that matches Vanilla's behavior of gathering all
-        // teamless entities onto a single position.
+        let world = context.source.world().clone();
+        let min_y = world.min_y;
+        let max_height = if self.has_max_height {
+            let val = IntegerArgumentType::get(context, ARG_MAX_HEIGHT)?;
+            if val < min_y {
+                return Err(INVALID_MAX_HEIGHT_ERROR_TYPE.create_without_context(
+                    TextComponent::text(val.to_string()),
+                    TextComponent::text(min_y.to_string()),
+                ));
+            }
+            val
+        } else {
+            world.dimension.height + min_y + 1
+        };
+
         let pile_count = if respect_teams { 1 } else { targets.len() };
 
-        let world = context.source.world().clone();
-
         let Some((piles, surface_ys)) =
-            find_spread_positions(&world, pile_count, spread_distance, &area)
+            find_spread_positions(&world, pile_count, spread_distance, max_height, &area)
         else {
             let error_type = if respect_teams {
                 &FAILED_TEAMS_ERROR_TYPE
@@ -321,14 +342,28 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         command("spreadplayers", DESCRIPTION)
             .requires(PERMISSION)
             .then(
-                argument(ARG_CENTER, ColumnPosArgumentType).then(
+                argument(ARG_CENTER, Vec2ArgumentType::Default).then(
                     argument(ARG_SPREAD_DISTANCE, FloatArgumentType::with_min(0.0)).then(
-                        argument(ARG_MAX_RANGE, FloatArgumentType::with_min(1.0)).then(
-                            argument(ARG_RESPECT_TEAMS, BoolArgumentType).then(
-                                argument(ARG_TARGETS, EntityArgumentType::Entities)
-                                    .executes(SpreadPlayersExecutor),
+                        argument(ARG_MAX_RANGE, FloatArgumentType::with_min(1.0))
+                            .then(argument(ARG_RESPECT_TEAMS, BoolArgumentType).then(
+                                argument(ARG_TARGETS, EntityArgumentType::Entities).executes(
+                                    SpreadPlayersExecutor {
+                                        has_max_height: false,
+                                    },
+                                ),
+                            ))
+                            .then(
+                                literal("under").then(
+                                    argument(ARG_MAX_HEIGHT, IntegerArgumentType::any()).then(
+                                        argument(ARG_RESPECT_TEAMS, BoolArgumentType).then(
+                                            argument(ARG_TARGETS, EntityArgumentType::Entities)
+                                                .executes(SpreadPlayersExecutor {
+                                                    has_max_height: true,
+                                                }),
+                                        ),
+                                    ),
+                                ),
                             ),
-                        ),
                     ),
                 ),
             ),

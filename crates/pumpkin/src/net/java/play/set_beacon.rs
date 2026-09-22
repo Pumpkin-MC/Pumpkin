@@ -1,12 +1,12 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use crate::block::entities::beacon::BeaconBlockEntity;
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::beacon_screen_handler::BeaconScreenHandler;
 use pumpkin_protocol::java::server::play::SSetBeacon;
-use pumpkin_world::inventory::Inventory;
 
 impl JavaClient {
-    pub async fn handle_set_beacon(&self, player: &Arc<Player>, packet: &SSetBeacon) {
+    pub fn handle_set_beacon(&self, player: &Arc<Player>, packet: &SSetBeacon) {
         let is_valid = {
             let screen_handler_lock = player
                 .current_screen_handler
@@ -81,11 +81,10 @@ impl JavaClient {
                 "Player {} tried to set invalid beacon effects: primary {:?}, secondary {:?}",
                 player.gameprofile.name, primary_id, secondary_id
             );
-            self.kick(TextComponent::translate(
+            self.try_kick(&TextComponent::translate(
                 "multiplayer.disconnect.generic",
                 &[],
-            ))
-            .await;
+            ));
         }
     }
 }

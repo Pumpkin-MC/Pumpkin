@@ -1,13 +1,10 @@
 use std::sync::Arc;
 
 use crate::block::entities::bed::BedBlockEntity;
-use pumpkin_data::Block;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BedPart;
-use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
+use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
@@ -19,7 +16,7 @@ use crate::block::bounce_entity_after_fall;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
-    PlacedArgs, PlayerPlacedArgs,
+    PathComputationType, PlacedArgs,
 };
 use crate::entity::{Entity, EntityBase, player::Player};
 use crate::world::World;
@@ -108,7 +105,7 @@ impl BlockBehaviour for BedBlock {
             args.world.add_block_entity(Arc::new(bed_entity));
 
             let mut bed_head_props = BedProperties::default(args.block);
-            bed_head_props.facing = BedProperties::from_state_id(args.state_id, args.block).facing;
+            bed_head_props.facing = BedProperties::from_state_id(args.state_id).facing;
             bed_head_props.part = BedPart::Head;
 
             let bed_head_pos = args.position.offset(bed_head_props.facing.to_offset());
@@ -123,18 +120,8 @@ impl BlockBehaviour for BedBlock {
         }
     }
 
-    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        {
-            args.world.play_bedrock_level_sound(
-                "place",
-                &args.position.to_centered_f64(),
-                i32::from(pumpkin_data::BlockState::to_be_network_id(args.state_id)),
-            );
-        }
-    }
-
     fn broken(&self, args: BrokenArgs<'_>) {
-        let bed_props = BedProperties::from_state_id(args.state.id, args.block);
+        let bed_props = BedProperties::from_state_id(args.state.id);
         let other_half_pos = if bed_props.part == BedPart::Head {
             args.position
                 .offset(bed_props.facing.opposite().to_offset())
@@ -150,10 +137,10 @@ impl BlockBehaviour for BedBlock {
         let is_creative = args.player.gamemode.load() == GameMode::Creative;
         let flags = if bed_props.part == BedPart::Foot && !is_creative {
             // Breaking foot in survival -> allow head to drop
-            BlockFlags::NOTIFY_NEIGHBORS
+            BlockFlags::NOTIFY_ALL
         } else {
             // Breaking head OR creative mode -> skip drops
-            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
         };
 
         args.world
@@ -165,16 +152,7 @@ impl BlockBehaviour for BedBlock {
             return;
         }
 
-        // If the block is being replaced with air (i.e., broken), the `broken` callback
-        // will handle breaking the other half with the correct drop flags. Only handle it here
-        // if the block is being replaced with something else (e.g., piston movement).
-        let new_state_id = args.world.get_block_state_id(args.position);
-        let new_block = Block::from_state_id(new_state_id);
-        if new_block == &Block::AIR {
-            return;
-        }
-
-        let bed_props = BedProperties::from_state_id(args.old_state_id, args.block);
+        let bed_props = BedProperties::from_state_id(args.old_state_id);
         let other_half_pos = if bed_props.part == BedPart::Head {
             args.position
                 .offset(bed_props.facing.opposite().to_offset())
@@ -184,12 +162,12 @@ impl BlockBehaviour for BedBlock {
 
         let (other_block, other_state) = args.world.get_block_and_state(&other_half_pos);
         if other_block == args.block {
-            let other_props = BedProperties::from_state_id(other_state.id, other_block);
+            let other_props = BedProperties::from_state_id(other_state.id);
             if other_props.part != bed_props.part {
                 args.world.break_block(
                     &other_half_pos,
                     None,
-                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS,
+                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL,
                 );
             }
         }
@@ -197,6 +175,10 @@ impl BlockBehaviour for BedBlock {
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         Self::use_bed(args.world, args.player, args.block, args.position)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 
@@ -209,7 +191,7 @@ impl BedBlock {
         position: &BlockPos,
     ) -> BlockActionResult {
         let state_id = world.get_block_state_id(position);
-        let bed_props = BedProperties::from_state_id(state_id, block);
+        let bed_props = BedProperties::from_state_id(state_id);
 
         let (bed_head_pos, bed_foot_pos) = if bed_props.part == BedPart::Head {
             (
@@ -220,8 +202,8 @@ impl BedBlock {
             (position.offset(bed_props.facing.to_offset()), *position)
         };
 
-        // Explode if not in the overworld
-        if world.dimension != Dimension::OVERWORLD {
+        // Explode if bed rule explodes (EnvironmentAttributes.BED_RULE)
+        if world.dimension.bed_rule.explodes {
             world.break_block(&bed_head_pos, None, BlockFlags::SKIP_DROPS);
             world.break_block(&bed_foot_pos, None, BlockFlags::SKIP_DROPS);
 
@@ -231,6 +213,21 @@ impl BedBlock {
                 crate::world::ExplosionInteraction::Block,
             );
 
+            return BlockActionResult::SuccessServer;
+        }
+
+        let is_dark = world.is_dark_outside();
+        let can_sleep = world.dimension.bed_rule.can_sleep(is_dark);
+        let can_set_spawn = world.dimension.bed_rule.can_set_spawn(is_dark);
+
+        if !can_set_spawn && !can_sleep {
+            player.send_system_message_raw(
+                &pumpkin_macros::translate_cross!(
+                    translation::java::BLOCK_MINECRAFT_BED_NO_SLEEP,
+                    translation::bedrock::TILE_BED_NOSLEEP
+                ),
+                true,
+            );
             return BlockActionResult::SuccessServer;
         }
 
@@ -281,13 +278,15 @@ impl BedBlock {
         }
 
         // Set respawn point
-        if player.set_respawn_point(
-            world.dimension.clone(),
-            bed_head_pos,
-            player.get_entity().yaw.load(),
-            player.get_entity().pitch.load(),
-            false,
-        ) {
+        if can_set_spawn
+            && player.set_respawn_point(
+                world.dimension.clone(),
+                bed_head_pos,
+                player.get_entity().yaw.load(),
+                player.get_entity().pitch.load(),
+                false,
+            )
+        {
             player.send_system_message(&pumpkin_macros::translate_cross!(
                 translation::java::BLOCK_MINECRAFT_SET_SPAWN,
                 translation::bedrock::TILE_BED_RESPAWNSET
@@ -295,7 +294,7 @@ impl BedBlock {
         }
 
         // Make sure the time and weather allows sleep
-        if !can_sleep(world) {
+        if !can_sleep {
             player.send_system_message_raw(
                 &pumpkin_macros::translate_cross!(
                     translation::java::BLOCK_MINECRAFT_BED_NO_SLEEP,
@@ -362,7 +361,7 @@ impl BedBlock {
         block_pos: &BlockPos,
         state_id: BlockStateId,
     ) {
-        let mut bed_props = BedProperties::from_state_id(state_id, block);
+        let mut bed_props = BedProperties::from_state_id(state_id);
         bed_props.occupied = occupied;
         world.set_block_state(
             block_pos,
@@ -385,25 +384,6 @@ impl BedBlock {
             bed_props.to_state_id(block),
             BlockFlags::NOTIFY_LISTENERS,
         );
-    }
-}
-
-fn can_sleep(world: &Arc<World>) -> bool {
-    let time = world
-        .level_time
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let weather = world
-        .weather
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-    if weather.thundering {
-        true
-    } else if weather.raining {
-        time.time_of_day > 12010 && time.time_of_day < 23991
-    } else {
-        time.time_of_day > 12542 && time.time_of_day < 23459
     }
 }
 

@@ -6,12 +6,12 @@ use std::{
     },
 };
 
+use crate::inventory::Inventory;
 use pumpkin_data::{
     item_stack::ItemStack,
     screen::WindowType,
     statistic::{CustomStatistic, StatisticCategory},
 };
-use pumpkin_world::inventory::Inventory;
 
 use crate::{
     player::player_inventory::PlayerInventory,
@@ -492,10 +492,10 @@ impl Slot for MerchantResultSlot {
 mod tests {
     use std::{
         borrow::Cow,
-        collections::HashMap,
         sync::atomic::{AtomicI32, AtomicUsize, Ordering},
     };
 
+    use crate::inventory::SimpleInventory;
     use pumpkin_data::{data_component_impl::EquipmentSlot, item::Item};
     use pumpkin_protocol::{
         codec::item_stack_seralizer::ItemStackSerializer,
@@ -507,7 +507,6 @@ mod tests {
             server::play::SlotActionType,
         },
     };
-    use pumpkin_world::inventory::SimpleInventory;
     use std::sync::Mutex;
 
     use crate::{entity_equipment::EntityEquipment, screen_handler::InventoryPlayer};
@@ -621,16 +620,42 @@ mod tests {
                 self.traded.fetch_add(amount, Ordering::Relaxed);
             }
         }
+
+        fn play_block_sound(&self, _sound: pumpkin_data::sound::Sound, _pitch: f32) {}
     }
 
     fn inventories() -> (Arc<PlayerInventory>, Arc<SimpleInventory>) {
         (
             Arc::new(PlayerInventory::new(
                 Arc::new(Mutex::new(EntityEquipment::new())),
-                Arc::new(HashMap::new()),
+                Arc::new(rustc_hash::FxHashMap::default()),
             )),
             Arc::new(SimpleInventory::new(3)),
         )
+    }
+
+    #[test]
+    fn numeric_hotbar_key_swaps_occupied_stacks() {
+        let (player_inventory, merchant_inventory) = inventories();
+        player_inventory.set_stack(0, ItemStack::new(1, &Item::WOODEN_PICKAXE));
+        player_inventory.set_stack(1, ItemStack::new(1, &Item::WOODEN_SWORD));
+        let player = TestPlayer::new(player_inventory.clone());
+        let mut handler =
+            MerchantScreenHandler::new(1, &player_inventory, merchant_inventory, Vec::new());
+
+        // Merchant screen slots 30-38 map to hotbar slots 0-8. First move the
+        // sword from hotbar slot 1 to the empty hotbar slot 2.
+        handler.on_slot_click(31, 2, SlotActionType::Swap, &player);
+        assert!(player_inventory.get_stack(1).is_empty());
+        assert_eq!(player_inventory.get_stack(2).item.id, Item::WOODEN_SWORD.id);
+
+        // Then reproduce #3059 by swapping that sword with the occupied slot 0.
+        handler.on_slot_click(32, 0, SlotActionType::Swap, &player);
+        assert_eq!(player_inventory.get_stack(0).item.id, Item::WOODEN_SWORD.id);
+        assert_eq!(
+            player_inventory.get_stack(2).item.id,
+            Item::WOODEN_PICKAXE.id
+        );
     }
 
     #[test]

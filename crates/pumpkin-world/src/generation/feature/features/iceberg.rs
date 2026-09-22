@@ -8,8 +8,6 @@ use pumpkin_util::{
 
 use crate::{block::BlockStateCodec, generation::proto_chunk::GenerationCache};
 
-const SEA_LEVEL: i32 = 63; // TODO: use getSeaLevel() instead of hardcoding
-
 pub struct IcebergFeature {
     pub main_block: BlockStateCodec,
 }
@@ -25,7 +23,7 @@ impl IcebergFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let origin = Vector3::new(pos.0.x, SEA_LEVEL, pos.0.z);
+        let origin = Vector3::new(pos.0.x, chunk.get_sea_level(), pos.0.z);
         let main_block = self.main_block.get_state();
 
         let snow_on_top = random.next_f64() > 0.7;
