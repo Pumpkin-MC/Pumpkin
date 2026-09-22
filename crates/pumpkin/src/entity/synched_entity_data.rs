@@ -67,6 +67,7 @@ impl Default for SynchedEntityData {
 }
 
 impl SynchedEntityData {
+    /// An empty tracker; values are added by [`Self::define`] and [`Self::set`].
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -75,6 +76,8 @@ impl SynchedEntityData {
         }
     }
 
+    /// Registers a tracked value with the default the client already assumes, so it
+    /// is only sent once something actually sets it.
     pub fn define<T: MetadataSerializer + Clone + Send + Sync + 'static>(
         &self,
         tracked: TrackedData,
@@ -98,6 +101,8 @@ impl SynchedEntityData {
         );
     }
 
+    /// Stores a tracked value and marks it dirty, returning whether it differs from
+    /// the value that was already stored.
     pub fn set<T: MetadataSerializer + Clone + Send + Sync + 'static>(
         &self,
         tracked: TrackedData,
@@ -134,11 +139,14 @@ impl SynchedEntityData {
         true
     }
 
+    /// Whether any value changed since the last [`Self::clear_dirty`].
     #[must_use]
     pub fn is_dirty(&self) -> bool {
         self.is_dirty.load(Ordering::Acquire)
     }
 
+    /// Serializes the values that changed since the last [`Self::clear_dirty`], or
+    /// `None` when nothing changed.
     pub fn pack_dirty_for_version(&self, version: &JavaMinecraftVersion) -> Option<Box<[u8]>> {
         if !self.is_dirty.load(Ordering::Acquire) {
             return None;
@@ -173,6 +181,7 @@ impl SynchedEntityData {
         Some(buf.into_boxed_slice())
     }
 
+    /// Marks every value as sent.
     pub fn clear_dirty(&self) {
         let mut items = self
             .items
@@ -184,6 +193,8 @@ impl SynchedEntityData {
         self.is_dirty.store(false, Ordering::Release);
     }
 
+    /// Serializes every value that differs from the default the client assumes, or
+    /// `None` when they are all still at their default.
     pub fn get_non_default_values_for_version(
         &self,
         version: &JavaMinecraftVersion,
@@ -215,5 +226,43 @@ impl SynchedEntityData {
 
         buf.put_u8(255);
         Some(buf.into_boxed_slice())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION;
+
+    use super::*;
+
+    /// Metadata ids no longer vary per version: core serializes the current format for
+    /// every client and `pumpkin-java-multiversion` translates. So the senders need no
+    /// version check of their own to decide whether a value reaches a client.
+    #[test]
+    fn a_set_value_is_serialized_for_every_version() {
+        let data = SynchedEntityData::new();
+        data.define(PLAYER_MODE_CUSTOMISATION, 0u8);
+        assert!(data.set(PLAYER_MODE_CUSTOMISATION, 0x7Fu8));
+
+        let current = data.get_non_default_values_for_version(&JavaMinecraftVersion::V_26_3);
+        let legacy = data.get_non_default_values_for_version(&JavaMinecraftVersion::V_1_20_5);
+        assert!(current.is_some());
+        assert_eq!(current, legacy);
+        assert_eq!(
+            data.pack_dirty_for_version(&JavaMinecraftVersion::V_1_20_5),
+            current
+        );
+    }
+
+    /// A value still at the default the client assumes is not sent.
+    #[test]
+    fn default_values_are_not_serialized() {
+        let data = SynchedEntityData::new();
+        data.define(PLAYER_MODE_CUSTOMISATION, 0u8);
+
+        assert!(
+            data.get_non_default_values_for_version(&JavaMinecraftVersion::V_26_3)
+                .is_none()
+        );
     }
 }
