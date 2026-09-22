@@ -1,6 +1,9 @@
 use crate::command::{
     CommandSource,
     argument_types::argument_type::{ArgumentType, JavaClientArgumentType},
+    argument_types::entity::{
+        ENTITY_SELECTOR_PERMISSION, NO_ENTITIES_ERROR_TYPE, NOT_SINGLE_ENTITY_ERROR_TYPE,
+    },
     argument_types::entity_selector::EntitySelector,
     argument_types::entity_selector::parser::EntitySelectorParser,
     context::command_context::CommandContext,
@@ -8,6 +11,7 @@ use crate::command::{
     string_reader::StringReader,
     suggestion::suggestions::{Suggestions, SuggestionsBuilder},
 };
+use pumpkin_util::text::TextComponent;
 
 /// A scoreboard holder, which is either a fake entry name or an entity selector.
 pub enum ScoreHolder {
@@ -17,70 +21,131 @@ pub enum ScoreHolder {
     Wildcard,
 }
 
-/// Parses a scoreboard holder, which is a fake name or an entity selector.
+/// A resolved holder's storage key and its user-facing name.
+pub struct ResolvedScoreHolder {
+    pub name: String,
+    pub display_name: TextComponent,
+}
+
+impl ResolvedScoreHolder {
+    fn named(name: String) -> Self {
+        Self {
+            display_name: TextComponent::text(name.clone()),
+            name,
+        }
+    }
+}
+
+/// Parses one or multiple scoreboard holders, including fake names and selectors.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct ScoreHolderArgumentType;
+pub enum ScoreHolderArgumentType {
+    Single,
+    Multiple,
+}
 
 impl ArgumentType<CommandSource> for ScoreHolderArgumentType {
     type Item = ScoreHolder;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
-        if reader.peek() == Some('*') {
-            reader.set_cursor(reader.cursor() + 1);
-            return Ok(ScoreHolder::Wildcard);
-        }
-        if reader.peek() == Some('@') {
-            let parser = EntitySelectorParser::new(reader, true);
-            Ok(ScoreHolder::Selector(Box::new(parser.parse_and_consume()?)))
-        } else {
-            Ok(ScoreHolder::Fake(reader.read_unquoted_string()))
-        }
+        self.parse_with_allow_selectors(reader, true)
+    }
+
+    fn parse_with_source(
+        &self,
+        reader: &mut StringReader,
+        source: &CommandSource,
+    ) -> Result<Self::Item, CommandSyntaxError> {
+        self.parse_with_allow_selectors(reader, source.has_permission(ENTITY_SELECTOR_PERMISSION))
     }
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::ScoreHolder {
-            flags: JavaClientArgumentType::SCORE_HOLDER_FLAG_ALLOW_MULTIPLE,
+            flags: if *self == Self::Multiple {
+                JavaClientArgumentType::SCORE_HOLDER_FLAG_ALLOW_MULTIPLE
+            } else {
+                0
+            },
         }
     }
 
     fn list_suggestions(
         &self,
         context: &CommandContext,
-        mut builder: SuggestionsBuilder,
+        builder: SuggestionsBuilder,
     ) -> Suggestions {
-        let scoreboard = context
-            .world()
-            .scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        for objective_scores in scoreboard.get_scores().values() {
-            for holder in objective_scores.keys() {
-                builder = builder.filter_and_suggest_one(holder.as_str());
+        let mut reader = StringReader::new(builder.input.clone());
+        reader.set_cursor(builder.start);
+        let mut parser = EntitySelectorParser::new(
+            &mut reader,
+            context.source.has_permission(ENTITY_SELECTOR_PERMISSION),
+        );
+        let _ = parser.parse();
+        parser.fill_suggestions(&builder, |mut suggestions| {
+            for player in context.server().get_all_players() {
+                suggestions = suggestions.filter_and_suggest_one(player.gameprofile.name.clone());
             }
-        }
-        builder.build()
+            let scoreboard = context
+                .world()
+                .scoreboard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for objective_scores in scoreboard.get_scores().values() {
+                for holder in objective_scores.keys() {
+                    suggestions = suggestions.filter_and_suggest_one(holder.as_str());
+                }
+            }
+            suggestions
+        })
     }
 
     fn examples(&self) -> Vec<String> {
-        examples!("detectGen", "Diamond", "@a", "@s")
+        examples!("detectGen", "#temp", "$x", "*", "@s")
     }
 }
 
 impl ScoreHolderArgumentType {
-    /// Resolves a parsed scoreboard holder to the names the scores are stored
-    /// under: the fake name itself, or the scoreboard name of every selected
-    /// entity.
-    pub fn get_score_holder_names(
+    fn parse_with_allow_selectors(
+        self,
+        reader: &mut StringReader,
+        allow_selectors: bool,
+    ) -> Result<ScoreHolder, CommandSyntaxError> {
+        let start = reader.cursor();
+        if reader.peek() == Some('@') {
+            let selector =
+                EntitySelectorParser::new(reader, allow_selectors).parse_and_consume()?;
+            if self == Self::Single && selector.max_selected > 1 {
+                reader.set_cursor(start);
+                return Err(NOT_SINGLE_ENTITY_ERROR_TYPE.create(reader));
+            }
+            return Ok(ScoreHolder::Selector(Box::new(selector)));
+        }
+
+        while reader.peek().is_some_and(|c| c != ' ') {
+            reader.skip();
+        }
+        let name = &reader.string()[start..reader.cursor()];
+        match name {
+            "" => Err(NO_ENTITIES_ERROR_TYPE.create(reader)),
+            "*" => Ok(ScoreHolder::Wildcard),
+            _ => Ok(ScoreHolder::Fake(name.to_string())),
+        }
+    }
+
+    /// Resolves holders without losing entity display names used in feedback.
+    pub fn get_score_holders(
         context: &CommandContext,
         name: &str,
-    ) -> Result<Vec<String>, CommandSyntaxError> {
-        match context.get_argument::<ScoreHolder>(name)? {
-            ScoreHolder::Fake(fake) => Ok(vec![fake.clone()]),
-            ScoreHolder::Selector(selector) => Ok(selector
+    ) -> Result<Vec<ResolvedScoreHolder>, CommandSyntaxError> {
+        let holders = match context.get_argument::<ScoreHolder>(name)? {
+            ScoreHolder::Fake(fake) => vec![ResolvedScoreHolder::named(fake.clone())],
+            ScoreHolder::Selector(selector) => selector
                 .find_entities(context.source.as_ref())?
                 .into_iter()
-                .map(|entity| entity.get_scoreboard_name())
-                .collect()),
+                .map(|entity| ResolvedScoreHolder {
+                    name: entity.get_scoreboard_name(),
+                    display_name: entity.get_display_name(),
+                })
+                .collect(),
             ScoreHolder::Wildcard => {
                 let scoreboard = context
                     .world()
@@ -95,9 +160,25 @@ impl ScoreHolderArgumentType {
                         }
                     }
                 }
-                Ok(names)
+                names.into_iter().map(ResolvedScoreHolder::named).collect()
             }
+        };
+        if holders.is_empty() {
+            return Err(NO_ENTITIES_ERROR_TYPE.create_without_context());
         }
+        Ok(holders)
+    }
+
+    /// Resolves exactly one holder, also checking wildcard expansion at runtime.
+    pub fn get_score_holder(
+        context: &CommandContext,
+        name: &str,
+    ) -> Result<ResolvedScoreHolder, CommandSyntaxError> {
+        let mut holders = Self::get_score_holders(context, name)?;
+        if holders.len() != 1 {
+            return Err(NOT_SINGLE_ENTITY_ERROR_TYPE.create_without_context());
+        }
+        Ok(holders.remove(0))
     }
 }
 
@@ -107,19 +188,31 @@ mod tests {
 
     #[test]
     fn fake_names_parse_as_fake_holders() {
-        let mut reader = StringReader::new("detectGen");
-        let Ok(ScoreHolder::Fake(name)) = ScoreHolderArgumentType.parse(&mut reader) else {
-            panic!("a plain name must parse as a fake holder");
-        };
-        assert_eq!(name, "detectGen");
-        assert_eq!(reader.remaining_length(), 0);
+        for name in [
+            "detectGen",
+            "#temp",
+            "$x",
+            "map:counter",
+            "*suffix",
+            "日本語",
+        ] {
+            let input = format!("{name} objective");
+            let mut reader = StringReader::new(&input);
+            let Ok(ScoreHolder::Fake(actual)) =
+                ScoreHolderArgumentType::Multiple.parse(&mut reader)
+            else {
+                panic!("{name} must parse as a fake holder");
+            };
+            assert_eq!(actual, name);
+            assert_eq!(reader.remaining_part(), " objective");
+        }
     }
 
     #[test]
     fn a_star_parses_as_the_wildcard() {
         let mut reader = StringReader::new("*");
         assert!(matches!(
-            ScoreHolderArgumentType.parse(&mut reader),
+            ScoreHolderArgumentType::Multiple.parse(&mut reader),
             Ok(ScoreHolder::Wildcard)
         ));
         assert_eq!(reader.remaining_length(), 0);
@@ -129,8 +222,43 @@ mod tests {
     fn selectors_parse_as_selectors() {
         let mut reader = StringReader::new("@s");
         assert!(matches!(
-            ScoreHolderArgumentType.parse(&mut reader),
+            ScoreHolderArgumentType::Multiple.parse(&mut reader),
             Ok(ScoreHolder::Selector(_))
         ));
+    }
+
+    #[test]
+    fn single_holder_rejects_selectors_that_can_select_multiple_entities() {
+        for selector in ["@a", "@e", "@p[limit=2]"] {
+            let mut reader = StringReader::new(selector);
+            let error = ScoreHolderArgumentType::Single
+                .parse(&mut reader)
+                .err()
+                .unwrap();
+            assert!(error.is(&NOT_SINGLE_ENTITY_ERROR_TYPE));
+            assert_eq!(reader.cursor(), 0);
+        }
+        for selector in ["@s", "@p", "@e[limit=1]", "#temp"] {
+            assert!(
+                ScoreHolderArgumentType::Single
+                    .parse(&mut StringReader::new(selector))
+                    .is_ok()
+            );
+        }
+        assert!(matches!(
+            ScoreHolderArgumentType::Single.client_side_parser(),
+            JavaClientArgumentType::ScoreHolder { flags: 0 }
+        ));
+    }
+
+    #[test]
+    fn empty_input_is_not_a_fake_holder() {
+        for input in ["", " objective"] {
+            assert!(
+                ScoreHolderArgumentType::Multiple
+                    .parse(&mut StringReader::new(input))
+                    .is_err()
+            );
+        }
     }
 }

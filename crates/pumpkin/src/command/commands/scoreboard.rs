@@ -3,13 +3,15 @@ use crate::command::argument_types::core::integer::IntegerArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::objective::ObjectiveArgumentType;
 use crate::command::argument_types::operation::{OperationArgumentType, ScoreboardOperation};
-use crate::command::argument_types::score_holder::ScoreHolderArgumentType;
+use crate::command::argument_types::score_holder::{ResolvedScoreHolder, ScoreHolderArgumentType};
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
-use crate::world::scoreboard::{Scoreboard, ScoreboardObjective, ScoreboardScore};
+use crate::world::scoreboard::{
+    Scoreboard, ScoreboardObjective, ScoreboardScore, ScoreboardTarget,
+};
 use pumpkin_data::translation;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::RenderType;
@@ -29,24 +31,19 @@ const ARG_OPERATION: &str = "operation";
 const ARG_SOURCE_TARGETS: &str = "source_targets";
 const ARG_SOURCE_OBJECTIVE: &str = "source_objective";
 
-const NO_HOLDERS_ERROR: CommandErrorType<0> = CommandErrorType::new(
-    "commands.scoreboard.players.nameNotFound",
-    "commands.scoreboard.players.nameNotFound",
-);
-
 const OBJECTIVE_READ_ONLY_ERROR: CommandErrorType<1> = CommandErrorType::new(
-    "commands.scoreboard.objectiveReadOnly",
-    "commands.scoreboard.objectiveReadOnly",
+    translation::java::ARGUMENTS_OBJECTIVE_READONLY,
+    translation::java::ARGUMENTS_OBJECTIVE_READONLY,
 );
 
 const NO_SCORE_ERROR: CommandErrorType<2> = CommandErrorType::new(
-    "commands.scoreboard.players.get.null",
-    "commands.scoreboard.players.get.null",
+    translation::java::COMMANDS_SCOREBOARD_PLAYERS_GET_NULL,
+    translation::java::COMMANDS_SCOREBOARD_PLAYERS_GET_NULL,
 );
 
 const OBJECTIVE_NOT_FOUND_ERROR: CommandErrorType<1> = CommandErrorType::new(
-    "commands.scoreboard.objectiveNotFound",
-    "commands.scoreboard.objectiveNotFound",
+    translation::java::ARGUMENTS_OBJECTIVE_NOTFOUND,
+    translation::java::ARGUMENTS_OBJECTIVE_NOTFOUND,
 );
 
 const DUPLICATE_OBJECTIVE_ERROR: CommandErrorType<0> = CommandErrorType::new(
@@ -134,21 +131,35 @@ impl CommandExecutor for PlayersEnableExecutor {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        let Some(objective) = scoreboard.get_objectives().get(&objective_name_owned) else {
-            return Err(INVALID_ENABLE_ERROR.create_without_context());
-        };
+        let (enabled_count, msg) =
+            Self::enable(&mut scoreboard, &world, &holders, &objective_name_owned)?;
+        drop(scoreboard);
+        context.source.send_feedback(msg, true);
+        Ok(enabled_count)
+    }
+}
+
+impl PlayersEnableExecutor {
+    /// Unlocks only disabled trigger scores, preserving their values and formatting.
+    fn enable(
+        scoreboard: &mut Scoreboard,
+        target: &impl ScoreboardTarget,
+        holders: &[ResolvedScoreHolder],
+        objective_name: &str,
+    ) -> Result<(i32, TextComponent), CommandSyntaxError> {
+        let objective_display_name = objective_or_error(scoreboard, objective_name)?;
+        let objective = &scoreboard.get_objectives()[objective_name];
 
         if objective.criterion != "trigger" {
             return Err(INVALID_ENABLE_ERROR.create_without_context());
         }
 
-        let objective_display_name = objective.display_name.clone();
-
         let mut enabled_count = 0;
-        for player_name in &holders {
+        for holder in holders {
+            let player_name = &holder.name;
             let current_score = scoreboard
                 .get_scores()
-                .get(&objective_name_owned)
+                .get(objective_name)
                 .and_then(|m| m.get(player_name));
 
             let is_already_enabled = current_score.is_some_and(|s| !s.locked);
@@ -160,14 +171,14 @@ impl CommandExecutor for PlayersEnableExecutor {
 
                 let updated_score = ScoreboardScore {
                     entity_name: player_name.clone(),
-                    objective_name: objective_name_owned.clone(),
+                    objective_name: objective_name.to_string(),
                     value: VarInt(value),
                     display_name,
                     number_format,
                     locked: false,
                 };
 
-                scoreboard.update_score(&world, updated_score);
+                scoreboard.update_score(target, updated_score);
                 enabled_count += 1;
             }
         }
@@ -176,7 +187,7 @@ impl CommandExecutor for PlayersEnableExecutor {
             return Err(FAILED_ENABLE_ERROR.create_without_context());
         }
 
-        let (holder, single) = holder_component(&holders);
+        let (holder, single) = holder_component(holders);
         let msg = if single {
             TextComponent::translate_cross(
                 translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_SINGLE,
@@ -187,13 +198,14 @@ impl CommandExecutor for PlayersEnableExecutor {
             TextComponent::translate_cross(
                 translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_MULTIPLE,
                 translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_MULTIPLE,
-                [objective_display_name, holder],
+                [
+                    objective_display_name,
+                    TextComponent::text(enabled_count.to_string()),
+                ],
             )
         };
 
-        context.source.send_feedback(msg, true);
-
-        Ok(1)
+        Ok((enabled_count, msg))
     }
 }
 
@@ -211,11 +223,7 @@ impl CommandExecutor for ObjectivesRemoveExecutor {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        let Some(objective) = scoreboard.get_objectives().get(&objective_name_owned) else {
-            return Err(INVALID_ENABLE_ERROR.create_without_context());
-        };
-
-        let display_name = objective.display_name.clone();
+        let display_name = objective_or_error(&scoreboard, &objective_name_owned)?;
 
         scoreboard.remove_objective(&world, &objective_name_owned);
 
@@ -247,7 +255,7 @@ fn objective_or_error(
 }
 
 /// Resolves an objective's display name and rejects objectives that do not
-/// accept writes, such as the ones backed by a stat.
+/// accept writes. Counter and stat criteria remain writable in vanilla.
 fn writable_objective_or_error(
     scoreboard: &Scoreboard,
     name: &str,
@@ -255,13 +263,14 @@ fn writable_objective_or_error(
     let objective = scoreboard.get_objectives().get(name).ok_or_else(|| {
         OBJECTIVE_NOT_FOUND_ERROR.create_without_context(TextComponent::text(name.to_string()))
     })?;
-    // Compound criteria are written as a `+` separated list and are writable
-    // while every part allows writes, matching vanilla.
-    let writable = objective
-        .criterion
-        .split('+')
-        .all(|criterion| criterion == "dummy" || criterion == "trigger");
-    if !writable {
+    // Only these live entity attributes are read-only, including in compound criteria.
+    let read_only = objective.criterion.split('+').any(|criterion| {
+        matches!(
+            criterion,
+            "health" | "food" | "air" | "armor" | "xp" | "level"
+        )
+    });
+    if read_only {
         return Err(
             OBJECTIVE_READ_ONLY_ERROR.create_without_context(TextComponent::text(name.to_string()))
         );
@@ -269,18 +278,16 @@ fn writable_objective_or_error(
     Ok(objective.display_name.clone())
 }
 
-fn holders_or_error(context: &CommandContext) -> Result<Vec<String>, CommandSyntaxError> {
-    let holders = ScoreHolderArgumentType::get_score_holder_names(context, ARG_TARGETS)?;
-    if holders.is_empty() {
-        return Err(NO_HOLDERS_ERROR.create_without_context());
-    }
-    Ok(holders)
+fn holders_or_error(
+    context: &CommandContext,
+) -> Result<Vec<ResolvedScoreHolder>, CommandSyntaxError> {
+    ScoreHolderArgumentType::get_score_holders(context, ARG_TARGETS)
 }
 
 /// Vanilla prints the holder name for a single target and a count otherwise.
-fn holder_component(holders: &[String]) -> (TextComponent, bool) {
+fn holder_component(holders: &[ResolvedScoreHolder]) -> (TextComponent, bool) {
     if holders.len() == 1 {
-        (TextComponent::text(holders[0].clone()), true)
+        (holders[0].display_name.clone(), true)
     } else {
         (TextComponent::text(holders.len().to_string()), false)
     }
@@ -302,7 +309,7 @@ impl CommandExecutor for PlayersSetExecutor {
 
         let display_name = writable_objective_or_error(&scoreboard, &objective_name)?;
         for holder in &holders {
-            scoreboard.set_score_value(&world, holder.clone(), objective_name.clone(), value);
+            scoreboard.set_score_value(&world, holder.name.clone(), objective_name.clone(), value);
         }
         drop(scoreboard);
 
@@ -333,7 +340,7 @@ struct PlayersGetExecutor;
 
 impl CommandExecutor for PlayersGetExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let holders = holders_or_error(context)?;
+        let holder = ScoreHolderArgumentType::get_score_holder(context, ARG_TARGETS)?;
         let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?.to_string();
 
         let world = context.world().clone();
@@ -342,32 +349,40 @@ impl CommandExecutor for PlayersGetExecutor {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        let display_name = objective_or_error(&scoreboard, &objective_name)?;
-        if holders.len() != 1 {
-            return Err(NO_HOLDERS_ERROR.create_without_context());
-        }
-        let holder = holders[0].clone();
-        let Some(value) = scoreboard.get_score_value(&holder, &objective_name) else {
+        let (value, feedback) = Self::get(&scoreboard, holder, &objective_name)?;
+        drop(scoreboard);
+        context.source.send_feedback(feedback, false);
+        Ok(value)
+    }
+}
+
+impl PlayersGetExecutor {
+    /// Reads an existing score and builds the non-broadcast query feedback.
+    fn get(
+        scoreboard: &Scoreboard,
+        holder: ResolvedScoreHolder,
+        objective_name: &str,
+    ) -> Result<(i32, TextComponent), CommandSyntaxError> {
+        let display_name = objective_or_error(scoreboard, objective_name)?;
+        let Some(value) = scoreboard.get_score_value(&holder.name, objective_name) else {
             return Err(NO_SCORE_ERROR.create_without_context(
-                TextComponent::text(holder),
-                TextComponent::text(objective_name),
+                TextComponent::text(objective_name.to_string()),
+                holder.display_name,
             ));
         };
 
-        context.source.send_feedback(
+        Ok((
+            value,
             TextComponent::translate_cross(
                 translation::java::COMMANDS_SCOREBOARD_PLAYERS_GET_SUCCESS,
                 translation::java::COMMANDS_SCOREBOARD_PLAYERS_GET_SUCCESS,
                 [
-                    TextComponent::text(holders[0].clone()),
-                    display_name,
+                    holder.display_name,
                     TextComponent::text(value.to_string()),
+                    display_name,
                 ],
             ),
-            true,
-        );
-
-        Ok(value)
+        ))
     }
 }
 
@@ -397,7 +412,7 @@ impl CommandExecutor for PlayersAddExecutor {
         for holder in &holders {
             result = result.wrapping_add(scoreboard.add_score(
                 &world,
-                holder.clone(),
+                holder.name.clone(),
                 objective_name.clone(),
                 delta,
             ));
@@ -461,7 +476,7 @@ impl CommandExecutor for PlayersResetExecutor {
             let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?.to_string();
             let display_name = objective_or_error(&scoreboard, &objective_name)?;
             for holder in &holders {
-                scoreboard.remove_score(&world, holder, &objective_name);
+                scoreboard.remove_score(&world, &holder.name, &objective_name);
             }
             drop(scoreboard);
             let (holder, single) = holder_component(&holders);
@@ -483,7 +498,7 @@ impl CommandExecutor for PlayersResetExecutor {
             );
         } else {
             for holder in &holders {
-                scoreboard.reset_scores_for_entity(&world, holder);
+                scoreboard.reset_scores_for_entity(&world, &holder.name);
             }
             drop(scoreboard);
             let (holder, single) = holder_component(&holders);
@@ -516,13 +531,9 @@ impl CommandExecutor for PlayersOperationExecutor {
         let holders = holders_or_error(context)?;
         let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?.to_string();
         let operation = *context.get_argument::<ScoreboardOperation>(ARG_OPERATION)?;
-        let sources = ScoreHolderArgumentType::get_score_holder_names(context, ARG_SOURCE_TARGETS)?;
+        let sources = ScoreHolderArgumentType::get_score_holders(context, ARG_SOURCE_TARGETS)?;
         let source_objective =
             ObjectiveArgumentType::get(context, ARG_SOURCE_OBJECTIVE)?.to_string();
-
-        if sources.is_empty() {
-            return Err(NO_HOLDERS_ERROR.create_without_context());
-        }
 
         let world = context.world().clone();
         let mut scoreboard = world
@@ -537,46 +548,15 @@ impl CommandExecutor for PlayersOperationExecutor {
             objective_or_error(&scoreboard, &source_objective)?;
         }
 
-        let mut result: i32 = 0;
-        for holder in &holders {
-            for source in &sources {
-                let source_value = scoreboard
-                    .get_score_value(source, &source_objective)
-                    .unwrap_or(0);
-                let target_value = scoreboard
-                    .get_score_value(holder, &objective_name)
-                    .unwrap_or(0);
-                if operation == ScoreboardOperation::Swap {
-                    scoreboard.set_score_value(
-                        &world,
-                        holder.clone(),
-                        objective_name.clone(),
-                        source_value,
-                    );
-                    scoreboard.set_score_value(
-                        &world,
-                        source.clone(),
-                        source_objective.clone(),
-                        target_value,
-                    );
-                } else {
-                    let new_value = operation.apply(target_value, source_value);
-                    scoreboard.set_score_value(
-                        &world,
-                        holder.clone(),
-                        objective_name.clone(),
-                        new_value,
-                    );
-                }
-            }
-            // Vanilla counts each holder once, with the score left after all of
-            // its source operations.
-            result = result.wrapping_add(
-                scoreboard
-                    .get_score_value(holder, &objective_name)
-                    .unwrap_or(0),
-            );
-        }
+        let result = Self::apply(
+            &mut scoreboard,
+            &world,
+            &holders,
+            &objective_name,
+            operation,
+            &sources,
+            &source_objective,
+        )?;
         drop(scoreboard);
 
         let (holder, single) = holder_component(&holders);
@@ -592,12 +572,81 @@ impl CommandExecutor for PlayersOperationExecutor {
                 TextComponent::translate_cross(
                     translation::java::COMMANDS_SCOREBOARD_PLAYERS_OPERATION_SUCCESS_MULTIPLE,
                     translation::java::COMMANDS_SCOREBOARD_PLAYERS_OPERATION_SUCCESS_MULTIPLE,
-                    [display_name, holder, result_component],
+                    [display_name, holder],
                 )
             },
             true,
         );
 
+        Ok(result)
+    }
+}
+
+impl PlayersOperationExecutor {
+    /// Applies each source sequentially and returns the sum of final target scores.
+    fn apply(
+        scoreboard: &mut Scoreboard,
+        target: &impl ScoreboardTarget,
+        holders: &[ResolvedScoreHolder],
+        objective_name: &str,
+        operation: ScoreboardOperation,
+        sources: &[ResolvedScoreHolder],
+        source_objective: &str,
+    ) -> CommandExecutorResult {
+        let mut result: i32 = 0;
+        for holder in holders {
+            if scoreboard
+                .get_score_value(&holder.name, objective_name)
+                .is_none()
+            {
+                scoreboard.set_score_value(target, holder.name.clone(), objective_name, 0);
+            }
+            for source in sources {
+                let source_value = scoreboard
+                    .get_score_value(&source.name, source_objective)
+                    .unwrap_or_else(|| {
+                        scoreboard.set_score_value(
+                            target,
+                            source.name.clone(),
+                            source_objective,
+                            0,
+                        );
+                        0
+                    });
+                let target_value = scoreboard
+                    .get_score_value(&holder.name, objective_name)
+                    .unwrap_or(0);
+                if operation == ScoreboardOperation::Swap {
+                    scoreboard.set_score_value(
+                        target,
+                        holder.name.clone(),
+                        objective_name,
+                        source_value,
+                    );
+                    scoreboard.set_score_value(
+                        target,
+                        source.name.clone(),
+                        source_objective,
+                        target_value,
+                    );
+                } else {
+                    let new_value = operation.apply(target_value, source_value)?;
+                    scoreboard.set_score_value(
+                        target,
+                        holder.name.clone(),
+                        objective_name,
+                        new_value,
+                    );
+                }
+            }
+            // Vanilla counts each holder once, with the score left after all of
+            // its source operations.
+            result = result.wrapping_add(
+                scoreboard
+                    .get_score_value(&holder.name, objective_name)
+                    .unwrap_or(0),
+            );
+        }
         Ok(result)
     }
 }
@@ -650,7 +699,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 literal("players")
                     .then(
                         literal("set").then(
-                            argument(ARG_TARGETS, ScoreHolderArgumentType).then(
+                            argument(ARG_TARGETS, ScoreHolderArgumentType::Multiple).then(
                                 argument(ARG_OBJECTIVE, ObjectiveArgumentType).then(
                                     argument(ARG_SCORE, IntegerArgumentType::any())
                                         .executes(PlayersSetExecutor),
@@ -660,7 +709,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     )
                     .then(
                         literal("get").then(
-                            argument(ARG_TARGETS, ScoreHolderArgumentType).then(
+                            argument(ARG_TARGETS, ScoreHolderArgumentType::Single).then(
                                 argument(ARG_OBJECTIVE, ObjectiveArgumentType)
                                     .executes(PlayersGetExecutor),
                             ),
@@ -668,7 +717,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     )
                     .then(
                         literal("add").then(
-                            argument(ARG_TARGETS, ScoreHolderArgumentType).then(
+                            argument(ARG_TARGETS, ScoreHolderArgumentType::Multiple).then(
                                 argument(ARG_OBJECTIVE, ObjectiveArgumentType).then(
                                     argument(ARG_SCORE, IntegerArgumentType::with_min(0))
                                         .executes(PlayersAddExecutor { remove: false }),
@@ -678,7 +727,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     )
                     .then(
                         literal("remove").then(
-                            argument(ARG_TARGETS, ScoreHolderArgumentType).then(
+                            argument(ARG_TARGETS, ScoreHolderArgumentType::Multiple).then(
                                 argument(ARG_OBJECTIVE, ObjectiveArgumentType).then(
                                     argument(ARG_SCORE, IntegerArgumentType::with_min(0))
                                         .executes(PlayersAddExecutor { remove: true }),
@@ -688,7 +737,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     )
                     .then(
                         literal("reset").then(
-                            argument(ARG_TARGETS, ScoreHolderArgumentType)
+                            argument(ARG_TARGETS, ScoreHolderArgumentType::Multiple)
                                 .executes(PlayersResetExecutor {
                                     has_objective: false,
                                 })
@@ -701,10 +750,14 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     )
                     .then(
                         literal("operation").then(
-                            argument(ARG_TARGETS, ScoreHolderArgumentType).then(
+                            argument(ARG_TARGETS, ScoreHolderArgumentType::Multiple).then(
                                 argument(ARG_OBJECTIVE, ObjectiveArgumentType).then(
                                     argument(ARG_OPERATION, OperationArgumentType).then(
-                                        argument(ARG_SOURCE_TARGETS, ScoreHolderArgumentType).then(
+                                        argument(
+                                            ARG_SOURCE_TARGETS,
+                                            ScoreHolderArgumentType::Multiple,
+                                        )
+                                        .then(
                                             argument(ARG_SOURCE_OBJECTIVE, ObjectiveArgumentType)
                                                 .executes(PlayersOperationExecutor),
                                         ),
@@ -715,7 +768,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     )
                     .then(
                         literal("enable").then(
-                            argument(ARG_TARGETS, ScoreHolderArgumentType).then(
+                            argument(ARG_TARGETS, ScoreHolderArgumentType::Multiple).then(
                                 argument(ARG_OBJECTIVE, ObjectiveArgumentType)
                                     .executes(PlayersEnableExecutor),
                             ),
@@ -728,17 +781,283 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::world::scoreboard::NoTarget;
+
+    fn holder(name: &str) -> ResolvedScoreHolder {
+        ResolvedScoreHolder {
+            name: name.to_string(),
+            display_name: TextComponent::text(name.to_string()),
+        }
+    }
+
+    fn scoreboard_with_objective(criterion: &str) -> Scoreboard {
+        let mut scoreboard = Scoreboard::new();
+        scoreboard.add_objective(
+            &NoTarget,
+            ScoreboardObjective::new(
+                "test",
+                TextComponent::text("Test"),
+                RenderType::Integer,
+                None,
+                criterion,
+            ),
+        );
+        scoreboard
+    }
+
+    #[test]
+    fn get_returns_the_score_and_orders_feedback_arguments() {
+        let mut scoreboard = scoreboard_with_objective("dummy");
+        scoreboard.set_score_value(&NoTarget, "entity-uuid", "test", 7);
+        let entity = || ResolvedScoreHolder {
+            name: "entity-uuid".to_string(),
+            display_name: TextComponent::text("Named Pig"),
+        };
+
+        let (value, feedback) = PlayersGetExecutor::get(&scoreboard, entity(), "test").unwrap();
+        assert_eq!(value, 7);
+        let feedback = serde_json::to_value(feedback).unwrap();
+        assert_eq!(
+            feedback["translate"],
+            translation::java::COMMANDS_SCOREBOARD_PLAYERS_GET_SUCCESS
+        );
+        assert_eq!(
+            feedback["with"],
+            serde_json::json!([
+                {"text": "Named Pig"}, {"text": "7"}, {"text": "Test"}
+            ])
+        );
+
+        scoreboard.remove_score(&NoTarget, "entity-uuid", "test");
+        let error = PlayersGetExecutor::get(&scoreboard, entity(), "test").unwrap_err();
+        assert!(error.is(&NO_SCORE_ERROR));
+        assert_eq!(
+            serde_json::to_value(error.message).unwrap()["with"],
+            serde_json::json!([
+                {"text": "test"}, {"text": "Named Pig"}
+            ])
+        );
+    }
+
+    #[test]
+    fn enable_counts_only_newly_unlocked_scores_and_preserves_values() {
+        let mut scoreboard = scoreboard_with_objective("trigger");
+        let mut enabled = ScoreboardScore::new("enabled", "test", VarInt(7), None, None);
+        enabled.locked = false;
+        scoreboard.update_score(&NoTarget, enabled);
+        scoreboard.set_score_value(&NoTarget, "locked", "test", 5);
+        let holders = [holder("enabled"), holder("locked"), holder("new")];
+
+        let (count, feedback) =
+            PlayersEnableExecutor::enable(&mut scoreboard, &NoTarget, &holders, "test").unwrap();
+        assert_eq!(count, 2);
+        let feedback = serde_json::to_value(feedback).unwrap();
+        assert_eq!(
+            feedback["translate"],
+            translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_MULTIPLE
+        );
+        assert_eq!(feedback["with"][1]["text"], "2");
+        for (name, value) in [("enabled", 7), ("locked", 5), ("new", 0)] {
+            let score = scoreboard.get_score(name, "test").unwrap();
+            assert_eq!(score.value.0, value);
+            assert!(!score.locked);
+        }
+        let error = PlayersEnableExecutor::enable(&mut scoreboard, &NoTarget, &holders, "test")
+            .unwrap_err();
+        assert!(error.is(&FAILED_ENABLE_ERROR));
+    }
+
+    #[test]
+    fn operations_track_missing_sources_and_propagate_zero_divisor_errors() {
+        for operation in [
+            ScoreboardOperation::Assign,
+            ScoreboardOperation::Divide,
+            ScoreboardOperation::Modulo,
+        ] {
+            let mut scoreboard = scoreboard_with_objective("dummy");
+            scoreboard.set_score_value(&NoTarget, "target", "test", 7);
+            let result = PlayersOperationExecutor::apply(
+                &mut scoreboard,
+                &NoTarget,
+                &[holder("target")],
+                "test",
+                operation,
+                &[holder("source")],
+                "test",
+            );
+            assert_eq!(scoreboard.get_score_value("source", "test"), Some(0));
+            if operation == ScoreboardOperation::Assign {
+                assert_eq!(result.unwrap(), 0);
+                assert_eq!(scoreboard.get_score_value("target", "test"), Some(0));
+            } else {
+                let error = result.unwrap_err();
+                assert_eq!(
+                    serde_json::to_value(error.message).unwrap()["translate"],
+                    translation::java::ARGUMENTS_OPERATION_DIV0
+                );
+                assert_eq!(scoreboard.get_score_value("target", "test"), Some(7));
+            }
+        }
+    }
+
+    #[test]
+    fn operations_sum_only_final_target_values_and_swap_sequentially() {
+        let mut scoreboard = scoreboard_with_objective("dummy");
+        for (name, value) in [("a", 1), ("b", 4), ("source1", 2), ("source2", 3)] {
+            scoreboard.set_score_value(&NoTarget, name, "test", value);
+        }
+        let targets = [holder("a"), holder("b")];
+        let result = PlayersOperationExecutor::apply(
+            &mut scoreboard,
+            &NoTarget,
+            &targets,
+            "test",
+            ScoreboardOperation::Plus,
+            &[holder("source1"), holder("source2")],
+            "test",
+        )
+        .unwrap();
+        assert_eq!(result, 15);
+        assert_eq!(scoreboard.get_score_value("a", "test"), Some(6));
+        assert_eq!(scoreboard.get_score_value("b", "test"), Some(9));
+
+        let result = PlayersOperationExecutor::apply(
+            &mut scoreboard,
+            &NoTarget,
+            &targets,
+            "test",
+            ScoreboardOperation::Swap,
+            &[holder("source1")],
+            "test",
+        )
+        .unwrap();
+        assert_eq!(result, 8);
+        assert_eq!(scoreboard.get_score_value("a", "test"), Some(2));
+        assert_eq!(scoreboard.get_score_value("b", "test"), Some(6));
+        assert_eq!(scoreboard.get_score_value("source1", "test"), Some(9));
+    }
 
     #[test]
     fn holder_component_uses_the_name_for_one_and_a_count_for_many() {
-        let one = vec!["detectGen".to_string()];
+        let one = vec![ResolvedScoreHolder {
+            name: "entity-uuid".to_string(),
+            display_name: TextComponent::text("Named Pig"),
+        }];
         let (holder, single) = holder_component(&one);
         assert!(single);
-        assert!(holder.to_pretty_console().contains("detectGen"));
+        assert_eq!(holder.to_pretty_console(), "Named Pig");
 
-        let many = vec!["detectGen".to_string(), "Coal".to_string()];
+        let mut many = one;
+        many.push(ResolvedScoreHolder {
+            name: "Coal".to_string(),
+            display_name: TextComponent::text("Coal"),
+        });
         let (holder, single) = holder_component(&many);
         assert!(!single);
         assert!(holder.to_pretty_console().contains('2'));
+    }
+
+    #[test]
+    fn only_live_attribute_criteria_are_read_only() {
+        let mut scoreboard = Scoreboard::new();
+        for (criterion, writable) in [
+            ("dummy", true),
+            ("trigger", true),
+            ("deathCount", true),
+            ("playerKillCount", true),
+            ("totalKillCount", true),
+            ("teamkill.red", true),
+            ("killedByTeam.blue", true),
+            ("minecraft.mined:minecraft.stone", true),
+            ("minecraft.custom:minecraft.jump", true),
+            ("deathCount+playerKillCount", true),
+            ("health", false),
+            ("food", false),
+            ("air", false),
+            ("armor", false),
+            ("xp", false),
+            ("level", false),
+            ("dummy+health", false),
+        ] {
+            scoreboard.add_objective(
+                &NoTarget,
+                ScoreboardObjective::new(
+                    "test",
+                    TextComponent::text("Test"),
+                    RenderType::Integer,
+                    None,
+                    criterion,
+                ),
+            );
+            let result = writable_objective_or_error(&scoreboard, "test");
+            assert_eq!(result.is_ok(), writable, "{criterion}");
+            if let Err(error) = result {
+                assert!(error.is(&OBJECTIVE_READ_ONLY_ERROR));
+                assert_eq!(
+                    error.message.to_pretty_console(),
+                    "Scoreboard objective 'test' is read-only"
+                );
+            }
+            scoreboard.remove_objective(&NoTarget, "test");
+        }
+        let error = objective_or_error(&scoreboard, "missing").unwrap_err();
+        assert!(error.is(&OBJECTIVE_NOT_FOUND_ERROR));
+        assert_eq!(
+            serde_json::to_value(&error.message).unwrap()["translate"],
+            translation::java::ARGUMENTS_OBJECTIVE_NOTFOUND
+        );
+    }
+
+    #[test]
+    fn get_requires_a_single_holder_in_the_command_tree() {
+        use crate::command::CommandSource;
+        use std::sync::Arc;
+
+        let mut dispatcher = CommandDispatcher::new();
+        register(&mut dispatcher, &PermissionRegistry::default());
+        let source = Arc::new(CommandSource::dummy());
+        for input in [
+            "scoreboard players get #temp test",
+            "scoreboard players get @s test",
+            "scoreboard players get @e[limit=1] test",
+            "scoreboard players set $x test 4",
+            "scoreboard players set @a test 4",
+        ] {
+            let result = dispatcher.parse_input(input, &source);
+            assert!(result.errors.is_empty(), "{input}: {:?}", result.errors);
+            assert_eq!(result.reader.remaining_length(), 0, "{input}");
+        }
+        for input in [
+            "scoreboard players get @a test",
+            "scoreboard players get @e test",
+        ] {
+            let result = dispatcher.parse_input(input, &source);
+            assert!(!result.errors.is_empty(), "{input}");
+        }
+    }
+
+    #[test]
+    fn holder_suggestions_include_selectors_and_selector_options() {
+        use crate::command::CommandSource;
+        use std::sync::Arc;
+
+        let mut dispatcher = CommandDispatcher::new();
+        register(&mut dispatcher, &PermissionRegistry::default());
+        let source = Arc::new(CommandSource::dummy());
+        for (input, expected) in [
+            ("scoreboard players set @", "@a"),
+            ("scoreboard players set @", "@s"),
+            ("scoreboard players set @e[", "type="),
+        ] {
+            let parsed = dispatcher.parse_input(input, &source);
+            let suggestions = dispatcher.get_completion_suggestions_at_end(parsed);
+            assert!(
+                suggestions
+                    .suggestions
+                    .iter()
+                    .any(|suggestion| { suggestion.text.cached_text() == expected }),
+                "{input}: {suggestions:?}"
+            );
+        }
     }
 }
