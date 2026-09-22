@@ -82,6 +82,11 @@ pub struct ChunkData {
     pub dirty: AtomicBool,
     pub inhabited_time: AtomicU64,
     pub custom_data: std::sync::Mutex<NbtCompound>,
+    /// Root tags this server does not model, kept verbatim so a save does not
+    /// strip them. A vanilla chunk carries `structures`, `PostProcessing`,
+    /// `carving_mask` and others; writing the chunk back without them loses
+    /// map data that nothing here can regenerate.
+    pub preserved_tags: std::sync::Mutex<NbtCompound>,
 }
 
 pub struct ChunkEntityData {
@@ -618,6 +623,7 @@ impl ChunkData {
             dirty: std::sync::atomic::AtomicBool::new(false),
             inhabited_time: std::sync::atomic::AtomicU64::new(0),
             custom_data: std::sync::Mutex::new(NbtCompound::new()),
+            preserved_tags: std::sync::Mutex::new(NbtCompound::new()),
         }
     }
 

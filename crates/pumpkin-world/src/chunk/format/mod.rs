@@ -34,6 +34,36 @@ pub mod anvil;
 pub mod linear;
 pub mod pump;
 
+/// Root tags `internal_from_bytes` consumes or `internal_to_bytes` regenerates.
+/// Everything else a chunk carries is data this server does not model, and it
+/// rides through a load/save cycle untouched rather than being dropped.
+const MODELLED_ROOT_TAGS: &[&str] = &[
+    "DataVersion",
+    "xPos",
+    "yPos",
+    "zPos",
+    "Status",
+    "Heightmaps",
+    "sections",
+    "block_entities",
+    "block_ticks",
+    "fluid_ticks",
+    "isLightOn",
+    "InhabitedTime",
+    "PumpkinCustomData",
+    "BukkitValues",
+];
+
+fn preserved_root_tags(root_tag: &NbtCompound) -> NbtCompound {
+    let mut preserved = NbtCompound::new();
+    for (name, tag) in &root_tag.child_tags {
+        if !MODELLED_ROOT_TAGS.contains(&&**name) {
+            preserved.put(name, tag.clone());
+        }
+    }
+    preserved
+}
+
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
     fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
@@ -444,6 +474,7 @@ impl ChunkData {
             blending_data: None,
             inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
             custom_data: std::sync::Mutex::new(custom_data),
+            preserved_tags: std::sync::Mutex::new(preserved_root_tags(&root_tag)),
         })
     }
 
@@ -492,6 +523,21 @@ impl ChunkData {
         let min_section_y = (self.section.min_y >> 4) as i8;
 
         let mut root_compound = NbtCompound::new();
+
+        // First, so that every tag this server does model overwrites whatever
+        // the chunk arrived with. Going the other way round would let a stale
+        // value survive any name missing from `MODELLED_ROOT_TAGS`, which is a
+        // worse failure than the dropped tags this exists to prevent.
+        {
+            let preserved = self
+                .preserved_tags
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (name, tag) in &preserved.child_tags {
+                root_compound.put(name, tag.clone());
+            }
+        }
+
         root_compound.put_int("DataVersion", WORLD_DATA_VERSION);
         root_compound.put_int("xPos", self.x);
         root_compound.put_int("zPos", self.z);
@@ -1189,6 +1235,76 @@ mod tests {
             pumpkin_data::biome::Biome::from_name("the_void")
                 .unwrap()
                 .id
+        );
+    }
+
+    /// A vanilla chunk carries tags this server has no field for. Dropping them
+    /// on save destroys map data: `structures` is what makes a village a
+    /// village to every structure-aware feature, and the generation-phase tags
+    /// decide what still has to happen to a chunk that is not finished yet.
+    #[test]
+    fn saving_keeps_the_top_level_tags_this_server_never_reads() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let mut nbt = test_chunk(vec![test_section(-4, "minecraft:stone", true)]);
+
+        let mut structures = NbtCompound::new();
+        structures.put("starts", NbtTag::Compound(NbtCompound::new()));
+        structures.put("References", NbtTag::Compound(NbtCompound::new()));
+        nbt.root_tag.put("structures", NbtTag::Compound(structures));
+        nbt.root_tag.put(
+            "PostProcessing",
+            NbtTag::List(vec![NbtTag::List(Vec::new())]),
+        );
+        nbt.root_tag.put(
+            "carving_mask",
+            NbtTag::ByteArray(vec![1i8, 2, 3].into_boxed_slice()),
+        );
+        nbt.root_tag.put_long("LastUpdate", 1_287_805);
+
+        let written = nbt.root_tag.clone();
+        let chunk = ChunkData::from_bytes(&nbt.write(), Vector2::new(0, 0)).expect("chunk parses");
+        let saved = chunk.to_bytes().expect("chunk serializes");
+
+        let mut cursor = std::io::Cursor::new(saved.as_ref());
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+        let reloaded = pumpkin_nbt::Nbt::read(&mut reader).expect("saved chunk parses");
+
+        for key in ["structures", "PostProcessing", "carving_mask", "LastUpdate"] {
+            assert_eq!(
+                reloaded.root_tag.get(key),
+                written.get(key),
+                "{key} did not survive the save"
+            );
+        }
+    }
+
+    /// `MODELLED_ROOT_TAGS` can fall behind the writer. When it does, the name
+    /// lands in the preserved bag as well, and the value the server computed
+    /// still has to be the one that reaches disk — a stale tag winning would be
+    /// a worse bug than the dropped tags this preservation exists to prevent.
+    #[test]
+    fn a_preserved_tag_never_shadows_one_this_server_owns() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let nbt = test_chunk(vec![test_section(-4, "minecraft:stone", true)]);
+        let chunk = ChunkData::from_bytes(&nbt.write(), Vector2::new(0, 0)).expect("chunk parses");
+        chunk
+            .preserved_tags
+            .lock()
+            .unwrap()
+            .put_int("DataVersion", 1);
+
+        let saved = chunk.to_bytes().expect("chunk serializes");
+        let mut cursor = std::io::Cursor::new(saved.as_ref());
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+        let reloaded = pumpkin_nbt::Nbt::read(&mut reader).expect("saved chunk parses");
+
+        assert_eq!(
+            reloaded.root_tag.get_int("DataVersion"),
+            Some(WORLD_DATA_VERSION)
         );
     }
 }
