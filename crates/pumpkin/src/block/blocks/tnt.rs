@@ -1,6 +1,7 @@
 use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::TntLikeProperties;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::translation;
@@ -33,7 +34,7 @@ impl TNTBlock {
 
         // Swap in air to claim the block: `set_block_state` locks the chunk section, so a task
         // racing for the same spot gets a non-TNT old state back and drops out here. Nothing is
-        // restored, the events above already ran and cannot re-enter through `placed`.
+        // restored, the plugin events already ran and cannot re-enter through `placed`.
         if world
             .set_block_state(location, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
             .to_block()
@@ -42,7 +43,7 @@ impl TNTBlock {
             return false;
         }
 
-        Self::ignite(world, tnt);
+        Self::ignite(world, location, tnt);
         true
     }
 
@@ -51,7 +52,7 @@ impl TNTBlock {
         let Some(tnt) = Self::prepare(world, location) else {
             return false;
         };
-        Self::ignite(world, tnt);
+        Self::ignite(world, location, tnt);
         true
     }
 
@@ -91,7 +92,7 @@ impl TNTBlock {
         Some(tnt)
     }
 
-    fn ignite(world: &Arc<World>, tnt: Arc<TNTEntity>) {
+    fn ignite(world: &Arc<World>, location: &BlockPos, tnt: Arc<TNTEntity>) {
         let pos = tnt.get_entity().pos.load();
         world.spawn_entity(tnt);
         world.play_sound(
@@ -99,6 +100,7 @@ impl TNTBlock {
             SoundCategory::Blocks,
             &pos,
         );
+        world.emit_game_event(GameEvent::PrimeFuse.name(), location.to_centered_f64());
     }
 }
 
