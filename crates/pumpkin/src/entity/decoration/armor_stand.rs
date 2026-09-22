@@ -226,8 +226,6 @@ impl ArmorStandEntity {
             SoundCategory::Neutral,
             &entity.pos.load(),
         );
-
-        // TODO: Implement equipment slots and make them drop all of their stored items.
     }
 
     /// Spawns break particles at the armor stand's position.
@@ -309,17 +307,13 @@ impl ArmorStandEntity {
         let clicked_slot = position.map_or(EquipmentSlot::MAIN_HAND, |position| {
             self.get_clicked_slot(position)
         });
-        let slot = if item_stack.is_empty() && !self.is_slot_disabled(&clicked_slot) {
-            clicked_slot
-        } else {
-            item_slot
-        };
+        let slot = select_interaction_slot(item_stack.is_empty(), &clicked_slot, &item_slot);
 
-        if !self.can_use_slot(&slot) {
+        if !self.can_use_slot(slot) {
             return false;
         }
 
-        self.swap_item(player, &slot, item_stack)
+        self.swap_item(player, slot, item_stack)
     }
 
     const fn slot_bit(slot: &EquipmentSlot, offset: i32) -> i32 {
@@ -332,6 +326,18 @@ impl ArmorStandEntity {
 
     fn is_slot_insertion_disabled(&self, slot: &EquipmentSlot) -> bool {
         self.disabled_slots.load(Ordering::Relaxed) & Self::slot_bit(slot, 16) != 0
+    }
+}
+
+const fn select_interaction_slot<'a>(
+    item_stack_empty: bool,
+    clicked_slot: &'a EquipmentSlot,
+    item_slot: &'a EquipmentSlot,
+) -> &'a EquipmentSlot {
+    if item_stack_empty {
+        clicked_slot
+    } else {
+        item_slot
     }
 }
 
@@ -748,5 +754,14 @@ mod tests {
         assert_eq!(stacks.len(), 1);
         assert_eq!(stacks[0].item.id, Item::DIAMOND_HELMET.id);
         assert!(equipment.equipment.is_empty());
+    }
+
+    #[test]
+    fn empty_hand_keeps_the_clicked_slot_for_disabled_slot_checks() {
+        let clicked_slot = EquipmentSlot::HEAD;
+        let item_slot = EquipmentSlot::MAIN_HAND;
+
+        assert!(select_interaction_slot(true, &clicked_slot, &item_slot) == &clicked_slot);
+        assert!(select_interaction_slot(false, &clicked_slot, &item_slot) == &item_slot);
     }
 }
