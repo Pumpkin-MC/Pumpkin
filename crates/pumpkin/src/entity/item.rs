@@ -190,6 +190,14 @@ impl ItemEntity {
             && stack.are_items_and_components_equal(other)
     }
 
+    /// Vanilla `ItemEntity.merge`: moves up to `min(max stack, max_count)` from `from` into `to`.
+    pub fn merge(to: &mut ItemStack, from: &mut ItemStack, max_count: u8) {
+        let max_size = to.get_max_stack_size().min(max_count);
+        let moved = from.item_count.min(max_size.saturating_sub(to.item_count));
+        to.increment(moved);
+        from.decrement(moved);
+    }
+
     /// Vanilla `ItemEntity.isMergable`.
     fn is_mergeable(&self) -> bool {
         if self.entity.removed.load(Ordering::SeqCst)
@@ -327,13 +335,7 @@ impl ItemEntity {
             (other_stack, self_stack)
         };
 
-        // Vanilla `ItemEntity.merge(to, from, 64)`.
-        let max_size = stack1.get_max_stack_size().min(MERGE_MAX_COUNT);
-        let moved = stack2
-            .item_count
-            .min(max_size.saturating_sub(stack1.item_count));
-        stack1.increment(moved);
-        stack2.decrement(moved);
+        Self::merge(&mut stack1, &mut stack2, MERGE_MAX_COUNT);
         let source_empty = stack2.is_empty();
         drop(stack1);
         drop(stack2);
