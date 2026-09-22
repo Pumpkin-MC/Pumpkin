@@ -1,18 +1,24 @@
 use crate::entity::player::statistics::StatisticCategory;
 use crate::server::Server;
+use crate::world::World;
 use core::f32;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::DamageResistantImpl;
-use pumpkin_data::data_component_impl::DamageResistantType;
+use pumpkin_data::data_component_impl::{BundleContentsImpl, ContainerImpl, DamageResistantImpl};
+use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::CAddItemActor;
 use pumpkin_protocol::bedrock::network_item::ItemStackWrapper;
+use pumpkin_protocol::bedrock::server::actor_event::{ActorEventID, SActorEvent};
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_util::math::atomic_f32::AtomicF32;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::version::JavaMinecraftVersion;
 use std::sync::atomic::Ordering::{AcqRel, Relaxed};
@@ -79,6 +85,11 @@ impl Drop for ItemMergeReservation<'_> {
     }
 }
 
+/// Vanilla `ItemEntity.LIFETIME`.
+const LIFETIME: u32 = 6000; // 5 minutes in ticks
+/// Vanilla `ItemEntity.merge(to, from, 64)`: cap on top of `getMaxStackSize`.
+const MERGE_MAX_COUNT: u8 = 64;
+
 impl ItemEntity {
     pub const DEFAULT_PICKUP_DELAY: u8 = 10;
 
@@ -89,13 +100,7 @@ impl ItemEntity {
             rand::random::<f64>().mul_add(0.2, -0.1),
         ));
         entity.yaw.store(rand::random::<f32>() * 360.0);
-
-        // Set fire immunity for certain items
-        if let Some(res) = item_stack.get_data_component::<DamageResistantImpl>()
-            && res.res_type == DamageResistantType::Fire
-        {
-            entity.fire_immune.store(true, Ordering::Relaxed);
-        }
+        Self::update_fire_immune(&entity, &item_stack);
 
         Self {
             entity,
@@ -117,13 +122,7 @@ impl ItemEntity {
     ) -> Self {
         entity.velocity.store(velocity);
         entity.yaw.store(rand::random::<f32>() * 360.0);
-
-        // Set fire immunity for certain items
-        if let Some(res) = item_stack.get_data_component::<DamageResistantImpl>()
-            && res.res_type == DamageResistantType::Fire
-        {
-            entity.fire_immune.store(true, Ordering::Relaxed);
-        }
+        Self::update_fire_immune(&entity, &item_stack);
 
         Self {
             entity,
@@ -168,7 +167,38 @@ impl ItemEntity {
         &self.entity
     }
 
-    pub fn can_merge(&self) -> bool {
+    /// Vanilla `ItemStack.canBeHurtBy`: the `damage_resistant` tag blocks matching damage.
+    fn can_be_hurt_by(stack: &ItemStack, damage_type: DamageType) -> bool {
+        stack
+            .get_data_component::<DamageResistantImpl>()
+            .is_none_or(|res| damage_type.is_tagged_with(res.res_type.as_str()) != Some(true))
+    }
+
+    /// Vanilla `ItemEntity.fireImmune`, cached since the item only changes on load.
+    fn update_fire_immune(entity: &Entity, stack: &ItemStack) {
+        entity.fire_immune.store(
+            !Self::can_be_hurt_by(stack, DamageType::IN_FIRE),
+            Ordering::Relaxed,
+        );
+    }
+
+    /// Vanilla `ItemEntity.areMergable`.
+    #[must_use]
+    pub fn are_mergable(stack: &ItemStack, other: &ItemStack) -> bool {
+        u16::from(stack.item_count) + u16::from(other.item_count)
+            <= u16::from(other.get_max_stack_size())
+            && stack.are_items_and_components_equal(other)
+    }
+
+    /// Vanilla `ItemEntity.isMergable`.
+    fn is_mergable(&self) -> bool {
+        if self.entity.removed.load(Ordering::SeqCst)
+            || self.never_pickup.load(Ordering::Relaxed)
+            || self.never_despawn.load(Ordering::Relaxed)
+            || self.item_age.load(Ordering::Relaxed) >= LIFETIME
+        {
+            return false;
+        }
         let Ok(item_stack) = self.item_stack.try_lock() else {
             return false;
         };
@@ -176,37 +206,25 @@ impl ItemEntity {
         item_stack.item_count < item_stack.get_max_stack_size()
     }
 
-    pub fn try_merge(&self) {
-        if !self.can_merge() || self.never_despawn.load(Ordering::Relaxed) {
+    /// Vanilla `ItemEntity.mergeWithNeighbours`.
+    fn merge_with_neighbours(&self) {
+        if !self.is_mergable() {
             return;
         }
 
         let bounding_box = self.entity.bounding_box.load().expand(0.5, 0.0, 0.5);
-
         let world = self.entity.world.load();
-        let entities = world.entities.load();
-        let items: Vec<&Self> = entities
-            .iter()
-            .filter_map(|entity: &Arc<dyn EntityBase>| {
-                entity.get_item_entity().filter(|item| {
-                    item.entity.entity_id != self.entity.entity_id
-                        && !item.never_despawn.load(Ordering::Relaxed)
-                        && item.entity.bounding_box.load().intersects(&bounding_box)
-                })
-            })
-            .collect();
+        for other in world.get_entities_at_box(&bounding_box) {
+            let Some(item) = other.get_item_entity() else {
+                continue;
+            };
+            if item.entity.entity_id == self.entity.entity_id || !item.is_mergable() {
+                continue;
+            }
 
-        for item in items {
-            if item.can_merge() {
-                if let Some(this_base) = world.get_entity_by_id(self.entity.entity_id)
-                    && let Some(this_item) = this_base.get_item_entity()
-                {
-                    this_item.try_merge_with(item);
-                }
-
-                if self.entity.removed.load(Ordering::SeqCst) {
-                    break;
-                }
+            self.try_merge_with(item);
+            if self.entity.removed.load(Ordering::SeqCst) {
+                break;
             }
         }
     }
@@ -239,9 +257,7 @@ impl ItemEntity {
                 (&*high_stack, &*low_stack)
             };
 
-            if !self_stack.are_equal(other_stack)
-                || self_stack.item_count + other_stack.item_count > self_stack.get_max_stack_size()
-            {
+            if !Self::are_mergable(self_stack, other_stack) {
                 return;
             }
 
@@ -300,8 +316,7 @@ impl ItemEntity {
         } else {
             (high_stack, low_stack)
         };
-        if !self_stack.are_equal(&other_stack)
-            || self_stack.item_count + other_stack.item_count > self_stack.get_max_stack_size()
+        if !Self::are_mergable(&self_stack, &other_stack)
             || (other_stack.item_count < self_stack.item_count) != target_is_self
         {
             return;
@@ -312,59 +327,87 @@ impl ItemEntity {
             (other_stack, self_stack)
         };
 
-        // Vanilla code adds a .min(64). Not needed with Vanilla item data
-
-        let max_size = stack1.get_max_stack_size();
-
-        let j = stack2.item_count.min(max_size - stack1.item_count);
-
-        stack1.increment(j);
-
-        stack2.decrement(j);
-
-        let empty1 = stack1.item_count == 0;
-
-        let empty2 = stack2.item_count == 0;
-
+        // Vanilla `ItemEntity.merge(to, from, 64)`.
+        let max_size = stack1.get_max_stack_size().min(MERGE_MAX_COUNT);
+        let moved = stack2
+            .item_count
+            .min(max_size.saturating_sub(stack1.item_count));
+        stack1.increment(moved);
+        stack2.decrement(moved);
+        let source_empty = stack2.is_empty();
         drop(stack1);
-
         drop(stack2);
 
-        let never_despawn = source.never_despawn.load(Ordering::Relaxed);
+        // `is_mergable` already excluded never-despawn and never-pickup items.
+        target.pickup_delay.fetch_max(
+            source.pickup_delay.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        target
+            .item_age
+            .fetch_min(source.item_age.load(Ordering::Relaxed), Ordering::Relaxed);
 
-        target.never_despawn.store(never_despawn, Ordering::Relaxed);
-
-        if !never_despawn {
-            let age = target
-                .item_age
-                .load(Ordering::Relaxed)
-                .min(source.item_age.load(Ordering::Relaxed));
-
-            target.item_age.store(age, Ordering::Relaxed);
-        }
-
-        let never_pickup = source.never_pickup.load(Ordering::Relaxed);
-
-        target.never_pickup.store(never_pickup, Ordering::Relaxed);
-
-        if !never_pickup {
-            let source_delay = source.pickup_delay.load(Ordering::Relaxed);
-            target
-                .pickup_delay
-                .fetch_max(source_delay, Ordering::Relaxed);
-        }
-
-        if empty1 {
-            target.entity.remove();
-        } else {
-            target.init_data_tracker();
-        }
-
-        if empty2 {
+        target.on_count_changed();
+        if source_empty {
             source.entity.remove();
         } else {
-            source.init_data_tracker();
+            source.on_count_changed();
         }
+    }
+
+    /// Vanilla `Item.onDestroyed`: containers (`BlockItem`, e.g. shulker boxes and bundles
+    /// spill their contents where the item died, whatever the damage type was).
+    fn on_destroyed(&self, world: &Arc<World>) {
+        let contents = {
+            let mut stack = self
+                .item_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut contents = Vec::new();
+            if let Some(container) = stack.get_data_component::<ContainerImpl>()
+                && !container.items.is_empty()
+            {
+                contents.extend(container.items.iter().map(|(_, item)| item.clone()));
+                stack.set_data_component(ContainerImpl { items: Vec::new() });
+            }
+            if let Some(bundle) = stack.get_data_component::<BundleContentsImpl>()
+                && !bundle.items.is_empty()
+            {
+                contents.extend(bundle.items.iter().cloned());
+                stack.set_data_component(BundleContentsImpl { items: Vec::new() });
+            }
+            contents
+        };
+
+        // no pickup delay.
+        let pos = self.entity.pos.load();
+        for item in contents.into_iter().filter(|item| !item.is_empty()) {
+            let spilled = Self::new(Entity::new(world.clone(), pos, &EntityType::ITEM), item);
+            spilled.set_pickup_delay(0);
+            world.spawn_entity(Arc::new(spilled));
+        }
+    }
+
+    /// Resends the stack after its count changed. Bedrock item actors ignore the `ITEM`
+    /// metadata, so they get the count as `UpdateStackSize`
+    fn on_count_changed(&self) {
+        self.init_data_tracker();
+
+        let count = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .item_count;
+        let packet = SActorEvent {
+            target_runtime_id: VarULong(self.entity.entity_id as u64),
+            event_id: ActorEventID::UpdateStackSize,
+            data: VarInt(i32::from(count)),
+            fire_at_position: None,
+        };
+        self.entity
+            .world
+            .load()
+            .send_to_tracking_players_bedrock(&self.entity, &packet);
     }
 
     fn decrement_pickup_delay(&self) {
@@ -418,22 +461,18 @@ impl ItemEntity {
         }
     }
 
-    fn should_tick_move(&self, move_velo: Vector3<f64>) -> Option<bool> {
+    /// a resting item only moves every 4th `tickCount`, offset by its id.
+    fn should_tick_move(&self, move_velo: Vector3<f64>) -> bool {
         let entity = &self.entity;
 
-        let mut tick_move = !entity.on_ground.load(Ordering::SeqCst)
-            || move_velo.horizontal_length_squared() > 1.0e-5;
-
-        if !tick_move {
-            let Ok(item_age) = i32::try_from(self.item_age.load(Ordering::Relaxed)) else {
-                entity.remove();
-                return None;
-            };
-
-            tick_move = (item_age + entity.entity_id) % 4 == 0;
-        }
-
-        Some(tick_move)
+        !entity.on_ground.load(Ordering::SeqCst)
+            || move_velo.horizontal_length_squared() > 1.0e-5
+            || entity
+                .age
+                .load(Ordering::Relaxed)
+                .wrapping_add(entity.entity_id)
+                % 4
+                == 0
     }
 
     fn move_and_apply_friction(&self, caller: &dyn EntityBase, move_velo: Vector3<f64>) {
@@ -442,19 +481,22 @@ impl ItemEntity {
         entity.move_entity(caller, move_velo);
         entity.tick_block_collisions(caller);
 
-        let mut friction = 0.98;
+        // air drag
+        let air_drag = 0.98;
+        let mut friction = air_drag;
         let on_ground = entity.on_ground.load(Ordering::SeqCst);
 
         let mut velo = entity.velocity.load();
         if on_ground {
             let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).1;
-            friction *= f64::from(block_affecting_velo.slipperiness) * 0.98;
+            friction *= f64::from(block_affecting_velo.slipperiness);
         }
 
-        velo = velo.multiply(friction, 0.98, friction);
+        velo = velo.multiply(friction, air_drag, friction);
 
+        // a landing item bounces back up with half its speed
         if on_ground && velo.y < 0.0 {
-            velo.y = 0.0;
+            velo.y *= -0.5;
         }
 
         entity.velocity.store(velo);
@@ -468,7 +510,7 @@ impl ItemEntity {
         let entity = &self.entity;
         let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
 
-        if age >= 6000 {
+        if age >= LIFETIME {
             let entity_id = entity.entity_id;
             let world = entity.world.load_full();
             let mut despawn_event =
@@ -486,20 +528,12 @@ impl ItemEntity {
             return false;
         }
 
-        let n = if entity
-            .last_pos
-            .load()
-            .sub(&entity.pos.load())
-            .length_squared()
-            == 0.0
-        {
-            40
-        } else {
-            2
-        };
-
-        if age.is_multiple_of(n) && self.can_merge() {
-            self.try_merge();
+        // merge rate on `tickCount`: 2 while the item changes block cell, else 40.
+        let moved =
+            BlockPos::floored_v(entity.last_pos.load()) != BlockPos::floored_v(entity.pos.load());
+        let rate = if moved { 2 } else { 40 };
+        if entity.age.load(Ordering::Relaxed) % rate == 0 {
+            self.merge_with_neighbours();
         }
 
         true
@@ -521,8 +555,24 @@ impl ItemEntity {
 }
 
 impl EntityBase for ItemEntity {
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = &self.entity;
+        if self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty()
+        {
+            entity.remove();
+            return;
+        }
+
+        // Vanilla `super.tick()`: `xo/yo/zo`, fluids, fire, portals and the void.
+        entity.tick(caller, server);
+        if entity.removed.load(Ordering::SeqCst) {
+            return;
+        }
+
         self.decrement_pickup_delay();
 
         let original_velo = entity.velocity.load();
@@ -534,11 +584,7 @@ impl EntityBase for ItemEntity {
 
         let move_velo = entity.velocity.load(); // In case push_out_of_blocks modifies it
 
-        let Some(tick_move) = self.should_tick_move(move_velo) else {
-            return;
-        };
-
-        if tick_move {
+        if self.should_tick_move(move_velo) {
             self.move_and_apply_friction(caller, move_velo);
         }
 
@@ -566,30 +612,65 @@ impl EntityBase for ItemEntity {
         damage_type: DamageType,
         _position: Option<Vector3<f64>>,
         _source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
     ) -> bool {
-        // Check if entity is fire_immune
-        let is_fire_damage = damage_type == DamageType::IN_FIRE
-            || damage_type == DamageType::ON_FIRE
-            || damage_type == DamageType::LAVA;
-        if is_fire_damage && self.entity.fire_immune.load(Ordering::Relaxed) {
+        // Vanilla `ItemEntity.hurtServer`.
+        let entity = &self.entity;
+        if entity.is_invulnerable_to(&damage_type, cause) {
+            return false;
+        }
+        let world = entity.world.load_full();
+        if !world.level_info.load().game_rules.mob_griefing
+            && cause.is_some_and(|cause| cause.get_mob().is_some())
+        {
+            return false;
+        }
+        // E.g. netherite ignores fire, the nether star explosions.
+        let can_be_hurt = Self::can_be_hurt_by(
+            &self
+                .item_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            damage_type,
+        );
+        if !can_be_hurt {
             return false;
         }
 
-        loop {
+        let mut event = crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
+            entity.entity_id,
+            damage_type,
+            amount,
+        );
+        if let Some(server) = world.server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled {
+            return false;
+        }
+
+        // Vanilla `markHurt`: resend the motion.
+        entity.velocity_dirty.store(true, Ordering::SeqCst);
+
+        // Vanilla keeps item health as an int: `(int)(health - damage)`.
+        let destroyed = loop {
             let current = self.health.load(Relaxed);
-            let new = current - amount;
+            let new = (current - event.damage).trunc();
             if self
                 .health
                 .compare_exchange(current, new, AcqRel, Relaxed)
                 .is_ok()
             {
-                if new <= 0.0 {
-                    self.entity.remove();
-                }
-                return true;
+                break current > 0.0 && new <= 0.0;
             }
+        };
+
+        world.emit_game_event(GameEvent::EntityDamage.name(), entity.pos.load());
+        if destroyed {
+            self.on_destroyed(&world);
+            entity.remove();
         }
+        true
     }
 
     fn on_player_collision(&self, player: &Arc<Player>) {
@@ -653,7 +734,7 @@ impl EntityBase for ItemEntity {
             if is_empty {
                 self.entity.remove();
             } else {
-                self.init_data_tracker();
+                self.on_count_changed();
             }
         }
     }
@@ -700,6 +781,8 @@ impl EntityBase for ItemEntity {
         if let Some(item_compound) = nbt.get_compound("Item")
             && let Some(stack) = ItemStack::read_item_stack(item_compound)
         {
+            // `new_empty` had no item yet to derive this from.
+            Self::update_fire_immune(&self.entity, &stack);
             *self
                 .item_stack
                 .lock()
@@ -775,5 +858,71 @@ impl EntityBase for ItemEntity {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ItemEntity;
+    use pumpkin_data::data_component_impl::{CustomDataImpl, CustomNameImpl};
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+    use pumpkin_data::{Enchantment, damage::DamageType};
+    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_util::text::TextComponent;
+
+    #[test]
+    fn different_counts_merge_up_to_max_stack() {
+        let stone = |count| ItemStack::new(count, &Item::STONE);
+        assert!(ItemEntity::are_mergable(&stone(1), &stone(5)));
+        assert!(ItemEntity::are_mergable(&stone(32), &stone(32)));
+        assert!(!ItemEntity::are_mergable(&stone(33), &stone(32)));
+    }
+
+    #[test]
+    fn unstackable_items_never_merge() {
+        let sword = ItemStack::new(1, &Item::DIAMOND_SWORD);
+        assert!(!ItemEntity::are_mergable(&sword, &sword.clone()));
+    }
+
+    #[test]
+    fn different_components_never_merge() {
+        let plain = ItemStack::new(1, &Item::STONE);
+
+        let mut named = plain.clone();
+        named.set_data_component(CustomNameImpl {
+            name: TextComponent::text("a"),
+        });
+        let mut renamed = plain.clone();
+        renamed.set_data_component(CustomNameImpl {
+            name: TextComponent::text("b"),
+        });
+        assert!(!ItemEntity::are_mergable(&plain, &named));
+        assert!(!ItemEntity::are_mergable(&named, &renamed));
+        assert!(ItemEntity::are_mergable(&named, &named.clone()));
+
+        let mut enchanted = plain.clone();
+        enchanted.add_enchantment(&Enchantment::UNBREAKING, 1);
+        let mut stronger = plain.clone();
+        stronger.add_enchantment(&Enchantment::UNBREAKING, 2);
+        assert!(!ItemEntity::are_mergable(&plain, &enchanted));
+        assert!(!ItemEntity::are_mergable(&enchanted, &stronger));
+
+        let mut data = NbtCompound::new();
+        data.put_string("id", "a".to_string());
+        let mut tagged = plain.clone();
+        tagged.set_data_component(CustomDataImpl::new(data));
+        assert!(!ItemEntity::are_mergable(&plain, &tagged));
+    }
+
+    #[test]
+    fn damage_resistant_items() {
+        let sword = ItemStack::new(1, &Item::NETHERITE_SWORD);
+        assert!(!ItemEntity::can_be_hurt_by(&sword, DamageType::LAVA));
+        assert!(ItemEntity::can_be_hurt_by(&sword, DamageType::CACTUS));
+
+        let star = ItemStack::new(1, &Item::NETHER_STAR);
+        assert!(!ItemEntity::can_be_hurt_by(&star, DamageType::EXPLOSION));
+        assert!(ItemEntity::can_be_hurt_by(&star, DamageType::LAVA));
     }
 }
