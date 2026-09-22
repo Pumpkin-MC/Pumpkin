@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockState, BlockStateId,
-    attributes::Attributes,
     damage::DamageType,
     entity::EntityType,
     fluid::Fluid,
@@ -101,7 +100,7 @@ pub trait ExplosionDamageCalculator: Send + Sync {
         let damage_multiplier = (1.0 - distance) * exposure as f64;
         (f64::midpoint(damage_multiplier * damage_multiplier, damage_multiplier)
             * 7.0
-            * explosion.power as f64
+            * radius
             + 1.0) as f32
     }
 }
@@ -110,19 +109,6 @@ pub trait ExplosionDamageCalculator: Send + Sync {
 pub struct DefaultExplosionDamageCalculator;
 
 impl ExplosionDamageCalculator for DefaultExplosionDamageCalculator {}
-
-fn explosion_knockback_power(
-    distance: f64,
-    exposure: f64,
-    knockback_multiplier: f64,
-    knockback_resistance: f64,
-) -> f64 {
-    crate::entity::combat::knockback_after_resistance(
-        (1.0 - distance) * exposure * knockback_multiplier,
-        knockback_resistance,
-    )
-    .max(0.0)
-}
 
 /// A configurable explosion damage calculator (e.g. for wind charges, mace wind bursts).
 pub struct SimpleExplosionDamageCalculator {
@@ -436,19 +422,13 @@ impl Explosion {
                 entity.get_eye_pos()
             };
             let direction = (dir_pos - self.pos).normalize();
-            let knockback_resistance = entity_base.get_living_entity().map_or(0.0, |living| {
-                living.get_attribute_value(&Attributes::EXPLOSION_KNOCKBACK_RESISTANCE)
-            });
+            // TODO: entity explosion knockback resistance attribute
+            let knockback_resistance = 0.0;
 
-            let knockback_power = explosion_knockback_power(
-                distance,
-                exposure,
-                knockback_multiplier,
-                knockback_resistance,
-            );
-            if knockback_power > 0.0 {
-                entity.add_velocity(direction * knockback_power);
-            }
+            let knockback_power =
+                (1.0 - distance) * exposure * knockback_multiplier * (1.0 - knockback_resistance);
+            let knockback = direction * knockback_power;
+            entity.add_velocity(knockback);
         }
     }
 
@@ -594,19 +574,8 @@ impl Explosion {
 
 #[cfg(test)]
 mod tests {
-    use super::{Explosion, explosion_knockback_power};
+    use super::Explosion;
     use pumpkin_data::Block;
-
-    #[test]
-    fn explosion_knockback_uses_explosion_resistance() {
-        let without_resistance = explosion_knockback_power(0.25, 0.8, 1.0, 0.0);
-        let with_half_resistance = explosion_knockback_power(0.25, 0.8, 1.0, 0.5);
-        let with_full_resistance = explosion_knockback_power(0.25, 0.8, 1.0, 1.0);
-
-        assert!((without_resistance - 0.6).abs() < f64::EPSILON);
-        assert!((with_half_resistance - 0.3).abs() < f64::EPSILON);
-        assert!(with_full_resistance.abs() < f64::EPSILON);
-    }
 
     #[test]
     fn tnt_minecart_rail_protection_covers_every_rail_type() {
