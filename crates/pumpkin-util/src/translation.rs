@@ -260,26 +260,11 @@ pub fn translation_to_pretty<P: Into<Cow<'static, str>>>(
     with: Vec<TextComponentBase>,
 ) -> String {
     let translation = get_translation(&namespaced_key.into(), locale);
-    format_translation_to_pretty(&translation, with)
-}
-
-/// Renders Java feedback for console and RCON without colliding with Bedrock keys.
-pub fn java_translation_to_pretty(key: &str, with: Vec<TextComponentBase>) -> String {
-    static JAVA_TRANSLATIONS: LazyLock<HashMap<String, String>> =
-        LazyLock::new(|| serde_json::from_str(VANILLA_EN_US_JSON).unwrap_or_default());
-    let translation = JAVA_TRANSLATIONS
-        .get(key)
-        .cloned()
-        .unwrap_or_else(|| get_translation(&format!("minecraft:{key}"), Locale::EnUs));
-    format_translation_to_pretty(&translation, with)
-}
-
-fn format_translation_to_pretty(translation: &str, with: Vec<TextComponentBase>) -> String {
     if with.is_empty() || !translation.contains('%') {
-        return translation.to_string();
+        return translation;
     }
 
-    let (substitutions, indices) = reorder_substitutions(translation, with);
+    let (substitutions, indices) = reorder_substitutions(&translation, with);
     let mut result = String::new();
     let mut pos = 0;
 
@@ -740,51 +725,7 @@ impl FromStr for Locale {
 #[cfg(test)]
 mod tests {
     use super::{Locale, TRANSLATIONS, get_translation_text, reorder_substitutions};
-    use crate::text::{TextComponent, TextComponentBase, TextContent, style::Style};
-
-    #[test]
-    #[expect(
-        deprecated,
-        reason = "Exercise the runtime constructor used by command errors"
-    )]
-    fn console_feedback_uses_java_translations_without_bedrock_collisions() {
-        let message = TextComponent::translate_cross(
-            "commands.scoreboard.players.get.success",
-            "commands.scoreboard.players.get.success",
-            [
-                TextComponent::text("#temp"),
-                TextComponent::text("7"),
-                TextComponent::text("test"),
-            ],
-        );
-        assert_eq!(message.to_pretty_console(), "#temp has 7 test");
-    }
-
-    #[test]
-    #[expect(
-        deprecated,
-        reason = "Exercise the runtime constructor used by command errors"
-    )]
-    fn console_feedback_preserves_case_sensitive_java_translation_keys() {
-        let message = TextComponent::translate_cross(
-            "arguments.objective.notFound",
-            "arguments.objective.notFound",
-            [TextComponent::text("missing")],
-        );
-        assert_eq!(
-            message.to_pretty_console(),
-            "Unknown scoreboard objective 'missing'"
-        );
-        let message = TextComponent::translate_cross(
-            "argument.scoreHolder.empty",
-            "argument.scoreHolder.empty",
-            [],
-        );
-        assert_eq!(
-            message.to_pretty_console(),
-            "No relevant score holders could be found"
-        );
-    }
+    use crate::text::{TextComponentBase, TextContent, style::Style};
 
     fn arg(text: &str) -> TextComponentBase {
         TextComponentBase {

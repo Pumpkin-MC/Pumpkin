@@ -1,7 +1,6 @@
 use crate::text::color::{ARGBColor, hsv_to_rgb};
 use crate::translation::{
-    Locale, get_translation, get_translation_text, java_translation_to_pretty,
-    reorder_substitutions, translation_to_pretty,
+    Locale, get_translation, get_translation_text, reorder_substitutions, translation_to_pretty,
 };
 use crate::version::JavaMinecraftVersion;
 use click::ClickEvent;
@@ -987,8 +986,13 @@ impl TextComponentBase {
         let mut text = match *self.content {
             TextContent::Text { text } => text.into_owned(),
             TextContent::Translate {
-                translate, with, ..
-            } => java_translation_to_pretty(&translate, with),
+                translate,
+                bedrock_translate,
+                with,
+            } => {
+                let key = bedrock_translate.as_ref().unwrap_or(&translate);
+                translation_to_pretty(format!("minecraft:{key}"), Locale::EnUs, with)
+            }
             TextContent::EntityNames {
                 selector,
                 separator: _,
