@@ -55,14 +55,11 @@ impl BlockBehaviour for FarmlandBlock {
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
-        // Vanilla `FarmBlock.randomTick` hydrates when water is nearby or
-        // when it is raining on the block above the farmland.
         let hydrated = is_water_nearby(args.world, args.position)
             || args.world.is_raining_at(&args.position.up());
         let state_id = args.world.get_block_state_id(args.position);
         if hydrated {
             let current_moisture = FarmlandProperties::from_state_id(state_id).moisture;
-            // Vanilla only updates the block when it is not fully hydrated.
             if current_moisture >= 7 {
                 return;
             }
@@ -145,10 +142,6 @@ fn is_water_nearby(world: &Arc<World>, block_pos: &BlockPos) -> bool {
                     y: dy,
                     z: dz,
                 });
-                // Vanilla checks the fluid state, not the block identity.
-                // Route through the world's fluid contract so waterlogged
-                // blocks and source-water plants (kelp, kelp plant, seagrass,
-                // tall seagrass, bubble columns) all hydrate farmland too.
                 if world.get_fluid(&check_pos).matches_type(&Fluid::WATER) {
                     return true;
                 }
