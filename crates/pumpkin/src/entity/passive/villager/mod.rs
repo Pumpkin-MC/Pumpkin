@@ -1810,6 +1810,7 @@ impl VillagerEntity {
         } else if is_sleeping {
             // Wake up during the day
             self.get_entity().set_pose(EntityPose::Standing);
+            self.mob_entity.living_entity.sleeping_pos.store(None);
             self.get_entity().set_synced_data(
                 pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
                 None::<BlockPos>,
