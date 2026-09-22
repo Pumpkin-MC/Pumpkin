@@ -1001,18 +1001,14 @@ pub fn serialize_java_packet(
         }
         ClientboundPacket::CLoginSuccess(data) => {
             let uuid = uuid::Uuid::from_u64_pair(data.uuid.high, data.uuid.low);
-            let session_id =
-                uuid::Uuid::from_u64_pair(data.session_id.high, data.session_id.low);
+            let session_id = uuid::Uuid::from_u64_pair(data.session_id.high, data.session_id.low);
             let properties: Vec<pumpkin_protocol::Property> = data
                 .properties
                 .iter()
                 .map(|property| pumpkin_protocol::Property {
                     name: property.name.clone().into_boxed_str(),
                     value: property.value.clone().into_boxed_str(),
-                    signature: property
-                        .signature
-                        .clone()
-                        .map(String::into_boxed_str),
+                    signature: property.signature.clone().map(String::into_boxed_str),
                 })
                 .collect();
             let p = pumpkin_protocol::java::client::login::CLoginSuccess {
@@ -1053,7 +1049,8 @@ pub fn serialize_java_packet(
                     }
                     if *version < JavaMinecraftVersion::V_1_21_4 {
                         effective_actions &=
-                            !pumpkin_protocol::java::client::play::PlayerInfoFlags::UPDATE_HAT.bits();
+                            !pumpkin_protocol::java::client::play::PlayerInfoFlags::UPDATE_HAT
+                                .bits();
                     }
 
                     write.write_u8(effective_actions)?;
