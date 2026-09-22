@@ -141,11 +141,17 @@ fn structure_set_containing(key: StructureKeys) -> Option<usize> {
         .position(|set| set.structures.iter().any(|entry| entry.structure == key))
 }
 
-/// Vanilla reports the horizontal block distance for structures and POIs.
-fn horizontal_distance(origin: &BlockPos, target: &BlockPos) -> i32 {
+/// Unfloored horizontal distance, for picking the nearest of several hits
+/// without two candidates collapsing onto the same integer.
+fn horizontal_distance_exact(origin: &BlockPos, target: &BlockPos) -> f64 {
     let dx = f64::from(target.0.x - origin.0.x);
     let dz = f64::from(target.0.z - origin.0.z);
-    dx.hypot(dz).floor().max(0.0) as i32
+    dx.hypot(dz)
+}
+
+/// Vanilla reports the horizontal block distance for structures and POIs.
+fn horizontal_distance(origin: &BlockPos, target: &BlockPos) -> i32 {
+    horizontal_distance_exact(origin, target).floor().max(0.0) as i32
 }
 
 /// ... and the full 3D block distance for biomes.
@@ -248,7 +254,8 @@ impl CommandExecutor for LocateStructureExecutor {
 
             if let Some((pos, key)) = nearest
                 && found.as_ref().is_none_or(|(best, _)| {
-                    horizontal_distance(&origin, &pos) < horizontal_distance(&origin, best)
+                    horizontal_distance_exact(&origin, &pos)
+                        < horizontal_distance_exact(&origin, best)
                 })
             {
                 found = Some((pos, key));
