@@ -24,11 +24,11 @@ fn canonicalize_type_name(name: &str) -> String {
 
 /// Generates the `TokenStream` for the `MetaDataType` struct for Minecraft 26.3.
 pub fn build() -> TokenStream {
-    let path = "../../assets/meta_data_type/26_3_meta_data_type.json";
+    let path = "../../assets/meta_data_type.json";
     let parsed: BTreeMap<String, i32> = serde_json::from_str(
-        &fs::read_to_string(path).expect("Failed to read 26_3_meta_data_type.json"),
+        &fs::read_to_string(path).expect("Failed to read meta_data_type.json"),
     )
-    .expect("Failed to parse 26_3_meta_data_type.json");
+    .expect("Failed to parse meta_data_type.json");
 
     let mut handlers_map: BTreeMap<String, i32> = BTreeMap::new();
     for (name, id) in parsed {
