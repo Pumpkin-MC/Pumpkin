@@ -2,6 +2,11 @@ package pumpkin:plugin@0.1.0;
 
 interface java-packets {
   use uuid.{ uuid };
+  record profile-property {
+    name: string,
+    value: string,
+    signature: option<string>,
+  }
   record config-s-client-information-config {
     locale: string,
     view-distance: u8,
@@ -1489,11 +1494,6 @@ interface java-packets {
     id: s32,
     value: f64,
     modifiers: list<attribute-modifier>,
-  }
-  record profile-property {
-    name: string,
-    value: string,
-    signature: option<string>,
   }
   record attribute-modifier {
     id: string,
