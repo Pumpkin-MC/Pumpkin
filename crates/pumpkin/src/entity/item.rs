@@ -184,14 +184,14 @@ impl ItemEntity {
 
     /// Vanilla `ItemEntity.areMergable`.
     #[must_use]
-    pub fn are_mergable(stack: &ItemStack, other: &ItemStack) -> bool {
+    pub fn are_mergeable(stack: &ItemStack, other: &ItemStack) -> bool {
         u16::from(stack.item_count) + u16::from(other.item_count)
             <= u16::from(other.get_max_stack_size())
             && stack.are_items_and_components_equal(other)
     }
 
     /// Vanilla `ItemEntity.isMergable`.
-    fn is_mergable(&self) -> bool {
+    fn is_mergeable(&self) -> bool {
         if self.entity.removed.load(Ordering::SeqCst)
             || self.never_pickup.load(Ordering::Relaxed)
             || self.never_despawn.load(Ordering::Relaxed)
@@ -208,7 +208,7 @@ impl ItemEntity {
 
     /// Vanilla `ItemEntity.mergeWithNeighbours`.
     fn merge_with_neighbours(&self) {
-        if !self.is_mergable() {
+        if !self.is_mergeable() {
             return;
         }
 
@@ -218,7 +218,7 @@ impl ItemEntity {
             let Some(item) = other.get_item_entity() else {
                 continue;
             };
-            if item.entity.entity_id == self.entity.entity_id || !item.is_mergable() {
+            if item.entity.entity_id == self.entity.entity_id || !item.is_mergeable() {
                 continue;
             }
 
@@ -257,7 +257,7 @@ impl ItemEntity {
                 (&*high_stack, &*low_stack)
             };
 
-            if !Self::are_mergable(self_stack, other_stack) {
+            if !Self::are_mergeable(self_stack, other_stack) {
                 return;
             }
 
@@ -316,7 +316,7 @@ impl ItemEntity {
         } else {
             (high_stack, low_stack)
         };
-        if !Self::are_mergable(&self_stack, &other_stack)
+        if !Self::are_mergeable(&self_stack, &other_stack)
             || (other_stack.item_count < self_stack.item_count) != target_is_self
         {
             return;
@@ -338,7 +338,7 @@ impl ItemEntity {
         drop(stack1);
         drop(stack2);
 
-        // `is_mergable` already excluded never-despawn and never-pickup items.
+        // `is_mergeable` already excluded never-despawn and never-pickup items.
         target.pickup_delay.fetch_max(
             source.pickup_delay.load(Ordering::Relaxed),
             Ordering::Relaxed,
@@ -874,15 +874,15 @@ mod tests {
     #[test]
     fn different_counts_merge_up_to_max_stack() {
         let stone = |count| ItemStack::new(count, &Item::STONE);
-        assert!(ItemEntity::are_mergable(&stone(1), &stone(5)));
-        assert!(ItemEntity::are_mergable(&stone(32), &stone(32)));
-        assert!(!ItemEntity::are_mergable(&stone(33), &stone(32)));
+        assert!(ItemEntity::are_mergeable(&stone(1), &stone(5)));
+        assert!(ItemEntity::are_mergeable(&stone(32), &stone(32)));
+        assert!(!ItemEntity::are_mergeable(&stone(33), &stone(32)));
     }
 
     #[test]
     fn unstackable_items_never_merge() {
         let sword = ItemStack::new(1, &Item::DIAMOND_SWORD);
-        assert!(!ItemEntity::are_mergable(&sword, &sword.clone()));
+        assert!(!ItemEntity::are_mergeable(&sword, &sword.clone()));
     }
 
     #[test]
@@ -897,22 +897,22 @@ mod tests {
         renamed.set_data_component(CustomNameImpl {
             name: TextComponent::text("b"),
         });
-        assert!(!ItemEntity::are_mergable(&plain, &named));
-        assert!(!ItemEntity::are_mergable(&named, &renamed));
-        assert!(ItemEntity::are_mergable(&named, &named.clone()));
+        assert!(!ItemEntity::are_mergeable(&plain, &named));
+        assert!(!ItemEntity::are_mergeable(&named, &renamed));
+        assert!(ItemEntity::are_mergeable(&named, &named.clone()));
 
         let mut enchanted = plain.clone();
         enchanted.add_enchantment(&Enchantment::UNBREAKING, 1);
         let mut stronger = plain.clone();
         stronger.add_enchantment(&Enchantment::UNBREAKING, 2);
-        assert!(!ItemEntity::are_mergable(&plain, &enchanted));
-        assert!(!ItemEntity::are_mergable(&enchanted, &stronger));
+        assert!(!ItemEntity::are_mergeable(&plain, &enchanted));
+        assert!(!ItemEntity::are_mergeable(&enchanted, &stronger));
 
         let mut data = NbtCompound::new();
         data.put_string("id", "a".to_string());
         let mut tagged = plain.clone();
         tagged.set_data_component(CustomDataImpl::new(data));
-        assert!(!ItemEntity::are_mergable(&plain, &tagged));
+        assert!(!ItemEntity::are_mergeable(&plain, &tagged));
     }
 
     #[test]
