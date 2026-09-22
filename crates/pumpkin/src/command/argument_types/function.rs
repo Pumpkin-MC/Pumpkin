@@ -3,7 +3,8 @@ use crate::command::{
     CommandSource, context::command_context::CommandContext,
     errors::command_syntax_error::CommandSyntaxError, string_reader::StringReader,
 };
-use pumpkin_data::translation;
+use pumpkin_command::argument_types::FromStringReader;
+use pumpkin_util::identifier::Identifier;
 
 /// Parses a function name: `name`, `namespace:name` or a tag such as `#tag`.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -13,16 +14,12 @@ impl ArgumentType<CommandSource> for FunctionArgumentType {
     type Item = String;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
-        let length = reader
-            .remaining_part()
-            .find(char::is_whitespace)
-            .unwrap_or_else(|| reader.remaining_part().len());
-        if length == 0 {
-            return Err(INVALID_FUNCTION_ERROR.create(reader));
+        if reader.peek() == Some('#') {
+            reader.skip();
+            Ok(format!("#{}", Identifier::from_reader(reader)?))
+        } else {
+            Ok(Identifier::from_reader(reader)?.to_string())
         }
-        let name = reader.remaining_part()[..length].to_string();
-        reader.set_cursor(reader.cursor() + length);
-        Ok(name)
     }
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType {
@@ -41,20 +38,26 @@ impl FunctionArgumentType {
     }
 }
 
-const INVALID_FUNCTION_ERROR: crate::command::errors::error_types::CommandErrorType<0> =
-    crate::command::errors::error_types::CommandErrorType::new(
-        translation::java::ARGUMENTS_FUNCTION_UNKNOWN,
-        translation::java::ARGUMENTS_FUNCTION_UNKNOWN,
-    );
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pumpkin_data::translation;
 
     #[test]
-    fn reads_namespaced_names_and_tags() {
-        assert_eq!(parse("nores:tick"), "nores:tick".to_string());
-        assert_eq!(parse("#minecraft:tick"), "#minecraft:tick".to_string());
+    fn normalizes_function_names_and_tags() {
+        for (input, expected) in [
+            ("ping", "minecraft:ping"),
+            ("#mcgrp", "#minecraft:mcgrp"),
+            (":ping", "minecraft:ping"),
+            ("#:mcgrp", "#minecraft:mcgrp"),
+            ("nores:tick", "nores:tick"),
+            ("#minecraft:tick", "#minecraft:tick"),
+            ("nores:folder/tick", "nores:folder/tick"),
+        ] {
+            let mut reader = StringReader::new(input);
+            assert_eq!(FunctionArgumentType.parse(&mut reader).unwrap(), expected);
+            assert_eq!(reader.remaining_length(), 0);
+        }
     }
 
     #[test]
@@ -68,13 +71,20 @@ mod tests {
     }
 
     #[test]
-    fn rejects_an_empty_name() {
-        let mut reader = StringReader::new(" nores:tick");
-        assert!(FunctionArgumentType.parse(&mut reader).is_err());
-    }
-
-    fn parse(text: &str) -> String {
-        let mut reader = StringReader::new(text);
-        FunctionArgumentType.parse(&mut reader).unwrap()
+    fn rejects_invalid_identifiers_with_the_standard_error() {
+        for input in [
+            "bad/namespace:ping",
+            "minecraft:bad:ping",
+            "#bad/namespace:ping",
+            "#minecraft:bad:ping",
+        ] {
+            let mut reader = StringReader::new(input);
+            let error = FunctionArgumentType.parse(&mut reader).unwrap_err();
+            assert_eq!(
+                serde_json::to_value(error.message).unwrap()["translate"],
+                translation::java::ARGUMENT_ID_INVALID
+            );
+            assert_eq!(reader.cursor(), usize::from(input.starts_with('#')));
+        }
     }
 }
