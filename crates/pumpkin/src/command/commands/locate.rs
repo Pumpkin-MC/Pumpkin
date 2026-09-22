@@ -109,6 +109,38 @@ fn result_name(searched: &ResourceOrTag, found: &str) -> String {
     }
 }
 
+/// The structures a `/locate structure` argument names: one for a plain id,
+/// every member for a `#tag`. Vanilla's `LocateCommand.getHolders` resolves
+/// both against the `worldgen/structure` registry the same way.
+fn wanted_structures(searched: &ResourceOrTag) -> Vec<StructureKeys> {
+    match searched {
+        ResourceOrTag::Resource(id) => id
+            .is_vanilla()
+            .then(|| StructureKeys::from_name(id.path()))
+            .flatten()
+            .into_iter()
+            .collect(),
+        ResourceOrTag::Tag(id) => {
+            tag::get_tag_values(RegistryKey::WorldgenStructure, &id.to_string())
+                .into_iter()
+                .flatten()
+                .filter_map(|name| StructureKeys::from_name(name))
+                .collect()
+        }
+    }
+}
+
+/// Index into [`StructureSet::ALL`] of the set a structure belongs to, whose
+/// placement decides where it may generate. Vanilla keeps this as a prepared
+/// reverse map (`ChunkGeneratorStructureState.placementsForStructure`); there
+/// are ~21 sets, so a scan is cheap enough for a command. An index rather than
+/// a reference because the sets are consts, whose addresses are not stable.
+fn structure_set_containing(key: StructureKeys) -> Option<usize> {
+    StructureSet::ALL
+        .iter()
+        .position(|set| set.structures.iter().any(|entry| entry.structure == key))
+}
+
 /// Vanilla reports the horizontal block distance for structures and POIs.
 fn horizontal_distance(origin: &BlockPos, target: &BlockPos) -> i32 {
     let dx = f64::from(target.0.x - origin.0.x);
@@ -153,21 +185,28 @@ impl CommandExecutor for LocateStructureExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let searched = context.get_argument::<ResourceOrTag>(ARG_STRUCTURE)?;
 
-        // The generator's placement data models vanilla's structure sets,
-        // so ids resolve against those. There is no structure tag data,
-        // hence tags cannot name any known structure (yet).
-        let set = if let ResourceOrTag::Resource(id) = searched
-            && id.is_vanilla()
-        {
-            StructureSet::get(id.path())
-        } else {
-            None
-        };
-
-        let Some(set) = set else {
+        let wanted = wanted_structures(searched);
+        if wanted.is_empty() {
             return Err(STRUCTURE_INVALID_ERROR_TYPE
                 .create_without_context(TextComponent::text(searched.printable())));
-        };
+        }
+
+        // A structure is located through the placement of the set that holds
+        // it, but only that structure counts as a hit: `minecraft:fortress`
+        // must not report a bastion just because both share
+        // `minecraft:nether_complexes`. Mirrors the `placementScans` map in
+        // vanilla's `ChunkGenerator.findNearestMapStructure`.
+        let mut scans: Vec<(usize, Vec<StructureKeys>)> = Vec::new();
+        for key in wanted {
+            let Some(set_index) = structure_set_containing(key) else {
+                continue;
+            };
+            if let Some((_, keys)) = scans.iter_mut().find(|(index, _)| *index == set_index) {
+                keys.push(key);
+            } else {
+                scans.push((set_index, vec![key]));
+            }
+        }
 
         let origin = BlockPos::floored_v(context.source.position);
 
@@ -175,38 +214,48 @@ impl CommandExecutor for LocateStructureExecutor {
         let seed = world.level.seed.0;
         let world_gen = world.level.world_gen.load_full();
 
-        let found = match &set.placement.placement_type {
-            // Strongholds come out of the pre-computed ring cache, which
-            // already holds positions they really occupy.
-            StructurePlacementType::ConcentricRings(_) => {
-                world_gen.global_structure_cache().and_then(|global_cache| {
-                    find_nearest_structure(
-                        origin,
-                        &[&set.placement],
-                        STRUCTURE_SEARCH_RADIUS,
-                        seed as i64,
-                        global_cache,
-                    )
-                })
-            }
-            // Everything else is spread over a grid whose candidate chunks
-            // are only *possible* sites: the biome at a candidate can still
-            // reject every structure in the set. Resolving the start makes
-            // sure the reported position actually holds one.
-            StructurePlacementType::RandomSpread(_) => {
-                let targets: Vec<StructureKeys> =
-                    set.structures.iter().map(|entry| entry.structure).collect();
-                find_nearest_structure_start(
+        let mut found: Option<(BlockPos, StructureKeys)> = None;
+        for (set_index, keys) in scans {
+            let set = &StructureSet::ALL[set_index];
+            let nearest = match &set.placement.placement_type {
+                // Strongholds come out of the pre-computed ring cache, which
+                // already holds positions they really occupy. A concentric-ring
+                // set holds exactly one structure, so the hit is unambiguous.
+                StructurePlacementType::ConcentricRings(_) => world_gen
+                    .global_structure_cache()
+                    .and_then(|global_cache| {
+                        find_nearest_structure(
+                            origin,
+                            &[&set.placement],
+                            STRUCTURE_SEARCH_RADIUS,
+                            seed as i64,
+                            global_cache,
+                        )
+                    })
+                    .map(|pos| (pos, keys[0])),
+                // Everything else is spread over a grid whose candidate chunks
+                // are only *possible* sites: the biome at a candidate can still
+                // reject every structure in the set. Resolving the start makes
+                // sure the reported position actually holds one, and says which.
+                StructurePlacementType::RandomSpread(_) => find_nearest_structure_start(
                     origin,
                     set,
-                    &targets,
+                    &keys,
                     STRUCTURE_SEARCH_RADIUS,
                     &world_gen,
-                )
-            }
-        };
+                ),
+            };
 
-        let Some(target) = found else {
+            if let Some((pos, key)) = nearest
+                && found.as_ref().is_none_or(|(best, _)| {
+                    horizontal_distance(&origin, &pos) < horizontal_distance(&origin, best)
+                })
+            {
+                found = Some((pos, key));
+            }
+        }
+
+        let Some((target, key)) = found else {
             return Err(STRUCTURE_NOT_FOUND_ERROR_TYPE
                 .create_without_context(TextComponent::text(searched.printable())));
         };
@@ -216,7 +265,7 @@ impl CommandExecutor for LocateStructureExecutor {
             context,
             translation::java::COMMANDS_LOCATE_STRUCTURE_SUCCESS,
             translation::bedrock::COMMANDS_LOCATE_STRUCTURE_SUCCESS,
-            searched.printable(),
+            result_name(searched, &format!("minecraft:{}", key.to_name())),
             &target,
             false,
             distance,
@@ -377,4 +426,63 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 ),
             ),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_util::identifier::Identifier;
+
+    fn resource(path: &'static str) -> ResourceOrTag {
+        ResourceOrTag::Resource(Identifier::vanilla_static(path))
+    }
+
+    /// The reported bug: both nether structures share `nether_complexes`, so
+    /// resolving by set made `/locate structure minecraft:fortress` either
+    /// fail or report a bastion.
+    #[test]
+    fn nether_structures_resolve_separately_within_one_set() {
+        assert_eq!(
+            wanted_structures(&resource("fortress")),
+            vec![StructureKeys::Fortress]
+        );
+        assert_eq!(
+            wanted_structures(&resource("bastion_remnant")),
+            vec![StructureKeys::BastionRemnant]
+        );
+
+        let fortress_set = structure_set_containing(StructureKeys::Fortress).unwrap();
+        let bastion_set = structure_set_containing(StructureKeys::BastionRemnant).unwrap();
+        assert_eq!(fortress_set, bastion_set);
+        assert_eq!(StructureSet::NAMES[fortress_set], "nether_complexes");
+    }
+
+    /// Set names are not structure ids and must no longer be accepted.
+    #[test]
+    fn structure_set_names_are_not_locatable() {
+        assert!(wanted_structures(&resource("nether_complexes")).is_empty());
+        assert!(wanted_structures(&resource("villages")).is_empty());
+    }
+
+    #[test]
+    fn tags_expand_to_their_members() {
+        let village = ResourceOrTag::Tag(Identifier::vanilla_static("village"));
+        let members = wanted_structures(&village);
+        assert_eq!(members.len(), 5);
+        assert!(members.contains(&StructureKeys::VillagePlains));
+        assert!(members.contains(&StructureKeys::VillageTaiga));
+    }
+
+    /// Every structure the command can name must belong to a set, or it has no
+    /// placement to search and would silently never be found.
+    #[test]
+    fn every_structure_belongs_to_a_set() {
+        for name in StructureKeys::all_names() {
+            let key = StructureKeys::from_name(name).expect("known structure name");
+            assert!(
+                structure_set_containing(key).is_some(),
+                "{name} is in no structure set"
+            );
+        }
+    }
 }
