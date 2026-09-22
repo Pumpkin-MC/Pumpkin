@@ -3426,14 +3426,7 @@ impl World {
             .level
             .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
             .await;
-        if let Some(server) = self.server.upgrade() {
-            let mut event =
-                crate::plugin::world::chunk_send::ChunkSend::new(player.world(), chunk.clone());
-            server.plugin_manager.fire(&server, &mut event).await;
-            if event.cancelled {
-                return;
-            }
-        }
+        // `send_chunks` fires `ChunkSend` -> a cancel only skips the chunk, the join continues.
         client.send_chunks(&[chunk]).await;
         player
             .chunk_sender
