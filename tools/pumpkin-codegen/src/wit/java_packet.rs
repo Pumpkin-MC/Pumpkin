@@ -41,7 +41,18 @@ pub fn build() -> String {
         ));
     }
 
-    let defined_types = collect_defined_types(&dirs);
+    let mut defined_types = collect_defined_types(&dirs);
+    // Game profile properties live in pumpkin-protocol's crate root rather than
+    // a packet module, so register their WIT representation explicitly.
+    defined_types.insert("profile-property".to_string());
+    interface.type_def(TypeDef::new(
+        "profile-property",
+        TypeDefKind::Record(Record::new(vec![
+            Field::new("name", WitType::String),
+            Field::new("value", WitType::String),
+            Field::new("signature", WitType::option(WitType::String)),
+        ])),
+    ));
 
     // Process serverbound packets
     for state in server_states {
