@@ -10,8 +10,8 @@ use crate::{
 };
 use pumpkin_data::{
     Block, BlockState, BlockStateId, block_properties::ComposterLikeProperties,
-    composter_increase_chance::get_composter_increase_chance_from_item_id, entity::EntityType,
-    item::Item, item_stack::ItemStack, world::WorldEvent,
+    data_component_impl::CompostableImpl, entity::EntityType, item::Item, item_stack::ItemStack,
+    world::WorldEvent,
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block;
@@ -48,12 +48,10 @@ impl BlockBehaviour for ComposterBlock {
             }
 
             let item_stack = &mut *args.item_stack;
-            let item_id = item_stack.item.id;
-
-            // Check if the item is consumable by the composter
-            let Some(chance) = get_composter_increase_chance_from_item_id(item_id) else {
+            let Some(compostable) = item_stack.get_data_component::<CompostableImpl>() else {
                 return BlockActionResult::Pass;
             };
+            let chance = compostable.chance;
 
             // Consume one item from the stack (if in survival mode)
             if !args.player.has_infinite_materials() {

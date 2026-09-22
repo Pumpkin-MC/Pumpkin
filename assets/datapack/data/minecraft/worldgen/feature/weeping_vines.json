@@ -1,0 +1,147 @@
+{
+  "type": "minecraft:overlay",
+  "features": [
+    {
+      "feature": {
+        "type": "minecraft:random_neighbor_spread",
+        "accepted_neighbors": [
+          "minecraft:netherrack",
+          "minecraft:nether_wart_block"
+        ],
+        "attempts": 200,
+        "block": {
+          "id": "minecraft:nether_wart_block"
+        },
+        "can_replace": {
+          "type": "minecraft:matching_block_tag",
+          "tag": "minecraft:air"
+        },
+        "xz_offset": {
+          "type": "minecraft:trapezoid",
+          "max": 5,
+          "min": -5,
+          "plateau": 0
+        },
+        "y_offset": {
+          "type": "minecraft:trapezoid",
+          "max": 1,
+          "min": -4,
+          "plateau": 3
+        }
+      },
+      "placement": []
+    },
+    {
+      "feature": {
+        "type": "minecraft:block_column",
+        "allowed_placement": {
+          "type": "minecraft:matching_block_tag",
+          "tag": "minecraft:air"
+        },
+        "direction": "down",
+        "layers": [
+          {
+            "height": {
+              "type": "minecraft:weighted_list",
+              "distribution": [
+                {
+                  "data": {
+                    "type": "minecraft:uniform",
+                    "max_inclusive": 8,
+                    "min_inclusive": 1
+                  },
+                  "weight": 10
+                },
+                {
+                  "data": {
+                    "type": "minecraft:uniform",
+                    "max_inclusive": 17,
+                    "min_inclusive": 2
+                  },
+                  "weight": 2
+                },
+                {
+                  "data": 1,
+                  "weight": 3
+                }
+              ]
+            },
+            "provider": {
+              "id": "minecraft:weeping_vines_plant"
+            }
+          },
+          {
+            "height": 1,
+            "provider": {
+              "type": "minecraft:randomized_int",
+              "property": "age",
+              "source": {
+                "id": "minecraft:weeping_vines",
+                "properties": {
+                  "age": "0"
+                }
+              },
+              "values": {
+                "type": "minecraft:uniform",
+                "max_inclusive": 25,
+                "min_inclusive": 17
+              }
+            }
+          }
+        ],
+        "prioritize_tip": true
+      },
+      "placement": [
+        {
+          "type": "minecraft:count",
+          "count": 100
+        },
+        {
+          "type": "minecraft:offset",
+          "x": {
+            "type": "minecraft:trapezoid",
+            "max": 7,
+            "min": -7,
+            "plateau": 0
+          },
+          "y": {
+            "type": "minecraft:trapezoid",
+            "max": 1,
+            "min": -4,
+            "plateau": 3
+          },
+          "z": {
+            "type": "minecraft:trapezoid",
+            "max": 7,
+            "min": -7,
+            "plateau": 0
+          }
+        },
+        {
+          "type": "minecraft:block_predicate_filter",
+          "predicate": {
+            "type": "minecraft:all_of",
+            "predicates": [
+              {
+                "type": "minecraft:matching_block_tag",
+                "tag": "minecraft:air"
+              },
+              {
+                "type": "minecraft:matching_blocks",
+                "blocks": [
+                  "minecraft:netherrack",
+                  "minecraft:nether_wart_block"
+                ],
+                "offset": [
+                  0,
+                  1,
+                  0
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

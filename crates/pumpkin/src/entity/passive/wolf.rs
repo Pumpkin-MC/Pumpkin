@@ -103,12 +103,9 @@ impl WolfEntity {
             // 2: OwnerHurtTargetGoal
             target_selector.add_goal(2, OwnerHurtTargetGoal::new());
             // 3: HurtByTargetGoal (RevengeGoal)
-            target_selector.add_goal(3, Box::new(RevengeGoal::new(true)));
-            // 4: NearestAttackableTarget (Player)
-            target_selector.add_goal(
-                4,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
+            target_selector.add_goal(3, Box::new(RevengeGoal::new(true).alerting_others()));
+            // 4: NearestAttackableTargetGoal (Player) — omitted; vanilla gates it on the
+            // NeutralMob anger system, and retaliation goes through goal 3 (RevengeGoal).
             // 5: NonTameRandomTarget (Sheep, Rabbit, Fox)
             target_selector.add_goal(
                 5,

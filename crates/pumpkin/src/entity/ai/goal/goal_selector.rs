@@ -38,15 +38,17 @@ impl GoalSelector {
         let mut i = 0;
         while i < self.goals.len() {
             if self.goals[i].type_id == type_id {
-                let goal = self.goals.swap_remove(i);
+                // Insertion order decides who wins a control when priorities tie, so no
+                // swap-remove.
+                let goal = self.goals.remove(i);
                 for slot in &mut self.goals_by_control {
                     if *slot == usize::MAX {
                         continue;
                     }
                     if *slot == i {
                         *slot = usize::MAX;
-                    } else if *slot == self.goals.len() {
-                        *slot = i;
+                    } else if *slot > i {
+                        *slot -= 1;
                     }
                 }
                 if goal.running {

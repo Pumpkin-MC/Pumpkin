@@ -76,7 +76,7 @@ pub(crate) fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Bloc
     };
 
     world.set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL);
-    world.sync_world_event(WorldEvent::ParticlesAndSoundWaxOn, location, 0);
+    world.sync_world_event(WorldEvent::ParticlesWaxOn, location, 0);
     true
 }
 
@@ -94,7 +94,7 @@ impl HoneyCombItem {
 
         args.world.update_block_entity(block_entity);
         args.world
-            .sync_world_event(WorldEvent::ParticlesAndSoundWaxOn, *args.position, 0);
+            .sync_world_event(WorldEvent::ParticlesWaxOn, *args.position, 0);
 
         BlockActionResult::Success
     }

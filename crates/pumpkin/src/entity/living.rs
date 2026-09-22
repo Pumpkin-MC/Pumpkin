@@ -9,6 +9,7 @@ use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventID, SActorEvent};
 use pumpkin_protocol::codec::var_ulong::VarULong;
+use pumpkin_util::Difficulty;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
@@ -111,6 +112,8 @@ pub struct LivingEntity {
     pub last_attacker_id: AtomicI32,
     /// The tick at which this entity was last attacked (entity age).
     pub last_attacked_time: AtomicI32,
+    last_damage_type: std::sync::Mutex<Option<DamageType>>,
+    last_damage_stamp: std::sync::atomic::AtomicI64,
 
     /// The entity ID of the entity this living entity last attacked.
     pub last_attacking_id: AtomicI32,
@@ -205,24 +208,6 @@ fn is_allowed_by_team_rules(
         || same_team
 }
 
-/// Resolves an entity's scoreboard team. Players are
-/// tracked by name; all other entities are tracked by their UUID string.
-fn get_entity_team(entity: &dyn EntityBase) -> Option<crate::world::scoreboard::Team> {
-    if let Some(player) = entity.get_player() {
-        return player.get_team();
-    }
-
-    let entity_ref = entity.get_entity();
-    entity_ref
-        .world
-        .load()
-        .scoreboard
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get_entity_team(&entity_ref.entity_uuid.to_string())
-        .cloned()
-}
-
 impl LivingEntity {
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
@@ -304,6 +289,8 @@ impl LivingEntity {
             climbing_pos: AtomicCell::new(None),
             last_attacker_id: AtomicI32::new(0),
             last_attacked_time: AtomicI32::new(0),
+            last_damage_type: std::sync::Mutex::new(None),
+            last_damage_stamp: std::sync::atomic::AtomicI64::new(0),
             last_attacking_id: AtomicI32::new(0),
             last_attack_time: AtomicI32::new(0),
             combat_tracker: std::sync::Mutex::new(CombatTracker::new()),
@@ -616,7 +603,7 @@ impl LivingEntity {
     }
 
     /// Picks up an Item entity or XP Orb
-    pub fn pickup(&self, item: &Entity, stack_amount: u32) {
+    pub fn pickup(&self, item: &Entity, stack_amount: u32) -> bool {
         let mut pickup_event =
             crate::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent::new(
                 self.entity.entity_id,
@@ -628,7 +615,7 @@ impl LivingEntity {
                 .plugin_manager
                 .fire_blocking(&server, &mut pickup_event);
             if pickup_event.cancelled {
-                return;
+                return false;
             }
         }
 
@@ -645,6 +632,7 @@ impl LivingEntity {
                 actor_runtime_id: VarULong(self.entity.entity_id as u64),
             },
         );
+        true
     }
 
     /// Sends the Hand animation to all others, used when Eating for example
@@ -866,10 +854,10 @@ impl LivingEntity {
                 .find(|a| a.0.id == attribute.id)
                 .map_or_else(
                     || {
-                        tracing::warn!(
-                            "Entity type {:?} has no base value for attribute {:?}; falling back to default {}",
-                            self.entity.entity_type,
-                            attribute.id,
+                        tracing::debug!(
+                            "Entity type {} has no base value for attribute {}; falling back to default {}",
+                            self.entity.entity_type.resource_name,
+                            attribute.name,
                             attribute.default_value,
                         );
                         attribute.default_value
@@ -1313,9 +1301,25 @@ impl LivingEntity {
         let world = self.entity.world.load();
         let entity_id = self.entity_id();
 
+        let je_packet =
+            pumpkin_protocol::java::client::play::CSwingArm::new(entity_id.into(), false);
+        let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
+            action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
+            target_actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
+            data: 0.0,
+            swing_source: None,
+        };
+
+        world.broadcast_editioned(&je_packet, &be_packet);
+    }
+
+    pub fn swing_off_hand(&self) {
+        let world = self.entity.world.load();
+        let entity_id = self.entity_id();
+
         let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
             entity_id.into(),
-            pumpkin_protocol::java::client::play::Animation::SwingMainArm,
+            pumpkin_protocol::java::client::play::Animation::SwingOffhand,
         );
         let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
             action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
@@ -1413,7 +1417,7 @@ impl LivingEntity {
     fn push_entities(&self, dyn_self: &dyn EntityBase) {
         let world = self.entity.world.load();
         let entity_bb = self.entity.bounding_box.load();
-        let own_team = get_entity_team(dyn_self);
+        let own_team = dyn_self.get_team();
 
         let pushable: Vec<Arc<dyn EntityBase>> = world
             .get_all_at_box(&entity_bb)
@@ -1423,10 +1427,7 @@ impl LivingEntity {
                 entity_ref.entity_id != self.entity.entity_id
                     && !entity.is_spectator()
                     && entity.is_pushable()
-                    && is_allowed_by_team_rules(
-                        own_team.as_ref(),
-                        get_entity_team(&**entity).as_ref(),
-                    )
+                    && is_allowed_by_team_rules(own_team.as_ref(), entity.get_team().as_ref())
             })
             .collect();
 
@@ -1918,6 +1919,10 @@ impl LivingEntity {
     }
 
     #[allow(clippy::redundant_closure_for_method_calls)]
+    /// Builds the chat death message for this entity: picks the
+    /// `death.attack.<id>` (or the `.player` variant when a killer entity is
+    /// known, or the kill-credit name when the killer is offline/removed)
+    /// translation and fills in the victim and killer display names.
     pub fn get_death_message(
         dyn_self: &dyn EntityBase,
         damage_type: DamageType,
@@ -1962,6 +1967,10 @@ impl LivingEntity {
         }
     }
 
+    /// Marks the entity as dead exactly once and runs the server-side death
+    /// flow: stop movement input, attribute the kill, drop loot, broadcast the
+    /// `Death` (3) entity event, and hand out XP. Safe to call on every lethal
+    /// damage event; only the first call has an effect.
     #[allow(clippy::too_many_lines)]
     pub fn on_death(
         &self,
@@ -2109,11 +2118,13 @@ impl LivingEntity {
                 .get(slot)
                 .copied()
                 .unwrap_or(DEFAULT_EQUIPMENT_DROP_CHANCE);
+            // A chance above 1.0 marks a guaranteed, undamaged drop.
+            let preserved = chance > 1.0;
             // Vanilla approximation: EnchantmentHelper.processEquipmentDropChance
             // adds lootingLevel * 0.01 to the per-slot equipment drop chance.
             chance += looting_level as f32 * 0.01;
             chance = chance.min(1.0);
-            if rand::random::<f32>() >= chance {
+            if !preserved && rand::random::<f32>() >= chance {
                 continue;
             }
             let mut item = self
@@ -2129,7 +2140,7 @@ impl LivingEntity {
             // Vanilla approximation: Mob.dropCustomDeathLoot applies random
             // damage to dropped equipment using two chained random calls:
             // setDamageValue(maxDamage - random.nextInt(1 + random.nextInt(max(maxDamage - 3, 1))))
-            if let Some(max_damage) = item.get_max_damage() {
+            if !preserved && let Some(max_damage) = item.get_max_damage() {
                 let mut rng = rand::rng();
                 let inner = rng.random_range(0..(max_damage - 3).max(1));
                 let outer = rng.random_range(0..=inner);
@@ -2262,11 +2273,12 @@ impl LivingEntity {
     fn drop_loot(&self, params: &LootContextParameters) {
         let resource_name = self.get_entity().entity_type.resource_name;
         let key = format!("minecraft:entities/{resource_name}");
-        if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+        let world = self.entity.world.load();
+        if let Some(loot_table) = world.get_loot_table(&key) {
             let seed: i64 = rand::random();
             let pos = self.entity.block_pos.load();
-            for stack in crate::world::loot::generate_loot_with_context(loot_table, seed, params) {
-                self.entity.world.load().drop_stack(&pos, stack);
+            for stack in crate::world::loot::generate_loot_from_handle(&loot_table, seed, params) {
+                world.drop_stack(&pos, stack);
             }
         }
     }
@@ -2511,12 +2523,34 @@ impl LivingEntity {
             .unwrap_or_else(|| ItemStack::EMPTY.clone())
     }
 
+    /// Forgotten after 40 ticks.
+    pub fn get_last_damage_type(&self) -> Option<DamageType> {
+        let stamp = self.last_damage_stamp.load(Ordering::Relaxed);
+        let mut last = self
+            .last_damage_type
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.entity.world.load().get_world_age() - stamp > 40 {
+            *last = None;
+        }
+        *last
+    }
+
     pub fn can_take_damage(&self) -> bool {
         !self.entity.invulnerable.load(Ordering::Relaxed) && self.is_part_of_game()
     }
 
     pub fn is_part_of_game(&self) -> bool {
         !self.is_spectator() && self.entity.is_alive()
+    }
+
+    pub fn can_attack(&self, target: &Self) -> bool {
+        if target.entity.entity_type == &EntityType::PLAYER
+            && self.entity.world.load().level_info.load().difficulty == Difficulty::Peaceful
+        {
+            return false;
+        }
+        target.can_take_damage()
     }
 
     pub fn reset_state(&self) {
@@ -2629,12 +2663,43 @@ impl LivingEntity {
                 nbt.put("active_effects", NbtTag::List(effects_list));
             }
         }
-        //TODO: write equipment
-        // todo more...
+        let equipment = {
+            let guard = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut compound = NbtCompound::new();
+            for (slot, stack) in &guard.equipment {
+                if !stack.is_empty() {
+                    let mut item_nbt = NbtCompound::new();
+                    stack.write_item_stack(&mut item_nbt);
+                    compound.put(slot.to_name(), NbtTag::Compound(item_nbt));
+                }
+            }
+            compound
+        };
+        if !equipment.child_tags.is_empty() {
+            nbt.put("equipment", NbtTag::Compound(equipment));
+        }
     }
 
     pub fn read_living_nbt_non_mut(&self, nbt: &NbtCompound) {
         self.health.store(nbt.get_float("Health").unwrap_or(20.0));
+
+        if let Some(equipment) = nbt.get_compound("equipment") {
+            let mut guard = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (name, tag) in &equipment.child_tags {
+                if let Some(slot) = EquipmentSlot::get_from_name(name)
+                    && let Some(compound) = tag.extract_compound()
+                    && let Some(stack) = ItemStack::read_item_stack(compound)
+                {
+                    guard.put(slot, stack);
+                }
+            }
+        }
 
         // Clamp any persisted absorption to the entity's configured max
         let raw_abs = nbt.get_float("AbsorptionAmount").unwrap_or(0.0);
@@ -3078,6 +3143,13 @@ impl LivingEntity {
         self.last_damage_taken.store(amount);
         let damage_amount = damage_amount.max(0.0);
 
+        // Record the source once the hit is confirmed.
+        *self
+            .last_damage_type
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(damage_type);
+        self.last_damage_stamp.store(world.get_world_age(), Relaxed);
+
         let Some(server) = world.server.upgrade() else {
             return false;
         };
@@ -3274,6 +3346,10 @@ impl EntityBase for LivingEntity {
         self.get_attribute_value(&Attributes::GRAVITY)
     }
 
+    /// Advances the living entity by one tick: base entity tick, movement and
+    /// physics while alive (still applied during the 20-tick death animation so
+    /// knockback lands), velocity coalescing, status effects, void damage, and
+    /// death-animation completion.
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.entity.tick(caller, server);
@@ -3307,14 +3383,6 @@ impl EntityBase for LivingEntity {
         // Coalesce velocity sends to once per tick.
         if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
             self.entity.send_velocity();
-        }
-
-        // TODO
-        let player = caller.get_player();
-        let is_player = player.is_some();
-
-        if !is_player {
-            self.entity.send_pos_rot();
         }
 
         // Fetch supporting blocks for players or other entities
@@ -3526,14 +3594,15 @@ impl EntityBase for LivingEntity {
                 // respawn. Removing one here breaks reconnecting while dead.
                 return;
             }
-            // Only send death particles once (on the exact tick death_time reaches 20)
-            // and then remove the entity, preventing entity_event spam.
-            if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
-                self.entity.world.load().send_entity_status(
-                    &self.entity,
-                    EntityStatus::Death,
-                    Some(ActorEventID::Death),
-                );
+            // Vanilla `LivingEntity.tickDeath` sends the POOF (60) particle event
+            // once the death animation finished; the death event (3) was already
+            // broadcast in `on_death`. Sending it again here would restart the
+            // client-side death animation.
+            if time >= 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
+                self.entity
+                    .world
+                    .load()
+                    .send_entity_status(&self.entity, EntityStatus::Poof, None);
                 self.entity.remove();
             }
         }
@@ -3983,7 +4052,7 @@ mod tests {
         metadata
             .write(
                 &mut bytes,
-                &pumpkin_util::version::JavaMinecraftVersion::V_26_2,
+                &pumpkin_util::version::JavaMinecraftVersion::V_26_3,
             )
             .unwrap();
 

@@ -59,3 +59,20 @@ impl BedrockClient {
         true
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_only_the_current_bedrock_protocol() {
+        assert!(matches!(
+            incompatible_protocol_status(2192),
+            Some(CPlayStatus::OutdatedClient)
+        ));
+        assert!(incompatible_protocol_status(2193).is_none());
+        assert!(matches!(
+            incompatible_protocol_status(2194),
+            Some(CPlayStatus::OutdatedServer)
+        ));
+    }
+}

@@ -76,7 +76,10 @@ pub enum JavaMinecraftVersion {
     V_1_21_11,
     /// 26.1: Tiny Takeover
     V_26_1,
+    // 26.2: Chaos Cubed
     V_26_2,
+    /// 26.3: Wilderness Bound
+    V_26_3,
     /// Fallback for unrecognized protocol versions.
     Unknown,
 }
@@ -139,6 +142,7 @@ impl JavaMinecraftVersion {
             Self::V_1_21_11 => 774,
             Self::V_26_1 => 775,
             Self::V_26_2 => 776,
+            Self::V_26_3 => 777,
             Self::Unknown => -1,
         }
     }
@@ -200,6 +204,7 @@ impl JavaMinecraftVersion {
             774 => Self::V_1_21_11,
             775 => Self::V_26_1,
             776 => Self::V_26_2,
+            777 => Self::V_26_3,
             _ => Self::Unknown,
         }
     }
@@ -277,7 +282,7 @@ impl std::fmt::Display for JavaMinecraftVersion {
             Self::V_1_21_11 => write!(f, "1.21.11"),
             Self::V_26_1 => write!(f, "26.1"),
             Self::V_26_2 => write!(f, "26.2"),
-
+            Self::V_26_3 => write!(f, "26.3"),
             Self::Unknown => write!(f, "unknown"),
         }
     }
@@ -287,8 +292,10 @@ impl std::fmt::Display for JavaMinecraftVersion {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 #[allow(non_camel_case_types)]
 pub enum BedrockMinecraftVersion {
-    /// 1.26.45
-    V_1_26_45,
+    /// 1.21: Tricky Trials.
+    V_1_21,
+    /// 1.26.51. Shares its protocol version with 1.26.50.
+    V_1_26_51,
     /// Fallback for unrecognized protocol versions.
     Unknown,
 }
@@ -300,7 +307,8 @@ impl BedrockMinecraftVersion {
     #[must_use]
     pub const fn protocol_version(&self) -> i32 {
         match self {
-            Self::V_1_26_45 => 2169,
+            Self::V_1_21 => 671,
+            Self::V_1_26_51 => 2193,
             Self::Unknown => -1,
         }
     }
@@ -311,7 +319,8 @@ impl BedrockMinecraftVersion {
     #[must_use]
     pub const fn from_protocol(protocol: u32) -> Self {
         match protocol {
-            2169 => Self::V_1_26_45,
+            671 => Self::V_1_21,
+            2193 => Self::V_1_26_51,
             _ => Self::Unknown,
         }
     }
@@ -320,8 +329,23 @@ impl BedrockMinecraftVersion {
 impl std::fmt::Display for BedrockMinecraftVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::V_1_26_45 => write!(f, "1.26.45"),
+            Self::V_1_21 => write!(f, "1.21"),
+            Self::V_1_26_51 => write!(f, "1.26.51"),
             Self::Unknown => write!(f, "unknown"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BedrockMinecraftVersion;
+
+    #[test]
+    fn resolves_bedrock_26_51_protocol() {
+        let version = BedrockMinecraftVersion::from_protocol(2193);
+
+        assert_eq!(version, BedrockMinecraftVersion::V_1_26_51);
+        assert_eq!(version.protocol_version(), 2193);
+        assert_eq!(version.to_string(), "1.26.51");
     }
 }
