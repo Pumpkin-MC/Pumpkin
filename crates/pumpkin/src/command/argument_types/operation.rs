@@ -108,6 +108,9 @@ impl ArgumentType<CommandSource> for OperationArgumentType {
     type Item = ScoreboardOperation;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
+        if !reader.can_read_char() {
+            return Err(INVALID_OPERATION_ERROR.create(reader));
+        }
         let start = reader.cursor();
         while reader.peek().is_some_and(|c| c != ' ') {
             reader.skip();
@@ -118,7 +121,7 @@ impl ArgumentType<CommandSource> for OperationArgumentType {
                 return Ok(operation);
             }
         }
-        Err(INVALID_OPERATION_ERROR.create(reader))
+        Err(INVALID_OPERATION_ERROR.create_without_context())
     }
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType {
@@ -132,7 +135,7 @@ impl ArgumentType<CommandSource> for OperationArgumentType {
     ) -> Suggestions {
         let mut builder = builder;
         for (_, symbol) in ScoreboardOperation::ALL {
-            builder = builder.suggest(symbol);
+            builder = builder.filter_and_suggest_one(symbol);
         }
         builder.build()
     }

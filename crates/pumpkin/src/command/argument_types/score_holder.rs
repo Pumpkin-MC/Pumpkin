@@ -8,10 +8,19 @@ use crate::command::{
     argument_types::entity_selector::parser::EntitySelectorParser,
     context::command_context::CommandContext,
     errors::command_syntax_error::CommandSyntaxError,
+    errors::error_types::CommandErrorType,
     string_reader::StringReader,
     suggestion::suggestions::{Suggestions, SuggestionsBuilder},
 };
+use crate::entity::EntityBase;
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
+use uuid::Uuid;
+
+const NO_WILDCARD_RESULTS: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_SCOREHOLDER_EMPTY,
+    translation::java::ARGUMENT_SCOREHOLDER_EMPTY,
+);
 
 /// A scoreboard holder, which is either a fake entry name or an entity selector.
 pub enum ScoreHolder {
@@ -33,6 +42,36 @@ impl ResolvedScoreHolder {
             display_name: TextComponent::text(name.clone()),
             name,
         }
+    }
+
+    fn entity(entity: &dyn EntityBase) -> Self {
+        Self {
+            name: entity.get_scoreboard_name(),
+            display_name: entity.get_display_name(),
+        }
+    }
+
+    /// Named online players and UUIDs retain entity feedback; offline names stay literal.
+    fn resolve_name(source: &CommandSource, name: &str) -> Vec<Self> {
+        if !name.starts_with('#')
+            && let Some(server) = source.server.as_ref()
+        {
+            if let Ok(uuid) = Uuid::parse_str(name) {
+                let entities: Vec<Self> = server
+                    .worlds
+                    .load()
+                    .iter()
+                    .filter_map(|world| world.get_entity_by_uuid(uuid))
+                    .map(|entity| Self::entity(entity.as_ref()))
+                    .collect();
+                if !entities.is_empty() {
+                    return entities;
+                }
+            } else if let Some(player) = server.get_player_by_name(name) {
+                return vec![Self::entity(player.as_ref())];
+            }
+        }
+        vec![Self::named(name.to_string())]
     }
 }
 
@@ -114,7 +153,6 @@ impl ScoreHolderArgumentType {
             let selector =
                 EntitySelectorParser::new(reader, allow_selectors).parse_and_consume()?;
             if self == Self::Single && selector.max_selected > 1 {
-                reader.set_cursor(start);
                 return Err(NOT_SINGLE_ENTITY_ERROR_TYPE.create(reader));
             }
             return Ok(ScoreHolder::Selector(Box::new(selector)));
@@ -137,14 +175,13 @@ impl ScoreHolderArgumentType {
         name: &str,
     ) -> Result<Vec<ResolvedScoreHolder>, CommandSyntaxError> {
         let holders = match context.get_argument::<ScoreHolder>(name)? {
-            ScoreHolder::Fake(fake) => vec![ResolvedScoreHolder::named(fake.clone())],
+            ScoreHolder::Fake(fake) => {
+                ResolvedScoreHolder::resolve_name(context.source.as_ref(), fake)
+            }
             ScoreHolder::Selector(selector) => selector
                 .find_entities(context.source.as_ref())?
                 .into_iter()
-                .map(|entity| ResolvedScoreHolder {
-                    name: entity.get_scoreboard_name(),
-                    display_name: entity.get_display_name(),
-                })
+                .map(|entity| ResolvedScoreHolder::entity(entity.as_ref()))
                 .collect(),
             ScoreHolder::Wildcard => {
                 let scoreboard = context
@@ -160,6 +197,9 @@ impl ScoreHolderArgumentType {
                         }
                     }
                 }
+                if names.is_empty() {
+                    return Err(NO_WILDCARD_RESULTS.create_without_context());
+                }
                 names.into_iter().map(ResolvedScoreHolder::named).collect()
             }
         };
@@ -169,15 +209,18 @@ impl ScoreHolderArgumentType {
         Ok(holders)
     }
 
-    /// Resolves exactly one holder, also checking wildcard expansion at runtime.
+    /// Resolves a single holder without a wildcard supplier, as used by `players get`.
     pub fn get_score_holder(
         context: &CommandContext,
         name: &str,
     ) -> Result<ResolvedScoreHolder, CommandSyntaxError> {
-        let mut holders = Self::get_score_holders(context, name)?;
-        if holders.len() != 1 {
-            return Err(NOT_SINGLE_ENTITY_ERROR_TYPE.create_without_context());
+        if matches!(
+            context.get_argument::<ScoreHolder>(name)?,
+            ScoreHolder::Wildcard
+        ) {
+            return Err(NO_WILDCARD_RESULTS.create_without_context());
         }
+        let mut holders = Self::get_score_holders(context, name)?;
         Ok(holders.remove(0))
     }
 }
@@ -236,7 +279,7 @@ mod tests {
                 .err()
                 .unwrap();
             assert!(error.is(&NOT_SINGLE_ENTITY_ERROR_TYPE));
-            assert_eq!(reader.cursor(), 0);
+            assert_eq!(reader.cursor(), selector.len());
         }
         for selector in ["@s", "@p", "@e[limit=1]", "#temp"] {
             assert!(

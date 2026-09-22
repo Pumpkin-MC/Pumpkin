@@ -154,7 +154,7 @@ impl PlayersEnableExecutor {
             return Err(INVALID_ENABLE_ERROR.create_without_context());
         }
 
-        let mut enabled_count = 0;
+        let mut enabled_holders = Vec::new();
         for holder in holders {
             let player_name = &holder.name;
             let current_score = scoreboard
@@ -179,20 +179,20 @@ impl PlayersEnableExecutor {
                 };
 
                 scoreboard.update_score(target, updated_score);
-                enabled_count += 1;
+                enabled_holders.push(holder);
             }
         }
 
-        if enabled_count == 0 {
+        if enabled_holders.is_empty() {
             return Err(FAILED_ENABLE_ERROR.create_without_context());
         }
 
-        let (holder, single) = holder_component(holders);
-        let msg = if single {
+        let enabled_count = enabled_holders.len() as i32;
+        let msg = if let [holder] = enabled_holders.as_slice() {
             TextComponent::translate_cross(
                 translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_SINGLE,
                 translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_SINGLE,
-                [objective_display_name, holder],
+                [objective_display_name, holder.display_name.clone()],
             )
         } else {
             TextComponent::translate_cross(
@@ -263,13 +263,11 @@ fn writable_objective_or_error(
     let objective = scoreboard.get_objectives().get(name).ok_or_else(|| {
         OBJECTIVE_NOT_FOUND_ERROR.create_without_context(TextComponent::text(name.to_string()))
     })?;
-    // Only these live entity attributes are read-only, including in compound criteria.
-    let read_only = objective.criterion.split('+').any(|criterion| {
-        matches!(
-            criterion,
-            "health" | "food" | "air" | "armor" | "xp" | "level"
-        )
-    });
+    // These are the six criteria registered as read-only by vanilla ObjectiveCriteria.
+    let read_only = matches!(
+        objective.criterion.as_str(),
+        "health" | "food" | "air" | "armor" | "xp" | "level"
+    );
     if read_only {
         return Err(
             OBJECTIVE_READ_ONLY_ERROR.create_without_context(TextComponent::text(name.to_string()))
@@ -313,7 +311,8 @@ impl CommandExecutor for PlayersSetExecutor {
         }
         drop(scoreboard);
 
-        let (holder, single) = holder_component(&holders);
+        // Java 26.3 uses the nonzero result count for `players set` feedback.
+        let (holder, single) = holder_component(if value == 0 { &[] } else { &holders });
         let value_component = TextComponent::text(value.to_string());
         context.source.send_feedback(
             if single {
@@ -783,6 +782,24 @@ mod tests {
     use super::*;
     use crate::world::scoreboard::NoTarget;
 
+    #[test]
+    fn single_holder_does_not_expand_wildcards() {
+        use crate::command::CommandSource;
+        use std::sync::Arc;
+
+        let mut dispatcher = CommandDispatcher::new();
+        register(&mut dispatcher, &PermissionRegistry::default());
+        let source = Arc::new(CommandSource::dummy());
+        let input = "scoreboard players get * test";
+        let parsed = dispatcher.parse_input(input, &source);
+        let context = parsed.context.build(input);
+        let error = PlayersGetExecutor.execute(&context).unwrap_err();
+        assert_eq!(
+            serde_json::to_value(error.message).unwrap()["translate"],
+            translation::java::ARGUMENT_SCOREHOLDER_EMPTY
+        );
+    }
+
     fn holder(name: &str) -> ResolvedScoreHolder {
         ResolvedScoreHolder {
             name: name.to_string(),
@@ -865,6 +882,18 @@ mod tests {
         let error = PlayersEnableExecutor::enable(&mut scoreboard, &NoTarget, &holders, "test")
             .unwrap_err();
         assert!(error.is(&FAILED_ENABLE_ERROR));
+
+        scoreboard.set_score_value(&NoTarget, "only_new", "test", 9);
+        let holders = [holder("enabled"), holder("locked"), holder("only_new")];
+        let (count, feedback) =
+            PlayersEnableExecutor::enable(&mut scoreboard, &NoTarget, &holders, "test").unwrap();
+        assert_eq!(count, 1);
+        let feedback = serde_json::to_value(feedback).unwrap();
+        assert_eq!(
+            feedback["translate"],
+            translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_SINGLE
+        );
+        assert_eq!(feedback["with"][1]["text"], "only_new");
     }
 
     #[test]
@@ -970,14 +999,12 @@ mod tests {
             ("killedByTeam.blue", true),
             ("minecraft.mined:minecraft.stone", true),
             ("minecraft.custom:minecraft.jump", true),
-            ("deathCount+playerKillCount", true),
             ("health", false),
             ("food", false),
             ("air", false),
             ("armor", false),
             ("xp", false),
             ("level", false),
-            ("dummy+health", false),
         ] {
             scoreboard.add_objective(
                 &NoTarget,
