@@ -214,10 +214,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
 
         if is_baby {
-            let mut bedrock_meta = SyncedActorDataList::new();
-            bedrock_meta.set_flag(entity_data_key::FLAGS, entity_data_flag::BABY as u8, true);
             entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, true);
-            entity.send_bedrock_actor_data(&bedrock_meta);
+            entity.set_bedrock_baby(true);
         }
     }
     fn set_variant_name(&self, _name: &str) {}
@@ -416,7 +414,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             target_actor_id: VarLong(runtime_id as i64),
             target_runtime_id: VarULong(runtime_id),
             actor_type: identifier.to_string(),
-            position: entity.pos.load().to_f32_lossy(),
+            position: entity.bedrock_render_pos().to_f32_lossy(),
             velocity: entity.velocity.load().to_f32_lossy(),
             rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
             y_head_rotation: entity.head_yaw.load(),
@@ -936,6 +934,9 @@ pub struct Entity {
     pub bedrock_flags: std::sync::atomic::AtomicI64,
     /// Stores more Bedrock-specific entity boolean flags (bit 0-63)
     pub bedrock_flags_two: std::sync::atomic::AtomicI64,
+    /// Shifts where Bedrock draws this entity without moving it server-side, for the
+    /// cases where Bedrock lays a model out differently to Java.
+    pub bedrock_render_offset: AtomicCell<Vector3<f64>>,
     /// If true, the entity bypasses physics, collisions, and block effects (e.g. spectator, markers, display entities)
     pub no_physics: AtomicBool,
     pub synched_data: synched_entity_data::SynchedEntityData,
@@ -1049,8 +1050,16 @@ impl Entity {
             damage_immunities: std::sync::Mutex::new(Vec::new()),
             data: AtomicI32::new(0),
             flags: std::sync::atomic::AtomicI8::new(0),
-            bedrock_flags: std::sync::atomic::AtomicI64::new(0),
+            // Bedrock expects these on for an ordinary entity. They are set up front so
+            // a flag changed before the entity is spawned cannot drop them.
+            bedrock_flags: std::sync::atomic::AtomicI64::new(
+                (1i64 << entity_data_flag::HAS_GRAVITY)
+                    | (1i64 << entity_data_flag::CLIMB)
+                    | (1i64 << entity_data_flag::HAS_COLLISION)
+                    | (1i64 << entity_data_flag::BREATHING),
+            ),
             bedrock_flags_two: std::sync::atomic::AtomicI64::new(0),
+            bedrock_render_offset: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
             fire_immune: AtomicBool::new(false),
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
@@ -1105,17 +1114,13 @@ impl Entity {
         self.world.store(world);
     }
 
-    pub fn bedrock_metadata(&self) -> SyncedActorDataList {
-        if self.bedrock_flags.load(Ordering::Relaxed) == 0 {
-            self.bedrock_flags.fetch_or(
-                (1i64 << entity_data_flag::HAS_GRAVITY)
-                    | (1i64 << entity_data_flag::CLIMB)
-                    | (1i64 << entity_data_flag::HAS_COLLISION)
-                    | (1i64 << entity_data_flag::BREATHING),
-                Ordering::Relaxed,
-            );
-        }
+    /// The position Bedrock should draw this entity at: its real position, unless a
+    /// render offset has been set for it.
+    pub fn bedrock_render_pos(&self) -> Vector3<f64> {
+        self.pos.load() + self.bedrock_render_offset.load()
+    }
 
+    pub fn bedrock_metadata(&self) -> SyncedActorDataList {
         let mut metadata = SyncedActorDataList::new();
         metadata.set(
             entity_data_key::WIDTH,
@@ -1125,7 +1130,10 @@ impl Entity {
             entity_data_key::HEIGHT,
             MetadataValue::Float(self.entity_type.dimension[1]),
         );
-        metadata.set(entity_data_key::SCALE, MetadataValue::Float(1.0));
+        metadata.set(
+            entity_data_key::SCALE,
+            MetadataValue::Float(self.bedrock_baby_scale()),
+        );
         metadata.set(
             entity_data_key::FLAGS,
             MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
@@ -1194,6 +1202,7 @@ impl Entity {
             MetadataValue::String(name.clone().get_text()),
         );
         let visible = self.custom_name_visible.load(Ordering::Relaxed);
+        self.put_bedrock_flags(&mut bedrock_meta);
         bedrock_meta.set_flag(
             entity_data_key::FLAGS,
             entity_data_flag::SHOW_NAME as u8,
@@ -1217,6 +1226,7 @@ impl Entity {
                 MetadataValue::String(name.clone().get_text()),
             );
         }
+        self.put_bedrock_flags(&mut bedrock_meta);
         bedrock_meta.set_flag(
             entity_data_key::FLAGS,
             entity_data_flag::SHOW_NAME as u8,
@@ -1273,6 +1283,19 @@ impl Entity {
             EntityPose::Crouching => EntityDimensions::new(0.6, 1.5, 1.27),
             EntityPose::Dying => EntityDimensions::new(0.2, 0.2, 1.62),
             _ => EntityDimensions::new(0.6, 1.8, 1.62),
+        }
+    }
+
+    #[must_use]
+    pub fn get_dimensions_for_pose(&self, pose: EntityPose) -> EntityDimensions {
+        if pose == EntityPose::Standing {
+            EntityDimensions {
+                width: self.entity_type.dimension[0],
+                height: self.entity_type.dimension[1],
+                eye_height: self.entity_type.eye_height,
+            }
+        } else {
+            Self::get_entity_dimensions(pose)
         }
     }
 
@@ -1724,6 +1747,7 @@ impl Entity {
     pub fn send_pos_rot(&self) {
         let old = self.last_sent_pos.load();
         let new = self.pos.load();
+        let be_pos = self.bedrock_render_pos();
         let chunk_pos = self.chunk_pos.load();
 
         let converted = Vector3::new(
@@ -1737,6 +1761,7 @@ impl Entity {
         let pitch = self.pitch.load();
         let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
+        let head_yaw = (self.head_yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
 
         // Only broadcast when position or rotation has actually changed.
         let pos_changed = converted.x != 0 || converted.y != 0 || converted.z != 0;
@@ -1794,12 +1819,12 @@ impl Entity {
                     &CMoveActorDelta::new(
                         VarULong(self.entity_id as u64),
                         flags,
-                        new.x as f32,
-                        new.y as f32,
-                        new.z as f32,
+                        be_pos.x as f32,
+                        be_pos.y as f32,
+                        be_pos.z as f32,
                         pitch,
                         yaw,
-                        yaw,
+                        head_yaw,
                     ),
                 );
             }
@@ -1841,9 +1866,9 @@ impl Entity {
                     &CMoveActorDelta::new(
                         VarULong(self.entity_id as u64),
                         flags,
-                        new.x as f32,
-                        new.y as f32,
-                        new.z as f32,
+                        be_pos.x as f32,
+                        be_pos.y as f32,
+                        be_pos.z as f32,
                         0,
                         0,
                         0,
@@ -1888,12 +1913,12 @@ impl Entity {
                     &CMoveActorDelta::new(
                         VarULong(self.entity_id as u64),
                         flags,
-                        new.x as f32,
-                        new.y as f32,
-                        new.z as f32,
+                        be_pos.x as f32,
+                        be_pos.y as f32,
+                        be_pos.z as f32,
                         pitch,
                         yaw,
-                        yaw,
+                        head_yaw,
                     ),
                 );
             }
@@ -1902,7 +1927,7 @@ impl Entity {
     }
 
     pub fn send_bedrock_pos(&self) {
-        let position = self.pos.load();
+        let position = self.bedrock_render_pos();
         let chunk_pos = self.chunk_pos.load();
         let mut flags =
             MOVE_ACTOR_DELTA_FLAG_HAS_X | MOVE_ACTOR_DELTA_FLAG_HAS_Y | MOVE_ACTOR_DELTA_FLAG_HAS_Z;
@@ -1934,6 +1959,8 @@ impl Entity {
     pub fn send_pos(&self) {
         let old = self.last_sent_pos.load();
         let new = self.pos.load();
+        // Bedrock may need the entity drawn somewhere other than its real position.
+        let be_pos = self.bedrock_render_pos();
         let chunk_pos = self.chunk_pos.load();
 
         let converted = Vector3::new(
@@ -1987,9 +2014,9 @@ impl Entity {
                 &CMoveActorDelta::new(
                     VarULong(self.entity_id as u64),
                     flags,
-                    new.x as f32,
-                    new.y as f32,
-                    new.z as f32,
+                    be_pos.x as f32,
+                    be_pos.y as f32,
+                    be_pos.z as f32,
                     0,
                     0,
                     0,
@@ -3049,6 +3076,54 @@ impl Entity {
         }
     }
 
+    fn bedrock_baby_scale(&self) -> f32 {
+        if self.age.load(Ordering::Relaxed) < 0 {
+            0.5
+        } else {
+            1.0
+        }
+    }
+
+    /// Marks the entity as a baby for Bedrock clients. The flag gives the baby its
+    /// model, the scale gives it its size, so both have to be sent.
+    pub fn set_bedrock_baby(&self, is_baby: bool) {
+        self.store_bedrock_flag(entity_data_flag::BABY, is_baby);
+        let mut metadata = SyncedActorDataList::new();
+        metadata.set(
+            entity_data_key::SCALE,
+            MetadataValue::Float(self.bedrock_baby_scale()),
+        );
+        self.put_bedrock_flags(&mut metadata);
+        self.send_bedrock_actor_data(&metadata);
+    }
+
+    pub fn store_bedrock_flag(&self, bedrock_flag: u32, value: bool) {
+        let flags = if bedrock_flag >= 64 {
+            &self.bedrock_flags_two
+        } else {
+            &self.bedrock_flags
+        };
+        let mask = 1i64 << (bedrock_flag % 64);
+        if value {
+            flags.fetch_or(mask, Ordering::Relaxed);
+        } else {
+            flags.fetch_and(!mask, Ordering::Relaxed);
+        }
+    }
+
+    /// Adds the entity's current Bedrock flags to `metadata`, so a flag change can ride
+    /// along with whatever else is being sent instead of costing a packet of its own.
+    pub fn put_bedrock_flags(&self, metadata: &mut SyncedActorDataList) {
+        metadata.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        metadata.set(
+            entity_data_key::FLAGS_TWO,
+            MetadataValue::Int64(self.bedrock_flags_two.load(Ordering::Relaxed)),
+        );
+    }
+
     /// Plays sound at this entity's position with the entity's sound category
     pub fn play_sound(&self, sound: Sound) {
         self.world
@@ -3247,7 +3322,7 @@ impl Entity {
             }
         }
 
-        let dimension = Self::get_entity_dimensions(pose);
+        let dimension = self.get_dimensions_for_pose(pose);
         let position = self.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
         self.pose.store(pose);

@@ -14,13 +14,17 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::client::move_actor_delta::{
+    CMoveActorDelta, MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW,
+};
+use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -859,6 +863,28 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn set_home(&self, _position: Option<BlockPos>) {}
+
+    fn wants_to_breed(&self) -> bool {
+        false
+    }
+
+    fn consume_breeding_food(&self) {}
+
+    fn is_sleeping(&self) -> bool {
+        self.get_entity().pose.load() == EntityPose::Sleeping
+    }
+
+    fn sleep_in_bed(&self, _bed_head_pos: BlockPos) -> bool {
+        false
+    }
+
+    fn wake_up(&self) {}
+
+    fn is_ready_to_sleep(&self) -> bool {
+        true
+    }
+
     fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
         None
     }
@@ -1249,6 +1275,7 @@ pub trait Mob: EntityBase + Send + Sync {
         let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
         if is_baby {
             entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, true);
+            entity.set_bedrock_baby(true);
         }
     }
 
@@ -1453,7 +1480,20 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         if head_yaw.abs_diff(last_head_yaw) >= 1 {
             let world = entity.world.load();
 
-            world.broadcast_to_chunk(chunk_pos, &CHeadRot::new(entity.entity_id.into(), head_yaw));
+            world.broadcast_to_chunk_editioned(
+                chunk_pos,
+                &CHeadRot::new(entity.entity_id.into(), head_yaw),
+                &CMoveActorDelta::new(
+                    VarULong(entity.entity_id as u64),
+                    MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    head_yaw,
+                ),
+            );
             mob_entity.last_sent_head_yaw.store(head_yaw, Relaxed);
         }
     }
