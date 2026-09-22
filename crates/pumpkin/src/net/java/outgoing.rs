@@ -28,7 +28,7 @@ use tracing::warn;
 
 use crate::net::decrement_pending_bytes;
 
-/// No barrier pending. Also the `fetch_min` identity: keeps the earliest.
+/// No barrier pending.
 const NO_BARRIER: u64 = u64::MAX;
 
 /// Where `resumeFlushing` got the tick barrier.
@@ -49,12 +49,14 @@ pub enum BarrierPlacement {
 /// land in front of it, flushing it into the next tick. `admission` makes it one step.
 #[derive(Clone)]
 pub struct TickFlush {
-    /// Serializes FIFO admission and count against a barrier snapshot.
+    /// Serializes FIFO admission and count against a barrier snapshot. Holds the
+    /// deferred barriers after `barrier_at`, ascending.
     /// Held across non-blocking work only, never across an await.
-    admission: Arc<std::sync::Mutex<()>>,
+    admission: Arc<std::sync::Mutex<VecDeque<u64>>>,
     /// Packets admitted to the FIFO so far.
     enqueued: Arc<AtomicU64>,
-    /// `enqueued` count the pending barrier sits behind, or `NO_BARRIER`.
+    /// `enqueued` count the next deferred barrier sits behind, or `NO_BARRIER`.
+    /// Written under `admission` only.
     barrier_at: Arc<AtomicU64>,
     notify: Arc<Notify>,
 }
@@ -63,7 +65,7 @@ impl TickFlush {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            admission: Arc::new(std::sync::Mutex::new(())),
+            admission: Arc::new(std::sync::Mutex::new(VecDeque::new())),
             enqueued: Arc::new(AtomicU64::new(0)),
             barrier_at: Arc::new(AtomicU64::new(NO_BARRIER)),
             notify: Arc::new(Notify::new()),
@@ -84,7 +86,7 @@ impl TickFlush {
     /// Vanilla `Connection.flushChannel`. In band while the FIFO has room. Same lock
     /// as [`Self::admit`]: the fallback snapshot cannot miss an already queued packet.
     pub fn place_barrier(&self, sender: &Sender<OutgoingPacket>) -> BarrierPlacement {
-        let _admission = self
+        let mut deferred = self
             .admission
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -92,7 +94,13 @@ impl TickFlush {
             Ok(()) => BarrierPlacement::InBand,
             Err(TrySendError::Full(_)) => {
                 let barrier_at = self.enqueued.load(Ordering::Acquire);
-                let _ = self.barrier_at.fetch_min(barrier_at, Ordering::AcqRel);
+                let head = self.barrier_at.load(Ordering::Acquire);
+                if head == NO_BARRIER {
+                    self.barrier_at.store(barrier_at, Ordering::Release);
+                } else if barrier_at > deferred.back().copied().unwrap_or(head) {
+                    // Same position again: no packets between, one flush covers both.
+                    deferred.push_back(barrier_at);
+                }
                 self.notify.notify_one();
                 BarrierPlacement::Deferred
             }
@@ -101,14 +109,19 @@ impl TickFlush {
     }
 
     /// `true` once `received` covers the packets the barrier sits behind.
+    /// Promotes the next deferred barrier. Writer loop only.
     fn take(&self, received: u64) -> bool {
         let barrier_at = self.barrier_at.load(Ordering::Acquire);
-        barrier_at != NO_BARRIER
-            && received >= barrier_at
-            && self
-                .barrier_at
-                .compare_exchange(barrier_at, NO_BARRIER, Ordering::AcqRel, Ordering::Acquire)
-                .is_ok()
+        if barrier_at == NO_BARRIER || received < barrier_at {
+            return false;
+        }
+        let mut deferred = self
+            .admission
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let next = deferred.pop_front().unwrap_or(NO_BARRIER);
+        self.barrier_at.store(next, Ordering::Release);
+        true
     }
 }
 
@@ -1037,6 +1050,67 @@ mod tests {
         drop(tx);
         close.cancel();
         writer.await.unwrap();
+    }
+
+    /// FIFO full at two tick ends: barrier @4, writer took 2, barrier @6, then a
+    /// duplicate @6. Returns `received`
+    fn two_deferred_barriers(
+        tx: &Sender<OutgoingPacket>,
+        rx: &mut Receiver<OutgoingPacket>,
+        tick_flush: &TickFlush,
+    ) -> u64 {
+        for i in 0..4 {
+            tick_flush.admit(tx.try_reserve().unwrap(), packet(i));
+        }
+        assert_eq!(tick_flush.place_barrier(tx), BarrierPlacement::Deferred);
+        for _ in 0..2 {
+            rx.try_recv().unwrap();
+        }
+        for i in 4..6 {
+            tick_flush.admit(tx.try_reserve().unwrap(), packet(i));
+        }
+        assert_eq!(tick_flush.place_barrier(tx), BarrierPlacement::Deferred);
+        assert_eq!(tick_flush.place_barrier(tx), BarrierPlacement::Deferred);
+        2
+    }
+
+    #[test]
+    fn take_yields_deferred_barriers_in_order() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+        let tick_flush = TickFlush::new();
+        two_deferred_barriers(&tx, &mut rx, &tick_flush);
+
+        assert!(!tick_flush.take(3));
+        assert!(tick_flush.take(4), "first tick barrier");
+        assert!(!tick_flush.take(5));
+        assert!(
+            tick_flush.take(6),
+            "second tick barrier must survive the first"
+        );
+        assert!(
+            !tick_flush.take(6),
+            "duplicate position collapses into one flush"
+        );
+    }
+
+    #[test]
+    fn second_deferred_barrier_flushes_its_own_tick() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+        let tick_flush = TickFlush::new();
+        let mut received = two_deferred_barriers(&tx, &mut rx, &tick_flush);
+
+        for expected in [[2u8, 3], [4, 5]] {
+            let first = rx.try_recv().unwrap();
+            let (flush_request, packets, _) =
+                drain_until_barrier(first, &mut rx, &tick_flush, received);
+            received += packets.len() as u64;
+            let drained: Vec<u8> = packets.iter().map(|packet| packet.data[0]).collect();
+            assert_eq!(drained, expected, "one tick per drain");
+            assert!(
+                flush_request == FlushRequest::Always,
+                "tick {expected:?} must end in a flush"
+            );
+        }
     }
 
     #[tokio::test]
