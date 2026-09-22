@@ -53,6 +53,7 @@ use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{EquippableImpl, IDSet, PotionContentsImpl};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
@@ -572,6 +573,12 @@ impl DispenserBlock {
     }
 
     fn dispense_tnt(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
+        // Vanilla keeps the item and plays the fail click when TNT is disabled.
+        if !ctx.world.level_info.load().game_rules.tnt_explodes {
+            Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserFail);
+            return;
+        }
+
         let _ = item.split(1);
         let target = Self::target_position(ctx);
 
@@ -580,9 +587,10 @@ impl DispenserBlock {
         ctx.world.spawn_entity(tnt);
         ctx.world
             .play_sound(Sound::EntityTntPrimed, SoundCategory::Blocks, &spawn_pos);
-
         ctx.world
-            .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);
+            .emit_game_event(GameEvent::EntityPlace.name(), target.to_centered_f64());
+
+        Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
     }
 
     fn dispense_spawn_egg(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
