@@ -31,6 +31,11 @@ use crate::net::decrement_pending_bytes;
 /// No barrier pending.
 const NO_BARRIER: u64 = u64::MAX;
 
+/// Outgoing FIFO slots per connection. Allocated lazily in blocks of 32
+/// Full FIFO kicks on `try_enqueue`
+/// Memory bound: `MAX_PENDING_BYTES`.
+pub const OUTGOING_QUEUE_CAPACITY: usize = 65536;
+
 /// Where `resumeFlushing` got the tick barrier.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BarrierPlacement {

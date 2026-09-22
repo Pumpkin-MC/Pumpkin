@@ -62,7 +62,10 @@ pub mod recipe_helper;
 pub mod status;
 
 pub use chunk_data::{CChunkData, ChunkLightExt};
-use outgoing::{BarrierPlacement, OutgoingPacket, TickFlush, run_outgoing_packet_writer};
+use outgoing::{
+    BarrierPlacement, OUTGOING_QUEUE_CAPACITY, OutgoingPacket, TickFlush,
+    run_outgoing_packet_writer,
+};
 
 use arc_swap::ArcSwap;
 use pending::PendingConnection;
@@ -140,7 +143,7 @@ impl JavaClient {
         gameprofile: GameProfile,
         config: PlayerConfig,
     ) -> Self {
-        let (send, recv) = tokio::sync::mpsc::channel(8192);
+        let (send, recv) = tokio::sync::mpsc::channel(OUTGOING_QUEUE_CAPACITY);
 
         Self {
             id: pending.id,
