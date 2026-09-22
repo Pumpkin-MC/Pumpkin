@@ -22,7 +22,7 @@ impl SchedulerTaskId {
 
 /// Owned causal metadata preserved across suspension and worker moves
 ///
-/// A child inherits this chain only while if and only if it's parent is still valid
+/// A child inherits this chain only while it's parent is still valid
 #[derive(Clone, Debug)]
 pub struct TaskContext {
     pub(crate) id: SchedulerTaskId,
