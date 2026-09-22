@@ -129,7 +129,6 @@ impl PistonBlockEntity {
     fn move_entity(entity: &crate::entity::Entity, dir: BlockDirection, distance: f64) {
         let new_pos = entity.pos.load() + Self::dir_vec(dir, distance);
         entity.set_pos(new_pos);
-        entity.send_pos();
     }
 
     /// Vanilla `push`: when a piston head retracts, shove entities that ended up
