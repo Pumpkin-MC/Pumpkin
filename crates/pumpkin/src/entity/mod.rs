@@ -32,33 +32,23 @@ use pumpkin_data::{
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::bedrock::client::{CAddActor, CSetActorMotion};
 use pumpkin_protocol::codec::var_long::VarLong;
-use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot};
 use pumpkin_protocol::{
     PositionFlag,
-    bedrock::client::{
-        move_actor_delta::{
-            CMoveActorDelta, MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW, MOVE_ACTOR_DELTA_FLAG_HAS_PITCH,
-            MOVE_ACTOR_DELTA_FLAG_HAS_X, MOVE_ACTOR_DELTA_FLAG_HAS_Y,
-            MOVE_ACTOR_DELTA_FLAG_HAS_YAW, MOVE_ACTOR_DELTA_FLAG_HAS_Z,
-            MOVE_ACTOR_DELTA_FLAG_ON_GROUND,
-        },
-        move_player::CMovePlayer,
-        set_actor_data::{
-            CSetActorData, MetadataValue, PropertySyncData, SyncedActorDataList, entity_data_flag,
-            entity_data_key,
-        },
+    bedrock::client::set_actor_data::{
+        CSetActorData, MetadataValue, PropertySyncData, SyncedActorDataList, entity_data_flag,
+        entity_data_key,
     },
     codec::var_int::VarInt,
     codec::var_ulong::VarULong,
     java::client::play::{
-        CEntityPositionSync, CEntityVelocity, CHeadRot, CPlayerPosition, CSetEntityMetadata,
-        CSetPassengers, CSpawnEntity, CUpdateEntityRot, Metadata, MetadataSerializer,
+        CEntityPositionSync, CEntityVelocity, CPlayerPosition, CSetEntityMetadata, CSetPassengers,
+        CSpawnEntity, Metadata, MetadataSerializer,
     },
 };
 use pumpkin_util::math::vector3::Axis;
 use pumpkin_util::math::{
     boundingbox::{BoundingBox, EntityDimensions},
-    get_section_cord,
+    get_section_cord, pack_degrees,
     position::BlockPos,
     vector2::Vector2,
     vector3::Vector3,
@@ -245,6 +235,18 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         0.0
     }
 
+    /// Bedrock network Y above the feet. Endstone `getBaseOffset`.
+    fn bedrock_y_offset(&self) -> f64 {
+        0.0
+    }
+
+    fn bedrock_pos(&self) -> Vector3<f64> {
+        self.get_entity()
+            .pos
+            .load()
+            .add_raw(0.0, self.bedrock_y_offset(), 0.0)
+    }
+
     fn get_mob(&self) -> Option<&dyn mob::Mob> {
         None
     }
@@ -406,6 +408,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .get_mob()
             .and_then(mob::Mob::mob_bedrock_identifier)
             .unwrap_or(entity.entity_type.resource_name);
+        // TODO: non-mob spawn metadata hook like `mob_bedrock_spawn_metadata` (falling block, TNT).
         let mut metadata = entity.bedrock_metadata();
         if let Some(mob) = self.get_mob()
             && let Some(mob_metadata) = mob.mob_bedrock_spawn_metadata()
@@ -416,13 +419,15 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             target_actor_id: VarLong(runtime_id as i64),
             target_runtime_id: VarULong(runtime_id),
             actor_type: identifier.to_string(),
-            position: entity.pos.load().to_f32_lossy(),
+            position: self.bedrock_pos().to_f32_lossy(),
             velocity: entity.velocity.load().to_f32_lossy(),
             rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
             y_head_rotation: entity.head_yaw.load(),
             y_body_rotation: entity.body_yaw.load(),
             attributes_list: Vec::new(),
             actor_data: metadata,
+            // TODO: Bedrock `climate_variant` property for pig/cow/chicken (`TemperatureVariantAnimal`)
+            // empty -> client picks its own variant.
             synced_properties: PropertySyncData {
                 int_entries_list: std::collections::HashMap::new(),
                 float_entries_list: std::collections::HashMap::new(),
@@ -823,6 +828,15 @@ impl RemovalReason {
 // IMPORTANT: have that 1 and not 0 because fetch_add returns previous value and 0 would be invalid
 static CURRENT_ID: AtomicI32 = AtomicI32::new(1);
 
+/// Position, motion and packed rotation for spawn packets.
+struct SpawnState {
+    pos: Vector3<f64>,
+    velocity: Vector3<f64>,
+    pitch: u8,
+    yaw: u8,
+    head_yaw: u8,
+}
+
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
     /// A unique identifier for the entity
@@ -941,7 +955,7 @@ pub struct Entity {
     pub synched_data: synched_entity_data::SynchedEntityData,
     /// Multiplies movement for one tick before being reset
     pub movement_multiplier: AtomicCell<Vector3<f64>>,
-    /// Determines whether the entity's velocity needs to be sent
+    /// Vanilla `needsSync`: tracker resyncs position and velocity of entities
     pub velocity_dirty: AtomicBool,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
@@ -949,11 +963,13 @@ pub struct Entity {
     pub last_sent_yaw: AtomicU8,
     /// The last sent pitch value (encoded as u8) for change detection
     pub last_sent_pitch: AtomicU8,
-    /// Cache for the last sent position to optimize Entity Pos update packets
+    /// Delta base of the move packets. Vanilla `ServerEntity.positionCodec`.
     pub last_sent_pos: AtomicCell<Vector3<f64>>,
     /// Cache for the last sent head yaw byte
     pub last_sent_head_yaw: AtomicU8,
-    /// Persistent custom data container for plugins (matching Bukkit's `PersistentDataHolder`)
+    /// Velocity last put on the wire. Vanilla `ServerEntity.lastSentMovement`.
+    pub last_sent_velocity: AtomicCell<Vector3<f64>>,
+    /// Persistent custom data container for plugins
     pub custom_data: std::sync::Mutex<NbtCompound>,
 }
 
@@ -1082,6 +1098,7 @@ impl Entity {
             last_sent_pitch: AtomicU8::new(0),
             last_sent_head_yaw: AtomicU8::new(0),
             last_sent_pos: AtomicCell::new(position),
+            last_sent_velocity: AtomicCell::new(Vector3::default()),
             custom_data: std::sync::Mutex::new(NbtCompound::new()),
         }
     }
@@ -1249,18 +1266,21 @@ impl Entity {
         self.set_synced_data(tracked_data::entity::DATA_NO_GRAVITY, no_gravity);
     }
 
+    /// Vanilla `hurtMarked` path: immediate, to watchers and self.
     pub fn send_velocity(&self) {
         let velocity = self.velocity.load();
-        let chunk_pos = self.chunk_pos.load();
-        self.world.load().broadcast_to_chunk_editioned(
-            chunk_pos,
-            &CEntityVelocity::new(self.entity_id.into(), velocity),
-            &CSetActorMotion {
-                target_runtime_id: VarULong(self.entity_id as u64),
-                motion: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
-                tick: VarULong(0),
-            },
-        );
+        self.last_sent_velocity.store(velocity);
+        self.world
+            .load()
+            .send_to_tracking_players_and_self_editioned(
+                self,
+                &CEntityVelocity::new(self.entity_id.into(), velocity),
+                &CSetActorMotion {
+                    target_runtime_id: VarULong(self.entity_id as u64),
+                    motion: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+                    tick: VarULong(0),
+                },
+            );
     }
 
     #[must_use]
@@ -1348,48 +1368,6 @@ impl Entity {
         let yaw = wrap_degrees((delta.z.atan2(delta.x) as f32).to_degrees() - 90.0);
         self.pitch.store(pitch);
         self.yaw.store(yaw);
-    }
-
-    pub fn send_rotation(&self) {
-        let yaw = self.yaw.load();
-        let pitch = self.pitch.load();
-        let chunk_pos = self.chunk_pos.load();
-
-        // Broadcast the update packet.
-
-        let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
-        let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
-
-        if yaw == self.last_sent_yaw.load(Relaxed) && pitch == self.last_sent_pitch.load(Relaxed) {
-            return;
-        }
-
-        self.last_sent_yaw.store(yaw, Relaxed);
-        self.last_sent_pitch.store(pitch, Relaxed);
-
-        self.world.load().broadcast_to_chunk(
-            chunk_pos,
-            &CUpdateEntityRot::new(
-                self.entity_id.into(),
-                yaw,
-                pitch,
-                self.on_ground.load(Relaxed),
-            ),
-        );
-
-        self.send_head_rot(yaw);
-    }
-
-    pub fn send_head_rot(&self, head_yaw: u8) {
-        let chunk_pos = self.chunk_pos.load();
-        if head_yaw == self.last_sent_head_yaw.load(Relaxed) {
-            return;
-        }
-        self.last_sent_head_yaw.store(head_yaw, Relaxed);
-
-        self.world
-            .load()
-            .broadcast_to_chunk(chunk_pos, &CHeadRot::new(self.entity_id.into(), head_yaw));
     }
 
     fn default_portal_cooldown(&self) -> u32 {
@@ -1720,282 +1698,12 @@ impl Entity {
         suffocating
     }
 
-    #[expect(clippy::too_many_lines)]
-    pub fn send_pos_rot(&self) {
-        let old = self.last_sent_pos.load();
-        let new = self.pos.load();
-        let chunk_pos = self.chunk_pos.load();
-
-        let converted = Vector3::new(
-            new.x.mul_add(4096.0, -(old.x * 4096.0)) as i16,
-            new.y.mul_add(4096.0, -(old.y * 4096.0)) as i16,
-            new.z.mul_add(4096.0, -(old.z * 4096.0)) as i16,
-        );
-
-        let yaw = self.yaw.load();
-
-        let pitch = self.pitch.load();
-        let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
-        let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
-
-        // Only broadcast when position or rotation has actually changed.
-        let pos_changed = converted.x != 0 || converted.y != 0 || converted.z != 0;
-        let rot_changed =
-            yaw != self.last_sent_yaw.load(Relaxed) || pitch != self.last_sent_pitch.load(Relaxed);
-
-        if !pos_changed && !rot_changed {
-            return;
-        }
-
-        self.last_sent_pos.store(new);
-        self.last_sent_yaw.store(yaw, Relaxed);
-        self.last_sent_pitch.store(pitch, Relaxed);
-
-        // Dynamically pick the most efficient packet
-        if pos_changed && rot_changed {
-            let je_packet = CUpdateEntityPosRot::new(
-                self.entity_id.into(),
-                Vector3::new(converted.x, converted.y, converted.z),
-                yaw,
-                pitch,
-                self.on_ground.load(Relaxed),
-            );
-            if self.entity_type == &EntityType::PLAYER {
-                self.world.load().broadcast_to_chunk_editioned(
-                    chunk_pos,
-                    &je_packet,
-                    &CMovePlayer::new(
-                        VarULong(self.entity_id as u64),
-                        Vector3::new(new.x as f32, new.y as f32, new.z as f32),
-                        self.pitch.load(),
-                        self.yaw.load(),
-                        self.yaw.load(),
-                        CMovePlayer::MODE_NORMAL,
-                        self.on_ground.load(Relaxed),
-                        VarULong(0),
-                        0,
-                        0,
-                        VarULong(0),
-                    ),
-                );
-            } else {
-                let mut flags = MOVE_ACTOR_DELTA_FLAG_HAS_X
-                    | MOVE_ACTOR_DELTA_FLAG_HAS_Y
-                    | MOVE_ACTOR_DELTA_FLAG_HAS_Z
-                    | MOVE_ACTOR_DELTA_FLAG_HAS_PITCH
-                    | MOVE_ACTOR_DELTA_FLAG_HAS_YAW
-                    | MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW;
-                if self.on_ground.load(Relaxed) {
-                    flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
-                }
-                self.world.load().broadcast_to_chunk_editioned(
-                    chunk_pos,
-                    &je_packet,
-                    &CMoveActorDelta::new(
-                        VarULong(self.entity_id as u64),
-                        flags,
-                        new.x as f32,
-                        new.y as f32,
-                        new.z as f32,
-                        pitch,
-                        yaw,
-                        yaw,
-                    ),
-                );
-            }
-        } else if pos_changed {
-            let je_packet = CUpdateEntityPos::new(
-                self.entity_id.into(),
-                Vector3::new(converted.x, converted.y, converted.z),
-                self.on_ground.load(Relaxed),
-            );
-            if self.entity_type == &EntityType::PLAYER {
-                self.world.load().broadcast_to_chunk_editioned(
-                    chunk_pos,
-                    &je_packet,
-                    &CMovePlayer::new(
-                        VarULong(self.entity_id as u64),
-                        Vector3::new(new.x as f32, new.y as f32, new.z as f32),
-                        self.pitch.load(),
-                        self.yaw.load(),
-                        self.yaw.load(),
-                        CMovePlayer::MODE_NORMAL,
-                        self.on_ground.load(Relaxed),
-                        VarULong(0),
-                        0,
-                        0,
-                        VarULong(0),
-                    ),
-                );
-            } else {
-                let mut flags = MOVE_ACTOR_DELTA_FLAG_HAS_X
-                    | MOVE_ACTOR_DELTA_FLAG_HAS_Y
-                    | MOVE_ACTOR_DELTA_FLAG_HAS_Z;
-                if self.on_ground.load(Relaxed) {
-                    flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
-                }
-
-                self.world.load().broadcast_to_chunk_editioned(
-                    chunk_pos,
-                    &je_packet,
-                    &CMoveActorDelta::new(
-                        VarULong(self.entity_id as u64),
-                        flags,
-                        new.x as f32,
-                        new.y as f32,
-                        new.z as f32,
-                        0,
-                        0,
-                        0,
-                    ),
-                );
-            }
-        } else if rot_changed {
-            let je_packet = CUpdateEntityRot::new(
-                self.entity_id.into(),
-                yaw,
-                pitch,
-                self.on_ground.load(Relaxed),
-            );
-            if self.entity_type == &EntityType::PLAYER {
-                self.world.load().broadcast_to_chunk_editioned(
-                    chunk_pos,
-                    &je_packet,
-                    &CMovePlayer::new(
-                        VarULong(self.entity_id as u64),
-                        Vector3::new(new.x as f32, new.y as f32, new.z as f32),
-                        self.pitch.load(),
-                        self.yaw.load(),
-                        self.yaw.load(),
-                        CMovePlayer::MODE_ROTATION,
-                        self.on_ground.load(Relaxed),
-                        VarULong(0),
-                        0,
-                        0,
-                        VarULong(0),
-                    ),
-                );
-            } else {
-                let mut flags = MOVE_ACTOR_DELTA_FLAG_HAS_PITCH
-                    | MOVE_ACTOR_DELTA_FLAG_HAS_YAW
-                    | MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW;
-                if self.on_ground.load(Relaxed) {
-                    flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
-                }
-                self.world.load().broadcast_to_chunk_editioned(
-                    chunk_pos,
-                    &je_packet,
-                    &CMoveActorDelta::new(
-                        VarULong(self.entity_id as u64),
-                        flags,
-                        new.x as f32,
-                        new.y as f32,
-                        new.z as f32,
-                        pitch,
-                        yaw,
-                        yaw,
-                    ),
-                );
-            }
-        }
-        self.send_head_rot(yaw);
-    }
-
-    pub fn send_bedrock_pos(&self) {
-        let position = self.pos.load();
-        let chunk_pos = self.chunk_pos.load();
-        let mut flags =
-            MOVE_ACTOR_DELTA_FLAG_HAS_X | MOVE_ACTOR_DELTA_FLAG_HAS_Y | MOVE_ACTOR_DELTA_FLAG_HAS_Z;
-        if self.on_ground.load(Relaxed) {
-            flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
-        }
-        let packet = CMoveActorDelta::new(
-            VarULong(self.entity_id as u64),
-            flags,
-            position.x as f32,
-            position.y as f32,
-            position.z as f32,
-            0,
-            0,
-            0,
-        );
-        let world = self.world.load();
-        world.broadcast_to_chunk_bedrock(chunk_pos, &packet);
-    }
-
     pub fn update_last_pos(&self) -> Vector3<f64> {
         let pos = self.pos.load();
         let old = self.last_pos.load();
         self.movement.store(pos - old);
         self.last_pos.store(pos);
         old
-    }
-
-    pub fn send_pos(&self) {
-        let old = self.last_sent_pos.load();
-        let new = self.pos.load();
-        let chunk_pos = self.chunk_pos.load();
-
-        let converted = Vector3::new(
-            new.x.mul_add(4096.0, -(old.x * 4096.0)) as i16,
-            new.y.mul_add(4096.0, -(old.y * 4096.0)) as i16,
-            new.z.mul_add(4096.0, -(old.z * 4096.0)) as i16,
-        );
-
-        // Only broadcast when position has actually changed.
-        if converted.x == 0 && converted.y == 0 && converted.z == 0 {
-            return;
-        }
-
-        self.last_sent_pos.store(new);
-
-        let je_packet = CUpdateEntityPos::new(
-            self.entity_id.into(),
-            Vector3::new(converted.x, converted.y, converted.z),
-            self.on_ground.load(Relaxed),
-        );
-
-        if self.entity_type == &EntityType::PLAYER {
-            self.world.load().broadcast_to_chunk_editioned(
-                chunk_pos,
-                &je_packet,
-                &CMovePlayer::new(
-                    VarULong(self.entity_id as u64),
-                    Vector3::new(new.x as f32, new.y as f32, new.z as f32),
-                    self.pitch.load(),
-                    self.yaw.load(),
-                    self.yaw.load(),
-                    CMovePlayer::MODE_NORMAL,
-                    self.on_ground.load(Relaxed),
-                    VarULong(0),
-                    0,
-                    0,
-                    VarULong(0),
-                ),
-            );
-        } else {
-            let mut flags = MOVE_ACTOR_DELTA_FLAG_HAS_X
-                | MOVE_ACTOR_DELTA_FLAG_HAS_Y
-                | MOVE_ACTOR_DELTA_FLAG_HAS_Z;
-            if self.on_ground.load(Relaxed) {
-                flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
-            }
-
-            self.world.load().broadcast_to_chunk_editioned(
-                chunk_pos,
-                &je_packet,
-                &CMoveActorDelta::new(
-                    VarULong(self.entity_id as u64),
-                    flags,
-                    new.x as f32,
-                    new.y as f32,
-                    new.z as f32,
-                    0,
-                    0,
-                    0,
-                ),
-            );
-        }
     }
 
     // updateWaterState() in yarn
@@ -2709,6 +2417,9 @@ impl Entity {
     pub fn set_rotation(&self, yaw: f32, pitch: f32) {
         // TODO
         self.yaw.store(yaw);
+        // Java players have no separate head-yaw packet from the client- look yaw is also head yaw.
+        // Bedrock `MovePlayer` / `MoveActorDelta` need this field, not only `yaw`.
+        self.head_yaw.store(yaw);
         self.set_pitch(pitch);
     }
 
@@ -2721,19 +2432,40 @@ impl Entity {
         self.world.load().remove_entity(self);
     }
 
+    /// Vanilla `ClientboundAddEntityPacket(entity, serverEntity)`: tracker, not live.
+    /// Players live: tracker skips `send_changes` for them.
+    fn spawn_state(&self) -> SpawnState {
+        if self.entity_type == &EntityType::PLAYER {
+            SpawnState {
+                pos: self.pos.load(),
+                velocity: self.velocity.load(),
+                pitch: pack_degrees(self.pitch.load()),
+                yaw: pack_degrees(self.yaw.load()),
+                head_yaw: pack_degrees(self.head_yaw.load()),
+            }
+        } else {
+            SpawnState {
+                pos: self.last_sent_pos.load(),
+                velocity: self.last_sent_velocity.load(),
+                pitch: self.last_sent_pitch.load(Relaxed),
+                yaw: self.last_sent_yaw.load(Relaxed),
+                head_yaw: self.last_sent_head_yaw.load(Relaxed),
+            }
+        }
+    }
+
     pub fn create_spawn_packet(&self) -> CSpawnEntity {
-        let entity_loc = self.pos.load();
-        let entity_vel = self.velocity.load();
-        CSpawnEntity::new(
+        let spawn = self.spawn_state();
+        CSpawnEntity::new_packed(
             VarInt(self.entity_id),
             self.entity_uuid,
             VarInt(i32::from(self.entity_type.id)),
-            entity_loc,
-            self.pitch.load(),
-            self.yaw.load(),
-            self.head_yaw.load(), // todo: head_yaw and yaw are swapped, find out why
+            spawn.pos,
+            spawn.pitch,
+            spawn.yaw,
+            spawn.head_yaw, // todo: head_yaw and yaw are swapped, find out why
             self.data.load(Relaxed).into(),
-            entity_vel,
+            spawn.velocity,
         )
     }
 
@@ -3061,12 +2793,8 @@ impl Entity {
         tracked: pumpkin_data::tracked_data::TrackedData,
         value: T,
     ) -> bool {
-        if self.synched_data.set(tracked, value) {
-            self.send_dirty_entity_data();
-            true
-        } else {
-            false
-        }
+        // Sent by the tracker at end of tick, vanilla `sendDirtyEntityData`.
+        self.synched_data.set(tracked, value)
     }
 
     pub fn send_bedrock_actor_data(&self, bedrock_meta: &SyncedActorDataList) {
@@ -3075,6 +2803,9 @@ impl Entity {
         let mut bedrock_recipients = Vec::new();
 
         if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
+            if !tracked.has_bedrock_watchers() && self.entity_type != &EntityType::PLAYER {
+                return;
+            }
             for player in players.iter() {
                 if (tracked.seen_by.contains(&player.gameprofile.id)
                     || player.entity_id() == self.entity_id)
@@ -3113,18 +2844,18 @@ impl Entity {
         }
     }
 
-    pub fn send_meta_data<T: MetadataSerializer>(
+    /// The Java players that should receive entity data for this entity: everyone
+    /// tracking it, plus the entity itself when it is a player. Until the entity is
+    /// tracked, every player watching its chunk stands in for the tracker.
+    fn java_metadata_recipients<'a>(
         &self,
-        meta: &[Metadata<T>],
-        bedrock_meta: Option<&SyncedActorDataList>,
-    ) {
-        let world = self.world.load();
-        let players = world.players.load();
-
+        world: &World,
+        players: &'a [Arc<Player>],
+    ) -> Vec<&'a Arc<Player>> {
         let mut java_recipients = Vec::new();
 
         if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
-            for player in players.iter() {
+            for player in players {
                 if (tracked.seen_by.contains(&player.gameprofile.id)
                     || player.entity_id() == self.entity_id)
                     && let ClientPlatform::Java(_) = player.client.as_ref()
@@ -3134,17 +2865,36 @@ impl Entity {
             }
         } else {
             let chunk_pos = self.chunk_pos.load();
-            for player in players.iter() {
-                if player
-                    .watched_section
-                    .load()
-                    .is_within_distance(chunk_pos.x, chunk_pos.y)
+            for player in players {
+                // A player that just changed world is in the new world's player list but
+                // not in its tracker yet, and its watched section still points at the
+                // world it left, so it has to be matched on its entity id instead.
+                if (player.entity_id() == self.entity_id
+                    || player
+                        .watched_section
+                        .load()
+                        .is_within_distance(chunk_pos.x, chunk_pos.y))
                     && let ClientPlatform::Java(_) = player.client.as_ref()
                 {
                     java_recipients.push(player);
                 }
             }
         }
+
+        java_recipients
+    }
+
+    /// Sends the given metadata entries to this entity's viewers, and the matching
+    /// actor data to the Bedrock ones when `bedrock_meta` is given.
+    pub fn send_meta_data<T: MetadataSerializer>(
+        &self,
+        meta: &[Metadata<T>],
+        bedrock_meta: Option<&SyncedActorDataList>,
+    ) {
+        let world = self.world.load();
+        let players = world.players.load();
+
+        let java_recipients = self.java_metadata_recipients(&world, &players);
 
         let recipients_by_version =
             World::collect_java_recipients_by_version(java_recipients.into_iter());
@@ -3174,6 +2924,8 @@ impl Entity {
         }
     }
 
+    /// Sends the synced values that changed since the last call to this entity's
+    /// viewers, and does nothing when none did.
     pub fn send_dirty_entity_data(&self) {
         if !self.synched_data.is_dirty() {
             return;
@@ -3182,30 +2934,54 @@ impl Entity {
         let world = self.world.load();
         let players = world.players.load();
 
-        let mut java_recipients = Vec::new();
+        // Unwatched, skip the player scan.
+        if self.entity_type != &EntityType::PLAYER
+            && world
+                .entity_tracker
+                .get_tracked_entity(self.entity_id)
+                .is_some_and(|tracked| tracked.seen_by.is_empty())
+        {
+            self.synched_data.clear_dirty();
+            return;
+        }
 
-        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
-            for player in players.iter() {
-                if (tracked.seen_by.contains(&player.gameprofile.id)
-                    || player.entity_id() == self.entity_id)
-                    && let ClientPlatform::Java(_) = player.client.as_ref()
+        let java_recipients = self.java_metadata_recipients(&world, &players);
+
+        if java_recipients.is_empty() {
+            // Vanilla `packDirty` clears even without recipients.
+            self.synched_data.clear_dirty();
+            return;
+        }
+
+        let recipients_by_version =
+            World::collect_java_recipients_by_version(java_recipients.into_iter());
+
+        for (version, recipients) in recipients_by_version {
+            if let Some(buf) = self.synched_data.pack_dirty_for_version(&version) {
+                let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
+                if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
                 {
-                    java_recipients.push(player);
-                }
-            }
-        } else {
-            let chunk_pos = self.chunk_pos.load();
-            for player in players.iter() {
-                if player
-                    .watched_section
-                    .load()
-                    .is_within_distance(chunk_pos.x, chunk_pos.y)
-                    && let ClientPlatform::Java(_) = player.client.as_ref()
-                {
-                    java_recipients.push(player);
+                    for recipient in recipients {
+                        recipient.try_enqueue_packet(packet_data.clone());
+                    }
                 }
             }
         }
+        self.synched_data.clear_dirty();
+    }
+
+    /// Resends every non-default synced value of this entity to its viewers, the entity
+    /// itself included when it is a player.
+    ///
+    /// Clients discard the entity data they cached whenever the entity is re-created on
+    /// their side (a respawn or a dimension change re-creates the local player, and a
+    /// spawn packet resets the entity for everyone else), so the values have to be pushed
+    /// again even though nothing became dirty on our side.
+    pub fn refresh_synced_data(&self) {
+        let world = self.world.load();
+        let players = world.players.load();
+
+        let java_recipients = self.java_metadata_recipients(&world, &players);
 
         if java_recipients.is_empty() {
             return;
@@ -3215,7 +2991,10 @@ impl Entity {
             World::collect_java_recipients_by_version(java_recipients.into_iter());
 
         for (version, recipients) in recipients_by_version {
-            if let Some(buf) = self.synched_data.pack_dirty_for_version(&version) {
+            if let Some(buf) = self
+                .synched_data
+                .get_non_default_values_for_version(&version)
+            {
                 let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
                 if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
                 {
@@ -3377,6 +3156,7 @@ impl Entity {
         }
         // Update cache so we don't send rubberbanding deltas
         self.last_sent_pos.store(position);
+        // TODO: use `pumpkin_util::math::pack_degrees`.
         if let Some(yaw) = yaw {
             self.last_sent_yaw
                 .store((yaw * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
@@ -4263,6 +4043,7 @@ impl Entity {
             let yaw = rotation[0].extract_float().unwrap_or(0.0);
             let pitch = rotation[1].extract_float().unwrap_or(0.0);
             self.set_rotation(yaw, pitch);
+            // TODO: use `pumpkin_util::math::pack_degrees`.
             let yaw_byte = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
             let pitch_byte = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
             self.last_sent_yaw.store(yaw_byte, Relaxed);
