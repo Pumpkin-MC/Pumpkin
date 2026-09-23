@@ -322,7 +322,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         caller: &dyn EntityBase,
         lightning: &lightning::LightningBoltEntity,
     ) {
-        // Vanilla `Entity.thunderHit` hits entitys with 5 damage and sets them on fire for 8 seconds.
+        // Vanilla `Entity.thunderHit` hits entities with 5 damage and sets them on fire for 8 seconds.
         self.set_on_fire_for(8.0);
         let cause = lightning.get_cause();
         self.damage_with_context(
