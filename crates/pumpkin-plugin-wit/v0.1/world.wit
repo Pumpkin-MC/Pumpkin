@@ -909,7 +909,14 @@ interface %world {
         ///
         /// Biomes are stored per 4x4x4 cell, so this changes the whole cell that
         /// contains the position. Does nothing if the chunk is not loaded.
+        ///
+        /// Players are not told; call `refresh-biomes` once a batch of changes is
+        /// done.
         set-biome: func(pos: block-pos, biome: biome);
+
+        /// Sends the current biomes of the given loaded chunks, as chunk x and z,
+        /// to every player who has them loaded.
+        refresh-biomes: func(chunks: list<tuple<s32, s32>>);
 
         /// Spawns an entity of the specified type at the given position.
         spawn-entity: func(entity-type: entity-type, pos: position) -> entity;

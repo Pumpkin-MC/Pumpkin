@@ -7,7 +7,7 @@ use pumpkin_util::math::position::get_local_cord;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::chunk::format::LightContainer;
-use pumpkin_world::chunk::palette::NetworkPalette;
+use pumpkin_world::chunk::palette::{BiomePalette, NetworkPalette};
 use std::io::Write;
 
 /// Serializes chunk data for Minecraft 1.18+ through 26.2+.
@@ -126,42 +126,12 @@ pub fn write_chunk_data(
                 }
             }
 
-            let biome_network = biome_palette.convert_network();
-            blocks_and_biomes_buf.write_u8(biome_network.bits_per_entry)?;
-
-            match biome_network.palette {
-                NetworkPalette::Single(registry_id) => {
-                    blocks_and_biomes_buf.write_var_int(&registry_id.into())?;
-                }
-                NetworkPalette::Indirect(palette) => {
-                    blocks_and_biomes_buf.write_var_int(&palette.len().try_into().map_err(
-                        |_| {
-                            WritingError::Message(format!(
-                                "{} is not representable as a VarInt!",
-                                palette.len()
-                            ))
-                        },
-                    )?)?;
-                    for registry_id in palette {
-                        blocks_and_biomes_buf.write_var_int(&registry_id.into())?;
-                    }
-                }
-                NetworkPalette::Direct => {}
-            }
-
-            if version <= &JavaMinecraftVersion::V_1_21_4 {
-                blocks_and_biomes_buf.write_list(&biome_network.packed_data, |buf, &packed| {
-                    buf.write_i64_be(packed)
-                })?;
-            } else {
-                for packed in &biome_network.packed_data {
-                    blocks_and_biomes_buf.write_i64_be(*packed)?;
-                }
-            }
+            let biome_storage_len =
+                write_biomes(&mut blocks_and_biomes_buf, biome_palette, version)?;
 
             if version == &JavaMinecraftVersion::V_1_21_5 {
                 let block_storage_len = block_network.packed_data.len() as i32;
-                let biome_storage_len = biome_network.packed_data.len() as i32;
+                let biome_storage_len = biome_storage_len as i32;
                 zero_bytes_count += VarInt(block_storage_len).written_size()
                     + VarInt(biome_storage_len).written_size();
             }
@@ -288,4 +258,44 @@ pub fn write_chunk_data(
     }
 
     Ok(())
+}
+
+/// Writes one section's biome container as `version` reads it, returning how
+/// many longs of packed data it holds.
+pub fn write_biomes(
+    buf: &mut Vec<u8>,
+    biomes: &BiomePalette,
+    version: &JavaMinecraftVersion,
+) -> Result<usize, WritingError> {
+    let network = biomes.convert_network();
+    buf.write_u8(network.bits_per_entry)?;
+
+    match network.palette {
+        NetworkPalette::Single(registry_id) => {
+            buf.write_var_int(&registry_id.into())?;
+        }
+        NetworkPalette::Indirect(palette) => {
+            buf.write_var_int(&palette.len().try_into().map_err(|_| {
+                WritingError::Message(format!(
+                    "{} is not representable as a VarInt!",
+                    palette.len()
+                ))
+            })?)?;
+            for registry_id in palette {
+                buf.write_var_int(&registry_id.into())?;
+            }
+        }
+        NetworkPalette::Direct => {}
+    }
+
+    if version <= &JavaMinecraftVersion::V_1_21_4 {
+        buf.write_list(&network.packed_data, |buf, &packed| {
+            buf.write_i64_be(packed)
+        })?;
+    } else {
+        for packed in &network.packed_data {
+            buf.write_i64_be(*packed)?;
+        }
+    }
+    Ok(network.packed_data.len())
 }

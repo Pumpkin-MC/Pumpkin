@@ -978,6 +978,30 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Ok(())
     }
 
+    async fn refresh_biomes(
+        &mut self,
+        world: Resource<World>,
+        chunks: Vec<(i32, i32)>,
+    ) -> wasmtime::Result<()> {
+        let world = self.get_world_res(&world)?.provider.clone();
+        for (x, z) in chunks {
+            let pos = pumpkin_util::math::vector2::Vector2::new(x, z);
+            let Some(chunk) = world
+                .level
+                .loaded_chunks
+                .get(&pos)
+                .map(|c| c.value().clone())
+            else {
+                continue;
+            };
+            world.broadcast_to_chunk(
+                pos,
+                &crate::net::java::chunk_data::CChunksBiomes(&[&*chunk]),
+            );
+        }
+        Ok(())
+    }
+
     async fn get_entities(
         &mut self,
         world: Resource<World>,
