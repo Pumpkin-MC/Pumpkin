@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use pumpkin_util::loot_table::{
     DynamicLootCondition, DynamicLootEntry, DynamicLootPool, DynamicLootTable, LootBonusFormula,
+    LootStateCount,
 };
 use serde_json::Value;
 
@@ -92,8 +93,9 @@ fn parse_entry(val: &Value, pool_entries: &mut Vec<DynamicLootEntry>, empty_weig
         }
         "item" | "tag" => {
             if let Some(name) = val.get("name").and_then(Value::as_str) {
-                let (min_count, max_count, bonus_formula) =
-                    val.get("functions").map_or((1, 1, None), parse_functions);
+                let modifiers = val.get("functions").or_else(|| val.get("modifier"));
+                let (min_count, max_count, bonus_formula, bonus_condition, state_counts) =
+                    modifiers.map_or((1, 1, None, None, Vec::new()), parse_functions);
                 let conditions = val.get("conditions").map_or(Vec::new(), parse_conditions);
                 let condition = combine_conditions(conditions);
 
@@ -102,8 +104,10 @@ fn parse_entry(val: &Value, pool_entries: &mut Vec<DynamicLootEntry>, empty_weig
                     weight,
                     min_count,
                     max_count,
+                    state_counts,
                     condition,
                     bonus_formula,
+                    bonus_condition,
                 });
             }
         }
@@ -118,18 +122,29 @@ fn parse_entry(val: &Value, pool_entries: &mut Vec<DynamicLootEntry>, empty_weig
     }
 }
 
-fn parse_functions(val: &Value) -> (i32, i32, Option<LootBonusFormula>) {
+fn parse_functions(
+    val: &Value,
+) -> (
+    i32,
+    i32,
+    Option<LootBonusFormula>,
+    Option<LootStateCount>,
+    Vec<LootStateCount>,
+) {
     let mut min_count = 1;
     let mut max_count = 1;
     let mut bonus_formula = None;
+    let mut bonus_condition = None;
+    let mut state_counts = Vec::new();
 
-    let Some(functions) = val.as_array() else {
-        return (min_count, max_count, bonus_formula);
-    };
+    let functions = val
+        .as_array()
+        .map_or(std::slice::from_ref(val), Vec::as_slice);
 
     for func in functions {
         let func_type = func
             .get("function")
+            .or_else(|| func.get("type"))
             .and_then(Value::as_str)
             .unwrap_or_default();
         let func_type = func_type.strip_prefix("minecraft:").unwrap_or(func_type);
@@ -138,11 +153,25 @@ fn parse_functions(val: &Value) -> (i32, i32, Option<LootBonusFormula>) {
             "set_count" => {
                 if let Some(count) = func.get("count") {
                     let (min_c, max_c) = parse_rolls(count);
-                    min_count = min_c;
-                    max_count = max_c;
+                    let add = func.get("add").and_then(Value::as_bool).unwrap_or(false);
+                    let p = count.get("n").and(count.get("p")).and_then(Value::as_f64);
+                    let state_count = LootStateCount::parse(
+                        func.get("condition"),
+                        add,
+                        min_c,
+                        max_c,
+                        p.map(|p| p as f32),
+                    );
+                    if let Some(state_count) = state_count {
+                        state_counts.push(state_count);
+                    } else {
+                        min_count = min_c;
+                        max_count = max_c;
+                    }
                 }
             }
             "apply_bonus" => {
+                bonus_condition = LootStateCount::parse(func.get("condition"), false, 0, 0, None);
                 if let Some(formula) = func.get("formula").and_then(Value::as_str) {
                     let formula_clean = formula.strip_prefix("minecraft:").unwrap_or(formula);
                     match formula_clean {
@@ -185,12 +214,19 @@ fn parse_functions(val: &Value) -> (i32, i32, Option<LootBonusFormula>) {
                         .unwrap_or(1) as i32
                 });
                 bonus_formula = Some(LootBonusFormula::UniformBonusCount(max_bonus.max(1)));
+                bonus_condition = None;
             }
             _ => {}
         }
     }
 
-    (min_count, max_count, bonus_formula)
+    (
+        min_count,
+        max_count,
+        bonus_formula,
+        bonus_condition,
+        state_counts,
+    )
 }
 
 fn parse_conditions(val: &Value) -> Vec<DynamicLootCondition> {

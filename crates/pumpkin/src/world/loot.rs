@@ -1,3 +1,4 @@
+use pumpkin_data::Block;
 use pumpkin_data::BlockState;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
@@ -5,7 +6,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 pub use pumpkin_util::loot_table::{
     DynamicLootCondition, DynamicLootEntry, DynamicLootPool, DynamicLootTable, LootBonusFormula,
-    LootCondition, LootEntry, LootPool, LootTable,
+    LootCondition, LootEntry, LootPool, LootStateCount, LootTable,
 };
 use pumpkin_util::random::{RandomImpl, xoroshiro128::Xoroshiro};
 
@@ -278,9 +279,15 @@ pub fn generate_loot_with_context(
                         } else {
                             0
                         };
+                    let base_count =
+                        apply_state_counts(base_count, entry.state_counts, params, &mut rng);
 
                     let mut final_count = base_count;
-                    if let Some(bonus) = entry.bonus_formula {
+                    if let Some(bonus) = entry.bonus_formula
+                        && entry
+                            .bonus_condition
+                            .is_none_or(|c| state_matches(c, params))
+                    {
                         final_count =
                             apply_bonus_formula(final_count, bonus, fortune_level, &mut rng);
                     }
@@ -383,6 +390,7 @@ pub fn generate_dynamic_loot_with_context(
             pool.empty_weight,
             &eligible_entries,
             fortune_level,
+            params,
             &mut rng,
             &mut items_to_place,
         );
@@ -391,11 +399,53 @@ pub fn generate_dynamic_loot_with_context(
     items_to_place
 }
 
+/// Applies `set_count` modifiers gated on the broken block's state, in order.
+fn apply_state_counts(
+    mut count: i32,
+    modifiers: &[LootStateCount],
+    params: &LootContextParameters,
+    rng: &mut Xoroshiro,
+) -> i32 {
+    for modifier in modifiers.iter().filter(|m| state_matches(m, params)) {
+        let (min, max) = (modifier.min_count, modifier.max_count);
+        let rolled = match modifier.binomial {
+            Some(p) => (0..max).map(|_| i32::from(rng.next_f32() < p)).sum(),
+            None if max > min => min + rng.next_bounded_i32(max - min + 1),
+            None => min,
+        };
+        count = if modifier.add { count + rolled } else { rolled };
+    }
+    count
+}
+
+/// Whether the broken block matches `modifier`'s block and state. An empty block matches any.
+fn state_matches(modifier: &LootStateCount, params: &LootContextParameters) -> bool {
+    let name = modifier
+        .block
+        .strip_prefix("minecraft:")
+        .unwrap_or(&modifier.block);
+    name.is_empty()
+        || params.block_state.is_some_and(|state| {
+            let block = Block::from_state_id(state.id);
+            let props = block
+                .properties(state.id)
+                .map(|p| p.to_props())
+                .unwrap_or_default();
+            block.name == name
+                && modifier.properties.iter().all(|(key, value)| {
+                    props
+                        .iter()
+                        .any(|&(k, v)| k == key.as_ref() && v == value.as_ref())
+                })
+        })
+}
+
 fn roll_dynamic_entries(
     rolls: i32,
     empty_weight: i32,
     eligible_entries: &[&DynamicLootEntry],
     fortune_level: i32,
+    params: &LootContextParameters,
     rng: &mut Xoroshiro,
     items_to_place: &mut Vec<ItemStack>,
 ) {
@@ -422,9 +472,15 @@ fn roll_dynamic_entries(
                     } else {
                         0
                     };
+                let base_count = apply_state_counts(base_count, &entry.state_counts, params, rng);
 
                 let mut final_count = base_count;
-                if let Some(bonus) = entry.bonus_formula {
+                if let Some(bonus) = entry.bonus_formula
+                    && entry
+                        .bonus_condition
+                        .as_ref()
+                        .is_none_or(|c| state_matches(c, params))
+                {
                     final_count = apply_bonus_formula(final_count, bonus, fortune_level, rng);
                 }
 
