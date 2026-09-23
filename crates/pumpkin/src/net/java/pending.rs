@@ -285,6 +285,7 @@ impl PendingConnection {
             None
         };
         let bytes = encode_packet(packet.id, &packet.payload).ok()?;
+        super::advance_encoder_state(user, packet.id);
         if let Err(err) = writer.write_packet(bytes).await {
             warn!("Failed to send packet to client {}: {err}", user.id);
             user.close();
@@ -312,7 +313,6 @@ impl PendingConnection {
                 writer.set_compression((threshold as usize, level));
             }
         }
-        super::advance_encoder_state(user, packet.id);
         Some(packet)
     }
 

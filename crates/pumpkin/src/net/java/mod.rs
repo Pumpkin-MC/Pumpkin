@@ -72,8 +72,7 @@ use pending::PendingConnection;
 use crate::entity::player::Player;
 use crate::net::user::{OutgoingPacket, User};
 use crate::net::{
-    ClientPlatform, GameProfile, PacketHandlerResult, PacketRateLimiter, PlayerConfig,
-    decrement_pending_bytes,
+    ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig, decrement_pending_bytes,
 };
 use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
@@ -703,6 +702,7 @@ impl JavaClient {
         pumpkin_protocol::java::packet_encoder::write_packet(packet, &version, write)
     }
 
+    // TODO: translator active -> `CURRENT_MC_VERSION` (multiversion plugin parses 26.3).
     pub fn serialize_packet_for_version<P: ClientPacket>(
         packet: &P,
         version: JavaMinecraftVersion,

@@ -318,6 +318,7 @@ pub fn java_packet(args: TokenStream, item: TokenStream) -> TokenStream {
                     pumpkin_data::packet::PacketState::Login => crate::ConnectionState::Login,
                     pumpkin_data::packet::PacketState::Config => crate::ConnectionState::Config,
                     pumpkin_data::packet::PacketState::Play => crate::ConnectionState::Play,
+                    pumpkin_data::packet::PacketState::Unknown => unreachable!("raw packet ID has no state"),
                 }
             }
         }

@@ -36,7 +36,6 @@ mod block_transformer;
 mod carver;
 mod chunk_status;
 mod chunk_view_lut;
-mod composter_increase_chance;
 mod configured_feature;
 mod damage_type;
 mod data_component;
@@ -50,7 +49,6 @@ mod entity_type;
 mod environment_attribute;
 mod flower_pot_transformations;
 mod fluid;
-mod fuels;
 mod game_event;
 mod game_rules;
 mod item;
@@ -69,10 +67,8 @@ mod particle;
 mod placed_feature;
 mod potion;
 mod potion_brewing;
-mod recipe_remainder;
 mod recipes;
 mod registry;
-mod remap;
 mod scoreboard_slot;
 mod screen;
 mod sdk;
@@ -151,20 +147,14 @@ pub fn main() {
             flower_pot_transformations::build,
             "flower_pot_transformations.rs",
         ),
-        (
-            composter_increase_chance::build,
-            "composter_increase_chance.rs",
-        ),
         (recipes::build, "recipes.rs"),
         (enchantments::build, "enchantment.rs"),
-        (fuels::build, "fuels.rs"),
         (data_component::build, "data_component.rs"),
         (attributes::build, "attributes.rs"),
         (environment_attribute::build, "environment_attribute.rs"),
         (effect::build, "effect.rs"),
         (potion::build, "potion.rs"),
         (potion_brewing::build, "potion_brewing.rs"),
-        (recipe_remainder::build, "recipe_remainder.rs"),
         (placed_feature::build_enum, "placed_feature.rs"),
         (placed_feature::build, "placed_features_generated.rs"),
         (configured_feature::build_enum, "configured_feature.rs"),
@@ -180,11 +170,14 @@ pub fn main() {
         (block_transformer::build, "block_transformer.rs"),
         (trial_spawner::build, "trial_spawner.rs"),
     ];
-    build_functions.extend(remap::build());
 
     // If any arguments are given, treat them as file-stem filters.
     // e.g. `cargo run -- chest_loot` only regenerates chest_loot.rs.
     let filters: Vec<String> = std::env::args().skip(1).collect();
+    if filters.iter().any(|f| f == "wit") {
+        wit::main();
+        return;
+    }
     let build_functions: Vec<_> = if filters.is_empty() {
         wit::main();
         sdk::main();

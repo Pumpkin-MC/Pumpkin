@@ -1,6 +1,0 @@
-{
-  "type": "minecraft:end_gateway",
-  "config": {
-    "exact": false
-  }
-}

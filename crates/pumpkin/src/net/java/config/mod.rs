@@ -2,10 +2,7 @@ use std::{num::NonZero, sync::Arc, sync::atomic::Ordering};
 
 use crate::{
     entity::player::ChatMode,
-    net::{
-        PlayerConfig, can_not_join,
-        java::{JavaClient, PacketHandlerResult},
-    },
+    net::{PacketHandlerResult, PlayerConfig, can_not_join, java::JavaClient},
     server::Server,
 };
 use core::str;
