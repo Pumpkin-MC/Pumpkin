@@ -675,6 +675,46 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         }
     }
 
+    async fn load_chunk(
+        &mut self,
+        world: Resource<World>,
+        x: i32,
+        z: i32,
+    ) -> wasmtime::Result<Resource<WitChunk>> {
+        use pumpkin_world::chunk_system::ChunkLoading;
+
+        /// Fetching drops its own ticket as soon as the chunk arrives, so a plugin
+        /// writing to it straight after would race the unloader. Vanilla's getChunk
+        /// holds a ticket for a tick for the same reason; this holds one a little
+        /// longer, then lets the chunk unload and save as usual.
+        const HOLD: std::time::Duration = std::time::Duration::from_secs(5);
+
+        let world_provider = self.get_world_res(&world)?.provider.clone();
+        let level = world_provider.level.clone();
+        let pos = pumpkin_util::math::vector2::Vector2::new(x, z);
+        // Scoped so the lock guard, which is not Send, is gone before the await.
+        {
+            let mut loading = level
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            loading.add_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
+            loading.send_change();
+        };
+        let chunk = level.get_or_fetch_chunk(pos, Clone::clone).await;
+        let held = level.clone();
+        level.spawn_task(async move {
+            tokio::time::sleep(HOLD).await;
+            let mut loading = held
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            loading.remove_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
+            loading.send_change();
+        });
+        self.add_chunk(world_provider, std::sync::Arc::downgrade(&chunk))
+    }
+
     async fn get_block_state_id(
         &mut self,
         world: Resource<World>,
