@@ -132,9 +132,14 @@ impl ReplaceDisk {
         &self,
         world: &Arc<World>,
         enchantment_level: i32,
-        _entity: Option<&crate::entity::Entity>,
+        entity: Option<&crate::entity::Entity>,
         position: Vector3<f64>,
     ) {
+        // Vanilla's `ReplaceDisc.apply` attributes the game event to `entity` and carries
+        // the block state it just wrote (`Level.gameEvent(entity, event, pos)` builds its
+        // `GameEvent.Context` from the level's block at `pos` after the write), so a
+        // dampening block placed by this effect correctly swallows its own event.
+        let source_player = entity.and_then(|e| world.get_player_by_id(e.entity_id));
         let mut changed = false;
         for pos in self.iterate_blocks(enchantment_level, position) {
             let passes_predicate = self
@@ -150,7 +155,12 @@ impl ReplaceDisk {
             if old_state_id != new_state.id {
                 changed = true;
                 if let Some(event) = self.trigger_game_event {
-                    world.emit_game_event(event.name(), pos.to_centered_f64(), None);
+                    world.emit_game_event_in(
+                        event.name(),
+                        pos.to_centered_f64(),
+                        source_player.as_deref(),
+                        Some(new_state),
+                    );
                 }
             }
         }

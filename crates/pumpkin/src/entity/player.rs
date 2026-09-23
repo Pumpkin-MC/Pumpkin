@@ -534,12 +534,6 @@ pub struct Player {
     pub move_dist: AtomicCell<f32>,
     /// Distance threshold at which the next step event fires.
     pub next_step: AtomicCell<f32>,
-    /// Game time of the last sculk shrieker warning, used to rate-limit further ones the way
-    /// vanilla's `WardenSpawnTracker` does. [`None`] until this player has been warned.
-    pub last_warden_warning: AtomicCell<Option<i64>>,
-    /// How many shrieker warnings this player has accumulated, as vanilla's
-    /// `WardenSpawnTracker.warningLevel`. Decays again once warnings stop.
-    pub warden_warning_level: AtomicCell<u8>,
     /// Inbound packets waiting to be processed during player tick.
     pub inbound_packets: SegQueue<RawPacket>,
 }
@@ -850,8 +844,6 @@ impl Player {
             post_effects: std::sync::Mutex::new(Vec::new()),
             move_dist: AtomicCell::new(0.0),
             next_step: AtomicCell::new(1.0),
-            last_warden_warning: AtomicCell::new(None),
-            warden_warning_level: AtomicCell::new(0),
             inbound_packets: SegQueue::new(),
         }
     }

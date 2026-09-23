@@ -48,12 +48,19 @@ impl SetBlockProperties {
         world: &Arc<World>,
         _enchantment_level: i32,
         _owner: Option<&Arc<Player>>,
-        _entity: Option<&Entity>,
+        entity: Option<&Entity>,
         position: Vector3<f64>,
     ) {
+        // Matches vanilla's `SetBlockProperties.apply`, which attributes this to `entity`
+        // rather than an unattributed source.
+        let source_player = entity.and_then(|e| world.get_player_by_id(e.entity_id));
         let target = self.target_position(position);
         if let Some(event) = self.trigger_game_event {
-            world.emit_game_event(event.name(), target.to_centered_f64(), None);
+            world.emit_game_event(
+                event.name(),
+                target.to_centered_f64(),
+                source_player.as_deref(),
+            );
         }
     }
 }
