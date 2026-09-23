@@ -43,7 +43,7 @@ impl ItemBehaviour for EndCrystalItem {
         let location_vec = location.0.to_f64();
 
         if !world.get_block_state(&location).is_air()
-            || !world
+            || world
                 .get_all_at_box(&BoundingBox::new(
                     Vector3::new(location_vec.x, location_vec.y, location_vec.z),
                     Vector3::new(
