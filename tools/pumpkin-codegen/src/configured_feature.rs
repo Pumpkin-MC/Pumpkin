@@ -12,7 +12,7 @@ use crate::placed_feature::{
 };
 
 fn load_configured_features() -> BTreeMap<String, Value> {
-    let dir = Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/feature");
+    let dir = Path::new("../../assets/datapack/data/minecraft/worldgen/feature");
     let mut map = BTreeMap::new();
     collect_configured_features(dir, "", &mut map);
     map

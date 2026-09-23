@@ -1,6 +1,5 @@
 use std::io::Write;
 
-use pumpkin_data::attribute_id_remap::remap_attribute_id_for_version;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::packet::clientbound::play::UPDATE_ATTRIBUTES;
 use pumpkin_macros::java_packet;
@@ -318,8 +317,7 @@ impl ClientPacket for CUpdateAttributes {
 
         for prop in &self.properties {
             if *version >= JavaMinecraftVersion::V_1_20_5 {
-                let remapped_id = remap_attribute_id_for_version(prop.id.0 as u32, *version);
-                write.write_var_int(&VarInt(remapped_id as i32))?;
+                write.write_var_int(&prop.id)?;
             } else if *version >= JavaMinecraftVersion::V_1_16 {
                 let name = attribute_id_to_1_16_name(prop.id.0 as u8);
                 write.write_string(name)?;
@@ -442,10 +440,7 @@ mod tests {
         assert_eq!(count, VarInt(1));
 
         let attr_id = cursor.get_var_int().unwrap();
-        let expected_id = pumpkin_data::attribute_id_remap::remap_attribute_id_for_version(
-            u32::from(Attributes::ARMOR.id),
-            version,
-        );
+        let expected_id = u32::from(Attributes::ARMOR.id);
         assert_eq!(attr_id.0, expected_id as i32);
 
         let base = cursor.get_f64_be().unwrap();
@@ -468,13 +463,12 @@ mod tests {
     }
 
     #[test]
-    fn update_attributes_packet_id_for_1_21_and_26() {
+    fn update_attributes_packet_id_for_26_3() {
         assert_eq!(
-            CUpdateAttributes::to_id(JavaMinecraftVersion::V_1_21),
-            UPDATE_ATTRIBUTES.to_id(JavaMinecraftVersion::V_1_21)
+            CUpdateAttributes::to_id(JavaMinecraftVersion::V_26_3),
+            UPDATE_ATTRIBUTES.to_id(JavaMinecraftVersion::V_26_3)
         );
-        assert_eq!(CUpdateAttributes::to_id(JavaMinecraftVersion::V_1_21), 117);
-        assert_eq!(CUpdateAttributes::to_id(JavaMinecraftVersion::V_26_2), 131);
+        assert_eq!(CUpdateAttributes::to_id(JavaMinecraftVersion::V_26_3), 134);
     }
 
     #[test]

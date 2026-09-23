@@ -519,6 +519,9 @@ interface java-packets {
     channel: string,
     data: list<u8>,
   }
+  record config-c-config-post-effects {
+    effects: list<string>,
+  }
   record config-c-registry-data {
     registry-id: string,
     entries: list<string>,
@@ -1228,6 +1231,9 @@ interface java-packets {
     yaw: f32,
     pitch: f32,
   }
+  record c-post-effects {
+    effects: list<string>,
+  }
   record c-projectile-power {
     entity-id: s32,
     x-power: f64,
@@ -1411,25 +1417,6 @@ interface java-packets {
     head-yaw: u8,
     data: s32,
   }
-  record c-spawn-living-entity {
-    entity-id: s32,
-    entity-uuid: uuid,
-    r-type: s32,
-    position: tuple<f64, f64, f64>,
-    yaw: u8,
-    pitch: u8,
-    head-yaw: u8,
-    velocity: string,
-    metadata: option<list<u8>>,
-  }
-  record c-spawn-painting {
-    entity-id: s32,
-    uuid: uuid,
-    title: string,
-    %variant: s32,
-    location: tuple<s32, s32, s32>,
-    direction: u8,
-  }
   record c-stop-sound {
     sound-id: option<string>,
     category: option<string>,
@@ -1561,10 +1548,6 @@ interface java-packets {
   }
   record c-update-tags-play {
     tags: list<string>,
-  }
-  record c-use-bed {
-    entity-id: s32,
-    location: tuple<s32, s32, s32>,
   }
   enum waypoint-operation {
     track,
@@ -1705,6 +1688,7 @@ interface java-packets {
     config-c-known-packs(config-c-known-packs),
     config-c-config-ping(config-c-config-ping),
     config-c-plugin-message(config-c-plugin-message),
+    config-c-config-post-effects(config-c-config-post-effects),
     config-c-registry-data(config-c-registry-data),
     config-c-config-remove-resource-pack(config-c-config-remove-resource-pack),
     config-c-config-reset-chat,
@@ -1793,6 +1777,7 @@ interface java-packets {
     c-remove-player-info(c-remove-player-info),
     c-player-rotation(c-player-rotation),
     c-player-spawn-position(c-player-spawn-position),
+    c-post-effects(c-post-effects),
     c-projectile-power(c-projectile-power),
     c-recipe-book-add(c-recipe-book-add),
     c-recipe-book-remove(c-recipe-book-remove),
@@ -1830,8 +1815,6 @@ interface java-packets {
     c-play-show-dialog(c-play-show-dialog),
     c-sound-effect(c-sound-effect),
     c-spawn-entity(c-spawn-entity),
-    c-spawn-living-entity(c-spawn-living-entity),
-    c-spawn-painting(c-spawn-painting),
     c-start-configuration,
     c-stop-sound(c-stop-sound),
     c-store-cookie(c-store-cookie),
@@ -1854,7 +1837,6 @@ interface java-packets {
     c-update-objectives(c-update-objectives),
     c-update-recipes(c-update-recipes),
     c-update-score(c-update-score),
-    c-use-bed(c-use-bed),
     c-waypoint(c-waypoint),
     c-world-event(c-world-event),
     status-c-ping-response(status-c-ping-response),

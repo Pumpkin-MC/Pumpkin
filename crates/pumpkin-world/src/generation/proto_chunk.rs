@@ -34,6 +34,7 @@ use super::{
 };
 use crate::biome::BiomeSupplier;
 use crate::chunk::format::LightContainer;
+use crate::chunk::palette::BlockPalette;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkHeightmaps, ChunkLight, ChunkSections};
 use crate::chunk_system::{StagedChunkEnum, generation_cache::SurfaceBiomeNeighborhood};
 use crate::generation::height_limit::HeightLimitView;
@@ -129,7 +130,7 @@ pub struct ProtoChunk {
     pub z: i32,
     pub default_block: &'static BlockState,
     biome_mixer_seed: i64,
-    pub(crate) flat_block_map: Box<[BlockStateId]>,
+    pub(crate) flat_block_map: Vec<BlockStateId>,
     /// Sections holding a light emitting block. Set as blocks are written and never cleared, so
     /// it can name a section that no longer emits, but never miss one that does.
     pub(crate) emitter_sections: SectionMask,
@@ -233,8 +234,7 @@ impl ProtoChunk {
             z,
             default_block,
             biome_mixer_seed,
-            flat_block_map: vec![BlockStateId::AIR; CHUNK_AREA * height as usize]
-                .into_boxed_slice(),
+            flat_block_map: Vec::new(),
             emitter_sections: SectionMask::default(),
             flat_biome_map: vec![
                 Biome::PLAINS.id;
@@ -514,9 +514,10 @@ impl ProtoChunk {
     }
 
     #[inline]
-    const fn local_pos_to_block_index(&self, x: i32, y: i32, z: i32) -> usize {
-        self.height() as usize * CHUNK_DIM as usize * x as usize
-            + CHUNK_DIM as usize * y as usize
+    const fn local_pos_to_block_index(x: i32, y: i32, z: i32) -> usize {
+        ((y as usize) >> 4) * BlockPalette::VOLUME
+            + (x as usize) * CHUNK_AREA
+            + ((y as usize) & 15) * CHUNK_DIM as usize
             + z as usize
     }
 
@@ -538,8 +539,17 @@ impl ProtoChunk {
     #[inline]
     #[must_use]
     pub fn get_block_state_raw(&self, x: i32, y: i32, z: i32) -> BlockStateId {
-        let index = self.local_pos_to_block_index(x, y, z);
-        self.flat_block_map[index]
+        debug_assert!((0..i32::from(self.height())).contains(&y));
+        Self::block_in(&self.flat_block_map, x, y, z)
+    }
+
+    /// Reads a detached `flat_block_map`, so callers can hold other fields mutably meanwhile.
+    #[inline]
+    #[must_use]
+    pub(crate) fn block_in(map: &[BlockStateId], x: i32, y: i32, z: i32) -> BlockStateId {
+        map.get(Self::local_pos_to_block_index(x, y, z))
+            .copied()
+            .unwrap_or(BlockStateId::AIR)
     }
 
     #[inline]
@@ -584,7 +594,16 @@ impl ProtoChunk {
             self.emitter_sections.set((local_y >> 4) as usize);
         }
 
-        let index = self.local_pos_to_block_index(local_x, local_y, local_z);
+        let index = Self::local_pos_to_block_index(local_x, local_y, local_z);
+        if index >= self.flat_block_map.len() {
+            if block_state.id == BlockStateId::AIR {
+                return;
+            }
+            let section_end = ((local_y as usize >> 4) + 1) * BlockPalette::VOLUME;
+            self.flat_block_map
+                .reserve_exact(section_end - self.flat_block_map.len());
+            self.flat_block_map.resize(section_end, BlockStateId::AIR);
+        }
         self.flat_block_map[index] = block_state.id;
     }
 

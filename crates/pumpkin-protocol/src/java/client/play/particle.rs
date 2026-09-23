@@ -1,8 +1,6 @@
 use std::io::Write;
 
-use pumpkin_data::{
-    packet::clientbound::play::LEVEL_PARTICLES, particle_id_remap::remap_particle_id_for_version,
-};
+use pumpkin_data::packet::clientbound::play::LEVEL_PARTICLES;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
@@ -159,18 +157,6 @@ pub fn particle_id_from_1_7_name(name: &str) -> i32 {
     }
 }
 
-pub(super) fn particle_id_for_version(
-    particle_id: VarInt,
-    version: JavaMinecraftVersion,
-) -> VarInt {
-    u16::try_from(particle_id.0).map_or(particle_id, |particle_id| {
-        VarInt(i32::from(remap_particle_id_for_version(
-            particle_id,
-            version,
-        )))
-    })
-}
-
 impl ClientPacket for CParticle<'_> {
     fn write_packet_data(
         &self,
@@ -184,18 +170,14 @@ impl ClientPacket for CParticle<'_> {
                 .map_or("smoke", particle_name_for_v1_7);
             write.write_string_bounded(name, 64)?;
         } else if *version < JavaMinecraftVersion::V_1_20_5 {
-            let remapped_id =
-                remap_particle_id_for_version(self.particle_id.0 as u16, *version) as i32;
             if *version >= JavaMinecraftVersion::V_1_19 {
-                write.write_var_int(&VarInt(remapped_id))?;
+                write.write_var_int(&self.particle_id)?;
             } else {
-                write.write_i32_be(remapped_id)?;
+                write.write_i32_be(self.particle_id.0)?;
             }
         } else if *version >= JavaMinecraftVersion::V_26_3 {
             // The particle moved back to the front of the packet in 26.3
-            let remapped_id =
-                remap_particle_id_for_version(self.particle_id.0 as u16, *version) as i32;
-            write.write_var_int(&VarInt(remapped_id))?;
+            write.write_var_int(&self.particle_id)?;
             write.write_slice(self.data)?;
         }
 
@@ -233,9 +215,7 @@ impl ClientPacket for CParticle<'_> {
         write.write_i32_be(self.particle_count)?;
 
         if *version >= JavaMinecraftVersion::V_1_20_5 {
-            let remapped_id =
-                remap_particle_id_for_version(self.particle_id.0 as u16, *version) as i32;
-            write.write_var_int(&VarInt(remapped_id))?;
+            write.write_var_int(&self.particle_id)?;
         }
         write.write_slice(self.data)?;
 
@@ -313,7 +293,7 @@ impl<'a> ServerPacket<'a> for CParticle<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{Cursor, Seek, SeekFrom};
+    use std::io::Cursor;
 
     use pumpkin_data::particle::Particle;
     use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
@@ -321,41 +301,6 @@ mod tests {
     use crate::{ClientPacket, VarInt};
 
     use super::CParticle;
-
-    fn encoded_particle_id(version: JavaMinecraftVersion) -> VarInt {
-        let packet = CParticle::new(
-            false,
-            false,
-            Vector3::new(0.0, 0.0, 0.0),
-            Vector3::new(0.0, 0.0, 0.0),
-            0.0,
-            1,
-            VarInt(Particle::ExplosionEmitter as i32),
-            &[],
-        );
-        let mut bytes = Vec::new();
-        packet.write_packet_data(&mut bytes, &version).unwrap();
-
-        let mut cursor = Cursor::new(bytes);
-        cursor.seek(SeekFrom::Start(46)).unwrap();
-        VarInt::decode(&mut cursor).unwrap()
-    }
-
-    #[test]
-    fn particle_id_remaps_for_1_21_11() {
-        assert_eq!(
-            encoded_particle_id(JavaMinecraftVersion::V_1_21_11),
-            VarInt(22)
-        );
-    }
-
-    #[test]
-    fn particle_id_stays_latest_for_26_2() {
-        assert_eq!(
-            encoded_particle_id(JavaMinecraftVersion::V_26_2),
-            VarInt(29)
-        );
-    }
 
     #[test]
     fn particle_encoding_legacy_1_7_string() {
@@ -402,7 +347,7 @@ mod tests {
 
         let mut slice = bytes.as_slice();
         let id = slice.get_i32_be().unwrap();
-        assert_eq!(id, 18);
+        assert_eq!(id, Particle::ExplosionEmitter as i32);
     }
 
     #[test]
@@ -424,6 +369,6 @@ mod tests {
 
         let mut cursor = Cursor::new(bytes);
         let id = VarInt::decode(&mut cursor).unwrap();
-        assert_eq!(id, VarInt(22));
+        assert_eq!(id, VarInt(Particle::ExplosionEmitter as i32));
     }
 }
