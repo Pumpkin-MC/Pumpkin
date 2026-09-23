@@ -2762,28 +2762,31 @@ impl World {
         )
     }
 
-    /// The block/fluid check plus the entity check: entities other than
-    /// `exclude_uuid` (the joining/respawning player) make the position
-    /// unsafe.
-    fn no_collision_no_liquid_at(&self, feet: &BlockPos, exclude_uuid: Option<Uuid>) -> bool {
+    /// The block/fluid check plus a check for collidable non-player entities.
+    fn no_collision_no_liquid_at(&self, feet: &BlockPos) -> bool {
+        let player_box = player_bounding_box(feet);
         no_collision_no_liquid(
             feet,
             self.get_block_state(feet),
             self.get_block_state(&feet.up()),
-        ) && self
-            .get_entities_at_box(&player_bounding_box(feet))
-            .iter()
-            .all(|entity| Some(entity.get_entity().entity_uuid) == exclude_uuid)
+        ) && !self.entities.load().iter().any(|entity| {
+            entity
+                .get_entity()
+                .bounding_box
+                .load()
+                .intersects(&player_box)
+                && entity.is_collidable(None)
+        })
     }
 
     /// Fixes up the height with the block/fluid/entity safety check.
-    fn fixup_spawn_height_at(&self, position: BlockPos, exclude_uuid: Option<Uuid>) -> BlockPos {
+    fn fixup_spawn_height_at(&self, position: BlockPos) -> BlockPos {
         // The head block also has to fit in the world.
         fixup_spawn_height_with(
             position,
             self.dimension.min_y,
             self.get_top_y() - 1,
-            |pos| self.no_collision_no_liquid_at(pos, exclude_uuid),
+            |pos| self.no_collision_no_liquid_at(pos),
         )
     }
 
@@ -2796,7 +2799,6 @@ impl World {
         spawn_x: i32,
         spawn_z: i32,
         fallback_y: i32,
-        exclude_uuid: Option<Uuid>,
     ) -> Vector3<f64> {
         let suggestion = BlockPos::new(spawn_x, fallback_y, spawn_z);
 
@@ -2827,25 +2829,24 @@ impl World {
         let radius = spawn_search_radius(respawn_radius as i32, border_distance);
 
         let position = if default_adventure {
-            self.fixup_spawn_height_at(suggestion, exclude_uuid)
+            // Height fixup reads this column synchronously, so fetch its chunk first.
+            self.level
+                .get_or_fetch_chunk(Vector2::new(spawn_x >> 4, spawn_z >> 4), |_| ())
+                .await;
+            self.fixup_spawn_height_at(suggestion)
         } else {
             let mut loaded_chunks = FxHashSet::default();
             match self
-                .check_spawn_column(spawn_x, spawn_z, exclude_uuid, &mut loaded_chunks)
+                .check_spawn_column(spawn_x, spawn_z, &mut loaded_chunks)
                 .await
             {
                 Some(position) => position,
                 None => self
-                    .find_safe_player_spawn_position(
-                        suggestion,
-                        radius,
-                        exclude_uuid,
-                        &mut loaded_chunks,
-                    )
+                    .find_safe_player_spawn_position(suggestion, radius, &mut loaded_chunks)
                     .await
                     .unwrap_or_else(|| {
                         // Last resort: fix up the suggested spawn height.
-                        self.fixup_spawn_height_at(suggestion, exclude_uuid)
+                        self.fixup_spawn_height_at(suggestion)
                     }),
             }
         };
@@ -2863,18 +2864,12 @@ impl World {
         &self,
         suggestion: BlockPos,
         radius: i32,
-        exclude_uuid: Option<Uuid>,
         loaded_chunks: &mut FxHashSet<Vector2<i32>>,
     ) -> Option<BlockPos> {
         for ring in 1..=radius {
             for (dx, dz) in spawn_search_ring_offsets(ring) {
                 if let Some(found) = self
-                    .check_spawn_column(
-                        suggestion.0.x + dx,
-                        suggestion.0.z + dz,
-                        exclude_uuid,
-                        loaded_chunks,
-                    )
+                    .check_spawn_column(suggestion.0.x + dx, suggestion.0.z + dz, loaded_chunks)
                     .await
                 {
                     return Some(found);
@@ -2892,7 +2887,6 @@ impl World {
         &self,
         x: i32,
         z: i32,
-        exclude_uuid: Option<Uuid>,
         loaded_chunks: &mut FxHashSet<Vector2<i32>>,
     ) -> Option<BlockPos> {
         let chunk_pos = Vector2::new(x >> 4, z >> 4);
@@ -2915,9 +2909,7 @@ impl World {
             // Needs a solid top face below the feet.
             if state.is_side_solid(BlockDirection::Up) {
                 let feet = BlockPos::new(x, y + 1, z);
-                return self
-                    .no_collision_no_liquid_at(&feet, exclude_uuid)
-                    .then_some(feet);
+                return self.no_collision_no_liquid_at(&feet).then_some(feet);
             }
         }
 
@@ -2957,7 +2949,6 @@ impl World {
                     level_info.spawn_x,
                     level_info.spawn_z,
                     level_info.spawn_y,
-                    Some(player.gameprofile.id),
                 )
                 .await;
             (position, level_info.spawn_yaw, level_info.spawn_pitch)
@@ -3525,12 +3516,7 @@ impl World {
         } else {
             let info = &self.level_info.load();
             let position = self
-                .get_safe_player_spawn_position(
-                    info.spawn_x,
-                    info.spawn_z,
-                    info.spawn_y,
-                    Some(player.gameprofile.id),
-                )
+                .get_safe_player_spawn_position(info.spawn_x, info.spawn_z, info.spawn_y)
                 .await;
             (position, info.spawn_yaw, info.spawn_pitch)
         };
@@ -4215,12 +4201,7 @@ impl World {
 
             // Search around the world spawn for a safe position.
             let position = default_world
-                .get_safe_player_spawn_position(
-                    spawn_x,
-                    spawn_z,
-                    spawn_y,
-                    Some(player.gameprofile.id),
-                )
+                .get_safe_player_spawn_position(spawn_x, spawn_z, spawn_y)
                 .await;
 
             (
