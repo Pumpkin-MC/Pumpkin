@@ -1,0 +1,68 @@
+interface text {
+    use common.{named-color, rgb-color, argb-color};
+
+    resource text-component {
+        /// Creates a plain text component.
+        text: static async func(plain: string) -> text-component;
+        /// Creates a translation component.
+        translate: static async func(key: string, %with: list<text-component>) -> text-component;
+        /// Creates a translation component with a Bedrock-specific fallback key.
+        translate-cross: static async func(java-key: string, bedrock-key: string, %with: list<text-component>) -> text-component;
+        /// Creates an entity names / selector text component.
+        entity-names: static async func(selector: string, separator: option<string>) -> text-component;
+        /// Creates a keybind text component (e.g., "key.jump").
+        keybind: static async func(keybind: string) -> text-component;
+        /// Creates a custom translation component.
+        custom: static async func(namespace: string, key: string, locale: string, %with: list<text-component>) -> text-component;
+
+        /// Parses a legacy Minecraft formatted string (using section signs '§' by default) into a text component.
+        from-legacy-string: static async func(input: string) -> text-component;
+        /// Parses a legacy formatted string using a custom color code symbol (e.g. '&' or '§').
+        from-legacy-string-with-code: static async func(input: string, code-symbol: char) -> text-component;
+
+        /// Parses a standard Minecraft JSON text component.
+        from-json: static async func(json: string) -> result<text-component, string>;
+        /// Serializes the text component to JSON format.
+        to-json: async func() -> string;
+
+        add-child: async func(child: text-component);
+        add-text: async func(text: string);
+        get-text: async func() -> string;
+        encode: async func() -> list<u8>;
+        to-pretty-console: async func() -> string;
+
+        // Style
+
+        color-named: async func(color: named-color);
+        color-rgb: async func(color: rgb-color);
+        gradient-named: async func(colors: list<named-color>);
+        gradient: async func(colors: list<rgb-color>);
+        rainbow: async func();
+        bold: async func(value: bool);
+        italic: async func(value: bool);
+        underlined: async func(value: bool);
+        strikethrough: async func(value: bool);
+        obfuscated: async func(value: bool);
+        /// Text inserted into chat when shift-clicked
+        insertion: async func(text: string);
+        font: async func(font: string);
+        shadow-color: async func(color: argb-color);
+
+        // Click events
+
+        click-open-url: async func(url: string);
+        click-open-file: async func(path: string);
+        click-run-command: async func(command: string);
+        click-suggest-command: async func(command: string);
+        click-change-page: async func(page: u32);
+        click-copy-to-clipboard: async func(text: string);
+
+        // Hover events
+
+        hover-show-text: async func(text: text-component);
+        /// Item data as SNBT string
+        hover-show-item: async func(item: string);
+        hover-show-entity: async func(entity-type: string, id: string, name: option<text-component>);
+    }
+}
+

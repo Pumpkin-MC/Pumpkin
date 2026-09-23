@@ -1,0 +1,16 @@
+interface uuid {
+    /// A 128-bit UUID represented as two 64-bit integers.
+    record uuid {
+        high: u64,
+        low: u64,
+    }
+
+    /// Generates a new random v4 UUID.
+    generate: async func() -> uuid;
+
+    /// Parses a UUID in memory. Returns none if the string is invalid.
+    parse: func(s: string) -> option<uuid>;
+
+    /// Formats a UUID in its standard string representation in memory.
+    to-string: func(id: uuid) -> string;
+}

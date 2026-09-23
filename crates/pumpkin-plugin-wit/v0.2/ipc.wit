@@ -1,0 +1,12 @@
+package pumpkin:plugin@0.2.0;
+
+interface ipc {
+    type plugin-id = string;
+    type ipc-message = list<u8>;
+
+    /// Sends a message to another plugin and returns its response.
+    ///
+    /// The message is transferred by value. The call may suspend while the
+    /// recipient runs or waits on host work.
+    send-ipc-message: async func(recipient: plugin-id, message: ipc-message) -> result<result<ipc-message, string>>;
+}

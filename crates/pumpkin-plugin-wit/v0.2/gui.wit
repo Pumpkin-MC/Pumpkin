@@ -1,0 +1,40 @@
+interface gui {
+    use text.{text-component};
+    use common.{click-type};
+    use item-stack.{item-stack};
+    use screens.{screen};
+    use inventory.{inventory};
+
+    resource gui {
+        /// Creates a GUI with the specified screen type and title.
+        create: static async func(%type: screen, title: text-component) -> gui;
+        /// Returns the underlying inventory handle for this GUI.
+        get-inventory: async func() -> inventory;
+        set-item: async func(slot: u32, item: item-stack);
+        get-item: async func(slot: u32) -> option<item-stack>;
+
+        /// Returns the type of this GUI.
+        get-type: async func() -> screen;
+
+        /// Returns the title of this GUI.
+        get-title: async func() -> text-component;
+
+        /// Returns the number of slots in this GUI.
+        get-size: async func() -> u32;
+
+        /// Clears all items from the GUI.
+        clear-items: async func();
+
+        /// Sets whether players can grab items out of the inventory.
+        set-allow-grab-items: async func(allow: bool);
+
+        /// Returns whether players can grab items out of the inventory.
+        get-allow-grab-items: async func() -> bool;
+
+        /// Sets whether players can put items into the inventory from their own.
+        set-allow-put-items: async func(allow: bool);
+
+        /// Returns whether players can put items into the inventory from their own.
+        get-allow-put-items: async func() -> bool;
+    }
+}

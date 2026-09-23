@@ -1,0 +1,423 @@
+interface block-entity {
+    use common.{block-pos, nbt-tree};
+    use item-stack.{item-stack};
+    use inventory.{inventory};
+
+    resource block-entity {
+        resource-location: async func() -> string;
+        get-position: async func() -> block-pos;
+        get-id: async func() -> u32;
+        is-dirty: async func() -> bool;
+        clear-dirty: async func();
+
+        /// Sets a namespaced custom data value on this block entity.
+        set-custom-data: async func(namespace: string, key: string, value: nbt-tree);
+        /// Returns a namespaced custom data value from this block entity, if set.
+        get-custom-data: async func(namespace: string, key: string) -> option<nbt-tree>;
+        /// Removes a namespaced custom data value from this block entity.
+        remove-custom-data: async func(namespace: string, key: string);
+        /// Returns whether this block entity has a namespaced custom data value.
+        has-custom-data: async func(namespace: string, key: string) -> bool;
+    }
+
+    resource container-block-entity {
+        get-block-entity: async func() -> block-entity;
+        /// Returns the generic inventory handle for this container.
+        get-inventory: async func() -> inventory;
+        get-size: async func() -> u32;
+        is-empty: async func() -> bool;
+        get-stack: async func(slot: u32) -> option<item-stack>;
+        set-stack: async func(slot: u32, stack: option<item-stack>);
+        remove-stack: async func(slot: u32) -> option<item-stack>;
+        clear: async func();
+    }
+
+    resource command-block-entity {
+        get-block-entity: async func () -> block-entity;
+        last-output: async func() -> string;
+        track-output: async func() -> bool;
+        success-count: async func() -> u32;
+        command: async func() -> string;
+        auto: async func() -> bool;
+        condition-met: async func() -> bool;
+        powered: async func() -> bool;
+    }
+
+    enum dye-color {
+        white,
+        orange,
+        magenta,
+        light-blue,
+        yellow,
+        lime,
+        pink,
+        gray,
+        light-gray,
+        cyan,
+        purple,
+        blue,
+        brown,
+        green,
+        red,
+        black,
+    }
+
+    record sign-text {
+        messages: list<string>,
+        color: dye-color,
+        has-glowing-text: bool,
+    }
+
+    resource sign-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-front-text: async func() -> sign-text;
+        set-front-text: async func(text: sign-text);
+        get-back-text: async func() -> sign-text;
+        set-back-text: async func(text: sign-text);
+        is-waxed: async func() -> bool;
+        set-waxed: async func(waxed: bool);
+    }
+
+    resource jukebox-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        is-playing: async func() -> bool;
+        stop-playing: async func();
+        start-playing: async func(length-in-ticks: u64);
+    }
+
+    resource chest-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        viewer-count: async func() -> u32;
+    }
+
+    resource mob-spawner-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-spawn-count: async func() -> s32;
+        get-spawn-range: async func() -> s32;
+        get-delay: async func() -> s32;
+    }
+
+    resource map-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-map-id: async func() -> s32;
+        set-map-id: async func(map-id: s32);
+        get-colors: async func() -> list<u8>;
+        set-colors: async func(colors: list<u8>);
+        set-pixel: async func(x: u32, y: u32, color: u8);
+        get-pixel: async func(x: u32, y: u32) -> u8;
+        update: async func();
+        stream-frame: async func(frame-data: list<u8>);
+    }
+
+    resource hanging-sign-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-front-text: async func() -> sign-text;
+        set-front-text: async func(text: sign-text);
+        get-back-text: async func() -> sign-text;
+        set-back-text: async func(text: sign-text);
+        is-waxed: async func() -> bool;
+        set-waxed: async func(waxed: bool);
+    }
+
+    resource trapped-chest-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        viewer-count: async func() -> u32;
+    }
+
+    resource banner-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-custom-name: async func() -> option<string>;
+    }
+
+    resource barrel-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        viewer-count: async func() -> u32;
+    }
+
+    resource beacon-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        get-primary-effect: async func() -> s32;
+        get-secondary-effect: async func() -> s32;
+        get-levels: async func() -> s32;
+    }
+
+    resource bed-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource beehive-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-bee-count: async func() -> u32;
+    }
+
+    resource bell-block-entity {
+        get-block-entity: async func() -> block-entity;
+        is-ringing: async func() -> bool;
+        get-ring-ticks: async func() -> s32;
+    }
+
+    resource blasting-furnace-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        get-cooking-time-spent: async func() -> u16;
+        get-cooking-total-time: async func() -> u16;
+        get-lit-time-remaining: async func() -> u16;
+        get-lit-total-time: async func() -> u16;
+        is-burning: async func() -> bool;
+    }
+
+    resource brewing-stand-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        get-brew-time: async func() -> s32;
+        get-fuel: async func() -> s32;
+    }
+
+    resource brushable-block-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource calibrated-sculk-sensor-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource campfire-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+    }
+
+    resource chiseled-bookshelf-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        get-last-interacted-slot: async func() -> s8;
+    }
+
+    resource comparator-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-output-signal: async func() -> u8;
+    }
+
+    resource conduit-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource copper-golem-statue-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource crafter-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        get-crafting-ticks-remaining: async func() -> s32;
+        is-triggered: async func() -> bool;
+    }
+
+    resource creaking-heart-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-creaking-uuid: async func() -> option<string>;
+    }
+
+    resource daylight-detector-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource decorated-pot-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource dispenser-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+    }
+
+    resource dropper-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+    }
+
+    resource enchanting-table-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource end-gateway-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-age: async func() -> s64;
+        is-exact-teleport: async func() -> bool;
+    }
+
+    resource end-portal-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource ender-chest-block-entity {
+        get-block-entity: async func() -> block-entity;
+        viewer-count: async func() -> u32;
+    }
+
+    resource furnace-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        get-cooking-time-spent: async func() -> u16;
+        get-cooking-total-time: async func() -> u16;
+        get-lit-time-remaining: async func() -> u16;
+        get-lit-total-time: async func() -> u16;
+        is-burning: async func() -> bool;
+    }
+
+    resource hopper-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        get-cooldown: async func() -> s32;
+    }
+
+    resource jigsaw-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-name: async func() -> string;
+        get-target: async func() -> string;
+        get-pool: async func() -> string;
+        get-final-state: async func() -> string;
+        get-selection-priority: async func() -> s32;
+        get-placement-priority: async func() -> s32;
+    }
+
+    resource lectern-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        get-page: async func() -> u32;
+    }
+
+    resource piston-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-progress: async func() -> f32;
+        is-extending: async func() -> bool;
+        is-source: async func() -> bool;
+    }
+
+    resource potent-sulfur-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource sculk-catalyst-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource sculk-sensor-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource sculk-shrieker-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-warning-level: async func() -> s32;
+    }
+
+    resource shelf-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+    }
+
+    resource shulker-box-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        viewer-count: async func() -> u32;
+    }
+
+    resource skull-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-note-block-sound: async func() -> option<string>;
+    }
+
+    resource smoker-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-container: async func() -> container-block-entity;
+        get-cooking-time-spent: async func() -> u16;
+        get-cooking-total-time: async func() -> u16;
+        get-lit-time-remaining: async func() -> u16;
+        get-lit-total-time: async func() -> u16;
+        is-burning: async func() -> bool;
+    }
+
+    resource structure-block-block-entity {
+        get-block-entity: async func() -> block-entity;
+        get-name: async func() -> string;
+        get-author: async func() -> string;
+        get-mode: async func() -> string;
+        get-integrity: async func() -> f32;
+        get-seed: async func() -> s64;
+    }
+
+    resource test-block-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource test-instance-block-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource trial-spawner-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    resource vault-block-entity {
+        get-block-entity: async func() -> block-entity;
+    }
+
+    variant block-entity-type {
+        command-block-entity(command-block-entity),
+        sign-block-entity(sign-block-entity),
+        hanging-sign-block-entity(hanging-sign-block-entity),
+        jukebox-block-entity(jukebox-block-entity),
+        chest-block-entity(chest-block-entity),
+        trapped-chest-block-entity(trapped-chest-block-entity),
+        mob-spawner-block-entity(mob-spawner-block-entity),
+        map-block-entity(map-block-entity),
+        banner-block-entity(banner-block-entity),
+        barrel-block-entity(barrel-block-entity),
+        beacon-block-entity(beacon-block-entity),
+        bed-block-entity(bed-block-entity),
+        beehive-block-entity(beehive-block-entity),
+        bell-block-entity(bell-block-entity),
+        blasting-furnace-block-entity(blasting-furnace-block-entity),
+        brewing-stand-block-entity(brewing-stand-block-entity),
+        brushable-block-block-entity(brushable-block-block-entity),
+        calibrated-sculk-sensor-block-entity(calibrated-sculk-sensor-block-entity),
+        campfire-block-entity(campfire-block-entity),
+        chiseled-bookshelf-block-entity(chiseled-bookshelf-block-entity),
+        comparator-block-entity(comparator-block-entity),
+        conduit-block-entity(conduit-block-entity),
+        copper-golem-statue-block-entity(copper-golem-statue-block-entity),
+        crafter-block-entity(crafter-block-entity),
+        creaking-heart-block-entity(creaking-heart-block-entity),
+        daylight-detector-block-entity(daylight-detector-block-entity),
+        decorated-pot-block-entity(decorated-pot-block-entity),
+        dispenser-block-entity(dispenser-block-entity),
+        dropper-block-entity(dropper-block-entity),
+        enchanting-table-block-entity(enchanting-table-block-entity),
+        end-gateway-block-entity(end-gateway-block-entity),
+        end-portal-block-entity(end-portal-block-entity),
+        ender-chest-block-entity(ender-chest-block-entity),
+        furnace-block-entity(furnace-block-entity),
+        hopper-block-entity(hopper-block-entity),
+        jigsaw-block-entity(jigsaw-block-entity),
+        lectern-block-entity(lectern-block-entity),
+        piston-block-entity(piston-block-entity),
+        potent-sulfur-block-entity(potent-sulfur-block-entity),
+        sculk-catalyst-block-entity(sculk-catalyst-block-entity),
+        sculk-sensor-block-entity(sculk-sensor-block-entity),
+        sculk-shrieker-block-entity(sculk-shrieker-block-entity),
+        shelf-block-entity(shelf-block-entity),
+        shulker-box-block-entity(shulker-box-block-entity),
+        skull-block-entity(skull-block-entity),
+        smoker-block-entity(smoker-block-entity),
+        structure-block-block-entity(structure-block-block-entity),
+        test-block-block-entity(test-block-block-entity),
+        test-instance-block-block-entity(test-instance-block-block-entity),
+        trial-spawner-block-entity(trial-spawner-block-entity),
+        vault-block-entity(vault-block-entity),
+        container-block-entity(container-block-entity),
+    }
+}
