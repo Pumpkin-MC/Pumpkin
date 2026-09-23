@@ -201,6 +201,10 @@ def select_packages(
             directly_affected.add(package_roots[package_root])
             continue
 
+        # WIT packages have their own validation job and no Cargo manifest.
+        if path == WIT_ROOT or WIT_ROOT in path.parents:
+            continue
+
         if is_rust_ci_ignored_change(path):
             continue
 
