@@ -38,6 +38,7 @@ use pumpkin_protocol::{
     },
     ser::{NetworkWriteExt, WritingError},
 };
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::{
@@ -393,13 +394,14 @@ impl JavaClient {
         }
     }
 
-    pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
+    /// Returns the positions actually queued -> cancelled or unencodable chunks are left out.
+    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> Vec<Vector2<i32>> {
         let player = self.player.load_full();
         let Some(player) = player.as_ref() else {
-            return;
+            return Vec::new();
         };
         let Some(server) = player.world().server.upgrade() else {
-            return;
+            return Vec::new();
         };
 
         let mut valid_chunks = Vec::with_capacity(chunks.len());
@@ -412,7 +414,7 @@ impl JavaClient {
         }
 
         if valid_chunks.is_empty() {
-            return;
+            return Vec::new();
         }
 
         let version = self.version.load();
@@ -459,17 +461,17 @@ impl JavaClient {
                     None
                 };
 
-                serialized.push((Bytes::from(buf), light_buf));
+                serialized.push((Vector2::new(chunk.x, chunk.z), Bytes::from(buf), light_buf));
             }
             let _ = tx.send(serialized);
         });
 
         let Ok(serialized) = rx.await else {
-            return;
+            return Vec::new();
         };
         let sent_count = serialized.len();
         if sent_count == 0 {
-            return;
+            return Vec::new();
         }
 
         if version >= JavaMinecraftVersion::V_1_20_2 {
@@ -478,17 +480,20 @@ impl JavaClient {
 
         // Keep the whole batch on the priority queue. Otherwise the batch end can overtake chunk
         // data queued on the normal channel, leaving the client unable to render those chunks.
-        for (chunk_data, light_data) in serialized {
+        let mut sent = Vec::with_capacity(sent_count);
+        for (pos, chunk_data, light_data) in serialized {
             self.send_packet_now_data(chunk_data).await;
             if let Some(light_data) = light_data {
                 self.send_packet_now_data(light_data).await;
             }
+            sent.push(pos);
         }
 
         if version >= JavaMinecraftVersion::V_1_20_2 {
             self.send_packet(&CChunkBatchEnd::new(sent_count as u16))
                 .await;
         }
+        sent
     }
 
     #[allow(clippy::unused_async)]

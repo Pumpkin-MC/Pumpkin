@@ -3426,13 +3426,14 @@ impl World {
             .level
             .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
             .await;
-        // `send_chunks` fires `ChunkSend` -> a cancel only skips the chunk, the join continues.
-        client.send_chunks(&[chunk]).await;
-        player
-            .chunk_sender
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .mark_sent_out_of_band(center_chunk);
+        // A cancelled `ChunkSend` keeps the chunk pending -> the batch path sends it later.
+        if client.send_chunks(&[chunk]).await.contains(&center_chunk) {
+            player
+                .chunk_sender
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .mark_sent_out_of_band(center_chunk);
+        }
 
         let velocity = player.living_entity.entity.velocity.load();
 
@@ -4688,12 +4689,14 @@ impl World {
             .level
             .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
             .await;
-        java_client.send_chunks(&[chunk]).await;
-        player
-            .chunk_sender
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .mark_sent_out_of_band(center_chunk);
+        // A cancelled `ChunkSend` keeps the chunk pending -> the batch path sends it later.
+        if java_client.send_chunks(&[chunk]).await.contains(&center_chunk) {
+            player
+                .chunk_sender
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .mark_sent_out_of_band(center_chunk);
+        }
     }
 
     /// Must only be called after the player's own `CLogin` packet has been sent.
