@@ -1055,11 +1055,11 @@ impl TrialSpawner {
         }
 
         if let Some(equip) = equipment_loot_table
-            && let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&equip)
+            && let Some(loot_table) = world.get_loot_table(&equip)
             && let Some(living) = entity.get_living_entity()
         {
             let seed = rand::random::<i64>();
-            let items = crate::world::loot::generate_loot(loot_table, seed);
+            let items = loot_table.generate_loot(seed);
             let mut equipment = living
                 .entity_equipment
                 .lock()
@@ -1126,10 +1126,10 @@ impl TrialSpawner {
     ) {
         let mut dropped_any = false;
         if let Some(key) = ejecting_loot_table
-            && let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(key)
+            && let Some(loot_table) = world.get_loot_table(key)
         {
             let seed = rand::random::<i64>();
-            let items = crate::world::loot::generate_loot(loot_table, seed);
+            let items = loot_table.generate_loot(seed);
             for stack in items {
                 world.drop_stack(&spawner_pos, stack);
                 dropped_any = true;

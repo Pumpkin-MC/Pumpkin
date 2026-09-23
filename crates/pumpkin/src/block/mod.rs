@@ -460,9 +460,9 @@ pub fn drop_loot(
     params: &LootContextParameters,
 ) {
     let key = format!("minecraft:blocks/{}", block.name);
-    if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+    if let Some(loot_table) = world.get_loot_table(&key) {
         let seed: i64 = rand::random();
-        let items = crate::world::loot::generate_loot_with_context(loot_table, seed, params);
+        let items = crate::world::loot::generate_loot_from_handle(&loot_table, seed, params);
         if !items.is_empty() {
             let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
                 block_pos: *pos,
@@ -475,7 +475,13 @@ pub fn drop_loot(
                 server.plugin_manager.fire_blocking(&server, &mut event);
             }
             if !event.cancelled {
-                for stack in event.items {
+                let block_entity = world.get_block_entity(pos);
+                for mut stack in event.items {
+                    if let Some(block_entity) = &block_entity
+                        && Block::from_item_id(stack.item.id) == Some(block)
+                    {
+                        block_entity.collect_item_components(&mut stack);
+                    }
                     world.drop_stack(pos, stack);
                 }
             }
