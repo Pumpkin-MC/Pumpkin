@@ -1918,7 +1918,7 @@ impl Entity {
 
     // Entity.updateVelocity in yarn
 
-    fn update_velocity_from_input(&self, movement_input: Vector3<f64>, speed: f64) {
+    pub(crate) fn update_velocity_from_input(&self, movement_input: Vector3<f64>, speed: f64) {
         let final_input = self.movement_input_to_velocity(movement_input, speed);
 
         self.velocity.store(self.velocity.load() + final_input);

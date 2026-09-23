@@ -1394,7 +1394,12 @@ impl LivingEntity {
 
         // Strider is the only entity that has canWalkOnFluid = false
 
-        if (touching_water || self.entity.touching_lava.load(SeqCst))
+        if caller
+            .get_mob()
+            .is_some_and(|mob| mob.custom_travel(caller))
+        {
+            // The mob moved itself.
+        } else if (touching_water || self.entity.touching_lava.load(SeqCst))
             && should_swim_in_fluids
             && self.entity.entity_type != &EntityType::STRIDER
         {
@@ -1656,7 +1661,7 @@ impl LivingEntity {
         }
     }
 
-    fn make_move(&self, caller: &dyn EntityBase) {
+    pub(crate) fn make_move(&self, caller: &dyn EntityBase) {
         self.entity.move_entity(caller, self.entity.velocity.load());
 
         self.check_climbing();
