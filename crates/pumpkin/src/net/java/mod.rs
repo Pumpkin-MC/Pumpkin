@@ -570,6 +570,7 @@ impl JavaClient {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
             match self.outgoing_packet_queue_send.try_reserve() {
+                // The writer drains and flushes it after `close()`
                 Ok(permit) => self.tick_flush.admit(permit, OutgoingPacket::normal(data)),
                 Err(err) => {
                     decrement_pending_bytes(&self.pending_bytes, packet_len);
@@ -756,6 +757,7 @@ impl JavaClient {
     /// # Notes
     ///
     /// This function does not attempt to send any disconnect packets to the client.
+    /// Packets already queued are still written and flushed, bounded by `DISCONNECT_FLUSH_TIMEOUT`.
     pub fn close(&self) {
         self.close_token.cancel();
     }

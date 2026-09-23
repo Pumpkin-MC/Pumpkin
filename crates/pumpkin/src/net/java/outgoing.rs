@@ -36,7 +36,7 @@ const NO_BARRIER: u64 = u64::MAX;
 /// Memory bound: `MAX_PENDING_BYTES`.
 pub const OUTGOING_QUEUE_CAPACITY: usize = 65536;
 
-/// Max wait in `kick_explicit` for the disconnect flush, then close.
+/// Max wait for the disconnect flush (`kick_explicit`, writer drain on close).
 pub const DISCONNECT_FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Where `resumeFlushing` got the tick barrier.
@@ -328,10 +328,11 @@ impl FlushState {
     ) -> Option<bool> {
         let did_flush = self.unflushed;
         if did_flush {
+            // Flush first: a `try_kick` racing this flush still gets out on a healthy socket.
             let flushed = tokio::select! {
                 biased;
-                () = ctx.close_token.cancelled() => None,
                 res = writer.flush() => Some(res),
+                () = ctx.close_token.cancelled() => None,
             };
             match flushed {
                 Some(Ok(())) => {}
@@ -540,7 +541,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         if ctx.tick_flush.take(received) {
             if !state.flush_and_stamp(&mut writer, &ctx).await {
                 ctx.close_token.cancel();
-                break;
+                return;
             }
             continue;
         }
@@ -551,7 +552,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
             WriterStep::Flush => {
                 if !state.flush_and_stamp(&mut writer, &ctx).await {
                     ctx.close_token.cancel();
-                    break;
+                    return;
                 }
                 continue;
             }
@@ -577,7 +578,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
             && !state.flush_and_stamp(&mut writer, &ctx).await
         {
             ctx.close_token.cancel();
-            break;
+            return;
         }
 
         // Flushed above already, so skip the final flush.
@@ -586,10 +587,40 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         }
     }
 
-    // Stalled flush already raced close_token above. No second hang here.
-    if !ctx.close_token.is_cancelled() {
-        let _ = writer.flush().await;
+    drain_on_close(packet_receiver, writer, state, &ctx).await;
+}
+
+/// close only after the disconnect is sent. `try_kick` enqueues it and
+/// closes at once, so frame and flush what was admitted before `close()`.
+/// Socket errors and a flush stalled at close time return before this.
+async fn drain_on_close<W: AsyncWrite + Unpin + Send + 'static>(
+    mut packet_receiver: Receiver<OutgoingPacket>,
+    mut writer: TCPNetworkEncoder<W>,
+    mut state: FlushState,
+    ctx: &WriterCtx,
+) {
+    packet_receiver.close();
+    let mut packets = VecDeque::new();
+    // Closing: flushes once below, suspended or not.
+    let mut flush_request = FlushRequest::None;
+    while let Ok(packet) = packet_receiver.try_recv() {
+        packet.ingest(&mut flush_request, &mut packets);
     }
+
+    // Stalled peer give up like `kick_explicit`.
+    let _ = tokio::time::timeout(DISCONNECT_FLUSH_TIMEOUT, async move {
+        if !packets.is_empty() {
+            writer = write_queued_frames(writer, packets, &mut state.on_flush, ctx).await?;
+            state.unflushed = true;
+        }
+        if state.unflushed && writer.flush().await.is_ok() {
+            for completion in state.on_flush.drain(..) {
+                let _ = completion.send(());
+            }
+        }
+        Some(())
+    })
+    .await;
 }
 
 #[cfg(test)]
@@ -928,6 +959,66 @@ mod tests {
         close.cancel();
         writer.await.unwrap();
         assert!(done_rx.await.is_err(), "failed flush drops the completion");
+    }
+
+    /// `try_kick`: enqueue mid-tick, `close()` at once. The disconnect must still go out.
+    #[tokio::test]
+    async fn close_writes_and_flushes_the_queued_disconnect() {
+        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let flushes = Arc::new(AtomicUsize::new(0));
+        let suspend = Arc::new(AtomicBool::new(true));
+        let close = CancellationToken::new();
+
+        let writer = spawn_writer(rx, writes.clone(), flushes.clone(), suspend, close.clone());
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        tx.try_send(packet(0xDC)).unwrap();
+        close.cancel();
+        tokio::time::timeout(Duration::from_millis(50), writer)
+            .await
+            .expect("drain on close must not hang on a healthy socket")
+            .unwrap();
+
+        assert_eq!(flushes.load(Ordering::SeqCst), 1, "flushed despite suspend");
+        assert_eq!(
+            writes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .last(),
+            Some(&0xDC),
+            "disconnect written before the writer stops"
+        );
+    }
+
+    /// `close()` before the writer ever ran: the queue is still drained.
+    #[tokio::test]
+    async fn close_before_start_still_drains_the_queue() {
+        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let flushes = Arc::new(AtomicUsize::new(0));
+        let close = CancellationToken::new();
+
+        for i in 1..=3 {
+            tx.try_send(packet(i)).unwrap();
+        }
+        close.cancel();
+        run_writer(
+            rx,
+            writes.clone(),
+            flushes.clone(),
+            Arc::new(AtomicBool::new(false)),
+            close,
+        )
+        .await;
+
+        let written = writes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let payloads: Vec<u8> = written.chunks(2).map(|frame| frame[1]).collect();
+        assert_eq!(payloads, [1, 2, 3], "one [len, id] frame per queued packet");
+        assert_eq!(flushes.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]
