@@ -369,6 +369,12 @@ impl ItemEntity {
                 .item_stack
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // in a parallel batch -> the player already has the contents.
+            if stack.is_empty() {
+                return;
+            }
+            // Claims the item -> a pickup waiting on the lock sees an empty stack.
+            stack.set_count(0);
             let mut contents = Vec::new();
             if let Some(container) = stack.get_data_component::<ContainerImpl>()
                 && !container.items.is_empty()
@@ -703,26 +709,26 @@ impl EntityBase for ItemEntity {
             return;
         }
 
-        let (item_id, count_before) = {
-            let stack = self
+        // Inserted in place under the lock, so a parallel merge or destruction can't act on a
+        // stale copy. An empty stack was already destroyed or merged away.
+        let (item_id, count_before, inserted, count_after, is_empty) = {
+            let mut stack = self
                 .item_stack
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            (stack.item.id, stack.item_count)
+            if stack.is_empty() {
+                return;
+            }
+            let (item_id, count_before) = (stack.item.id, stack.item_count);
+            let inserted = player.inventory.insert_stack_anywhere(&mut stack);
+            (
+                item_id,
+                count_before,
+                inserted,
+                stack.item_count,
+                stack.is_empty(),
+            )
         };
-
-        let mut local_stack = self
-            .item_stack
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        let inserted = player.inventory.insert_stack_anywhere(&mut local_stack);
-        let count_after = local_stack.item_count;
-        let is_empty = local_stack.is_empty();
-        *self
-            .item_stack
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = local_stack;
 
         if inserted || player.is_creative() {
             player.inventory_changed.store(true, Ordering::Relaxed);
