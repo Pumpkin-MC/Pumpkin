@@ -384,12 +384,24 @@ impl Hash for ConsumableImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct UseEffectsImpl;
+impl UseEffectsImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for UseEffectsImpl {
     default_impl!(UseEffects);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct UseRemainderImpl;
+pub struct UseRemainderImpl {
+    pub remainder: Option<Cow<'static, str>>,
+}
+impl UseRemainderImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self { remainder: None })
+    }
+}
 impl DataComponentImpl for UseRemainderImpl {
     default_impl!(UseRemainder);
 }

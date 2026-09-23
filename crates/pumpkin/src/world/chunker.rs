@@ -28,22 +28,26 @@ pub fn get_view_distance(player: &Player) -> NonZero<u8> {
         .clamp(fallback, max_view_distance)
 }
 
-// Checks if the target chunk is within the view distance
-// of the center chunk. Uses Chebyshev distance.
+// Checks if the target chunk is within Chebyshev distance (L_infinity) of the center chunk.
 #[must_use]
 #[inline]
-pub fn is_within_view_distance(
+pub fn is_within_chebyshev_distance(
     center: Vector2<i32>,
     target: Vector2<i32>,
-    view_distance: i32,
+    distance: i32,
 ) -> bool {
-    (target.x - center.x).abs().max((target.y - center.y).abs()) <= view_distance
+    (target.x - center.x).abs().max((target.y - center.y).abs()) <= distance
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn update_position(player: &Arc<Player>) {
     let entity = &player.get_entity();
     let new_chunk_center = entity.chunk_pos.load();
     let old_cylindrical = player.watched_section.load();
+
+    // Vanilla `ChunkMap.move` -> re-pair on every move, not only on a view change.
+    let world = player.world();
+    world.entity_tracker.update_player_position(player, &world);
 
     // This does break when a new player spawns
     // if old_cylindrical.center == new_chunk_center {
@@ -78,33 +82,52 @@ pub fn update_position(player: &Arc<Player>) {
     let loading_chunks: Vec<_> = loading_iter.collect();
     let unloading_chunks: Vec<_> = unloading_iter.collect();
 
-    let world = player.world();
     let level = &world.level;
     let mut held_tickets = player
         .held_chunk_tickets
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
+    let is_spectator = player.is_spectator();
+    let spectators_generate_chunks = world
+        .level_info
+        .load()
+        .game_rules
+        .spectators_generate_chunks;
+
+    let new_view_level = (!is_spectator || spectators_generate_chunks).then(|| {
+        pumpkin_world::chunk_system::ChunkLoading::get_level_from_view_distance(
+            u8::from(view_distance) + 1,
+        )
+    });
+
+    let new_sim_level = (!is_spectator || spectators_generate_chunks).then(|| {
+        let sim_dist = world.server.upgrade().map_or(10, |s| {
+            s.advanced_config.networking.java.simulation_distance.get()
+        });
+        pumpkin_world::chunk_system::ChunkLoading::get_level_from_simulation_distance(sim_dist)
+    });
+
     {
         let mut lock = level
             .chunk_loading
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let new_level = pumpkin_world::chunk_system::ChunkLoading::get_level_from_view_distance(
-            u8::from(view_distance) + 1,
-        );
-        lock.add_ticket(new_chunk_center, new_level);
 
-        let sim_dist = world.server.upgrade().map_or(10, |s| {
-            s.advanced_config.networking.java.simulation_distance.get()
-        });
-        let sim_level =
-            pumpkin_world::chunk_system::ChunkLoading::get_level_from_simulation_distance(sim_dist);
-        lock.add_ticket(new_chunk_center, sim_level);
+        if let Some(view) = new_view_level {
+            lock.add_ticket(new_chunk_center, view);
+        }
+        if let Some(sim) = new_sim_level {
+            lock.add_ticket(new_chunk_center, sim);
+        }
 
-        if let Some((held_view, held_sim)) = held_tickets.replace((new_level, sim_level)) {
-            lock.remove_ticket(old_cylindrical.center, held_view);
-            lock.remove_ticket(old_cylindrical.center, held_sim);
+        if let Some((held_view, held_sim)) = held_tickets.replace((new_view_level, new_sim_level)) {
+            if let Some(view) = held_view {
+                lock.remove_ticket(old_cylindrical.center, view);
+            }
+            if let Some(sim) = held_sim {
+                lock.remove_ticket(old_cylindrical.center, sim);
+            }
         }
         lock.send_change();
     };
@@ -152,7 +175,6 @@ pub fn update_position(player: &Arc<Player>) {
     }
 
     if !loading_chunks.is_empty() {
-        world.spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);
+        world.spawn_world_entity_chunks(player.clone(), loading_chunks);
     }
-    world.entity_tracker.update_player_position(player, &world);
 }

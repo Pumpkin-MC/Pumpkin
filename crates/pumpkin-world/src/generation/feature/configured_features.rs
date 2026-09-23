@@ -71,6 +71,7 @@ use super::features::{
     waterlogged_vegetation_patch,
     waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature,
     weeping_vines::WeepingVinesFeature,
+    weighted_random_selector::WeightedRandomFeature,
 };
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::WorldPortalExt;
@@ -151,6 +152,7 @@ pub enum ConfiguredFeature {
     ScatteredOre(ScatteredOreFeature),
     RandomSelector(RandomFeature),
     SimpleRandomSelector(SimpleRandomFeature),
+    WeightedRandomSelector(WeightedRandomFeature),
     RandomBooleanSelector(RandomBooleanFeature),
     Geode(Box<GeodeFeature>),
     DripstoneCluster(DripstoneClusterFeature),
@@ -315,6 +317,15 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
+            Self::WeightedRandomSelector(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::Vines(_feature) => VinesFeature::generate(
                 chunk,
                 block_registry,
@@ -422,21 +433,45 @@ impl ConfiguredFeature {
             Self::BonusChest(_feature) => {
                 BonusChestFeature::generate(chunk, min_y, height, feature_name, random, pos)
             }
-            Self::DeltaFeature(_feature) => {
-                DeltaFeatureFeature::generate(chunk, min_y, height, feature_name, random, pos)
+            Self::DeltaFeature(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::BlockPile(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::DripstoneCluster(feature) => feature.generate(chunk, pos),
             Self::LargeDripstone(feature) => feature.generate(chunk, random, pos),
             Self::EndGateway(feature) => feature.generate(chunk, pos),
             Self::FillLayer(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::FallenTree(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::HugeBrownMushroom(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
-            Self::HugeFungus(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
-            }
+            Self::HugeFungus(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::HugeRedMushroom(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
@@ -452,7 +487,7 @@ impl ConfiguredFeature {
             Self::WeepingVines(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
-            _ => false,
+            Self::NoOp => false,
         }
     }
 }

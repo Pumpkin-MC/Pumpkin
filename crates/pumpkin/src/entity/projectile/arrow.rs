@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
 
-use crate::entity::projectile::ProjectileHit;
+use crate::entity::projectile::{ProjectileHit, calculate_ray_intersection};
 use crate::{
     entity::{Entity, EntityBase, living::LivingEntity, player::Player},
     server::Server,
@@ -326,25 +326,15 @@ impl ArrowEntity {
     pub fn set_critical(&self, critical: bool) {
         self.is_critical.store(critical, Ordering::Relaxed);
         let flags = self.get_flags();
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::abstract_arrow::ID_FLAGS,
-                flags,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::abstract_arrow::ID_FLAGS, flags);
     }
 
     pub fn set_no_physics(&self, no_physics: bool) {
         self.no_physics.store(no_physics, Ordering::Relaxed);
         let flags = self.get_flags();
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::abstract_arrow::ID_FLAGS,
-                flags,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::abstract_arrow::ID_FLAGS, flags);
     }
 
     #[must_use]
@@ -363,12 +353,9 @@ impl ArrowEntity {
 
     pub fn set_pierce_level(&self, level: u8) {
         self.pierce_level.store(level, Ordering::Relaxed);
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::abstract_arrow::PIERCE_LEVEL,
-                level,
-            )],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::abstract_arrow::PIERCE_LEVEL,
+            level,
         );
     }
 
@@ -413,6 +400,10 @@ impl ArrowEntity {
 }
 
 impl EntityBase for ArrowEntity {
+    fn get_owner_id(&self) -> Option<i32> {
+        self.owner_id
+    }
+
     fn write_custom_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         let item_stack = self
             .item_stack
@@ -472,22 +463,14 @@ impl EntityBase for ArrowEntity {
         let in_ground = self.in_ground.load(Ordering::Relaxed);
 
         if entity.entity_type.id == EntityType::SPECTRAL_ARROW.id {
-            entity.send_meta_data(
-                &[
-                    Metadata::new(pumpkin_data::tracked_data::spectral_arrow::ID_FLAGS, flags),
-                    Metadata::new(
-                        pumpkin_data::tracked_data::spectral_arrow::PIERCE_LEVEL,
-                        pierce,
-                    ),
-                ],
-                None,
+            entity.set_synced_data(pumpkin_data::tracked_data::spectral_arrow::ID_FLAGS, flags);
+            entity.set_synced_data(
+                pumpkin_data::tracked_data::spectral_arrow::PIERCE_LEVEL,
+                pierce,
             );
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::spectral_arrow::IN_GROUND,
-                    in_ground,
-                )],
-                None,
+            entity.set_synced_data(
+                pumpkin_data::tracked_data::spectral_arrow::IN_GROUND,
+                in_ground,
             );
         } else {
             let item_stack = self
@@ -495,27 +478,10 @@ impl EntityBase for ArrowEntity {
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let color = Self::get_effect_color(&item_stack);
-            entity.send_meta_data(
-                &[
-                    Metadata::new(pumpkin_data::tracked_data::arrow::ID_FLAGS, flags),
-                    Metadata::new(pumpkin_data::tracked_data::arrow::PIERCE_LEVEL, pierce),
-                ],
-                None,
-            );
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::arrow::IN_GROUND,
-                    in_ground,
-                )],
-                None,
-            );
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::arrow::ID_EFFECT_COLOR,
-                    color,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::arrow::ID_FLAGS, flags);
+            entity.set_synced_data(pumpkin_data::tracked_data::arrow::PIERCE_LEVEL, pierce);
+            entity.set_synced_data(pumpkin_data::tracked_data::arrow::IN_GROUND, in_ground);
+            entity.set_synced_data(pumpkin_data::tracked_data::arrow::ID_EFFECT_COLOR, color);
         }
 
         if self.is_on_fire() {
@@ -631,12 +597,9 @@ impl EntityBase for ArrowEntity {
                 let block = world.get_block(&pos);
                 if block.is_air() {
                     self.in_ground.store(false, Ordering::Relaxed);
-                    entity.send_meta_data(
-                        &[Metadata::new(
-                            pumpkin_data::tracked_data::abstract_arrow::IN_GROUND,
-                            false,
-                        )],
-                        None,
+                    entity.set_synced_data(
+                        pumpkin_data::tracked_data::abstract_arrow::IN_GROUND,
+                        false,
                     );
                     let mut vel = entity.velocity.load();
                     vel.x *= rand::random::<f64>() * 0.2;
@@ -897,13 +860,7 @@ impl EntityBase for ArrowEntity {
                 entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
 
                 // Notify client that arrow is in ground
-                entity.send_meta_data(
-                    &[Metadata::new(
-                        pumpkin_data::tracked_data::abstract_arrow::IN_GROUND,
-                        true,
-                    )],
-                    None,
-                );
+                entity.set_synced_data(pumpkin_data::tracked_data::abstract_arrow::IN_GROUND, true);
 
                 // Play sound with vanilla pitch formula
                 let sound_pitch = 1.2 / (rand::random::<f32>() * 0.2 + 0.9);
@@ -913,7 +870,7 @@ impl EntityBase for ArrowEntity {
                     &hit_pos,
                     1.0,
                     sound_pitch,
-                    0.0,
+                    0,
                 );
                 let chunk_pos = entity.chunk_pos.load();
                 world.broadcast_to_chunk(chunk_pos, &sound_packet);
@@ -992,9 +949,10 @@ impl EntityBase for ArrowEntity {
                         &hit_pos,
                         1.0,
                         sound_pitch,
-                        0.0,
+                        0,
                     );
-                    world.broadcast_packet_all(&sound_packet);
+                    let chunk_pos = entity.chunk_pos.load();
+                    world.broadcast_to_chunk(chunk_pos, &sound_packet);
 
                     if Self::should_apply_post_hurt_effects(damage_succeeded) {
                         let item_stack = self
@@ -1056,6 +1014,19 @@ impl EntityBase for ArrowEntity {
             _ => {}
         }
 
+        if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+            && let Some(server) = player.world().server.upgrade()
+        {
+            let mut event = crate::plugin::api::events::player::player_pickup_arrow::PlayerPickupArrowEvent::new(
+                player_arc,
+                self.entity.entity_id,
+            );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
+
         // Try to insert an arrow into the player's inventory
         let item_stack = self
             .item_stack
@@ -1063,6 +1034,11 @@ impl EntityBase for ArrowEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut stack = Self::pickup_item_stack(&item_stack);
         if player.is_creative() || player.inventory.insert_stack_anywhere(&mut stack) {
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::PickedUp,
+                stack.item.id as i32,
+                1,
+            );
             player.living_entity.pickup(&self.entity, 1);
 
             // Remove arrow entity after pickup
@@ -1116,36 +1092,6 @@ impl ArrowEntity {
 
         false
     }
-}
-
-/// Ray intersection algorithm for AABBs
-fn calculate_ray_intersection(
-    start: &Vector3<f64>,
-    dir: &Vector3<f64>,
-    bb: &pumpkin_util::math::boundingbox::BoundingBox,
-) -> Option<f64> {
-    let mut t_min = 0.0f64;
-    let mut t_max = 1.0f64;
-
-    let b_min = [bb.min.x, bb.min.y, bb.min.z];
-    let b_max = [bb.max.x, bb.max.y, bb.max.z];
-    let s = [start.x, start.y, start.z];
-    let d = [dir.x, dir.y, dir.z];
-
-    for i in 0..3 {
-        if d[i].abs() < 1e-9 {
-            if s[i] < b_min[i] || s[i] > b_max[i] {
-                return None;
-            }
-        } else {
-            let t1 = (b_min[i] - s[i]) / d[i];
-            let t2 = (b_max[i] - s[i]) / d[i];
-            t_min = t_min.max(t1.min(t2));
-            t_max = t_max.min(t1.max(t2));
-        }
-    }
-
-    (0.0..=1.0).contains(&t_min).then_some(t_min)
 }
 
 /// Get the face of the block that was hit

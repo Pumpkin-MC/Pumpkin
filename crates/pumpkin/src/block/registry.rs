@@ -47,21 +47,25 @@ use crate::block::blocks::glazed_terracotta::GlazedTerracottaBlock;
 use crate::block::blocks::grass_block::GrassBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
 use crate::block::blocks::hay::HayBlock;
+use crate::block::blocks::honey::HoneyBlock;
 use crate::block::blocks::ice::{FrostedIceBlock, IceBlock};
 use crate::block::blocks::infested::InfestedBlock;
 use crate::block::blocks::iron_bars::IronBarsBlock;
 use crate::block::blocks::jigsaw::JigsawBlock;
-// use crate::block::blocks::leaves::LeavesBlock;
+use crate::block::blocks::leaves::LeavesBlock;
+use crate::block::blocks::light::LightBlock;
 use crate::block::blocks::logs::LogBlock;
 use crate::block::blocks::loom::LoomBlock;
 use crate::block::blocks::magma::MagmaBlock;
 use crate::block::blocks::mangrove_roots::MangroveRootsBlock;
+use crate::block::blocks::mud::MudBlock;
 use crate::block::blocks::nether_portal::NetherPortalBlock;
 use crate::block::blocks::note::NoteBlock;
 use crate::block::blocks::nylium::NyliumBlock;
 use crate::block::blocks::piston::piston::PistonBlock;
 use crate::block::blocks::piston::piston_extension::PistonExtensionBlock;
 use crate::block::blocks::piston::piston_head::PistonHeadBlock;
+use crate::block::blocks::plant::azalea::AzaleaBlock;
 use crate::block::blocks::plant::bamboo::BambooBlock;
 use crate::block::blocks::plant::bamboo_sapling::BambooSaplingBlock;
 use crate::block::blocks::plant::big_dripleaf::BigDripleafBlock;
@@ -69,12 +73,14 @@ use crate::block::blocks::plant::big_dripleaf_stem::BigDripleafStemBlock;
 use crate::block::blocks::plant::bush::BushBlock;
 use crate::block::blocks::plant::cactus::CactusBlock;
 use crate::block::blocks::plant::cactus_flower::CactusFlowerBlock;
+use crate::block::blocks::plant::cave_vines::CaveVinesBlock;
 use crate::block::blocks::plant::chorus_flower::ChorusFlowerBlock;
 use crate::block::blocks::plant::chorus_plant::ChorusPlantBlock;
 use crate::block::blocks::plant::cocoa::CocoaBlock;
 use crate::block::blocks::plant::crop::beetroot::BeetrootBlock;
 use crate::block::blocks::plant::crop::carrot::CarrotBlock;
 use crate::block::blocks::plant::crop::nether_wart::NetherWartBlock;
+use crate::block::blocks::plant::crop::pitcher_crop::PitcherCropBlock;
 use crate::block::blocks::plant::crop::potatoes::PotatoBlock;
 use crate::block::blocks::plant::crop::sweet_berry_bush::SweetBerryBushBlock;
 use crate::block::blocks::plant::crop::torch_flower::TorchFlowerBlock;
@@ -84,6 +90,7 @@ use crate::block::blocks::plant::eyeblossom::EyeblossomBlock;
 use crate::block::blocks::plant::flower::FlowerBlock;
 use crate::block::blocks::plant::flowerbed::FlowerbedBlock;
 use crate::block::blocks::plant::fungus::FungusBlock;
+use crate::block::blocks::plant::hanging_roots::HangingRootsBlock;
 use crate::block::blocks::plant::kelp::KelpBlock;
 use crate::block::blocks::plant::leaf_litter::LeafLitterBlock;
 use crate::block::blocks::plant::lily_pad::LilyPadBlock;
@@ -94,6 +101,7 @@ use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::plant::sapling::SaplingBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
 use crate::block::blocks::plant::seagrass::SeaGrassBlock;
+use crate::block::blocks::plant::shelf_mushroom::ShelfMushroomBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
 use crate::block::blocks::plant::small_dripleaf::SmallDripleafBlock;
 use crate::block::blocks::plant::spore_blossom::SporeBlossomBlock;
@@ -132,9 +140,10 @@ use crate::block::blocks::redstone::sculk_sensor::SculkSensorBlock;
 use crate::block::blocks::redstone::target_block::TargetBlock;
 use crate::block::blocks::redstone::tripwire::TripwireBlock;
 use crate::block::blocks::redstone::tripwire_hook::TripwireHookBlock;
+use crate::block::blocks::scaffolding::ScaffoldingBlock;
 use crate::block::blocks::sculk::sculk_catalyst::SculkCatalystBlock;
 use crate::block::blocks::sculk::sculk_shrieker::SculkShriekerBlock;
-use crate::block::blocks::sculk::sculk_vein::SculkVeinBlock;
+use crate::block::blocks::sculk::sculk_vein::MultifaceBlock;
 use crate::block::blocks::shelf::ShelfBlock;
 use crate::block::blocks::signs::SignBlock;
 use crate::block::blocks::slabs::SlabBlock;
@@ -142,10 +151,16 @@ use crate::block::blocks::slime::SlimeBlock;
 use crate::block::blocks::smithing_table::SmithingTableBlock;
 use crate::block::blocks::sniffer_egg::SnifferEggBlock;
 use crate::block::blocks::snow::LayeredSnowBlock;
+use crate::block::blocks::soul_sand::SoulSandBlock;
 use crate::block::blocks::spawner::SpawnerBlock;
 use crate::block::blocks::sponge::{SpongeBlock, WetSpongeBlock};
+use crate::block::blocks::spreading_snowy_block::{MyceliumBlock, PodzolBlock};
 use crate::block::blocks::stairs::StairBlock;
+use crate::block::blocks::straw_bed::StrawBedBlock;
 use crate::block::blocks::structure_block::StructureBlock;
+use crate::block::blocks::structure_void::StructureVoidBlock;
+use crate::block::blocks::test_block::{TestBlock, TestInstanceBlock};
+use crate::block::blocks::tinted_glass::TintedGlassBlock;
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::blocks::torches::TorchBlock;
 use crate::block::blocks::trapdoor::TrapDoorBlock;
@@ -159,8 +174,9 @@ use crate::block::fluid::lava::FlowingLava;
 use crate::block::fluid::water::FlowingWater;
 use crate::block::{
     BlockBehaviour, BlockHitResult, BlockMetadata, BonemealArgs, FluidMetadata,
-    GetInsideCollisionShapeArgs, OnEntityCollisionArgs, OnEntityStepArgs, OnLandedUponArgs,
-    OnProjectileHitArgs, UpdateEntityMovementAfterFallOnArgs, stop_vertical_movement_after_fall,
+    GetInsideCollisionShapeArgs, GetScreenHandlerFactoryArgs, OnEntityCollisionArgs,
+    OnEntityStepArgs, OnLandedUponArgs, OnProjectileHitArgs, PathComputationType,
+    UpdateEntityMovementAfterFallOnArgs, stop_vertical_movement_after_fall,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
@@ -172,7 +188,9 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
+use pumpkin_inventory::screen_handler::ScreenHandlerFactory;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
@@ -204,6 +222,7 @@ use crate::block::blocks::jukebox::JukeboxBlock;
 use crate::block::blocks::ladder::LadderBlock;
 use crate::block::blocks::lanterns::LanternBlock;
 use crate::block::blocks::lectern::LecternBlock;
+use crate::block::blocks::netherrack::NetherrackBlock;
 use crate::block::blocks::respawn_anchor::RespawnAnchorBlock;
 use crate::block::blocks::rooted_dirt::RootedDirtBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
@@ -224,6 +243,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(AnvilBlock);
     manager.register(BeaconBlock);
     manager.register(BedBlock);
+    manager.register(StrawBedBlock);
     manager.register(SaplingBlock);
     manager.register(MangrovePropaguleBlock);
     manager.register(CactusBlock);
@@ -262,14 +282,20 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(InfestedBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
-    // FIX despawn
-    // manager.register(LeavesBlock);
+    manager.register(LeavesBlock);
     manager.register(BambooBlock);
     manager.register(BambooSaplingBlock);
     manager.register(BannerBlock);
     manager.register(SignBlock);
     manager.register(SlabBlock);
     manager.register(SlimeBlock);
+    manager.register(HoneyBlock);
+    manager.register(MudBlock);
+    manager.register(SoulSandBlock);
+    manager.register(ScaffoldingBlock);
+    manager.register(LightBlock);
+    manager.register(StructureVoidBlock);
+    manager.register(TintedGlassBlock);
     manager.register(StairBlock);
     manager.register(StonecutterBlock);
     manager.register(LoomBlock);
@@ -277,6 +303,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SmithingTableBlock);
     manager.register(FletchingTableBlock);
     manager.register(StructureBlock);
+    manager.register(TestBlock);
+    manager.register(TestInstanceBlock);
     manager.register(ShortPlantBlock);
     manager.register(DryVegetationBlock);
     manager.register(LilyPadBlock);
@@ -296,6 +324,10 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(PotatoBlock);
     manager.register(BeetrootBlock);
     manager.register(TorchFlowerBlock);
+    manager.register(PitcherCropBlock);
+    manager.register(CaveVinesBlock);
+    manager.register(AzaleaBlock);
+    manager.register(HangingRootsBlock);
     manager.register(CarrotBlock);
     manager.register(SweetBerryBushBlock);
     manager.register(SeaGrassBlock);
@@ -306,6 +338,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(TorchBlock);
     manager.register(TrapDoorBlock);
     manager.register(MushroomPlantBlock);
+    manager.register(ShelfMushroomBlock);
     manager.register(FlowerbedBlock);
     manager.register(LeafLitterBlock);
     manager.register(WallBlock);
@@ -326,6 +359,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(WeatheringCopperStairBlock);
     manager.register(WeatheringCopperTrapDoorBlock);
     manager.register(CommandBlock);
+    manager.register(TestBlock);
     manager.register(JigsawBlock);
     manager.register(ComposterBlock);
     manager.register(CauldronBlock);
@@ -373,9 +407,12 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(AmethystBlock);
     manager.register(BuddingAmethystBlock);
     manager.register(GrassBlock);
+    manager.register(MyceliumBlock);
+    manager.register(PodzolBlock);
     manager.register(RootedDirtBlock);
     manager.register(NyliumBlock);
     manager.register(BubbleColumnBlock);
+    manager.register(NetherrackBlock);
 
     manager.register(FallingBlock);
 
@@ -390,7 +427,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(LeverBlock);
     manager.register(LightningRodBlock);
     manager.register(SculkSensorBlock);
-    manager.register(SculkVeinBlock);
+    manager.register(MultifaceBlock);
     manager.register(SculkCatalystBlock);
     manager.register(SculkShriekerBlock);
     manager.register(ObserverBlock);
@@ -441,9 +478,9 @@ pub enum BlockActionResult {
     SuccessServer,
     /// Block other actions from being executed | Same as CONSUME in vanilla
     Consume,
-    /// Allow other actions to be executed, but indicate it failed | Same as FAIL in vanilla
+    /// Allow other actions from being executed, but indicate it failed | Same as FAIL in vanilla
     Fail,
-    /// Allow other actions to be executed | Same as PASS in vanilla
+    /// Allow other actions from being executed | Same as PASS in vanilla
     Pass,
     /// Use default action for the block: `normal_use` | Same as `PASS_TO_DEFAULT_BLOCK_ACTION` in vanilla
     PassToDefaultBlockAction,
@@ -456,8 +493,11 @@ impl BlockActionResult {
     }
 }
 
+/// Marks a block with no registered behaviour. Never handed out as a real index.
+const NO_BEHAVIOUR: u16 = u16::MAX;
+
 pub struct BlockRegistry {
-    block_indices: [u8; pumpkin_data::BlockId::COUNT as usize],
+    block_indices: [u16; pumpkin_data::BlockId::COUNT as usize],
     behaviours: Vec<Arc<dyn BlockBehaviour>>,
     fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
 }
@@ -465,7 +505,7 @@ pub struct BlockRegistry {
 impl Default for BlockRegistry {
     fn default() -> Self {
         Self {
-            block_indices: [0xFF; pumpkin_data::BlockId::COUNT as usize],
+            block_indices: [NO_BEHAVIOUR; pumpkin_data::BlockId::COUNT as usize],
             behaviours: Vec::new(),
             fluids: FxHashMap::default(),
         }
@@ -476,6 +516,11 @@ impl Default for BlockRegistry {
 pub enum BlockPlacingError {
     InvalidGamemode,
     BlockOutOfWorld,
+}
+
+fn can_replace_with_other_block(block: &Block, state: &BlockState) -> bool {
+    // Sculk veins allow replacement by another block despite their state flag.
+    block == &Block::SCULK_VEIN || state.replaceable()
 }
 
 impl BlockRegistry {
@@ -499,6 +544,19 @@ impl BlockRegistry {
             return false;
         }
         if behaviour.is_bonemeal_success(args) {
+            if let Some(server) = world.server.upgrade() {
+                let mut event =
+                    crate::plugin::api::events::block::block_fertilize::BlockFertilizeEvent::new(
+                        *position,
+                        world.clone(),
+                        None,
+                        vec![],
+                    );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return false;
+                }
+            }
             behaviour.perform_bonemeal(args);
         }
         true
@@ -606,7 +664,7 @@ impl BlockRegistry {
                 player,
             )
             .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
-        } else if clicked_block_state.replaceable() {
+        } else if can_replace_with_other_block(clicked_block, clicked_block_state) {
             if clicked_block == &Block::WATER {
                 use pumpkin_data::block_properties::WaterLikeProperties;
                 let water_props = WaterLikeProperties::from_state_id(clicked_block_state.id);
@@ -637,7 +695,7 @@ impl BlockRegistry {
                     )
                     .then_some(BlockIsReplacing::Itself(previous_block_state.id))
                 } else {
-                    previous_block_state.replaceable().then(|| {
+                    can_replace_with_other_block(previous_block, previous_block_state).then(|| {
                         if previous_block == &Block::WATER {
                             use pumpkin_data::block_properties::WaterLikeProperties;
                             let water_props =
@@ -656,6 +714,17 @@ impl BlockRegistry {
                     }
                 }
             };
+
+        if world.is_in_spawn_protection(player, &final_block_pos) {
+            player.send_system_message(&pumpkin_util::text::TextComponent::translate_cross(
+                pumpkin_data::translation::java::BUILD_SPAWN_PROTECTION,
+                pumpkin_data::translation::java::BUILD_SPAWN_PROTECTION,
+                [pumpkin_util::text::TextComponent::text(
+                    player.gameprofile.name.clone(),
+                )],
+            ));
+            return Ok(None);
+        }
 
         if !self.can_place_at(
             Some(server),
@@ -724,6 +793,19 @@ impl BlockRegistry {
         let _replaced_id =
             world.set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL);
 
+        world.play_bedrock_level_sound(
+            "place",
+            &final_block_pos.to_centered_f64(),
+            BlockState::to_be_network_id(new_state) as i32,
+        );
+
+        if let Ok(hand) = pumpkin_util::Hand::from_packet_id(use_item_on.hand.0)
+            && placed_block.default_state.block_entity_type != u16::MAX
+            && let Some(block_entity) = world.get_block_entity(&final_block_pos)
+        {
+            block_entity.apply_item_components(&player.inventory().get_stack_in_hand(hand));
+        }
+
         self.player_placed(
             &world,
             placed_block,
@@ -744,8 +826,10 @@ impl BlockRegistry {
     #[allow(clippy::expect_used)]
     pub fn register<T: BlockBehaviour + BlockMetadata + 'static>(&mut self, block: T) {
         let ids = T::ids();
-        let idx = u8::try_from(self.behaviours.len())
-            .expect("Too many block behaviours for u8 index table");
+        let idx = u16::try_from(self.behaviours.len())
+            .ok()
+            .filter(|idx| *idx != NO_BEHAVIOUR)
+            .expect("Too many block behaviours for the index table");
         self.behaviours.push(Arc::new(block));
         for i in ids {
             self.block_indices[i.as_u16() as usize] = idx;
@@ -877,6 +961,27 @@ impl BlockRegistry {
             });
         }
         BlockActionResult::Pass
+    }
+
+    pub fn get_screen_handler_factory(
+        &self,
+        block: &Block,
+        player: &Arc<Player>,
+        position: &BlockPos,
+        server: &Server,
+        world: &Arc<World>,
+    ) -> Option<Box<dyn ScreenHandlerFactory>> {
+        let pumpkin_block = self.get_pumpkin_block(block.id);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
+                server,
+                world,
+                block,
+                position,
+                player,
+            });
+        }
+        None
     }
 
     pub fn explode(&self, block: &Block, world: &Arc<World>, position: &BlockPos) {
@@ -1262,7 +1367,7 @@ impl BlockRegistry {
     #[must_use]
     pub fn get_pumpkin_block(&self, block: BlockId) -> Option<&Arc<dyn BlockBehaviour>> {
         let idx = self.block_indices[block.as_u16() as usize];
-        if idx == 0xFF {
+        if idx == NO_BEHAVIOUR {
             None
         } else {
             self.behaviours.get(idx as usize)
@@ -1384,5 +1489,62 @@ impl BlockRegistry {
             || block.rotate(state_id, rotation),
             |pumpkin_block| pumpkin_block.rotate(block, state_id, rotation),
         )
+    }
+
+    #[must_use]
+    pub fn is_pathfindable(
+        &self,
+        block: &Block,
+        state: &BlockState,
+        computation_type: PathComputationType,
+    ) -> bool {
+        self.get_pumpkin_block(block.id).map_or_else(
+            || match computation_type {
+                PathComputationType::Water => {
+                    state.is_waterlogged()
+                        || Fluid::from_state_id(state.id)
+                            .is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER))
+                }
+                PathComputationType::Land | PathComputationType::Air => !state.is_full_cube(),
+            },
+            |pumpkin_block| pumpkin_block.is_pathfindable(state, computation_type),
+        )
+    }
+}
+
+#[cfg(test)]
+mod replacement_tests {
+    use super::can_replace_with_other_block;
+    use pumpkin_data::{Block, BlockState, block_properties::GlowLichenLikeProperties};
+
+    #[test]
+    fn sculk_vein_can_be_replaced_when_dry_or_waterlogged() {
+        let block = &Block::SCULK_VEIN;
+        for waterlogged in [false, true] {
+            let mut properties = GlowLichenLikeProperties::default(block);
+            properties.down = true;
+            properties.waterlogged = waterlogged;
+            let state = BlockState::from_id(properties.to_state_id(block));
+            assert!(!state.replaceable());
+            assert!(can_replace_with_other_block(block, state));
+        }
+    }
+
+    #[test]
+    fn other_blocks_keep_their_replacement_flags() {
+        for (block, expected) in [
+            (&Block::AIR, true),
+            (&Block::WATER, true),
+            (&Block::SHORT_GRASS, true),
+            (&Block::GLOW_LICHEN, true),
+            (&Block::RESIN_CLUMP, true),
+            (&Block::STONE, false),
+            (&Block::OAK_SLAB, false),
+        ] {
+            assert_eq!(
+                can_replace_with_other_block(block, block.default_state),
+                expected
+            );
+        }
     }
 }

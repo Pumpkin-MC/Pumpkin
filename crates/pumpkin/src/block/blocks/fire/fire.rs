@@ -144,6 +144,17 @@ impl FireBlock {
         let block = world.get_block(pos);
         let odds = Self::get_burn_odds(block);
         if rand::rng().random_range(0..chance) < odds {
+            if let Some(server) = world.server.upgrade() {
+                let mut event = crate::plugin::api::events::block::block_burn::BlockBurnEvent {
+                    igniting_block: &Block::FIRE,
+                    block,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+            }
             let old_block = block;
             if rand::rng().random_range(0..(age + 10) as i32) < 5
                 && !Self::is_near_rain(world.as_ref(), pos)
@@ -416,10 +427,24 @@ impl BlockBehaviour for FireBlock {
                                 let mut new_fire_props =
                                     FireProperties::from_state_id(fire_state_id);
                                 new_fire_props.age = spread_age;
+                                let new_state_id = new_fire_props.to_state_id(&Block::FIRE);
+
+                                if let Some(server) = world.server.upgrade() {
+                                    let mut event = crate::plugin::api::events::block::block_spread::BlockSpreadEvent::new(
+                                        *pos,
+                                        offset_pos,
+                                        world.clone(),
+                                        new_state_id,
+                                    );
+                                    server.plugin_manager.fire_blocking(&server, &mut event);
+                                    if event.cancelled {
+                                        continue;
+                                    }
+                                }
 
                                 world.set_block_state(
                                     &offset_pos,
-                                    new_fire_props.to_state_id(&Block::FIRE),
+                                    new_state_id,
                                     BlockFlags::NOTIFY_NEIGHBORS,
                                 );
                             }

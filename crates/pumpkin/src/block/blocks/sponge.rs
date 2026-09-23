@@ -4,7 +4,6 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 
 use crate::block::{BlockBehaviour, OnNeighborUpdateArgs, PlacedArgs};
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockStateId};
@@ -112,8 +111,8 @@ pub struct WetSpongeBlock;
 impl BlockBehaviour for WetSpongeBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
         {
-            // Check if placed in Nether, if so, dry out
-            if args.world.dimension == Dimension::THE_NETHER {
+            // Check if placed where water evaporates (EnvironmentAttributes.WATER_EVAPORATES), if so, dry out
+            if args.world.dimension.water_evaporates {
                 args.world.set_block_state(
                     args.position,
                     Block::SPONGE.default_state.id,

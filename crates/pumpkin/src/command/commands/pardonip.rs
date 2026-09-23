@@ -31,7 +31,7 @@ struct PardonIpExecutor;
 
 impl CommandExecutor for PardonIpExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let target = StringArgumentType::get(context, "ip")?;
+        let target = StringArgumentType::get(context, "target")?;
         let ip = IpAddr::from_str(target)
             .map_err(|_| ERROR_PARDONIP_INVALID.create_without_context())?;
 
@@ -77,7 +77,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 
     let cmd = command("pardon-ip", DESCRIPTION)
         .requires(PERMISSION)
-        .then(argument("ip", StringArgumentType::SingleWord).executes(PardonIpExecutor));
+        .then(argument("target", StringArgumentType::SingleWord).executes(PardonIpExecutor));
 
     dispatcher.register_with_aliases(cmd, &["pardonip"]);
 }

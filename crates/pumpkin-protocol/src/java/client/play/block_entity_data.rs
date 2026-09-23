@@ -1,7 +1,6 @@
 use std::io::{Read, Write};
 
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
-use pumpkin_data::block_entity_type_id_remap::remap_block_entity_type_id_for_version;
 use pumpkin_data::packet::clientbound::play::BLOCK_ENTITY_DATA;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
@@ -162,11 +161,10 @@ impl ClientPacket for CBlockEntityData {
     ) -> Result<(), WritingError> {
         write.write_block_pos(&self.location, version)?;
 
-        let remapped_type = remap_block_entity_type_id_for_version(self.r#type.0 as u32, *version);
         if *version >= JavaMinecraftVersion::V_1_18 {
-            write.write_var_int(&VarInt(remapped_type as i32))?;
+            write.write_var_int(&self.r#type)?;
         } else {
-            write.write_u8(remapped_type as u8)?;
+            write.write_u8(self.r#type.0 as u8)?;
         }
 
         write_nbt_payload(&mut write, &self.nbt_data, version)

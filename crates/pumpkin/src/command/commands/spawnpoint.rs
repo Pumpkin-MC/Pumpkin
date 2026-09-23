@@ -1,11 +1,12 @@
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command};
-use crate::command::argument_types::coordinates::angle::AngleArgumentType;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
+use crate::command::argument_types::coordinates::rotation::RotationArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
@@ -24,7 +25,7 @@ enum SpawnpointMode {
     SelfDefault,
     TargetsDefault,
     TargetsPos,
-    TargetsPosAngle,
+    TargetsPosRotation,
 }
 
 struct SpawnpointExecutor(SpawnpointMode);
@@ -43,37 +44,60 @@ impl CommandExecutor for SpawnpointExecutor {
             _ => EntityArgumentType::get_players(context, "targets")?,
         };
 
+        let (pos, (pitch, yaw)) = match self.0 {
+            SpawnpointMode::SelfDefault | SpawnpointMode::TargetsDefault => {
+                let block_pos = BlockPos::floored_v(context.source.position);
+                (block_pos, (0.0, 0.0))
+            }
+            SpawnpointMode::TargetsPos => {
+                let block_pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
+                (block_pos, (0.0, 0.0))
+            }
+            SpawnpointMode::TargetsPosRotation => {
+                let block_pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
+                let rot = RotationArgumentType::get(context, "rotation")?.rotation(&context.source);
+                (block_pos, (rot.x, rot.y))
+            }
+        };
+
+        let world = context.source.world();
+        let dimension = world.dimension.clone();
+        let dimension_name = dimension.minecraft_name.to_string();
+
         for target in &targets {
-            let (pos, yaw) = match self.0 {
-                SpawnpointMode::SelfDefault | SpawnpointMode::TargetsDefault => {
-                    let block_pos = target.position().to_block_pos();
-                    let yaw = target.living_entity.entity.yaw.load();
-                    (block_pos, yaw)
-                }
-                SpawnpointMode::TargetsPos => {
-                    let block_pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
-                    let yaw = target.living_entity.entity.yaw.load();
-                    (block_pos, yaw)
-                }
-                SpawnpointMode::TargetsPosAngle => {
-                    let block_pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
-                    let yaw = AngleArgumentType::get(context, "angle")?.get_angle(&context.source);
-                    (block_pos, yaw)
-                }
-            };
+            target.set_respawn_point(dimension.clone(), pos, yaw, pitch, true);
+        }
 
-            let dimension = target.world().dimension.clone();
-            target.set_respawn_point(dimension, pos, yaw, 0.0, true);
-
+        if targets.len() == 1 {
             context.source.send_feedback(
                 TextComponent::translate_cross(
                     translation::java::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
                     translation::bedrock::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
                     [
-                        TextComponent::text(target.gameprofile.name.clone()),
                         TextComponent::text(pos.0.x.to_string()),
                         TextComponent::text(pos.0.y.to_string()),
                         TextComponent::text(pos.0.z.to_string()),
+                        TextComponent::text(yaw.to_string()),
+                        TextComponent::text(pitch.to_string()),
+                        TextComponent::text(dimension_name),
+                        TextComponent::text(targets[0].gameprofile.name.clone()),
+                    ],
+                ),
+                true,
+            );
+        } else {
+            context.source.send_feedback(
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_SPAWNPOINT_SUCCESS_MULTIPLE,
+                    translation::java::COMMANDS_SPAWNPOINT_SUCCESS_MULTIPLE,
+                    [
+                        TextComponent::text(pos.0.x.to_string()),
+                        TextComponent::text(pos.0.y.to_string()),
+                        TextComponent::text(pos.0.z.to_string()),
+                        TextComponent::text(yaw.to_string()),
+                        TextComponent::text(pitch.to_string()),
+                        TextComponent::text(dimension_name),
+                        TextComponent::text(targets.len().to_string()),
                     ],
                 ),
                 true,
@@ -102,8 +126,9 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         argument("pos", BlockPosArgumentType)
                             .executes(SpawnpointExecutor(SpawnpointMode::TargetsPos))
                             .then(
-                                argument("angle", AngleArgumentType)
-                                    .executes(SpawnpointExecutor(SpawnpointMode::TargetsPosAngle)),
+                                argument("rotation", RotationArgumentType).executes(
+                                    SpawnpointExecutor(SpawnpointMode::TargetsPosRotation),
+                                ),
                             ),
                     ),
             ),

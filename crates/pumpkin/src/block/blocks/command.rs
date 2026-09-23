@@ -12,10 +12,10 @@ use crate::{
     server::Server,
     world::World,
 };
-use pumpkin_data::{
-    Block, BlockId, BlockStateId, FacingExt,
-    block_properties::{CommandBlockLikeProperties, Facing},
-};
+
+use pumpkin_data::block_properties::{CommandBlockLikeProperties, Facing};
+use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, FacingExt, Rotation};
+
 use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
 use pumpkin_world::tick::TickPriority;
 use tracing::warn;
@@ -44,7 +44,9 @@ impl CommandBlock {
         Some((target_pos, props))
     }
 
-    fn conditions_met(world: &Arc<World>, pos: &BlockPos, facing: Facing) -> bool {
+    /// Equivalent to vanilla `CommandBlockEntity.markConditionMet()`. Conditional
+    /// command blocks inspect the command block behind their own facing direction.
+    fn conditions_met(world: &World, pos: &BlockPos) -> bool {
         let (_block, state_id) = world.get_block_and_state_id(pos);
         let props = CommandBlockLikeProperties::from_state_id(state_id);
 
@@ -52,7 +54,7 @@ impl CommandBlock {
             return true;
         }
 
-        let Some(before) = Self::get_relative_facing(world, pos, facing.opposite()) else {
+        let Some(before) = Self::get_relative_facing(world, pos, props.facing.opposite()) else {
             return false;
         };
         let Some(before_entity) = world.get_block_entity(&before.0) else {
@@ -68,6 +70,22 @@ impl CommandBlock {
         command_entity.success_count.load(Ordering::Relaxed) > 0
     }
 
+    fn mark_condition_met(
+        world: &World,
+        command_block: &CommandBlockEntity,
+        pos: &BlockPos,
+    ) -> bool {
+        let condition_met = Self::conditions_met(world, pos);
+        command_block
+            .condition_met
+            .store(condition_met, Ordering::Release);
+        condition_met
+    }
+
+    /// Mirrors vanilla CommandBlock.setPoweredAndUpdate: only a power edge mutates
+    /// the powered state, and a REDSTONE-mode rising edge records the condition and
+    /// schedules execution one tick later. Chain/automatic blocks do not schedule
+    /// themselves from the edge.
     fn update(
         world: &World,
         block: &Block,
@@ -75,42 +93,21 @@ impl CommandBlock {
         pos: &BlockPos,
         powered: bool,
     ) {
-        let is_auto = command_block.auto.load(Ordering::Relaxed);
-        if command_block.powered.load(Ordering::Relaxed) == powered && !is_auto {
+        let was_powered = command_block.powered.load(Ordering::Relaxed);
+        if was_powered == powered {
             return;
         }
+
         command_block.powered.store(powered, Ordering::Relaxed);
-
-        if block.id == Block::CHAIN_COMMAND_BLOCK.id || is_auto || !powered {
+        if !powered
+            || command_block.auto.load(Ordering::Relaxed)
+            || block.id == Block::CHAIN_COMMAND_BLOCK.id
+        {
             return;
         }
 
-        let state_id = world.get_block_state_id(pos);
-        let props = CommandBlockLikeProperties::from_state_id(state_id);
-
-        if !props.conditional {
-            world.schedule_block_tick(block, *pos, 1, TickPriority::Normal);
-            return;
-        }
-
-        let Some(behind) = Self::get_relative_facing(world, pos, props.facing.opposite()) else {
-            return;
-        };
-        let Some(behind_entity) = world.get_block_entity(&behind.0) else {
-            warn!(
-                "Command Block exists at {} with no matching block entity!",
-                behind.0
-            );
-            return;
-        };
-        let Some(behind_entity) = behind_entity.as_any().downcast_ref::<CommandBlockEntity>()
-        else {
-            return;
-        };
-
-        if behind_entity.success_count.load(Ordering::Relaxed) > 0 {
-            world.schedule_block_tick(block, *pos, 1, TickPriority::Normal);
-        }
+        Self::mark_condition_met(world, command_block, pos);
+        world.schedule_block_tick(block, *pos, 1, TickPriority::Normal);
     }
 
     fn execute(
@@ -141,7 +138,7 @@ impl CommandBlock {
         }
     }
 
-    fn chain_execute(server: &Arc<Server>, world: &Arc<World>, start: BlockPos, direction: Facing) {
+    fn chain_execute(server: &Arc<Server>, world: &Arc<World>, start: BlockPos) {
         let mut i = u16::MAX;
         let mut pos = start;
 
@@ -170,8 +167,8 @@ impl CommandBlock {
             let props = CommandBlockLikeProperties::from_state_id(state_id);
 
             if powered || auto {
-                let conditions_met = Self::conditions_met(world, &pos, direction);
-                if conditions_met {
+                let condition_met = Self::mark_condition_met(world, command_entity, &pos);
+                if condition_met {
                     let command = command_entity
                         .command
                         .lock()
@@ -187,7 +184,8 @@ impl CommandBlock {
                 }
             }
 
-            pos = pos.offset(direction.to_block_direction().to_offset());
+            // Vanilla follows each chain block's own FACING, allowing chains to turn.
+            pos = pos.offset(props.facing.to_block_direction().to_offset());
 
             i -= 1;
             if i == 0 {
@@ -280,29 +278,43 @@ impl BlockBehaviour for CommandBlock {
         let Some(server) = args.world.server.upgrade() else {
             return;
         };
-        let props =
-            CommandBlockLikeProperties::from_state_id(args.world.get_block_state_id(args.position));
 
-        let world = args.world.clone();
-        let entity_clone = block_entity.clone();
-        let position = *args.position;
-        let facing = props.facing;
-        if let Some(command_entity) = entity_clone.as_any().downcast_ref::<CommandBlockEntity>() {
+        let block = args.world.get_block(args.position);
+        let state_id = args.world.get_block_state_id(args.position);
+        let props = CommandBlockLikeProperties::from_state_id(state_id);
+        let was_condition_met = command_entity.condition_met.load(Ordering::Acquire);
+
+        let should_execute = if block == &Block::REPEATING_COMMAND_BLOCK {
+            // Vanilla computes the next condition before using the condition captured
+            // for this tick.
+            Self::mark_condition_met(args.world, command_entity, args.position);
+            was_condition_met
+        } else if block == &Block::COMMAND_BLOCK {
+            was_condition_met
+        } else {
+            // Sequence command blocks execute only as part of a chain.
+            false
+        };
+
+        if should_execute {
             let command = command_entity
                 .command
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .clone();
-            Self::execute(&server, world.clone(), entity_clone, &command);
+            let world = args.world.clone();
+            let position = *args.position;
+            let facing = props.facing;
+            Self::execute(&server, world.clone(), block_entity.clone(), &command);
             Self::chain_execute(
                 &server,
                 &world,
                 position.offset(facing.to_block_direction().to_offset()),
-                facing,
             );
+        } else if props.conditional {
+            command_entity.success_count.store(0, Ordering::Release);
         }
 
-        let block = args.world.get_block(args.position);
         let is_auto = command_entity.auto.load(Ordering::Relaxed);
         let can_run = command_entity.powered.load(Ordering::Relaxed) || is_auto;
         if block == &Block::REPEATING_COMMAND_BLOCK && can_run {
@@ -353,5 +365,18 @@ impl BlockBehaviour for CommandBlock {
                 },
             )
         }
+    }
+
+    fn rotate(
+        &self,
+        block: &Block,
+        state_id: BlockStateId,
+        rotation: Rotation,
+    ) -> &'static BlockState {
+        let mut props = CommandBlockLikeProperties::from_state_id(state_id);
+        props.facing = rotation
+            .rotate(props.facing.to_block_direction())
+            .to_facing();
+        BlockState::from_id(props.to_state_id(block))
     }
 }

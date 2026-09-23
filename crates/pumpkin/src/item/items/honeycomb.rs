@@ -29,16 +29,21 @@ impl ItemMetadata for HoneyCombItem {
 impl ItemBehaviour for HoneyCombItem {
     fn use_on_block(
         &self,
-        _item: &mut ItemStack,
+        item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         _face: BlockDirection,
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
-        try_wax_block(&world, location, block);
+        if try_wax_block(&world, location, block) {
+            item.decrement_unless_creative(player.gamemode.load(), 1);
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Pass
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -71,7 +76,7 @@ pub(crate) fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Bloc
     };
 
     world.set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL);
-    world.sync_world_event(WorldEvent::ParticlesAndSoundWaxOn, location, 0);
+    world.sync_world_event(WorldEvent::ParticlesWaxOn, location, 0);
     true
 }
 
@@ -89,7 +94,7 @@ impl HoneyCombItem {
 
         args.world.update_block_entity(block_entity);
         args.world
-            .sync_world_event(WorldEvent::ParticlesAndSoundWaxOn, *args.position, 0);
+            .sync_world_event(WorldEvent::ParticlesWaxOn, *args.position, 0);
 
         BlockActionResult::Success
     }

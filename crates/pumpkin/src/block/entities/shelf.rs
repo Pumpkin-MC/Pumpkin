@@ -1,8 +1,8 @@
 use crate::block::entities::BlockEntity;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 use std::any::Any;
 use std::array::from_fn;
 use std::sync::Arc;
@@ -12,25 +12,33 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub struct ShelfBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
+    pub align_items_to_bottom: AtomicBool,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
 }
 
 impl BlockEntity for ShelfBlockEntity {
     fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.write_inventory_nbt(nbt, true);
+        if self.align_items_to_bottom.load(Ordering::Relaxed) {
+            nbt.put_bool("align_items_to_bottom", true);
+        }
     }
 
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
     {
+        let align_items_to_bottom = nbt.get_bool("align_items_to_bottom").unwrap_or(false);
         let mut shelf = Self {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
+            align_items_to_bottom: AtomicBool::new(align_items_to_bottom),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         };
 
-        pumpkin_world::inventory::sync_read_items_from_nbt(
+        pumpkin_inventory::sync_read_items_from_nbt(
             nbt,
             shelf
                 .items
@@ -53,6 +61,14 @@ impl BlockEntity for ShelfBlockEntity {
         Some(self)
     }
 
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
+    }
+
     fn is_dirty(&self) -> bool {
         self.dirty.load(Ordering::Relaxed)
     }
@@ -65,6 +81,9 @@ impl BlockEntity for ShelfBlockEntity {
         let mut nbt = NbtCompound::new();
         if let Ok(items) = self.items.try_read() {
             sync_write_items_to_nbt(items.as_slice(), &mut nbt);
+        }
+        if self.align_items_to_bottom.load(Ordering::Relaxed) {
+            nbt.put_bool("align_items_to_bottom", true);
         }
         Some(nbt)
     }
@@ -83,7 +102,9 @@ impl ShelfBlockEntity {
         Self {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
+            align_items_to_bottom: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 }
@@ -144,6 +165,7 @@ impl Inventory for ShelfBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -10,7 +10,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -18,6 +17,7 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     player::Player,
 };
@@ -148,12 +148,9 @@ impl CopperGolemEntity {
     pub fn set_weather_state(&self, state: WeatherState) {
         self.weather_state.store(state.id(), Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::copper_golem::WEATHER_STATE,
-                VarInt(state.id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::copper_golem::WEATHER_STATE,
+            VarInt(state.id()),
         );
     }
 
@@ -165,31 +162,10 @@ impl CopperGolemEntity {
     pub fn set_state(&self, state: CopperGolemState) {
         self.state.store(state.id(), Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::copper_golem::COPPER_GOLEM_STATE,
-                VarInt(state.id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::copper_golem::COPPER_GOLEM_STATE,
+            VarInt(state.id()),
         );
-    }
-
-    #[must_use]
-    pub fn hurt_sound(&self) -> Sound {
-        match self.get_weather_state() {
-            WeatherState::Unaffected | WeatherState::Exposed => Sound::EntityCopperGolemHurt,
-            WeatherState::Weathered => Sound::EntityCopperGolemWeatheredHurt,
-            WeatherState::Oxidized => Sound::EntityCopperGolemOxidizedHurt,
-        }
-    }
-
-    #[must_use]
-    pub fn death_sound(&self) -> Sound {
-        match self.get_weather_state() {
-            WeatherState::Unaffected | WeatherState::Exposed => Sound::EntityCopperGolemDeath,
-            WeatherState::Weathered => Sound::EntityCopperGolemWeatheredDeath,
-            WeatherState::Oxidized => Sound::EntityCopperGolemOxidizedDeath,
-        }
     }
 
     #[must_use]
@@ -202,7 +178,29 @@ impl CopperGolemEntity {
     }
 }
 
+impl CustomSound for CopperGolemEntity {
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(match self.get_weather_state() {
+            WeatherState::Unaffected | WeatherState::Exposed => Sound::EntityCopperGolemHurt,
+            WeatherState::Weathered => Sound::EntityCopperGolemWeatheredHurt,
+            WeatherState::Oxidized => Sound::EntityCopperGolemOxidizedHurt,
+        })
+    }
+
+    fn death_sound(&self) -> Option<Sound> {
+        Some(match self.get_weather_state() {
+            WeatherState::Unaffected | WeatherState::Exposed => Sound::EntityCopperGolemDeath,
+            WeatherState::Weathered => Sound::EntityCopperGolemWeatheredDeath,
+            WeatherState::Oxidized => Sound::EntityCopperGolemOxidizedDeath,
+        })
+    }
+}
+
 impl Mob for CopperGolemEntity {
+    fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
+        Some(self)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_long(
             "next_weather_age",
@@ -237,18 +235,13 @@ impl Mob for CopperGolemEntity {
 
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[
-                Metadata::new(
-                    pumpkin_data::tracked_data::copper_golem::WEATHER_STATE,
-                    VarInt(self.get_weather_state().id()),
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::copper_golem::COPPER_GOLEM_STATE,
-                    VarInt(self.get_state().id()),
-                ),
-            ],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::copper_golem::WEATHER_STATE,
+            VarInt(self.get_weather_state().id()),
+        );
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::copper_golem::COPPER_GOLEM_STATE,
+            VarInt(self.get_state().id()),
         );
     }
 

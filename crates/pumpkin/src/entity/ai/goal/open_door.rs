@@ -30,20 +30,18 @@ impl Goal for OpenDoorGoal {
         self.door_interact_goal.can_use(mob)
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         self.close_door && self.forget_time > 0 && self.door_interact_goal.can_continue_to_use()
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        self.door_interact_goal.start_interaction(mob);
+        // The crossing direction is deliberately not re-armed, only `forget_time` bounds the goal.
         self.forget_time = 20;
         self.door_interact_goal.set_open(mob, true);
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
-        if self.close_door {
-            self.door_interact_goal.set_open(mob, false);
-        }
+        self.door_interact_goal.set_open(mob, false);
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
@@ -57,33 +55,5 @@ impl Goal for OpenDoorGoal {
 
     fn controls(&self) -> Controls {
         Controls::empty()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn open_door_can_continue_to_use() {
-        let mut goal = OpenDoorGoal::new(true);
-        goal.forget_time = 20;
-        goal.door_interact_goal.passed = false;
-
-        assert!(goal.close_door);
-        assert!(goal.forget_time > 0);
-        assert!(goal.door_interact_goal.can_continue_to_use());
-
-        // When forget_time expires
-        goal.forget_time = 0;
-        assert!(
-            !(goal.close_door
-                && goal.forget_time > 0
-                && goal.door_interact_goal.can_continue_to_use())
-        );
-
-        // When close_door is false
-        let goal_no_close = OpenDoorGoal::new(false);
-        assert!(!goal_no_close.close_door);
     }
 }

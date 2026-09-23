@@ -1,21 +1,26 @@
 use super::{Entity, EntityBase, ai::pathfinder::Navigator, living::LivingEntity};
+use crate::entity::ai::brain::Brain;
+use crate::entity::ai::brain::memory::PackedMemories;
 use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
+use crate::entity::ai::sensing::Sensing;
 use crate::entity::player::Player;
+use crate::entity::predicate::EntityPredicate;
 use crate::server::Server;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
@@ -64,6 +69,7 @@ pub mod spider;
 pub mod vex;
 pub mod vindicator;
 pub mod warden;
+pub mod warden_spawn_tracker;
 pub mod witch;
 pub mod zoglin;
 pub mod zombie;
@@ -76,7 +82,9 @@ pub struct MobEntity {
     pub navigator: std::sync::Mutex<Navigator>,
     pub target: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     pub look_control: std::sync::Mutex<LookControl>,
+    pub sensing: std::sync::Mutex<Sensing>,
     pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
+    pub brain: std::sync::Mutex<Brain>,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
     pub love_ticks: AtomicI32,
@@ -84,21 +92,7 @@ pub struct MobEntity {
     pub breeder: AtomicCell<Option<Uuid>>,
     pub persistence_required: AtomicBool,
     mob_flags: AtomicU8,
-    last_sent_yaw: AtomicU8,
-    last_sent_pitch: AtomicU8,
-    last_sent_head_yaw: AtomicU8,
 }
-
-/// Tick boundaries (both inclusive) when monsters do not burn in sunlight (26.1).
-///
-/// Sourced from `data/minecraft/timeline/day.json` — `monsters_burn` keyframes:
-/// `value=false` at tick 12542 (dusk), `value=true` at tick 23460 (dawn).
-///
-/// TODO: Replace with `EnvironmentAttributes::MONSTERS_BURN` lookup once the
-/// `EnvironmentAttributeSystem` is implemented in `pumpkin-data`.
-pub(crate) const NIGHT_START: i64 = 12542;
-pub(crate) const NIGHT_END: i64 = 23459;
-
 impl MobEntity {
     const AI_DISABLED_FLAG: u8 = 1;
     const LEFT_HANDED_FLAG: u8 = 2;
@@ -111,6 +105,7 @@ impl MobEntity {
     pub const MAX_PICKUP_LOOT_CHANCE: f32 = 0.55;
     pub const MAX_ENCHANTED_ARMOR_CHANCE: f32 = 0.5;
     pub const MAX_ENCHANTED_WEAPON_CHANCE: f32 = 0.25;
+    pub const GUARANTEED_DROP_CHANCE: f32 = 2.0;
     pub const EQUIPMENT_POPULATION_ORDER: [EquipmentSlot; 4] = [
         EquipmentSlot::HEAD,
         EquipmentSlot::CHEST,
@@ -173,7 +168,9 @@ impl MobEntity {
             navigator: std::sync::Mutex::new(Navigator::default()),
             target: std::sync::Mutex::new(None),
             look_control: std::sync::Mutex::new(LookControl::default()),
+            sensing: std::sync::Mutex::new(Sensing::default()),
             move_control: std::sync::Mutex::new(Box::new(MoveControl::default())),
+            brain: std::sync::Mutex::new(Brain::default()),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
             love_ticks: AtomicI32::new(0),
@@ -181,9 +178,6 @@ impl MobEntity {
             breeder: AtomicCell::new(None),
             persistence_required: AtomicBool::new(false),
             mob_flags: AtomicU8::new(0),
-            last_sent_yaw: AtomicU8::new(0),
-            last_sent_pitch: AtomicU8::new(0),
-            last_sent_head_yaw: AtomicU8::new(0),
         }
     }
 
@@ -257,7 +251,110 @@ impl MobEntity {
         }
     }
 
+    pub fn spawn_at_location(&self, stack: ItemStack) {
+        if stack.is_empty() {
+            return;
+        }
+        let entity = &self.living_entity.entity;
+        let world = entity.world.load();
+        let item_entity = crate::entity::item::ItemEntity::new(
+            Entity::new(world.clone(), entity.pos.load(), &EntityType::ITEM),
+            stack,
+        );
+        world.spawn_entity(Arc::new(item_entity));
+    }
+
+    #[must_use]
+    pub fn drop_chance(&self, slot: &EquipmentSlot) -> f32 {
+        self.living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(slot)
+            .copied()
+            .unwrap_or(crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE)
+    }
+
+    pub fn set_guaranteed_drop(&self, slot: &EquipmentSlot) {
+        self.living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(slot.clone(), Self::GUARANTEED_DROP_CHANCE);
+    }
+
+    /// Equips `stack` and tells tracking clients, returning what was in the slot.
+    pub fn set_item_slot(&self, slot: &EquipmentSlot, stack: ItemStack) -> ItemStack {
+        let previous = self
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .put(slot, stack.clone());
+        self.living_entity
+            .send_equipment_changes(&[(slot.clone(), stack)]);
+        previous
+    }
+
+    pub fn set_item_slot_and_drop_when_killed(&self, slot: &EquipmentSlot, stack: ItemStack) {
+        self.set_item_slot(slot, stack);
+        self.set_guaranteed_drop(slot);
+    }
+
+    fn write_drop_chances(&self, nbt: &mut NbtCompound) {
+        let chances = self
+            .living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut compound = NbtCompound::new();
+        for (slot, chance) in chances.iter() {
+            if *chance != crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE {
+                compound.put_float(slot.to_name(), *chance);
+            }
+        }
+        if !compound.child_tags.is_empty() {
+            nbt.put("drop_chances", pumpkin_nbt::tag::NbtTag::Compound(compound));
+        }
+    }
+
+    fn read_drop_chances(&self, nbt: &NbtCompound) {
+        let Some(compound) = nbt.get_compound("drop_chances") else {
+            return;
+        };
+        let mut chances = self
+            .living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for (name, tag) in &compound.child_tags {
+            if let Some(slot) = EquipmentSlot::get_from_name(name)
+                && let Some(chance) = tag.extract_float()
+            {
+                chances.insert(slot.clone(), chance);
+            }
+        }
+    }
+
+    pub fn tick_brain(&self, mob: &dyn Mob) {
+        let world = self.living_entity.entity.world.load_full();
+        let time = world.get_world_age();
+        self.brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick(&world, mob, time);
+    }
+
     pub fn write_mob_nbt(&self, nbt: &mut NbtCompound) {
+        self.write_drop_chances(nbt);
+        nbt.put_compound(
+            "Brain",
+            self.brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .pack()
+                .into_nbt(),
+        );
         if self.is_no_ai() {
             nbt.put_bool("NoAI", true);
         }
@@ -273,6 +370,7 @@ impl MobEntity {
     }
 
     pub fn read_mob_nbt(&self, nbt: &NbtCompound) {
+        self.read_drop_chances(nbt);
         if let Some(no_ai) = nbt.get_bool("NoAI") {
             self.set_no_ai(no_ai);
         }
@@ -329,10 +427,9 @@ impl MobEntity {
         if new_b != old_b {
             self.mob_flags.store(new_b, Ordering::Relaxed);
 
-            self.living_entity.entity.send_meta_data(
-                &[Metadata::new(tracked_data::mob::DATA_MOB_FLAGS_ID, new_b)],
-                None,
-            );
+            self.living_entity
+                .entity
+                .set_synced_data(tracked_data::mob::DATA_MOB_FLAGS_ID, new_b);
         }
     }
 
@@ -395,6 +492,12 @@ impl MobEntity {
         current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
     }
 
+    pub fn check_mob_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        let below = pos.down();
+        let state = world.get_block_state(&below);
+        state.is_side_solid(BlockDirection::Up)
+    }
+
     pub fn check_monster_spawn_rules(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
         if world.level_info.load().difficulty == Difficulty::Peaceful {
             return false;
@@ -404,8 +507,53 @@ impl MobEntity {
             return false;
         }
 
-        //TODO:check_mob_spawn_rules(entity_type, world, spawn_reason, pos).await
-        true
+        Self::check_mob_spawn_rules(world, pos)
+    }
+
+    pub fn check_any_light_monster_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        if world.level_info.load().difficulty == Difficulty::Peaceful {
+            return false;
+        }
+
+        Self::check_mob_spawn_rules(world, pos)
+    }
+
+    pub fn check_surface_monsters_spawn_rules(
+        world: &World,
+        pos: &BlockPos,
+        is_thundering: bool,
+    ) -> bool {
+        Self::check_monster_spawn_rules(world, pos, is_thundering) && world.can_see_sky(pos)
+    }
+
+    pub fn check_animal_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        let below = pos.down();
+        world
+            .get_block(&below)
+            .has_tag(&tag::Block::MINECRAFT_ANIMALS_SPAWNABLE_ON)
+            && Self::is_bright_enough_to_spawn(world, pos)
+    }
+
+    pub fn is_bright_enough_to_spawn(world: &World, pos: &BlockPos) -> bool {
+        world.get_max_local_raw_brightness(pos) > 8
+    }
+
+    pub fn check_surface_water_animal_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        let sea_level = world.sea_level;
+        let min_spawn_level = sea_level - 13;
+        pos.0.y >= min_spawn_level
+            && pos.0.y <= sea_level
+            && world
+                .get_fluid(&pos.down())
+                .has_tag(&tag::Fluid::MINECRAFT_WATER)
+            && (world.get_block(&pos.up()) == &Block::WATER
+                || world
+                    .get_fluid(&pos.up())
+                    .has_tag(&tag::Fluid::MINECRAFT_WATER))
+    }
+
+    pub fn check_surface_ageable_water_creature_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        Self::check_surface_water_animal_spawn_rules(world, pos)
     }
 
     pub fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
@@ -484,22 +632,16 @@ impl MobEntity {
         let world_arc = entity.world.load();
         let world = world_arc.as_ref();
 
-        // Night boundary from data/minecraft/timeline/day.json — monsters_burn keyframes:
-        // value=false at tick 12542 (dusk), value=true at tick 23460 (dawn).
-        // TODO: read directly from EnvironmentAttributes::MONSTERS_BURN once implemented.
-
-        let day_time = world.get_time_of_day() % 24000;
-        if (NIGHT_START..=NIGHT_END).contains(&day_time) {
+        let eye_block_pos = entity.get_eye_pos().to_block_pos();
+        if !world.monsters_burn(&eye_block_pos) {
             return false;
         }
 
         // Vanilla: getLightLevelDependentMagicValue() — sky light at eye pos, scaled 0–1.
-        let eye_block_pos = entity.get_eye_pos();
         let brightness = world
             .level
             .light_engine
-            .get_sky_light_level(&world.level, &eye_block_pos.to_block_pos())
-            as f32
+            .get_sky_light_level(&world.level, &eye_block_pos) as f32
             / 15.0;
 
         if brightness <= 0.5 {
@@ -596,6 +738,11 @@ impl MobEntity {
             })
             .fold(f64::MAX, f64::min);
 
+        // Mobs like a converting zombie villager refuse to despawn (`removeWhenFarAway`).
+        if !mob.remove_when_far_away(nearest_dist_sq) {
+            return;
+        }
+
         if nearest_dist_sq == f64::MAX {
             mob.get_entity().remove();
             return;
@@ -615,6 +762,44 @@ impl MobEntity {
 pub trait Mob: EntityBase + Send + Sync {
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
+    }
+
+    fn can_attack(&self, target: &crate::entity::living::LivingEntity) -> bool {
+        if target.entity.entity_type == &EntityType::GHAST {
+            return false;
+        }
+        if let Some(tamable) = self.as_tamable()
+            && tamable.is_owned_by(&target.entity.entity_uuid)
+        {
+            return false;
+        }
+        self.get_mob_entity().living_entity.can_attack(target)
+    }
+
+    /// Takes the navigation lock, so callers must not already hold it.
+    fn is_navigator_idle(&self) -> bool {
+        self.get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_idle()
+    }
+
+    fn has_line_of_sight(&self, target: &crate::entity::Entity) -> bool {
+        let mob_entity = self.get_mob_entity();
+        mob_entity
+            .sensing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .has_line_of_sight(&mob_entity.living_entity.entity, target)
+    }
+
+    fn requires_custom_persistence(&self) -> bool {
+        false
+    }
+
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        true
     }
 
     fn get_max_look_yaw_change(&self) -> f32 {
@@ -661,6 +846,8 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn clear_trading_player(&self) {}
+
     fn get_home(&self) -> Option<BlockPos> {
         None
     }
@@ -683,10 +870,35 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn set_saddled(&self, _saddled: bool) {}
 
+    fn check_spawn_obstruction(&self, world: &World) -> bool {
+        let bounding_box = self.get_entity().bounding_box.load();
+        !world.contains_any_liquid(bounding_box)
+            && world.get_entities_at_box(&bounding_box).is_empty()
+    }
+
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick(&self, _caller: &dyn EntityBase) {}
 
     fn post_tick(&self) {}
+
+    fn get_preferred_weapon_type(&self) -> Option<&'static pumpkin_data::tag::Tag> {
+        None
+    }
+
+    fn can_replace_current_item(
+        &self,
+        new_item: &ItemStack,
+        current_item: &ItemStack,
+        slot: &EquipmentSlot,
+    ) -> bool {
+        equipment::can_replace_current_item(
+            self.get_mob_entity(),
+            self.get_preferred_weapon_type(),
+            new_item,
+            current_item,
+            slot,
+        )
+    }
 
     /// Called before damage is applied. Return `false` to cancel the damage entirely.
     /// Used by endermen to dodge projectiles via teleportation.
@@ -695,6 +907,8 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {}
+
+    fn on_attack(&self, _target: &dyn EntityBase) {}
 
     fn on_eating_grass(&self) {}
 
@@ -718,8 +932,18 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
+        None
+    }
+
     fn as_animal(&self) -> Option<&dyn crate::entity::passive::animal::Animal> {
         None
+    }
+
+    /// How much this mob likes standing on `pos`, used to rank stroll candidates.
+    fn get_walk_target_value(&self, pos: &BlockPos) -> f32 {
+        self.as_animal()
+            .map_or(0.0, |animal| animal.animal_walk_target_value(pos))
     }
 
     fn as_tamable(&self) -> Option<&dyn crate::entity::passive::tamable::TamableAnimal> {
@@ -837,13 +1061,32 @@ pub trait Mob: EntityBase + Send + Sync {
         }
     }
 
+    /// Runs after navigation and before the movement controls, where vanilla ticks a mob's brain.
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {}
+
+    /// Builds this mob's brain from its saved memories; goal mobs keep the brain-dead default.
+    fn make_brain(&self, _packed: &PackedMemories) -> Brain {
+        Brain::default()
+    }
+
     fn mob_write_nbt(&self, _nbt: &mut NbtCompound) {}
 
     fn mob_read_nbt(&self, _nbt: &NbtCompound) {}
 
+    /// Drops a target the mob is not allowed to attack, such as a creative player.
+    fn as_valid_target(&self, target: Option<Arc<dyn EntityBase>>) -> Option<Arc<dyn EntityBase>> {
+        let target = target?;
+        if !EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity()) {
+            return None;
+        }
+        let living = target.get_living_entity()?;
+        self.can_attack(living).then_some(target)
+    }
+
     /// Set or clear the mob's target. Override to add side effects when targeting changes.
     fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let mob = self.get_mob_entity();
+        let target = self.as_valid_target(target);
         let target_id = target.as_ref().map(|t| t.get_entity().entity_id);
         *mob.target
             .lock()
@@ -998,10 +1241,7 @@ pub trait Mob: EntityBase + Send + Sync {
         let entity = self.get_entity();
         let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
-                None,
-            );
+            entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, true);
         }
     }
 
@@ -1020,6 +1260,10 @@ pub trait Mob: EntityBase + Send + Sync {
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)
+    }
+
+    fn is_pushable(&self) -> bool {
+        self.get_mob_entity().living_entity.is_pushable()
     }
 
     fn on_lightning_strike(
@@ -1090,6 +1334,12 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         let age = mob_entity.living_entity.entity.age.load(Relaxed);
         let entity_id = mob_entity.living_entity.entity.entity_id;
 
+        mob_entity
+            .sensing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick();
+
         // 1. "Take" selectors out of the mutexes
         let mut target_selector = {
             let mut guard = mob_entity
@@ -1145,6 +1395,8 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = navigator;
         };
 
+        self.custom_server_ai_step(caller);
+
         // Controllers are synchronous, so we can just use normal blocks
         {
             let mut look_control = mob_entity
@@ -1164,39 +1416,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
         mob_entity.living_entity.tick(caller, server);
         self.post_tick();
-
-        // --- Packet logic remains the same ---
-        let entity = &mob_entity.living_entity.entity;
-        let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
-        let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
-        let head_yaw = (entity.head_yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
-
-        let last_yaw = mob_entity.last_sent_yaw.load(Relaxed);
-        let last_pitch = mob_entity.last_sent_pitch.load(Relaxed);
-        let last_head_yaw = mob_entity.last_sent_head_yaw.load(Relaxed);
-
-        let chunk_pos = entity.chunk_pos.load();
-        if yaw.abs_diff(last_yaw) >= 1 || pitch.abs_diff(last_pitch) >= 1 {
-            let world = entity.world.load();
-            world.broadcast_to_chunk(
-                chunk_pos,
-                &CUpdateEntityRot::new(
-                    entity.entity_id.into(),
-                    yaw,
-                    pitch,
-                    entity.on_ground.load(Relaxed),
-                ),
-            );
-            mob_entity.last_sent_yaw.store(yaw, Relaxed);
-            mob_entity.last_sent_pitch.store(pitch, Relaxed);
-        }
-
-        if head_yaw.abs_diff(last_head_yaw) >= 1 {
-            let world = entity.world.load();
-
-            world.broadcast_to_chunk(chunk_pos, &CHeadRot::new(entity.entity_id.into(), head_yaw));
-            mob_entity.last_sent_head_yaw.store(head_yaw, Relaxed);
-        }
     }
 
     fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
@@ -1303,6 +1522,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         self.get_mob_entity().read_mob_nbt(nbt);
+        if let Some(brain) = nbt.get_compound("Brain") {
+            *self
+                .get_mob_entity()
+                .brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                self.make_brain(&PackedMemories::from_nbt(brain));
+        }
         if let Some(ageable) = self.as_ageable() {
             ageable.read_ageable_nbt(nbt);
         }

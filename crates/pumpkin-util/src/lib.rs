@@ -6,7 +6,6 @@
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
-pub use p384;
 pub use serde_json;
 
 pub use difficulty::Difficulty;
@@ -32,13 +31,9 @@ pub mod version;
 pub mod world_seed;
 pub mod y_offset;
 
-pub mod client;
 pub mod identifier;
-pub mod jwt;
 pub mod resource;
 pub mod uuid;
-
-pub use client::{client, client_builder};
 
 /// Represents the different types of height maps used for terrain generation and collision checks.
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -241,8 +236,6 @@ pub struct DoublePerlinNoiseParametersCodec {
     pub first_octave: i32,
     /// Amplitude values for each octave, determining the weight of each frequency layer.
     pub amplitudes: Vec<f64>,
-    #[serde(skip)]
-    pub amplitude: f64,
 }
 
 impl<T> IndexMut<usize> for MutableSplitSlice<'_, T> {

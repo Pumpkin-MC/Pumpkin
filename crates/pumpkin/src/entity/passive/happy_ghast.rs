@@ -9,7 +9,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -62,7 +61,15 @@ impl HappyGhastEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(TemptGoal::new(1.0, HAPPY_GHAST_FOOD)));
+            goal_selector.add_goal(
+                1,
+                Box::new(TemptGoal::with_stop_distance(
+                    1.0,
+                    HAPPY_GHAST_FOOD,
+                    false,
+                    7.0,
+                )),
+            );
             goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 3,
@@ -89,12 +96,9 @@ impl HappyGhastEntity {
         self.is_leash_holder
             .store(is_leash_holder, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::happy_ghast::IS_LEASH_HOLDER,
-                is_leash_holder,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::happy_ghast::IS_LEASH_HOLDER,
+            is_leash_holder,
         );
     }
 
@@ -102,12 +106,9 @@ impl HappyGhastEntity {
         let stays_still = self.server_still_timeout.load(Ordering::Relaxed) > 0;
         self.stays_still.store(stays_still, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::happy_ghast::STAYS_STILL,
-                stays_still,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::happy_ghast::STAYS_STILL,
+            stays_still,
         );
     }
 }
@@ -192,26 +193,15 @@ impl Mob for HappyGhastEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::happy_ghast::BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::happy_ghast::BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[
-                Metadata::new(
-                    pumpkin_data::tracked_data::happy_ghast::IS_LEASH_HOLDER,
-                    self.is_leash_holder.load(Ordering::Relaxed),
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::happy_ghast::STAYS_STILL,
-                    self.stays_still.load(Ordering::Relaxed),
-                ),
-            ],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::happy_ghast::IS_LEASH_HOLDER,
+            self.is_leash_holder.load(Ordering::Relaxed),
+        );
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::happy_ghast::STAYS_STILL,
+            self.stays_still.load(Ordering::Relaxed),
         );
     }
 

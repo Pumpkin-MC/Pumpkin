@@ -5,8 +5,8 @@ use std::sync::Mutex;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, GetComparatorOutputArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
-    OnScheduledTickArgs, PlacedArgs,
+    BlockBehaviour, GetComparatorOutputArgs, GetScreenHandlerFactoryArgs, NormalUseArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
 use crate::entity::item::ItemEntity;
 use crate::entity::{Entity, EntityBase};
@@ -18,6 +18,7 @@ use pumpkin_data::block_properties::Facing;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{FacingExt, translation};
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_3x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -26,7 +27,6 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::Inventory;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
@@ -37,9 +37,9 @@ impl ScreenHandlerFactory for DropperScreenFactory {
         &self,
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
-        _player: &dyn InventoryPlayer,
+        player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
-        let handler = create_generic_3x3(sync_id, player_inventory, self.0.clone());
+        let handler = create_generic_3x3(sync_id, player_inventory, self.0.clone(), player);
         let screen_handler_arc = Arc::new(Mutex::new(handler));
 
         Some(screen_handler_arc as SharedScreenHandler)
@@ -86,13 +86,31 @@ const fn to_data3d(facing: Facing) -> i32 {
 
 impl BlockBehaviour for DropperBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(inventory) = block_entity.get_inventory()
-        {
+        if let Some(factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
+            server: args.server,
+            world: args.world,
+            block: args.block,
+            position: args.position,
+            player: args.player,
+        }) {
+            args.player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::InspectDropper as i32,
+                1,
+            );
             args.player
-                .open_handled_screen(&DropperScreenFactory(inventory), Some(*args.position));
+                .open_handled_screen(factory.as_ref(), Some(*args.position));
         }
         BlockActionResult::Success
+    }
+
+    fn get_screen_handler_factory(
+        &self,
+        args: GetScreenHandlerFactoryArgs<'_>,
+    ) -> Option<Box<dyn ScreenHandlerFactory>> {
+        let block_entity = args.world.get_block_entity(args.position)?;
+        let inventory = block_entity.get_inventory()?;
+        Some(Box::new(DropperScreenFactory(inventory)))
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
@@ -202,14 +220,6 @@ impl BlockBehaviour for DropperBlock {
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(inventory) = block_entity.get_inventory()
-        {
-            Some(crate::block::calculate_comparator_output(
-                inventory.as_ref(),
-            ))
-        } else {
-            None
-        }
+        crate::block::container_comparator_output(&args)
     }
 }

@@ -1,7 +1,6 @@
-use crate::block::{BlockBehaviour, OnPlaceArgs};
-use pumpkin_data::Block;
-use pumpkin_data::BlockStateId;
+use crate::block::{BlockBehaviour, OnPlaceArgs, PathComputationType};
 use pumpkin_data::block_properties::EndRodLikeProperties;
+use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 
 #[pumpkin_block("minecraft:end_rod")]
@@ -25,5 +24,9 @@ impl BlockBehaviour for EndRodBlock {
         }
 
         props.to_state_id(args.block)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

@@ -18,6 +18,8 @@ pub struct StructureBlockBlockEntity {
     pub mirror: Mutex<String>,
     pub mode: Mutex<String>,
     pub ignore_entities: Mutex<bool>,
+    pub strict: Mutex<bool>,
+    pub powered: Mutex<bool>,
     pub show_air: Mutex<bool>,
     pub show_bounding_box: Mutex<bool>,
     pub integrity: Mutex<f32>,
@@ -52,8 +54,18 @@ impl BlockEntity for StructureBlockBlockEntity {
             mirror: Mutex::new(nbt.get_string("mirror").unwrap_or("NONE").to_string()),
             mode: Mutex::new(nbt.get_string("mode").unwrap_or("DATA").to_string()),
             ignore_entities: Mutex::new(nbt.get_bool("ignoreEntities").unwrap_or(true)),
-            show_air: Mutex::new(nbt.get_bool("showAir").unwrap_or(false)),
-            show_bounding_box: Mutex::new(nbt.get_bool("showBoundingBox").unwrap_or(true)),
+            strict: Mutex::new(nbt.get_bool("strict").unwrap_or(false)),
+            powered: Mutex::new(nbt.get_bool("powered").unwrap_or(false)),
+            show_air: Mutex::new(
+                nbt.get_bool("showair")
+                    .or_else(|| nbt.get_bool("showAir"))
+                    .unwrap_or(false),
+            ),
+            show_bounding_box: Mutex::new(
+                nbt.get_bool("showboundingbox")
+                    .or_else(|| nbt.get_bool("showBoundingBox"))
+                    .unwrap_or(true),
+            ),
             integrity: Mutex::new(nbt.get_float("integrity").unwrap_or(1.0)),
             seed: Mutex::new(nbt.get_long("seed").unwrap_or(0)),
         }
@@ -99,11 +111,17 @@ impl BlockEntity for StructureBlockBlockEntity {
         if let Ok(ignore_entities) = self.ignore_entities.lock() {
             nbt.put_bool("ignoreEntities", *ignore_entities);
         }
+        if let Ok(strict) = self.strict.lock() {
+            nbt.put_bool("strict", *strict);
+        }
+        if let Ok(powered) = self.powered.lock() {
+            nbt.put_bool("powered", *powered);
+        }
         if let Ok(show_air) = self.show_air.lock() {
-            nbt.put_bool("showAir", *show_air);
+            nbt.put_bool("showair", *show_air);
         }
         if let Ok(show_bounding_box) = self.show_bounding_box.lock() {
-            nbt.put_bool("showBoundingBox", *show_bounding_box);
+            nbt.put_bool("showboundingbox", *show_bounding_box);
         }
         if let Ok(integrity) = self.integrity.lock() {
             nbt.put_float("integrity", *integrity);
@@ -128,8 +146,10 @@ impl BlockEntity for StructureBlockBlockEntity {
         nbt.put_string("mirror", self.mirror.try_lock().ok()?.clone());
         nbt.put_string("mode", self.mode.try_lock().ok()?.clone());
         nbt.put_bool("ignoreEntities", *self.ignore_entities.try_lock().ok()?);
-        nbt.put_bool("showAir", *self.show_air.try_lock().ok()?);
-        nbt.put_bool("showBoundingBox", *self.show_bounding_box.try_lock().ok()?);
+        nbt.put_bool("strict", *self.strict.try_lock().ok()?);
+        nbt.put_bool("powered", *self.powered.try_lock().ok()?);
+        nbt.put_bool("showair", *self.show_air.try_lock().ok()?);
+        nbt.put_bool("showboundingbox", *self.show_bounding_box.try_lock().ok()?);
         nbt.put_float("integrity", *self.integrity.try_lock().ok()?);
         nbt.put_long("seed", *self.seed.try_lock().ok()?);
         Some(nbt)
@@ -159,6 +179,8 @@ impl StructureBlockBlockEntity {
             mirror: Mutex::new("NONE".to_string()),
             mode: Mutex::new("DATA".to_string()),
             ignore_entities: Mutex::new(true),
+            strict: Mutex::new(false),
+            powered: Mutex::new(false),
             show_air: Mutex::new(false),
             show_bounding_box: Mutex::new(true),
             integrity: Mutex::new(1.0),

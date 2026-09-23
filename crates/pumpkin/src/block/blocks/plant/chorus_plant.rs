@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId,
+    Block, BlockDirection, BlockState, BlockStateId,
     block_properties::BrownMushroomBlockLikeProperties,
     tag::{self, Taggable},
 };
@@ -11,7 +11,8 @@ use pumpkin_world::{
 };
 
 use crate::block::{
-    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PathComputationType,
 };
 
 #[pumpkin_block("minecraft:chorus_plant")]
@@ -64,6 +65,10 @@ impl BlockBehaviour for ChorusPlantBlock {
             args.world
                 .break_block(args.position, None, BlockFlags::empty());
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

@@ -3,16 +3,16 @@ use std::sync::Arc;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
+    BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
+    OnPlaceArgs, PathComputationType,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
-use pumpkin_data::Block;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -132,6 +132,15 @@ impl BlockBehaviour for FenceGateBlock {
                 fence_gate_props.to_state_id(args.block),
                 BlockFlags::NOTIFY_LISTENERS,
             );
+        }
+    }
+
+    fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
+        match computation_type {
+            PathComputationType::Land | PathComputationType::Air => {
+                FenceGateProperties::from_state_id(state.id).open
+            }
+            PathComputationType::Water => false,
         }
     }
 }

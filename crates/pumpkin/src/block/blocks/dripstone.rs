@@ -3,13 +3,13 @@ use std::sync::Arc;
 use crate::{
     block::{
         BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-        PlacedArgs,
+        PathComputationType, PlacedArgs,
     },
     entity::player::Player,
     world::World,
 };
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId,
+    Block, BlockDirection, BlockState, BlockStateId,
     block_properties::{PointedDripstoneLikeProperties, SpeleothemThickness, VerticalDirection},
 };
 use pumpkin_macros::pumpkin_block;
@@ -113,6 +113,10 @@ impl BlockBehaviour for DripstoneBlock {
             }
         }
         args.state_id
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 fn update_stalagmite(world: &Arc<World>, stalagmite_len: u8, tip_pos: &BlockPos) {
@@ -351,10 +355,7 @@ fn can_support_dripstone(support_block: &Block) -> bool {
     if support_block == &Block::POINTED_DRIPSTONE {
         return true;
     }
-    if support_block.default_state.is_full_cube() && support_block.default_state.is_solid_block() {
-        return true;
-    }
-    false
+    support_block.default_state.is_solid_render()
 }
 fn modify_dripstone_thickness_to(
     world: &Arc<World>,

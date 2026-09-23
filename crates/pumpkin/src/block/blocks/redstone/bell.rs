@@ -5,16 +5,15 @@ use crate::block::entities::bell::BellBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BlockHitResult, BrokenArgs, CanPlaceAtArgs, NormalUseArgs,
-    OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs, OnProjectileHitArgs, PathComputationType, PlacedArgs,
 };
 use crate::world::World;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::{AttachFace, BellAttachment, BellLikeProperties};
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_data::{HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -214,5 +213,31 @@ impl BlockBehaviour for BellBlock {
                 ring_bell(*args.position, args.world, None, None);
             }
         }
+    }
+
+    fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
+        let player = args
+            .projectile
+            .get_owner_id()
+            .and_then(|id| args.world.get_player_by_id(id));
+        if ring_bell(
+            *args.position,
+            args.world,
+            None,
+            player
+                .as_ref()
+                .map(|p| p.clone() as Arc<dyn crate::entity::EntityBase>),
+        ) && let Some(player) = player
+        {
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::BellRing as i32,
+                1,
+            );
+        }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

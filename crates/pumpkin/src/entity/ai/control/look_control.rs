@@ -108,7 +108,7 @@ impl LookControl {
     fn clamp_head_yaw(mob: &dyn Mob) {
         let mob_entity = mob.get_mob_entity();
         if let Ok(navigator) = mob_entity.navigator.try_lock()
-            && !navigator.is_idle()
+            && navigator.is_in_progress()
         {
             let entity = &mob_entity.living_entity.entity;
             let max_head_rotation = mob.get_max_head_rotation();

@@ -15,6 +15,7 @@ use pumpkin_data::villager::{
     TRADES_WANDERING_TRADER_BUYING, TRADES_WANDERING_TRADER_COMMON,
     TRADES_WANDERING_TRADER_UNCOMMON, VillagerTrade, VillagerTradeModifier,
 };
+use pumpkin_inventory::SimpleInventory;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
@@ -26,7 +27,6 @@ use pumpkin_protocol::java::client::play::CMerchantOffers;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::SimpleInventory;
 use rand::RngExt;
 use rand::seq::IndexedRandom;
 
@@ -43,7 +43,7 @@ use crate::entity::ai::goal::wander_around::WanderAroundGoal;
 use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::experience_orb::ExperienceOrbEntity;
-use crate::entity::mob::{Mob, MobEntity, NIGHT_END, NIGHT_START};
+use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
@@ -168,7 +168,7 @@ impl WanderingTraderEntity {
             );
 
             // Priority 1: TradeWithPlayerGoal
-            goal_selector.add_goal(1, Box::new(TradeWithPlayerGoal::new(0.5)));
+            goal_selector.add_goal(1, Box::new(TradeWithPlayerGoal::new()));
 
             // Priority 1: AvoidEntityGoals
             goal_selector.add_goal(
@@ -588,6 +588,13 @@ impl Mob for WanderingTraderEntity {
         &self.mob_entity
     }
 
+    fn clear_trading_player(&self) {
+        *self
+            .trading_player
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
+
     fn get_trading_player(&self) -> Option<Arc<Player>> {
         let trading = self
             .trading_player
@@ -852,7 +859,7 @@ impl Goal for LookAtTradingPlayerGoal {
         mob_pos.squared_distance_to_vec(&player_pos) <= self.range * self.range
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let Some(player) = mob.get_trading_player() else {
             return false;
         };
@@ -932,7 +939,7 @@ impl Goal for WanderToPositionGoal {
         Self::is_too_far_away(&wander_pos, &entity_pos, self.stop_distance)
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         let Some(trader) = self.trader.upgrade() else {
             return false;
         };
@@ -1038,7 +1045,7 @@ impl Goal for MoveTowardsRestrictionGoal {
         mob_entity.has_position_target() && !mob_entity.is_in_position_target_range()
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let mob_entity = mob.get_mob_entity();
         !mob_entity
             .navigator
@@ -1103,8 +1110,8 @@ impl Goal for WanderingTraderUseItemGoal {
             return false;
         }
         let world = trader.mob_entity.living_entity.entity.world.load();
-        let day_time = world.get_time_of_day() % 24000;
-        let is_dark = (NIGHT_START..=NIGHT_END).contains(&day_time);
+        let is_dark = world.is_dark_outside();
+        let is_bright = world.is_bright_outside();
         let is_invisible = trader
             .mob_entity
             .living_entity
@@ -1114,14 +1121,14 @@ impl Goal for WanderingTraderUseItemGoal {
             self.goal_type = Some(PotionGoalType::Invisibility);
             return true;
         }
-        if !is_dark && is_invisible {
+        if is_bright && is_invisible {
             self.goal_type = Some(PotionGoalType::Milk);
             return true;
         }
         false
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         let Some(trader) = self.trader.upgrade() else {
             return false;
         };

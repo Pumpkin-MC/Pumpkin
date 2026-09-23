@@ -50,7 +50,7 @@ impl CowEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS)));
+            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.25)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -94,6 +94,17 @@ impl Mob for CowEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        if item_stack.get_item() == &Item::BUCKET && !self.is_baby() {
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            let entity = &self.mob_entity.living_entity.entity;
+            let world = entity.world.load();
+            world.play_sound(
+                Sound::EntityCowMilk,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &entity.pos.load(),
+            );
+            return true;
+        }
         self.animal_interact(player, item_stack, Sound::EntityCowAmbient)
     }
 }

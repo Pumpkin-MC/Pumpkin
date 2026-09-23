@@ -1,3 +1,4 @@
+use crate::command::CommandSource;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command};
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::argument_types::core::string::StringArgumentType;
@@ -35,7 +36,7 @@ enum HelpArgument {
 }
 
 struct HelpArgumentType;
-impl ArgumentType for HelpArgumentType {
+impl ArgumentType<CommandSource> for HelpArgumentType {
     type Item = HelpArgument;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
@@ -68,7 +69,10 @@ impl ArgumentType for HelpArgumentType {
                 // We use greedy phrases for now
                 // as the `?` command as the argument
                 // doesn't work for the unquoted word one.
-                let mut text = StringArgumentType::GreedyPhrase.parse(reader)?;
+                let mut text = ArgumentType::<CommandSource>::parse(
+                    &StringArgumentType::GreedyPhrase,
+                    reader,
+                )?;
 
                 {
                     let mut integer_text = text.as_str();

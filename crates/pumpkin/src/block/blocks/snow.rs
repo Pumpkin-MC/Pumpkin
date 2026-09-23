@@ -1,5 +1,7 @@
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockStateId, block_properties::SnowLikeProperties, item::Item, tag};
+use pumpkin_data::{
+    Block, BlockState, BlockStateId, block_properties::SnowLikeProperties, item::Item, tag,
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
@@ -9,7 +11,7 @@ use pumpkin_world::{
 
 use crate::block::{
     BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
-    RandomTickArgs, UseWithItemArgs, registry::BlockActionResult,
+    PathComputationType, RandomTickArgs, UseWithItemArgs, registry::BlockActionResult,
 };
 
 #[pumpkin_block("minecraft:snow")]
@@ -89,6 +91,11 @@ impl BlockBehaviour for LayeredSnowBlock {
                 .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
         }
         args.state_id
+    }
+
+    fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
+        computation_type == PathComputationType::Land
+            && SnowLikeProperties::from_state_id(state.id).layers < 5
     }
 }
 

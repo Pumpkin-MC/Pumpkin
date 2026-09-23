@@ -4,14 +4,14 @@ use crate::block::entities::calibrated_sculk_sensor::CalibratedSculkSensorBlockE
 use crate::block::entities::sculk_sensor::SculkSensorBlockEntity;
 use crate::block::{
     BlockBehaviour, BlockMetadata, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
-    GetRedstonePowerArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
+    GetRedstonePowerArgs, OnPlaceArgs, OnScheduledTickArgs, PathComputationType, PlacedArgs,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::{
     CalibratedSculkSensorLikeProperties, HorizontalFacing, SculkSensorLikeProperties,
     SculkSensorPhase,
 };
-use pumpkin_data::{Block, BlockDirection, BlockId, BlockStateId};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
@@ -30,6 +30,15 @@ const fn horizontal_facing_to_dir(facing: HorizontalFacing) -> BlockDirection {
         HorizontalFacing::South => BlockDirection::South,
         HorizontalFacing::West => BlockDirection::West,
         HorizontalFacing::East => BlockDirection::East,
+    }
+}
+
+/// Both sensor variants carry the same phase property under different types.
+fn sculk_sensor_phase(block: &Block, state_id: BlockStateId) -> SculkSensorPhase {
+    if block.id == BlockId::CALIBRATED_SCULK_SENSOR {
+        CalibratedSculkSensorLikeProperties::from_state_id(state_id).sculk_sensor_phase
+    } else {
+        SculkSensorLikeProperties::from_state_id(state_id).sculk_sensor_phase
     }
 }
 
@@ -139,6 +148,11 @@ impl BlockBehaviour for SculkSensorBlock {
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        // Vanilla reads the frequency only while the sensor is active.
+        if sculk_sensor_phase(args.block, args.state.id) != SculkSensorPhase::Active {
+            return Some(0);
+        }
+
         let be = args.world.get_block_entity(args.position)?;
         if let Some(sensor_be) = be.as_any().downcast_ref::<SculkSensorBlockEntity>() {
             return Some(
@@ -223,5 +237,9 @@ impl BlockBehaviour for SculkSensorBlock {
                 SculkSensorPhase::Inactive => {}
             }
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

@@ -1,20 +1,19 @@
 use std::sync::Arc;
 
-use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BambooLeaves, BambooLikeProperties};
 use pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_BAMBOO;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::{self};
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 
-use crate::block::{BlockBehaviour, CanPlaceAtArgs, blocks::plant::PlantBlockBase};
 use crate::block::{
-    GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, RandomTickArgs,
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PathComputationType, RandomTickArgs, blocks::plant::PlantBlockBase,
 };
 use crate::world::World;
 
@@ -73,7 +72,7 @@ impl BlockBehaviour for BambooBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         if !<Self as PlantBlockBase>::can_place_at(self, args.world.as_ref(), args.position) {
             args.world
-                .break_block(args.position, None, BlockFlags::empty());
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
         } else if args.world.get_block(&args.position.down()) == &Block::BAMBOO_SAPLING {
             args.world.set_block_state(
                 &args.position.down(),
@@ -110,6 +109,10 @@ impl BlockBehaviour for BambooBlock {
         if rand::rng().random_range(0..=3) == 0 {
             update_leaves_and_grow(args.world, args.position);
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

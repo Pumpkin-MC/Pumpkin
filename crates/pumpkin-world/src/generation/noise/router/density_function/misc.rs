@@ -11,13 +11,11 @@ use pumpkin_util::{
 };
 
 use crate::generation::noise::router::{
-    chunk_density_function::ChunkNoiseFunctionSampleOptions,
     chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
+    density_volume::{DensityBuffer, DensityVolume},
 };
 
-use super::{
-    IndexToNoisePos, NoiseFunctionComponentRange, StaticIndependentChunkNoiseFunctionComponentImpl,
-};
+use super::{NoiseFunctionComponentRange, StaticIndependentChunkNoiseFunctionComponentImpl};
 
 pub struct EndIsland {
     sampler: Arc<SimplexNoiseSampler>,
@@ -78,6 +76,17 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for EndIsland {
     fn sample(&self, pos: &Vector3<i32>) -> f32 {
         (Self::sample_2d(&self.sampler, pos.x / 8, pos.z / 8) - 8.0) / 128.0
     }
+
+    fn sample_volume(&self, buffer: &mut [f32], volume: &DensityVolume) {
+        for z in 0..volume.size_z {
+            let block_z = volume.block_z(z);
+            for x in 0..volume.size_x {
+                let value = self.sample(&Vector3::new(volume.block_x(x), 0, block_z));
+                let index = volume.index_unchecked(x, 0, z);
+                buffer[index..index + volume.size_y].fill(value);
+            }
+        }
+    }
 }
 
 pub struct IntervalSelect {
@@ -111,12 +120,10 @@ impl StaticChunkNoiseFunctionComponentImpl for IntervalSelect {
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
         let input_val = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_index],
             pos,
-            sample_options,
         );
 
         let mut selected_index = self.thresholds.len();
@@ -128,28 +135,31 @@ impl StaticChunkNoiseFunctionComponentImpl for IntervalSelect {
         }
 
         let func_index = self.functions_indices[selected_index];
-        ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut component_stack[..=func_index],
-            pos,
-            sample_options,
-        )
+        ChunkNoiseFunctionComponent::sample_from_stack(&mut component_stack[..=func_index], pos)
     }
 
-    fn fill(
+    fn sample_volume(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f32],
-        mapper: &impl IndexToNoisePos,
-        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+        buffer: &mut [f32],
+        volume: &DensityVolume,
     ) {
-        ChunkNoiseFunctionComponent::fill_from_stack(
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
             &mut component_stack[..=self.input_index],
-            array,
-            mapper,
-            sample_options,
+            buffer,
+            volume,
         );
-
-        array.iter_mut().enumerate().for_each(|(index, value)| {
+        let mut function_buffers = Vec::with_capacity(self.functions_indices.len());
+        for &function_index in self.functions_indices {
+            let mut function_buffer = DensityBuffer::acquire(volume);
+            ChunkNoiseFunctionComponent::sample_volume_from_stack(
+                &mut component_stack[..=function_index],
+                &mut function_buffer,
+                volume,
+            );
+            function_buffers.push(function_buffer);
+        }
+        for (index, value) in buffer.iter_mut().enumerate() {
             let mut selected_index = self.thresholds.len();
             for (i, &threshold) in self.thresholds.iter().enumerate() {
                 if *value < threshold {
@@ -157,15 +167,8 @@ impl StaticChunkNoiseFunctionComponentImpl for IntervalSelect {
                     break;
                 }
             }
-
-            let func_index = self.functions_indices[selected_index];
-            let pos = mapper.at(index, Some(sample_options));
-            *value = ChunkNoiseFunctionComponent::sample_from_stack(
-                &mut component_stack[..=func_index],
-                &pos,
-                sample_options,
-            );
-        });
+            *value = function_buffers[selected_index][index];
+        }
     }
 }
 
@@ -214,17 +217,21 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for ClampedYGradient {
         )
     }
 
-    fn fill(&self, array: &mut [f32], mapper: &impl IndexToNoisePos) {
-        array.iter_mut().enumerate().for_each(|(index, value)| {
-            let pos = mapper.at(index, None);
-            *value = clamped_map(
-                pos.y as f32,
+    fn sample_volume(&self, buffer: &mut [f32], volume: &DensityVolume) {
+        for y in 0..volume.size_y {
+            let value = clamped_map(
+                volume.block_y(y) as f32,
                 self.data.from_y,
                 self.data.to_y,
                 self.data.from_value,
                 self.data.to_value,
             );
-        });
+            for z in 0..volume.size_z {
+                for x in 0..volume.size_x {
+                    buffer[volume.index_unchecked(x, y, z)] = value;
+                }
+            }
+        }
     }
 }
 
@@ -250,13 +257,8 @@ impl NoiseFunctionComponentRange for Gradient {
     }
 }
 
-impl StaticIndependentChunkNoiseFunctionComponentImpl for Gradient {
-    fn sample(&self, pos: &Vector3<i32>) -> f32 {
-        let coordinate = match self.data.axis {
-            Axis::X => pos.x,
-            Axis::Y => pos.y,
-            Axis::Z => pos.z,
-        };
+impl Gradient {
+    fn compute(&self, coordinate: i32) -> f32 {
         let coordinate_range = self.data.to_coordinate - self.data.from_coordinate;
         let coordinate_factor =
             (self.data.to_value - self.data.from_value) / (coordinate_range as f32);
@@ -286,12 +288,47 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for Gradient {
             }
         }
     }
+}
 
-    fn fill(&self, array: &mut [f32], mapper: &impl IndexToNoisePos) {
-        array.iter_mut().enumerate().for_each(|(index, value)| {
-            let pos = mapper.at(index, None);
-            *value = self.sample(&pos);
-        });
+impl StaticIndependentChunkNoiseFunctionComponentImpl for Gradient {
+    fn sample(&self, pos: &Vector3<i32>) -> f32 {
+        self.compute(match self.data.axis {
+            Axis::X => pos.x,
+            Axis::Y => pos.y,
+            Axis::Z => pos.z,
+        })
+    }
+
+    fn sample_volume(&self, buffer: &mut [f32], volume: &DensityVolume) {
+        match self.data.axis {
+            Axis::X => {
+                for x in 0..volume.size_x {
+                    let value = self.compute(volume.block_x(x));
+                    for z in 0..volume.size_z {
+                        let index = volume.index_unchecked(x, 0, z);
+                        buffer[index..index + volume.size_y].fill(value);
+                    }
+                }
+            }
+            Axis::Y => {
+                for y in 0..volume.size_y {
+                    let value = self.compute(volume.block_y(y));
+                    for z in 0..volume.size_z {
+                        for x in 0..volume.size_x {
+                            buffer[volume.index_unchecked(x, y, z)] = value;
+                        }
+                    }
+                }
+            }
+            Axis::Z => {
+                let slab = volume.size_x * volume.size_y;
+                for z in 0..volume.size_z {
+                    let value = self.compute(volume.block_z(z));
+                    let index = volume.index_unchecked(0, 0, z);
+                    buffer[index..index + slab].fill(value);
+                }
+            }
+        }
     }
 }
 
@@ -328,13 +365,6 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for DistanceToPoint {
             DistanceMetric::Manhattan => dx.abs() + dy.abs() + dz.abs(),
             DistanceMetric::Chebyshev => dx.abs().max(dy.abs()).max(dz.abs()),
         }
-    }
-
-    fn fill(&self, array: &mut [f32], mapper: &impl IndexToNoisePos) {
-        array.iter_mut().enumerate().for_each(|(index, value)| {
-            let pos = mapper.at(index, None);
-            *value = self.sample(&pos);
-        });
     }
 }
 
@@ -381,7 +411,6 @@ impl StaticChunkNoiseFunctionComponentImpl for Slice {
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
         let slice_pos = match self.axis {
             Axis::X => Vector3::new(self.coordinate, pos.y, pos.z),
@@ -391,20 +420,114 @@ impl StaticChunkNoiseFunctionComponentImpl for Slice {
         ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_index],
             &slice_pos,
-            sample_options,
         )
     }
 
-    fn fill(
+    fn sample_volume(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f32],
-        mapper: &impl IndexToNoisePos,
-        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+        buffer: &mut [f32],
+        volume: &DensityVolume,
     ) {
-        for (index, value) in array.iter_mut().enumerate() {
-            let pos = mapper.at(index, Some(sample_options));
-            *value = self.sample(component_stack, &pos, sample_options);
+        let input_volume = match self.axis {
+            Axis::X => {
+                if volume.size_x == 1 && volume.min_block_x == self.coordinate {
+                    ChunkNoiseFunctionComponent::sample_volume_from_stack(
+                        &mut component_stack[..=self.input_index],
+                        buffer,
+                        volume,
+                    );
+                    return;
+                }
+                DensityVolume::new(
+                    1,
+                    volume.size_y,
+                    volume.size_z,
+                    self.coordinate,
+                    volume.min_block_y,
+                    volume.min_block_z,
+                    volume.step_block_x,
+                    volume.step_block_y,
+                    volume.step_block_z,
+                )
+            }
+            Axis::Y => {
+                if volume.size_y == 1 && volume.min_block_y == self.coordinate {
+                    ChunkNoiseFunctionComponent::sample_volume_from_stack(
+                        &mut component_stack[..=self.input_index],
+                        buffer,
+                        volume,
+                    );
+                    return;
+                }
+                DensityVolume::new(
+                    volume.size_x,
+                    1,
+                    volume.size_z,
+                    volume.min_block_x,
+                    self.coordinate,
+                    volume.min_block_z,
+                    volume.step_block_x,
+                    volume.step_block_y,
+                    volume.step_block_z,
+                )
+            }
+            Axis::Z => {
+                if volume.size_z == 1 && volume.min_block_z == self.coordinate {
+                    ChunkNoiseFunctionComponent::sample_volume_from_stack(
+                        &mut component_stack[..=self.input_index],
+                        buffer,
+                        volume,
+                    );
+                    return;
+                }
+                DensityVolume::new(
+                    volume.size_x,
+                    volume.size_y,
+                    1,
+                    volume.min_block_x,
+                    volume.min_block_y,
+                    self.coordinate,
+                    volume.step_block_x,
+                    volume.step_block_y,
+                    volume.step_block_z,
+                )
+            }
+        };
+        let mut input = DensityBuffer::acquire(&input_volume);
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.input_index],
+            &mut input,
+            &input_volume,
+        );
+        match self.axis {
+            Axis::X => {
+                let mut index = 0;
+                for z in 0..volume.size_z {
+                    for _ in 0..volume.size_x {
+                        for y in 0..volume.size_y {
+                            buffer[index] = input[input_volume.index_unchecked(0, y, z)];
+                            index += 1;
+                        }
+                    }
+                }
+            }
+            Axis::Y => {
+                for z in 0..volume.size_z {
+                    for x in 0..volume.size_x {
+                        let value = input[input_volume.index_unchecked(x, 0, z)];
+                        let index = volume.index_unchecked(x, 0, z);
+                        buffer[index..index + volume.size_y].fill(value);
+                    }
+                }
+            }
+            Axis::Z => {
+                let slab = volume.size_x * volume.size_y;
+                for z in 0..volume.size_z {
+                    let index = volume.index_unchecked(0, 0, z);
+                    buffer[index..index + slab].copy_from_slice(&input[..slab]);
+                }
+            }
         }
     }
 }
@@ -455,58 +578,52 @@ impl StaticChunkNoiseFunctionComponentImpl for RangeChoice {
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
         let input_sample = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_index],
             pos,
-            sample_options,
         );
 
         if self.data.min_inclusive <= input_sample && input_sample < self.data.max_exclusive {
             ChunkNoiseFunctionComponent::sample_from_stack(
                 &mut component_stack[..=self.when_in_index],
                 pos,
-                sample_options,
             )
         } else {
             ChunkNoiseFunctionComponent::sample_from_stack(
                 &mut component_stack[..=self.when_out_index],
                 pos,
-                sample_options,
             )
         }
     }
 
-    fn fill(
+    fn sample_volume(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f32],
-        mapper: &impl IndexToNoisePos,
-        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+        buffer: &mut [f32],
+        volume: &DensityVolume,
     ) {
-        ChunkNoiseFunctionComponent::fill_from_stack(
-            &mut component_stack[..=self.input_index],
-            array,
-            mapper,
-            sample_options,
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.when_in_index],
+            buffer,
+            volume,
         );
-
-        array.iter_mut().enumerate().for_each(|(index, value)| {
-            let pos = mapper.at(index, Some(sample_options));
-            *value = if self.data.min_inclusive <= *value && *value < self.data.max_exclusive {
-                ChunkNoiseFunctionComponent::sample_from_stack(
-                    &mut component_stack[..=self.when_in_index],
-                    &pos,
-                    sample_options,
-                )
-            } else {
-                ChunkNoiseFunctionComponent::sample_from_stack(
-                    &mut component_stack[..=self.when_out_index],
-                    &pos,
-                    sample_options,
-                )
-            };
-        });
+        let mut input = DensityBuffer::acquire(volume);
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.input_index],
+            &mut input,
+            volume,
+        );
+        let mut when_out = DensityBuffer::acquire(volume);
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.when_out_index],
+            &mut when_out,
+            volume,
+        );
+        for ((value, input), when_out) in buffer.iter_mut().zip(input.iter()).zip(when_out.iter()) {
+            if !(self.data.min_inclusive <= *input && *input < self.data.max_exclusive) {
+                *value = *when_out;
+            }
+        }
     }
 }

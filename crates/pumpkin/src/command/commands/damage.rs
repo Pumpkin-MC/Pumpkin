@@ -85,7 +85,7 @@ impl CommandExecutor for DamageEntityExecutor {
 
         let source = match self.0 {
             EntityMode::WithSource | EntityMode::WithSourceAndCause => {
-                Some(EntityArgumentType::get_entity(context, "source")?)
+                Some(EntityArgumentType::get_entity(context, "entity")?)
             }
             EntityMode::Basic | EntityMode::WithType => None,
         };
@@ -133,7 +133,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                             )
                             .then(
                                 literal("by").then(
-                                    argument("source", EntityArgumentType::Entity)
+                                    argument("entity", EntityArgumentType::Entity)
                                         .executes(DamageEntityExecutor(EntityMode::WithSource))
                                         .then(literal("from").then(
                                             argument("cause", EntityArgumentType::Entity).executes(

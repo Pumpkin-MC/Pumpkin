@@ -1,10 +1,5 @@
-use pumpkin_data::BlockStateId;
-use pumpkin_data::{
-    Block, BlockState,
-    block_properties::{DoubleBlockHalf, GrassBlockLikeProperties, TallSeagrassLikeProperties},
-    tag::{self, Taggable},
-};
-use pumpkin_macros::pumpkin_block;
+use pumpkin_data::block_properties::{DoubleBlockHalf, TallSeagrassLikeProperties};
+use pumpkin_data::{Block, BlockId, BlockState, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::{RandomGenerator, RandomImpl, xoroshiro128::Xoroshiro};
 use pumpkin_world::generation::feature::{
@@ -15,12 +10,42 @@ use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 
-use crate::block::{BlockBehaviour, GetStateForNeighborUpdateArgs};
+use super::spreading_snowy_block::{SnowyBlock, SpreadingSnowyBlock};
+use crate::block::{
+    BlockBehaviour, BlockMetadata, GetStateForNeighborUpdateArgs, OnPlaceArgs, RandomTickArgs,
+};
 
-#[pumpkin_block("minecraft:grass_block")]
 pub struct GrassBlock;
 
+impl BlockMetadata for GrassBlock {
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::GRASS_BLOCK].into()
+    }
+}
+
 impl BlockBehaviour for GrassBlock {
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        SnowyBlock::on_place(args.block, args.world, args.position)
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        SnowyBlock::get_state_for_neighbor_update(&args)
+    }
+
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        let state = args.world.get_block_state(args.position);
+        SpreadingSnowyBlock::random_tick(
+            state,
+            args.world,
+            args.position,
+            &Block::DIRT,
+            Block::GRASS_BLOCK.default_state,
+        );
+    }
+
     fn is_valid_bonemeal_target(&self, args: crate::block::BonemealArgs<'_>) -> bool {
         let above = args.position.up();
         args.world.is_in_height_limit(above.0.y)
@@ -28,10 +53,18 @@ impl BlockBehaviour for GrassBlock {
             && args.world.get_block_state(&above).is_air()
     }
 
+    fn is_bonemeal_success(&self, _args: crate::block::BonemealArgs<'_>) -> bool {
+        true
+    }
+
     fn perform_bonemeal(&self, args: crate::block::BonemealArgs<'_>) {
         const SPREAD_ATTEMPTS: i32 = 128;
         const ATTEMPTS_PER_STEP: i32 = 16;
         const FLOWER_CHANCE: i32 = 8;
+
+        if args.block != &Block::GRASS_BLOCK {
+            return;
+        }
 
         let origin = args.position.up();
         for attempt in 0..SPREAD_ATTEMPTS {
@@ -102,21 +135,6 @@ impl BlockBehaviour for GrassBlock {
                 }
             }
         }
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let block_above = args.world.get_block(&args.position.up());
-        let mut props = GrassBlockLikeProperties::from_state_id(args.state_id);
-        let should_be_snowy = block_above.has_tag(&tag::Block::MINECRAFT_SNOW);
-        if props.snowy == should_be_snowy {
-            return args.state_id;
-        }
-        props.snowy = should_be_snowy;
-
-        props.to_state_id(&Block::GRASS_BLOCK)
     }
 }
 

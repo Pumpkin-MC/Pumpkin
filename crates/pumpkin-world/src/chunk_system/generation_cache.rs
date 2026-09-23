@@ -454,6 +454,10 @@ impl GenerationCache for Cache {
     fn is_air(&self, local_pos: &Vector3<i32>) -> bool {
         is_air(GenerationCache::get_block_state(self, local_pos))
     }
+
+    fn get_sea_level(&self) -> i32 {
+        self.get_center_chunk().get_sea_level()
+    }
 }
 
 impl Cache {

@@ -9,8 +9,10 @@ use pumpkin_world::{
     world::{BlockAccessor, BlockFlags},
 };
 
+use crate::block::blocks::plant::mangrove_propagule::MangrovePropaguleBlock;
 use crate::block::{
-    BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, RandomTickArgs,
+    BlockBehaviour, BonemealArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+    RandomTickArgs,
 };
 
 pub const DECAY_DISTANCE: u8 = 7;
@@ -99,8 +101,38 @@ impl BlockBehaviour for LeavesBlock {
         let state_id = args.world.get_block_state_id(args.position);
         let props = OakLeavesLikeProperties::from_state_id(state_id);
         if !props.persistent && props.distance == DECAY_DISTANCE {
+            if let Some(server) = args.world.server.upgrade() {
+                let mut event =
+                    crate::plugin::api::events::block::leaves_decay::LeavesDecayEvent::new(
+                        *args.position,
+                        args.world.clone(),
+                    );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+            }
             args.world
-                .break_block(args.position, None, BlockFlags::empty());
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
+        }
+    }
+
+    fn is_valid_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
+        args.block == &Block::MANGROVE_LEAVES
+            && args.world.get_block_state(&args.position.down()).is_air()
+    }
+
+    fn is_bonemeal_success(&self, args: BonemealArgs<'_>) -> bool {
+        args.block == &Block::MANGROVE_LEAVES
+    }
+
+    fn perform_bonemeal(&self, args: BonemealArgs<'_>) {
+        if args.block == &Block::MANGROVE_LEAVES {
+            args.world.set_block_state(
+                &args.position.down(),
+                MangrovePropaguleBlock::create_new_hanging_propagule(0),
+                BlockFlags::NOTIFY_ALL,
+            );
         }
     }
 }

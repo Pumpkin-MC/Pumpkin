@@ -5,6 +5,7 @@ pub mod registry;
 use std::any::Any;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -22,6 +23,15 @@ pub trait ItemMetadata {
 pub trait ItemBehaviour: Send + Sync {
     fn normal_use(&self, _item: &Item, _player: &Player) {}
 
+    /// Handles an item use with the rotation reported for that action.
+    ///
+    /// Java clients include this rotation in the use-item packet. Item behaviours
+    /// that perform a raycast should override this method instead of relying on
+    /// the player's potentially stale entity rotation.
+    fn normal_use_with_rotation(&self, item: &Item, player: &Player, _yaw: f32, _pitch: f32) {
+        self.normal_use(item, player);
+    }
+
     #[expect(clippy::too_many_arguments)]
     fn use_on_block(
         &self,
@@ -32,13 +42,18 @@ pub trait ItemBehaviour: Send + Sync {
         _cursor_pos: Vector3<f32>,
         _block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
+        BlockActionResult::Pass
     }
 
     fn use_on_entity(&self, _item: &mut ItemStack, _player: &Player, _entity: Arc<dyn EntityBase>) {
     }
 
     fn on_stopped_using(&self, _stack: &ItemStack, _player: &Player) {}
+
+    fn on_spear_jab(&self, _stack: &ItemStack, _player: &Player) {}
+
+    fn on_use_tick(&self, _stack: &ItemStack, _player: &Player, _remaining_use_ticks: i32) {}
 
     /// Returns the maximum number of ticks this item can be used for.
     /// Return 0 if the item does not have a behaviour-driven use duration.

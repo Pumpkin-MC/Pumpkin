@@ -3,12 +3,11 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
-use pumpkin_data::entity::{EntityStatus, EntityType};
+use pumpkin_data::entity::{EntityStatus, EntityType, MobCategory};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
 
 use crate::entity::{
@@ -71,13 +70,15 @@ impl IronGolemEntity {
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
+            // Players are omitted (vanilla gates that on the unimplemented NeutralMob anger
+            // system). Mirrors NearestAttackableTargetGoal<Mob>: any monster but creepers.
             target_selector.add_goal(
                 3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, false),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::ZOMBIE, true),
+                ActiveTargetGoal::predicated(&mob_arc.mob_entity, 5, false, |living, _world| {
+                    let entity_type = living.entity.entity_type;
+                    entity_type.category == &MobCategory::MONSTER
+                        && entity_type != &EntityType::CREEPER
+                }),
             );
         };
 
@@ -93,13 +94,7 @@ impl IronGolemEntity {
         self.player_created.store(value, Ordering::Relaxed);
         let entity = self.get_entity();
         let flag: u8 = u8::from(value);
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::iron_golem::FLAGS_ID,
-                flag,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::iron_golem::FLAGS_ID, flag);
     }
 
     pub fn offer_flower(&self, offer: bool) {
@@ -150,13 +145,7 @@ impl Mob for IronGolemEntity {
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let flag: u8 = u8::from(self.is_player_created());
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::iron_golem::FLAGS_ID,
-                flag,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::iron_golem::FLAGS_ID, flag);
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {

@@ -134,7 +134,7 @@ impl ExperienceExecutor {
                     target.add_experience_points(amount);
                 } else {
                     let current_lvl = target.experience_level.load(Ordering::Relaxed);
-                    if amount > experience::points_in_level(current_lvl) {
+                    if amount >= experience::points_in_level(current_lvl) {
                         return false;
                     }
                     target.set_experience_points(amount);
@@ -147,7 +147,7 @@ impl ExperienceExecutor {
 
 impl CommandExecutor for ExperienceExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let targets = EntityArgumentType::get_players(context, "targets")?;
+        let targets = EntityArgumentType::get_players(context, "target")?;
 
         if self.mode == Mode::Query {
             let target = targets[0].clone();
@@ -163,7 +163,7 @@ impl CommandExecutor for ExperienceExecutor {
             }
         }
 
-        if successes == 0 {
+        if self.mode == Mode::Set && successes == 0 {
             return Err(ERROR_SET_POINTS_INVALID.create_without_context());
         }
 
@@ -171,7 +171,7 @@ impl CommandExecutor for ExperienceExecutor {
         let msg = self.get_success_message(amount, &targets, first_name);
         context.source.send_feedback(msg, true);
 
-        Ok(successes)
+        Ok(targets.len() as i32)
     }
 }
 
@@ -183,50 +183,50 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     ));
 
     let add_node = literal("add").then(
-        argument("targets", EntityArgumentType::Players).then(
-            argument("amount", IntegerArgumentType::with_min(0))
+        argument("target", EntityArgumentType::Players).then(
+            argument("amount", IntegerArgumentType::any())
                 .executes(ExperienceExecutor {
                     mode: Mode::Add,
                     exp_type: ExpType::Points,
                 })
-                .then(literal("levels").executes(ExperienceExecutor {
-                    mode: Mode::Add,
-                    exp_type: ExpType::Levels,
-                }))
                 .then(literal("points").executes(ExperienceExecutor {
                     mode: Mode::Add,
                     exp_type: ExpType::Points,
+                }))
+                .then(literal("levels").executes(ExperienceExecutor {
+                    mode: Mode::Add,
+                    exp_type: ExpType::Levels,
                 })),
         ),
     );
 
     let set_node = literal("set").then(
-        argument("targets", EntityArgumentType::Players).then(
+        argument("target", EntityArgumentType::Players).then(
             argument("amount", IntegerArgumentType::with_min(0))
                 .executes(ExperienceExecutor {
                     mode: Mode::Set,
                     exp_type: ExpType::Points,
                 })
-                .then(literal("levels").executes(ExperienceExecutor {
-                    mode: Mode::Set,
-                    exp_type: ExpType::Levels,
-                }))
                 .then(literal("points").executes(ExperienceExecutor {
                     mode: Mode::Set,
                     exp_type: ExpType::Points,
+                }))
+                .then(literal("levels").executes(ExperienceExecutor {
+                    mode: Mode::Set,
+                    exp_type: ExpType::Levels,
                 })),
         ),
     );
 
     let query_node = literal("query").then(
-        argument("targets", EntityArgumentType::Player)
-            .then(literal("levels").executes(ExperienceExecutor {
-                mode: Mode::Query,
-                exp_type: ExpType::Levels,
-            }))
+        argument("target", EntityArgumentType::Player)
             .then(literal("points").executes(ExperienceExecutor {
                 mode: Mode::Query,
                 exp_type: ExpType::Points,
+            }))
+            .then(literal("levels").executes(ExperienceExecutor {
+                mode: Mode::Query,
+                exp_type: ExpType::Levels,
             })),
     );
 

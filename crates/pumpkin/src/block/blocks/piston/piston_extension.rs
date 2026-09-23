@@ -1,9 +1,8 @@
-use pumpkin_data::{Block, FacingExt};
+use pumpkin_data::{Block, BlockState, FacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::BlockBehaviour;
-use crate::block::BrokenArgs;
+use crate::block::{BlockBehaviour, BrokenArgs, PathComputationType};
 
 use super::piston::PistonProps;
 
@@ -28,5 +27,9 @@ impl BlockBehaviour for PistonExtensionBlock {
                 }
             }
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

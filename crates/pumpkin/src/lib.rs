@@ -1,5 +1,6 @@
 #![deny(clippy::unwrap_used)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
+#![allow(clippy::significant_drop_in_scrutinee)]
 // Not warn event sending macros
 #![allow(unused_labels, deprecated)]
 
@@ -23,7 +24,7 @@ use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::plugin::server::server_command::ServerCommandEvent;
 use crate::server::{Server, ticker::Ticker};
 use plugin::server::server_load::{LoadType, ServerLoadEvent};
-use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
+use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use rustyline::Editor;
@@ -60,6 +61,7 @@ pub mod logging;
 pub mod net;
 pub mod plugin;
 pub mod server;
+pub mod telemetry;
 pub mod world;
 
 pub struct LoggingConfig {
@@ -247,9 +249,19 @@ impl PumpkinServer {
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
+        telemetry_config: TelemetryConfig,
         vanilla_data: VanillaData,
     ) -> Self {
-        let server = Server::new(basic_config, advanced_config, vanilla_data).await;
+        let server = Server::new(
+            basic_config,
+            advanced_config,
+            telemetry_config,
+            vanilla_data,
+        )
+        .await;
+
+        #[cfg(target_family = "unix")]
+        adjust_file_descriptor_limit();
 
         let rcon = server.advanced_config.networking.rcon.clone();
 
@@ -331,7 +343,10 @@ impl PumpkinServer {
             }
         };
 
-        let (bedrock_status, ice_socket) = Self::bind_bedrock_status(&server).await;
+        let (bedrock_status, ice_socket) = match Self::bind_bedrock_status(&server).await {
+            Some((status, ice)) => (Some(status), Some(ice)),
+            None => (None, None),
+        };
         let nethernet_listener = Self::bind_nethernet(&server, ice_socket).await;
 
         Self {
@@ -351,7 +366,7 @@ impl PumpkinServer {
             return None;
         }
         let Some(ice_socket) = ice_socket else {
-            error!("Bedrock UDP should be bound before NetherNet");
+            error!("Bedrock UDP has to be bound before NetherNet can use it for ICE");
             return None;
         };
         let identity_key = match load_or_create_identity_key(&config.nethernet.identity_key) {
@@ -361,45 +376,42 @@ impl PumpkinServer {
                 return None;
             }
         };
-        let _ = server.bedrock_private_key.set(identity_key.clone());
         let oidc_verifier = (config.online_mode && config.authentication.enabled)
             .then(|| server.bedrock_oidc_keys.clone());
-        match NetherNetListener::bind(
-            config.nethernet.address,
-            ice_socket,
-            config.nethernet.external_ip,
-            identity_key,
-            config.online_mode,
-            oidc_verifier,
-            config.nethernet.stun_servers.clone(),
-        )
-        .await
-        {
+        match NetherNetListener::bind(server, identity_key, oidc_verifier, ice_socket).await {
             Ok(l) => Some(l),
             Err(err) => {
-                error!("Failed to bind Bedrock NetherNet signaling endpoint: {err}");
+                error!("Failed to bind Bedrock NetherNet endpoint: {err}");
                 None
             }
         }
     }
 
-    async fn bind_bedrock_status(server: &Server) -> (Option<StatusResponder>, Option<IceSocket>) {
+    /// Binds the UDP port used by Bedrock status and `NetherNet`'s ICE agent.
+    async fn bind_bedrock_status(server: &Arc<Server>) -> Option<(StatusResponder, IceSocket)> {
         let config = &server.advanced_config.networking.bedrock;
         if !config.enabled || !config.nethernet.enabled {
-            return (None, None);
+            return None;
         }
         match StatusResponder::bind(config.nethernet.address).await {
-            Ok((responder, ice_socket)) => {
-                if let Ok((ipv4, ipv6)) = responder.local_addrs() {
+            Ok((status, ice)) => {
+                if let Ok((ipv4, ipv6)) = status.local_addrs() {
                     info!(
                         "Bedrock server-list status is listening on {ipv4} (IPv4) and {ipv6} (IPv6)"
                     );
                 }
-                (Some(responder), Some(ice_socket))
+                Some((status, ice))
             }
             Err(err) => {
-                error!("Failed to bind Bedrock UDP status/ICE endpoint: {err}");
-                (None, None)
+                error!(
+                    "Failed to bind the Bedrock UDP socket on {}: {err}",
+                    config.nethernet.address
+                );
+                error!(
+                    "Bedrock status and NetherNet ICE use this UDP port; make sure nothing else \
+                     is using it and start the server again"
+                );
+                std::process::exit(1);
             }
         }
     }
@@ -461,6 +473,8 @@ impl PumpkinServer {
             .plugin_manager
             .fire(&self.server, &mut ServerLoadEvent::new(LoadType::Startup))
             .await;
+
+        self.server.start_telemetry();
 
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             if !self
@@ -615,14 +629,22 @@ impl PumpkinServer {
                         });
                     }
                     Err(e) => {
+                        #[cfg(target_family = "unix")]
+                        if e.raw_os_error() == Some(libc::EMFILE) {
+                            error!(
+                                "Too many open files! Server reached file descriptor limit. \
+                                New connections cannot be accepted until existing connections close or `ulimit -n` is increased."
+                            );
+                            sleep(Duration::from_millis(500)).await;
+                            return true;
+                        }
                         error!("Failed to accept Java client connection: {e}");
                         sleep(Duration::from_millis(50)).await;
                     }
                 }
             },
 
-            // Remote server-list status remains a RakNet unconnected ping/pong even
-            // when the game connection itself is negotiated over NetherNet.
+            // Branch for Bedrock status and NetherNet ICE packets.
             status_result = resolve_some(
                 self.bedrock_status.as_ref(),
                 |status: &StatusResponder| status.receive(&self.server),
@@ -825,4 +847,59 @@ fn scrub_address(ip: &str) -> String {
     ip.chars()
         .map(|ch| if ch == '.' || ch == ':' { ch } else { 'x' })
         .collect()
+}
+
+#[cfg(target_family = "unix")]
+fn adjust_file_descriptor_limit() {
+    let mut rlim = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+
+    // SAFETY: Passing a valid mutable pointer to a stack-allocated `rlimit` struct.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &raw mut rlim) } != 0 {
+        return;
+    }
+
+    let max_target = if rlim.rlim_max == libc::RLIM_INFINITY {
+        1_048_576
+    } else {
+        rlim.rlim_max
+    };
+
+    if rlim.rlim_cur < max_target {
+        let old_limit = rlim.rlim_cur;
+        rlim.rlim_cur = max_target;
+
+        // SAFETY: Calling `setrlimit` with a valid resource and valid pointer to initialized `rlimit`.
+        let res = unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &raw const rlim) };
+        if res == 0 {
+            debug!("Increased open file descriptor limit from {old_limit} to {max_target}");
+        } else {
+            // Fallback: try setting to a reasonable high value (65,536) if max_target was rejected by the OS.
+            let fallback = 65_536.min(max_target);
+            if fallback > old_limit {
+                rlim.rlim_cur = fallback;
+                // SAFETY: Calling `setrlimit` with a valid resource and valid pointer to initialized `rlimit`.
+                if unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &raw const rlim) } == 0 {
+                    debug!("Increased open file descriptor limit from {old_limit} to {fallback}");
+                }
+            }
+        }
+    }
+
+    let mut current_rlim = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: Passing a valid mutable pointer to a stack-allocated `rlimit` struct.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &raw mut current_rlim) } == 0
+        && current_rlim.rlim_cur < 4096
+    {
+        warn!(
+            "Open file descriptor limit is low ({}). Supporting >1000 concurrent players may fail with 'Too many open files'. \
+            Consider increasing the limit with `ulimit -n 65535` or setting `LimitNOFILE=65535` in systemd.",
+            current_rlim.rlim_cur
+        );
+    }
 }

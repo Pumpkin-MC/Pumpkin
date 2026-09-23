@@ -3,14 +3,13 @@ use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    UseWithItemArgs,
+    PathComputationType, UseWithItemArgs,
 };
 use crate::entity::EntityBase;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection, tag};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -129,6 +128,10 @@ impl BlockBehaviour for SeaPickleBlock {
             args.position,
             args.state_id,
         )
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 
