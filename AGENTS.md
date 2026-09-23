@@ -505,6 +505,7 @@ Common mappings between inputs and generators:
 | SDK Types, WIT, and Packet Mappings | Game data read by respective generators                                           | [sdk/](tools/pumpkin-codegen/src/sdk/), [wit/](tools/pumpkin-codegen/src/wit/)                                           |
 
 Vanilla built-in recipe generation and runtime datapack loading are two separate pieces of code. When modifying custom datapack recipe parsing, refer to `crates/pumpkin/src/data/datapack/recipe_loader.rs` first.
+
 ---
 
 ## Review and Submission
