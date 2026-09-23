@@ -6,12 +6,15 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage};
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
 use tracing::{debug, error};
+use uuid::Uuid;
 
 /// Helper for managing player data in the server context.
 ///
@@ -21,6 +24,8 @@ pub struct ServerPlayerData {
     storage: Arc<PlayerDataStorage>,
     save_interval: Duration,
     last_save: AtomicCell<Instant>,
+    write_generations: Arc<Mutex<HashMap<Uuid, u64>>>,
+    next_generation: AtomicU64,
 }
 
 impl ServerPlayerData {
@@ -30,7 +35,13 @@ impl ServerPlayerData {
             storage: Arc::new(PlayerDataStorage::new(data_path, enabled)),
             save_interval,
             last_save: AtomicCell::new(Instant::now()),
+            write_generations: Arc::new(Mutex::new(HashMap::new())),
+            next_generation: AtomicU64::new(0),
         }
+    }
+
+    fn reserve_generation(&self) -> u64 {
+        self.next_generation.fetch_add(1, Ordering::AcqRel)
     }
 
     /// Handles a player leaving the server.
@@ -55,8 +66,14 @@ impl ServerPlayerData {
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt);
 
-        self.storage.save_player_data(&player.gameprofile.id, nbt)?;
-        Ok(())
+        let generation = self.reserve_generation();
+        commit_player_data(
+            &self.storage,
+            &self.write_generations,
+            &player.gameprofile.id,
+            generation,
+            nbt,
+        )
     }
 
     /// Performs periodic maintenance tasks.
@@ -78,7 +95,7 @@ impl ServerPlayerData {
                 for player in world.players.load().iter() {
                     let mut nbt = NbtCompound::new();
                     player.write_nbt(&mut nbt);
-                    snapshots.push((player.gameprofile.id, nbt));
+                    snapshots.push((player.gameprofile.id, self.reserve_generation(), nbt));
                 }
             }
 
@@ -87,9 +104,12 @@ impl ServerPlayerData {
             }
 
             let storage = self.storage.clone();
+            let generations = self.write_generations.clone();
             rayon::spawn(move || {
-                for (uuid, nbt) in snapshots {
-                    if let Err(e) = storage.save_player_data(&uuid, nbt) {
+                for (uuid, generation, nbt) in snapshots {
+                    if let Err(e) =
+                        commit_player_data(&storage, &generations, &uuid, generation, nbt)
+                    {
                         error!("Failed to save player data for {uuid}: {e}");
                     }
                 }
@@ -174,9 +194,39 @@ impl ServerPlayerData {
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt);
 
-        self.storage.save_player_data(&uuid, nbt)?;
-        Ok(())
+        let generation = self.reserve_generation();
+        commit_player_data(
+            &self.storage,
+            &self.write_generations,
+            &uuid,
+            generation,
+            nbt,
+        )
     }
+}
+
+fn commit_player_data(
+    storage: &PlayerDataStorage,
+    generations: &Mutex<HashMap<Uuid, u64>>,
+    uuid: &Uuid,
+    generation: u64,
+    nbt: NbtCompound,
+) -> Result<(), PlayerDataError> {
+    let mut generations = generations
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    if generations
+        .get(uuid)
+        .is_some_and(|committed| *committed >= generation)
+    {
+        debug!("Skipping stale player data write for {uuid}");
+        return Ok(());
+    }
+
+    storage.save_player_data(uuid, nbt)?;
+    generations.insert(*uuid, generation);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -313,5 +363,35 @@ mod test {
         assert!(success);
         assert_eq!(loaded_data.get_string("name").unwrap(), "TestPlayer");
         assert_eq!(loaded_data.get_int("level").unwrap(), 42);
+    }
+
+    #[test]
+    fn stale_snapshot_is_not_committed() {
+        use super::commit_player_data;
+        use std::collections::HashMap;
+        use std::sync::Mutex;
+
+        let temp_dir = tempdir().unwrap();
+        let storage = PlayerDataStorage::new(temp_dir.path(), true);
+        let generations = Mutex::new(HashMap::new());
+        let uuid = Uuid::new_v4();
+
+        let mut first = NbtCompound::new();
+        first.put_string("State", "old".to_string());
+        commit_player_data(&storage, &generations, &uuid, 1, first).unwrap();
+
+        let mut stale = NbtCompound::new();
+        stale.put_string("State", "stale".to_string());
+        commit_player_data(&storage, &generations, &uuid, 0, stale).unwrap();
+
+        let (_, loaded) = storage.load_player_data(&uuid).unwrap();
+        assert_eq!(loaded.get_string("State").unwrap(), "old");
+
+        let mut newer = NbtCompound::new();
+        newer.put_string("State", "new".to_string());
+        commit_player_data(&storage, &generations, &uuid, 2, newer).unwrap();
+
+        let (_, loaded) = storage.load_player_data(&uuid).unwrap();
+        assert_eq!(loaded.get_string("State").unwrap(), "new");
     }
 }

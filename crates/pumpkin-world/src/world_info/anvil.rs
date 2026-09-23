@@ -441,10 +441,12 @@ impl WorldInfoWriter for AnvilLevelInfo {
         write_gzip_compound_tag(root, File::create(&path_new)?)
             .map_err(|e| WorldInfoError::SerializationError(e.to_string()))?;
 
-        if path.exists() {
-            let _ = std::fs::copy(&path, &path_old);
+        if path.exists()
+            && let Err(e) = std::fs::copy(&path, &path_old)
+        {
+            error!("Failed to back up level.dat to {}: {e}", path_old.display());
         }
-        let _ = std::fs::rename(&path_new, &path);
+        std::fs::rename(&path_new, &path)?;
 
         let data_version = level_data.data_version;
 

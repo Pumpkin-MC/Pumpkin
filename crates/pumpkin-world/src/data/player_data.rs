@@ -137,21 +137,119 @@ impl PlayerDataStorage {
             return Err(PlayerDataError::Io(e));
         }
 
-        // Create the file and write directly with GZip compression
-        match File::create(&path) {
-            Ok(file) => {
-                if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, file) {
-                    error!("Failed to write compressed player data for {uuid}: {e}");
-                    Err(PlayerDataError::Nbt(e.to_string()))
-                } else {
-                    debug!("Saved player data for {uuid} to disk");
-                    Ok(())
-                }
-            }
-            Err(e) => {
-                error!("Failed to create player data file for {uuid}: {e}");
-                Err(PlayerDataError::Io(e))
-            }
+        Self::write_atomically(&path, |file| {
+            pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, file)
+                .map_err(|e| PlayerDataError::Nbt(e.to_string()))
+        })
+        .map_err(|e| {
+            error!("Failed to write compressed player data for {uuid}: {e}");
+            e
+        })?;
+
+        debug!("Saved player data for {uuid} to disk");
+        Ok(())
+    }
+
+    fn write_atomically(
+        path: &std::path::Path,
+        write: impl FnOnce(&File) -> Result<(), PlayerDataError>,
+    ) -> Result<(), PlayerDataError> {
+        static TEMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+        let unique = TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let temp_path = path.with_extension(format!("dat.tmp.{}.{unique}", std::process::id()));
+
+        let result = (|| {
+            let file = File::create(&temp_path)?;
+            write(&file)?;
+            file.sync_all()?;
+            std::fs::rename(&temp_path, path)?;
+            Ok(())
+        })();
+
+        if result.is_err() {
+            let _ = std::fs::remove_file(&temp_path);
         }
+
+        result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn temp_storage() -> (tempfile::TempDir, PlayerDataStorage) {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let storage = PlayerDataStorage::new(temp_dir.path(), true);
+        (temp_dir, storage)
+    }
+
+    fn test_compound(value: &str) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("State", value.to_string());
+        nbt
+    }
+
+    #[test]
+    fn save_and_load_round_trip() {
+        let (_dir, storage) = temp_storage();
+        let uuid = Uuid::new_v4();
+
+        storage
+            .save_player_data(&uuid, test_compound("good"))
+            .unwrap();
+
+        let (found, loaded) = storage.load_player_data(&uuid).unwrap();
+        assert!(found);
+        assert_eq!(loaded.get_string("State").unwrap(), "good");
+    }
+
+    #[test]
+    fn failed_write_leaves_previous_file_intact() {
+        let (dir, storage) = temp_storage();
+        let uuid = Uuid::new_v4();
+        storage
+            .save_player_data(&uuid, test_compound("good"))
+            .unwrap();
+
+        let path = storage.get_player_data_path(&uuid);
+        let result = PlayerDataStorage::write_atomically(&path, |mut file| {
+            file.write_all(b"partial garbage").unwrap();
+            Err(PlayerDataError::Nbt("injected failure".to_string()))
+        });
+        assert!(result.is_err());
+
+        let (found, loaded) = storage.load_player_data(&uuid).unwrap();
+        assert!(found);
+        assert_eq!(loaded.get_string("State").unwrap(), "good");
+
+        let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".tmp."))
+            .collect();
+        assert!(leftovers.is_empty());
+    }
+
+    #[test]
+    fn no_temp_files_left_after_save() {
+        let (dir, storage) = temp_storage();
+        let uuid = Uuid::new_v4();
+
+        storage
+            .save_player_data(&uuid, test_compound("good"))
+            .unwrap();
+        storage
+            .save_player_data(&uuid, test_compound("better"))
+            .unwrap();
+
+        let entries: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(entries, vec![format!("{uuid}.dat")]);
     }
 }
