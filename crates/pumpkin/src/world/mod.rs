@@ -3420,20 +3420,7 @@ impl World {
         player.living_entity.entity.set_rotation(yaw, pitch);
         player.living_entity.entity.last_pos.store(position);
         chunker::update_position(player);
-
-        let center_chunk = player.living_entity.entity.chunk_pos.load();
-        let chunk = self
-            .level
-            .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
-            .await;
-        // A cancelled `ChunkSend` keeps the chunk pending -> the batch path sends it later.
-        if client.send_chunks(&[chunk]).await.contains(&center_chunk) {
-            player
-                .chunk_sender
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .mark_sent_out_of_band(center_chunk);
-        }
+        self.send_center_chunk(player).await;
 
         let velocity = player.living_entity.entity.velocity.load();
 
