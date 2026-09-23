@@ -936,8 +936,7 @@ impl SkyLightPropagator {
                             from_rel_y,
                             fill_end,
                         );
-                        let col_height = c.height() as usize;
-                        let map = c.flat_block_map.as_ref();
+                        let map = c.flat_block_map.as_slice();
                         descend_sky_column(
                             &mut c.light.sky_light,
                             local_x,
@@ -945,8 +944,12 @@ impl SkyLightPropagator {
                             bottom_y,
                             descend_top,
                             |y| {
-                                let rel = (y - bottom_y) as usize;
-                                map[col_height * 16 * local_x + 16 * rel + local_z]
+                                ProtoChunk::block_in(
+                                    map,
+                                    local_x as i32,
+                                    y - bottom_y,
+                                    local_z as i32,
+                                )
                             },
                         );
                     }
