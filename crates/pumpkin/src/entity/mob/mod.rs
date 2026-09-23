@@ -726,7 +726,16 @@ impl MobEntity {
         let pos = entity.pos.load();
         let players = world.players.load();
 
-        let nearest_dist_sq = players
+        // Vanilla `Mob::checkDespawn` looks up the single nearest player
+        // (`level().getNearestPlayer`) and does nothing at all when that
+        // lookup returns null — no player anywhere in the level, not "a
+        // player who happens to be infinitely far away". A `fold` starting
+        // from `f64::MAX` can't distinguish those two cases on its own, so
+        // the empty-iterator case is checked explicitly first: with zero
+        // players online (a headless server tick, a GameTest with no one
+        // connected, ...) every mob would otherwise measure as "impossibly
+        // far" and get discarded on its very first tick.
+        let Some(nearest_dist_sq) = players
             .iter()
             .filter(|p| p.gamemode.load() != pumpkin_util::GameMode::Spectator)
             .map(|p| {
@@ -736,15 +745,15 @@ impl MobEntity {
                 let dz = pp.z - pos.z;
                 dx * dx + dy * dy + dz * dz
             })
-            .fold(f64::MAX, f64::min);
+            .fold(None, |closest: Option<f64>, dist| {
+                Some(closest.map_or(dist, |closest| closest.min(dist)))
+            })
+        else {
+            return;
+        };
 
         // Mobs like a converting zombie villager refuse to despawn (`removeWhenFarAway`).
         if !mob.remove_when_far_away(nearest_dist_sq) {
-            return;
-        }
-
-        if nearest_dist_sq == f64::MAX {
-            mob.get_entity().remove();
             return;
         }
 

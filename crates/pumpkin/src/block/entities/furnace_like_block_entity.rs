@@ -454,6 +454,17 @@ macro_rules! impl_block_entity_for_cooking {
                     if self.is_burning() && can_accept_output {
                         let mut start_cancelled = false;
                         if self.get_cooking_time_spent() == 0 {
+                            // A brand-new furnace has never smelted anything, so
+                            // `cooking_total_time` is still its default of 0 —
+                            // fill it in from the recipe now so the event below
+                            // reports the real duration, and so the `>=` check a
+                            // few lines down doesn't treat the very first tick as
+                            // "already done" against a total of 0.
+                            if self.get_cooking_total_time() == 0 {
+                                if let Some(cooking_recipe) = furnace_recipe {
+                                    self.set_cooking_total_time(cooking_recipe.cookingtime as u16);
+                                }
+                            }
                             if let Some(server) = world.server.upgrade() {
                                 let mut start_event = $crate::plugin::api::events::inventory::furnace_start_smelt::FurnaceStartSmeltEvent::new(
                                     self.position,
@@ -471,7 +482,14 @@ macro_rules! impl_block_entity_for_cooking {
                         if !start_cancelled {
                             self.cooking_time_spent.fetch_add(1, Ordering::Relaxed);
 
-                            if self.get_cooking_time_spent() == self.get_cooking_total_time() {
+                            // Vanilla compares with `>=`, not `==` (see
+                            // `AbstractFurnaceBlockEntity.serverTick`): a freshly
+                            // created block entity's `cooking_total_time` starts at
+                            // 0, and `==` would mean `cooking_time_spent` (which
+                            // only ever increases while lit) can never equal 0
+                            // again once it passes it — permanently stalling the
+                            // very first smelt a brand-new furnace ever attempts.
+                            if self.get_cooking_time_spent() >= self.get_cooking_total_time() {
                                 self.set_cooking_time_spent(0);
                                 if let Some(cooking_recipe) = furnace_recipe {
                                     let cooking_total_time = cooking_recipe.cookingtime;
@@ -516,15 +534,29 @@ macro_rules! impl_block_entity_for_cooking {
                     is_dirty = true;
                     let (furnace_block, furnace_block_state) =
                         world.get_block_and_state(&self.position);
-                    let mut props =
-                        pumpkin_data::block_properties::FurnaceLikeProperties::from_state_id(furnace_block_state.id);
+                    // The block entity can outlive its block by a tick when another
+                    // Rayon worker replaces it (e.g. the block was just broken, or a
+                    // test harness cleared the area for a retry) — matching
+                    // `hopper.rs::tick`'s own guard against the same race.
+                    // `FurnaceLikeProperties::from_state_id` panics for any block it
+                    // doesn't recognize, and that's not only air: any other block
+                    // (a chest placed over the same position, say) would panic
+                    // just the same, so the check has to name the furnace-like
+                    // blocks themselves rather than exclude air alone.
+                    if furnace_block.id == pumpkin_data::BlockId::FURNACE
+                        || furnace_block.id == pumpkin_data::BlockId::BLAST_FURNACE
+                        || furnace_block.id == pumpkin_data::BlockId::SMOKER
+                    {
+                        let mut props =
+                            pumpkin_data::block_properties::FurnaceLikeProperties::from_state_id(furnace_block_state.id);
 
-                    props.lit = self.is_burning();
-                    world.set_block_state(
-                        &self.position,
-                        props.to_state_id(furnace_block),
-                        $crate::world::BlockFlags::NOTIFY_ALL,
-                    );
+                        props.lit = self.is_burning();
+                        world.set_block_state(
+                            &self.position,
+                            props.to_state_id(furnace_block),
+                            $crate::world::BlockFlags::NOTIFY_ALL,
+                        );
+                    }
                 }
 
                 if is_dirty {

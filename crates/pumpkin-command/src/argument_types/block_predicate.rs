@@ -3,11 +3,13 @@ use std::collections::HashMap;
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
 use pumpkin_data::{Block, translation};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 
 use crate::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::argument_types::block::INVALID_BLOCK_ERROR_TYPE;
 use crate::argument_types::nbt::NbtCompoundArgumentType;
+use crate::argument_types::nbt_path::compare_nbt;
 use crate::context::command_context::CommandContext;
 use crate::errors::command_syntax_error::CommandSyntaxError;
 use crate::errors::error_types::CommandErrorType;
@@ -59,6 +61,24 @@ impl BlockPredicate {
     pub const fn requires_nbt(&self) -> bool {
         match self {
             Self::Block { nbt, .. } | Self::Tag { nbt, .. } => nbt.is_some(),
+        }
+    }
+
+    /// Tests whether `entity_nbt` (the full saved NBT of the block entity at
+    /// the tested position, `id`/`x`/`y`/`z` included — matching vanilla's
+    /// `BlockEntity::saveWithFullMetadata`) satisfies this predicate's `{...}`
+    /// NBT constraint, if one was given. Only meaningful when
+    /// [`Self::requires_nbt`] is `true`; callers should skip fetching the
+    /// block entity entirely otherwise.
+    #[must_use]
+    pub fn test_nbt(&self, entity_nbt: &NbtCompound) -> bool {
+        match self {
+            Self::Block { nbt, .. } | Self::Tag { nbt, .. } => nbt.as_ref().is_none_or(|pattern| {
+                compare_nbt(
+                    &NbtTag::Compound(pattern.clone()),
+                    &NbtTag::Compound(entity_nbt.clone()),
+                )
+            }),
         }
     }
 }
@@ -228,5 +248,51 @@ impl BlockPredicateArgumentType {
         name: &str,
     ) -> Result<BlockPredicate, CommandSyntaxError> {
         Ok(context.get_argument::<BlockPredicate>(name)?.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::string_reader::StringReader;
+
+    fn parse(input: &str) -> BlockPredicate {
+        let mut reader = StringReader::new(input);
+        ArgumentType::<crate::source::DummySource>::parse(&BlockPredicateArgumentType, &mut reader)
+            .unwrap()
+    }
+
+    #[test]
+    fn requires_nbt_is_false_without_a_pattern() {
+        let predicate = parse("minecraft:chest");
+        assert!(!predicate.requires_nbt());
+    }
+
+    #[test]
+    fn nbt_matching_matches_a_subset_of_the_actual_entity_data() {
+        // Real bug: `requires_nbt()` already existed, but nothing ever
+        // called anything to actually compare the parsed `{...}` pattern
+        // against a real block entity's NBT — the filter was parsed and
+        // then silently ignored.
+        let predicate = parse("minecraft:chest{Items:[]}");
+        assert!(predicate.requires_nbt());
+
+        let mut actual = NbtCompound::new();
+        actual.put_string("id", "minecraft:chest".to_string());
+        actual.put_list("Items", Vec::new());
+        actual.put_int("x", 0);
+        assert!(predicate.test_nbt(&actual));
+
+        let mut wrong = NbtCompound::new();
+        wrong.put_string("id", "minecraft:chest".to_string());
+        assert!(!predicate.test_nbt(&wrong));
+    }
+
+    #[test]
+    fn nbt_matching_is_vacuously_true_without_a_pattern() {
+        let predicate = parse("minecraft:chest");
+        let mut actual = NbtCompound::new();
+        actual.put_string("id", "minecraft:chest".to_string());
+        assert!(predicate.test_nbt(&actual));
     }
 }

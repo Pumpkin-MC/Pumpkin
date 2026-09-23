@@ -385,11 +385,29 @@ impl<S: CommandSource> CommandDispatcher<S> {
     }
 
     /// Executes a given result that has already been parsed from an input.
-    pub fn execute(&self, parsed: ParsingResult<'_, S>) -> Result<i32, CommandSyntaxError> {
+    pub fn execute(&self, mut parsed: ParsingResult<'_, S>) -> Result<i32, CommandSyntaxError> {
+        // Brigadier's own node-parsing loop consumes the separating whitespace
+        // between arguments as it advances to each next node, so trailing
+        // whitespace with nothing meaningful after it (a stray space a command
+        // block, a client, or another command's output tacked on) never counts
+        // as "more input" there. This dispatcher's per-argument parsing stops
+        // exactly at each value's own end instead, so a trailing space is still
+        // sitting unconsumed here — skip it before deciding whether anything is
+        // actually left over, or every command whose input happens to end in
+        // whitespace fails with a bogus "unknown argument" error.
+        parsed.reader.skip_whitespace();
+        // A saved error can coexist with a fully consumed reader: an argument
+        // left empty by trailing whitespace (`execute run` with nothing after
+        // it) has every candidate for that argument fail with the reader
+        // already at its end, so `peek()` alone can't tell that apart from a
+        // genuine, error-free success. Check for a saved error first so that
+        // case still reports its specific parse error instead of falling
+        // through to `try_flatten`'s generic "unknown command".
+        if let Some(err) = parsed.errors.values().next() {
+            return Err(err.clone());
+        }
         if parsed.reader.peek().is_some() {
-            return if let Some(err) = parsed.errors.values().next() {
-                Err(err.clone())
-            } else if parsed.context.range.is_empty() {
+            return if parsed.context.range.is_empty() {
                 Err(Self::unknown_command_error(&parsed.reader))
             } else {
                 Err(DISPATCHER_UNKNOWN_ARGUMENT.create(&parsed.reader))

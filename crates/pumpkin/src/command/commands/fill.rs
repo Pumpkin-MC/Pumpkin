@@ -1,5 +1,6 @@
 use pumpkin_data::translation;
 use pumpkin_data::{Block, BlockStateId};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -142,10 +143,42 @@ fn fill_blocks(
                                         }
                                     }
                                     _ => {
-                                        if let Some(f) = filter
-                                            && !f.test(current_block)
-                                        {
-                                            continue;
+                                        if let Some(f) = filter {
+                                            if !f.test(current_block) {
+                                                continue;
+                                            }
+                                            if f.requires_nbt() {
+                                                // Calling `world.get_block_entity` here would
+                                                // re-enter `world.level.read_chunk_sync` for the
+                                                // same chunk while its lock is already held by
+                                                // this closure, which can deadlock. `chunk` and
+                                                // `world.block_entities` (a separate map) give us
+                                                // the same two sources without that re-entry.
+                                                let matches_nbt = world
+                                                    .block_entities
+                                                    .get(&chunk_pos)
+                                                    .and_then(|m| {
+                                                        m.get(&pos).map(|entity| {
+                                                            let mut nbt = NbtCompound::new();
+                                                            entity.write_internal(&mut nbt);
+                                                            nbt
+                                                        })
+                                                    })
+                                                    .or_else(|| {
+                                                        chunk
+                                                            .pending_block_entities
+                                                            .lock()
+                                                            .unwrap_or_else(
+                                                                std::sync::PoisonError::into_inner,
+                                                            )
+                                                            .get(&pos)
+                                                            .cloned()
+                                                    })
+                                                    .is_some_and(|nbt| f.test_nbt(&nbt));
+                                                if !matches_nbt {
+                                                    continue;
+                                                }
+                                            }
                                         }
                                     }
                                 }

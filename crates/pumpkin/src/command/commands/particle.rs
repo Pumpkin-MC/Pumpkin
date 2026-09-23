@@ -35,6 +35,7 @@ const ERROR_FAILED: CommandErrorType<0> = CommandErrorType::new(
 fn send_particles(
     source: &CommandSource,
     particle: Particle,
+    extra_data: &[u8],
     pos: Vector3<f64>,
     delta: Vector3<f64>,
     speed: f32,
@@ -54,7 +55,7 @@ fn send_particles(
         speed,
         count,
         VarInt(i32::from(particle.to_id())),
-        &[],
+        extra_data,
     );
 
     let max_dist_sq = if force { 512.0 * 512.0 } else { 32.0 * 32.0 };
@@ -105,14 +106,15 @@ struct ParticleExecutor {
 
 impl CommandExecutor for ParticleExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let particle = ParticleArgumentType::get(context, "name")?;
+        let parsed = ParticleArgumentType::get(context, "name")?;
 
         match self.mode {
             ParticleMode::Simple => {
                 let pos = context.source.position;
                 send_particles(
                     &context.source,
-                    particle,
+                    parsed.particle,
+                    &parsed.extra_data,
                     pos,
                     Vector3::new(0.0, 0.0, 0.0),
                     0.0,
@@ -125,7 +127,8 @@ impl CommandExecutor for ParticleExecutor {
                 let pos = Vec3ArgumentType::get_vector3(context, "pos")?;
                 send_particles(
                     &context.source,
-                    particle,
+                    parsed.particle,
+                    &parsed.extra_data,
                     pos,
                     Vector3::new(0.0, 0.0, 0.0),
                     0.0,
@@ -147,7 +150,8 @@ impl CommandExecutor for ParticleExecutor {
 
                 send_particles(
                     &context.source,
-                    particle,
+                    parsed.particle,
+                    &parsed.extra_data,
                     pos,
                     delta,
                     speed,

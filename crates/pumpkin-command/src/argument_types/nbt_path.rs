@@ -101,6 +101,16 @@ pub fn compare_nbt(pattern: &NbtTag, target: &NbtTag) -> bool {
             if pattern_list.is_empty() {
                 return target_list.is_empty();
             }
+            // Matches vanilla's `NbtUtils.compareNbt`: a pattern element can
+            // match any target element without "consuming" it, so a target
+            // shorter than the pattern could otherwise let one target
+            // element satisfy several pattern elements at once (e.g.
+            // pattern `[A, A]` against target `[A]`) — reject that up
+            // front, the same way vanilla's own size check does, rather
+            // than let the search below quietly allow it.
+            if target_list.len() < pattern_list.len() {
+                return false;
+            }
             for pattern_elem in pattern_list {
                 let mut matched = false;
                 for target_elem in target_list {
@@ -452,6 +462,28 @@ impl NbtPath {
         current.len()
     }
 
+    // SAFETY (applies to every `unsafe { &mut *parent_ptr }` fed by this
+    // function's return value, in `set`/`insert`/`remove` as well as here):
+    // every pointer in `current` at the start of a loop iteration points at
+    // a *distinct* location reachable from the root `tag`, and `NbtTag`/
+    // `NbtCompound` are plain owned trees (a `Vec`/`HashMap` of owned
+    // values, no `Rc`/shared aliasing) — so two different tree positions can
+    // never alias the same memory. Mutating through one pointer this
+    // iteration therefore can't invalidate another pointer already held for
+    // a different position. The one way that guarantee could break is a
+    // `Vec`/`HashMap` reallocating out from under an *already-collected*
+    // pointer into one of its own elements: this is avoided because a
+    // container is only grown (`list.push`, `child_tags.insert`) *before*
+    // any pointer into that same container is taken for this iteration,
+    // never after (see the `MatchElement`/`MatchObject` `found`/
+    // `contains_key` guards below, and the single unconditional push in
+    // `AllElements` happening only while the list is still empty). Changing
+    // that ordering in any node's match arm — or adding a node kind that
+    // doesn't follow it — would reintroduce a dangling-pointer hazard with
+    // no compiler check to catch it; `set_on_a_freshly_created_match_element
+    // _also_applies_the_final_field` and `set_through_all_elements_then_a
+    // _field_does_not_cross_contaminate_siblings` in the tests below exist
+    // specifically to catch a regression here.
     fn get_or_create_parents(
         &self,
         tag: &mut NbtTag,
@@ -462,7 +494,6 @@ impl NbtPath {
             let next_node = &self.nodes[i + 1];
             let mut next = Vec::new();
             for &parent_ptr in &current {
-                // SAFETY: We traverse disjoint paths in the NBT tree.
                 let parent = unsafe { &mut *parent_ptr };
                 match node {
                     NbtPathNode::CompoundChild(name) => {
@@ -561,6 +592,7 @@ impl NbtPath {
         };
         let mut changed_count = 0;
         for &parent_ptr in &parents {
+            // SAFETY: see `get_or_create_parents`, which produced `parents`.
             let parent = unsafe { &mut *parent_ptr };
             let val_clone = to_add.clone();
             changed_count += last_node.set_tag(parent, &mut || val_clone.clone());
@@ -588,6 +620,7 @@ impl NbtPath {
 
         let mut modified_count = 0;
         for &parent_ptr in &parents {
+            // SAFETY: see `get_or_create_parents`, which produced `parents`.
             let parent = unsafe { &mut *parent_ptr };
             let target_tags = match last_node {
                 NbtPathNode::CompoundChild(name) => {
@@ -650,6 +683,7 @@ impl NbtPath {
         };
         let mut total_removed = 0;
         for &parent_ptr in &parents {
+            // SAFETY: see `get_or_create_parents`, which produced `parents`.
             let parent = unsafe { &mut *parent_ptr };
             total_removed += last_node.remove_tag(parent);
         }
@@ -798,5 +832,475 @@ fn parse_compound_pattern(reader: &mut StringReader) -> Result<NbtCompound, Comm
     match SnbtParser::parse_for_commands(reader)? {
         NbtTag::Compound(compound) => Ok(compound),
         _ => Err(ERROR_INVALID_NODE.create(reader)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::string_reader::StringReader;
+
+    fn parse(input: &str) -> Result<NbtPath, CommandSyntaxError> {
+        let mut reader = StringReader::new(input);
+        ArgumentType::<crate::source::DummySource>::parse(&NbtPathArgumentType, &mut reader)
+    }
+
+    // --- parsing ---
+
+    #[test]
+    fn parses_a_single_unquoted_name() {
+        let path = parse("foo").unwrap();
+        assert_eq!(path.nodes(), &[NbtPathNode::CompoundChild("foo".into())]);
+    }
+
+    #[test]
+    fn parses_a_dotted_chain_of_names() {
+        let path = parse("foo.bar.baz").unwrap();
+        assert_eq!(
+            path.nodes(),
+            &[
+                NbtPathNode::CompoundChild("foo".into()),
+                NbtPathNode::CompoundChild("bar".into()),
+                NbtPathNode::CompoundChild("baz".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_a_quoted_name_containing_a_space() {
+        let path = parse("\"foo bar\"").unwrap();
+        assert_eq!(
+            path.nodes(),
+            &[NbtPathNode::CompoundChild("foo bar".into())]
+        );
+    }
+
+    #[test]
+    fn parses_an_indexed_element_positive_and_negative() {
+        let path = parse("foo[0]").unwrap();
+        assert_eq!(
+            path.nodes(),
+            &[
+                NbtPathNode::CompoundChild("foo".into()),
+                NbtPathNode::IndexedElement(0)
+            ]
+        );
+        let path = parse("foo[-1]").unwrap();
+        assert_eq!(
+            path.nodes(),
+            &[
+                NbtPathNode::CompoundChild("foo".into()),
+                NbtPathNode::IndexedElement(-1)
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_an_all_elements_wildcard() {
+        let path = parse("foo[]").unwrap();
+        assert_eq!(
+            path.nodes(),
+            &[
+                NbtPathNode::CompoundChild("foo".into()),
+                NbtPathNode::AllElements
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_a_match_element_pattern() {
+        let mut expected = NbtCompound::new();
+        expected.put_int("a", 1);
+        let path = parse("foo[{a:1}]").unwrap();
+        assert_eq!(
+            path.nodes(),
+            &[
+                NbtPathNode::CompoundChild("foo".into()),
+                NbtPathNode::MatchElement(expected)
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_a_match_object_pattern() {
+        let mut expected = NbtCompound::new();
+        expected.put_int("a", 1);
+        let path = parse("foo{a:1}").unwrap();
+        assert_eq!(
+            path.nodes(),
+            &[NbtPathNode::MatchObject("foo".into(), expected)]
+        );
+    }
+
+    #[test]
+    fn parses_a_match_root_object_pattern_as_the_first_node() {
+        let mut expected = NbtCompound::new();
+        expected.put_int("a", 1);
+        let path = parse("{a:1}").unwrap();
+        assert_eq!(path.nodes(), &[NbtPathNode::MatchRootObject(expected)]);
+    }
+
+    #[test]
+    fn rejects_a_match_root_object_pattern_that_is_not_the_first_node() {
+        // Two match-object-shaped nodes back to back with no `.` between
+        // them: the second one starts with `{` but isn't the first node of
+        // the whole path, which only `MatchRootObject` is allowed to do.
+        let mut reader = StringReader::new("foo{a:1}{b:2}");
+        assert!(
+            ArgumentType::<crate::source::DummySource>::parse(&NbtPathArgumentType, &mut reader)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_an_empty_path() {
+        let mut reader = StringReader::new("");
+        assert!(
+            ArgumentType::<crate::source::DummySource>::parse(&NbtPathArgumentType, &mut reader)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_an_unclosed_index() {
+        let mut reader = StringReader::new("foo[0");
+        assert!(
+            ArgumentType::<crate::source::DummySource>::parse(&NbtPathArgumentType, &mut reader)
+                .is_err()
+        );
+    }
+
+    // --- get / count_matching ---
+
+    #[test]
+    fn get_returns_the_value_at_a_matching_path() {
+        let mut root = NbtCompound::new();
+        root.put_int("foo", 42);
+        let path = parse("foo").unwrap();
+        assert_eq!(
+            path.get(&NbtTag::Compound(root)).unwrap(),
+            vec![NbtTag::Int(42)]
+        );
+    }
+
+    #[test]
+    fn get_fails_with_nothing_found_on_a_missing_path() {
+        let root = NbtCompound::new();
+        let path = parse("foo").unwrap();
+        assert!(path.get(&NbtTag::Compound(root)).is_err());
+    }
+
+    #[test]
+    fn count_matching_counts_every_wildcard_hit() {
+        let mut root = NbtCompound::new();
+        root.put_list(
+            "items",
+            vec![NbtTag::Int(1), NbtTag::Int(2), NbtTag::Int(3)],
+        );
+        let path = parse("items[]").unwrap();
+        assert_eq!(path.count_matching(&NbtTag::Compound(root)), 3);
+    }
+
+    // --- set ---
+
+    #[test]
+    fn set_creates_missing_intermediate_compounds() {
+        let mut root = NbtTag::Compound(NbtCompound::new());
+        let path = parse("a.b.c").unwrap();
+        let changed = path.set(&mut root, NbtTag::Int(7)).unwrap();
+        assert_eq!(changed, 1);
+        assert_eq!(path.get(&root).unwrap(), vec![NbtTag::Int(7)]);
+    }
+
+    #[test]
+    fn set_on_all_elements_overwrites_every_item_with_the_same_value() {
+        let mut compound = NbtCompound::new();
+        compound.put_list(
+            "items",
+            vec![NbtTag::Int(1), NbtTag::Int(2), NbtTag::Int(3)],
+        );
+        let mut root = NbtTag::Compound(compound);
+        let path = parse("items[]").unwrap();
+
+        let changed = path.set(&mut root, NbtTag::Int(9)).unwrap();
+        assert_eq!(changed, 3);
+        assert_eq!(
+            path.get(&root).unwrap(),
+            vec![NbtTag::Int(9), NbtTag::Int(9), NbtTag::Int(9)]
+        );
+
+        // Setting the same value again changes nothing.
+        let changed_again = path.set(&mut root, NbtTag::Int(9)).unwrap();
+        assert_eq!(changed_again, 0);
+    }
+
+    #[test]
+    fn set_on_negative_index_addresses_from_the_end() {
+        let mut compound = NbtCompound::new();
+        compound.put_list(
+            "items",
+            vec![NbtTag::Int(1), NbtTag::Int(2), NbtTag::Int(3)],
+        );
+        let mut root = NbtTag::Compound(compound);
+        let path = parse("items[-1]").unwrap();
+        path.set(&mut root, NbtTag::Int(99)).unwrap();
+        assert_eq!(path.get(&root).unwrap(), vec![NbtTag::Int(99)]);
+        // Confirm it was the *last* element, not some other one, that changed.
+        let all = parse("items[]").unwrap().get(&root).unwrap();
+        assert_eq!(all, vec![NbtTag::Int(1), NbtTag::Int(2), NbtTag::Int(99)]);
+    }
+
+    #[test]
+    fn set_on_a_freshly_created_match_element_also_applies_the_final_field() {
+        // Regression test for the `get_or_create_parents` raw-pointer chain:
+        // `list[{a:1}]` on an empty list has to fall back to *creating* a
+        // new `{a:1}` element (no existing element matches), and the next
+        // node (`.b`) then has to set a field on that same brand-new
+        // element through the pointer collected during that fallback. If
+        // the pointer ever dangled or aliased a sibling, this would either
+        // panic, silently do nothing, or corrupt another element.
+        let mut compound = NbtCompound::new();
+        compound.put_list("list", Vec::new());
+        let mut root = NbtTag::Compound(compound);
+
+        let path = parse("list[{a:1}].b").unwrap();
+        let changed = path.set(&mut root, NbtTag::Int(5)).unwrap();
+        assert_eq!(changed, 1);
+
+        let NbtTag::Compound(root_compound) = &root else {
+            panic!("expected a compound")
+        };
+        let list = root_compound.get_list("list").unwrap();
+        assert_eq!(list.len(), 1);
+        let NbtTag::Compound(created) = &list[0] else {
+            panic!("expected the fallback-created element to be a compound");
+        };
+        assert_eq!(created.get_int("a"), Some(1));
+        assert_eq!(created.get_int("b"), Some(5));
+    }
+
+    #[test]
+    fn set_through_all_elements_then_a_field_does_not_cross_contaminate_siblings() {
+        // Each list element is its own compound; writing `value` through
+        // each of the (disjoint) pointers collected for `[]` must only ever
+        // touch that one element's own map, never a sibling's.
+        let mut first = NbtCompound::new();
+        first.put_int("id", 1);
+        let mut second = NbtCompound::new();
+        second.put_int("id", 2);
+        let mut compound = NbtCompound::new();
+        compound.put_list(
+            "list",
+            vec![NbtTag::Compound(first), NbtTag::Compound(second)],
+        );
+        let mut root = NbtTag::Compound(compound);
+
+        let path = parse("list[].value").unwrap();
+        let changed = path.set(&mut root, NbtTag::Int(100)).unwrap();
+        assert_eq!(changed, 2);
+
+        let NbtTag::Compound(root_compound) = &root else {
+            panic!("expected a compound")
+        };
+        let list = root_compound.get_list("list").unwrap();
+        for (i, elem) in list.iter().enumerate() {
+            let NbtTag::Compound(c) = elem else {
+                panic!("expected a compound")
+            };
+            assert_eq!(c.get_int("id"), Some(i as i32 + 1), "id got clobbered");
+            assert_eq!(c.get_int("value"), Some(100));
+        }
+    }
+
+    // --- insert ---
+
+    #[test]
+    fn insert_creates_the_list_if_the_key_did_not_exist() {
+        let mut root = NbtTag::Compound(NbtCompound::new());
+        let path = parse("items").unwrap();
+        let changed = path
+            .insert(0, &mut root, &[NbtTag::Int(1), NbtTag::Int(2)])
+            .unwrap();
+        assert_eq!(changed, 1);
+        assert_eq!(
+            path.get(&root).unwrap(),
+            vec![NbtTag::List(vec![NbtTag::Int(1), NbtTag::Int(2)])]
+        );
+    }
+
+    #[test]
+    fn insert_at_a_negative_index_counts_from_the_end() {
+        let mut compound = NbtCompound::new();
+        compound.put_list("items", vec![NbtTag::Int(1), NbtTag::Int(3)]);
+        let mut root = NbtTag::Compound(compound);
+        let path = parse("items").unwrap();
+        // Matches vanilla's `NbtPathArgument.Node.insert`: actualIndex =
+        // size + index + 1, so -1 is "append at the very end" (size + 1 - 1
+        // == size) and -2 is "one slot before that" — not "before the last
+        // element" in the everyday negative-index sense.
+        path.insert(-2, &mut root, &[NbtTag::Int(2)]).unwrap();
+        assert_eq!(
+            path.get(&root).unwrap(),
+            vec![NbtTag::List(vec![
+                NbtTag::Int(1),
+                NbtTag::Int(2),
+                NbtTag::Int(3)
+            ])]
+        );
+    }
+
+    #[test]
+    fn insert_into_a_non_list_target_fails() {
+        let mut compound = NbtCompound::new();
+        compound.put_int("items", 5);
+        let mut root = NbtTag::Compound(compound);
+        let path = parse("items").unwrap();
+        assert!(path.insert(0, &mut root, &[NbtTag::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn insert_out_of_range_fails() {
+        let mut compound = NbtCompound::new();
+        compound.put_list("items", vec![NbtTag::Int(1)]);
+        let mut root = NbtTag::Compound(compound);
+        let path = parse("items").unwrap();
+        assert!(path.insert(5, &mut root, &[NbtTag::Int(2)]).is_err());
+    }
+
+    // --- remove ---
+
+    #[test]
+    fn remove_deletes_a_compound_child() {
+        let mut compound = NbtCompound::new();
+        compound.put_int("foo", 1);
+        let mut root = NbtTag::Compound(compound);
+        let path = parse("foo").unwrap();
+        assert_eq!(path.remove(&mut root), 1);
+        assert!(path.get(&root).is_err());
+    }
+
+    #[test]
+    fn remove_all_elements_clears_the_list_and_reports_how_many() {
+        let mut compound = NbtCompound::new();
+        compound.put_list(
+            "items",
+            vec![NbtTag::Int(1), NbtTag::Int(2), NbtTag::Int(3)],
+        );
+        let mut root = NbtTag::Compound(compound);
+        let path = parse("items[]").unwrap();
+        assert_eq!(path.remove(&mut root), 3);
+        let NbtTag::Compound(root_compound) = &root else {
+            panic!("expected a compound")
+        };
+        assert!(root_compound.get_list("items").unwrap().is_empty());
+    }
+
+    #[test]
+    fn remove_match_element_only_removes_matching_entries() {
+        let mut a = NbtCompound::new();
+        a.put_int("keep", 1);
+        let mut b = NbtCompound::new();
+        b.put_int("drop", 1);
+        let mut c = NbtCompound::new();
+        c.put_int("keep", 1);
+        let mut compound = NbtCompound::new();
+        compound.put_list(
+            "items",
+            vec![
+                NbtTag::Compound(a),
+                NbtTag::Compound(b.clone()),
+                NbtTag::Compound(c),
+            ],
+        );
+        let mut root = NbtTag::Compound(compound);
+
+        let path = parse("items[{drop:1}]").unwrap();
+        assert_eq!(path.remove(&mut root), 1);
+
+        let NbtTag::Compound(root_compound) = &root else {
+            panic!("expected a compound")
+        };
+        let remaining = root_compound.get_list("items").unwrap();
+        assert_eq!(remaining.len(), 2);
+        for elem in remaining {
+            let NbtTag::Compound(c) = elem else {
+                panic!("expected a compound")
+            };
+            assert_eq!(c.get_int("keep"), Some(1));
+        }
+    }
+
+    // --- is_too_deep ---
+
+    #[test]
+    fn is_too_deep_is_false_for_a_shallow_tag() {
+        let mut compound = NbtCompound::new();
+        compound.put_int("a", 1);
+        assert!(!is_too_deep(&NbtTag::Compound(compound), 0));
+    }
+
+    #[test]
+    fn is_too_deep_is_true_past_the_512_depth_limit() {
+        let mut tag = NbtTag::Compound(NbtCompound::new());
+        for _ in 0..600 {
+            let mut wrapper = NbtCompound::new();
+            wrapper.put("inner", tag);
+            tag = NbtTag::Compound(wrapper);
+        }
+        assert!(is_too_deep(&tag, 0));
+    }
+
+    // --- compare_nbt ---
+
+    #[test]
+    fn compare_nbt_matches_a_compound_subset() {
+        let mut pattern = NbtCompound::new();
+        pattern.put_int("a", 1);
+        let mut target = NbtCompound::new();
+        target.put_int("a", 1);
+        target.put_int("b", 2);
+        assert!(compare_nbt(
+            &NbtTag::Compound(pattern),
+            &NbtTag::Compound(target)
+        ));
+    }
+
+    #[test]
+    fn compare_nbt_rejects_a_mismatched_value() {
+        let mut pattern = NbtCompound::new();
+        pattern.put_int("a", 1);
+        let mut target = NbtCompound::new();
+        target.put_int("a", 2);
+        assert!(!compare_nbt(
+            &NbtTag::Compound(pattern),
+            &NbtTag::Compound(target)
+        ));
+    }
+
+    #[test]
+    fn compare_nbt_list_pattern_only_needs_each_element_matched_somewhere() {
+        let pattern = NbtTag::List(vec![NbtTag::Int(1)]);
+        let target = NbtTag::List(vec![NbtTag::Int(1), NbtTag::Int(2)]);
+        assert!(compare_nbt(&pattern, &target));
+    }
+
+    #[test]
+    fn compare_nbt_a_shorter_target_list_cannot_satisfy_a_longer_pattern() {
+        // Real bug this session found and fixed: without a length check,
+        // the "does some target element match" search lets one target
+        // element satisfy multiple pattern elements at once, so `[1, 1]`
+        // against a target of just `[1]` would wrongly match twice against
+        // the same lone element. Vanilla's `NbtUtils.compareNbt` guards
+        // against exactly this with an explicit size check.
+        let pattern = NbtTag::List(vec![NbtTag::Int(1), NbtTag::Int(1)]);
+        let target = NbtTag::List(vec![NbtTag::Int(1)]);
+        assert!(!compare_nbt(&pattern, &target));
+    }
+
+    #[test]
+    fn compare_nbt_empty_pattern_list_only_matches_an_empty_target_list() {
+        let pattern = NbtTag::List(Vec::new());
+        assert!(compare_nbt(&pattern, &NbtTag::List(Vec::new())));
+        assert!(!compare_nbt(&pattern, &NbtTag::List(vec![NbtTag::Int(1)])));
     }
 }
