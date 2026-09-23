@@ -1412,79 +1412,47 @@ impl Entity {
             return movement;
         }
 
-        let mut adjusted_movement = movement;
-
-        // Y-Axis adjustment
-        if movement.get_axis(Axis::Y) != 0.0 {
-            let mut max_time = 1.0;
-            let mut positions = block_positions.into_iter();
-            if let Some((mut collisions_len, mut position)) = positions.next() {
-                let mut supporting_block_pos = None;
-
-                for (i, inert_box) in collisions.iter().enumerate() {
-                    if i == collisions_len {
-                        let Some((next_len, next_pos)) = positions.next() else {
-                            break;
-                        };
-                        collisions_len = next_len;
-                        position = next_pos;
-                    }
-
-                    if let Some(collision_time) = bounding_box.calculate_collision_time(
-                        inert_box,
-                        adjusted_movement,
-                        Axis::Y,
-                        max_time,
-                    ) {
-                        max_time = collision_time;
-
-                        // If the entity is moving downwards and collides, set the supporting block position
-                        if movement.get_axis(Axis::Y) < 0.0 {
-                            supporting_block_pos = Some(position);
-                        }
-                    }
-                }
-
-                if max_time != 1.0 {
-                    let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
-                    adjusted_movement.set_axis(Axis::Y, changed_component);
-                }
-
-                self.on_ground
-                    .store(supporting_block_pos.is_some(), Ordering::SeqCst);
-                self.supporting_block_pos.store(supporting_block_pos);
-            }
-        }
-
-        let mut horizontal_collision = false;
-
-        for axis in Axis::horizontal() {
-            if movement.get_axis(axis) == 0.0 {
+        // Vanilla `Entity.collideWithShapes`: Y first, then the larger horizontal axis, each
+        // against the box already moved along the resolved axes.
+        let order = if movement.x.abs() < movement.z.abs() {
+            [Axis::Y, Axis::Z, Axis::X]
+        } else {
+            [Axis::Y, Axis::X, Axis::Z]
+        };
+        let mut adjusted_movement = Vector3::new(0.0, 0.0, 0.0);
+        let mut floor_box = None;
+        for axis in order {
+            let wanted = movement.get_axis(axis);
+            if wanted == 0.0 {
                 continue;
             }
-
-            let mut max_time = 1.0;
-
-            for inert_box in &collisions {
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
-                    inert_box,
-                    adjusted_movement,
-                    axis,
-                    max_time,
-                ) {
-                    max_time = collision_time;
-                }
-            }
-
-            if max_time != 1.0 {
-                let changed_component = adjusted_movement.get_axis(axis) * max_time;
-                adjusted_movement.set_axis(axis, changed_component);
-                horizontal_collision = true;
+            let (allowed, blocker) =
+                bounding_box
+                    .shift(adjusted_movement)
+                    .collide_along(axis, &collisions, wanted);
+            adjusted_movement.set_axis(axis, allowed);
+            if axis == Axis::Y && wanted < 0.0 && allowed != wanted {
+                floor_box = blocker;
             }
         }
 
+        // Vanilla `Mth.equal`: sideways cuts under 1e-5 are not a collision.
+        let horizontal_collision = (movement.x - adjusted_movement.x).abs() >= 1.0e-5
+            || (movement.z - adjusted_movement.z).abs() >= 1.0e-5;
         self.horizontal_collision
             .store(horizontal_collision, Ordering::SeqCst);
+
+        let on_ground = movement.y < 0.0 && adjusted_movement.y != movement.y;
+        self.on_ground.store(on_ground, Ordering::SeqCst);
+        if on_ground {
+            let supporting_block_pos = floor_box.and_then(|i| {
+                block_positions
+                    .iter()
+                    .find(|(end, _)| i < *end)
+                    .map(|(_, pos)| *pos)
+            });
+            self.supporting_block_pos.store(supporting_block_pos);
+        }
 
         adjusted_movement
     }
@@ -2027,9 +1995,18 @@ impl Entity {
 
         self.move_pos(final_move);
 
-        let velocity_multiplier = f64::from(caller.get_block_speed_factor());
-
-        self.velocity.store(final_move * velocity_multiplier);
+        // Vanilla `Entity.move`: the entity keeps its own velocity, a wall stops the axis it hit
+        // (no entity bounciness yet) and the block speed factor only slows X/Z.
+        let speed_factor = f64::from(caller.get_block_speed_factor());
+        let mut velocity = self.velocity.load();
+        if (motion.x - final_move.x).abs() >= 1.0e-5 {
+            velocity.x = 0.0;
+        }
+        if (motion.z - final_move.z).abs() >= 1.0e-5 {
+            velocity.z = 0.0;
+        }
+        self.velocity
+            .store(velocity.multiply(speed_factor, 1.0, speed_factor));
 
         if let Some(living) = caller.get_living_entity() {
             let on_ground = self.on_ground.load(Ordering::SeqCst);
@@ -2085,6 +2062,7 @@ impl Entity {
             }
         }
 
+        // TODO: vanilla rolls from the entity `random`; same odds, not seed-reproducible.
         let amplitude = rand::random::<f64>().mul_add(0.2, 0.1);
 
         let axis = direction.to_axis().into();

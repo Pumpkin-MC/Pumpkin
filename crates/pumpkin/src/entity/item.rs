@@ -94,6 +94,7 @@ impl ItemEntity {
     pub const DEFAULT_PICKUP_DELAY: u8 = 10;
 
     pub fn new(entity: Entity, item_stack: ItemStack) -> Self {
+        // TODO: vanilla rolls velocity and yaw from the entity `random`; not seed-reproducible.
         entity.velocity.store(Vector3::new(
             rand::random::<f64>().mul_add(0.2, -0.1),
             0.2,
@@ -121,6 +122,7 @@ impl ItemEntity {
         pickup_delay: u8,
     ) -> Self {
         entity.velocity.store(velocity);
+        // TODO: vanilla rolls yaw from the entity `random`; same odds, not seed-reproducible.
         entity.yaw.store(rand::random::<f32>() * 360.0);
         Self::update_fire_immune(&entity, &item_stack);
 
@@ -207,10 +209,12 @@ impl ItemEntity {
         {
             return false;
         }
-        let Ok(item_stack) = self.item_stack.try_lock() else {
-            return false;
-        };
-
+        // Blocking is safe: no other stack lock is held here, and a skipped check would delay
+        // the merge by up to 40 ticks.
+        let item_stack = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         item_stack.item_count < item_stack.get_max_stack_size()
     }
 
@@ -510,8 +514,20 @@ impl ItemEntity {
         }
 
         let entity = &self.entity;
-        let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
 
+        // merge rate on `tickCount`: 2 while the item changes block cell, else 40.
+        let moved =
+            BlockPos::floored_v(entity.last_pos.load()) != BlockPos::floored_v(entity.pos.load());
+        let rate = if moved { 2 } else { 40 };
+        if entity.age.load(Ordering::Relaxed) % rate == 0 {
+            self.merge_with_neighbours();
+            if entity.removed.load(Ordering::SeqCst) {
+                return false;
+            }
+        }
+
+        // Aged after merging, so the last tick before despawn can still merge.
+        let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
         if age >= LIFETIME {
             let entity_id = entity.entity_id;
             let world = entity.world.load_full();
@@ -528,14 +544,6 @@ impl ItemEntity {
                 e.get_entity().remove();
             }
             return false;
-        }
-
-        // merge rate on `tickCount`: 2 while the item changes block cell, else 40.
-        let moved =
-            BlockPos::floored_v(entity.last_pos.load()) != BlockPos::floored_v(entity.pos.load());
-        let rate = if moved { 2 } else { 40 };
-        if entity.age.load(Ordering::Relaxed) % rate == 0 {
-            self.merge_with_neighbours();
         }
 
         true
@@ -593,6 +601,18 @@ impl EntityBase for ItemEntity {
         if self.process_age_and_merge() {
             self.mark_needs_sync(caller, original_velo);
         }
+    }
+
+    fn teleport(
+        &self,
+        position: Vector3<f64>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        world: Arc<World>,
+    ) {
+        self.entity.teleport(position, yaw, pitch, &world);
+        // Vanilla `ItemEntity.teleport`: merge at the destination right away.
+        self.merge_with_neighbours();
     }
 
     fn init_data_tracker(&self) {

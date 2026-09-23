@@ -270,6 +270,7 @@ impl Explosion {
                     let mut pos_y = self.pos.y;
                     let mut pos_z = self.pos.z;
 
+                    // TODO: vanilla rolls from `level.random`; same odds, not seed-reproducible.
                     let random_val = rand::random::<f32>();
                     let mut h = self.power * random_val.mul_add(0.6, 0.7);
 
@@ -531,6 +532,7 @@ impl Explosion {
                 }
 
                 let mut blocks: Vec<_> = self.get_blocks_to_destroy(world).into_iter().collect();
+                // TODO: vanilla shuffles with `level.random`; same odds, not seed-reproducible.
                 blocks.shuffle(&mut rand::rng());
                 let decay_drops = self.block_interaction == BlockInteraction::DestroyWithDecay;
                 let explosion_radius = decay_drops.then_some(self.power);
