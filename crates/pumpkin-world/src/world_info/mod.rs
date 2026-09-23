@@ -588,8 +588,8 @@ impl LevelData {
 
 #[derive(Error, Debug)]
 pub enum WorldInfoError {
-    #[error("Io error: {0}")]
-    IoError(std::io::ErrorKind),
+    #[error("I/O error: {0}")]
+    IoError(#[from] std::io::Error),
     #[error("Info not found!")]
     InfoNotFound,
     #[error("Deserialization error: {0}")]
@@ -604,15 +604,6 @@ pub enum WorldInfoError {
     UnsupportedDataVersion(i32),
     #[error("Unsupported world level version: {0}")]
     UnsupportedLevelVersion(i32),
-}
-
-impl From<std::io::Error> for WorldInfoError {
-    fn from(value: std::io::Error) -> Self {
-        match value.kind() {
-            std::io::ErrorKind::NotFound => Self::InfoNotFound,
-            value => Self::IoError(value),
-        }
-    }
 }
 
 #[cfg(test)]
