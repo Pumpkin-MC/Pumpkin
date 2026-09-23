@@ -4063,13 +4063,23 @@ impl Entity {
             .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
         self.frozen_ticks
             .store(nbt.get_int("TicksFrozen").unwrap_or(0), Relaxed);
-        if let Some(name_json) = nbt.get_string("CustomName")
-            && let Ok(component) = pumpkin_util::serde_json::from_str(name_json)
-        {
-            self.custom_name.store(Arc::new(Some(component)));
+        if let Some(name) = nbt.get_string("CustomName") {
+            // Names are written here as JSON, but since 1.21.5 vanilla writes a
+            // plain name as a bare string, which is not JSON.
+            let component: TextComponent = pumpkin_util::serde_json::from_str(name)
+                .unwrap_or_else(|_| TextComponent::text(name.to_owned()));
+            self.custom_name.store(Arc::new(Some(component.clone())));
+            // Java clients only learn a name from the tracked data.
+            self.set_synced_data(tracked_data::entity::DATA_CUSTOM_NAME, Some(component));
         }
-        self.custom_name_visible
-            .store(nbt.get_bool("CustomNameVisible").unwrap_or(false), Relaxed);
+        let custom_name_visible = nbt.get_bool("CustomNameVisible").unwrap_or(false);
+        // Only on a change, as the tracked value has no default to compare with.
+        if self.custom_name_visible.swap(custom_name_visible, Relaxed) != custom_name_visible {
+            self.set_synced_data(
+                tracked_data::entity::DATA_CUSTOM_NAME_VISIBLE,
+                custom_name_visible,
+            );
+        }
 
         if let Some(tag_list) = nbt.get_list("Tags") {
             let mut tags = self
