@@ -3617,7 +3617,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-scheduler"
-version = "0.1.0+26.3-26.51"
+version = "0.2.0+26.3-26.51"
 dependencies = [
  "futures",
  "thiserror 2.0.20",
