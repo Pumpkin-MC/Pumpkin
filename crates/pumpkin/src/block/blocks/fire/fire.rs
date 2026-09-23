@@ -169,8 +169,9 @@ impl FireBlock {
                 world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
             }
 
+            // The TNT was already replaced above, so `prime` would find no TNT here.
             if old_block == &Block::TNT {
-                TNTBlock::prime(world, pos);
+                TNTBlock::spawn_primed(world, pos);
             }
         }
     }

@@ -157,6 +157,8 @@ impl BlockBehaviour for TNTBlock {
             let props = TntLikeProperties::from_state_id(args.state.id);
             if props.r#unstable {
                 // `break_block` already swapped the TNT away, so `prime` would find no TNT here.
+                // TODO: the loot table's `match_block` `unstable=false` condition is ignored by the
+                // loot loader, so unstable TNT still drops an item on top of the primed entity.
                 Self::spawn_primed(args.world, args.position);
             }
         }
