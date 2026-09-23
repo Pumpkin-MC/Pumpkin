@@ -230,7 +230,7 @@ impl CircleMovementGoal {
             return;
         };
         let center = {
-            let c = phantom.circling_center.lock().unwrap();
+            let mut c = phantom.circling_center.lock().unwrap();
             if c.0.x == 0 && c.0.y == 0 && c.0.z == 0 {
                 let pos = phantom.mob_entity.living_entity.entity.pos.load();
                 let new_center = BlockPos::new(
@@ -238,7 +238,7 @@ impl CircleMovementGoal {
                     pos.y.floor() as i32,
                     pos.z.floor() as i32,
                 );
-                *phantom.circling_center.lock().unwrap() = new_center;
+                *c = new_center;
                 new_center
             } else {
                 *c
@@ -381,6 +381,14 @@ impl Goal for SwoopMovementGoal {
         // For now, ignore cats
         let _ = self.next_cat_check;
         true
+    }
+
+    fn stop(&mut self, _mob: &dyn Mob) {
+        let Some(phantom) = self.phantom.upgrade() else {
+            return;
+        };
+        phantom.mob_entity.set_target(None);
+        phantom.set_movement_type(PhantomMovementType::Circle);
     }
 
     fn tick(&mut self, _mob: &dyn Mob) {
