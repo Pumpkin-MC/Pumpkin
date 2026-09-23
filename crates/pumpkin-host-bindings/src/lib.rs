@@ -63,6 +63,7 @@ bindgen!({
         "pumpkin:plugin/world@0.1.0.[method]world.set-raining": async | store | trappable,
         "pumpkin:plugin/world@0.1.0.[method]world.set-thundering": async | store | trappable,
         "pumpkin:plugin/world@0.1.0.[method]world.spawn-entity": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]world.spawn-entity-from-nbt": async | store | trappable,
         "pumpkin:plugin/world@0.1.0.[method]world.strike-lightning": async | store | trappable,
         default: async | trappable,
     },

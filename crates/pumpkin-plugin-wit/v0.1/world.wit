@@ -504,6 +504,14 @@ interface %world {
         /// Returns the entity currently targeted in the looking direction within the specified distance.
         get-target-entity: func(max-distance: f64) -> option<entity>;
 
+        /// Serialises this entity to NBT, in the same shape a saved entity uses.
+        get-nbt: func() -> list<u8>;
+
+        /// Loads saved NBT into this entity, as loading it from a save would. This
+        /// is not a merge: a field the NBT leaves out can fall back to its default,
+        /// so pass a whole entity, such as `get-nbt` returned with a few changes.
+        set-nbt: func(nbt-data: list<u8>) -> result<_, string>;
+
         /// Sets a namespaced custom data value on this entity.
         set-custom-data: func(namespace: string, key: string, value: nbt-tree);
         /// Returns a namespaced custom data value from this entity, if set.
@@ -899,6 +907,14 @@ interface %world {
 
         /// Spawns an entity of the specified type at the given position.
         spawn-entity: func(entity-type: entity-type, pos: position) -> entity;
+
+        /// Spawns an entity from saved NBT, which must carry an `id` naming the
+        /// entity type, under the UUID given. The entity is created at `pos` and
+        /// the NBT is then applied, so NBT that carries its own position wins.
+        ///
+        /// Returns none if the NBT is malformed, or names an entity type that is
+        /// unknown or cannot be summoned, such as a player.
+        spawn-entity-from-nbt: func(pos: position, id: uuid, nbt-data: list<u8>) -> option<entity>;
 
         /// Returns a list of all entities in this world.
         get-entities: func() -> list<entity>;

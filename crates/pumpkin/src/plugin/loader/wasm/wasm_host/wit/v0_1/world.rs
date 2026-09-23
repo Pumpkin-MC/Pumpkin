@@ -1306,6 +1306,46 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
         host.get().add_entity(entity)
     }
 
+    async fn spawn_entity_from_nbt(
+        mut host: Access<'_, PluginHostState, Self>,
+        world: Resource<World>,
+        pos: pumpkin::plugin::common::Position,
+        id: pumpkin::plugin::uuid::Uuid,
+        nbt_data: Vec<u8>,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::world::Entity>>> {
+        let (world, plugin) = world_and_plugin(host.get(), &world)?;
+
+        let Ok(nbt) = super::entity::read_unnamed_compound(&nbt_data) else {
+            return Ok(None);
+        };
+        let Some(type_name) = nbt.get_string("id") else {
+            return Ok(None);
+        };
+        // Vanilla cannot load a player or a fishing bobber from NBT either.
+        let Some(entity_type) = pumpkin_data::entity::EntityType::from_name(
+            type_name.strip_prefix("minecraft:").unwrap_or(type_name),
+        )
+        .filter(|entity_type| entity_type.summonable) else {
+            return Ok(None);
+        };
+
+        let pos = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
+        let entity = crate::entity::r#type::from_type(
+            entity_type,
+            pos,
+            &world,
+            uuid::Uuid::from_u64_pair(id.high, id.low),
+        );
+        entity.read_nbt_non_mut(&nbt);
+
+        let spawned_entity = Arc::clone(&entity);
+        plugin
+            .store
+            .pump_blocking(&mut host, move || world.spawn_entity(spawned_entity))
+            .await?;
+        host.get().add_entity(entity).map(Some)
+    }
+
     async fn strike_lightning(
         mut host: Access<'_, PluginHostState, Self>,
         world: Resource<World>,
