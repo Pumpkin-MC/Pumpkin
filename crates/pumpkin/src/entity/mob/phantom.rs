@@ -1,3 +1,8 @@
+#![allow(
+    clippy::missing_const_for_fn,
+    clippy::semicolon_outside_block,
+    clippy::semicolon_if_nothing_returned
+)]
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 
@@ -67,7 +72,7 @@ impl PhantomEntity {
                 .target_selector
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            target_selector.add_goal(1, Box::new(FindTargetGoal::new(phantom_weak.clone())));
+            target_selector.add_goal(1, Box::new(FindTargetGoal::new(phantom_weak)));
             // Keep look goals at low priority
             goal_selector.add_goal(
                 6,
@@ -81,7 +86,7 @@ impl PhantomEntity {
                 6,
                 Box::new(crate::entity::ai::goal::look_around::RandomLookAroundGoal::default()),
             );
-        };
+        }
 
         // Initialize circling center to current pos up 5
         {
@@ -91,8 +96,15 @@ impl PhantomEntity {
                 pos.y.floor() as i32 + 5,
                 pos.z.floor() as i32,
             );
-            *mob_arc.circling_center.lock().unwrap() = block_pos;
-            *mob_arc.target_position.lock().unwrap() = Vector3::new(pos.x, pos.y, pos.z);
+            *mob_arc
+                .circling_center
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = block_pos;
+            *mob_arc
+                .target_position
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Vector3::new(pos.x, pos.y, pos.z);
         }
 
         mob_arc
@@ -111,7 +123,10 @@ impl PhantomEntity {
 
     fn move_towards_target(&self, speed: f64) {
         let entity = &self.mob_entity.living_entity.entity;
-        let target = *self.target_position.lock().unwrap();
+        let target = *self
+            .target_position
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let pos = entity.pos.load();
         let dx = target.x - pos.x;
         let dy = target.y - pos.y;
@@ -136,7 +151,7 @@ impl PhantomEntity {
         entity.head_yaw.store(new_yaw);
 
         // Pitch towards target
-        let horiz = (dir_x * dir_x + dir_z * dir_z).sqrt();
+        let horiz = dir_x.hypot(dir_z);
         let pitch = (-dir_y.atan2(horiz).to_degrees()) as f32;
         let current_pitch = entity.pitch.load();
         let pitch_diff = pitch - current_pitch;
@@ -155,7 +170,10 @@ impl PhantomEntity {
     }
 
     fn is_near_target(&self) -> bool {
-        let target = *self.target_position.lock().unwrap();
+        let target = *self
+            .target_position
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let pos = self.mob_entity.living_entity.entity.pos.load();
         let dx = target.x - pos.x;
         let dy = target.y - pos.y;
@@ -182,7 +200,10 @@ impl Mob for PhantomEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        let center = *self.circling_center.lock().unwrap();
+        let center = *self
+            .circling_center
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         nbt.put_int("AX", center.0.x);
         nbt.put_int("AY", center.0.y);
         nbt.put_int("AZ", center.0.z);
@@ -194,7 +215,10 @@ impl Mob for PhantomEntity {
             let x = nbt.get_int("AX").unwrap_or(0);
             let y = nbt.get_int("AY").unwrap_or(0);
             let z = nbt.get_int("AZ").unwrap_or(0);
-            *self.circling_center.lock().unwrap() = BlockPos::new(x, y, z);
+            *self
+                .circling_center
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = BlockPos::new(x, y, z);
         }
         if let Some(size) = nbt.get_int("Size") {
             self.phantom_size.store(size, Ordering::Relaxed);
@@ -215,7 +239,7 @@ struct CircleMovementGoal {
 }
 
 impl CircleMovementGoal {
-    fn new(phantom: Weak<PhantomEntity>) -> Self {
+    const fn new(phantom: Weak<PhantomEntity>) -> Self {
         Self {
             phantom,
             angle: 0.0,
@@ -230,7 +254,10 @@ impl CircleMovementGoal {
             return;
         };
         let center = {
-            let mut c = phantom.circling_center.lock().unwrap();
+            let mut c = phantom
+                .circling_center
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if c.0.x == 0 && c.0.y == 0 && c.0.z == 0 {
                 let pos = phantom.mob_entity.living_entity.entity.pos.load();
                 let new_center = BlockPos::new(
@@ -250,7 +277,10 @@ impl CircleMovementGoal {
             center.0.y as f64 - 4.0 + self.y_offset as f64,
             center.0.z as f64 + (self.radius * self.angle.sin()) as f64,
         );
-        *phantom.target_position.lock().unwrap() = target;
+        *phantom
+            .target_position
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = target;
     }
 }
 
@@ -314,7 +344,11 @@ impl Goal for CircleMovementGoal {
             pos.y.floor() as i32,
             pos.z.floor() as i32,
         );
-        let target_y = phantom.target_position.lock().unwrap().y;
+        let target_y = phantom
+            .target_position
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .y;
         if target_y < pos.y && !world.get_block_state(&block_pos.down()).is_air() {
             self.y_offset = self.y_offset.max(1.0);
             self.adjust_direction();
@@ -341,7 +375,7 @@ struct SwoopMovementGoal {
 }
 
 impl SwoopMovementGoal {
-    fn new(phantom: Weak<PhantomEntity>) -> Self {
+    const fn new(phantom: Weak<PhantomEntity>) -> Self {
         Self {
             phantom,
             next_cat_check: 0,
@@ -400,8 +434,11 @@ impl Goal for SwoopMovementGoal {
         };
         let target_entity = target.get_entity();
         let target_pos = target_entity.pos.load();
-        let target_y = target_pos.y + target_entity.get_eye_height() as f64 * 0.5;
-        *phantom.target_position.lock().unwrap() =
+        let target_y = target_pos.y + target_entity.get_eye_height() * 0.5;
+        *phantom
+            .target_position
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
             Vector3::new(target_pos.x, target_y, target_pos.z);
 
         let phantom_pos = phantom.mob_entity.living_entity.entity.pos.load();
@@ -416,7 +453,7 @@ impl Goal for SwoopMovementGoal {
 
         if intersects {
             // Attack
-            let _ = phantom.mob_entity.try_attack(
+            phantom.mob_entity.try_attack(
                 phantom.as_ref() as &dyn crate::entity::EntityBase,
                 target.as_ref(),
             );
@@ -472,7 +509,10 @@ impl StartAttackGoal {
         if center.0.y < sea_level {
             center = BlockPos::new(center.0.x, sea_level + 1, center.0.z);
         }
-        *phantom.circling_center.lock().unwrap() = center;
+        *phantom
+            .circling_center
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = center;
     }
 }
 
@@ -499,11 +539,18 @@ impl Goal for StartAttackGoal {
             return;
         };
         // Lift circling center to top motion blocking + 10-30
-        let center = *phantom.circling_center.lock().unwrap();
+        let center = *phantom
+            .circling_center
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let world = phantom.mob_entity.living_entity.entity.world.load();
         // Simplified: just up 10 + rand 20
         let new_y = center.0.y + 10 + rand::rng().random_range(0..20);
-        *phantom.circling_center.lock().unwrap() = BlockPos::new(center.0.x, new_y, center.0.z);
+        *phantom
+            .circling_center
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            BlockPos::new(center.0.x, new_y, center.0.z);
         let _ = world;
     }
 
@@ -545,7 +592,7 @@ struct FindTargetGoal {
 }
 
 impl FindTargetGoal {
-    fn new(phantom: Weak<PhantomEntity>) -> Self {
+    const fn new(phantom: Weak<PhantomEntity>) -> Self {
         Self { phantom, delay: 20 }
     }
 }
@@ -574,7 +621,7 @@ impl Goal for FindTargetGoal {
         sorted.sort_by(|a, b| {
             let ay = a.get_entity().pos.load().y;
             let by = b.get_entity().pos.load().y;
-            by.partial_cmp(&ay).unwrap()
+            by.partial_cmp(&ay).unwrap_or(std::cmp::Ordering::Equal)
         });
         for player in sorted {
             let living = &player.living_entity;
