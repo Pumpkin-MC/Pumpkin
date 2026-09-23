@@ -4677,7 +4677,11 @@ impl World {
             .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
             .await;
         // A cancelled `ChunkSend` keeps the chunk pending -> the batch path sends it later.
-        if java_client.send_chunks(&[chunk]).await.contains(&center_chunk) {
+        if java_client
+            .send_chunks(&[chunk])
+            .await
+            .contains(&center_chunk)
+        {
             player
                 .chunk_sender
                 .lock()
