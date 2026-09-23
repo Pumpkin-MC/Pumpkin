@@ -63,6 +63,9 @@ impl VarUInt {
             let byte = read.get_u8()?;
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
+                if i == Self::MAX_SIZE.get() - 1 && byte & 0x7F > 0x0F {
+                    return Err(ReadingError::TooLarge("VarUInt".to_string()));
+                }
                 return Ok(Self(val));
             }
         }
@@ -91,6 +94,9 @@ impl VarUInt {
             })?;
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
+                if i == Self::MAX_SIZE.get() - 1 && byte & 0x7F > 0x0F {
+                    return Err(ReadingError::TooLarge("VarUInt".to_string()));
+                }
                 return Ok(Self(val));
             }
         }
@@ -175,9 +181,48 @@ impl PacketRead for VarUInt {
             let byte = u8::read(reader)?;
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
+                if i == Self::MAX_SIZE.get() - 1 && byte & 0x7F > 0x0F {
+                    return Err(Error::new(ErrorKind::InvalidData, "VarUInt is too big"));
+                }
                 return Ok(Self(val));
             }
         }
         Err(Error::new(ErrorKind::InvalidData, ""))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_rejects_final_byte_payload_overflow() {
+        assert_eq!(
+            VarUInt::decode(&mut [0xFF, 0xFF, 0xFF, 0xFF, 0x0F].as_slice()).unwrap(),
+            VarUInt(u32::MAX)
+        );
+        assert!(VarUInt::decode(&mut [0x80, 0x80, 0x80, 0x80, 0x10].as_slice()).is_err());
+        assert!(VarUInt::decode(&mut [0xFF, 0xFF, 0xFF, 0xFF, 0x7F].as_slice()).is_err());
+        assert!(VarUInt::read(&mut [0x80, 0x80, 0x80, 0x80, 0x20].as_slice()).is_err());
+    }
+
+    #[tokio::test]
+    async fn decode_async_rejects_final_byte_payload_overflow() {
+        assert_eq!(
+            VarUInt::decode_async(&mut [0xFF, 0xFF, 0xFF, 0xFF, 0x0F].as_slice())
+                .await
+                .unwrap(),
+            VarUInt(u32::MAX)
+        );
+        assert!(
+            VarUInt::decode_async(&mut [0x80, 0x80, 0x80, 0x80, 0x10].as_slice())
+                .await
+                .is_err()
+        );
+        assert!(
+            VarUInt::decode_async(&mut [0xFF, 0xFF, 0xFF, 0xFF, 0x7F].as_slice())
+                .await
+                .is_err()
+        );
     }
 }
