@@ -898,10 +898,20 @@ impl TextComponentBase {
     }
 }
 
+/// Converts text fields to JSON, restoring the boolean type encoded as an NBT byte.
 fn nbt_compound_to_json(compound: &pumpkin_nbt::NbtCompound) -> serde_json::Value {
     let mut map = serde_json::Map::new();
     for (k, v) in &compound.child_tags {
-        map.insert(k.to_string(), nbt_tag_to_json(v));
+        let value = if matches!(
+            k.as_ref(),
+            "bold" | "italic" | "underlined" | "strikethrough" | "obfuscated" | "interpret"
+        ) && let pumpkin_nbt::tag::NbtTag::Byte(value) = v
+        {
+            serde_json::Value::Bool(*value != 0)
+        } else {
+            nbt_tag_to_json(v)
+        };
+        map.insert(k.to_string(), value);
     }
     serde_json::Value::Object(map)
 }
@@ -1324,10 +1334,15 @@ impl TextComponent {
         Self::text("")
     }
 
-    /// Parses a text component from its NBT representation
+    /// Parses a text component from NBT, returning empty text if the payload is malformed.
     #[must_use]
     pub fn from_nbt(tag: &pumpkin_nbt::tag::NbtTag) -> Self {
-        serde_json::from_value(nbt_tag_to_json(tag)).unwrap_or_else(|_| Self::empty())
+        Self::try_from_nbt(tag).unwrap_or_else(|_| Self::empty())
+    }
+
+    /// Parses structured NBT text, returning an error for an invalid text tree.
+    pub fn try_from_nbt(tag: &pumpkin_nbt::tag::NbtTag) -> Result<Self, serde_json::Error> {
+        serde_json::from_value(nbt_tag_to_json(tag))
     }
 
     /// Creates a new text component with plain text content.

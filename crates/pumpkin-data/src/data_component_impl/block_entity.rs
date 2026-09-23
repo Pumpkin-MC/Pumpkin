@@ -51,8 +51,23 @@ pub struct ContainerImpl {
     pub items: Vec<(u8, crate::item_stack::ItemStack)>,
 }
 impl PartialEq for ContainerImpl {
-    fn eq(&self, _other: &Self) -> bool {
-        false
+    /// Compares occupied slots and their item contents, independent of sparse entry order.
+    fn eq(&self, other: &Self) -> bool {
+        let mut left = [None; 256];
+        let mut right = [None; 256];
+        for (slot, stack) in &self.items {
+            left[usize::from(*slot)] = (!stack.is_empty()).then_some(stack);
+        }
+        for (slot, stack) in &other.items {
+            right[usize::from(*slot)] = (!stack.is_empty()).then_some(stack);
+        }
+        left.iter()
+            .zip(right)
+            .all(|(left, right)| match (left, right) {
+                (Some(left), Some(right)) => left.are_equal(right),
+                (None, None) => true,
+                _ => false,
+            })
     }
 }
 impl Eq for ContainerImpl {}
@@ -62,18 +77,25 @@ impl std::fmt::Debug for ContainerImpl {
     }
 }
 impl ContainerImpl {
+    /// Reads sparse slots, rejecting malformed entries and indices outside the 256-slot range.
     pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let NbtTag::List(list) = tag else {
+            return None;
+        };
+        if list.len() > 256 {
+            return None;
+        }
         let mut items = Vec::new();
-        if let NbtTag::List(l) = tag {
-            for item_tag in l {
-                if let NbtTag::Compound(c) = item_tag
-                    && let Some(slot) = c.get_int("slot")
-                    && let Some(item_compound) = c.get_compound("item")
-                    && let Some(stack) =
-                        crate::item_stack::ItemStack::read_item_stack(item_compound)
-                {
-                    items.push((slot as u8, stack));
-                }
+        for item_tag in list {
+            let compound = item_tag.extract_compound()?;
+            let slot = u8::try_from(compound.get_int("slot")?).ok()?;
+            let stack =
+                crate::item_stack::ItemStack::read_item_stack(compound.get_compound("item")?)?;
+            // Repeated slots replace earlier values, matching the dense container representation.
+            if let Some((_, previous)) = items.iter_mut().find(|(index, _)| *index == slot) {
+                *previous = stack;
+            } else {
+                items.push((slot, stack));
             }
         }
         Some(Self { items })
@@ -156,14 +178,61 @@ impl DataComponentImpl for BlockStateImpl {
     default_impl!(BlockState);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BeesImpl;
+/// An occupant's typed entity NBT and its elapsed and minimum hive residence times.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BeeData {
+    pub entity_data: NbtCompound,
+    pub ticks_in_hive: i32,
+    pub min_ticks_in_hive: i32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BeesImpl {
+    pub bees: Vec<BeeData>,
+}
 impl BeesImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub const EMPTY: Self = Self { bees: Vec::new() };
+
+    /// Reads occupant data and timers, rejecting missing fields and unknown entity types.
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let NbtTag::List(list) = data else {
+            return None;
+        };
+        let mut bees = Vec::new();
+        for tag in list {
+            let compound = tag.extract_compound()?;
+            let entity_data = compound.get_compound("entity_data")?.clone();
+            let entity_name = entity_data.get_string("id")?;
+            crate::entity::EntityType::from_name(
+                entity_name
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(entity_name),
+            )?;
+            bees.push(BeeData {
+                entity_data,
+                ticks_in_hive: compound.get_int("ticks_in_hive")?,
+                min_ticks_in_hive: compound.get_int("min_ticks_in_hive")?,
+            });
+        }
+        Some(Self { bees })
     }
 }
 impl DataComponentImpl for BeesImpl {
+    /// Persists each occupant's full entity data and both residence timers.
+    fn write_data(&self) -> NbtTag {
+        NbtTag::List(
+            self.bees
+                .iter()
+                .map(|bee| {
+                    let mut compound = NbtCompound::new();
+                    compound.put_compound("entity_data", bee.entity_data.clone());
+                    compound.put_int("ticks_in_hive", bee.ticks_in_hive);
+                    compound.put_int("min_ticks_in_hive", bee.min_ticks_in_hive);
+                    NbtTag::Compound(compound)
+                })
+                .collect(),
+        )
+    }
     default_impl!(Bees);
 }
 
@@ -199,4 +268,42 @@ impl SulfurCubeContentImpl {
 }
 impl DataComponentImpl for SulfurCubeContentImpl {
     default_impl!(SulfurCubeContent);
+}
+
+#[cfg(test)]
+mod copy_component_tests {
+    use super::*;
+
+    /// Hive occupants retain their entity payload and both timers through item persistence.
+    #[test]
+    fn bees_preserve_entity_and_timers() {
+        let mut entity = NbtCompound::new();
+        entity.put_string("id", "minecraft:bee".into());
+        entity.put_bool("HasNectar", true);
+        let mut bee = NbtCompound::new();
+        bee.put_compound("entity_data", entity);
+        bee.put_int("ticks_in_hive", 37);
+        bee.put_int("min_ticks_in_hive", 2400);
+        let expected = NbtTag::List(vec![NbtTag::Compound(bee)]);
+        assert_eq!(
+            BeesImpl::read_data(&expected).map(|value| value.write_data()),
+            Some(expected)
+        );
+    }
+
+    /// Persistent container indices outside 0 through 255 cannot wrap into a valid slot.
+    #[test]
+    fn container_rejects_out_of_range_persistent_slots() {
+        for slot in [-1, 256] {
+            let mut stack = NbtCompound::new();
+            crate::item_stack::ItemStack::new(1, &crate::item::Item::DIAMOND)
+                .write_item_stack(&mut stack);
+            let mut entry = NbtCompound::new();
+            entry.put_int("slot", slot);
+            entry.put_compound("item", stack);
+            assert!(
+                ContainerImpl::read_data(&NbtTag::List(vec![NbtTag::Compound(entry)])).is_none()
+            );
+        }
+    }
 }

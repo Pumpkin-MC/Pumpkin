@@ -487,6 +487,7 @@ impl ItemStack {
             .retain(|(id, _)| *id != DataComponent::CustomName);
     }
 
+    /// Returns visible custom or item-name text, falling back to the item registry key.
     #[must_use]
     pub fn get_hover_name(&self) -> String {
         if let Some(custom_name) =
@@ -497,7 +498,7 @@ impl ItemStack {
         if let Some(item_name) =
             self.get_data_component::<crate::data_component_impl::ItemNameImpl>()
         {
-            return item_name.name.to_string();
+            return item_name.to_text_component().get_text();
         }
         self.item.registry_key.to_string()
     }
@@ -1074,30 +1075,27 @@ mod tests {
         assert!(decoded.get_data_component::<UnbreakableImpl>().is_some());
     }
 
+    /// Translation keys survive item NBT persistence without becoming literal text.
     #[test]
-    fn translated_item_name_survives_item_stack_nbt_roundtrip() {
+    fn translated_item_name_survives_item_stack_nbt_roundtrip()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut stack = ItemStack::new(1, &Item::FILLED_MAP);
         stack.patch.push((
             DataComponent::ItemName,
-            Some(
-                ItemNameImpl {
-                    name: Cow::Borrowed("filled_map.mansion"),
-                }
-                .to_dyn(),
-            ),
+            Some(ItemNameImpl::Translation(Cow::Borrowed("filled_map.mansion")).to_dyn()),
         ));
 
         let mut compound = NbtCompound::new();
         stack.write_item_stack(&mut compound);
-        let decoded = ItemStack::read_item_stack(&compound).expect("stack should decode");
+        let decoded = ItemStack::read_item_stack(&compound).ok_or("stack should decode")?;
 
         assert_eq!(
             decoded
                 .get_data_component::<ItemNameImpl>()
-                .expect("item name should decode")
-                .name,
-            "filled_map.mansion"
+                .ok_or("item name should decode")?,
+            &ItemNameImpl::Translation(Cow::Borrowed("filled_map.mansion"))
         );
+        Ok(())
     }
 
     // ── damage_item ───────────────────────────────────────────────

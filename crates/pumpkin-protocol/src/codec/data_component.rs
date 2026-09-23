@@ -16,6 +16,9 @@ use pumpkin_util::version::JavaMinecraftVersion;
 
 const MAX_STATUS_EFFECTS: usize = 128;
 
+#[cfg(test)]
+mod copy_component_tests;
+
 #[must_use]
 pub fn data_to_proto_sound(id_or: &IdOr<SoundEvent>) -> crate::IdOr<crate::SoundEvent> {
     match id_or {
@@ -318,22 +321,17 @@ impl DataComponentCodec<Self> for ItemModelImpl {
 }
 
 impl DataComponentCodec<Self> for CustomNameImpl {
+    /// Writes the structured, untranslated text payload used by the client.
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        let mut bytes = Vec::new();
-        NbtTag::String(self.name.clone().get_text().into_boxed_str())
-            .serialize(&mut NbtWriteHelperJava::new(&mut bytes))
-            .map_err(|e| WritingError::Message(e.to_string()))?;
-        seq.write_slice(&bytes)?;
-        Ok(())
+        seq.write_nbt(self.write_data())
     }
 
+    /// Reads structured text, rejecting missing or malformed payloads instead of clearing the name.
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let tag = seq.get_nbt_with_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)?;
-        let name = tag.as_ref().map_or_else(
-            pumpkin_util::text::TextComponent::empty,
-            pumpkin_util::text::TextComponent::from_nbt,
-        );
-        Ok(Self { name })
+        let tag = seq
+            .get_nbt_with_version(&pumpkin_data::packet::CURRENT_MC_VERSION)?
+            .ok_or_else(|| ReadingError::Message("Missing custom name".into()))?;
+        Self::read_data(&tag).ok_or_else(|| ReadingError::Message("Invalid custom name".into()))
     }
 }
 
@@ -374,21 +372,15 @@ impl DataComponentCodec<Self> for LoreImpl {
 }
 
 impl DataComponentCodec<Self> for ItemNameImpl {
+    /// Writes the item's untranslated structured text payload.
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        let mut name = pumpkin_nbt::compound::NbtCompound::new();
-        name.put_string("translate", self.name.to_string());
-        let mut bytes = Vec::new();
-        NbtTag::Compound(name)
-            .serialize(&mut NbtWriteHelperJava::new(&mut bytes))
-            .map_err(|error| WritingError::Message(error.to_string()))?;
-        seq.write_slice(&bytes)
+        seq.write_nbt(self.write_data())
     }
 
+    /// Reads a length-prefixed translation key.
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let name = seq.get_str()?;
-        Ok(Self {
-            name: Cow::Owned(name.into()),
-        })
+        Ok(Self::Translation(Cow::Owned(name.into())))
     }
 }
 
@@ -1690,18 +1682,35 @@ impl DataComponentCodec<Self> for CustomModelDataImpl {
 }
 
 impl DataComponentCodec<Self> for TooltipDisplayImpl {
+    /// Writes the visibility flag and hidden component registry IDs in their stored order.
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_bool(false)?;
-        seq.write_var_int(&VarInt(0))
+        seq.write_bool(self.hide_tooltip)?;
+        seq.write_var_int(&VarInt(self.hidden_components.len() as i32))?;
+        for component in &self.hidden_components {
+            seq.write_var_int(&VarInt(i32::from(component.to_id())))?;
+        }
+        Ok(())
     }
 
+    /// Reads hidden component IDs, retaining first-occurrence ordering and rejecting invalid IDs.
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _hide_tooltip = seq.get_bool()?;
-        let len = seq.get_var_int()?.0 as usize;
+        let hide_tooltip = seq.get_bool()?;
+        let len = usize::try_from(seq.get_var_int()?.0)
+            .map_err(|_| ReadingError::Message("Negative hidden component count".into()))?;
+        let mut hidden_components = Vec::new();
         for _ in 0..len {
-            let _comp_id = seq.get_var_int()?;
+            let id = u8::try_from(seq.get_var_int()?.0)
+                .map_err(|_| ReadingError::Message("Invalid hidden component ID".into()))?;
+            let component = DataComponent::try_from_id(id)
+                .ok_or_else(|| ReadingError::Message("Unknown hidden component ID".into()))?;
+            if !hidden_components.contains(&component) {
+                hidden_components.push(component);
+            }
         }
-        Ok(Self)
+        Ok(Self {
+            hide_tooltip,
+            hidden_components,
+        })
     }
 }
 
@@ -2488,8 +2497,9 @@ impl DataComponentCodec<Self> for LodestoneTrackerImpl {
 }
 
 impl DataComponentCodec<Self> for ProfileImpl {
+    /// Writes optional profile identity and properties, followed by the skin overrides.
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(1))?;
+        seq.write_bool(false)?;
         if let Some(name) = &self.name {
             seq.write_bool(true)?;
             seq.write_string(name)?;
@@ -2537,21 +2547,30 @@ impl DataComponentCodec<Self> for ProfileImpl {
         } else {
             seq.write_bool(false)?;
         }
-        if self.model.is_some() {
+        if let Some(model) = &self.model {
             seq.write_bool(true)?;
-            seq.write_var_int(&VarInt(0))?;
+            match model.as_str() {
+                "slim" => seq.write_bool(true)?,
+                "wide" => seq.write_bool(false)?,
+                _ => {
+                    return Err(WritingError::Message(format!(
+                        "Invalid profile model: {model}"
+                    )));
+                }
+            }
         } else {
             seq.write_bool(false)?;
         }
         Ok(())
     }
 
+    /// Reads complete or partial profile identities without discarding skin overrides.
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let either = seq.get_var_int()?.0;
+        let full_profile = seq.get_bool()?;
         let mut name = None;
         let mut id = None;
         let mut properties = Vec::new();
-        if either == 0 {
+        if full_profile {
             let uuid = seq.get_uuid()?;
             let u = uuid.as_u128();
             id = Some([
@@ -2576,7 +2595,8 @@ impl DataComponentCodec<Self> for ProfileImpl {
                 ]);
             }
         }
-        let props_len = seq.get_var_int()?.0 as usize;
+        let props_len = usize::try_from(seq.get_var_int()?.0)
+            .map_err(|_| ReadingError::Message("Negative profile property count".into()))?;
         for _ in 0..props_len {
             let prop_name = seq.get_str()?.to_string();
             let prop_value = seq.get_str()?.to_string();
@@ -2607,8 +2627,7 @@ impl DataComponentCodec<Self> for ProfileImpl {
             None
         };
         let model = if seq.get_bool()? {
-            let _ = seq.get_var_int()?;
-            Some("wide".to_string())
+            Some(if seq.get_bool()? { "slim" } else { "wide" }.to_string())
         } else {
             None
         };
@@ -2636,24 +2655,58 @@ impl DataComponentCodec<Self> for NoteBlockSoundImpl {
 }
 
 impl DataComponentCodec<Self> for BannerPatternsImpl {
+    /// Writes registered pattern holders using the registry order sent during configuration.
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         seq.write_var_int(&VarInt::from(self.layers.len() as i32))?;
+        let registry = pumpkin_data::registry::REGISTRY_V_26_3
+            .iter()
+            .find(|registry| registry.registry_id == "banner_pattern")
+            .ok_or_else(|| WritingError::Message("Missing banner pattern registry".into()))?;
         for layer in &self.layers {
-            seq.write_var_int(&VarInt(0))?;
+            let name = layer
+                .pattern
+                .strip_prefix("minecraft:")
+                .unwrap_or(&layer.pattern);
+            let index = registry
+                .entries
+                .iter()
+                .position(|entry| entry.name == name)
+                .ok_or_else(|| {
+                    WritingError::Message(format!("Unknown banner pattern: {}", layer.pattern))
+                })?;
+            seq.write_var_int(&VarInt((index + 1) as i32))?;
             seq.write_var_int(&VarInt::from(layer.color.id() as i32))?;
         }
         Ok(())
     }
 
+    /// Reads registered pattern names and colors, rejecting unsupported inline holders.
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
-        let mut layers = Vec::with_capacity(len);
+        let len = usize::try_from(seq.get_var_int()?.0)
+            .map_err(|_| ReadingError::Message("Negative banner layer count".into()))?;
+        let registry = pumpkin_data::registry::REGISTRY_V_26_3
+            .iter()
+            .find(|registry| registry.registry_id == "banner_pattern")
+            .ok_or_else(|| ReadingError::Message("Missing banner pattern registry".into()))?;
+        let mut layers = Vec::new();
         for _ in 0..len {
-            let _pattern = seq.get_var_int()?.0;
-            let color_id = seq.get_var_int()?.0 as u8;
-            let color = pumpkin_data::dye_color::DyeColor::by_id(color_id).unwrap_or_default();
+            let holder_id = seq.get_var_int()?.0;
+            let index = holder_id
+                .checked_sub(1)
+                .and_then(|id| usize::try_from(id).ok())
+                .ok_or_else(|| {
+                    ReadingError::Message("Invalid or inline banner pattern holder".into())
+                })?;
+            let pattern = registry
+                .entries
+                .get(index)
+                .ok_or_else(|| ReadingError::Message("Unknown banner pattern holder".into()))?;
+            let color_id = u8::try_from(seq.get_var_int()?.0)
+                .map_err(|_| ReadingError::Message("Invalid banner color".into()))?;
+            let color = pumpkin_data::dye_color::DyeColor::by_id(color_id)
+                .ok_or_else(|| ReadingError::Message("Invalid banner color".into()))?;
             layers.push(pumpkin_data::data_component_impl::BannerPatternLayer {
-                pattern: String::new(),
+                pattern: format!("minecraft:{}", pattern.name),
                 color,
             });
         }
@@ -2678,32 +2731,155 @@ impl DataComponentCodec<Self> for BaseColorImpl {
 }
 
 impl DataComponentCodec<Self> for PotDecorationsImpl {
+    /// Writes four optional complete templates in back, left, right, front order.
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
-    }
-
-    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
-        for _ in 0..len {
-            let _ = seq.get_var_int()?;
-        }
-        Ok(Self)
-    }
-}
-
-impl DataComponentCodec<Self> for ContainerImpl {
-    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt::from(self.items.len() as i32))?;
-        for (_slot, stack) in &self.items {
-            seq.write_bool(true)?;
-            serialize_item_stack_template(stack, seq)?;
+        for face in &self.decorations {
+            seq.write_bool(face.is_some())?;
+            if let Some(face) = face {
+                serialize_pot_decoration(face, seq)?;
+            }
         }
         Ok(())
     }
 
+    /// Reads exactly four optional templates without replacing missing faces with bricks.
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
-        let mut items = Vec::with_capacity(len);
+        let mut decorations = Self::EMPTY.decorations;
+        for face in &mut decorations {
+            if seq.get_bool()? {
+                *face = Some(deserialize_pot_decoration(seq)?);
+            }
+        }
+        Ok(Self { decorations })
+    }
+}
+
+/// Encodes an item-first pot template with a bounded patch and no component payload lengths.
+fn serialize_pot_decoration(
+    face: &PotDecoration,
+    seq: &mut impl NetworkWriteExt,
+) -> Result<(), WritingError> {
+    if face.count <= 0 || face.item.id == pumpkin_data::item::Item::AIR.id || face.patch.len() > 256
+    {
+        return Err(WritingError::Message(
+            "Invalid pot decoration template".into(),
+        ));
+    }
+    let mut seen = [false; 256];
+    let mut additions = 0;
+    for (id, value) in &face.patch {
+        if std::mem::replace(&mut seen[usize::from(id.to_id())], true) {
+            return Err(WritingError::Message(
+                "Duplicate pot decoration component".into(),
+            ));
+        }
+        if let Some(value) = value {
+            if value.get_self_enum() != *id {
+                return Err(WritingError::Message(
+                    "Mismatched pot decoration component".into(),
+                ));
+            }
+            additions += 1;
+        }
+    }
+    seq.write_var_int(&VarInt(i32::from(face.item.id)))?;
+    seq.write_var_int(&VarInt(face.count))?;
+    seq.write_var_int(&VarInt(additions))?;
+    seq.write_var_int(&VarInt(face.patch.len() as i32 - additions))?;
+    for (id, value) in &face.patch {
+        if let Some(value) = value {
+            seq.write_var_int(&VarInt(i32::from(id.to_id())))?;
+            serialize(*id, value.as_ref(), seq)?;
+        }
+    }
+    for (id, value) in &face.patch {
+        if value.is_none() {
+            seq.write_var_int(&VarInt(i32::from(id.to_id())))?;
+        }
+    }
+    Ok(())
+}
+
+/// Decodes a positive-count pot template, rejecting unknown IDs and oversized or duplicate patches.
+fn deserialize_pot_decoration(
+    seq: &mut impl NetworkReadExt,
+) -> Result<PotDecoration, ReadingError> {
+    let id = u16::try_from(seq.get_var_int()?.0)
+        .map_err(|_| ReadingError::Message("Invalid pot decoration item ID".into()))?;
+    let item = pumpkin_data::item::Item::from_id(id)
+        .ok_or_else(|| ReadingError::Message("Unknown pot decoration item ID".into()))?;
+    if item.id == pumpkin_data::item::Item::AIR.id {
+        return Err(ReadingError::Message(
+            "Pot decoration item cannot be air".into(),
+        ));
+    }
+    let count = seq.get_var_int()?.0;
+    if count <= 0 {
+        return Err(ReadingError::Message(
+            "Invalid pot decoration item count".into(),
+        ));
+    }
+    let additions = seq.get_var_int()?.0;
+    let removals = seq.get_var_int()?.0;
+    let total = additions
+        .checked_add(removals)
+        .filter(|total| additions >= 0 && removals >= 0 && *total <= 256)
+        .ok_or_else(|| ReadingError::Message("Invalid pot decoration component count".into()))?;
+    let mut patch = Vec::with_capacity(total as usize);
+    let mut seen = [false; 256];
+    for index in 0..total {
+        let id = u8::try_from(seq.get_var_int()?.0)
+            .ok()
+            .and_then(DataComponent::try_from_id)
+            .ok_or_else(|| ReadingError::Message("Unknown pot decoration component ID".into()))?;
+        if std::mem::replace(&mut seen[usize::from(id.to_id())], true) {
+            return Err(ReadingError::Message(
+                "Duplicate pot decoration component".into(),
+            ));
+        }
+        let value = if index < additions {
+            Some(deserialize(id, seq)?)
+        } else {
+            None
+        };
+        patch.push((id, value));
+    }
+    Ok(PotDecoration { item, count, patch })
+}
+
+impl DataComponentCodec<Self> for ContainerImpl {
+    /// Expands sparse contents into the bounded dense list, keeping empty slot placeholders.
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        if self.items.len() > 256 {
+            return Err(WritingError::Message("Too many container entries".into()));
+        }
+        let mut slots = [None; 256];
+        for (slot, stack) in &self.items {
+            slots[usize::from(*slot)] = (!stack.is_empty()).then_some(stack);
+        }
+        let len = slots
+            .iter()
+            .rposition(Option::is_some)
+            .map_or(0, |slot| slot + 1);
+        seq.write_var_int(&VarInt(len as i32))?;
+        for stack in slots.iter().take(len) {
+            seq.write_bool(stack.is_some())?;
+            if let Some(stack) = stack {
+                serialize_item_stack_template(stack, seq)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Reads up to 256 optional slots, rejecting out-of-range lengths before allocating.
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let len = seq.get_var_int()?.0;
+        if !(0..=256).contains(&len) {
+            return Err(ReadingError::TooLarge(
+                "Container must have at most 256 slots".into(),
+            ));
+        }
+        let mut items = Vec::with_capacity(len as usize);
         for slot in 0..len {
             if seq.get_bool()? {
                 let stack = deserialize_item_stack_template(seq)?;
@@ -2739,19 +2915,54 @@ impl DataComponentCodec<Self> for BlockStateImpl {
 }
 
 impl DataComponentCodec<Self> for BeesImpl {
+    /// Writes each occupant's entity type, untyped NBT payload, and residence timers.
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        let len = i32::try_from(self.bees.len())
+            .map_err(|_| WritingError::Message("Too many hive occupants".into()))?;
+        seq.write_var_int(&VarInt(len))?;
+        for bee in &self.bees {
+            let name = bee.entity_data.get_string("id").ok_or_else(|| {
+                WritingError::Message("Hive occupant is missing an entity ID".into())
+            })?;
+            let entity_type =
+                EntityType::from_name(name.strip_prefix("minecraft:").unwrap_or(name)).ok_or_else(
+                    || WritingError::Message(format!("Unknown hive occupant entity ID: {name}")),
+                )?;
+            seq.write_var_int(&VarInt(i32::from(entity_type.id)))?;
+            let mut data = bee.entity_data.clone();
+            data.child_tags.remove("id");
+            seq.write_nbt(NbtTag::Compound(data))?;
+            seq.write_var_int(&VarInt(bee.ticks_in_hive))?;
+            seq.write_var_int(&VarInt(bee.min_ticks_in_hive))?;
+        }
+        Ok(())
     }
 
+    /// Restores typed entity NBT and timers without allocating from an untrusted list length.
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
+        let len = usize::try_from(seq.get_var_int()?.0)
+            .map_err(|_| ReadingError::Message("Negative hive occupant count".into()))?;
+        let mut bees = Vec::new();
         for _ in 0..len {
-            let _entity_type = seq.get_var_int()?;
-            let _nbt = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
-            let _ticks = seq.get_var_int()?;
-            let _min_ticks = seq.get_var_int()?;
+            let id = u16::try_from(seq.get_var_int()?.0)
+                .map_err(|_| ReadingError::Message("Invalid hive occupant entity ID".into()))?;
+            let entity_type = EntityType::from_raw(id)
+                .ok_or_else(|| ReadingError::Message("Unknown hive occupant entity ID".into()))?;
+            let Some(NbtTag::Compound(mut entity_data)) =
+                seq.get_nbt_with_version(&pumpkin_data::packet::CURRENT_MC_VERSION)?
+            else {
+                return Err(ReadingError::Message(
+                    "Hive occupant entity data must be a compound".into(),
+                ));
+            };
+            entity_data.put_string("id", format!("minecraft:{}", entity_type.resource_name));
+            bees.push(BeeData {
+                entity_data,
+                ticks_in_hive: seq.get_var_int()?.0,
+                min_ticks_in_hive: seq.get_var_int()?.0,
+            });
         }
-        Ok(Self)
+        Ok(Self { bees })
     }
 }
 
@@ -2770,27 +2981,32 @@ impl DataComponentCodec<Self> for SulfurCubeContentImpl {
 }
 
 impl DataComponentCodec<Self> for LockImpl {
-    fn serialize(&self, _seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        Ok(())
+    /// Writes the lock predicate through the component's fallback NBT network codec.
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_nbt(self.write_data())
     }
 
-    fn deserialize(_seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        Ok(Self {
-            predicate: pumpkin_nbt::compound::NbtCompound::new(),
-        })
+    /// Reads the fallback predicate compound, rejecting missing or malformed lock data.
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let tag = seq
+            .get_nbt_with_version(&pumpkin_data::packet::CURRENT_MC_VERSION)?
+            .ok_or_else(|| ReadingError::Message("Missing lock predicate".into()))?;
+        Self::read_data(&tag).ok_or_else(|| ReadingError::Message("Invalid lock predicate".into()))
     }
 }
 
 impl DataComponentCodec<Self> for ContainerLootImpl {
-    fn serialize(&self, _seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        Ok(())
+    /// Writes the deferred loot key and seed using the fallback NBT network codec.
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_nbt(self.write_data())
     }
 
-    fn deserialize(_seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        Ok(Self {
-            loot_table: String::new(),
-            seed: 0,
-        })
+    /// Reads deferred loot metadata without generating or consuming the referenced loot.
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let tag = seq
+            .get_nbt_with_version(&pumpkin_data::packet::CURRENT_MC_VERSION)?
+            .ok_or_else(|| ReadingError::Message("Missing container loot".into()))?;
+        Self::read_data(&tag).ok_or_else(|| ReadingError::Message("Invalid container loot".into()))
     }
 }
 

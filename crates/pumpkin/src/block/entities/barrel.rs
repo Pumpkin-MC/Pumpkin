@@ -1,3 +1,4 @@
+use super::components::{BlockEntityComponents, RANDOMIZABLE_CONTAINER_FIELDS};
 use pumpkin_data::block_properties::BarrelLikeProperties;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, FacingExt, item_stack::ItemStack};
@@ -24,6 +25,7 @@ use super::BlockEntity;
 
 pub struct BarrelBlockEntity {
     pub position: BlockPos,
+    pub components: BlockEntityComponents,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
     pub comparator_dirty: AtomicBool,
@@ -33,6 +35,8 @@ pub struct BarrelBlockEntity {
 }
 
 impl BlockEntity for BarrelBlockEntity {
+    super::components::impl_container_components!();
+
     fn resource_location(&self) -> &'static str {
         Self::ID
     }
@@ -41,31 +45,38 @@ impl BlockEntity for BarrelBlockEntity {
         self.position
     }
 
+    /// Loads persistent components and inventory state without generating deferred loot.
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
     {
         let mut barrel = Self {
             position,
+            components: BlockEntityComponents::from_nbt(nbt, RANDOMIZABLE_CONTAINER_FIELDS),
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
         };
 
-        pumpkin_inventory::sync_read_items_from_nbt(
-            nbt,
-            barrel
-                .items
-                .get_mut()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
-
+        if !barrel.components.has_loot_table() {
+            pumpkin_inventory::sync_read_items_from_nbt(
+                nbt,
+                barrel
+                    .items
+                    .get_mut()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
+        }
         barrel
     }
 
+    /// Persists the component fields together with current container state.
     fn write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_inventory_nbt(nbt, true);
+        self.components.write_nbt(nbt);
+        if !self.components.has_loot_table() {
+            self.write_inventory_nbt(nbt, true);
+        }
     }
 
     fn tick(&self, world: &Arc<World>) {
@@ -93,8 +104,10 @@ impl BlockEntity for BarrelBlockEntity {
         self.dirty.store(false, Ordering::Relaxed);
     }
 
+    /// Sends the container fields used by chunk updates without generating deferred loot.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
+        self.components.write_client_nbt(&mut nbt);
         if let Ok(guard) = self.items.try_read() {
             sync_write_items_to_nbt(&*guard, &mut nbt);
         }
@@ -122,10 +135,12 @@ impl BarrelBlockEntity {
     pub const INVENTORY_SIZE: usize = 27;
     pub const ID: &'static str = "minecraft:barrel";
 
+    /// Creates an empty container with component storage at the supplied position.
     #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
+            components: BlockEntityComponents::new(RANDOMIZABLE_CONTAINER_FIELDS),
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
