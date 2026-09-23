@@ -62,8 +62,16 @@ impl ResolvedScoreHolder {
                     .worlds
                     .load()
                     .iter()
-                    .filter_map(|world| world.get_entity_by_uuid(uuid))
-                    .map(|entity| Self::entity(entity.as_ref()))
+                    .filter_map(|world| {
+                        world
+                            .get_entity_by_uuid(uuid)
+                            .map(|entity| Self::entity(entity.as_ref()))
+                            .or_else(|| {
+                                world
+                                    .get_player_by_uuid(uuid)
+                                    .map(|player| Self::entity(player.as_ref()))
+                            })
+                    })
                     .collect();
                 if !entities.is_empty() {
                     return entities;
@@ -123,16 +131,6 @@ impl ArgumentType<CommandSource> for ScoreHolderArgumentType {
         parser.fill_suggestions(&builder, |mut suggestions| {
             for player in context.server().get_all_players() {
                 suggestions = suggestions.filter_and_suggest_one(player.gameprofile.name.clone());
-            }
-            let scoreboard = context
-                .world()
-                .scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            for objective_scores in scoreboard.get_scores().values() {
-                for holder in objective_scores.keys() {
-                    suggestions = suggestions.filter_and_suggest_one(holder.as_str());
-                }
             }
             suggestions
         })
