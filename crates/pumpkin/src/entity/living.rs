@@ -1822,6 +1822,14 @@ impl LivingEntity {
             let fall_distance = self.fall_distance.swap(0.0);
             if fall_distance > 0.0 {
                 self.on_changed_block(caller, self.entity.block_pos.load());
+                if caller.get_player().is_some() {
+                    let world = self.entity.world.load();
+                    let pos = self.entity.get_pos_with_y_offset(0.2).0;
+                    let block = world.get_block(&pos);
+                    world
+                        .block_registry
+                        .update_entity_movement_after_fall_on(block, caller);
+                }
             }
             if fall_distance <= 0.0
                 || dont_damage
