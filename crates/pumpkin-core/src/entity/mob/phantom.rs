@@ -194,7 +194,7 @@ impl Mob for PhantomEntity {
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         entity.set_synced_data(
-            tracked_data::phantom::SIZE,
+            tracked_data::phantom::ID_SIZE,
             self.phantom_size.load(Ordering::Relaxed),
         );
     }
@@ -223,7 +223,7 @@ impl Mob for PhantomEntity {
         if let Some(size) = nbt.get_int("Size") {
             self.phantom_size.store(size, Ordering::Relaxed);
             let entity = self.get_entity();
-            entity.set_synced_data(tracked_data::phantom::SIZE, size);
+            entity.set_synced_data(tracked_data::phantom::ID_SIZE, size);
         }
     }
 }
