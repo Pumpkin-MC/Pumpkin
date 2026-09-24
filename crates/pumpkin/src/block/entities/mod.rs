@@ -189,6 +189,14 @@ pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
 #[allow(clippy::too_many_lines)]
 pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> {
     let id = nbt.get_string("id")?;
+    // Vanilla reads the id as an identifier, so `chest` means `minecraft:chest`.
+    let namespaced;
+    let id = if id.contains(':') {
+        id
+    } else {
+        namespaced = format!("minecraft:{id}");
+        namespaced.as_str()
+    };
     let x = nbt.get_int("x")?;
     let y = nbt.get_int("y")?;
     let z = nbt.get_int("z")?;
@@ -474,6 +482,18 @@ mod test {
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
     use std::sync::Arc;
+
+    #[test]
+    fn block_entity_ids_without_a_namespace_load() {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "chest".to_string());
+        nbt.put_int("x", 0);
+        nbt.put_int("y", 64);
+        nbt.put_int("z", 0);
+
+        let entity = block_entity_from_nbt(&nbt).map(|entity| entity.resource_location());
+        assert_eq!(entity, Some("minecraft:chest"));
+    }
 
     /// A loaded block entity is serialized back into its chunk with
     /// `write_internal`, so whatever it holds has to survive that round trip or
