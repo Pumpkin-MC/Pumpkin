@@ -209,6 +209,7 @@ pub struct StructureTemplate {
     pub entity_info_list: Vec<StructureEntityInfo>,
     pub size: Vector3<i32>,
     pub author: String,
+    pub name: Option<String>,
 
     // Backward-compatible fields
     // TODO: make these fields private with accessors. They are public now, so a
@@ -592,6 +593,13 @@ impl StructureTemplate {
         &self
             .jigsaw_blocks_cache
             .get_or_init(|| {
+                if let Some(name) = &self.name
+                    && let Some(meta) =
+                        pumpkin_data::structure_metadata::StaticStructureMetadataList::get(name)
+                {
+                    return JigsawBlockCache(meta.jigsaws.iter().map(JigsawBlock::from).collect());
+                }
+
                 JigsawBlockCache(
                     self.blocks
                         .iter()
