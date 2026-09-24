@@ -8,10 +8,7 @@ use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::enchantm
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::recipe::RecipeManager as WitRecipeManager;
 use pumpkin::plugin::server::CommandSender as WasmCommandSender;
 
-use super::player::{
-    from_wit_permission_level, parse_ban_expiry, text_component_from_resource,
-    to_wit_permission_level,
-};
+use super::player::{from_wit_permission_level, parse_ban_expiry, to_wit_permission_level};
 use crate::data::SaveJSONConfiguration;
 use crate::plugin::{
     loader::wasm::wasm_host::{
@@ -70,10 +67,13 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         })
     }
 
-    async fn get_difficulty(&mut self, res: Resource<Server>) -> wasmtime::Result<Difficulty> {
-        let resource = self.get(&res)?;
+    async fn get_difficulty(&mut self, _res: Resource<Server>) -> wasmtime::Result<Difficulty> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
 
-        Ok(match resource.get_difficulty() {
+        Ok(match server.get_difficulty() {
             pumpkin_util::Difficulty::Peaceful => Difficulty::Peaceful,
             pumpkin_util::Difficulty::Easy => Difficulty::Easy,
             pumpkin_util::Difficulty::Normal => Difficulty::Normal,
@@ -1162,8 +1162,8 @@ impl pumpkin::plugin::server::HostBanManagerWithStore<PluginHostState>
                 .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
             let reason_text = options
                 .reason
-                .as_ref()
-                .map(|res| text_component_from_resource(state, res))
+                .map(|res| state.take(res))
+                .transpose()?
                 .map_or_else(
                     || "Banned by plugin.".to_string(),
                     pumpkin_util::text::TextComponent::to_pretty_console,
@@ -1238,8 +1238,8 @@ impl pumpkin::plugin::server::HostBanManagerWithStore<PluginHostState>
             let state = host.get();
             let reason_text = options
                 .reason
-                .as_ref()
-                .map(|res| text_component_from_resource(state, res))
+                .map(|res| state.take(res))
+                .transpose()?
                 .map_or_else(
                     || "Banned by plugin.".to_string(),
                     pumpkin_util::text::TextComponent::to_pretty_console,

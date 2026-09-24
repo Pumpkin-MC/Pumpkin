@@ -555,16 +555,6 @@ const fn from_wasm_bedrock_status_flag(flag: pumpkin::plugin::player::BedrockSta
     }
 }
 
-pub fn player_from_resource(
-    state: &PluginHostState,
-    player: &Resource<Player>,
-) -> wasmtime::Result<std::sync::Arc<crate::entity::player::Player>> {
-    state
-        .get(player)
-        .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
-        .cloned()
-}
-
 pub(crate) fn text_component_from_resource(
     state: &PluginHostState,
     text: &Resource<pumpkin::plugin::text::TextComponent>,
@@ -572,16 +562,6 @@ pub(crate) fn text_component_from_resource(
     state
         .get(text)
         .expect("invalid text-component resource handle")
-        .clone()
-}
-
-fn world_from_resource(
-    state: &PluginHostState,
-    world: &Resource<pumpkin::plugin::world::World>,
-) -> std::sync::Arc<crate::world::World> {
-    state
-        .get(world)
-        .expect("invalid world resource handle")
         .clone()
 }
 
@@ -1114,12 +1094,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         hand: pumpkin::plugin::common::Hand,
         stack: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
         let stack = if let Some(stack_res) = stack {
-            self.get(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&player)?;
 
         let hand = from_wasm_hand(hand);
         let slot = match hand {
@@ -1143,12 +1123,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         slot: u8,
         stack: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
         let stack = if let Some(stack_res) = stack {
-            self.get(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&player)?;
 
         player.inventory().set_stack(slot as usize, stack.clone());
 
@@ -1221,12 +1201,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         slot: u8,
         stack: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
         let stack = if let Some(stack_res) = stack {
-            self.get(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&player)?;
 
         let ec = player.ender_chest_inventory();
         ec.set_stack(slot as usize, stack.clone());
@@ -1351,7 +1331,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn get_world(
         &mut self,
         player: Resource<Player>,
-    ) -> wasmtime::Result<wasmtime::component::Resource<pumpkin::plugin::world::World>> {
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::world::World>> {
         let player = self.get(&player)?;
         let world = player.world();
         self.add(world)
@@ -1441,9 +1421,9 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn set_display_name(
         &mut self,
         player: Resource<Player>,
-        display_name: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
+        display_name: Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let display_name = text_component_from_resource(self, &display_name);
+        let display_name = self.take(display_name)?;
         let player = self.get(&player)?;
         player.set_display_name(Some(display_name));
         Ok(())
@@ -1468,9 +1448,9 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn set_tab_list_name(
         &mut self,
         player: Resource<Player>,
-        name: Option<wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>>,
+        name: Option<Resource<pumpkin::plugin::text::TextComponent>>,
     ) -> wasmtime::Result<()> {
-        let name = name.map(|n| text_component_from_resource(self, &n));
+        let name = name.map(|n| self.take(n)).transpose()?;
         let player = self.get(&player)?;
         player.set_tab_list_name(name);
         Ok(())
@@ -1479,10 +1459,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn send_system_message(
         &mut self,
         player: Resource<Player>,
-        text: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
+        text: Resource<pumpkin::plugin::text::TextComponent>,
         overlay: bool,
     ) -> wasmtime::Result<()> {
-        let component = text_component_from_resource(self, &text);
+        let component = self.take(text)?;
         let player = self.get(&player)?;
         player.send_system_message_raw(&component, overlay);
         Ok(())
@@ -2187,8 +2167,8 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         player: Resource<Player>,
         other: Resource<Player>,
     ) -> wasmtime::Result<()> {
+        let other = self.take(other)?;
         let player = self.get(&player)?;
-        let other = self.get(&other)?;
         player.hide_player(other.gameprofile.id);
         Ok(())
     }
@@ -2198,8 +2178,8 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         player: Resource<Player>,
         other: Resource<Player>,
     ) -> wasmtime::Result<()> {
+        let other = self.take(other)?;
         let player = self.get(&player)?;
-        let other = self.get(&other)?;
         player.show_player(other.gameprofile.id);
         Ok(())
     }
@@ -2209,8 +2189,8 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         player: Resource<Player>,
         other: Resource<Player>,
     ) -> wasmtime::Result<bool> {
+        let other = self.take(other)?;
         let player = self.get(&player)?;
-        let other = self.get(&other)?;
         Ok(player.can_see(&other.gameprofile.id))
     }
 
@@ -2219,8 +2199,8 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         player: Resource<Player>,
         other: Resource<Player>,
     ) -> wasmtime::Result<bool> {
+        let other = self.take(other)?;
         let player = self.get(&player)?;
-        let other = self.get(&other)?;
         Ok(player.can_see(&other.gameprofile.id))
     }
 
@@ -2377,11 +2357,11 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn set_tab_list_header_footer(
         &mut self,
         player: Resource<Player>,
-        header: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
-        footer: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
+        header: Resource<pumpkin::plugin::text::TextComponent>,
+        footer: Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let header = text_component_from_resource(self, &header);
-        let footer = text_component_from_resource(self, &footer);
+        let header = self.take(header)?;
+        let footer = self.take(footer)?;
         let player = self.get(&player)?;
         player.set_tab_list_header_footer(&header, &footer);
         Ok(())
@@ -2420,9 +2400,9 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn show_title(
         &mut self,
         player: Resource<Player>,
-        text: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
+        text: Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let component = text_component_from_resource(self, &text);
+        let component = self.take(text)?;
         let player = self.get(&player)?;
         player.show_title(&component, &TitleMode::Title);
         Ok(())
@@ -2431,9 +2411,9 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn show_subtitle(
         &mut self,
         player: Resource<Player>,
-        text: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
+        text: Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let component = text_component_from_resource(self, &text);
+        let component = self.take(text)?;
         let player = self.get(&player)?;
         player.show_title(&component, &TitleMode::SubTitle);
         Ok(())
@@ -2442,9 +2422,9 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn show_actionbar(
         &mut self,
         player: Resource<Player>,
-        text: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
+        text: Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let component = text_component_from_resource(self, &text);
+        let component = self.take(text)?;
         let player = self.get(&player)?;
         player.show_title(&component, &TitleMode::ActionBar);
         Ok(())
@@ -3120,7 +3100,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             let state = host.get();
             (
                 state.get(&player)?.clone(),
-                world_from_resource(state, &world),
+                state.take(world)?,
                 plugin_from_state(state)?,
             )
         };
@@ -3146,7 +3126,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             let state = host.get();
             (
                 state.get(&player)?.clone(),
-                world_from_resource(state, &world),
+                state.take(world)?,
                 plugin_from_state(state)?,
             )
         };
@@ -3184,10 +3164,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let (player, gui, plugin) = {
             let state = host.get();
-            let gui = state
-                .get(&gui)
-                .map_err(|_| wasmtime::Error::msg("invalid gui resource handle"))?
-                .clone();
+            let gui = state.take(gui)?;
             (state.get(&player)?.clone(), gui, plugin_from_state(state)?)
         };
 
@@ -3242,9 +3219,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             (
                 state.get(&player)?.clone(),
                 state.server.as_ref().expect("server not available").clone(),
-                reason
-                    .as_ref()
-                    .map(|reason| text_component_from_resource(state, reason)),
+                reason.map(|t| state.take(t)).transpose()?,
                 plugin_from_state(state)?,
             )
         };
@@ -3283,9 +3258,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             (
                 state.get(&player)?.clone(),
                 state.server.as_ref().expect("server not available").clone(),
-                reason
-                    .as_ref()
-                    .map(|reason| text_component_from_resource(state, reason)),
+                reason.map(|t| state.take(t)).transpose()?,
                 plugin_from_state(state)?,
             )
         };
@@ -3655,10 +3628,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         let player = self.get(&player)?.clone();
 
         let uuid = Uuid::from_wit(&pack.id);
-        let prompt_message = pack
-            .prompt_message
-            .as_ref()
-            .map(|p| text_component_from_resource(self, p));
+        let prompt_message = pack.prompt_message.map(|t| self.take(t)).transpose()?;
 
         if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             client
@@ -3878,7 +3848,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
         let (player, reason, plugin) = {
             let state = host.get();
             let player = state.get(&player)?.clone();
-            let reason = text_component_from_resource(state, &options.reason);
+            let reason = state.take(options.reason)?;
             let plugin = state
                 .plugin
                 .as_ref()
