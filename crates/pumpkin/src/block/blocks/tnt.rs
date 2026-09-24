@@ -32,18 +32,16 @@ impl TNTBlock {
             return false;
         };
 
-        // A plugin handler may have replaced the TNT while the events ran -> leave its block alone.
-        if world.get_block(location) != &Block::TNT {
-            return false;
-        }
-
-        // Swap in air to claim the block, a task that raced here gets a non-TNT old state
-        // back and drops out, so the TNT is only ignited once. Nothing is restored, since that
-        // could overwrite a later change.
+        // Claim the block atomically: if a plugin handler or another task replaced the TNT in
+        // the meantime, its block stays untouched and only one caller ever ignites this TNT.
         if world
-            .set_block_state(location, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
-            .to_block()
-            != &Block::TNT
+            .set_block_state_if(
+                location,
+                BlockStateId::AIR,
+                BlockFlags::NOTIFY_ALL,
+                |state| state.to_block() == &Block::TNT,
+            )
+            .is_none()
         {
             return false;
         }
