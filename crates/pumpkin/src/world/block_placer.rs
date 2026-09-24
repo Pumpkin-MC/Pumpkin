@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
@@ -27,14 +29,14 @@ impl World {
 }
 
 pub struct WorldBlockPlacer<'a> {
-    world: &'a World,
+    world: &'a Arc<World>,
     pub block_entity_nbts: Vec<NbtCompound>,
     pub changed_positions: Vec<(BlockPos, BlockStateId)>,
 }
 
 impl<'a> WorldBlockPlacer<'a> {
     #[must_use]
-    pub const fn new(world: &'a World) -> Self {
+    pub const fn new(world: &'a Arc<World>) -> Self {
         Self {
             world,
             block_entity_nbts: Vec::new(),
@@ -64,6 +66,13 @@ impl BlockPlacer for WorldBlockPlacer<'_> {
         if replaced.to_block() != state.id.to_block()
             && block_entity_name(Block::from_state_id(replaced)).is_some()
         {
+            // Like vanilla `StructureTemplate::placeInWorld`: the old contents drop, unless the
+            // new block brings its own block entity, which clears the old one silently.
+            if block_entity_name(Block::from_state_id(state.id)).is_none()
+                && let Some(entity) = self.world.get_block_entity(&block_pos)
+            {
+                entity.on_block_replaced(self.world, &block_pos);
+            }
             self.world.remove_block_entity(&block_pos);
         }
         self.changed_positions.push((block_pos, state.id));
