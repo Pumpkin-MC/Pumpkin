@@ -144,8 +144,8 @@ impl PhantomEntity {
         let yaw = (-dir_x.atan2(dir_z).to_degrees()) as f32;
         // Simple yaw lerp
         let current_yaw = entity.yaw.load();
-        let diff = ((yaw - current_yaw + 540.0) % 360.0) - 180.0;
-        let new_yaw = current_yaw + (diff * 0.2).clamp(-20.0, 20.0);
+        let diff = (yaw - current_yaw + 540.0).rem_euclid(360.0) - 180.0;
+        let new_yaw = (current_yaw + (diff * 0.2).clamp(-20.0, 20.0)).rem_euclid(360.0);
         entity.yaw.store(new_yaw);
         entity.body_yaw.store(new_yaw);
         entity.head_yaw.store(new_yaw);
@@ -659,6 +659,15 @@ impl Goal for FindTargetGoal {
         let Some(target) = phantom.mob_entity.get_target() else {
             return false;
         };
-        target.get_entity().is_alive() && !target.get_entity().is_spectator()
+        let entity = target.get_entity();
+        if !entity.is_alive() || entity.is_spectator() {
+            return false;
+        }
+        if let Some(player) = entity.world.load().get_player_by_id(entity.entity_id) {
+            if player.is_creative() {
+                return false;
+            }
+        }
+        true
     }
 }
