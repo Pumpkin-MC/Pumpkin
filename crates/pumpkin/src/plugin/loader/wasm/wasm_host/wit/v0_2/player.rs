@@ -1163,7 +1163,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         let stack = if let Some(stack_res) = stack {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.get_item_stack_v0_2(&stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
@@ -1192,7 +1192,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         let stack = if let Some(stack_res) = stack {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.get_item_stack_v0_2(&stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
@@ -1276,7 +1276,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         let stack = if let Some(stack_res) = stack {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.get_item_stack_v0_2(&stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
@@ -4478,9 +4478,9 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
             let locale = Locale::from_str(&locale_str).unwrap_or(Locale::EnUs);
 
             let form_json = match form {
-                Form::Simple(simple) => self.serialize_simple_form(simple, locale),
-                Form::Modal(modal) => self.serialize_modal_form(&modal, locale),
-                Form::Custom(custom) => self.serialize_custom_form(custom, locale),
+                Form::Simple(simple) => self.serialize_simple_form_v0_2(simple, locale),
+                Form::Modal(modal) => self.serialize_modal_form_v0_2(&modal, locale),
+                Form::Custom(custom) => self.serialize_custom_form_v0_2(custom, locale),
             };
 
             client

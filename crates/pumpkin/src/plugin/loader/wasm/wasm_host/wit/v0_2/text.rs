@@ -21,7 +21,7 @@ use pumpkin_util::translation::Locale;
 
 // --- Trapping Helpers ---
 impl PluginHostState {
-    fn get_text_ref(
+    fn get_text_ref_v0_2(
         &self,
         res: &Resource<TextComponent>,
     ) -> wasmtime::Result<&TextComponentResource> {
@@ -39,7 +39,7 @@ impl PluginHostState {
             .map_err(wasmtime::Error::from)
     }
 
-    fn take_text(
+    fn take_text_v0_2(
         &mut self,
         res: &Resource<TextComponent>,
     ) -> wasmtime::Result<TextComponentResource> {
@@ -92,7 +92,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
     ) -> wasmtime::Result<Resource<TextComponent>> {
         let mut components = Vec::with_capacity(with.len());
         for r in with {
-            components.push(self.take_text(&r)?.provider);
+            components.push(self.take_text_v0_2(&r)?.provider);
         }
         #[allow(deprecated)]
         let tc = InternalTextComponent::translate(key, components);
@@ -108,7 +108,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
     ) -> wasmtime::Result<Resource<TextComponent>> {
         let mut components = Vec::with_capacity(with.len());
         for r in with {
-            components.push(self.take_text(&r)?.provider);
+            components.push(self.take_text_v0_2(&r)?.provider);
         }
         #[allow(deprecated)]
         let tc = InternalTextComponent::translate_cross(java_key, bedrock_key, components);
@@ -142,7 +142,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         let loc = Locale::from_str(&locale).unwrap_or(Locale::EnUs);
         let mut components = Vec::with_capacity(with.len());
         for r in with {
-            components.push(self.take_text(&r)?.provider);
+            components.push(self.take_text_v0_2(&r)?.provider);
         }
         let tc = InternalTextComponent::custom(namespace, key, loc, components);
         self.add_text_component(tc)
@@ -185,7 +185,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         &mut self,
         text_component: Resource<TextComponent>,
     ) -> wasmtime::Result<String> {
-        let tc = &self.get_text_ref(&text_component)?.provider;
+        let tc = &self.get_text_ref_v0_2(&text_component)?.provider;
         Ok(serde_json::to_string(tc).unwrap_or_default())
     }
 
@@ -194,7 +194,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         text_component: Resource<TextComponent>,
         child: Resource<TextComponent>,
     ) -> wasmtime::Result<()> {
-        let child_tc = self.take_text(&child)?.provider;
+        let child_tc = self.take_text_v0_2(&child)?.provider;
         let parent = self.get_text_mut(&text_component)?;
         parent.provider = parent.provider.clone().add_child(child_tc);
         Ok(())
@@ -215,7 +215,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         text_component: Resource<TextComponent>,
     ) -> wasmtime::Result<String> {
         Ok(self
-            .get_text_ref(&text_component)?
+            .get_text_ref_v0_2(&text_component)?
             .provider
             .clone()
             .get_text())
@@ -226,7 +226,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         text_component: Resource<TextComponent>,
     ) -> wasmtime::Result<Vec<u8>> {
         Ok(self
-            .get_text_ref(&text_component)?
+            .get_text_ref_v0_2(&text_component)?
             .provider
             .encode()
             .into_vec())
@@ -237,7 +237,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         text_component: Resource<TextComponent>,
     ) -> wasmtime::Result<String> {
         Ok(self
-            .get_text_ref(&text_component)?
+            .get_text_ref_v0_2(&text_component)?
             .provider
             .clone()
             .to_pretty_console())
@@ -425,7 +425,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         res: Resource<TextComponent>,
         text: Resource<TextComponent>,
     ) -> wasmtime::Result<()> {
-        let hover_tc = self.take_text(&text)?.provider;
+        let hover_tc = self.take_text_v0_2(&text)?.provider;
         self.get_text_mut(&res)?.provider.0.style.hover_event = Some(HoverEvent::ShowText {
             value: vec![hover_tc.0],
         });
@@ -452,7 +452,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         name: Option<Resource<TextComponent>>,
     ) -> wasmtime::Result<()> {
         let name_val = match name {
-            Some(r) => Some(vec![self.take_text(&r)?.provider.0]),
+            Some(r) => Some(vec![self.take_text_v0_2(&r)?.provider.0]),
             None => None,
         };
         self.get_text_mut(&res)?.provider.0.style.hover_event = Some(HoverEvent::ShowEntity {

@@ -388,7 +388,7 @@ impl HostContainerBlockEntity for PluginHostState {
 
         let stack = match stack_res {
             Some(res) => {
-                let lock = self.get_item_stack(&res)?;
+                let lock = self.get_item_stack_v0_2(&res)?;
                 lock.lock().await.clone()
             }
             None => pumpkin_data::item_stack::ItemStack::EMPTY.clone(),

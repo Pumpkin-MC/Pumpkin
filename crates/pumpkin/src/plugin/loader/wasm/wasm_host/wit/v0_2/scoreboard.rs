@@ -22,14 +22,14 @@ fn map_number_format(
         None => Ok(None),
         Some(scoreboard::NumberFormat::Blank) => Ok(Some(NumberFormat::Blank)),
         Some(scoreboard::NumberFormat::Fixed(tc)) => {
-            let text = state.get_text_provider(&tc)?;
+            let text = state.get_text_provider_v0_2(&tc)?;
             Ok(Some(NumberFormat::Fixed(text)))
         }
     }
 }
 
 impl PluginHostState {
-    fn get_scoreboard_res(
+    fn get_scoreboard_res_v0_2(
         &self,
         res: &Resource<scoreboard::Scoreboard>,
     ) -> wasmtime::Result<&ScoreboardResource> {
@@ -38,7 +38,7 @@ impl PluginHostState {
             .map_err(wasmtime::Error::from)
     }
 
-    fn get_bedrock_scoreboard_res(
+    fn get_bedrock_scoreboard_res_v0_2(
         &self,
         res: &Resource<scoreboard::BedrockScoreboard>,
     ) -> wasmtime::Result<&BedrockScoreboardResource> {
@@ -59,8 +59,8 @@ impl scoreboard::HostScoreboard for PluginHostState {
         render_type: RenderType,
         number_format: Option<scoreboard::NumberFormat>,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
-        let display_name = self.get_text_provider(&display_name)?;
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
+        let display_name = self.get_text_provider_v0_2(&display_name)?;
         let nf = map_number_format(number_format, self)?;
 
         let rt = match render_type {
@@ -109,8 +109,8 @@ impl scoreboard::HostScoreboard for PluginHostState {
         render_type: RenderType,
         number_format: Option<scoreboard::NumberFormat>,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
-        let display_name = self.get_text_provider(&display_name)?;
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
+        let display_name = self.get_text_provider_v0_2(&display_name)?;
         let nf = map_number_format(number_format, self)?;
 
         let rt = match render_type {
@@ -156,7 +156,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         res: Resource<scoreboard::Scoreboard>,
         name: String,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         match provider {
             ScoreboardProvider::World(world) => {
                 world
@@ -186,7 +186,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         slot: DisplaySlot,
         objective_name: String,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         let slot = map_display_slot(slot);
 
         match provider {
@@ -225,7 +225,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         res: Resource<scoreboard::Scoreboard>,
         slot: DisplaySlot,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         let slot = map_display_slot(slot);
 
         match provider {
@@ -259,7 +259,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         value: i32,
         number_format: Option<scoreboard::NumberFormat>,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         let nf = map_number_format(number_format, self)?;
         let score = ScoreboardScore::new(entity_name, objective_name, VarInt(value), None, nf);
         match provider {
@@ -300,7 +300,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         objective_name: String,
         delta: i32,
     ) -> wasmtime::Result<i32> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         let new_val = match provider {
             ScoreboardProvider::World(world) => world
                 .scoreboard
@@ -336,7 +336,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         entity_name: String,
         objective_name: String,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         match provider {
             ScoreboardProvider::World(world) => {
                 world
@@ -365,7 +365,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         res: Resource<scoreboard::Scoreboard>,
         entity_name: String,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         match provider {
             ScoreboardProvider::World(world) => {
                 world
@@ -395,7 +395,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         name: String,
         settings: TeamSettings,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         let team = map_team_settings(name, &settings, self)?;
         match provider {
             ScoreboardProvider::World(world) => {
@@ -433,7 +433,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         res: Resource<scoreboard::Scoreboard>,
         name: String,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         match provider {
             ScoreboardProvider::World(world) => {
                 world
@@ -463,7 +463,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         name: String,
         settings: TeamSettings,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         let team = map_team_settings(name, &settings, self)?;
         match provider {
             ScoreboardProvider::World(world) => {
@@ -494,7 +494,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         team_name: String,
         player_name: String,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         match provider {
             ScoreboardProvider::World(world) => {
                 world
@@ -524,7 +524,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         team_name: String,
         player_name: String,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         match provider {
             ScoreboardProvider::World(world) => {
                 world
@@ -553,7 +553,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         res: Resource<scoreboard::Scoreboard>,
         team_name: String,
     ) -> wasmtime::Result<()> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         match provider {
             ScoreboardProvider::World(world) => {
                 world
@@ -581,7 +581,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
     ) -> wasmtime::Result<Vec<String>> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         let teams = match provider {
             ScoreboardProvider::World(world) => world
                 .scoreboard
@@ -613,7 +613,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         res: Resource<scoreboard::Scoreboard>,
         name: String,
     ) -> wasmtime::Result<Option<TeamSettings>> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         let team_opt = match provider {
             ScoreboardProvider::World(world) => world
                 .scoreboard
@@ -648,7 +648,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         res: Resource<scoreboard::Scoreboard>,
         team_name: String,
     ) -> wasmtime::Result<Vec<String>> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         let players = match provider {
             ScoreboardProvider::World(world) => world
                 .scoreboard
@@ -681,7 +681,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         res: Resource<scoreboard::Scoreboard>,
         player_name: String,
     ) -> wasmtime::Result<Option<String>> {
-        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let provider = self.get_scoreboard_res_v0_2(&res)?.provider.clone();
         let team_name = match provider {
             ScoreboardProvider::World(world) => world
                 .scoreboard
@@ -759,9 +759,9 @@ fn map_team_settings(
     settings: &TeamSettings,
     state: &PluginHostState,
 ) -> wasmtime::Result<Team> {
-    let display_name = state.get_text_provider(&settings.display_name)?;
-    let player_prefix = state.get_text_provider(&settings.prefix)?;
-    let player_suffix = state.get_text_provider(&settings.suffix)?;
+    let display_name = state.get_text_provider_v0_2(&settings.display_name)?;
+    let player_prefix = state.get_text_provider_v0_2(&settings.prefix)?;
+    let player_suffix = state.get_text_provider_v0_2(&settings.suffix)?;
 
     let mut options = 0;
     if settings.friendly_fire {
@@ -929,7 +929,7 @@ impl HostBedrockScoreboard for PluginHostState {
         display_name: String,
         sort_order: scoreboard::BedrockSortOrder,
     ) -> wasmtime::Result<()> {
-        let player = self.get_bedrock_scoreboard_res(&res)?.provider.clone();
+        let player = self.get_bedrock_scoreboard_res_v0_2(&res)?.provider.clone();
         let mut custom_guard = player
             .custom_scoreboard
             .lock()
@@ -971,7 +971,7 @@ impl HostBedrockScoreboard for PluginHostState {
         display_name: String,
         sort_order: scoreboard::BedrockSortOrder,
     ) -> wasmtime::Result<()> {
-        let player = self.get_bedrock_scoreboard_res(&res)?.provider.clone();
+        let player = self.get_bedrock_scoreboard_res_v0_2(&res)?.provider.clone();
         let mut custom_guard = player
             .custom_scoreboard
             .lock()
@@ -1011,7 +1011,7 @@ impl HostBedrockScoreboard for PluginHostState {
         res: Resource<scoreboard::BedrockScoreboard>,
         name: String,
     ) -> wasmtime::Result<()> {
-        let player = self.get_bedrock_scoreboard_res(&res)?.provider.clone();
+        let player = self.get_bedrock_scoreboard_res_v0_2(&res)?.provider.clone();
         let mut custom_guard = player
             .custom_scoreboard
             .lock()
@@ -1028,7 +1028,7 @@ impl HostBedrockScoreboard for PluginHostState {
         slot: scoreboard::BedrockDisplaySlot,
         objective_name: String,
     ) -> wasmtime::Result<()> {
-        let player = self.get_bedrock_scoreboard_res(&res)?.provider.clone();
+        let player = self.get_bedrock_scoreboard_res_v0_2(&res)?.provider.clone();
         let mut custom_guard = player
             .custom_scoreboard
             .lock()
@@ -1065,7 +1065,7 @@ impl HostBedrockScoreboard for PluginHostState {
         res: Resource<scoreboard::BedrockScoreboard>,
         slot: scoreboard::BedrockDisplaySlot,
     ) -> wasmtime::Result<()> {
-        let player = self.get_bedrock_scoreboard_res(&res)?.provider.clone();
+        let player = self.get_bedrock_scoreboard_res_v0_2(&res)?.provider.clone();
         let mut custom_guard = player
             .custom_scoreboard
             .lock()
@@ -1094,7 +1094,7 @@ impl HostBedrockScoreboard for PluginHostState {
         objective_name: String,
         value: i32,
     ) -> wasmtime::Result<()> {
-        let player = self.get_bedrock_scoreboard_res(&res)?.provider.clone();
+        let player = self.get_bedrock_scoreboard_res_v0_2(&res)?.provider.clone();
         let mut custom_guard = player
             .custom_scoreboard
             .lock()
@@ -1122,7 +1122,7 @@ impl HostBedrockScoreboard for PluginHostState {
         objective_name: String,
         delta: i32,
     ) -> wasmtime::Result<i32> {
-        let player = self.get_bedrock_scoreboard_res(&res)?.provider.clone();
+        let player = self.get_bedrock_scoreboard_res_v0_2(&res)?.provider.clone();
         let mut custom_guard = player
             .custom_scoreboard
             .lock()
@@ -1149,7 +1149,7 @@ impl HostBedrockScoreboard for PluginHostState {
         entity_name: String,
         objective_name: String,
     ) -> wasmtime::Result<()> {
-        let player = self.get_bedrock_scoreboard_res(&res)?.provider.clone();
+        let player = self.get_bedrock_scoreboard_res_v0_2(&res)?.provider.clone();
         let mut custom_guard = player
             .custom_scoreboard
             .lock()
@@ -1165,7 +1165,7 @@ impl HostBedrockScoreboard for PluginHostState {
         res: Resource<scoreboard::BedrockScoreboard>,
         entity_name: String,
     ) -> wasmtime::Result<()> {
-        let player = self.get_bedrock_scoreboard_res(&res)?.provider.clone();
+        let player = self.get_bedrock_scoreboard_res_v0_2(&res)?.provider.clone();
         let mut custom_guard = player
             .custom_scoreboard
             .lock()

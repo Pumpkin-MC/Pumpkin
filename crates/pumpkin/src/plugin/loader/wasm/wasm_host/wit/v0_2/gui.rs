@@ -76,7 +76,7 @@ pub const fn from_wit_screen(screen: WitScreen) -> WindowType {
 }
 
 impl PluginHostState {
-    fn get_gui_res(&self, res: &Resource<Gui>) -> wasmtime::Result<&GuiResource> {
+    fn get_gui_res_v0_2(&self, res: &Resource<Gui>) -> wasmtime::Result<&GuiResource> {
         self.resource_table
             .get::<GuiResource>(&Resource::new_own(res.rep()))
             .map_err(wasmtime::Error::from)
@@ -93,7 +93,7 @@ impl gui::HostGui for PluginHostState {
             crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::text::TextComponent,
         >,
     ) -> wasmtime::Result<Resource<Gui>> {
-        let title = self.get_text_provider(&title)?;
+        let title = self.get_text_provider_v0_2(&title)?;
         let window_type = from_wit_screen(screen);
 
         let size = match window_type {
@@ -127,7 +127,7 @@ impl gui::HostGui for PluginHostState {
         >,
     >{
         let inv = {
-            let gui = self.get_gui_res(&res)?.provider.lock().await;
+            let gui = self.get_gui_res_v0_2(&res)?.provider.lock().await;
             gui.inventory.clone()
         };
         self.add_inventory(
@@ -142,10 +142,10 @@ impl gui::HostGui for PluginHostState {
         item: Resource<WitHostItemStack>,
     ) -> wasmtime::Result<()> {
         let item_stack = {
-            let item_stack = self.get_item_stack(&item)?;
+            let item_stack = self.get_item_stack_v0_2(&item)?;
             item_stack.lock().await.clone()
         };
-        let gui = self.get_gui_res(&res)?.provider.lock().await;
+        let gui = self.get_gui_res_v0_2(&res)?.provider.lock().await;
         let mut slots = gui
             .inventory
             .slots
@@ -163,7 +163,7 @@ impl gui::HostGui for PluginHostState {
         slot: u32,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
         let stack = {
-            let gui = self.get_gui_res(&res)?.provider.lock().await;
+            let gui = self.get_gui_res_v0_2(&res)?.provider.lock().await;
             let slots = gui
                 .inventory
                 .slots
@@ -189,7 +189,7 @@ impl gui::HostGui for PluginHostState {
     }
 
     async fn get_type(&mut self, res: Resource<Gui>) -> wasmtime::Result<WitScreen> {
-        let gui = self.get_gui_res(&res)?.provider.lock().await;
+        let gui = self.get_gui_res_v0_2(&res)?.provider.lock().await;
         Ok(to_wit_screen(gui.window_type))
     }
 
@@ -202,7 +202,7 @@ impl gui::HostGui for PluginHostState {
         >,
     > {
         let title = {
-            let gui = self.get_gui_res(&res)?.provider.lock().await;
+            let gui = self.get_gui_res_v0_2(&res)?.provider.lock().await;
             gui.title.clone()
         };
         self.add_text_component(title)
@@ -211,13 +211,13 @@ impl gui::HostGui for PluginHostState {
 
     async fn get_size(&mut self, res: Resource<Gui>) -> wasmtime::Result<u32> {
         use pumpkin_inventory::Inventory;
-        let gui = self.get_gui_res(&res)?.provider.lock().await;
+        let gui = self.get_gui_res_v0_2(&res)?.provider.lock().await;
         Ok(gui.inventory.size() as u32)
     }
 
     async fn clear_items(&mut self, res: Resource<Gui>) -> wasmtime::Result<()> {
         use pumpkin_inventory::Clearable;
-        let gui = self.get_gui_res(&res)?.provider.lock().await;
+        let gui = self.get_gui_res_v0_2(&res)?.provider.lock().await;
         gui.inventory.clear();
         Ok(())
     }
@@ -227,13 +227,13 @@ impl gui::HostGui for PluginHostState {
         res: Resource<Gui>,
         allow: bool,
     ) -> wasmtime::Result<()> {
-        let mut gui = self.get_gui_res(&res)?.provider.lock().await;
+        let mut gui = self.get_gui_res_v0_2(&res)?.provider.lock().await;
         gui.allow_grab_items = allow;
         Ok(())
     }
 
     async fn get_allow_grab_items(&mut self, res: Resource<Gui>) -> wasmtime::Result<bool> {
-        let gui = self.get_gui_res(&res)?.provider.lock().await;
+        let gui = self.get_gui_res_v0_2(&res)?.provider.lock().await;
         Ok(gui.allow_grab_items)
     }
 
@@ -242,13 +242,13 @@ impl gui::HostGui for PluginHostState {
         res: Resource<Gui>,
         allow: bool,
     ) -> wasmtime::Result<()> {
-        let mut gui = self.get_gui_res(&res)?.provider.lock().await;
+        let mut gui = self.get_gui_res_v0_2(&res)?.provider.lock().await;
         gui.allow_put_items = allow;
         Ok(())
     }
 
     async fn get_allow_put_items(&mut self, res: Resource<Gui>) -> wasmtime::Result<bool> {
-        let gui = self.get_gui_res(&res)?.provider.lock().await;
+        let gui = self.get_gui_res_v0_2(&res)?.provider.lock().await;
         Ok(gui.allow_put_items)
     }
 

@@ -35,7 +35,7 @@ use crate::plugin::{
 };
 
 impl PluginHostState {
-    fn get_server_res(&self, res: &Resource<Server>) -> wasmtime::Result<&ServerResource> {
+    fn get_server_res_v0_2(&self, res: &Resource<Server>) -> wasmtime::Result<&ServerResource> {
         self.resource_table
             .get::<ServerResource>(&Resource::new_own(res.rep()))
             .map_err(wasmtime::Error::from)
@@ -79,7 +79,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     }
 
     async fn get_difficulty(&mut self, res: Resource<Server>) -> wasmtime::Result<Difficulty> {
-        let resource = self.get_server_res(&res)?;
+        let resource = self.get_server_res_v0_2(&res)?;
 
         Ok(match resource.provider.get_difficulty() {
             pumpkin_util::Difficulty::Peaceful => Difficulty::Peaceful,
@@ -225,7 +225,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         world: Resource<pumpkin::plugin::world::World>,
     ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::player::Player>>> {
-        let world_res = self.get_world_res(&world)?;
+        let world_res = self.get_world_res_v0_2(&world)?;
         let players = world_res.provider.players.load();
         let mut player_resources = Vec::with_capacity(players.len());
         for p in players.iter() {
@@ -240,7 +240,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         world: Resource<pumpkin::plugin::world::World>,
     ) -> wasmtime::Result<u32> {
-        let world_res = self.get_world_res(&world)?;
+        let world_res = self.get_world_res_v0_2(&world)?;
         Ok(world_res.provider.players.load().len() as u32)
     }
 

@@ -416,7 +416,7 @@ impl HostLivingEntity for PluginHostState {
         if let Some(living) = entity.get_living_entity() {
             let slot = from_wit_equipment_slot(slot);
             let item_stack = if let Some(stack_res) = stack {
-                self.get_item_stack(&stack_res)?.lock().await.clone()
+                self.get_item_stack_v0_2(&stack_res)?.lock().await.clone()
             } else {
                 pumpkin_data::item_stack::ItemStack::EMPTY.clone()
             };

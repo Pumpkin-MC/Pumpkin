@@ -63,7 +63,7 @@ impl CommandExecutor for WasmCommandExecutor {
         let consumed_args = build_consumed_args_from_context(context);
         let handler_id = self.handler_id;
         let function = match self.plugin.plugin_instance.as_ref() {
-            PluginInstance::v0_2(plugin) => plugin.func_handle_command(),
+            PluginInstance::V0_2(plugin) => plugin.func_handle_command(),
         };
 
         tokio::task::block_in_place(|| {

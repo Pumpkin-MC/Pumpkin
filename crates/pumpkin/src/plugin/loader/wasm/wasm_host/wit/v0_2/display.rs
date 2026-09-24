@@ -619,7 +619,10 @@ impl HostItemDisplayEntity for PluginHostState {
             .downcast_ref::<InternalItemDisplayEntity>()
         {
             let stack = if let Some(item_res_val) = item {
-                self.get_item_stack(&item_res_val)?.lock().await.clone()
+                self.get_item_stack_v0_2(&item_res_val)?
+                    .lock()
+                    .await
+                    .clone()
             } else {
                 pumpkin_data::item_stack::ItemStack::new(0, &pumpkin_data::item::Item::AIR)
             };
@@ -724,7 +727,7 @@ impl HostTextDisplayEntity for PluginHostState {
         text_display: Resource<TextDisplayEntity>,
         text: Resource<TextComponent>,
     ) -> wasmtime::Result<()> {
-        let text_val = self.get_text_provider(&text)?;
+        let text_val = self.get_text_provider_v0_2(&text)?;
         let text_res = self.get_text_display_entity_res(&text_display)?;
         if let Some(t) = text_res
             .provider

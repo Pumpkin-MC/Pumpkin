@@ -53,7 +53,7 @@ use crate::{
 pub mod executor;
 
 impl PluginHostState {
-    fn get_command_mut(
+    fn get_command_mut_v0_2(
         &mut self,
         res: &Resource<Command>,
     ) -> wasmtime::Result<&mut CommandResource> {
@@ -61,7 +61,7 @@ impl PluginHostState {
             .get_mut::<CommandResource>(&Resource::new_own(res.rep()))
             .map_err(wasmtime::Error::from)
     }
-    fn get_node_mut(
+    fn get_node_mut_v0_2(
         &mut self,
         res: &Resource<CommandNode>,
     ) -> wasmtime::Result<&mut CommandNodeResource> {
@@ -69,12 +69,12 @@ impl PluginHostState {
             .get_mut::<CommandNodeResource>(&Resource::new_own(res.rep()))
             .map_err(wasmtime::Error::from)
     }
-    fn take_node(&mut self, res: &Resource<CommandNode>) -> wasmtime::Result<CommandNodeResource> {
+    fn take_node_v0_2(&mut self, res: &Resource<CommandNode>) -> wasmtime::Result<CommandNodeResource> {
         self.resource_table
             .delete::<CommandNodeResource>(Resource::new_own(res.rep()))
             .map_err(wasmtime::Error::from)
     }
-    fn get_sender_res(
+    fn get_sender_res_v0_2(
         &self,
         res: &Resource<CommandSender>,
     ) -> wasmtime::Result<&CommandSenderResource> {
@@ -82,7 +82,7 @@ impl PluginHostState {
             .get::<CommandSenderResource>(&Resource::new_own(res.rep()))
             .map_err(wasmtime::Error::from)
     }
-    fn get_sender_mut(
+    fn get_sender_mut_v0_2(
         &mut self,
         res: &Resource<CommandSender>,
     ) -> wasmtime::Result<&mut CommandSenderResource> {
@@ -297,8 +297,8 @@ impl pumpkin::plugin::command::HostCommand for PluginHostState {
         command: Resource<Command>,
         node: Resource<CommandNode>,
     ) -> wasmtime::Result<()> {
-        let node_data = self.take_node(&node)?;
-        let command_res = self.get_command_mut(&command)?;
+        let node_data = self.take_node_v0_2(&node)?;
+        let command_res = self.get_command_mut_v0_2(&command)?;
         let cmd = std::mem::replace(
             &mut command_res.provider,
             WasmCommand::new(Vec::new(), String::new()),
@@ -327,7 +327,7 @@ impl pumpkin::plugin::command::HostCommand for PluginHostState {
             plugin,
             server,
         };
-        let command_res = self.get_command_mut(&command)?;
+        let command_res = self.get_command_mut_v0_2(&command)?;
         let cmd = std::mem::replace(
             &mut command_res.provider,
             WasmCommand::new(Vec::new(), String::new()),
@@ -349,7 +349,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         &mut self,
         res: Resource<CommandSender>,
     ) -> wasmtime::Result<CommandSenderType> {
-        let sender = self.get_sender_res(&res)?.provider.clone();
+        let sender = self.get_sender_res_v0_2(&res)?.provider.clone();
         match sender {
             crate::command::CommandSender::Rcon(_) => Ok(CommandSenderType::Rcon),
             crate::command::CommandSender::Console => Ok(CommandSenderType::Console),
@@ -367,7 +367,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
     }
 
     async fn get_name(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<String> {
-        Ok(self.get_sender_res(&sender)?.provider.to_string())
+        Ok(self.get_sender_res_v0_2(&sender)?.provider.to_string())
     }
 
     async fn send_message(
@@ -380,7 +380,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .get::<TextComponentResource>(&Resource::new_own(text.rep()))?
             .provider
             .clone();
-        self.get_sender_res(&sender)?
+        self.get_sender_res_v0_2(&sender)?
             .provider
             .send_message(component);
         Ok(())
@@ -396,7 +396,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .get::<TextComponentResource>(&Resource::new_own(text.rep()))?
             .provider
             .clone();
-        self.get_sender_res(&sender)?
+        self.get_sender_res_v0_2(&sender)?
             .provider
             .send_message(component);
         Ok(())
@@ -412,7 +412,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .get::<TextComponentResource>(&Resource::new_own(text.rep()))?
             .provider
             .clone();
-        self.get_sender_res(&sender)?
+        self.get_sender_res_v0_2(&sender)?
             .provider
             .send_message(component.color(pumpkin_util::text::color::Color::Named(
                 pumpkin_util::text::color::NamedColor::Red,
@@ -425,7 +425,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         sender: Resource<CommandSender>,
         count: i32,
     ) -> wasmtime::Result<()> {
-        self.get_sender_mut(&sender)?
+        self.get_sender_mut_v0_2(&sender)?
             .provider
             .set_success_count(count as u32);
         Ok(())
@@ -433,14 +433,14 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
 
     async fn is_player(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<bool> {
         Ok(matches!(
-            self.get_sender_res(&sender)?.provider,
+            self.get_sender_res_v0_2(&sender)?.provider,
             crate::command::CommandSender::Player(_)
         ))
     }
 
     async fn is_console(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<bool> {
         Ok(matches!(
-            self.get_sender_res(&sender)?.provider,
+            self.get_sender_res_v0_2(&sender)?.provider,
             crate::command::CommandSender::Console | crate::command::CommandSender::Rcon(_)
         ))
     }
@@ -450,7 +450,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         sender: Resource<CommandSender>,
     ) -> wasmtime::Result<Option<Resource<Player>>> {
         if let crate::command::CommandSender::Player(player) =
-            &self.get_sender_res(&sender)?.provider
+            &self.get_sender_res_v0_2(&sender)?.provider
         {
             Ok(Some(self.add_player(player.clone()).map_err(|_| {
                 wasmtime::Error::msg("Failed to add player resource")
@@ -465,7 +465,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         sender: Resource<CommandSender>,
     ) -> wasmtime::Result<PermissionLevel> {
         Ok(
-            match self.get_sender_res(&sender)?.provider.permission_lvl() {
+            match self.get_sender_res_v0_2(&sender)?.provider.permission_lvl() {
                 pumpkin_util::PermissionLvl::Zero => PermissionLevel::Zero,
                 pumpkin_util::PermissionLvl::One => PermissionLevel::One,
                 pumpkin_util::PermissionLvl::Two => PermissionLevel::Two,
@@ -487,7 +487,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             PermissionLevel::Three => pumpkin_util::PermissionLvl::Three,
             PermissionLevel::Four => pumpkin_util::PermissionLvl::Four,
         };
-        Ok(self.get_sender_res(&sender)?.provider.permission_lvl() >= required)
+        Ok(self.get_sender_res_v0_2(&sender)?.provider.permission_lvl() >= required)
     }
 
     async fn position(
@@ -495,7 +495,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         sender: Resource<CommandSender>,
     ) -> wasmtime::Result<Option<Position>> {
         Ok(self
-            .get_sender_res(&sender)?
+            .get_sender_res_v0_2(&sender)?
             .provider
             .position()
             .map(|p| (p.x, p.y, p.z)))
@@ -505,7 +505,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         &mut self,
         sender: Resource<CommandSender>,
     ) -> wasmtime::Result<Option<Resource<World>>> {
-        if let Some(world) = self.get_sender_res(&sender)?.provider.world() {
+        if let Some(world) = self.get_sender_res_v0_2(&sender)?.provider.world() {
             Ok(Some(self.add_world(world).map_err(|_| {
                 wasmtime::Error::msg("Failed to add world resource")
             })?))
@@ -516,7 +516,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
 
     async fn get_locale(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<Locale> {
         Ok(map_util_locale_to_wit(
-            self.get_sender_res(&sender)?.provider.get_locale(),
+            self.get_sender_res_v0_2(&sender)?.provider.get_locale(),
         ))
     }
 
@@ -525,7 +525,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         sender: Resource<CommandSender>,
     ) -> wasmtime::Result<bool> {
         Ok(self
-            .get_sender_res(&sender)?
+            .get_sender_res_v0_2(&sender)?
             .provider
             .should_receive_feedback())
     }
@@ -535,7 +535,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         sender: Resource<CommandSender>,
     ) -> wasmtime::Result<bool> {
         Ok(self
-            .get_sender_res(&sender)?
+            .get_sender_res_v0_2(&sender)?
             .provider
             .should_broadcast_console_to_ops())
     }
@@ -544,7 +544,10 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         &mut self,
         sender: Resource<CommandSender>,
     ) -> wasmtime::Result<bool> {
-        Ok(self.get_sender_res(&sender)?.provider.should_track_output())
+        Ok(self
+            .get_sender_res_v0_2(&sender)?
+            .provider
+            .should_track_output())
     }
 
     async fn drop(&mut self, rep: Resource<CommandSender>) -> wasmtime::Result<()> {
@@ -566,7 +569,7 @@ impl pumpkin::plugin::command::HostCommandSenderWithStore<PluginHostState>
     ) -> wasmtime::Result<bool> {
         let (sender, server, plugin) = {
             let state = host.get();
-            let sender = state.get_sender_res(&sender)?.provider.clone();
+            let sender = state.get_sender_res_v0_2(&sender)?.provider.clone();
             let server = state
                 .resource_table
                 .get::<ServerResource>(&Resource::new_own(server.rep()))?
@@ -694,8 +697,8 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
         self_node: Resource<CommandNode>,
         node: Resource<CommandNode>,
     ) -> wasmtime::Result<()> {
-        let child = self.take_node(&node)?;
-        let parent = self.get_node_mut(&self_node)?;
+        let child = self.take_node_v0_2(&node)?;
+        let parent = self.get_node_mut_v0_2(&self_node)?;
         let builder =
             std::mem::replace(&mut parent.provider, WasmCommandNode::Literal(literal("")));
         parent.provider = builder.then(child.provider);
@@ -722,7 +725,7 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
             plugin,
             server,
         };
-        let resource = self.get_node_mut(&node)?;
+        let resource = self.get_node_mut_v0_2(&node)?;
         let builder = std::mem::replace(
             &mut resource.provider,
             WasmCommandNode::Literal(literal("")),
@@ -751,7 +754,7 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
             plugin,
             server,
         };
-        let resource = self.get_node_mut(&node)?;
+        let resource = self.get_node_mut_v0_2(&node)?;
         let builder = std::mem::replace(
             &mut resource.provider,
             WasmCommandNode::Literal(literal("")),

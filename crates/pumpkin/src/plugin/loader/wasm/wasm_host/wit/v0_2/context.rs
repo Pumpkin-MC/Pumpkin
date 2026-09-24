@@ -431,13 +431,13 @@ fn register_player_event(
 }
 
 impl PluginHostState {
-    fn get_context(&self, res: &Resource<Context>) -> wasmtime::Result<&ContextResource> {
+    fn get_context_v0_2(&self, res: &Resource<Context>) -> wasmtime::Result<&ContextResource> {
         self.resource_table
             .get::<ContextResource>(&Resource::new_own(res.rep()))
             .map_err(wasmtime::Error::from)
     }
 
-    fn take_command(&mut self, res: &Resource<Command>) -> wasmtime::Result<CommandResource> {
+    fn take_command_v0_2(&mut self, res: &Resource<Command>) -> wasmtime::Result<CommandResource> {
         self.resource_table
             .delete::<CommandResource>(Resource::new_own(res.rep()))
             // Convert ResourceTableError -> wasmtime::Error
@@ -1531,7 +1531,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .upgrade()
             .ok_or_else(|| wasmtime::Error::msg("Plugin has been dropped"))?;
 
-        let resource = self.get_context(&context)?;
+        let resource = self.get_context_v0_2(&context)?;
         let handler = Arc::new(WasmPluginEventHandler { handler_id, plugin });
 
         match event_type {
@@ -1766,8 +1766,8 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
     ) -> wasmtime::Result<()> {
         use crate::command::argument_builder::ArgumentBuilder;
 
-        let command = self.take_command(&command)?.provider;
-        let context = self.get_context(&context)?.provider.clone();
+        let command = self.take_command_v0_2(&command)?.provider;
+        let context = self.get_context_v0_2(&context)?.provider.clone();
         let aliases = if command.names.len() > 1 {
             command.names[1..].to_vec()
         } else {
@@ -1822,7 +1822,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         &mut self,
         context: Resource<Context>,
     ) -> wasmtime::Result<Resource<Server>> {
-        let server_provider = self.get_context(&context)?.provider.server.clone();
+        let server_provider = self.get_context_v0_2(&context)?.provider.server.clone();
         self.add_server(server_provider)
             .map_err(|_| wasmtime::Error::msg("failed to add server resource"))
     }

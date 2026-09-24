@@ -29,7 +29,7 @@ const fn from_wasm_hand(hand: WitHand) -> pumpkin_util::Hand {
 impl InventoryHost for PluginHostState {}
 
 impl PluginHostState {
-    fn get_inventory_provider(
+    fn get_inventory_provider_v0_2(
         &self,
         res: &Resource<WitInventory>,
     ) -> wasmtime::Result<InventoryProvider> {
@@ -40,7 +40,7 @@ impl PluginHostState {
         Ok(r.provider.clone())
     }
 
-    fn get_player_inventory_player(
+    fn get_player_inventory_player_v0_2(
         &self,
         res: &Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Arc<Player>> {
@@ -54,7 +54,7 @@ impl PluginHostState {
 
 impl HostInventory for PluginHostState {
     async fn get_size(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<u32> {
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get_inventory_provider_v0_2(&res)?;
         let size = match provider {
             InventoryProvider::Generic(inv) => inv.size() as u32,
             InventoryProvider::PlayerMain(_) => 36,
@@ -64,7 +64,7 @@ impl HostInventory for PluginHostState {
     }
 
     async fn is_empty(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<bool> {
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get_inventory_provider_v0_2(&res)?;
         let empty = match provider {
             InventoryProvider::Generic(inv) => inv.is_empty(),
             InventoryProvider::PlayerMain(player) => {
@@ -84,7 +84,7 @@ impl HostInventory for PluginHostState {
         res: Resource<WitInventory>,
         slot: u32,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get_inventory_provider_v0_2(&res)?;
         let stack = match provider {
             InventoryProvider::Generic(inv) => {
                 let s = inv.get_stack(slot as usize);
@@ -122,12 +122,12 @@ impl HostInventory for PluginHostState {
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.get_item_stack_v0_2(&stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
 
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get_inventory_provider_v0_2(&res)?;
         match provider {
             InventoryProvider::Generic(inv) => {
                 inv.set_stack(slot as usize, stack);
@@ -156,7 +156,7 @@ impl HostInventory for PluginHostState {
         res: Resource<WitInventory>,
         slot: u32,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get_inventory_provider_v0_2(&res)?;
         let old_stack = match provider {
             InventoryProvider::Generic(inv) => {
                 let s = inv.remove_stack(slot as usize);
@@ -201,7 +201,7 @@ impl HostInventory for PluginHostState {
     }
 
     async fn clear(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<()> {
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get_inventory_provider_v0_2(&res)?;
         match provider {
             InventoryProvider::Generic(inv) => {
                 inv.clear();
@@ -256,7 +256,7 @@ impl HostInventory for PluginHostState {
         res: Resource<WitInventory>,
         item_id: String,
     ) -> wasmtime::Result<u32> {
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get_inventory_provider_v0_2(&res)?;
         let mut total = 0u32;
         let is_matching =
             |key: &str| key == item_id || key.strip_prefix("minecraft:") == Some(&item_id);
@@ -313,7 +313,7 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Resource<WitInventory>> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         self.add_inventory(InventoryProvider::PlayerMain(player))
     }
 
@@ -322,7 +322,7 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         hand: WitHand,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         let hand = from_wasm_hand(hand);
         let stack = player.inventory().get_stack_in_hand(hand);
         if stack.is_empty() {
@@ -338,9 +338,9 @@ impl HostPlayerInventory for PluginHostState {
         hand: WitHand,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.get_item_stack_v0_2(&stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
@@ -365,7 +365,7 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<u8> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         Ok(player.inventory().get_selected_slot())
     }
 
@@ -374,7 +374,7 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         slot: u8,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         if slot < 9 {
             player.inventory().set_selected_slot(slot);
         }
@@ -385,7 +385,7 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         let stack = player.inventory().get_slot(39);
         if stack.is_empty() {
             Ok(None)
@@ -399,9 +399,9 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.get_item_stack_v0_2(&stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
@@ -416,7 +416,7 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         let stack = player.inventory().get_slot(38);
         if stack.is_empty() {
             Ok(None)
@@ -430,9 +430,9 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.get_item_stack_v0_2(&stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
@@ -447,7 +447,7 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         let stack = player.inventory().get_slot(37);
         if stack.is_empty() {
             Ok(None)
@@ -461,9 +461,9 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.get_item_stack_v0_2(&stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
@@ -478,7 +478,7 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         let stack = player.inventory().get_slot(36);
         if stack.is_empty() {
             Ok(None)
@@ -492,9 +492,9 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.get_item_stack_v0_2(&stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
@@ -509,7 +509,7 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         let stack = player.inventory().get_slot(40);
         if stack.is_empty() {
             Ok(None)
@@ -523,9 +523,9 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get_player_inventory_player_v0_2(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.get_item_stack_v0_2(&stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };

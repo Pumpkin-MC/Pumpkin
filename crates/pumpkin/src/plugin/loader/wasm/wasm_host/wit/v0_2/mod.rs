@@ -141,5 +141,5 @@ pub async fn init_plugin(
         .permissions
         .clone_from(&metadata.permissions);
 
-    Ok((PluginInstance::v0_2(plugin), store, metadata))
+    Ok((PluginInstance::V0_2(plugin), store, metadata))
 }

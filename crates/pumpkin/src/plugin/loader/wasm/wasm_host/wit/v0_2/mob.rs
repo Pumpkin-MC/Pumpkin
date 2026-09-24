@@ -231,7 +231,7 @@ impl CustomWasmGoal {
         let goal_id = self.goal_id;
         let run = async move {
             let function = match plugin.plugin_instance.as_ref() {
-                PluginInstance::v0_2(instance) => match call {
+                PluginInstance::V0_2(instance) => match call {
                     GoalCall::Start => instance.func_handle_ai_goal_start(),
                     GoalCall::Tick => instance.func_handle_ai_goal_tick(),
                     GoalCall::Stop => instance.func_handle_ai_goal_stop(),
