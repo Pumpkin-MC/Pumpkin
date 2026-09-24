@@ -4,7 +4,7 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command};
-use crate::command::argument_types::core::string::StringArgumentType;
+use crate::command::argument_types::function::FunctionArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
@@ -41,7 +41,7 @@ struct FunctionExecutor;
 
 impl CommandExecutor for FunctionExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let name_str = StringArgumentType::get(context, "name")?;
+        let name_str = FunctionArgumentType::get(context, "name")?;
         let server = context.server();
 
         let Ok(executed_count) =
@@ -92,7 +92,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 
     dispatcher.register(
         command("function", DESCRIPTION).requires(PERMISSION).then(
-            argument("name", StringArgumentType::SingleWord)
+            argument("name", FunctionArgumentType)
                 .suggests(FunctionSuggestionProvider)
                 .executes(FunctionExecutor),
         ),
