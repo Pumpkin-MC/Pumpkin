@@ -1,4 +1,4 @@
-use crate::block::entities::{BlockEntity, block_entity_from_nbt};
+use crate::block::entities::{BlockEntity, block_entity_from_nbt, block_entity_name};
 use dashmap::DashMap;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
@@ -62,7 +62,7 @@ pub use explosion::{
     ExplosionInteraction, SimpleExplosionDamageCalculator,
 };
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::block_properties::{BLOCK_ENTITY_TYPES, blocks_movement, is_air};
+use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
@@ -241,16 +241,13 @@ fn remove_invalid_pending_block_entities(chunk: &ChunkData) -> Vec<BlockPos> {
     let original_len = pending.len();
     pending.retain(|position, nbt| {
         let relative = position.chunk_relative_position();
-        let state = chunk
+        let expected_id = chunk
             .section
             .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
-            .map(BlockState::from_id);
-        let expected_id = state
-            .and_then(|state| BLOCK_ENTITY_TYPES.get(state.block_entity_type as usize))
-            .copied();
+            .and_then(|state_id| block_entity_name(Block::from_state_id(state_id)));
         let actual_id = nbt
             .get_string("id")
-            .and_then(|id| id.strip_prefix("minecraft:"));
+            .map(|id| id.strip_prefix("minecraft:").unwrap_or(id));
         let valid = matches!((expected_id, actual_id), (Some(expected), Some(actual)) if expected == actual);
         if !valid {
             debug!(
@@ -5065,7 +5062,7 @@ impl World {
         let is_new_block = old_block != new_block;
         let block_moved = flags.contains(BlockFlags::MOVED);
 
-        if is_new_block && old_block.default_state.block_entity_type != u16::MAX {
+        if is_new_block && block_entity_name(old_block).is_some() {
             if let Some(entity) = self.get_block_entity(position)
                 && !flags.contains(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK)
             {
@@ -7535,38 +7532,45 @@ mod tests {
     #[test]
     fn migration_drops_pending_block_entities_that_do_not_match_the_block() {
         let chunk = ChunkData::empty(0, 0);
-        let valid = BlockPos::new(1, 64, 1);
-        let wrong_type = BlockPos::new(2, 64, 2);
-        let plain_block = BlockPos::new(3, 64, 3);
-        for position in [valid, wrong_type] {
-            chunk.section.set_block_absolute_y(
-                position.0.x as usize,
-                position.0.y,
-                position.0.z as usize,
-                Block::CHEST.default_state.id,
-            );
-        }
-        chunk.section.set_block_absolute_y(
-            plain_block.0.x as usize,
-            plain_block.0.y,
-            plain_block.0.z as usize,
-            Block::IRON_BLOCK.default_state.id,
-        );
+        let cases = [
+            (1, &Block::CHEST, "minecraft:chest", true),
+            (2, &Block::CHEST, "chest", true),
+            // Pumpkin keeps bed block entities for Bedrock and older Java clients.
+            (3, &Block::RED_BED, "minecraft:bed", true),
+            (4, &Block::STRAW_BED, "minecraft:bed", true),
+            (5, &Block::STONE, "minecraft:bed", false),
+            (6, &Block::CHEST, "minecraft:beacon", false),
+            (7, &Block::IRON_BLOCK, "minecraft:beacon", false),
+        ];
         let mut pending = chunk.pending_block_entities.lock().unwrap();
-        pending.insert(valid, block_entity_nbt("minecraft:chest", valid));
-        pending.insert(wrong_type, block_entity_nbt("minecraft:beacon", wrong_type));
-        pending.insert(
-            plain_block,
-            block_entity_nbt("minecraft:beacon", plain_block),
-        );
+        for &(x, block, id, _) in &cases {
+            let position = BlockPos::new(x, 64, x);
+            chunk
+                .section
+                .set_block_absolute_y(x as usize, 64, x as usize, block.default_state.id);
+            pending.insert(position, block_entity_nbt(id, position));
+        }
         drop(pending);
 
         let positions = remove_invalid_pending_block_entities(&chunk);
 
-        assert_eq!(positions, [valid]);
         let pending = chunk.pending_block_entities.lock().unwrap();
-        assert_eq!(pending.len(), 1);
-        assert!(pending.contains_key(&valid));
+        for &(x, block, id, kept) in &cases {
+            let position = BlockPos::new(x, 64, x);
+            assert_eq!(
+                pending.contains_key(&position),
+                kept,
+                "{id} on {}",
+                block.name
+            );
+            assert_eq!(
+                positions.contains(&position),
+                kept,
+                "{id} on {}",
+                block.name
+            );
+        }
+        assert_eq!(positions.len(), pending.len());
         assert!(chunk.is_dirty());
     }
 

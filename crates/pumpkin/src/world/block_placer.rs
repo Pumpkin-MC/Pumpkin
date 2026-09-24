@@ -1,10 +1,11 @@
-use pumpkin_data::{BlockState, BlockStateId};
+use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::generation::structure::template::BlockPlacer;
 use pumpkin_world::level::Level;
 
+use crate::block::entities::block_entity_name;
 use crate::world::World;
 
 impl World {
@@ -61,7 +62,7 @@ impl BlockPlacer for WorldBlockPlacer<'_> {
         let block_pos = BlockPos::new(pos.x, pos.y, pos.z);
         let replaced = Level::set_block_state(&self.world.level, &block_pos, state.id);
         if replaced.to_block() != state.id.to_block()
-            && replaced.to_state().block_entity_type != u16::MAX
+            && block_entity_name(Block::from_state_id(replaced)).is_some()
         {
             self.world.remove_block_entity(&block_pos);
         }
