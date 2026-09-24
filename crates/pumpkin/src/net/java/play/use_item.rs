@@ -24,6 +24,14 @@ impl JavaClient {
 
         let mut item_in_hand = inventory.get_stack_in_hand(hand);
 
+        if self.version.load() >= JavaMinecraftVersion::V_1_21 && !item_in_hand.is_empty() {
+            let target_yaw = wrap_degrees(use_item.yaw);
+            let target_pitch = wrap_degrees(use_item.pitch);
+            if (target_yaw, target_pitch) != player.rotation() {
+                player.get_entity().set_rotation(target_yaw, target_pitch);
+            }
+        }
+
         let mut consume_event =
             crate::plugin::api::events::player::player_item_consume::PlayerItemConsumeEvent::new(
                 player.clone(),
@@ -37,7 +45,9 @@ impl JavaClient {
         }
 
         let (item_id, _item) = (item_in_hand.item.id, item_in_hand.item);
-        player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
+        if item_id != Item::FIREWORK_ROCKET.id || player.get_entity().is_fall_flying() {
+            player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
+        }
 
         let hit_result = player.world().raycast(
             player.eye_position(),
@@ -79,7 +89,7 @@ impl JavaClient {
             'after: {
                 server
                     .item_registry
-                    .on_use_with_rotation(&stack_for_use, player, use_yaw, use_pitch);
+                    .on_use_in_hand(&stack_for_use, player, hand, use_yaw, use_pitch);
             }
         }}
     }

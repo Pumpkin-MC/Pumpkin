@@ -136,6 +136,10 @@ impl ThrownItemEntity {
 impl ThrownItemEntity {
     /// Process a tick for projectile movement and collisions
     pub fn process_tick(&self, caller: &dyn EntityBase) {
+        self.process_tick_with_owner(caller, self.owner_id);
+    }
+
+    pub fn process_tick_with_owner(&self, caller: &dyn EntityBase, owner_id: Option<i32>) {
         let entity = self.get_entity();
         let world = entity.world.load();
 
@@ -213,7 +217,7 @@ impl ThrownItemEntity {
         // Entity collisions
         let candidates = world.get_entities_at_box(&search_box);
         for cand in candidates {
-            if self.should_skip_collision(entity, &cand) {
+            if self.should_skip_collision(entity, &cand, owner_id) {
                 continue;
             }
 
@@ -255,14 +259,19 @@ impl ThrownItemEntity {
     }
 
     /// Returns if collision should be skipped (e.g. owner or projectile vs projectile)
-    fn should_skip_collision(&self, self_ent: &Entity, other: &Arc<dyn EntityBase>) -> bool {
+    fn should_skip_collision(
+        &self,
+        self_ent: &Entity,
+        other: &Arc<dyn EntityBase>,
+        owner_id: Option<i32>,
+    ) -> bool {
         let other_ent = other.get_entity();
         if other_ent.entity_id == self_ent.entity_id {
             return true;
         }
 
         // Skip owner for initial frames
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+        if Some(other_ent.entity_id) == owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
             return true;
         }
 

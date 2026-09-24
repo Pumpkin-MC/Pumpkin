@@ -6503,6 +6503,40 @@ impl World {
         None
     }
 
+    pub fn ray_trace_collision(
+        &self,
+        start: Vector3<f64>,
+        end: Vector3<f64>,
+        entity: &dyn EntityBase,
+    ) -> Option<(BlockPos, BlockDirection, Vector3<f64>)> {
+        if start == end {
+            return None;
+        }
+
+        let bounds = BoundingBox::new(
+            Vector3::new(start.x.min(end.x), start.y.min(end.y), start.z.min(end.z)),
+            Vector3::new(start.x.max(end.x), start.y.max(end.y), start.z.max(end.z)),
+        )
+        .expand(1.0e-7, 1.0e-7, 1.0e-7);
+        let (shapes, positions) = self.get_block_collisions(bounds, entity);
+        let mut closest = None;
+        let mut nearest = f64::INFINITY;
+        let mut first = 0;
+        for (last, pos) in positions {
+            for shape in &shapes[first..last] {
+                if let Some((distance, face, hit_pos)) =
+                    Self::intersects_aabb_with_hit(start, end, shape.min, shape.max)
+                    && distance < nearest
+                {
+                    nearest = distance;
+                    closest = Some((pos, face, hit_pos));
+                }
+            }
+            first = last;
+        }
+        closest
+    }
+
     pub fn ray_trace_entities(
         &self,
         start: Vector3<f64>,

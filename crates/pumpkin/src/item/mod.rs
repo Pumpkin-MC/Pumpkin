@@ -32,6 +32,17 @@ pub trait ItemBehaviour: Send + Sync {
         self.normal_use(item, player);
     }
 
+    fn normal_use_in_hand(
+        &self,
+        item: &Item,
+        player: &Player,
+        _hand: pumpkin_util::Hand,
+        yaw: f32,
+        pitch: f32,
+    ) {
+        self.normal_use_with_rotation(item, player, yaw, pitch);
+    }
+
     #[expect(clippy::too_many_arguments)]
     fn use_on_block(
         &self,

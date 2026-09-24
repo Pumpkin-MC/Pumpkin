@@ -1,3 +1,4 @@
+use crossbeam::atomic::AtomicCell;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
@@ -24,6 +25,7 @@ pub const AIR_INERTIA: f64 = 0.95;
 pub const WATER_INERTIA: f64 = 0.8;
 
 pub struct FireballEntity {
+    owner_id: AtomicCell<Option<i32>>,
     pub thrown: ThrownItemEntity,
     pub item_stack: RwLock<ItemStack>,
     pub acceleration_power: AtomicU64,
@@ -42,6 +44,7 @@ impl FireballEntity {
         };
 
         Self {
+            owner_id: AtomicCell::new(thrown.owner_id),
             thrown,
             item_stack: RwLock::new(Self::get_default_item()),
             acceleration_power: AtomicU64::new(INITIAL_ACCELERATION_POWER.to_bits()),
@@ -57,6 +60,7 @@ impl FireballEntity {
         thrown.entity.velocity.store(vel);
 
         Self {
+            owner_id: AtomicCell::new(thrown.owner_id),
             thrown,
             item_stack: RwLock::new(Self::get_default_item()),
             acceleration_power: AtomicU64::new(accel.to_bits()),
@@ -85,6 +89,7 @@ impl FireballEntity {
         thrown.entity.velocity.store(vel);
 
         Self {
+            owner_id: AtomicCell::new(thrown.owner_id),
             thrown,
             item_stack: RwLock::new(Self::get_default_item()),
             acceleration_power: AtomicU64::new(acceleration_power.to_bits()),
@@ -140,6 +145,16 @@ impl FireballEntity {
         self.explosion_power.store(power, Ordering::Relaxed);
     }
 
+    pub fn redirect(&self, owner: Option<&dyn EntityBase>) {
+        self.owner_id
+            .store(owner.map(|owner| owner.get_entity().entity_id));
+        if let Some(owner) = owner {
+            self.get_entity()
+                .set_velocity(owner.get_entity().rotation().to_f64());
+        }
+        self.on_deflection(true);
+    }
+
     pub fn on_deflection(&self, by_attack: bool) {
         if by_attack {
             self.set_acceleration_power(INITIAL_ACCELERATION_POWER);
@@ -169,7 +184,7 @@ impl FireballEntity {
 
 impl EntityBase for FireballEntity {
     fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+        self.owner_id.load()
     }
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
@@ -223,7 +238,8 @@ impl EntityBase for FireballEntity {
             entity.velocity.store(velocity);
         }
 
-        self.thrown.process_tick(caller);
+        self.thrown
+            .process_tick_with_owner(caller, self.get_owner_id());
     }
 
     fn get_entity(&self) -> &Entity {
