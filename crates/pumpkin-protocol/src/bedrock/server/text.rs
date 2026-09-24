@@ -4,7 +4,7 @@ use crate::{
 };
 use pumpkin_macros::packet;
 use std::borrow::Cow;
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, Read, Write};
 
 #[derive(Debug)]
 #[packet(9)]
@@ -262,7 +262,7 @@ impl PacketWrite for SText<'_> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PacketRead, PacketReadSlice, PacketWrite)]
 #[repr(u8)]
 pub enum TextPacketType {
     Raw = 0,
@@ -277,50 +277,4 @@ pub enum TextPacketType {
     JsonWhisper = 9,
     Json = 10,
     JsonAnnouncement = 11,
-}
-
-impl PacketWrite for TextPacketType {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as u8).write(writer)
-    }
-}
-
-impl PacketRead for TextPacketType {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        match u8::read(reader)? {
-            0 => Ok(Self::Raw),
-            1 => Ok(Self::Chat),
-            2 => Ok(Self::Translation),
-            3 => Ok(Self::Popup),
-            4 => Ok(Self::JukeboxPopup),
-            5 => Ok(Self::Tip),
-            6 => Ok(Self::System),
-            7 => Ok(Self::Whisper),
-            8 => Ok(Self::Announcement),
-            9 => Ok(Self::JsonWhisper),
-            10 => Ok(Self::Json),
-            11 => Ok(Self::JsonAnnouncement),
-            _ => Err(Error::new(ErrorKind::InvalidData, "Unknown Text Type")),
-        }
-    }
-}
-
-impl<'a> PacketReadSlice<'a> for TextPacketType {
-    fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
-        match u8::read_slice(buf)? {
-            0 => Ok(Self::Raw),
-            1 => Ok(Self::Chat),
-            2 => Ok(Self::Translation),
-            3 => Ok(Self::Popup),
-            4 => Ok(Self::JukeboxPopup),
-            5 => Ok(Self::Tip),
-            6 => Ok(Self::System),
-            7 => Ok(Self::Whisper),
-            8 => Ok(Self::Announcement),
-            9 => Ok(Self::JsonWhisper),
-            10 => Ok(Self::Json),
-            11 => Ok(Self::JsonAnnouncement),
-            _ => Err(Error::new(ErrorKind::InvalidData, "Unknown Text Type")),
-        }
-    }
 }
