@@ -63,6 +63,8 @@ pub struct Biome {
 }
 
 impl Biome {
+    /// Replaces the spawners and spawn costs with the ones from the 26.3
+    /// `natural_mob_spawns` attribute, panicking if the spawn list is malformed.
     fn apply_natural_mob_spawns(&mut self, name: &str) {
         let Some(attr) = self.attributes.get("minecraft:gameplay/natural_mob_spawns") else {
             return;

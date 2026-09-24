@@ -550,6 +550,8 @@ pub fn get_random_pos_within(
     BlockPos::new(x, y, z)
 }
 
+/// Spawns the initial passive creatures for a newly generated chunk, like vanilla
+/// `NaturalSpawner::spawnMobsForChunkGeneration`.
 pub fn spawn_mobs_for_chunk_generation(
     world: &Arc<World>,
     cache: &mut dyn GenerationCache,
@@ -919,6 +921,8 @@ pub fn can_spawn_mob_at(
     })
 }
 
+/// Picks a weighted random spawner for `category` from the biome at `block_pos`, like
+/// vanilla `NaturalSpawner::getRandomSpawnMobAt`.
 #[must_use]
 pub fn get_random_spawn_mob_at(
     world: &Arc<World>,
