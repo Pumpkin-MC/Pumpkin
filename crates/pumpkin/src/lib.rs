@@ -27,6 +27,7 @@ use plugin::server::server_load::{LoadType, ServerLoadEvent};
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
+use pumpkin_world::world_info::WorldInfoError;
 use rustyline::Editor;
 use rustyline::history::FileHistory;
 use rustyline::{Config, error::ReadlineError};
@@ -251,14 +252,14 @@ impl PumpkinServer {
         advanced_config: AdvancedConfiguration,
         telemetry_config: TelemetryConfig,
         vanilla_data: VanillaData,
-    ) -> Self {
+    ) -> Result<Self, WorldInfoError> {
         let server = Server::new(
             basic_config,
             advanced_config,
             telemetry_config,
             vanilla_data,
         )
-        .await;
+        .await?;
 
         #[cfg(target_family = "unix")]
         adjust_file_descriptor_limit();
@@ -349,12 +350,12 @@ impl PumpkinServer {
         };
         let nethernet_listener = Self::bind_nethernet(&server, ice_socket).await;
 
-        Self {
+        Ok(Self {
             server,
             tcp_listener,
             bedrock_status,
             nethernet_listener,
-        }
+        })
     }
 
     async fn bind_nethernet(
@@ -442,6 +443,7 @@ impl PumpkinServer {
     }
 
     pub async fn unload_plugins(&self) {
+        self.server.plugin_manager.stop_watcher().await;
         if let Err(err) = self.server.plugin_manager.unload_all_plugins().await {
             error!("Error unloading plugins: {err}");
         } else {

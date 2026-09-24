@@ -5,6 +5,7 @@ use crate::chunk::{
 use crate::generation::biome_coords;
 use crate::tick::scheduler::ChunkTickScheduler;
 use pumpkin_config::lighting::LightingEngineConfig;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -215,6 +216,9 @@ impl Chunk {
         let biome_min_y = biome_coords::from_block(dimension.min_y);
         let block_sections = (0..total_sections)
             .map(|section_index| {
+                if section_index * BlockPalette::VOLUME >= proto_chunk.flat_block_map.len() {
+                    return BlockPalette::Homogeneous(BlockStateId::AIR);
+                }
                 BlockPalette::from_fn(|x, y, z| {
                     let y = section_index * BlockPalette::SIZE + y;
                     proto_chunk.get_block_state_raw(x as i32, y as i32, z as i32)
