@@ -63,17 +63,16 @@ pub struct Biome {
 }
 
 impl Biome {
-    fn apply_natural_mob_spawns(&mut self) {
+    fn apply_natural_mob_spawns(&mut self, name: &str) {
         let Some(attr) = self.attributes.get("minecraft:gameplay/natural_mob_spawns") else {
             return;
         };
         let Some(argument) = attr.get("argument") else {
             return;
         };
-        if let Some(spawns) = argument.get("spawns_by_category")
-            && let Ok(groups) = serde_json::from_value::<SpawnGroups>(spawns.clone())
-        {
-            self.spawners = groups;
+        if let Some(spawns) = argument.get("spawns_by_category") {
+            self.spawners = serde_json::from_value(spawns.clone())
+                .unwrap_or_else(|e| panic!("Failed to parse spawns for biome {name}: {e}"));
         }
         if let Some(costs) = argument.get("spawn_costs")
             && let Ok(spawn_costs) = serde_json::from_value(costs.clone())
@@ -136,12 +135,7 @@ impl<'de> Deserialize<'de> for Spawner {
             max_count: Option<i32>,
             #[serde(default)]
             count: Option<Value>,
-            #[serde(default = "default_weight")]
             weight: i32,
-        }
-
-        fn default_weight() -> i32 {
-            1
         }
 
         let raw = Raw::deserialize(deserializer)?;
@@ -336,7 +330,7 @@ pub fn build() -> TokenStream {
             .into_owned();
         let content = fs::read_to_string(entry.path()).expect("Failed to read biome file");
         let mut biome: Biome = serde_json::from_str(&content).expect("Failed to parse biome JSON");
-        biome.apply_natural_mob_spawns();
+        biome.apply_natural_mob_spawns(&stem);
         biome.id = i as u8;
         biomes.insert(stem, biome);
     }
