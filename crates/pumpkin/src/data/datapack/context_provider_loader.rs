@@ -44,6 +44,36 @@ pub fn json_value_to_nbt(value: &Value) -> NbtTag {
     }
 }
 
+/// Loads all embedded context int and float providers into their respective registries.
+pub fn load_embedded_context_providers(
+    int_registry: &mut ContextProviderRegistry,
+    float_registry: &mut ContextProviderRegistry,
+) -> (usize, usize) {
+    let int_before = int_registry.len();
+    for &id in pumpkin_data::context_provider::all_context_int_provider_names() {
+        if let Some(content) = pumpkin_data::context_provider::get_context_int_provider_json(id)
+            && let Ok(val) = serde_json::from_str::<Value>(content)
+        {
+            let tag = json_value_to_nbt(&val);
+            int_registry.insert(id.to_string(), tag);
+        }
+    }
+    let int_count = int_registry.len() - int_before;
+
+    let float_before = float_registry.len();
+    for &id in pumpkin_data::context_provider::all_context_float_provider_names() {
+        if let Some(content) = pumpkin_data::context_provider::get_context_float_provider_json(id)
+            && let Ok(val) = serde_json::from_str::<Value>(content)
+        {
+            let tag = json_value_to_nbt(&val);
+            float_registry.insert(id.to_string(), tag);
+        }
+    }
+    let float_count = float_registry.len() - float_before;
+
+    (int_count, float_count)
+}
+
 pub fn load_context_providers_from_dir(
     namespace: &str,
     provider_dir: &Path,
@@ -132,5 +162,16 @@ mod tests {
         } else {
             panic!("Expected compound");
         }
+    }
+
+    #[test]
+    fn loads_embedded_context_providers() {
+        let mut int_reg = HashMap::new();
+        let mut float_reg = HashMap::new();
+        let (ints, floats) = load_embedded_context_providers(&mut int_reg, &mut float_reg);
+        assert!(ints > 0);
+        assert!(floats > 0);
+        assert!(int_reg.contains_key("minecraft:compostable/low"));
+        assert!(float_reg.contains_key("minecraft:cooking/speed_default"));
     }
 }
