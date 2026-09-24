@@ -302,6 +302,29 @@ struct WriterCtx {
     id: u64,
 }
 
+/// Reason flush left the writer loop.
+enum FlushExit {
+    /// `close()` during a stalled flush -> Buffer for `drain_on_close`.
+    Closing,
+    /// Socket error.
+    Failed,
+}
+
+/// Flush, else leave the writer loop
+/// drain on close / stop on socket error.
+macro_rules! flush_or_exit {
+    ($state:expr, $writer:expr, $ctx:expr) => {
+        match $state.flush_and_stamp(&mut $writer, $ctx).await {
+            Ok(()) => {}
+            Err(FlushExit::Closing) => break,
+            Err(FlushExit::Failed) => {
+                $ctx.close_token.cancel();
+                return;
+            }
+        }
+    };
+}
+
 /// Write state between two TCP flushes.
 struct FlushState {
     /// Written to the `BufWriter`, not flushed yet.
@@ -320,53 +343,45 @@ impl FlushState {
         }
     }
 
-    /// `None` on socket error. `Some(true)` if TCP flush ran.
+    /// `Ok(true)` if TCP flush ran.
     async fn flush<W: AsyncWrite + Unpin>(
         &mut self,
         writer: &mut TCPNetworkEncoder<W>,
         ctx: &WriterCtx,
-    ) -> Option<bool> {
+    ) -> Result<bool, FlushExit> {
         let did_flush = self.unflushed;
         if did_flush {
             // Flush first: a `try_kick` racing this flush still gets out on a healthy socket.
             let flushed = tokio::select! {
                 biased;
-                res = writer.flush() => Some(res),
-                () = ctx.close_token.cancelled() => None,
+                res = writer.flush() => res,
+                // Stalled flush: `drain_on_close` resumes it
+                // bounded by DISCONNECT_FLUSH_TIMEOUT
+                () = ctx.close_token.cancelled() => return Err(FlushExit::Closing),
             };
-            match flushed {
-                Some(Ok(())) => {}
-                Some(Err(err)) => {
-                    if !ctx.close_token.is_cancelled() {
-                        warn!("Failed to flush packets for client {}: {err}", ctx.id);
-                    }
-                    return None;
+            if let Err(err) = flushed {
+                if !ctx.close_token.is_cancelled() {
+                    warn!("Failed to flush packets for client {}: {err}", ctx.id);
                 }
-                // close() during a stalled flush. Drop it instead of hanging here.
-                None => return None,
+                return Err(FlushExit::Failed);
             }
             self.unflushed = false;
             for completion in self.on_flush.drain(..) {
                 let _ = completion.send(());
             }
         }
-        Some(did_flush)
+        Ok(did_flush)
     }
 
-    /// `false` on socket error.
     async fn flush_and_stamp<W: AsyncWrite + Unpin>(
         &mut self,
         writer: &mut TCPNetworkEncoder<W>,
         ctx: &WriterCtx,
-    ) -> bool {
-        match self.flush(writer, ctx).await {
-            Some(true) => {
-                self.last_tcp_flush = Instant::now();
-                true
-            }
-            Some(false) => true,
-            None => false,
+    ) -> Result<(), FlushExit> {
+        if self.flush(writer, ctx).await? {
+            self.last_tcp_flush = Instant::now();
         }
+        Ok(())
     }
 
     fn should_flush_now(
@@ -506,6 +521,37 @@ async fn write_queued_frames<W: AsyncWrite + Unpin + Send + 'static>(
     Some(writer)
 }
 
+enum WriteOutcome<W: AsyncWrite + Unpin> {
+    Open(TCPNetworkEncoder<W>),
+    /// `close()` mid-write. Batch finished, drain gets the rest of the budget.
+    Closing(TCPNetworkEncoder<W>, tokio::time::Instant),
+    Failed,
+}
+
+/// `write_queued_frames`, raced against close(). On close the same future keeps
+/// running under `DISCONNECT_FLUSH_TIMEOUT`: dropping `write_all` cuts a frame in half.
+async fn write_or_close<W: AsyncWrite + Unpin + Send + 'static>(
+    writer: TCPNetworkEncoder<W>,
+    packets: VecDeque<FramePacket>,
+    on_flush: &mut Vec<oneshot::Sender<()>>,
+    ctx: &WriterCtx,
+) -> WriteOutcome<W> {
+    let write = write_queued_frames(writer, packets, on_flush, ctx);
+    tokio::pin!(write);
+    tokio::select! {
+        biased;
+        res = &mut write => res.map_or(WriteOutcome::Failed, WriteOutcome::Open),
+        () = ctx.close_token.cancelled() => {
+            let deadline = tokio::time::Instant::now() + DISCONNECT_FLUSH_TIMEOUT;
+            match tokio::time::timeout_at(deadline, write).await {
+                Ok(Some(writer)) => WriteOutcome::Closing(writer, deadline),
+                // Stalled past the budget, or socket error.
+                _ => WriteOutcome::Failed,
+            }
+        }
+    }
+}
+
 pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
     mut packet_receiver: Receiver<OutgoingPacket>,
     mut writer: TCPNetworkEncoder<W>,
@@ -539,10 +585,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         // Deferred barrier. Only after this tick's packets are drained, else they
         // land behind the flush.
         if ctx.tick_flush.take(received) {
-            if !state.flush_and_stamp(&mut writer, &ctx).await {
-                ctx.close_token.cancel();
-                return;
-            }
+            flush_or_exit!(state, writer, &ctx);
             continue;
         }
 
@@ -550,10 +593,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
             WriterStep::Packet(packet) => packet,
             WriterStep::Retry => continue,
             WriterStep::Flush => {
-                if !state.flush_and_stamp(&mut writer, &ctx).await {
-                    ctx.close_token.cancel();
-                    return;
-                }
+                flush_or_exit!(state, writer, &ctx);
                 continue;
             }
             WriterStep::Stop => break,
@@ -564,21 +604,23 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         received += packets_to_frame.len() as u64;
 
         if !packets_to_frame.is_empty() {
-            let Some(returned) =
-                write_queued_frames(writer, packets_to_frame, &mut state.on_flush, &ctx).await
-            else {
-                ctx.close_token.cancel();
-                return;
-            };
-            writer = returned;
+            match write_or_close(writer, packets_to_frame, &mut state.on_flush, &ctx).await {
+                WriteOutcome::Open(returned) => writer = returned,
+                WriteOutcome::Closing(returned, deadline) => {
+                    state.unflushed = true;
+                    drain_on_close(packet_receiver, returned, state, &ctx, deadline).await;
+                    return;
+                }
+                WriteOutcome::Failed => {
+                    ctx.close_token.cancel();
+                    return;
+                }
+            }
             state.unflushed = true;
         }
 
-        if state.should_flush_now(flush_request, disconnected, &ctx)
-            && !state.flush_and_stamp(&mut writer, &ctx).await
-        {
-            ctx.close_token.cancel();
-            return;
+        if state.should_flush_now(flush_request, disconnected, &ctx) {
+            flush_or_exit!(state, writer, &ctx);
         }
 
         // Flushed above already, so skip the final flush.
@@ -587,17 +629,19 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         }
     }
 
-    drain_on_close(packet_receiver, writer, state, &ctx).await;
+    let deadline = tokio::time::Instant::now() + DISCONNECT_FLUSH_TIMEOUT;
+    drain_on_close(packet_receiver, writer, state, &ctx, deadline).await;
 }
 
 /// close only after the disconnect is sent. `try_kick` enqueues it and
 /// closes at once, so frame and flush what was admitted before `close()`.
-/// Socket errors and a flush stalled at close time return before this.
+/// A write or flush stalled at close time resumes here. Socket errors return before this.
 async fn drain_on_close<W: AsyncWrite + Unpin + Send + 'static>(
     mut packet_receiver: Receiver<OutgoingPacket>,
     mut writer: TCPNetworkEncoder<W>,
     mut state: FlushState,
     ctx: &WriterCtx,
+    deadline: tokio::time::Instant,
 ) {
     packet_receiver.close();
     let mut packets = VecDeque::new();
@@ -608,7 +652,7 @@ async fn drain_on_close<W: AsyncWrite + Unpin + Send + 'static>(
     }
 
     // Stalled peer give up like `kick_explicit`.
-    let _ = tokio::time::timeout(DISCONNECT_FLUSH_TIMEOUT, async move {
+    let _ = tokio::time::timeout_at(deadline, async move {
         if !packets.is_empty() {
             writer = write_queued_frames(writer, packets, &mut state.on_flush, ctx).await?;
             state.unflushed = true;
@@ -673,6 +717,83 @@ mod tests {
         fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
             self.flush_polls.fetch_add(1, Ordering::SeqCst);
             Poll::Pending
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    /// Socket stalls until open: TCP flush always, writes unless `writes_pass`.
+    #[derive(Default)]
+    struct SocketGate {
+        open: AtomicBool,
+        writes_pass: bool,
+        waker: std::sync::Mutex<Option<std::task::Waker>>,
+        flushed: AtomicUsize,
+    }
+
+    impl SocketGate {
+        fn stalled_flush() -> Arc<Self> {
+            Arc::new(Self {
+                writes_pass: true,
+                ..Self::default()
+            })
+        }
+
+        fn stalled_write() -> Arc<Self> {
+            Arc::new(Self::default())
+        }
+
+        /// true once open, else parks waker
+        fn poll_open(&self, cx: &Context<'_>) -> bool {
+            *self
+                .waker
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(cx.waker().clone());
+            self.open.load(Ordering::SeqCst)
+        }
+
+        fn open(&self) {
+            self.open.store(true, Ordering::SeqCst);
+            let waker = self
+                .waker
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take();
+            if let Some(waker) = waker {
+                waker.wake();
+            }
+        }
+    }
+
+    struct GatedWriter {
+        writes: Arc<std::sync::Mutex<Vec<u8>>>,
+        gate: Arc<SocketGate>,
+    }
+
+    impl AsyncWrite for GatedWriter {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<std::io::Result<usize>> {
+            if !self.gate.writes_pass && !self.gate.poll_open(cx) {
+                return Poll::Pending;
+            }
+            self.writes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .extend_from_slice(buf);
+            Poll::Ready(Ok(buf.len()))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            if !self.gate.poll_open(cx) {
+                return Poll::Pending;
+            }
+            self.gate.flushed.fetch_add(1, Ordering::SeqCst);
+            Poll::Ready(Ok(()))
         }
 
         fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
@@ -751,6 +872,23 @@ mod tests {
             0,
         )
         .await;
+    }
+
+    fn spawn_gated_writer(
+        rx: Receiver<OutgoingPacket>,
+        writes: Arc<std::sync::Mutex<Vec<u8>>>,
+        gate: Arc<SocketGate>,
+        close: CancellationToken,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(GatedWriter { writes, gate }),
+            close,
+            Arc::new(AtomicBool::new(false)),
+            TickFlush::new(),
+            Arc::new(AtomicUsize::new(0)),
+            0,
+        ))
     }
 
     fn spawn_writer(
@@ -919,11 +1057,8 @@ mod tests {
             "the flush was attempted and is still pending"
         );
 
-        close.cancel();
-        tokio::time::timeout(Duration::from_millis(50), writer)
-            .await
-            .expect("writer task must observe close_token while the TCP flush is stalled")
-            .unwrap();
+        // Close during the stall
+        writer.abort();
     }
 
     /// `kick_explicit` closes on completion: must not fire while the frame sits in the buffer.
@@ -956,9 +1091,94 @@ mod tests {
             "disconnect completion must wait for the stalled TCP flush"
         );
 
+        // Stalled past `DISCONNECT_FLUSH_TIMEOUT`.
         close.cancel();
-        writer.await.unwrap();
+        writer.abort();
+        let _ = writer.await;
         assert!(done_rx.await.is_err(), "failed flush drops the completion");
+    }
+
+    /// Busy connection: `try_kick` lands while an earlier flush is stalled.
+    /// Disconnect must still go out once the socket drains.
+    #[tokio::test]
+    async fn close_during_stalled_flush_still_sends_the_disconnect() {
+        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let gate = SocketGate::stalled_flush();
+        let close = CancellationToken::new();
+        let writer = spawn_gated_writer(rx, writes.clone(), gate.clone(), close.clone());
+
+        tx.try_send(packet(1)).unwrap();
+        tx.try_send(OutgoingPacket::Flush).unwrap();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        tx.try_send(packet(0xDC)).unwrap();
+        close.cancel();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        gate.open();
+
+        tokio::time::timeout(Duration::from_millis(50), writer)
+            .await
+            .expect("drain must finish once the socket drains")
+            .unwrap();
+        assert_eq!(
+            writes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .last(),
+            Some(&0xDC),
+            "disconnect written after the stalled flush"
+        );
+        assert_eq!(gate.flushed.load(Ordering::SeqCst), 1);
+    }
+
+    /// Full socket buffer: `try_kick` lands mid-write. Frame finishes whole, then the disconnect.
+    #[tokio::test]
+    async fn close_during_stalled_write_finishes_the_frame() {
+        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let gate = SocketGate::stalled_write();
+        let close = CancellationToken::new();
+        let writer = spawn_gated_writer(rx, writes.clone(), gate.clone(), close.clone());
+
+        tx.try_send(packet(1)).unwrap();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        tx.try_send(packet(0xDC)).unwrap();
+        close.cancel();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        gate.open();
+
+        tokio::time::timeout(Duration::from_millis(50), writer)
+            .await
+            .expect("drain must finish once the socket drains")
+            .unwrap();
+        assert_eq!(
+            *writes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            [1, 1, 1, 0xDC],
+            "stalled frame written whole, disconnect behind it"
+        );
+        assert_eq!(gate.flushed.load(Ordering::SeqCst), 1);
+    }
+
+    /// If Peer never reads close(), must still end the writer within the disconnect budget
+    #[tokio::test(start_paused = true)]
+    async fn close_bounds_a_stalled_write() {
+        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let close = CancellationToken::new();
+        let writer = spawn_gated_writer(rx, writes, SocketGate::stalled_write(), close.clone());
+
+        tx.try_send(packet(1)).unwrap();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        close.cancel();
+
+        tokio::time::timeout(DISCONNECT_FLUSH_TIMEOUT + Duration::from_secs(1), writer)
+            .await
+            .expect("stalled write must give up at DISCONNECT_FLUSH_TIMEOUT")
+            .unwrap();
     }
 
     /// `try_kick`: enqueue mid-tick, `close()` at once. The disconnect must still go out.

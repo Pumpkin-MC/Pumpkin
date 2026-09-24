@@ -145,11 +145,12 @@ impl Ticker {
     }
 }
 
-/// Vanilla `MinecraftServer` overload skip. Returns the updated schedule and,
+/// Vanilla `MinecraftServer.runServer` overload skip. Returns the updated schedule and,
 /// when the deadline jumped, the `(behind_ms, ticks)` log payload.
 ///
-/// Skipping is gated on the warning interval, so between skips the server runs
-/// catch-up ticks and only drops game time once per interval.
+/// Skip and warning share one gate, as in vanilla: at most one skip per
+/// 10s + 100 ticks of deadline. In between, deadline stays behind and missed
+/// ticks run back to back. Accepted lag for vanilla timing parity.
 const fn apply_overload_skip(
     schedule: TickSchedule,
     now_nanos: i64,
