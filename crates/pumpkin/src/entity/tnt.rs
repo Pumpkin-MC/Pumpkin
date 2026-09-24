@@ -82,11 +82,11 @@ impl EntityBase for TNTEntity {
     /// Vanilla `PrimedTnt.readAdditionalSaveData`.
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         let fuse = nbt
-            .get_short("fuse")
+            .get_numeric_short("fuse")
             .map_or(Self::DEFAULT_FUSE, |fuse| fuse.max(0) as u32);
         self.fuse.store(fuse, Relaxed);
         self.power.store(
-            nbt.get_float("explosion_power")
+            nbt.get_numeric_float("explosion_power")
                 .unwrap_or(Self::DEFAULT_POWER)
                 .clamp(0.0, 128.0),
         );

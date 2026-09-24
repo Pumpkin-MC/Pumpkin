@@ -28,26 +28,34 @@ pub struct TNTBlock;
 impl TNTBlock {
     /// Vanilla `TntBlock.prime` plus the block removal its callers do.
     pub fn prime(world: &Arc<World>, location: &BlockPos) -> bool {
-        let Some(tnt) = Self::prepare(world, location) else {
-            return false;
-        };
-
-        // Claim the block atomically: if a plugin handler or another task replaced the TNT in
-        // the meantime, its block stays untouched and only one caller ever ignites this TNT.
-        if world
-            .set_block_state_if(
-                location,
-                BlockStateId::AIR,
-                BlockFlags::NOTIFY_ALL,
-                |state| state.to_block() == &Block::TNT,
-            )
-            .is_none()
-        {
+        if !world.level_info.load().game_rules.tnt_explodes {
             return false;
         }
 
-        Self::ignite(world, location, tnt);
-        true
+        // Claim the block atomically: if another task replaced the TNT in the meantime, its
+        // block stays untouched and only one caller ever ignites this TNT.
+        let Some(tnt_state) = world.set_block_state_if(
+            location,
+            BlockStateId::AIR,
+            BlockFlags::NOTIFY_ALL,
+            |state| state.to_block() == &Block::TNT,
+        ) else {
+            return false;
+        };
+
+        if Self::spawn_primed(world, location) {
+            return true;
+        }
+
+        // A plugin cancelled priming: put the TNT back unless something else took its place.
+        // Skipping `placed` keeps powered TNT from re-priming itself in a loop.
+        world.set_block_state_if(
+            location,
+            tnt_state,
+            BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+            |state| state == BlockStateId::AIR,
+        );
+        false
     }
 
     /// Primes a TNT block the caller already took out of the world.
