@@ -11,7 +11,7 @@ impl BedrockClient {
         self.handle_player_action(
             player,
             server,
-            SPlayerAction {
+            &SPlayerAction {
                 player_runtime_id: VarULong(0), // Unused
                 action: packet.action,
                 block_position: packet.block_pos,

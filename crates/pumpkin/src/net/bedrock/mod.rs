@@ -812,7 +812,7 @@ impl BedrockClient {
             }
             SPlayerAction::PACKET_ID => {
                 let packet = SPlayerAction::read(reader)?;
-                self.handle_player_action(player, server, packet);
+                self.handle_player_action(player, server, &packet);
             }
             SRespawn::PACKET_ID => {
                 let packet = SRespawn::read(reader)?;
