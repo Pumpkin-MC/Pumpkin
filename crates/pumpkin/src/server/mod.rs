@@ -156,13 +156,12 @@ pub struct Server {
 
 impl Server {
     #[expect(clippy::too_many_lines)]
-    #[must_use]
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
         telemetry_config: TelemetryConfig,
         vanilla_data: VanillaData,
-    ) -> Arc<Self> {
+    ) -> Result<Arc<Self>, WorldInfoError> {
         let permission_manager = Arc::new(PermissionManager::new());
         // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher = ArcSwap::from_pointee(default_dispatcher(
@@ -201,9 +200,7 @@ impl Server {
                 );
                 let default_data =
                     LevelData::from_world_generator(basic_config.seed, &overworld_gen);
-                if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
-                    error!("Failed to save level.dat: {err}");
-                }
+                AnvilLevelInfo.write_world_info(&default_data, &world_path)?;
                 default_data
             }
             Err(
@@ -436,7 +433,7 @@ impl Server {
             .datapack_manager
             .execute_function(&server, &source, "#minecraft:load");
 
-        server
+        Ok(server)
     }
 
     /// Spawns a task associated with this server. All tasks spawned with this method are awaited
