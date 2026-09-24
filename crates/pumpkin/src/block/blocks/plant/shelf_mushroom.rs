@@ -46,7 +46,8 @@ impl BlockBehaviour for ShelfMushroomBlock {
         let mut props = ShelfMushroomProperties::default(args.block);
         props.age = 0;
 
-        for dir in args.player.get_entity().get_entity_facing_order() {
+        let looking = args.player.get_entity().get_entity_facing_order();
+        for dir in std::iter::once(args.direction.to_facing()).chain(looking) {
             let Some(look_dir) = dir.to_horizontal_facing() else {
                 continue;
             };
