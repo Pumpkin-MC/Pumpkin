@@ -28,6 +28,18 @@ use pumpkin_data::entity::EntityPose as InternalEntityPose;
 impl Host for PluginHostState {}
 impl entity_types::Host for PluginHostState {}
 
+/// Reads a document whose root compound carries no name, which is the form both
+/// `write_unnamed` and the plugin API use.
+pub fn read_unnamed_compound(data: &[u8]) -> Result<pumpkin_nbt::NbtCompound, String> {
+    let mut cursor = std::io::Cursor::new(data);
+    let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+        pumpkin_nbt::deserializer::NbtStreamReader(&mut cursor),
+    );
+    pumpkin_nbt::Nbt::read_unnamed(&mut reader)
+        .map(|nbt| nbt.root_tag)
+        .map_err(|e| format!("Invalid NBT: {e}"))
+}
+
 pub fn entity_from_resource(
     state: &PluginHostState,
     entity: &Resource<Entity>,
@@ -81,6 +93,28 @@ impl HostEntity for PluginHostState {
     async fn get_uuid(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Uuid> {
         let entity = entity_from_resource(self, &entity)?;
         Ok(Uuid::to_wit(&entity.get_entity().entity_uuid))
+    }
+
+    async fn get_nbt(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Vec<u8>> {
+        let entity = entity_from_resource(self, &entity)?;
+        let mut nbt = pumpkin_nbt::NbtCompound::new();
+        entity.write_nbt(&mut nbt);
+        Ok(pumpkin_nbt::Nbt::from(nbt).write_unnamed().to_vec())
+    }
+
+    async fn set_nbt(
+        &mut self,
+        entity: Resource<Entity>,
+        nbt_data: Vec<u8>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let entity = entity_from_resource(self, &entity)?;
+        match read_unnamed_compound(&nbt_data) {
+            Ok(nbt) => {
+                entity.read_nbt_non_mut(&nbt);
+                Ok(Ok(()))
+            }
+            Err(e) => Ok(Err(e)),
+        }
     }
 
     async fn get_type(
