@@ -663,10 +663,10 @@ impl Goal for FindTargetGoal {
         if !entity.is_alive() || entity.is_spectator() {
             return false;
         }
-        if let Some(player) = entity.world.load().get_player_by_id(entity.entity_id) {
-            if player.is_creative() {
-                return false;
-            }
+        if let Some(player) = entity.world.load().get_player_by_id(entity.entity_id)
+            && player.is_creative()
+        {
+            return false;
         }
         true
     }
