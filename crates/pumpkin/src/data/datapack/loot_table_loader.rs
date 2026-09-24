@@ -72,7 +72,10 @@ fn parse_rolls(val: &Value) -> (i32, i32) {
                 .unwrap_or(1) as i32;
             return (r, r);
         }
-        if let Some(n) = obj.get("n").and_then(Value::as_i64) {
+        if let Some(n) = obj
+            .get("n")
+            .and_then(|n| n.as_i64().or_else(|| n.as_f64().map(|f| f as i64)))
+        {
             return (0, n as i32);
         }
     }
