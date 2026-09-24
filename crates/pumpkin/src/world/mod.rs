@@ -397,17 +397,18 @@ fn spawn_search_ring_offsets(radius: i32) -> Vec<(i32, i32)> {
     offsets
 }
 
-/// Clamps the `respawn_radius` game rule by the border distance: at least 1
-/// near the border, at most 1024 candidates.
+/// Clamps the `respawn_radius` game rule by the border distance, expanding near
+/// or outside the border to reach a whole block inside it, with at most 1024
+/// candidates.
 fn spawn_search_radius(respawn_radius: i32, border_distance: f64) -> i32 {
     let border_distance = border_distance.floor() as i32;
-    let mut radius = respawn_radius.max(0);
-    if border_distance < radius {
-        radius = border_distance;
-    }
-    if border_distance <= 1 {
-        radius = 1;
-    }
+    let radius = if border_distance <= 1 {
+        // The block's far edge must be strictly inside the border. For example,
+        // a max edge of 5 and spawn x = 6 (distance -1) need radius 3 to reach x = 3.
+        2_i32.saturating_sub(border_distance)
+    } else {
+        respawn_radius.max(0).min(border_distance)
+    };
     radius.min(MAX_SPAWN_SEARCH_RADIUS)
 }
 
@@ -2799,7 +2800,7 @@ impl World {
     }
 
     /// Computes a safe world-spawn position for a joining or respawning
-    /// player: check the spawn column, search around it within
+    /// player: check the spawn column, search around it with a border-adjusted
     /// `respawn_radius`, and fix up the height as a last resort. Returns the
     /// bottom-center position (x+0.5, y, z+0.5), or `None` if no candidate is
     /// inside the world border.
@@ -8099,10 +8100,19 @@ mod tests {
         assert_eq!(spawn_search_radius(-5, 1000.0), 0);
         // Border distance clamps down...
         assert_eq!(spawn_search_radius(10, 3.9), 3);
-        // ...with a minimum of 1 on the border...
-        assert_eq!(spawn_search_radius(10, 0.5), 1);
+        // ...expanding near/outside the border to fit an entire block...
+        assert_eq!(spawn_search_radius(10, 0.5), 2);
         assert_eq!(spawn_search_radius(10, 1.0), 1);
+        assert_eq!(spawn_search_radius(10, 0.0), 2);
+        assert_eq!(spawn_search_radius(10, -1.0), 3);
+        assert_eq!(spawn_search_radius(10, -1.25), 4);
+        assert_eq!(spawn_search_radius(0, -1.0), 3);
         // ...and the 1024 candidate cap (radius 15).
         assert_eq!(spawn_search_radius(100, 1000.0), MAX_SPAWN_SEARCH_RADIUS);
+        assert_eq!(spawn_search_radius(10, -1000.0), MAX_SPAWN_SEARCH_RADIUS);
+        assert_eq!(
+            spawn_search_radius(10, f64::from(i32::MIN)),
+            MAX_SPAWN_SEARCH_RADIUS,
+        );
     }
 }

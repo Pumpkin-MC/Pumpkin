@@ -97,6 +97,58 @@ async fn outside_initial_and_ring_columns_are_skipped() {
 }
 
 #[tokio::test]
+async fn outside_spawn_search_reaches_border_on_each_side() {
+    let fixture = SpawnWorld::new();
+    // For [-5, 5), legal block coordinates range from -5 through 3.
+    // In particular, x = 6 needs radius 3 to reach x = 3, even when the
+    // respawn-radius game rule would otherwise disable the search.
+    for respawn_radius in [0, 10] {
+        let mut info = (**fixture.world.level_info.load()).clone();
+        info.game_rules.respawn_radius = respawn_radius;
+        fixture.world.level_info.store(Arc::new(info));
+
+        for (x, z, expected_x, expected_z) in [
+            (6, 0, 3.5, -2.5),
+            (-8, 0, -4.5, -2.5),
+            (0, 6, -2.5, 3.5),
+            (0, -8, -2.5, -4.5),
+            (6, 6, 3.5, 3.5),
+            (-8, -8, -4.5, -4.5),
+        ] {
+            assert_eq!(
+                fixture.world.get_safe_player_spawn_position(x, z, 64).await,
+                Some(Vector3::new(expected_x, 65.0, expected_z)),
+                "spawn ({x}, {z}), respawn radius {respawn_radius}",
+            );
+        }
+    }
+    assert_eq!(fixture.world.level.loaded_chunk_count(), 4);
+    fixture.shutdown().await;
+}
+
+#[tokio::test]
+async fn outside_spawn_search_respects_candidate_limit() {
+    let fixture = SpawnWorld::new();
+    // The nearest legal column is x = 3: reachable at radius 15, but not 16.
+    assert_eq!(
+        fixture
+            .world
+            .get_safe_player_spawn_position(18, 0, 64)
+            .await,
+        Some(Vector3::new(3.5, 65.0, -4.5)),
+    );
+    assert_eq!(
+        fixture
+            .world
+            .get_safe_player_spawn_position(19, 0, 64)
+            .await,
+        None,
+    );
+    assert_eq!(fixture.world.level.loaded_chunk_count(), 4);
+    fixture.shutdown().await;
+}
+
+#[tokio::test]
 async fn outside_height_fixup_is_rejected() {
     let fixture = SpawnWorld::new();
     assert_eq!(
@@ -161,13 +213,18 @@ async fn fractional_border_edges_require_the_whole_spawn_block() {
             .await,
         Some(Vector3::new(-3.5, 65.0, 0.5)),
     );
-    for (spawn_x, expected_x) in [(-5, -3.5), (5, 4.5)] {
+    for (spawn_x, expected_x, expected_z) in [
+        (-5, -3.5, -0.5),
+        (5, 4.5, -0.5),
+        (-7, -3.5, -2.5),
+        (7, 4.5, -2.5),
+    ] {
         assert_eq!(
             fixture
                 .world
                 .get_safe_player_spawn_position(spawn_x, 0, 64)
                 .await,
-            Some(Vector3::new(expected_x, 65.0, -0.5)),
+            Some(Vector3::new(expected_x, 65.0, expected_z)),
         );
     }
     fixture.shutdown().await;
