@@ -949,6 +949,32 @@ mod tests {
         assert_eq!(components.get("minecraft:jukebox_playable"), None);
     }
 
+    #[test]
+    fn jukebox_playable_song_keeps_one_namespace_when_it_arrives_prefixed() {
+        // The generated item definitions store the id with its namespace,
+        // `read_data` stores it without.
+        let mut stack = ItemStack::new(1, &Item::MUSIC_DISC_PIGSTEP);
+        stack.patch.push((
+            DataComponent::JukeboxPlayable,
+            Some(
+                JukeboxPlayableImpl {
+                    song: "minecraft:pigstep",
+                }
+                .to_dyn(),
+            ),
+        ));
+
+        let mut item = NbtCompound::new();
+        stack.write_item_stack(&mut item);
+
+        let written = item
+            .get_compound("components")
+            .and_then(|components| components.get_compound("minecraft:jukebox_playable"))
+            .expect("jukebox_playable is written back");
+
+        assert_eq!(written.get_string("song"), Some("minecraft:pigstep"));
+    }
+
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
     fn iron_sword() -> ItemStack {
         ItemStack::new(1, &Item::IRON_SWORD)
