@@ -814,7 +814,12 @@ impl ItemStack {
 
         for (id, data) in &self.patch {
             if let Some(data) = data {
-                tag.put(id.to_name(), data.write_data());
+                // `NbtTag::End` is the compound terminator; writing it under a
+                // name closes `components` early.
+                let written = data.write_data();
+                if !matches!(written, NbtTag::End) {
+                    tag.put(id.to_name(), written);
+                }
             } else {
                 let name = '!'.to_string() + id.to_name();
                 tag.put(name.as_str(), NbtCompound::new());
@@ -875,8 +880,100 @@ mod tests {
     use crate::data_component::DataComponent;
     use crate::data_component_impl::{
         CustomDataImpl, CustomNameImpl, DataComponentImpl, EnchantmentsImpl, ItemNameImpl,
-        LoreImpl, UnbreakableImpl,
+        JukeboxPlayableImpl, LoreImpl, MapDecorationsImpl, UnbreakableImpl,
     };
+    use pumpkin_nbt::{Nbt, deserializer::NbtReadHelperJava};
+    use std::io::Cursor;
+
+    #[test]
+    fn unwritable_component_does_not_truncate_enclosing_compound() {
+        let mut stack = ItemStack::new(1, &Item::FILLED_MAP);
+        stack.patch.push((
+            DataComponent::MapDecorations,
+            Some(MapDecorationsImpl.to_dyn()),
+        ));
+
+        let mut item = NbtCompound::new();
+        stack.write_item_stack(&mut item);
+
+        let mut root = NbtCompound::new();
+        root.put_compound("Item", item);
+        root.put_string("after", "sentinel".to_string());
+
+        let bytes = Nbt::new(String::new(), root).write_unnamed();
+        let mut reader = NbtReadHelperJava::new(Cursor::new(&bytes[..]));
+        let round_tripped = Nbt::read_unnamed(&mut reader).expect("document round trips");
+
+        assert_eq!(round_tripped.root_tag.get_string("after"), Some("sentinel"));
+    }
+
+    #[test]
+    fn jukebox_playable_song_survives_item_stack_nbt_roundtrip() {
+        let mut stored = NbtCompound::new();
+        stored.put_string("song", "minecraft:pigstep".to_string());
+        let parsed = JukeboxPlayableImpl::read_data(&NbtTag::Compound(stored))
+            .expect("jukebox_playable parses");
+
+        let mut stack = ItemStack::new(1, &Item::MUSIC_DISC_PIGSTEP);
+        stack
+            .patch
+            .push((DataComponent::JukeboxPlayable, Some(parsed.to_dyn())));
+
+        let mut item = NbtCompound::new();
+        stack.write_item_stack(&mut item);
+
+        let written = item
+            .get_compound("components")
+            .and_then(|components| components.get_compound("minecraft:jukebox_playable"))
+            .expect("jukebox_playable is written back");
+
+        assert_eq!(written.get_string("song"), Some("minecraft:pigstep"));
+    }
+
+    #[test]
+    fn jukebox_playable_with_unknown_song_is_not_written_back() {
+        let mut stored = NbtCompound::new();
+        stored.put_string("song", "modded:not_a_vanilla_disc".to_string());
+        let parsed = JukeboxPlayableImpl::read_data(&NbtTag::Compound(stored))
+            .expect("jukebox_playable parses");
+
+        let mut stack = ItemStack::new(1, &Item::MUSIC_DISC_PIGSTEP);
+        stack
+            .patch
+            .push((DataComponent::JukeboxPlayable, Some(parsed.to_dyn())));
+
+        let mut item = NbtCompound::new();
+        stack.write_item_stack(&mut item);
+
+        let components = item.get_compound("components").expect("components written");
+        assert_eq!(components.get("minecraft:jukebox_playable"), None);
+    }
+
+    #[test]
+    fn jukebox_playable_song_keeps_one_namespace_when_it_arrives_prefixed() {
+        // The generated item definitions store the id with its namespace,
+        // `read_data` stores it without.
+        let mut stack = ItemStack::new(1, &Item::MUSIC_DISC_PIGSTEP);
+        stack.patch.push((
+            DataComponent::JukeboxPlayable,
+            Some(
+                JukeboxPlayableImpl {
+                    song: "minecraft:pigstep",
+                }
+                .to_dyn(),
+            ),
+        ));
+
+        let mut item = NbtCompound::new();
+        stack.write_item_stack(&mut item);
+
+        let written = item
+            .get_compound("components")
+            .and_then(|components| components.get_compound("minecraft:jukebox_playable"))
+            .expect("jukebox_playable is written back");
+
+        assert_eq!(written.get_string("song"), Some("minecraft:pigstep"));
+    }
 
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
     fn iron_sword() -> ItemStack {

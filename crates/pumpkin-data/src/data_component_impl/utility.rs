@@ -868,6 +868,17 @@ impl JukeboxPlayableImpl {
     }
 }
 impl DataComponentImpl for JukeboxPlayableImpl {
+    fn write_data(&self) -> NbtTag {
+        // `read_data` leaves `song` empty for a non-vanilla id.
+        if self.song.is_empty() {
+            return NbtTag::End;
+        }
+        // The generated item definitions carry the namespace, `read_data` strips it.
+        let bare = self.song.strip_prefix("minecraft:").unwrap_or(self.song);
+        let mut compound = NbtCompound::new();
+        compound.put_string("song", format!("minecraft:{bare}"));
+        NbtTag::Compound(compound)
+    }
     default_impl!(JukeboxPlayable);
 }
 
