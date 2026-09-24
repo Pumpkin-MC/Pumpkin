@@ -405,7 +405,7 @@ fn spawn_search_radius(respawn_radius: i32, border_distance: f64) -> i32 {
     let radius = if border_distance <= 1 {
         // The block's far edge must be strictly inside the border. For example,
         // a max edge of 5 and spawn x = 6 (distance -1) need radius 3 to reach x = 3.
-        2_i32.saturating_sub(border_distance)
+        2i32.saturating_sub(border_distance)
     } else {
         respawn_radius.max(0).min(border_distance)
     };

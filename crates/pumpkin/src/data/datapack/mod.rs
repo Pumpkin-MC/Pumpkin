@@ -1,9 +1,12 @@
 pub mod context_provider_loader;
 pub mod damage_type_loader;
+pub mod dynamic_registry_loader;
 pub mod function_loader;
 pub mod loot_table_loader;
 pub mod recipe_loader;
+pub mod structure_loader;
 pub mod test_loader;
+pub mod trade_loader;
 
 use std::collections::HashMap;
 use std::fs;
@@ -28,6 +31,7 @@ use self::damage_type_loader::{DamageTypeDefinition, DamageTypeEntry, DamageType
 use self::test_loader::{
     TestInstance, TestInstanceRegistry, load_test_instances_from_dir, to_registry_entry,
 };
+use self::trade_loader::{DynamicVillagerTradeSet, TradeRegistry};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KnownPackData {
@@ -76,6 +80,8 @@ pub struct DatapackManager {
     context_float_providers: RwLock<ContextProviderRegistry>,
     damage_types: RwLock<DamageTypeRegistry>,
     loot_tables: RwLock<HashMap<String, Arc<DynamicLootTable>>>,
+    dynamic_registries: RwLock<HashMap<String, HashMap<String, RegistryEntryData>>>,
+    trade_registry: RwLock<TradeRegistry>,
 }
 
 fn share_function_bodies(
@@ -105,6 +111,8 @@ impl DatapackManager {
             context_float_providers: RwLock::new(HashMap::new()),
             damage_types: RwLock::new(HashMap::new()),
             loot_tables: RwLock::new(HashMap::new()),
+            dynamic_registries: RwLock::new(HashMap::new()),
+            trade_registry: RwLock::new(TradeRegistry::new()),
         }
     }
 
@@ -115,6 +123,7 @@ impl DatapackManager {
         recipe_manager: &RecipeManager,
     ) {
         let datapacks_dir = world_path.join("datapacks");
+        structure_loader::clear_dynamic_worldgen_data();
         let mut loaded_packs_vec = Vec::new();
         let mut all_recipes: Vec<DynamicRecipe> = Vec::new();
         let mut all_functions: HashMap<String, Vec<String>> = HashMap::new();
@@ -131,6 +140,20 @@ impl DatapackManager {
         if embedded_count > 0 {
             info!("Loaded {embedded_count} embedded test instance(s)");
         }
+        let (embedded_ints, embedded_floats) =
+            context_provider_loader::load_embedded_context_providers(
+                &mut all_context_int_providers,
+                &mut all_context_float_providers,
+            );
+        if embedded_ints > 0 || embedded_floats > 0 {
+            info!(
+                "Loaded {embedded_ints} int and {embedded_floats} float embedded context provider(s)"
+            );
+        }
+        let mut all_dynamic_registries: HashMap<String, HashMap<String, RegistryEntryData>> =
+            HashMap::new();
+        let mut all_trade_registry = TradeRegistry::new();
+
         let mut acc = PackContentAccumulators {
             recipes: &mut all_recipes,
             functions: &mut all_functions,
@@ -140,6 +163,8 @@ impl DatapackManager {
             context_int_providers: &mut all_context_int_providers,
             context_float_providers: &mut all_context_float_providers,
             loot_tables: &mut all_loot_tables,
+            dynamic_registries: &mut all_dynamic_registries,
+            trade_registry: &mut all_trade_registry,
         };
 
         scan_datapacks_dir(
@@ -185,6 +210,14 @@ impl DatapackManager {
             .loot_tables
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = all_loot_tables;
+        *self
+            .dynamic_registries
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_dynamic_registries;
+        *self
+            .trade_registry
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_trade_registry;
     }
 
     pub fn get_loaded_packs(&self) -> Vec<LoadedDatapack> {
@@ -375,6 +408,116 @@ impl DatapackManager {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         merge_damage_type_entries(vanilla_entries, &guard)
+    }
+
+    #[must_use]
+    pub fn merge_registry_entries(
+        &self,
+        registry_id: &str,
+        vanilla_entries: &[RegistryEntryData],
+    ) -> Vec<RegistryEntryData> {
+        let guard = self
+            .dynamic_registries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let custom = guard
+            .get(registry_id)
+            .or_else(|| guard.get(&format!("minecraft:{registry_id}")))
+            .or_else(|| {
+                registry_id
+                    .strip_prefix("minecraft:")
+                    .and_then(|r| guard.get(r))
+            });
+        custom.map_or_else(
+            || vanilla_entries.iter().map(clone_registry_entry).collect(),
+            |custom| {
+                dynamic_registry_loader::merge_dynamic_registry_entries(vanilla_entries, custom)
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn get_custom_registry_entry(
+        &self,
+        registry_id: &str,
+        entry_id: &str,
+    ) -> Option<RegistryEntryData> {
+        let guard = self
+            .dynamic_registries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let custom_map = guard
+            .get(registry_id)
+            .or_else(|| guard.get(&format!("minecraft:{registry_id}")))
+            .or_else(|| {
+                registry_id
+                    .strip_prefix("minecraft:")
+                    .and_then(|r| guard.get(r))
+            })?;
+        custom_map.get(entry_id).map(clone_registry_entry)
+    }
+
+    #[must_use]
+    pub fn get_custom_registry_entries(&self, registry_id: &str) -> Vec<RegistryEntryData> {
+        let guard = self
+            .dynamic_registries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let custom_map = guard
+            .get(registry_id)
+            .or_else(|| guard.get(&format!("minecraft:{registry_id}")))
+            .or_else(|| {
+                registry_id
+                    .strip_prefix("minecraft:")
+                    .and_then(|r| guard.get(r))
+            });
+        custom_map.map_or_else(Vec::new, |entries| {
+            let mut list: Vec<_> = entries.values().map(clone_registry_entry).collect();
+            list.sort_by(|a, b| a.entry_id.cmp(&b.entry_id));
+            list
+        })
+    }
+
+    #[must_use]
+    pub fn get_dynamic_registry_ids(&self) -> Vec<String> {
+        let guard = self
+            .dynamic_registries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut ids: Vec<_> = guard.keys().cloned().collect();
+        ids.sort();
+        ids
+    }
+
+    #[must_use]
+    pub fn get_villager_trade_set(
+        &self,
+        profession: &str,
+        level: i32,
+    ) -> Option<DynamicVillagerTradeSet> {
+        let registry = self
+            .trade_registry
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        registry.get_villager_trade_set(profession, level)
+    }
+
+    #[must_use]
+    pub fn get_wandering_trader_trade_set(&self, tier: &str) -> Option<DynamicVillagerTradeSet> {
+        let registry = self
+            .trade_registry
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        registry.get_wandering_trader_trade_set(tier)
+    }
+
+    #[must_use]
+    pub fn get_trade_set(&self, key: &str) -> Option<DynamicVillagerTradeSet> {
+        let registry = self
+            .trade_registry
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        registry.resolve_trade_set(key)
     }
 
     /// Returns datapack test instances in the protocol's synced-registry entry format.
@@ -1089,6 +1232,8 @@ struct PackContentAccumulators<'a> {
     context_int_providers: &'a mut ContextProviderRegistry,
     context_float_providers: &'a mut ContextProviderRegistry,
     loot_tables: &'a mut HashMap<String, Arc<DynamicLootTable>>,
+    dynamic_registries: &'a mut HashMap<String, HashMap<String, RegistryEntryData>>,
+    trade_registry: &'a mut TradeRegistry,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -1100,6 +1245,13 @@ struct PackContentCounts {
     int_providers: usize,
     float_providers: usize,
     loot_tables: usize,
+    structures: usize,
+    template_pools: usize,
+    processor_lists: usize,
+    dynamic_registries: usize,
+    trade_sets: usize,
+    trades: usize,
+    trade_tags: usize,
 }
 
 fn scan_datapacks_dir(
@@ -1142,7 +1294,7 @@ fn scan_datapacks_dir(
         let counts = load_pack_contents(&pack_path, acc);
 
         info!(
-            "Loaded datapack '{file_name}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s)",
+            "Loaded datapack '{file_name}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s), {} structure(s), {} template pool(s), {} processor list(s), {} dynamic registry entry/entries, {} trade set(s), {} trade(s)",
             counts.recipes,
             counts.functions,
             counts.test_instances,
@@ -1150,6 +1302,12 @@ fn scan_datapacks_dir(
             counts.int_providers,
             counts.float_providers,
             counts.loot_tables,
+            counts.structures,
+            counts.template_pools,
+            counts.processor_lists,
+            counts.dynamic_registries,
+            counts.trade_sets,
+            counts.trades,
         );
 
         loaded_packs_vec.push(LoadedDatapack {
@@ -1167,6 +1325,7 @@ fn scan_datapacks_dir(
 
 /// Loads recipes, functions, function tags, test instances, damage types, context number providers,
 /// and loot tables from a single datapack directory, returning per-pack counts as [`PackContentCounts`].
+#[allow(clippy::too_many_lines)]
 fn load_pack_contents(
     pack_path: &Path,
     acc: &mut PackContentAccumulators<'_>,
@@ -1273,6 +1432,77 @@ fn load_pack_contents(
                         &lt_dir,
                         acc.loot_tables,
                     );
+                }
+            }
+
+            // Load structure templates
+            for st_sub in ["structure", "structures"] {
+                let st_dir = ns_path.join(st_sub);
+                if st_dir.is_dir() {
+                    counts.structures +=
+                        structure_loader::load_structures_from_dir(&namespace, &st_dir);
+                }
+            }
+
+            // Load worldgen template pools and processor lists
+            let worldgen_dir = ns_path.join("worldgen");
+            if worldgen_dir.is_dir() {
+                let pool_dir = worldgen_dir.join("template_pool");
+                if pool_dir.is_dir() {
+                    counts.template_pools +=
+                        structure_loader::load_template_pools_from_dir(&namespace, &pool_dir);
+                }
+                let proc_dir = worldgen_dir.join("processor_list");
+                if proc_dir.is_dir() {
+                    counts.processor_lists +=
+                        structure_loader::load_processor_lists_from_dir(&namespace, &proc_dir);
+                }
+            }
+
+            // Load dynamic registry entries (wolf_variant, cat_variant, frog_variant, instrument,
+            // trim_material, trim_pattern, banner_pattern, decorated_pot_pattern, chat_type, etc.)
+            counts.dynamic_registries += dynamic_registry_loader::load_dynamic_registries_from_ns(
+                &namespace,
+                &ns_path,
+                acc.dynamic_registries,
+            );
+
+            // Load trade sets
+            for ts_sub in ["trade_set", "trade_sets"] {
+                let ts_dir = ns_path.join(ts_sub);
+                if ts_dir.is_dir() {
+                    counts.trade_sets += trade_loader::load_trade_sets_from_dir(
+                        &namespace,
+                        &ts_dir,
+                        &mut acc.trade_registry.trade_sets,
+                    );
+                }
+            }
+
+            // Load villager trades
+            for vt_sub in ["villager_trade", "villager_trades"] {
+                let vt_dir = ns_path.join(vt_sub);
+                if vt_dir.is_dir() {
+                    counts.trades += trade_loader::load_trades_from_dir(
+                        &namespace,
+                        &vt_dir,
+                        &mut acc.trade_registry.trades,
+                    );
+                }
+            }
+
+            // Load villager trade tags
+            let tags_dir = ns_path.join("tags");
+            if tags_dir.is_dir() {
+                for vt_tag_sub in ["villager_trade", "villager_trades"] {
+                    let vt_tag_dir = tags_dir.join(vt_tag_sub);
+                    if vt_tag_dir.is_dir() {
+                        counts.trade_tags += trade_loader::load_trade_tags_from_dir(
+                            &namespace,
+                            &vt_tag_dir,
+                            &mut acc.trade_registry.trade_tags,
+                        );
+                    }
                 }
             }
         }
