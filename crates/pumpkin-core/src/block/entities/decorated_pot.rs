@@ -3,7 +3,9 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+
+use crate::world::World;
 
 pub struct DecoratedPotBlockEntity {
     pub position: BlockPos,
@@ -18,6 +20,12 @@ impl BlockEntity for DecoratedPotBlockEntity {
 
     fn get_position(&self) -> BlockPos {
         self.position
+    }
+
+    fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
+        if let Some(item) = self.take_item() {
+            world.drop_stack(position, item);
+        }
     }
 
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
