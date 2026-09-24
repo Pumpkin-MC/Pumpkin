@@ -528,7 +528,7 @@ enum WriteOutcome<W: AsyncWrite + Unpin> {
     Failed,
 }
 
-/// `write_queued_frames`, raced against close(). On close the same future keeps
+/// `write_queued_frames`, raced against `close()`. On close the same future keeps
 /// running under `DISCONNECT_FLUSH_TIMEOUT`: dropping `write_all` cuts a frame in half.
 async fn write_or_close<W: AsyncWrite + Unpin + Send + 'static>(
     writer: TCPNetworkEncoder<W>,
@@ -1163,7 +1163,7 @@ mod tests {
         assert_eq!(gate.flushed.load(Ordering::SeqCst), 1);
     }
 
-    /// If Peer never reads close(), must still end the writer within the disconnect budget
+    /// If Peer never reads `close()`, must still end the writer within the disconnect budget
     #[tokio::test(start_paused = true)]
     async fn close_bounds_a_stalled_write() {
         let (tx, rx) = tokio::sync::mpsc::channel(4096);
