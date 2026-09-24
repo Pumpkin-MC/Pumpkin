@@ -323,18 +323,17 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         caller: &dyn EntityBase,
         lightning: &lightning::LightningBoltEntity,
     ) {
-        if self.get_living_entity().is_some() {
-            self.set_on_fire_for(8.0);
-            let cause = lightning.get_cause();
-            self.damage_with_context(
-                caller,
-                5.0,
-                DamageType::LIGHTNING_BOLT,
-                None,
-                Some(lightning),
-                cause.as_deref().map(|p| p as &dyn EntityBase),
-            );
-        }
+        // Vanilla `Entity.thunderHit` hits entities with 5 damage and sets them on fire for 8 seconds.
+        self.set_on_fire_for(8.0);
+        let cause = lightning.get_cause();
+        self.damage_with_context(
+            caller,
+            5.0,
+            DamageType::LIGHTNING_BOLT,
+            None,
+            Some(lightning),
+            cause.as_deref().map(|p| p as &dyn EntityBase),
+        );
     }
 
     fn is_spectator(&self) -> bool {
@@ -490,7 +489,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     fn set_on_fire_for(&self, seconds: f32) {
         let entity = self.get_entity();
         // Exclude fire-immune entities (ex. certain items) from burn damage
-        if !entity.fire_immune.load(Ordering::Relaxed) {
+        if !entity.is_fire_immune() {
             self.set_on_fire_for_ticks((seconds * 20.0).floor() as u32);
         }
     }
@@ -1414,79 +1413,47 @@ impl Entity {
             return movement;
         }
 
-        let mut adjusted_movement = movement;
-
-        // Y-Axis adjustment
-        if movement.get_axis(Axis::Y) != 0.0 {
-            let mut max_time = 1.0;
-            let mut positions = block_positions.into_iter();
-            if let Some((mut collisions_len, mut position)) = positions.next() {
-                let mut supporting_block_pos = None;
-
-                for (i, inert_box) in collisions.iter().enumerate() {
-                    if i == collisions_len {
-                        let Some((next_len, next_pos)) = positions.next() else {
-                            break;
-                        };
-                        collisions_len = next_len;
-                        position = next_pos;
-                    }
-
-                    if let Some(collision_time) = bounding_box.calculate_collision_time(
-                        inert_box,
-                        adjusted_movement,
-                        Axis::Y,
-                        max_time,
-                    ) {
-                        max_time = collision_time;
-
-                        // If the entity is moving downwards and collides, set the supporting block position
-                        if movement.get_axis(Axis::Y) < 0.0 {
-                            supporting_block_pos = Some(position);
-                        }
-                    }
-                }
-
-                if max_time != 1.0 {
-                    let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
-                    adjusted_movement.set_axis(Axis::Y, changed_component);
-                }
-
-                self.on_ground
-                    .store(supporting_block_pos.is_some(), Ordering::SeqCst);
-                self.supporting_block_pos.store(supporting_block_pos);
-            }
-        }
-
-        let mut horizontal_collision = false;
-
-        for axis in Axis::horizontal() {
-            if movement.get_axis(axis) == 0.0 {
+        // Vanilla `Entity.collideWithShapes`: Y first, then the larger horizontal axis, each
+        // against the box already moved along the resolved axes.
+        let order = if movement.x.abs() < movement.z.abs() {
+            [Axis::Y, Axis::Z, Axis::X]
+        } else {
+            [Axis::Y, Axis::X, Axis::Z]
+        };
+        let mut adjusted_movement = Vector3::new(0.0, 0.0, 0.0);
+        let mut floor_box = None;
+        for axis in order {
+            let wanted = movement.get_axis(axis);
+            if wanted == 0.0 {
                 continue;
             }
-
-            let mut max_time = 1.0;
-
-            for inert_box in &collisions {
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
-                    inert_box,
-                    adjusted_movement,
-                    axis,
-                    max_time,
-                ) {
-                    max_time = collision_time;
-                }
-            }
-
-            if max_time != 1.0 {
-                let changed_component = adjusted_movement.get_axis(axis) * max_time;
-                adjusted_movement.set_axis(axis, changed_component);
-                horizontal_collision = true;
+            let (allowed, blocker) =
+                bounding_box
+                    .shift(adjusted_movement)
+                    .collide_along(axis, &collisions, wanted);
+            adjusted_movement.set_axis(axis, allowed);
+            if axis == Axis::Y && wanted < 0.0 && allowed != wanted {
+                floor_box = blocker;
             }
         }
 
+        // Vanilla `Mth.equal`: sideways cuts under 1e-5 are not a collision.
+        let horizontal_collision = (movement.x - adjusted_movement.x).abs() >= 1.0e-5
+            || (movement.z - adjusted_movement.z).abs() >= 1.0e-5;
         self.horizontal_collision
             .store(horizontal_collision, Ordering::SeqCst);
+
+        let on_ground = movement.y < 0.0 && adjusted_movement.y != movement.y;
+        self.on_ground.store(on_ground, Ordering::SeqCst);
+        if on_ground {
+            let supporting_block_pos = floor_box.and_then(|i| {
+                block_positions
+                    .iter()
+                    .find(|(end, _)| i < *end)
+                    .map(|(_, pos)| *pos)
+            });
+            self.supporting_block_pos.store(supporting_block_pos);
+        }
 
         adjusted_movement
     }
@@ -2029,9 +1996,18 @@ impl Entity {
 
         self.move_pos(final_move);
 
-        let velocity_multiplier = f64::from(caller.get_block_speed_factor());
-
-        self.velocity.store(final_move * velocity_multiplier);
+        // Vanilla `Entity.move`: the entity keeps its own velocity, a wall stops the axis it hit
+        // (no entity bounciness yet) and the block speed factor only slows X/Z.
+        let speed_factor = f64::from(caller.get_block_speed_factor());
+        let mut velocity = self.velocity.load();
+        if (motion.x - final_move.x).abs() >= 1.0e-5 {
+            velocity.x = 0.0;
+        }
+        if (motion.z - final_move.z).abs() >= 1.0e-5 {
+            velocity.z = 0.0;
+        }
+        self.velocity
+            .store(velocity.multiply(speed_factor, 1.0, speed_factor));
 
         if let Some(living) = caller.get_living_entity() {
             let on_ground = self.on_ground.load(Ordering::SeqCst);
@@ -2087,6 +2063,7 @@ impl Entity {
             }
         }
 
+        // TODO: vanilla rolls from the entity `random`; same odds, not seed-reproducible.
         let amplitude = rand::random::<f64>().mul_add(0.2, 0.1);
 
         let axis = direction.to_axis().into();
@@ -3048,26 +3025,38 @@ impl Entity {
         self.send_bedrock_actor_data(&bedrock_meta);
     }
 
-    /// Checks if the entity is invulnerable to the given damage type, considering both general invulnerability and specific immunities.
-    pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
-        // Nothing is immune to void or kill
-        if matches!(
-            *damage_type,
-            DamageType::GENERIC_KILL | DamageType::OUT_OF_WORLD
-        ) {
-            return false;
-        }
+    /// Vanilla `Entity.fireImmune`: the entity type.
+    pub fn is_fire_immune(&self) -> bool {
+        self.entity_type.fire_immune || self.fire_immune.load(Ordering::Relaxed)
+    }
 
-        // General invulnerability
-        if self.invulnerable.load(Ordering::Relaxed) {
-            return true;
-        }
+    /// Vanilla `Entity.isInvulnerableToBase`. Driven by the damage type tags, so datapacks
+    /// decide what bypasses invulnerability or counts as fire and fall damage.
+    /// `cause` is the attacker (vanilla `DamageSource.getEntity`).
+    pub fn is_invulnerable_to(
+        &self,
+        damage_type: &DamageType,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        let bypasses = damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY);
+        let creative_cause = cause
+            .and_then(EntityBase::get_player)
+            .is_some_and(Player::is_creative);
 
-        // Specific type immunities
-        self.damage_immunities
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .contains(damage_type)
+        self.removed.load(Ordering::SeqCst)
+            || (self.invulnerable.load(Ordering::Relaxed) && !bypasses && !creative_cause)
+            || (damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FIRE) && self.is_fire_immune())
+            || (damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FALL)
+                && self
+                    .entity_type
+                    .has_tag(&tag::EntityType::MINECRAFT_FALL_DAMAGE_IMMUNE))
+            // Plugin immunities, which never block damage that bypasses invulnerability.
+            || (!bypasses
+                && self
+                    .damage_immunities
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains(damage_type))
     }
 
     /// Sets if the entity is invulnerable to a specific damage type
@@ -4116,7 +4105,7 @@ impl EntityBase for Entity {
         let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
 
         // Check for fire immunity (or if the specific entity is)
-        let is_immune = self.entity_type.fire_immune || self.fire_immune.load(Ordering::Relaxed);
+        let is_immune = self.is_fire_immune();
         if fire_ticks > 0 {
             if is_immune {
                 self.fire_ticks.store(fire_ticks - 4, Ordering::Relaxed);

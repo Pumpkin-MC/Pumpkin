@@ -1,5 +1,3 @@
-use std::sync::atomic::Ordering;
-
 use pumpkin_data::{
     Enchantment, damage::DamageType, data_component_impl::EquipmentSlot, effect::StatusEffect,
 };
@@ -26,7 +24,7 @@ impl BlockBehaviour for MagmaBlock {
             }
 
             // Fire immune entities don't take damage
-            if ent.entity_type.fire_immune || ent.fire_immune.load(Ordering::Relaxed) {
+            if ent.is_fire_immune() {
                 return;
             }
 

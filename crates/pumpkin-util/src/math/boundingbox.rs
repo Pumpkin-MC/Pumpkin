@@ -1,4 +1,4 @@
-use crate::math::{vector2::Vector2, vector3::Axis};
+use crate::math::vector3::Axis;
 
 use super::{position::BlockPos, vector3::Vector3};
 
@@ -9,49 +9,6 @@ pub struct BoundingBox {
     pub min: Vector3<f64>,
     /// The maximum corner of the box.
     pub max: Vector3<f64>,
-}
-
-/// Represents a 2D bounding plane used for collision checks.
-#[derive(Clone, Copy, Debug)]
-struct BoundingPlane {
-    /// The minimum corner of the plane.
-    pub min: Vector2<f64>,
-    /// The maximum corner of the plane.
-    pub max: Vector2<f64>,
-}
-
-impl BoundingPlane {
-    /// Checks whether this plane intersects another plane.
-    ///
-    /// # Arguments
-    /// * `other` – The other bounding plane to check against.
-    pub fn intersects(&self, other: &Self) -> bool {
-        self.min.x < other.max.x
-            && self.max.x > other.min.x
-            && self.min.y < other.max.y
-            && self.max.y > other.min.y
-    }
-
-    /// Projects a 3D bounding box onto a 2D plane by excluding one axis.
-    ///
-    /// # Arguments
-    /// * `bounding_box` – The 3D bounding box to project.
-    /// * `excluded` – The axis to exclude from the projection.
-    pub const fn from_box(bounding_box: &BoundingBox, excluded: Axis) -> Self {
-        let [axis1, axis2] = Axis::excluding(excluded);
-
-        Self {
-            min: Vector2::new(
-                bounding_box.get_side(false).get_axis(axis1),
-                bounding_box.get_side(false).get_axis(axis2),
-            ),
-
-            max: Vector2::new(
-                bounding_box.get_side(true).get_axis(axis1),
-                bounding_box.get_side(true).get_axis(axis2),
-            ),
-        }
-    }
 }
 
 impl BoundingBox {
@@ -246,48 +203,51 @@ impl BoundingBox {
         if max { self.max } else { self.min }
     }
 
-    /// Calculates the collision time with another bounding box along a movement vector.
-    ///
-    /// # Arguments
-    /// * `other` – The bounding box to test collision against.
-    /// * `movement` – Movement vector of this box.
-    /// * `axis` – Axis along which to calculate collision.
-    /// * `max_time` – Maximum allowed collision time.
+    /// Vanilla `Shapes.collide`: how far this box can move along `axis`, up to `distance`, before
+    /// it touches one of `boxes`. A box overlapped by less than `1e-7` still blocks.
     ///
     /// # Returns
-    /// Some(f64) if a collision occurs within `max_time`, None otherwise.
+    /// The allowed distance and the index of the box that limited it, if any.
     #[must_use]
-    pub fn calculate_collision_time(
+    pub fn collide_along(
         &self,
-        other: &Self,
-        movement: Vector3<f64>,
         axis: Axis,
-        max_time: f64, // NOTE: Start with 1.0
-    ) -> Option<f64> {
-        let movement_on_axis = movement.get_axis(axis);
+        boxes: &[Self],
+        mut distance: f64,
+    ) -> (f64, Option<usize>) {
+        const EPSILON: f64 = 1.0e-7;
+        let [a, b] = Axis::excluding(axis);
+        let mut blocker = None;
 
-        if movement_on_axis == 0.0 {
-            return None;
+        for (i, other) in boxes.iter().enumerate() {
+            if distance.abs() < EPSILON {
+                return (0.0, blocker);
+            }
+            // Only boxes overlapping on the two other axes can block.
+            if other.min.get_axis(a) >= self.max.get_axis(a) - EPSILON
+                || other.max.get_axis(a) <= self.min.get_axis(a) + EPSILON
+                || other.min.get_axis(b) >= self.max.get_axis(b) - EPSILON
+                || other.max.get_axis(b) <= self.min.get_axis(b) + EPSILON
+            {
+                continue;
+            }
+
+            if distance > 0.0 {
+                let gap = other.min.get_axis(axis) - self.max.get_axis(axis);
+                if gap >= -EPSILON && gap < distance {
+                    distance = gap;
+                    blocker = Some(i);
+                }
+            } else {
+                let gap = other.max.get_axis(axis) - self.min.get_axis(axis);
+                if gap <= EPSILON && gap > distance {
+                    distance = gap;
+                    blocker = Some(i);
+                }
+            }
         }
 
-        let move_positive = movement_on_axis.is_sign_positive();
-        let self_plane_const = self.get_side(move_positive).get_axis(axis);
-        let other_plane_const = other.get_side(!move_positive).get_axis(axis);
-        let collision_time = (other_plane_const - self_plane_const) / movement_on_axis;
-
-        if collision_time < 0.0 || collision_time >= max_time {
-            return None;
-        }
-
-        let self_moved = self.shift(movement * collision_time);
-        let self_plane_moved = BoundingPlane::from_box(&self_moved, axis);
-        let other_plane = BoundingPlane::from_box(other, axis);
-
-        if !self_plane_moved.intersects(&other_plane) {
-            return None;
-        }
-
-        Some(collision_time)
+        (distance, blocker)
     }
 
     /// Returns the average side length of the bounding box.
@@ -436,5 +396,50 @@ impl EntityDimensions {
             height,
             eye_height,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BoundingBox;
+    use crate::math::vector3::{Axis, Vector3};
+
+    fn bb(min: (f64, f64, f64), max: (f64, f64, f64)) -> BoundingBox {
+        BoundingBox::new(
+            Vector3::new(min.0, min.1, min.2),
+            Vector3::new(max.0, max.1, max.2),
+        )
+    }
+
+    #[test]
+    fn collide_along_stops_at_floor_and_wall() {
+        let floor = bb((0.0, 63.0, 0.0), (1.0, 64.0, 1.0));
+        let item = bb((0.375, 64.2, 0.375), (0.625, 64.45, 0.625));
+        let (dy, blocker) = item.collide_along(Axis::Y, &[floor], -0.5);
+        assert!((dy + 0.2).abs() < 1e-9);
+        assert_eq!(blocker, Some(0));
+
+        let wall = bb((1.0, 64.0, 0.0), (2.0, 65.0, 1.0));
+        let resting = bb((0.7, 64.0, 0.4), (0.95, 64.25, 0.65));
+        let (dx, _) = resting.collide_along(Axis::X, &[wall], 0.3);
+        assert!((dx - 0.05).abs() < 1e-9);
+        // Only boxes overlapping on the other axes block.
+        let (dz, blocker) = resting.collide_along(Axis::Z, &[wall], 0.3);
+        assert_eq!((dz, blocker), (0.3, None));
+    }
+
+    #[test]
+    fn collide_along_blocks_within_epsilon_overlap() {
+        let floor = bb((0.0, 63.0, 0.0), (1.0, 64.0, 1.0));
+        // Rounding left the item 5e-8 inside the floor: vanilla still treats it as resting.
+        let sunk = bb((0.375, 64.0 - 5e-8, 0.375), (0.625, 64.25, 0.625));
+        let (dy, _) = sunk.collide_along(Axis::Y, &[floor], -0.04);
+        assert!(dy.abs() < 1e-7);
+        // Deeper overlap is ignored, like vanilla.
+        let inside = bb((0.375, 63.9, 0.375), (0.625, 64.15, 0.625));
+        assert_eq!(
+            inside.collide_along(Axis::Y, &[floor], -0.04),
+            (-0.04, None)
+        );
     }
 }

@@ -34,6 +34,7 @@ impl EntityBase for TNTEntity {
 
         let mut velo = entity.velocity.load();
         velo.y -= self.get_gravity();
+        entity.velocity.store(velo);
 
         entity.move_entity(caller, velo);
         entity.tick_block_collisions(caller);
@@ -68,6 +69,7 @@ impl EntityBase for TNTEntity {
     }
 
     fn init_data_tracker(&self) {
+        // TODO: vanilla rolls from `level.random`; same odds, not seed-reproducible.
         let pos: f64 = rand::random::<f64>() * TAU;
 
         self.entity
