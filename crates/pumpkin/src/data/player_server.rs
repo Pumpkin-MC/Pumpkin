@@ -6,7 +6,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage};
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
@@ -52,11 +52,7 @@ impl ServerPlayerData {
             .on_closed(player.as_ref());
         player.on_handled_screen_closed();
 
-        let mut nbt = NbtCompound::new();
-        player.write_nbt(&mut nbt);
-
-        self.storage.save_player_data(&player.gameprofile.id, nbt)?;
-        Ok(())
+        self.extract_data_and_save_player(player)
     }
 
     /// Performs periodic maintenance tasks.
@@ -76,6 +72,9 @@ impl ServerPlayerData {
             let mut snapshots = Vec::new();
             for world in server.worlds.load().iter() {
                 for player in world.players.load().iter() {
+                    if !player.has_played_before.load(Ordering::Relaxed) {
+                        continue;
+                    }
                     let mut nbt = NbtCompound::new();
                     player.write_nbt(&mut nbt);
                     snapshots.push((player.gameprofile.id, nbt));
@@ -166,7 +165,9 @@ impl ServerPlayerData {
     ///
     /// A Result indicating success or the error that occurred.
     pub fn extract_data_and_save_player(&self, player: &Player) -> Result<(), PlayerDataError> {
-        if !self.storage.is_save_enabled() {
+        // A rejected first spawn must not create a returning-player data file
+        // containing the uninitialized position.
+        if !self.storage.is_save_enabled() || !player.has_played_before.load(Ordering::Relaxed) {
             return Ok(());
         }
 

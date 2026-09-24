@@ -28,6 +28,8 @@ pub mod map;
 pub mod portal;
 pub mod raid;
 pub mod random_sequences;
+#[cfg(test)]
+mod spawn_tests;
 pub mod stopwatches;
 pub mod time;
 pub mod villager_poi;
@@ -43,7 +45,7 @@ use crate::{
     command::client_suggestions,
     entity::{Entity, EntityBase, RemovalReason, player::Player, r#type::from_type},
     error::PumpkinError,
-    net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
+    net::{ClientPlatform, DisconnectReason, bedrock::BedrockClient, java::JavaClient},
     plugin::{
         block::block_break::BlockBreakEvent,
         player::{
@@ -2779,27 +2781,34 @@ impl World {
         })
     }
 
-    /// Fixes up the height with the block/fluid/entity safety check.
-    fn fixup_spawn_height_at(&self, position: BlockPos) -> BlockPos {
+    /// Fixes up the height with the block/fluid/entity safety check and rejects
+    /// results outside the world border.
+    fn fixup_spawn_height_at(&self, position: BlockPos) -> Option<BlockPos> {
         // The head block also has to fit in the world.
-        fixup_spawn_height_with(
+        let position = fixup_spawn_height_with(
             position,
             self.dimension.min_y,
             self.get_top_y() - 1,
             |pos| self.no_collision_no_liquid_at(pos),
-        )
+        );
+        self.worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains_block(position.0.x, position.0.z)
+            .then_some(position)
     }
 
     /// Computes a safe world-spawn position for a joining or respawning
     /// player: check the spawn column, search around it within
     /// `respawn_radius`, and fix up the height as a last resort. Returns the
-    /// bottom-center position (x+0.5, y, z+0.5).
+    /// bottom-center position (x+0.5, y, z+0.5), or `None` if no candidate is
+    /// inside the world border.
     pub async fn get_safe_player_spawn_position(
         &self,
         spawn_x: i32,
         spawn_z: i32,
         fallback_y: i32,
-    ) -> Vector3<f64> {
+    ) -> Option<Vector3<f64>> {
         let suggestion = BlockPos::new(spawn_x, fallback_y, spawn_z);
 
         // Skip the search when the default game mode is adventure.
@@ -2840,22 +2849,22 @@ impl World {
                 .check_spawn_column(spawn_x, spawn_z, &mut loaded_chunks)
                 .await
             {
-                Some(position) => position,
+                Some(position) => Some(position),
                 None => self
                     .find_safe_player_spawn_position(suggestion, radius, &mut loaded_chunks)
                     .await
-                    .unwrap_or_else(|| {
+                    .or_else(|| {
                         // Last resort: fix up the suggested spawn height.
                         self.fixup_spawn_height_at(suggestion)
                     }),
             }
-        };
+        }?;
 
-        Vector3::new(
+        Some(Vector3::new(
             f64::from(position.0.x) + 0.5,
             f64::from(position.0.y),
             f64::from(position.0.z) + 0.5,
-        )
+        ))
     }
 
     /// Returns the first safe column found in a square spiral around
@@ -2889,6 +2898,15 @@ impl World {
         z: i32,
         loaded_chunks: &mut FxHashSet<Vector2<i32>>,
     ) -> Option<BlockPos> {
+        if !self
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains_block(x, z)
+        {
+            return None;
+        }
+
         let chunk_pos = Vector2::new(x >> 4, z >> 4);
         if loaded_chunks.insert(chunk_pos) {
             self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
@@ -2909,7 +2927,13 @@ impl World {
             // Needs a solid top face below the feet.
             if state.is_side_solid(BlockDirection::Up) {
                 let feet = BlockPos::new(x, y + 1, z);
-                return self.no_collision_no_liquid_at(&feet).then_some(feet);
+                return (self
+                    .worldborder
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains_block(x, z)
+                    && self.no_collision_no_liquid_at(&feet))
+                .then_some(feet);
             }
         }
 
@@ -2944,13 +2968,23 @@ impl World {
 
             (position, yaw, pitch)
         } else {
-            let position = self
+            let Some(position) = self
                 .get_safe_player_spawn_position(
                     level_info.spawn_x,
                     level_info.spawn_z,
                     level_info.spawn_y,
                 )
-                .await;
+                .await
+            else {
+                player
+                    .client
+                    .kick(
+                        DisconnectReason::UnrecoverableError,
+                        TextComponent::text("No valid spawn position inside the world border"),
+                    )
+                    .await;
+                return;
+            };
             (position, level_info.spawn_yaw, level_info.spawn_pitch)
         };
 
@@ -3515,9 +3549,19 @@ impl World {
             (position, yaw, pitch)
         } else {
             let info = &self.level_info.load();
-            let position = self
+            let Some(position) = self
                 .get_safe_player_spawn_position(info.spawn_x, info.spawn_z, info.spawn_y)
-                .await;
+                .await
+            else {
+                player
+                    .client
+                    .kick(
+                        DisconnectReason::UnrecoverableError,
+                        TextComponent::text("No valid spawn position inside the world border"),
+                    )
+                    .await;
+                return;
+            };
             (position, info.spawn_yaw, info.spawn_pitch)
         };
 
@@ -4200,9 +4244,19 @@ impl World {
             }
 
             // Search around the world spawn for a safe position.
-            let position = default_world
+            let Some(position) = default_world
                 .get_safe_player_spawn_position(spawn_x, spawn_z, spawn_y)
-                .await;
+                .await
+            else {
+                player
+                    .client
+                    .kick(
+                        DisconnectReason::UnrecoverableError,
+                        TextComponent::text("No valid spawn position inside the world border"),
+                    )
+                    .await;
+                return;
+            };
 
             (
                 position,
