@@ -443,6 +443,7 @@ impl PumpkinServer {
     }
 
     pub async fn unload_plugins(&self) {
+        self.server.plugin_manager.stop_watcher().await;
         if let Err(err) = self.server.plugin_manager.unload_all_plugins().await {
             error!("Error unloading plugins: {err}");
         } else {
