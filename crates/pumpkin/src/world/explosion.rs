@@ -428,6 +428,13 @@ impl Explosion {
             let knockback_power =
                 (1.0 - distance) * exposure * knockback_multiplier * (1.0 - knockback_resistance);
             let knockback = direction * knockback_power;
+            // Vanilla `ServerExplosion.hurtEntities`: creative flyers get no knockback.
+            if entity_base
+                .get_player()
+                .is_some_and(|player| player.is_creative() && player.is_flying())
+            {
+                continue;
+            }
             entity.add_velocity(knockback);
         }
     }
