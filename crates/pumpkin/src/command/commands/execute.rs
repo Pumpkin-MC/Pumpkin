@@ -13,7 +13,9 @@
     clippy::struct_excessive_bools
 )]
 
-use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_builder::{
+    ArgumentBuilder, RequiredArgumentBuilder, argument, command, literal,
+};
 use crate::command::argument_types::block::BlockArgumentType;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::argument_types::coordinates::rotation::RotationArgumentType;
@@ -39,12 +41,16 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::attached::{CommandNodeId, NodeId};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::tree::Tree;
-use crate::command::node::{RedirectModifier, Redirection};
+use crate::command::node::{
+    CommandExecutor, CommandExecutorResult, RedirectModifier, RedirectModifierResult, Redirection,
+};
 use crate::entity::EntityBase;
 use crate::entity::r#type::from_type;
+use crate::world::scoreboard::Scoreboard;
 use crate::world::stopwatches::Stopwatches;
 use pumpkin_data::biome::Biome;
 use pumpkin_data::tag::{self, RegistryKey};
+use pumpkin_data::translation;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::identifier::Identifier;
@@ -61,6 +67,16 @@ const PERMISSION: &str = "minecraft:command.execute";
 
 static ERROR_INVALID_DIMENSION: CommandErrorType<1> =
     CommandErrorType::new("argument.dimension.invalid", "argument.dimension.invalid");
+
+const ERROR_OBJECTIVE_NOT_FOUND: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENTS_OBJECTIVE_NOTFOUND,
+    translation::java::ARGUMENTS_OBJECTIVE_NOTFOUND,
+);
+
+const ERROR_CONDITIONAL_FAILED: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL,
+    translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL,
+);
 
 static DIMENSION_REGISTRY: &Identifier = &Identifier::vanilla_static("dimension");
 
@@ -425,13 +441,64 @@ fn execute_unless_biome_modifier(
     Ok(vec![])
 }
 
-fn get_score(context: &CommandContext, target: &str, objective: &str) -> Option<i32> {
-    let world = context.source.world.as_ref()?;
+fn get_score_value(
+    scoreboard: &Scoreboard,
+    target: &str,
+    objective: &str,
+) -> Result<Option<i32>, CommandSyntaxError> {
+    if scoreboard.get_objective(objective).is_none() {
+        return Err(ERROR_OBJECTIVE_NOT_FOUND
+            .create_without_context(TextComponent::text(objective.to_string())));
+    }
+    Ok(scoreboard
+        .get_score(target, objective)
+        .map(|score| score.value.0))
+}
+
+fn get_score(
+    context: &CommandContext,
+    target: &str,
+    objective: &str,
+) -> Result<Option<i32>, CommandSyntaxError> {
+    let Some(world) = context.source.world.as_ref() else {
+        return Ok(None);
+    };
     let scoreboard = world
         .scoreboard
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    scoreboard.get_score(target, objective).map(|s| s.value.0)
+    get_score_value(&scoreboard, target, objective)
+}
+
+struct ScoreConditionExecutor(fn(&CommandContext) -> RedirectModifierResult);
+
+impl CommandExecutor for ScoreConditionExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        if (self.0)(context)?.is_empty() {
+            return Err(ERROR_CONDITIONAL_FAILED.create_without_context());
+        }
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_EXECUTE_CONDITIONAL_PASS,
+                translation::java::COMMANDS_EXECUTE_CONDITIONAL_PASS,
+                [],
+            ),
+            false,
+        );
+        Ok(1)
+    }
+}
+
+fn score_condition(
+    builder: RequiredArgumentBuilder,
+    modifier: fn(&CommandContext) -> RedirectModifierResult,
+) -> RequiredArgumentBuilder {
+    builder
+        .fork(
+            Redirection::Root,
+            RedirectModifier::Custom(Arc::new(modifier)),
+        )
+        .executes(ScoreConditionExecutor(modifier))
 }
 
 fn execute_if_score_matches_modifier(
@@ -441,7 +508,7 @@ fn execute_if_score_matches_modifier(
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
     let range = IntRangeArgumentType::get(context, "range")?;
 
-    if let Some(score) = get_score(context, &target, target_obj) {
+    if let Some(score) = get_score(context, &target, target_obj)? {
         if range.matches(score) {
             return Ok(vec![context.source.clone()]);
         }
@@ -456,7 +523,7 @@ fn execute_unless_score_matches_modifier(
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
     let range = IntRangeArgumentType::get(context, "range")?;
 
-    if let Some(score) = get_score(context, &target, target_obj) {
+    if let Some(score) = get_score(context, &target, target_obj)? {
         if !range.matches(score) {
             return Ok(vec![context.source.clone()]);
         }
@@ -471,13 +538,11 @@ fn execute_if_score_eq_modifier(
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
-    if let (Some(a), Some(b)) = (
-        get_score(context, &target, target_obj),
-        get_score(context, &source, source_obj),
-    ) {
+    if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a == b {
             return Ok(vec![context.source.clone()]);
         }
@@ -490,13 +555,11 @@ fn execute_if_score_lt_modifier(
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
-    if let (Some(a), Some(b)) = (
-        get_score(context, &target, target_obj),
-        get_score(context, &source, source_obj),
-    ) {
+    if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a < b {
             return Ok(vec![context.source.clone()]);
         }
@@ -509,13 +572,11 @@ fn execute_if_score_le_modifier(
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
-    if let (Some(a), Some(b)) = (
-        get_score(context, &target, target_obj),
-        get_score(context, &source, source_obj),
-    ) {
+    if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a <= b {
             return Ok(vec![context.source.clone()]);
         }
@@ -528,13 +589,11 @@ fn execute_if_score_gt_modifier(
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
-    if let (Some(a), Some(b)) = (
-        get_score(context, &target, target_obj),
-        get_score(context, &source, source_obj),
-    ) {
+    if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a > b {
             return Ok(vec![context.source.clone()]);
         }
@@ -547,13 +606,11 @@ fn execute_if_score_ge_modifier(
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
-    if let (Some(a), Some(b)) = (
-        get_score(context, &target, target_obj),
-        get_score(context, &source, source_obj),
-    ) {
+    if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a >= b {
             return Ok(vec![context.source.clone()]);
         }
@@ -566,13 +623,11 @@ fn execute_unless_score_eq_modifier(
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
-    if let (Some(a), Some(b)) = (
-        get_score(context, &target, target_obj),
-        get_score(context, &source, source_obj),
-    ) {
+    if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a != b {
             return Ok(vec![context.source.clone()]);
         }
@@ -587,13 +642,11 @@ fn execute_unless_score_lt_modifier(
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
-    if let (Some(a), Some(b)) = (
-        get_score(context, &target, target_obj),
-        get_score(context, &source, source_obj),
-    ) {
+    if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a >= b {
             return Ok(vec![context.source.clone()]);
         }
@@ -608,13 +661,11 @@ fn execute_unless_score_le_modifier(
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
-    if let (Some(a), Some(b)) = (
-        get_score(context, &target, target_obj),
-        get_score(context, &source, source_obj),
-    ) {
+    if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a > b {
             return Ok(vec![context.source.clone()]);
         }
@@ -629,13 +680,11 @@ fn execute_unless_score_gt_modifier(
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
-    if let (Some(a), Some(b)) = (
-        get_score(context, &target, target_obj),
-        get_score(context, &source, source_obj),
-    ) {
+    if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a <= b {
             return Ok(vec![context.source.clone()]);
         }
@@ -650,13 +699,11 @@ fn execute_unless_score_ge_modifier(
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
-    if let (Some(a), Some(b)) = (
-        get_score(context, &target, target_obj),
-        get_score(context, &source, source_obj),
-    ) {
+    if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a < b {
             return Ok(vec![context.source.clone()]);
         }
@@ -1260,79 +1307,50 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     literal("score").then(
                         argument("target", ScoreHolderArgumentType::Single).then(
                             argument("target_obj", ObjectiveArgumentType)
-                                .then(literal("matches").then(
-                                    argument("range", IntRangeArgumentType).redirect_with_modifier(
-                                        Redirection::Root,
-                                        RedirectModifier::Custom(Arc::new(
-                                            execute_if_score_matches_modifier,
-                                        )),
+                                .then(literal("matches").then(score_condition(
+                                    argument("range", IntRangeArgumentType),
+                                    execute_if_score_matches_modifier,
+                                )))
+                                .then(literal("=").then(
+                                    argument("source", ScoreHolderArgumentType::Single).then(
+                                        score_condition(
+                                            argument("source_obj", ObjectiveArgumentType),
+                                            execute_if_score_eq_modifier,
+                                        ),
                                     ),
                                 ))
-                                .then(
-                                    literal("=").then(
-                                        argument("source", ScoreHolderArgumentType::Single).then(
-                                            argument("source_obj", ObjectiveArgumentType)
-                                                .redirect_with_modifier(
-                                                    Redirection::Root,
-                                                    RedirectModifier::Custom(Arc::new(
-                                                        execute_if_score_eq_modifier,
-                                                    )),
-                                                ),
+                                .then(literal("<").then(
+                                    argument("source", ScoreHolderArgumentType::Single).then(
+                                        score_condition(
+                                            argument("source_obj", ObjectiveArgumentType),
+                                            execute_if_score_lt_modifier,
                                         ),
                                     ),
-                                )
-                                .then(
-                                    literal("<").then(
-                                        argument("source", ScoreHolderArgumentType::Single).then(
-                                            argument("source_obj", ObjectiveArgumentType)
-                                                .redirect_with_modifier(
-                                                    Redirection::Root,
-                                                    RedirectModifier::Custom(Arc::new(
-                                                        execute_if_score_lt_modifier,
-                                                    )),
-                                                ),
+                                ))
+                                .then(literal("<=").then(
+                                    argument("source", ScoreHolderArgumentType::Single).then(
+                                        score_condition(
+                                            argument("source_obj", ObjectiveArgumentType),
+                                            execute_if_score_le_modifier,
                                         ),
                                     ),
-                                )
-                                .then(
-                                    literal("<=").then(
-                                        argument("source", ScoreHolderArgumentType::Single).then(
-                                            argument("source_obj", ObjectiveArgumentType)
-                                                .redirect_with_modifier(
-                                                    Redirection::Root,
-                                                    RedirectModifier::Custom(Arc::new(
-                                                        execute_if_score_le_modifier,
-                                                    )),
-                                                ),
+                                ))
+                                .then(literal(">").then(
+                                    argument("source", ScoreHolderArgumentType::Single).then(
+                                        score_condition(
+                                            argument("source_obj", ObjectiveArgumentType),
+                                            execute_if_score_gt_modifier,
                                         ),
                                     ),
-                                )
-                                .then(
-                                    literal(">").then(
-                                        argument("source", ScoreHolderArgumentType::Single).then(
-                                            argument("source_obj", ObjectiveArgumentType)
-                                                .redirect_with_modifier(
-                                                    Redirection::Root,
-                                                    RedirectModifier::Custom(Arc::new(
-                                                        execute_if_score_gt_modifier,
-                                                    )),
-                                                ),
+                                ))
+                                .then(literal(">=").then(
+                                    argument("source", ScoreHolderArgumentType::Single).then(
+                                        score_condition(
+                                            argument("source_obj", ObjectiveArgumentType),
+                                            execute_if_score_ge_modifier,
                                         ),
                                     ),
-                                )
-                                .then(
-                                    literal(">=").then(
-                                        argument("source", ScoreHolderArgumentType::Single).then(
-                                            argument("source_obj", ObjectiveArgumentType)
-                                                .redirect_with_modifier(
-                                                    Redirection::Root,
-                                                    RedirectModifier::Custom(Arc::new(
-                                                        execute_if_score_ge_modifier,
-                                                    )),
-                                                ),
-                                        ),
-                                    ),
-                                ),
+                                )),
                         ),
                     ),
                 )
@@ -1449,79 +1467,50 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     literal("score").then(
                         argument("target", ScoreHolderArgumentType::Single).then(
                             argument("target_obj", ObjectiveArgumentType)
-                                .then(literal("matches").then(
-                                    argument("range", IntRangeArgumentType).redirect_with_modifier(
-                                        Redirection::Root,
-                                        RedirectModifier::Custom(Arc::new(
-                                            execute_unless_score_matches_modifier,
-                                        )),
+                                .then(literal("matches").then(score_condition(
+                                    argument("range", IntRangeArgumentType),
+                                    execute_unless_score_matches_modifier,
+                                )))
+                                .then(literal("=").then(
+                                    argument("source", ScoreHolderArgumentType::Single).then(
+                                        score_condition(
+                                            argument("source_obj", ObjectiveArgumentType),
+                                            execute_unless_score_eq_modifier,
+                                        ),
                                     ),
                                 ))
-                                .then(
-                                    literal("=").then(
-                                        argument("source", ScoreHolderArgumentType::Single).then(
-                                            argument("source_obj", ObjectiveArgumentType)
-                                                .redirect_with_modifier(
-                                                    Redirection::Root,
-                                                    RedirectModifier::Custom(Arc::new(
-                                                        execute_unless_score_eq_modifier,
-                                                    )),
-                                                ),
+                                .then(literal("<").then(
+                                    argument("source", ScoreHolderArgumentType::Single).then(
+                                        score_condition(
+                                            argument("source_obj", ObjectiveArgumentType),
+                                            execute_unless_score_lt_modifier,
                                         ),
                                     ),
-                                )
-                                .then(
-                                    literal("<").then(
-                                        argument("source", ScoreHolderArgumentType::Single).then(
-                                            argument("source_obj", ObjectiveArgumentType)
-                                                .redirect_with_modifier(
-                                                    Redirection::Root,
-                                                    RedirectModifier::Custom(Arc::new(
-                                                        execute_unless_score_lt_modifier,
-                                                    )),
-                                                ),
+                                ))
+                                .then(literal("<=").then(
+                                    argument("source", ScoreHolderArgumentType::Single).then(
+                                        score_condition(
+                                            argument("source_obj", ObjectiveArgumentType),
+                                            execute_unless_score_le_modifier,
                                         ),
                                     ),
-                                )
-                                .then(
-                                    literal("<=").then(
-                                        argument("source", ScoreHolderArgumentType::Single).then(
-                                            argument("source_obj", ObjectiveArgumentType)
-                                                .redirect_with_modifier(
-                                                    Redirection::Root,
-                                                    RedirectModifier::Custom(Arc::new(
-                                                        execute_unless_score_le_modifier,
-                                                    )),
-                                                ),
+                                ))
+                                .then(literal(">").then(
+                                    argument("source", ScoreHolderArgumentType::Single).then(
+                                        score_condition(
+                                            argument("source_obj", ObjectiveArgumentType),
+                                            execute_unless_score_gt_modifier,
                                         ),
                                     ),
-                                )
-                                .then(
-                                    literal(">").then(
-                                        argument("source", ScoreHolderArgumentType::Single).then(
-                                            argument("source_obj", ObjectiveArgumentType)
-                                                .redirect_with_modifier(
-                                                    Redirection::Root,
-                                                    RedirectModifier::Custom(Arc::new(
-                                                        execute_unless_score_gt_modifier,
-                                                    )),
-                                                ),
+                                ))
+                                .then(literal(">=").then(
+                                    argument("source", ScoreHolderArgumentType::Single).then(
+                                        score_condition(
+                                            argument("source_obj", ObjectiveArgumentType),
+                                            execute_unless_score_ge_modifier,
                                         ),
                                     ),
-                                )
-                                .then(
-                                    literal(">=").then(
-                                        argument("source", ScoreHolderArgumentType::Single).then(
-                                            argument("source_obj", ObjectiveArgumentType)
-                                                .redirect_with_modifier(
-                                                    Redirection::Root,
-                                                    RedirectModifier::Custom(Arc::new(
-                                                        execute_unless_score_ge_modifier,
-                                                    )),
-                                                ),
-                                        ),
-                                    ),
-                                ),
+                                )),
                         ),
                     ),
                 )
@@ -1592,7 +1581,144 @@ fn set_redirects_to_execute(tree: &mut Tree, parent: NodeId, execute_id: Command
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::CommandSource;
+    use crate::command::argument_types::core::integer::IntegerArgumentType;
+    use crate::command::{CommandSender, CommandSource};
+    use crate::world::scoreboard::{NoTarget, ScoreboardObjective};
+    use pumpkin_protocol::java::client::play::RenderType;
+
+    #[test]
+    fn score_lookup_distinguishes_missing_objectives_and_scores() {
+        let mut scoreboard = Scoreboard::new();
+        let error = get_score_value(&scoreboard, "#target", "missing").unwrap_err();
+        let message = serde_json::to_value(error.message).unwrap();
+        assert_eq!(
+            message["translate"],
+            translation::java::ARGUMENTS_OBJECTIVE_NOTFOUND
+        );
+        assert_eq!(message["with"][0]["text"], "missing");
+
+        for criterion in ["dummy", "health"] {
+            scoreboard.add_objective(
+                &NoTarget,
+                ScoreboardObjective::new(
+                    criterion,
+                    TextComponent::text(criterion),
+                    RenderType::Integer,
+                    None,
+                    criterion,
+                ),
+            );
+            assert_eq!(
+                get_score_value(&scoreboard, "#target", criterion).unwrap(),
+                None
+            );
+            assert!(scoreboard.get_score("#target", criterion).is_none());
+            for value in [0, -7, i32::MAX] {
+                scoreboard.set_score_value(&NoTarget, "#target", criterion, value);
+                assert_eq!(
+                    get_score_value(&scoreboard, "#target", criterion).unwrap(),
+                    Some(value)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn terminal_score_conditions_report_boolean_results_and_errors() {
+        let output = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut source = CommandSource::dummy();
+        source.output = CommandSender::Rcon(output.clone());
+        let mut dispatcher = CommandDispatcher::new();
+        register(&mut dispatcher, &PermissionRegistry::default());
+        let parsed = dispatcher.parse_input("execute", &source);
+        let context = parsed.context.build("execute");
+
+        let success = ScoreConditionExecutor(|context| Ok(vec![context.source.clone()]));
+        assert_eq!(success.execute(&context).unwrap(), 1);
+        assert_eq!(*output.lock().unwrap(), ["Test passed"]);
+        output.lock().unwrap().clear();
+
+        let failure = ScoreConditionExecutor(|_| Ok(vec![]));
+        let error = failure.execute(&context).unwrap_err();
+        assert_eq!(
+            serde_json::to_value(error.message).unwrap()["translate"],
+            translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL
+        );
+
+        let invalid = ScoreConditionExecutor(|_| {
+            Err(ERROR_OBJECTIVE_NOT_FOUND.create_without_context(TextComponent::text("missing")))
+        });
+        let error = invalid.execute(&context).unwrap_err();
+        assert_eq!(
+            serde_json::to_value(error.message).unwrap()["translate"],
+            translation::java::ARGUMENTS_OBJECTIVE_NOTFOUND
+        );
+        assert!(output.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn score_condition_builder_preserves_fork_results() {
+        struct ResultExecutor;
+        impl CommandExecutor for ResultExecutor {
+            fn execute(&self, _context: &CommandContext) -> CommandExecutorResult {
+                Ok(17)
+            }
+        }
+
+        let mut dispatcher = CommandDispatcher::new();
+        dispatcher.register(
+            command("condition", "Test a score condition").then(score_condition(
+                argument("score", IntegerArgumentType::new(0, 100)),
+                |context| {
+                    Ok(if IntegerArgumentType::get(context, "score")? > 0 {
+                        vec![context.source.clone()]
+                    } else {
+                        vec![]
+                    })
+                },
+            )),
+        );
+        dispatcher.register(
+            command("invalid", "Test an invalid objective").then(score_condition(
+                argument("score", IntegerArgumentType::new(0, 100)),
+                |_| {
+                    Err(ERROR_OBJECTIVE_NOT_FOUND
+                        .create_without_context(TextComponent::text("missing")))
+                },
+            )),
+        );
+        dispatcher
+            .register(command("result", "Return a non-boolean result").executes(ResultExecutor));
+        let output = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut source = CommandSource::dummy();
+        source.output = CommandSender::Rcon(output.clone());
+
+        assert_eq!(dispatcher.execute_input("condition 7", &source).unwrap(), 1);
+        assert_eq!(*output.lock().unwrap(), ["Test passed"]);
+        assert!(dispatcher.execute_input("condition 0", &source).is_err());
+        assert!(dispatcher.execute_input("invalid 7", &source).is_err());
+        output.lock().unwrap().clear();
+
+        assert_eq!(
+            dispatcher
+                .execute_input("condition 7 result", &source)
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            dispatcher
+                .execute_input("condition 0 result", &source)
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            dispatcher
+                .execute_input("invalid 7 result", &source)
+                .unwrap(),
+            0
+        );
+        assert!(output.lock().unwrap().is_empty());
+    }
 
     #[test]
     fn score_conditions_accept_single_score_holders() {
@@ -1613,6 +1739,7 @@ mod tests {
                     let result = dispatcher.parse_input(&input, &source);
                     assert!(result.errors.is_empty(), "{input}: {:?}", result.errors);
                     assert_eq!(result.reader.remaining_length(), 0, "{input}");
+                    assert!(result.context.build(&input).command.is_some(), "{input}");
                 }
             }
         }
