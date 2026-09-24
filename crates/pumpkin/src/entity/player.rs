@@ -1362,40 +1362,14 @@ impl Player {
             }
             if let Some(enchantments) = stack.get_data_component::<EnchantmentsImpl>() {
                 for (enchantment, level) in enchantments.enchantment.iter() {
-                    if **enchantment == Enchantment::SHARPNESS {
-                        extra_ench_damage += 0.5 * f64::from(*level) + 0.5;
-                    } else if **enchantment == Enchantment::SMITE {
-                        let target_type = victim_entity.entity_type.id;
-                        let is_undead = target_type == EntityType::ZOMBIE.id
-                            || target_type == EntityType::DROWNED.id
-                            || target_type == EntityType::HUSK.id
-                            || target_type == EntityType::ZOMBIE_VILLAGER.id
-                            || target_type == EntityType::ZOMBIFIED_PIGLIN.id
-                            || target_type == EntityType::SKELETON.id
-                            || target_type == EntityType::BOGGED.id
-                            || target_type == EntityType::PARCHED.id
-                            || target_type == EntityType::WITHER_SKELETON.id
-                            || target_type == EntityType::STRAY.id
-                            || target_type == EntityType::PHANTOM.id
-                            || target_type == EntityType::WITHER.id
-                            || target_type == EntityType::ZOMBIE_HORSE.id
-                            || target_type == EntityType::SKELETON_HORSE.id;
-                        if is_undead {
-                            extra_ench_damage += 2.5 * f64::from(*level);
-                        }
-                    } else if **enchantment == Enchantment::BANE_OF_ARTHROPODS {
-                        let target_type = victim_entity.entity_type.id;
-                        let is_arthropod = target_type == EntityType::SPIDER.id
-                            || target_type == EntityType::CAVE_SPIDER.id
-                            || target_type == EntityType::SILVERFISH.id
-                            || target_type == EntityType::ENDERMITE.id
-                            || target_type == EntityType::BEE.id;
-                        if is_arthropod {
-                            extra_ench_damage += 2.5 * f64::from(*level);
-                        }
-                    } else if **enchantment == Enchantment::KNOCKBACK {
-                        knockback_level = *level as u32;
-                    }
+                    enchantment.modify_damage_against(
+                        *level,
+                        &mut extra_ench_damage,
+                        Some(victim_entity.entity_type),
+                    );
+                    let mut kb = 0.0f32;
+                    enchantment.modify_knockback(*level, &mut kb);
+                    knockback_level += kb as u32;
                 }
             }
         }
@@ -1444,7 +1418,13 @@ impl Player {
         let is_mace_smash = matches!(attack_type, AttackType::MaceSmash);
         if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
-            damage += 1.5 * f64::from(fall_distance);
+            let mut smash_bonus_per_block = 0.0f64;
+            if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
+                for (enchantment, level) in enchantments.enchantment.iter() {
+                    enchantment.modify_fall_based_damage(*level, &mut smash_bonus_per_block);
+                }
+            }
+            damage += (1.5 + smash_bonus_per_block) * f64::from(fall_distance);
         }
 
         if !victim.damage_with_context(
@@ -1473,8 +1453,16 @@ impl Player {
 
         if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
             for (enchantment, level) in enchantments.enchantment.iter() {
-                if **enchantment == Enchantment::FIRE_ASPECT {
-                    victim_entity.set_on_fire_for_ticks(*level as u32 * 80);
+                for post_effect in enchantment.get_post_attack_effects() {
+                    if post_effect.affected
+                        == Some(pumpkin_data::enchantment::EnchantmentTarget::Victim)
+                        && let pumpkin_data::enchantment::EnchantmentEntityEffect::Ignite {
+                            duration,
+                        } = &post_effect.effect
+                    {
+                        let duration_seconds = duration.calculate(*level);
+                        victim_entity.set_on_fire_for_ticks((duration_seconds * 20.0) as u32);
+                    }
                 }
             }
         }
@@ -1482,6 +1470,18 @@ impl Player {
         if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
             self.living_entity.fall_distance.store(0.0);
+            if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
+                for (enchantment, level) in enchantments.enchantment.iter() {
+                    if **enchantment == Enchantment::WIND_BURST {
+                        let boost_y = 0.5 + 0.25 * (*level as f64);
+                        let vel = self.living_entity.entity.velocity.load();
+                        self.living_entity
+                            .entity
+                            .velocity
+                            .store(Vector3::new(vel.x, boost_y, vel.z));
+                    }
+                }
+            }
             world.play_sound(
                 if fall_distance > 5.0 {
                     Sound::ItemMaceSmashGroundHeavy
