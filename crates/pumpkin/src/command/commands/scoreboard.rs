@@ -533,11 +533,7 @@ impl CommandExecutor for PlayersOperationExecutor {
         let display_name = writable_objective_or_error(&scoreboard, &objective_name)?
             .display_name
             .clone();
-        if operation == ScoreboardOperation::Swap {
-            writable_objective_or_error(&scoreboard, &source_objective)?;
-        } else {
-            objective_or_error(&scoreboard, &source_objective)?;
-        }
+        objective_or_error(&scoreboard, &source_objective)?;
 
         let result = Self::apply(
             &mut scoreboard,
