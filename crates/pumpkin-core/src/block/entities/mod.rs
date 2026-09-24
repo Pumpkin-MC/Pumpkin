@@ -1,10 +1,12 @@
 use std::{any::Any, sync::Arc};
 
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
+use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::world::World;
 use pumpkin_data::BlockStateId;
 use pumpkin_inventory::Inventory;
@@ -137,7 +139,15 @@ pub trait BlockEntity: Any + Send + Sync {
     }
 
     fn set_block_state(&mut self, _block_state: BlockStateId) {}
+    /// Runs before the block entity is removed, like vanilla `preRemoveSideEffects`. Drops
+    /// belong here: by the time `BlockBehaviour::broken` runs, the entity is already gone.
     fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
+        if let Some(experience) = self.clone().to_experience_container() {
+            let xp = experience.extract_experience();
+            if xp > 0 {
+                ExperienceOrbEntity::spawn(world, position.to_f64(), xp as u32);
+            }
+        }
         if let Some(inventory) = self.get_inventory() {
             world.scatter_inventory(position, &inventory);
         }
@@ -323,6 +333,18 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         )),
         _ => None,
     }
+}
+
+/// Name of the block entity Pumpkin keeps for `block`, without namespace. Vanilla 26.3 has no
+/// bed block entity, but Bedrock clients and older Java clients still get their beds from it.
+#[must_use]
+pub fn block_entity_name(block: &Block) -> Option<&'static str> {
+    if block.has_tag(&tag::Block::MINECRAFT_BEDS) || block == &Block::STRAW_BED {
+        return Some("bed");
+    }
+    BLOCK_ENTITY_TYPES
+        .get(block.default_state.block_entity_type as usize)
+        .copied()
 }
 
 #[must_use]
