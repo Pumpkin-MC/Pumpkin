@@ -1063,12 +1063,9 @@ const fn from_wasm_bedrock_disconnect_reason(
 impl pumpkin::plugin::player::Host for PluginHostState {
     async fn get_world_players(
         &mut self,
-        world_ref: Resource<pumpkin::plugin::world::World>,
+        world: Resource<pumpkin::plugin::world::World>,
     ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::player::Player>>> {
-        let world = self
-            .get(&world_ref)
-            .map_err(|_| wasmtime::Error::msg("invalid world resource handle"))?
-            .clone();
+        let world = self.take(world)?;
 
         let mut players = Vec::new();
         for player in world.players.load().iter() {
