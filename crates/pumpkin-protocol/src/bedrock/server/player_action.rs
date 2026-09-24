@@ -18,7 +18,7 @@ pub struct SPlayerAction {
     pub face: VarInt,
 }
 
-#[derive(Debug, PacketRead)]
+#[derive(Clone, Copy, Debug, PacketRead)]
 #[repr(i32)]
 #[serial(varint)]
 pub enum PlayerActionType {

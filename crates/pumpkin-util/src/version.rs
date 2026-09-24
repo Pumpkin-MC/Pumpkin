@@ -74,7 +74,7 @@ pub enum JavaMinecraftVersion {
     V_1_21_7,
     V_1_21_9,
     V_1_21_11,
-    /// 26.1: Tiny Takeover
+    //  26.1: Tiny Takeover
     V_26_1,
     // 26.2: Chaos Cubed
     V_26_2,

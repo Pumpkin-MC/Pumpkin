@@ -59,6 +59,7 @@ impl BedrockClient {
         true
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
