@@ -8,6 +8,7 @@ members = [
     "crates/pumpkin-command",
     "crates/pumpkin-config",
     "crates/pumpkin-data",
+    "crates/pumpkin-scheduler",
     "crates/pumpkin-gametest",
     "crates/pumpkin-inventory",
     "crates/pumpkin-macros",
