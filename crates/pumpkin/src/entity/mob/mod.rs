@@ -1,4 +1,6 @@
 use super::{Entity, EntityBase, ai::pathfinder::Navigator, living::LivingEntity};
+use crate::entity::ai::brain::Brain;
+use crate::entity::ai::brain::memory::PackedMemories;
 use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
@@ -19,7 +21,6 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
@@ -68,6 +69,7 @@ pub mod spider;
 pub mod vex;
 pub mod vindicator;
 pub mod warden;
+pub mod warden_spawn_tracker;
 pub mod witch;
 pub mod zoglin;
 pub mod zombie;
@@ -82,6 +84,7 @@ pub struct MobEntity {
     pub look_control: std::sync::Mutex<LookControl>,
     pub sensing: std::sync::Mutex<Sensing>,
     pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
+    pub brain: std::sync::Mutex<Brain>,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
     pub love_ticks: AtomicI32,
@@ -89,9 +92,6 @@ pub struct MobEntity {
     pub breeder: AtomicCell<Option<Uuid>>,
     pub persistence_required: AtomicBool,
     mob_flags: AtomicU8,
-    last_sent_yaw: AtomicU8,
-    last_sent_pitch: AtomicU8,
-    last_sent_head_yaw: AtomicU8,
 }
 impl MobEntity {
     const AI_DISABLED_FLAG: u8 = 1;
@@ -170,6 +170,7 @@ impl MobEntity {
             look_control: std::sync::Mutex::new(LookControl::default()),
             sensing: std::sync::Mutex::new(Sensing::default()),
             move_control: std::sync::Mutex::new(Box::new(MoveControl::default())),
+            brain: std::sync::Mutex::new(Brain::default()),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
             love_ticks: AtomicI32::new(0),
@@ -177,9 +178,6 @@ impl MobEntity {
             breeder: AtomicCell::new(None),
             persistence_required: AtomicBool::new(false),
             mob_flags: AtomicU8::new(0),
-            last_sent_yaw: AtomicU8::new(0),
-            last_sent_pitch: AtomicU8::new(0),
-            last_sent_head_yaw: AtomicU8::new(0),
         }
     }
 
@@ -338,8 +336,25 @@ impl MobEntity {
         }
     }
 
+    pub fn tick_brain(&self, mob: &dyn Mob) {
+        let world = self.living_entity.entity.world.load_full();
+        let time = world.get_world_age();
+        self.brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick(&world, mob, time);
+    }
+
     pub fn write_mob_nbt(&self, nbt: &mut NbtCompound) {
         self.write_drop_chances(nbt);
+        nbt.put_compound(
+            "Brain",
+            self.brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .pack()
+                .into_nbt(),
+        );
         if self.is_no_ai() {
             nbt.put_bool("NoAI", true);
         }
@@ -855,6 +870,12 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn set_saddled(&self, _saddled: bool) {}
 
+    fn check_spawn_obstruction(&self, world: &World) -> bool {
+        let bounding_box = self.get_entity().bounding_box.load();
+        !world.contains_any_liquid(bounding_box)
+            && world.get_entities_at_box(&bounding_box).is_empty()
+    }
+
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick(&self, _caller: &dyn EntityBase) {}
 
@@ -1040,6 +1061,14 @@ pub trait Mob: EntityBase + Send + Sync {
         }
     }
 
+    /// Runs after navigation and before the movement controls, where vanilla ticks a mob's brain.
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {}
+
+    /// Builds this mob's brain from its saved memories; goal mobs keep the brain-dead default.
+    fn make_brain(&self, _packed: &PackedMemories) -> Brain {
+        Brain::default()
+    }
+
     fn mob_write_nbt(&self, _nbt: &mut NbtCompound) {}
 
     fn mob_read_nbt(&self, _nbt: &NbtCompound) {}
@@ -1217,6 +1246,7 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn mob_set_variant_name(&self, _name: &str) {}
+    fn mob_set_sound_variant_name(&self, _name: &str) {}
 
     fn mob_on_lightning_strike(
         &self,
@@ -1270,6 +1300,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn set_variant_name(&self, name: &str) {
         self.mob_set_variant_name(name);
+    }
+
+    fn set_sound_variant_name(&self, name: &str) {
+        self.mob_set_sound_variant_name(name);
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1366,6 +1400,8 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = navigator;
         };
 
+        self.custom_server_ai_step(caller);
+
         // Controllers are synchronous, so we can just use normal blocks
         {
             let mut look_control = mob_entity
@@ -1385,39 +1421,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
         mob_entity.living_entity.tick(caller, server);
         self.post_tick();
-
-        // --- Packet logic remains the same ---
-        let entity = &mob_entity.living_entity.entity;
-        let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
-        let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
-        let head_yaw = (entity.head_yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
-
-        let last_yaw = mob_entity.last_sent_yaw.load(Relaxed);
-        let last_pitch = mob_entity.last_sent_pitch.load(Relaxed);
-        let last_head_yaw = mob_entity.last_sent_head_yaw.load(Relaxed);
-
-        let chunk_pos = entity.chunk_pos.load();
-        if yaw.abs_diff(last_yaw) >= 1 || pitch.abs_diff(last_pitch) >= 1 {
-            let world = entity.world.load();
-            world.broadcast_to_chunk(
-                chunk_pos,
-                &CUpdateEntityRot::new(
-                    entity.entity_id.into(),
-                    yaw,
-                    pitch,
-                    entity.on_ground.load(Relaxed),
-                ),
-            );
-            mob_entity.last_sent_yaw.store(yaw, Relaxed);
-            mob_entity.last_sent_pitch.store(pitch, Relaxed);
-        }
-
-        if head_yaw.abs_diff(last_head_yaw) >= 1 {
-            let world = entity.world.load();
-
-            world.broadcast_to_chunk(chunk_pos, &CHeadRot::new(entity.entity_id.into(), head_yaw));
-            mob_entity.last_sent_head_yaw.store(head_yaw, Relaxed);
-        }
     }
 
     fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
@@ -1524,6 +1527,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         self.get_mob_entity().read_mob_nbt(nbt);
+        if let Some(brain) = nbt.get_compound("Brain") {
+            *self
+                .get_mob_entity()
+                .brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                self.make_brain(&PackedMemories::from_nbt(brain));
+        }
         if let Some(ageable) = self.as_ageable() {
             ageable.read_ageable_nbt(nbt);
         }

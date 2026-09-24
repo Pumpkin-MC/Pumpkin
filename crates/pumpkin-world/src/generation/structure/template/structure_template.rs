@@ -209,6 +209,7 @@ pub struct StructureTemplate {
     pub entity_info_list: Vec<StructureEntityInfo>,
     pub size: Vector3<i32>,
     pub author: String,
+    pub name: Option<String>,
 
     // Backward-compatible fields
     // TODO: make these fields private with accessors. They are public now, so a
@@ -592,6 +593,13 @@ impl StructureTemplate {
         &self
             .jigsaw_blocks_cache
             .get_or_init(|| {
+                if let Some(name) = &self.name
+                    && let Some(meta) =
+                        pumpkin_data::structure_metadata::StaticStructureMetadataList::get(name)
+                {
+                    return JigsawBlockCache(meta.jigsaws.iter().map(JigsawBlock::from).collect());
+                }
+
                 JigsawBlockCache(
                     self.blocks
                         .iter()
@@ -1353,7 +1361,7 @@ mod tests {
     #[test]
     fn load_26_3_template() {
         let bytes = include_bytes!(
-            "../../../../../../assets/datapacks/26_3/data/minecraft/structure/igloo/top.nbt"
+            "../../../../../../assets/datapack/data/minecraft/structure/igloo/top.nbt"
         );
         let template = StructureTemplate::from_nbt_bytes(bytes).expect("failed to load template");
 

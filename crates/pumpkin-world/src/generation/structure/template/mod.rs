@@ -42,10 +42,12 @@ use crate::ProtoChunk;
 pub use block_state_resolver::BlockStateResolver;
 pub use cache::{
     TemplateCache, all_embedded_datapack_names, all_pool_names, all_structure_names,
-    all_template_names, get_pool_elements, get_processor_list_json, get_template,
-    get_template_pool_json, global_cache, template_bytes,
+    all_template_names, get_template, global_cache, template_bytes,
 };
-pub use processor::StructureProcessor;
+pub use processor::{
+    StructureProcessor, clear_dynamic_processors, load_processor_list,
+    register_dynamic_processor_list,
+};
 pub use pumpkin_data::{BlockState, Mirror as BlockMirror, Rotation as BlockRotation};
 pub use structure_template::{
     JigsawBlockInfo, Palette, PaletteEntry, SimplePalette, StructureBlockInfo, StructureEntityInfo,

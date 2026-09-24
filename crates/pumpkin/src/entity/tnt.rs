@@ -48,11 +48,6 @@ impl EntityBase for TNTEntity {
             entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
         }
 
-        if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-            entity.send_pos_rot();
-            entity.send_velocity();
-        }
-
         // FIX: Prevent fuse underflow (vanilla parity)
         let fuse = self.fuse.load(Relaxed);
 
@@ -99,6 +94,12 @@ impl EntityBase for TNTEntity {
     fn get_gravity(&self) -> f64 {
         0.04
     }
+
+    // TODO: Bedrock lacks fuse metadata, ignited flag, prime sound and particles: no blink.
+    fn bedrock_y_offset(&self) -> f64 {
+        0.49
+    }
+
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

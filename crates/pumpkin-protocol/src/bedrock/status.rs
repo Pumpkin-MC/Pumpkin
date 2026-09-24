@@ -120,7 +120,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn formats_vanilla_26_45_advertisement() {
+    fn formats_vanilla_advertisement() {
         let info = ServerInfo {
             motd: "Pumpkin",
             protocol: 2169,

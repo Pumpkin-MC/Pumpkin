@@ -203,8 +203,12 @@ impl CachedStatus {
 
         StatusResponse {
             version: Some(Version {
-                name: format!("{LOWEST_SUPPORTED_MC_VERSION}-{CURRENT_MC_VERSION}"),
-                protocol: LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32,
+                name: if LOWEST_SUPPORTED_MC_VERSION == CURRENT_MC_VERSION {
+                    CURRENT_MC_VERSION.to_string()
+                } else {
+                    format!("{LOWEST_SUPPORTED_MC_VERSION}-{CURRENT_MC_VERSION}")
+                },
+                protocol: CURRENT_MC_VERSION.protocol_version() as u32,
             }),
             players: Some(Players {
                 max: max_players,

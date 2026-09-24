@@ -27,6 +27,7 @@ use std::{
 
 mod advancement;
 mod attributes;
+mod banner_pattern;
 mod bedrock_biome;
 mod bedrock_creative;
 mod biome;
@@ -34,15 +35,19 @@ mod bitsets;
 mod block;
 mod block_transformer;
 mod carver;
+mod cat_variant;
+mod chat_type;
 mod chunk_status;
 mod chunk_view_lut;
-mod composter_increase_chance;
 mod configured_feature;
+mod context_provider;
 mod damage_type;
 mod data_component;
+mod decorated_pot_pattern;
 mod dimension;
 mod dye_color;
 mod effect;
+mod enchantment_provider;
 mod enchantments;
 mod entity_pose;
 mod entity_status;
@@ -50,9 +55,10 @@ mod entity_type;
 mod environment_attribute;
 mod flower_pot_transformations;
 mod fluid;
-mod fuels;
+mod frog_variant;
 mod game_event;
 mod game_rules;
+mod instrument;
 mod item;
 mod jukebox_song;
 pub mod loot_table;
@@ -61,18 +67,19 @@ mod map_decoration;
 mod material_rule;
 mod message_type;
 mod meta_data_type;
+mod mob_variant;
 mod noise_parameter;
 mod noise_router;
 mod noise_settings;
 mod packet;
+mod painting_variant;
 mod particle;
 mod placed_feature;
 mod potion;
 mod potion_brewing;
-mod recipe_remainder;
+mod processor_list;
 mod recipes;
 mod registry;
-mod remap;
 mod scoreboard_slot;
 mod screen;
 mod sdk;
@@ -80,14 +87,21 @@ mod sound;
 mod sound_category;
 mod spawn_egg;
 mod statistic;
+mod structure_metadata;
 mod structures;
 mod tag;
+mod template_bytes;
+mod template_pool;
+mod test_instance;
 mod tracked_data;
 mod translations;
 mod trial_spawner;
+mod trim_material;
+mod trim_pattern;
 mod version;
 mod villager;
 mod wit;
+mod wolf_variant;
 mod world_event;
 
 /// Output directory where all generated Rust source files are written.
@@ -135,6 +149,13 @@ pub fn main() {
         (block::build, "block.rs"),
         (item::build, "item.rs"),
         (structures::build, "structures.rs"),
+        (template_pool::build, "template_pool.rs"),
+        (processor_list::build, "processor_list.rs"),
+        (structure_metadata::build, "structure_metadata.rs"),
+        (template_bytes::build, "template_bytes.rs"),
+        (test_instance::build, "test_instance.rs"),
+        (painting_variant::build, "painting_variant.rs"),
+        (context_provider::build, "context_provider.rs"),
         (material_rule::build, "material_rule.rs"),
         (noise_settings::build, "noise_settings.rs"),
         (fluid::build, "fluid.rs"),
@@ -146,20 +167,14 @@ pub fn main() {
             flower_pot_transformations::build,
             "flower_pot_transformations.rs",
         ),
-        (
-            composter_increase_chance::build,
-            "composter_increase_chance.rs",
-        ),
         (recipes::build, "recipes.rs"),
         (enchantments::build, "enchantment.rs"),
-        (fuels::build, "fuels.rs"),
         (data_component::build, "data_component.rs"),
         (attributes::build, "attributes.rs"),
         (environment_attribute::build, "environment_attribute.rs"),
         (effect::build, "effect.rs"),
         (potion::build, "potion.rs"),
         (potion_brewing::build, "potion_brewing.rs"),
-        (recipe_remainder::build, "recipe_remainder.rs"),
         (placed_feature::build_enum, "placed_feature.rs"),
         (placed_feature::build, "placed_features_generated.rs"),
         (configured_feature::build_enum, "configured_feature.rs"),
@@ -174,12 +189,37 @@ pub fn main() {
         (dye_color::build, "dye_color.rs"),
         (block_transformer::build, "block_transformer.rs"),
         (trial_spawner::build, "trial_spawner.rs"),
+        (banner_pattern::build, "banner_pattern.rs"),
+        (cat_variant::build, "cat_variant.rs"),
+        (chat_type::build, "chat_type.rs"),
+        (decorated_pot_pattern::build, "decorated_pot_pattern.rs"),
+        (frog_variant::build, "frog_variant.rs"),
+        (instrument::build, "instrument.rs"),
+        (trim_material::build, "trim_material.rs"),
+        (trim_pattern::build, "trim_pattern.rs"),
+        (wolf_variant::build, "wolf_variant.rs"),
+        (enchantment_provider::build, "enchantment_provider.rs"),
+        (mob_variant::build_cow, "cow_variant.rs"),
+        (mob_variant::build_cow_sound, "cow_sound_variant.rs"),
+        (mob_variant::build_pig, "pig_variant.rs"),
+        (mob_variant::build_pig_sound, "pig_sound_variant.rs"),
+        (mob_variant::build_chicken, "chicken_variant.rs"),
+        (mob_variant::build_chicken_sound, "chicken_sound_variant.rs"),
+        (mob_variant::build_cat_sound, "cat_sound_variant.rs"),
+        (mob_variant::build_wolf_sound, "wolf_sound_variant.rs"),
+        (
+            mob_variant::build_zombie_nautilus,
+            "zombie_nautilus_variant.rs",
+        ),
     ];
-    build_functions.extend(remap::build());
 
     // If any arguments are given, treat them as file-stem filters.
     // e.g. `cargo run -- chest_loot` only regenerates chest_loot.rs.
     let filters: Vec<String> = std::env::args().skip(1).collect();
+    if filters.iter().any(|f| f == "wit") {
+        wit::main();
+        return;
+    }
     let build_functions: Vec<_> = if filters.is_empty() {
         wit::main();
         sdk::main();
