@@ -23,8 +23,8 @@ use std::{
 /// Vanilla `Entity.getAirDrag`, applied every tick.
 const AIR_DRAG: f32 = 0.98;
 
-// TODO: `owner` (igniting entity) for kill credit and the explosion's indirect source.
-// TODO: `usedPortal` + `USED_PORTAL_DAMAGE_CALCULATOR` once non-player entities use portals.
+// TODO: `owner` (igniter, projectile owner or explosion source): NBT, kill credit, damage source.
+// TODO: `block_state` NBT tag and `usedPortal` damage calculator.
 pub struct TNTEntity {
     entity: Entity,
     power: AtomicCell<f32>,
@@ -70,7 +70,6 @@ impl TNTEntity {
 impl EntityBase for TNTEntity {
     /// Vanilla `PrimedTnt.addAdditionalSaveData`. Without it a chunk reload resets a
     /// nearly-detonated fuse and the TNT explodes late.
-    // TODO: `block_state` and `owner` tags.
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_short("fuse", self.fuse.load(Relaxed) as i16);
         let power = self.power.load();
@@ -126,7 +125,6 @@ impl EntityBase for TNTEntity {
             let world = entity.world.load_full();
             if world.level_info.load().game_rules.tnt_explodes {
                 // Vanilla `PrimedTnt.explode`: `getY(0.0625)`.
-                // TODO: pass this entity as the explosion source for the damage source.
                 let pos = entity.pos.load();
                 let y = f64::from(entity.entity_type.dimension[1]).mul_add(0.0625, pos.y);
                 world.explode(
@@ -163,7 +161,7 @@ impl EntityBase for TNTEntity {
         0.04
     }
 
-    // TODO: Bedrock lacks fuse metadata, ignited flag, prime sound and particles: no blink.
+    // TODO: currently Bedrock has no fuse metadata, so the TNT doesn't blink.
     fn bedrock_y_offset(&self) -> f64 {
         0.49
     }

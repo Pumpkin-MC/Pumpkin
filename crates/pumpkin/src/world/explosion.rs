@@ -497,8 +497,7 @@ impl Explosion {
         match self.block_interaction {
             BlockInteraction::Keep => 0,
             BlockInteraction::TriggerBlock => {
-                // TODO: vanilla only calls `onExplosionHit` overrides here, never `wasExploded`,
-                // so wind charges currently prime TNT while leaving the block in place.
+                // TODO: vanilla never calls `wasExploded` here; wind charges prime TNT but keep the block.
                 let blocks = self.get_blocks_to_destroy(world);
                 for (pos, (block, _state)) in &blocks {
                     let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);

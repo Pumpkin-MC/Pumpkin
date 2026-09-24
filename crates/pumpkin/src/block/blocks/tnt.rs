@@ -131,7 +131,6 @@ impl BlockBehaviour for TNTBlock {
                     args.item_stack.decrement(1);
                 }
             }
-            // TODO: award `Stats.ITEM_USED` for the igniting item.
             BlockActionResult::Success
         } else if !args.world.level_info.load().game_rules.tnt_explodes {
             args.player.send_system_message_raw(
@@ -163,14 +162,13 @@ impl BlockBehaviour for TNTBlock {
             let props = TntLikeProperties::from_state_id(args.state.id);
             if props.r#unstable {
                 // `break_block` already swapped the TNT away, so `prime` would find no TNT here.
-                // TODO: the loot table's `match_block` `unstable=false` condition is ignored by the
-                // loot loader, so unstable TNT still drops an item on top of the primed entity.
+                // TODO: loot ignores `unstable=false`, so this also drops a TNT item.
                 Self::spawn_primed(args.world, args.position);
             }
         }
     }
 
-    // TODO: vanilla also requires `projectile.mayInteract` and passes the owner as source.
+    // TODO: vanilla also requires `projectile.mayInteract`.
     fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
         if args.projectile.get_entity().is_on_fire() {
             Self::prime(args.world, args.position);
@@ -183,7 +181,6 @@ impl BlockBehaviour for TNTBlock {
             return;
         }
         let fuse = TNTEntity::random_short_fuse(TNTEntity::DEFAULT_FUSE);
-        // TODO: owner is `explosion.getIndirectSourceEntity()`.
         let tnt = TNTEntity::primed(args.world, args.position, fuse);
         args.world.spawn_entity(tnt);
     }
