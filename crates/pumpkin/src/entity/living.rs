@@ -2856,7 +2856,6 @@ impl LivingEntity {
             return damage;
         }
 
-        let is_fire_damage = damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FIRE);
         let mut epf = 0.0f32;
         {
             let equipment_lock = self
@@ -2874,34 +2873,7 @@ impl LivingEntity {
                     && let Some(enchantments) = stack.get_data_component::<EnchantmentsImpl>()
                 {
                     for (enchantment, level) in enchantments.enchantment.iter() {
-                        let enc = *enchantment;
-                        let lvl = *level as f32;
-                        if enc == &Enchantment::PROTECTION {
-                            if !damage_type
-                                .has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY)
-                                && damage_type != &DamageType::STARVE
-                                && damage_type != &DamageType::GENERIC_KILL
-                                && damage_type != &DamageType::OUT_OF_WORLD
-                            {
-                                epf += lvl;
-                            }
-                        } else if enc == &Enchantment::FIRE_PROTECTION {
-                            if is_fire_damage {
-                                epf += lvl * 2.0;
-                            }
-                        } else if enc == &Enchantment::BLAST_PROTECTION {
-                            if damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION) {
-                                epf += lvl * 2.0;
-                            }
-                        } else if enc == &Enchantment::PROJECTILE_PROTECTION {
-                            if damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_PROJECTILE) {
-                                epf += lvl * 2.0;
-                            }
-                        } else if enc == &Enchantment::FEATHER_FALLING
-                            && damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FALL)
-                        {
-                            epf += lvl * 3.0;
-                        }
+                        enchantment.modify_damage_protection_against(*level, damage_type, &mut epf);
                     }
                 }
             }

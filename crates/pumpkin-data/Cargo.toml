@@ -55,8 +55,52 @@ default = [
     "dye_color",
     "block_transformer",
     "trial_spawner",
+    "test_instance",
+    "painting_variant",
+    "context_provider",
+    "instrument",
+    "wolf_variant",
+    "cat_variant",
+    "frog_variant",
+    "trim_material",
+    "trim_pattern",
+    "banner_pattern",
+    "decorated_pot_pattern",
+    "chat_type",
+    "enchantment_provider",
+    "cow_variant",
+    "cow_sound_variant",
+    "pig_variant",
+    "pig_sound_variant",
+    "chicken_variant",
+    "chicken_sound_variant",
+    "cat_sound_variant",
+    "wolf_sound_variant",
+    "zombie_nautilus_variant",
 ]
 
+cow_variant = ["tag"]
+cow_sound_variant = ["sound"]
+pig_variant = ["tag"]
+pig_sound_variant = ["sound"]
+chicken_variant = ["tag"]
+chicken_sound_variant = ["sound"]
+cat_sound_variant = ["sound"]
+wolf_sound_variant = ["sound"]
+zombie_nautilus_variant = ["tag"]
+enchantment_provider = ["enchantment", "item", "tag"]
+instrument = ["sound"]
+wolf_variant = []
+cat_variant = []
+frog_variant = []
+trim_material = []
+trim_pattern = []
+banner_pattern = []
+decorated_pot_pattern = []
+chat_type = []
+context_provider = []
+painting_variant = []
+test_instance = []
 trial_spawner = []
 block_transformer = ["block", "sound", "world", "tag"]
 map_color = []
