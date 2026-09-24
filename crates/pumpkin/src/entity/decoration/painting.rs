@@ -1,9 +1,13 @@
 use core::f32;
 use std::sync::atomic::Ordering;
 
+use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, living::LivingEntity};
 use pumpkin_data::BlockDirection;
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -74,10 +78,22 @@ impl EntityBase for PaintingEntity {
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&dyn EntityBase>,
+        source: Option<&dyn EntityBase>,
         _cause: Option<&dyn EntityBase>,
     ) -> bool {
-        // TODO
+        // Vanilla `HangingEntity#dropItem`: the break sound and the drop only
+        // happen under `doEntityDrops`, and a creative attacker gets no item.
+        let world = self.entity.world.load();
+        if world.level_info.load().game_rules.entity_drops {
+            self.entity.play_sound(Sound::EntityPaintingBreak);
+            let is_creative = source
+                .and_then(|s| s.cast_any().downcast_ref::<Player>())
+                .is_some_and(Player::is_creative);
+            if !is_creative {
+                let pos = self.entity.block_pos.load();
+                world.drop_stack(&pos, ItemStack::new(1, &Item::PAINTING));
+            }
+        }
         self.entity.remove();
         true
     }
