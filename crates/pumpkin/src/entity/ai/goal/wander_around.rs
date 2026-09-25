@@ -12,6 +12,7 @@ pub struct WanderAroundGoal {
     target: Option<Vector3<f64>>,
     interval: i32,
     force_trigger: bool,
+    position: fn(&dyn Mob) -> Option<Vector3<f64>>,
 }
 
 impl WanderAroundGoal {
@@ -28,6 +29,16 @@ impl WanderAroundGoal {
             target: None,
             interval,
             force_trigger: false,
+            position: land_position,
+        }
+    }
+
+    /// Vanilla's `RandomSwimmingGoal`: the same stroll, to random spots in water.
+    #[must_use]
+    pub const fn swimming(speed: f64, interval: i32) -> Self {
+        Self {
+            position: swimmable_position,
+            ..Self::with_interval(speed, interval)
         }
     }
 
@@ -39,10 +50,14 @@ impl WanderAroundGoal {
     pub const fn set_interval(&mut self, interval: i32) {
         self.interval = interval;
     }
+}
 
-    fn get_position(mob: &dyn Mob) -> Option<Vector3<f64>> {
-        default_random_pos::get_pos(mob, 10, 7)
-    }
+fn land_position(mob: &dyn Mob) -> Option<Vector3<f64>> {
+    default_random_pos::get_pos(mob, 10, 7)
+}
+
+fn swimmable_position(mob: &dyn Mob) -> Option<Vector3<f64>> {
+    default_random_pos::get_swimmable_pos(mob, 10, 7)
 }
 
 impl Goal for WanderAroundGoal {
@@ -63,7 +78,7 @@ impl Goal for WanderAroundGoal {
             }
         }
 
-        self.target = Self::get_position(mob);
+        self.target = (self.position)(mob);
         if self.target.is_none() {
             return false;
         }

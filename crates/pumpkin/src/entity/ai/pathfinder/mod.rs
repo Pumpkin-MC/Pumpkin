@@ -410,6 +410,12 @@ pub trait PathNavigationTrait: Send + Sync {
     fn get_target_pos(&self) -> Option<BlockPos>;
     fn can_path_to_targets_below_surface(&self) -> bool;
     fn set_can_path_to_targets_below_surface(&mut self, can_path: bool);
+
+    /// Whether the mob can settle at `pos`, which random targets are checked
+    /// against: vanilla's `PathNavigation.isStableDestination`.
+    fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
+        world.get_block_state(&pos.down()).is_solid()
+    }
 }
 
 pub struct PathNavigation {
@@ -1988,6 +1994,11 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
 
     fn set_can_path_to_targets_below_surface(&mut self, can_path: bool) {
         self.inner.can_path_to_targets_below_surface = can_path;
+    }
+
+    /// A swimmer can hold still anywhere it is not inside a block.
+    fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
+        !world.get_block_state(pos).is_solid()
     }
 }
 
