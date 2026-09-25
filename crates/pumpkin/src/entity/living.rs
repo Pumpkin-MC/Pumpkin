@@ -108,6 +108,9 @@ pub struct LivingEntity {
     /// The position where the entity was last climbing, used for death messages
     pub climbing_pos: AtomicCell<Option<BlockPos>>,
 
+    /// The position this living entity is currently sleeping at.
+    pub sleeping_pos: AtomicCell<Option<BlockPos>>,
+
     /// The entity ID of the entity that last attacked this living entity.
     pub last_attacker_id: AtomicI32,
     /// The tick at which this entity was last attacked (entity age).
@@ -287,6 +290,7 @@ impl LivingEntity {
             jumping_cooldown: AtomicU8::new(0),
             climbing: AtomicBool::new(false),
             climbing_pos: AtomicCell::new(None),
+            sleeping_pos: AtomicCell::new(None),
             last_attacker_id: AtomicI32::new(0),
             last_attacked_time: AtomicI32::new(0),
             last_damage_type: std::sync::Mutex::new(None),
@@ -2644,6 +2648,12 @@ impl LivingEntity {
         nbt.put_short("HurtTime", self.hurt_cooldown.load(Relaxed).max(0) as i16);
         nbt.put_short("DeathTime", i16::from(self.death_time.load(Relaxed)));
         nbt.put_bool("FallFlying", self.entity.is_fall_flying());
+        if let Some(pos) = self.sleeping_pos.load() {
+            nbt.put(
+                "sleeping_pos",
+                NbtTag::IntArray(vec![pos.0.x, pos.0.y, pos.0.z]),
+            );
+        }
         {
             let effects_vec: Vec<pumpkin_data::potion::Effect> = {
                 let effects = self
@@ -2727,6 +2737,13 @@ impl LivingEntity {
         self.entity
             .fall_flying
             .store(nbt.get_bool("FallFlying").unwrap_or(false), Relaxed);
+        let sleeping_pos = nbt
+            .get_int_array("sleeping_pos")
+            .and_then(|pos| (pos.len() == 3).then(|| BlockPos::new(pos[0], pos[1], pos[2])));
+        self.sleeping_pos.store(sleeping_pos);
+        if sleeping_pos.is_some() {
+            self.entity.set_pose(EntityPose::Sleeping);
+        }
         {
             let nbt_effects = nbt.get_list("active_effects");
             if let Some(nbt_effects) = nbt_effects {
