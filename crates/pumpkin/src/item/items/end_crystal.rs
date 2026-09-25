@@ -43,8 +43,8 @@ impl ItemBehaviour for EndCrystalItem {
         let location_vec = location.0.to_f64();
 
         if !world.get_block_state(&location).is_air()
-            || !world
-                .get_entities_at_box(&BoundingBox::new(
+            || world
+                .get_all_at_box(&BoundingBox::new(
                     Vector3::new(location_vec.x, location_vec.y, location_vec.z),
                     Vector3::new(
                         location_vec.x + 1.0,
@@ -52,7 +52,8 @@ impl ItemBehaviour for EndCrystalItem {
                         location_vec.z + 1.0,
                     ),
                 ))
-                .is_empty()
+                .iter()
+                .any(|entity| !entity.is_spectator())
         {
             return BlockActionResult::Fail;
         }
