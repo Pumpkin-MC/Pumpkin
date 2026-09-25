@@ -38,15 +38,17 @@ use crate::world::loot::LootContextParameters;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::AttributeModifierSlot;
 use pumpkin_data::attributes::Attributes;
+use pumpkin_data::block_properties::{LadderLikeProperties, OakTrapdoorLikeProperties};
 use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
 use pumpkin_data::data_component_impl::{
-    AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
-    EquipmentSlot, EquippableImpl, FoodImpl,
+    AttributeModifiersImpl, BlocksAttacksImpl, DamageImpl, DeathProtectionImpl, EnchantmentsImpl,
+    EquipmentSlot, EquippableImpl, FoodImpl, GliderImpl,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::sound::SoundCategory;
@@ -93,6 +95,7 @@ pub struct LivingEntity {
     pub dead: AtomicBool,
     /// The distance the entity has been falling.
     pub fall_distance: AtomicCell<f32>,
+    pub fall_fly_ticks: AtomicI32,
     pub active_effects: std::sync::Mutex<FxHashMap<&'static StatusEffect, Effect>>,
     pub entity_equipment: Arc<std::sync::Mutex<EntityEquipment>>,
     pub equipment_drop_chances: Arc<std::sync::Mutex<FxHashMap<EquipmentSlot, f32>>>,
@@ -272,6 +275,7 @@ impl LivingEntity {
             last_damage_taken: AtomicCell::new(0.0),
             absorption: AtomicCell::new(0.0),
             fall_distance: AtomicCell::new(0.0),
+            fall_fly_ticks: AtomicI32::new(0),
             death_time: AtomicU8::new(0),
             dead: AtomicBool::new(false),
             item_use_time: AtomicI32::new(0),
@@ -1288,7 +1292,11 @@ impl LivingEntity {
     }
 
     fn get_effective_gravity(&self, caller: &dyn EntityBase) -> f64 {
-        let final_gravity = caller.get_gravity();
+        let final_gravity = if self.entity.has_no_gravity() {
+            0.0
+        } else {
+            caller.get_gravity()
+        };
 
         if self.entity.velocity.load().y <= 0.0 && self.has_effect(&StatusEffect::SLOW_FALLING) {
             final_gravity.min(0.01)
@@ -1384,6 +1392,10 @@ impl LivingEntity {
             self.jumping_cooldown.store(0, SeqCst);
         }
 
+        if self.entity.is_fall_flying() {
+            self.update_fall_flying(caller);
+        }
+
         if self.has_effect(&StatusEffect::SLOW_FALLING)
             || self.has_effect(&StatusEffect::LEVITATION)
         {
@@ -1399,9 +1411,9 @@ impl LivingEntity {
             && self.entity.entity_type != &EntityType::STRIDER
         {
             self.travel_in_fluid(caller, touching_water);
+        } else if self.entity.is_fall_flying() {
+            self.travel_fall_flying(caller);
         } else {
-            // TODO: Gliding
-
             self.travel_in_air(caller);
         }
 
@@ -1481,6 +1493,195 @@ impl LivingEntity {
         velo.z *= friction;
 
         self.entity.velocity.store(velo);
+    }
+
+    pub fn stop_fall_flying(&self) {
+        self.entity.set_fall_flying(true);
+        self.entity.set_fall_flying(false);
+    }
+
+    fn travel_fall_flying(&self, caller: &dyn EntityBase) {
+        self.check_climbing_for(caller);
+        if self.climbing.load(Relaxed) {
+            self.travel_in_air(caller);
+            self.stop_fall_flying();
+            return;
+        }
+
+        let last_movement = self.entity.velocity.load();
+        let last_speed = last_movement.horizontal_length();
+        let movement = self.update_fall_flying_movement(caller, last_movement);
+        self.entity.velocity.store(movement);
+
+        self.make_move(caller);
+
+        let new_speed = self.entity.velocity.load().horizontal_length();
+        self.handle_fall_flying_collisions(caller, last_speed, new_speed);
+    }
+
+    #[expect(clippy::float_cmp)]
+    pub fn restitute_fall_flying_movement(
+        &self,
+        caller: &dyn EntityBase,
+        requested: Vector3<f64>,
+        actual: Vector3<f64>,
+    ) {
+        let x_collision = (requested.x - actual.x).abs() >= 1.0e-5;
+        let z_collision = (requested.z - actual.z).abs() >= 1.0e-5;
+        self.entity
+            .horizontal_collision
+            .store(x_collision || z_collision, Relaxed);
+        let suppressed = self.entity.is_sneaking();
+        let mut restitution = if suppressed {
+            0.0
+        } else {
+            self.get_attribute_value(&Attributes::BOUNCINESS)
+        };
+        let current = self.entity.velocity.load();
+        let mut movement = current;
+        if x_collision {
+            movement.x = -current.x * restitution;
+        }
+        if z_collision {
+            movement.z = -current.z * restitution;
+        }
+        let mut bounced = restitution > 0.0 && (x_collision || z_collision);
+        if requested.y != actual.y {
+            if requested.y < 0.0 {
+                let block = self.entity.get_block_with_y_offset(0.2).1;
+                restitution = if -current.y <= self.get_effective_gravity(caller)
+                    || suppressed
+                    || block.has_tag(&tag::Block::MINECRAFT_SUPPRESSES_BOUNCE)
+                {
+                    0.0
+                } else {
+                    let block_restitution = if block == &Block::SLIME_BLOCK {
+                        1.0
+                    } else if block.has_tag(&tag::Block::MINECRAFT_BEDS)
+                        || block == &Block::SHELF_MUSHROOM
+                    {
+                        0.75
+                    } else {
+                        0.0
+                    };
+                    restitution.max(block_restitution)
+                };
+            }
+            let (gravity_compensation, drag) = if restitution > 0.0 {
+                let portion = if current.y == 0.0 {
+                    0.0
+                } else {
+                    (actual.y / current.y).clamp(0.0, 1.0)
+                };
+                let modifier = self.get_attribute_value(&Attributes::AIR_DRAG_MODIFIER) as f32;
+                let air_drag = (1.0 - (1.0 - 0.98f32) * modifier).clamp(0.0, 1.0);
+                bounced = true;
+                (
+                    portion * self.get_effective_gravity(caller),
+                    1.0 + portion * (f64::from(air_drag) - 1.0),
+                )
+            } else {
+                (0.0, 1.0)
+            };
+            movement.y = (gravity_compensation - current.y) * drag * restitution;
+        }
+        let factor = f64::from(caller.get_block_speed_factor());
+        self.entity
+            .velocity
+            .store(movement.multiply(factor, 1.0, factor));
+        if bounced {
+            if self.entity.get_block_with_y_offset(0.2).1 == &Block::SHELF_MUSHROOM {
+                self.entity.world.load().play_sound(
+                    Sound::BlockShelfMushroomBounce,
+                    SoundCategory::Blocks,
+                    &self.entity.pos.load(),
+                );
+            }
+            self.entity
+                .world
+                .load()
+                .emit_game_event(GameEvent::Bounce.name(), self.entity.pos.load());
+            self.entity.velocity_dirty.store(true, SeqCst);
+        }
+    }
+
+    fn update_fall_flying_movement(
+        &self,
+        caller: &dyn EntityBase,
+        movement: Vector3<f64>,
+    ) -> Vector3<f64> {
+        let pitch = self.entity.pitch.load() * (std::f32::consts::PI / 180.0);
+        let yaw = -self.entity.yaw.load() * (std::f32::consts::PI / 180.0);
+        let look = Vector3::new(
+            f64::from(pumpkin_util::math::sin(yaw) * pumpkin_util::math::cos(pitch)),
+            f64::from(-pumpkin_util::math::sin(pitch)),
+            f64::from(pumpkin_util::math::cos(yaw) * pumpkin_util::math::cos(pitch)),
+        );
+        let lean_angle = f64::from(pitch);
+        let look_hor_length = look.horizontal_length();
+        let move_hor_length = movement.horizontal_length();
+        let gravity = self.get_effective_gravity(caller);
+        let lift_force = lean_angle.cos() * lean_angle.cos();
+
+        let mut movement = movement;
+        movement.y += gravity * (-1.0 + lift_force * 0.75);
+
+        if movement.y < 0.0 && look_hor_length > 0.0 {
+            let convert = movement.y * -0.1 * lift_force;
+            movement.x += look.x * convert / look_hor_length;
+            movement.y += convert;
+            movement.z += look.z * convert / look_hor_length;
+        }
+
+        if lean_angle < 0.0 && look_hor_length > 0.0 {
+            let convert = move_hor_length * f64::from(-pumpkin_util::math::sin(pitch)) * 0.04;
+            movement.x -= look.x * convert / look_hor_length;
+            movement.y += convert * 3.2;
+            movement.z -= look.z * convert / look_hor_length;
+        }
+
+        if look_hor_length > 0.0 {
+            movement.x += (look.x / look_hor_length * move_hor_length - movement.x) * 0.1;
+            movement.z += (look.z / look_hor_length * move_hor_length - movement.z) * 0.1;
+        }
+
+        movement.multiply(f64::from(0.99f32), f64::from(0.98f32), f64::from(0.99f32))
+    }
+
+    fn handle_fall_flying_collisions(
+        &self,
+        caller: &dyn EntityBase,
+        move_hor_length: f64,
+        new_move_hor_length: f64,
+    ) {
+        if !self.entity.horizontal_collision.load(SeqCst) {
+            return;
+        }
+
+        let damage = ((move_hor_length - new_move_hor_length) * 10.0 - 3.0) as f32;
+        if damage <= 0.0 {
+            return;
+        }
+
+        let sound = if caller.get_player().is_some() {
+            if damage as i32 > 4 {
+                Sound::EntityPlayerBigFall
+            } else {
+                Sound::EntityPlayerSmallFall
+            }
+        } else {
+            Self::get_fall_sound(damage as i32)
+        };
+        self.entity.world.load().play_sound(
+            sound,
+            if caller.get_player().is_some() {
+                SoundCategory::Players
+            } else {
+                SoundCategory::Neutral
+            },
+            &self.entity.pos.load(),
+        );
+        caller.damage(caller, damage, DamageType::FLY_INTO_WALL);
     }
 
     fn travel_in_air(&self, caller: &dyn EntityBase) {
@@ -1659,63 +1860,37 @@ impl LivingEntity {
     fn make_move(&self, caller: &dyn EntityBase) {
         self.entity.move_entity(caller, self.entity.velocity.load());
 
-        self.check_climbing();
+        if self.entity.is_fall_flying() {
+            self.check_climbing_for(caller);
+        } else {
+            self.climbing.store(false, Relaxed);
+        }
     }
 
-    fn check_climbing(&self) {
-        // If spectator: return false
-
-        // TODO
-        // let mut pos = self.entity.block_pos.load();
-
-        // let world = self.entity.world.read().await;
-
-        // let (block, state) = world.get_block_and_state(&pos);
-
-        // let name = block.properties(state.id).map(|props| props.name());
-
-        // if let Some(name) = name {
-        //     if name == "LadderLikeProperties"
-        //         || name == "ScaffoldingLikeProperties"
-        //         || name == "CaveVinesLikeProperties"
-        //         || name == "CaveVinesPlantLikeProperties"
-        //     {
-        //         self.climbing.store(true, Relaxed);
-
-        //         self.climbing_pos.store(Some(pos));
-
-        //         return;
-        //     }
-
-        //     if name == "OakTrapdoorLikeProperties" {
-        //         let trapdoor = OakTrapdoorLikeProperties::from_state_id(state.id);
-
-        //         pos.0.y -= 1;
-
-        //         let (down_block, down_state) = world.get_block_and_state(&pos);
-
-        //         let is_ladder = down_block
-        //             .properties(down_state.id)
-        //             .is_some_and(|down_props| down_props.name() == "LadderLikeProperties");
-
-        //         if is_ladder {
-        //             let ladder = LadderLikeProperties::from_state_id(down_state.id);
-
-        //             if trapdoor.r#facing == ladder.r#facing {
-        //                 self.climbing.store(true, Relaxed);
-
-        //                 self.climbing_pos.store(Some(pos));
-
-        //                 return;
-        //             }
-        //         }
-        //     }
-        // }
-
-        self.climbing.store(false, Relaxed);
-
-        if self.entity.on_ground.load(SeqCst) {
-            self.climbing_pos.store(None);
+    pub fn check_climbing_for(&self, caller: &dyn EntityBase) {
+        let pos = self.entity.block_pos.load();
+        let world = self.entity.world.load();
+        let (block, state) = world.get_block_and_state(&pos);
+        let climbing = if caller.is_spectator()
+            || self.entity.is_fall_flying()
+                && block.has_tag(&tag::Block::MINECRAFT_CAN_GLIDE_THROUGH)
+        {
+            false
+        } else if block.has_tag(&tag::Block::MINECRAFT_CLIMBABLE) {
+            true
+        } else if block.has_tag(&tag::Block::MINECRAFT_TRAPDOORS) {
+            let trapdoor = OakTrapdoorLikeProperties::from_state_id(state.id);
+            let below = pos.down();
+            let (below_block, below_state) = world.get_block_and_state(&below);
+            trapdoor.open
+                && below_block == &Block::LADDER
+                && LadderLikeProperties::from_state_id(below_state.id).facing == trapdoor.facing
+        } else {
+            false
+        };
+        self.climbing.store(climbing, Relaxed);
+        if climbing {
+            self.climbing_pos.store(Some(pos));
         }
     }
 
@@ -1725,9 +1900,9 @@ impl LivingEntity {
 
             let mut velo = self.entity.velocity.load();
 
-            let pos = 0.15;
+            let pos = f64::from(0.15f32);
 
-            let neg = -0.15;
+            let neg = -pos;
 
             if velo.x < neg {
                 velo.x = neg;
@@ -1743,25 +1918,18 @@ impl LivingEntity {
 
             velo.y = velo.y.max(neg);
 
-            // TODO
-            // if velo.y < 0.0
-            //     && self.entity.entity_type == &EntityType::PLAYER
-            //     && self.entity.sneaking.load(Relaxed)
-            // {
-            //     let block = self
-            //         .entity
-            //         .world
-            //         .read()
-            //         .await
-            //         .get_block(&self.entity.block_pos.load())
-            //         .await;
-
-            //     if let Some(props) = block.properties(block.default_state.id) {
-            //         if props.name() == "ScaffoldingLikeProperties" {
-            //             velo.y = 0.0;
-            //         }
-            //     }
-            // }
+            if velo.y < 0.0
+                && self.entity.entity_type == &EntityType::PLAYER
+                && self.entity.is_sneaking()
+                && self
+                    .entity
+                    .world
+                    .load()
+                    .get_block(&self.entity.block_pos.load())
+                    != &Block::SCAFFOLDING
+            {
+                velo.y = 0.0;
+            }
 
             self.entity.velocity.store(velo);
         }
@@ -1823,26 +1991,26 @@ impl LivingEntity {
             if fall_distance > 0.0 {
                 self.on_changed_block(caller, self.entity.block_pos.load());
             }
-            if fall_distance <= 0.0
-                || dont_damage
-                || self.should_prevent_fall_damage()
-                || self.should_prevent_fall_damage_in_area()
-                || self.is_immune_to_fall_damage()
+            if fall_distance > 0.0
+                && !dont_damage
+                && !self.should_prevent_fall_damage()
+                && !self.should_prevent_fall_damage_in_area()
+                && !self.is_immune_to_fall_damage()
             {
-                return;
+                let world = self.entity.world.load();
+                let block = world.get_block(&self.entity.get_pos_with_y_offset(0.2).0);
+                let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
+                if let Some(pumpkin_block) = pumpkin_block {
+                    pumpkin_block.on_landed_upon(OnLandedUponArgs {
+                        world: &world,
+                        fall_distance,
+                        entity: caller,
+                    });
+                } else {
+                    self.handle_fall_damage(caller, fall_distance, 1.0);
+                }
             }
-            let world = self.entity.world.load();
-            let block = world.get_block(&self.entity.get_pos_with_y_offset(0.2).0);
-            let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
-            if let Some(pumpkin_block) = pumpkin_block {
-                pumpkin_block.on_landed_upon(OnLandedUponArgs {
-                    world: &world,
-                    fall_distance,
-                    entity: caller,
-                });
-            } else {
-                self.handle_fall_damage(caller, fall_distance, 1.0);
-            }
+            self.climbing_pos.store(None);
         } else if height_difference < 0.0 {
             let new_fall_distance = if !self.should_prevent_fall_damage()
                 && !self.should_prevent_fall_damage_in_area()
@@ -2482,6 +2650,130 @@ impl LivingEntity {
         }
     }
 
+    const fn equipment_slots_in_order() -> [EquipmentSlot; 8] {
+        [
+            EquipmentSlot::MAIN_HAND,
+            EquipmentSlot::OFF_HAND,
+            EquipmentSlot::FEET,
+            EquipmentSlot::LEGS,
+            EquipmentSlot::CHEST,
+            EquipmentSlot::HEAD,
+            EquipmentSlot::BODY,
+            EquipmentSlot::SADDLE,
+        ]
+    }
+
+    pub fn get_item_by_slot(&self, caller: &dyn EntityBase, slot: &EquipmentSlot) -> ItemStack {
+        match slot {
+            EquipmentSlot::MainHand(_) => self.held_item(caller),
+            EquipmentSlot::OffHand(_) => self.off_hand_item(caller),
+            _ => self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .equipment
+                .get(slot)
+                .cloned()
+                .unwrap_or_else(|| ItemStack::EMPTY.clone()),
+        }
+    }
+
+    #[must_use]
+    pub fn can_glide_using(stack: &ItemStack, slot: &EquipmentSlot) -> bool {
+        if stack.get_data_component::<GliderImpl>().is_none() {
+            return false;
+        }
+        stack
+            .get_data_component::<EquippableImpl>()
+            .is_some_and(|equippable| equippable.slot == slot)
+            && !stack.next_damage_will_break()
+    }
+
+    #[must_use]
+    pub fn can_glide(&self, caller: &dyn EntityBase) -> bool {
+        if let Some(player) = caller.get_player()
+            && player.is_flying()
+        {
+            return false;
+        }
+        if self.entity.on_ground.load(Relaxed)
+            || self.entity.has_vehicle()
+            || self.has_effect(&StatusEffect::LEVITATION)
+        {
+            return false;
+        }
+        Self::equipment_slots_in_order()
+            .iter()
+            .any(|slot| Self::can_glide_using(&self.get_item_by_slot(caller, slot), slot))
+    }
+
+    fn check_fall_distance_accumulation(&self) {
+        if self.entity.velocity.load().y > -0.5 && self.fall_distance.load() > 1.0 {
+            self.fall_distance.store(1.0);
+        }
+    }
+
+    pub fn update_fall_flying(&self, caller: &dyn EntityBase) {
+        self.check_fall_distance_accumulation();
+
+        if !self.can_glide(caller) {
+            self.entity.set_fall_flying(false);
+            return;
+        }
+
+        let ticks = self.fall_fly_ticks.load(Relaxed) + 1;
+        if ticks % 10 != 0 {
+            return;
+        }
+
+        if (ticks / 10) % 2 == 0 {
+            self.wear_down_glider(caller);
+        }
+
+        self.entity
+            .world
+            .load()
+            .emit_game_event(GameEvent::ElytraGlide.name(), self.entity.pos.load());
+    }
+
+    fn wear_down_glider(&self, caller: &dyn EntityBase) {
+        let worn: Vec<EquipmentSlot> = Self::equipment_slots_in_order()
+            .into_iter()
+            .filter(|slot| Self::can_glide_using(&self.get_item_by_slot(caller, slot), slot))
+            .collect();
+        if worn.is_empty() {
+            return;
+        }
+
+        let slot = &worn[rand::rng().random_range(0..worn.len())];
+        let mut stack = self.get_item_by_slot(caller, slot);
+        if stack.get_data_component::<DamageImpl>().is_none() {
+            return;
+        }
+
+        if let Some(player) = caller.get_player() {
+            if matches!(
+                player.gamemode.load(),
+                GameMode::Creative | GameMode::Spectator
+            ) {
+                return;
+            }
+            if !matches!(slot, EquipmentSlot::Body(_) | EquipmentSlot::Saddle(_)) {
+                player.damage_item_in_slot(slot, 1);
+                return;
+            }
+        }
+
+        if stack.damage_item(1) == DamageResult::Untouched {
+            return;
+        }
+        self.entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .put(slot, stack.clone());
+        self.send_equipment_changes(&[(slot.clone(), stack)]);
+    }
+
     pub fn held_item(&self, caller: &dyn EntityBase) -> ItemStack {
         if let Some(player) = caller.get_player() {
             return player.inventory.held_item();
@@ -2725,8 +3017,7 @@ impl LivingEntity {
             self.death_time.store(death_time as u8, Relaxed);
         }
         self.entity
-            .fall_flying
-            .store(nbt.get_bool("FallFlying").unwrap_or(false), Relaxed);
+            .set_fall_flying(nbt.get_bool("FallFlying").unwrap_or(false));
         {
             let nbt_effects = nbt.get_list("active_effects");
             if let Some(nbt_effects) = nbt_effects {
@@ -3332,13 +3623,11 @@ impl EntityBase for LivingEntity {
         let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
         let in_death_animation = self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
         let is_player = self.entity.entity_type == &EntityType::PLAYER;
-        if (is_alive || in_death_animation) && !is_player {
+        if (is_alive || in_death_animation) && (!is_player || self.entity.is_fall_flying()) {
             self.tick_movement(caller);
             // Vanilla-like order: freeze logic runs after movement/collisions.
             self.entity.tick_frozen(caller);
         } else if is_alive {
-            // Client-authoritative players skip `travel`, so decay pushed velocity like
-            // vanilla to prevent it accumulating and launching the player.
             self.apply_travel_friction();
 
             let suffocating = self.entity.tick_block_collisions(caller);
@@ -3350,6 +3639,12 @@ impl EntityBase for LivingEntity {
             self.push_entities(caller);
 
             self.entity.tick_frozen(caller);
+        }
+
+        if self.entity.is_fall_flying() {
+            self.fall_fly_ticks.fetch_add(1, Relaxed);
+        } else {
+            self.fall_fly_ticks.store(0, Relaxed);
         }
 
         // Coalesce velocity sends to once per tick.

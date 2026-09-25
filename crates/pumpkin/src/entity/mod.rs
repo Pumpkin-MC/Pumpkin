@@ -1395,6 +1395,9 @@ impl Entity {
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
     ) -> Vector3<f64> {
+        if self.is_fall_flying() {
+            return self.adjust_fall_flying_movement(movement, caller);
+        }
         if movement.length_squared() == 0.0 {
             return movement;
         }
@@ -1489,6 +1492,223 @@ impl Entity {
             .store(horizontal_collision, Ordering::SeqCst);
 
         adjusted_movement
+    }
+
+    #[expect(clippy::float_cmp)]
+    fn collide_fall_flying_shapes(
+        bounds: BoundingBox,
+        movement: Vector3<f64>,
+        collisions: &[BoundingBox],
+        positions: &[(usize, BlockPos)],
+    ) -> (Vector3<f64>, Option<BlockPos>) {
+        if collisions.is_empty() {
+            return (movement, None);
+        }
+        let axes = if movement.x.abs() < movement.z.abs() {
+            [Axis::Y, Axis::Z, Axis::X]
+        } else {
+            [Axis::Y, Axis::X, Axis::Z]
+        };
+        let mut resolved = Vector3::default();
+        let mut support = None;
+        for axis in axes {
+            let mut distance = movement.get_axis(axis);
+            if distance.abs() < 1.0e-7 {
+                continue;
+            }
+            let shifted = bounds.shift(resolved);
+            for (index, collision) in collisions.iter().enumerate() {
+                if distance.abs() < 1.0e-7 {
+                    distance = 0.0;
+                    break;
+                }
+                let overlaps = [Axis::X, Axis::Y, Axis::Z]
+                    .into_iter()
+                    .filter(|other| *other != axis)
+                    .all(|other| {
+                        shifted.max.get_axis(other) - 1.0e-7 >= collision.min.get_axis(other)
+                            && shifted.min.get_axis(other) + 1.0e-7 < collision.max.get_axis(other)
+                    });
+                if !overlaps {
+                    continue;
+                }
+                let previous = distance;
+                if distance > 0.0 {
+                    let gap = collision.min.get_axis(axis) - shifted.max.get_axis(axis);
+                    if shifted.max.get_axis(axis) - 1.0e-7 < collision.min.get_axis(axis)
+                        && gap >= -1.0e-7
+                    {
+                        distance = distance.min(gap);
+                    }
+                } else {
+                    let gap = collision.max.get_axis(axis) - shifted.min.get_axis(axis);
+                    if shifted.min.get_axis(axis) + 1.0e-7 >= collision.max.get_axis(axis)
+                        && gap <= 1.0e-7
+                    {
+                        distance = distance.max(gap);
+                    }
+                }
+                if axis == Axis::Y && movement.y < 0.0 && distance != previous {
+                    support = positions
+                        .iter()
+                        .find(|(end, _)| index < *end)
+                        .map(|(_, pos)| *pos);
+                }
+            }
+            resolved.set_axis(axis, distance);
+        }
+        (resolved, support)
+    }
+
+    fn add_fall_flying_border_collisions(
+        &self,
+        swept: BoundingBox,
+        collisions: &mut Vec<BoundingBox>,
+    ) {
+        let world = self.world.load();
+        let border = world
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let half = border.new_diameter / 2.0;
+        let limit = f64::from(border.portal_teleport_boundary);
+        let min_x = (border.center_x - half).clamp(-limit, limit);
+        let max_x = (border.center_x + half).clamp(-limit, limit);
+        let min_z = (border.center_z - half).clamp(-limit, limit);
+        let max_z = (border.center_z + half).clamp(-limit, limit);
+        let pos = self.pos.load();
+        let margin = (swept.max.x - swept.min.x)
+            .max(swept.max.z - swept.min.z)
+            .max(1.0);
+        let distance = (pos.x - min_x)
+            .min(max_x - pos.x)
+            .min(pos.z - min_z)
+            .min(max_z - pos.z);
+        if distance < margin * 2.0
+            && pos.x > min_x - margin
+            && pos.x < max_x + margin
+            && pos.z > min_z - margin
+            && pos.z < max_z + margin
+        {
+            let negative = f64::NEG_INFINITY;
+            let positive = f64::INFINITY;
+            collisions.extend([
+                BoundingBox {
+                    min: Vector3::new(negative, negative, negative),
+                    max: Vector3::new(min_x.floor(), positive, positive),
+                },
+                BoundingBox {
+                    min: Vector3::new(max_x.ceil(), negative, negative),
+                    max: Vector3::new(positive, positive, positive),
+                },
+                BoundingBox {
+                    min: Vector3::new(negative, negative, negative),
+                    max: Vector3::new(positive, positive, min_z.floor()),
+                },
+                BoundingBox {
+                    min: Vector3::new(negative, negative, max_z.ceil()),
+                    max: Vector3::new(positive, positive, positive),
+                },
+            ]);
+        }
+    }
+
+    #[expect(clippy::float_cmp)]
+    fn adjust_fall_flying_movement(
+        &self,
+        movement: Vector3<f64>,
+        caller: &dyn EntityBase,
+    ) -> Vector3<f64> {
+        let world = self.world.load();
+        let bounds = self.bounding_box.load();
+        let step_height = caller.get_living_entity().map_or(0.0, |living| {
+            living.get_attribute_value(&pumpkin_data::attributes::Attributes::STEP_HEIGHT) as f32
+        });
+        let swept =
+            bounds
+                .stretch(movement)
+                .stretch(Vector3::new(0.0, f64::from(step_height), 0.0));
+        let (mut collisions, positions) = world.get_block_collisions(swept, caller);
+        for entity in world.get_all_at_box(&swept) {
+            let other = entity.get_entity();
+            if other.entity_id == self.entity_id
+                || entity.is_spectator()
+                || self.has_passenger(other.entity_id)
+            {
+                continue;
+            }
+            let collidable = if other.entity_type.has_tag(&tag::EntityType::MINECRAFT_BOAT) {
+                true
+            } else if other.entity_type == &EntityType::SHULKER {
+                entity.get_living_entity().is_some_and(|living| {
+                    !living.dead.load(Ordering::Relaxed) && living.health.load() > 0.0
+                })
+            } else if let Some(ghast) = entity
+                .cast_any()
+                .downcast_ref::<passive::happy_ghast::HappyGhastEntity>()
+            {
+                other.age.load(Ordering::Relaxed) >= 0
+                    && entity.get_living_entity().is_some_and(|living| {
+                        !living.dead.load(Ordering::Relaxed) && living.health.load() > 0.0
+                    })
+                    && ghast.is_on_still_timeout()
+            } else {
+                false
+            };
+            if collidable {
+                collisions.push(other.bounding_box.load());
+            }
+        }
+        self.add_fall_flying_border_collisions(swept, &mut collisions);
+        let (mut resolved, mut support) =
+            Self::collide_fall_flying_shapes(bounds, movement, &collisions, &positions);
+        let on_ground_after_collision = movement.y < 0.0 && movement.y != resolved.y;
+        if step_height > 0.0
+            && (on_ground_after_collision || self.on_ground.load(Ordering::Relaxed))
+            && (movement.x != resolved.x || movement.z != resolved.z)
+        {
+            let grounded = if on_ground_after_collision {
+                bounds.shift(Vector3::new(0.0, resolved.y, 0.0))
+            } else {
+                bounds
+            };
+            let mut candidates: Vec<f32> = collisions
+                .iter()
+                .flat_map(|collision| [collision.min.y, collision.max.y])
+                .map(|y| (y - grounded.min.y) as f32)
+                .filter(|height| {
+                    *height >= 0.0 && *height <= step_height && *height != resolved.y as f32
+                })
+                .collect();
+            candidates.sort_unstable_by(f32::total_cmp);
+            candidates.dedup();
+            for height in candidates {
+                let (mut stepped, step_support) = Self::collide_fall_flying_shapes(
+                    grounded,
+                    Vector3::new(movement.x, f64::from(height), movement.z),
+                    &collisions,
+                    &positions,
+                );
+                if stepped.horizontal_length_squared() > resolved.horizontal_length_squared() {
+                    stepped.y -= bounds.min.y - grounded.min.y;
+                    resolved = stepped;
+                    support = step_support.or(support);
+                    break;
+                }
+            }
+        }
+        self.horizontal_collision.store(
+            (movement.x - resolved.x).abs() >= 1.0e-5 || (movement.z - resolved.z).abs() >= 1.0e-5,
+            Ordering::Relaxed,
+        );
+        if movement.y != 0.0 || caller.get_player().is_none() {
+            self.on_ground.store(
+                movement.y < 0.0 && movement.y != resolved.y,
+                Ordering::Relaxed,
+            );
+            self.supporting_block_pos.store(support);
+        }
+        resolved
     }
 
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
@@ -2001,7 +2221,7 @@ impl Entity {
 
     // Does not send movement. That must be done separately
     pub fn move_entity(&self, caller: &dyn EntityBase, mut motion: Vector3<f64>) {
-        if caller.get_player().is_some() {
+        if caller.get_player().is_some() && !self.is_fall_flying() {
             return;
         }
 
@@ -2025,9 +2245,27 @@ impl Entity {
             self.velocity.store(Vector3::default());
         }
 
+        if self.is_fall_flying() {
+            self.horizontal_collision.store(false, Ordering::Relaxed);
+        }
         let final_move = self.adjust_movement_for_collisions(motion, caller);
 
         self.move_pos(final_move);
+
+        if self.is_fall_flying()
+            && let Some(living) = caller.get_living_entity()
+        {
+            if caller.get_player().is_none() {
+                living.fall(
+                    caller,
+                    final_move.y,
+                    self.on_ground.load(Ordering::Relaxed),
+                    false,
+                );
+            }
+            living.restitute_fall_flying_movement(caller, motion, final_move);
+            return;
+        }
 
         let velocity_multiplier = f64::from(caller.get_block_speed_factor());
 
@@ -2711,12 +2949,7 @@ impl Entity {
     pub fn is_sprinting(&self) -> bool {
         self.sprinting.load(Ordering::Relaxed)
     }
-    pub fn check_fall_flying(&self) -> bool {
-        !self.on_ground.load(Relaxed)
-    }
-
     pub fn set_fall_flying(&self, fall_flying: bool) {
-        assert_ne!(self.fall_flying.load(Relaxed), fall_flying);
         self.fall_flying.store(fall_flying, Relaxed);
         self.set_flag(Flag::FallFlying, fall_flying);
     }
@@ -3862,7 +4095,7 @@ impl Entity {
 
     pub fn reset_state(&self) {
         self.pose.store(EntityPose::Standing);
-        self.fall_flying.store(false, Relaxed);
+        self.set_fall_flying(false);
         self.extinguish();
         self.set_on_fire(false);
     }

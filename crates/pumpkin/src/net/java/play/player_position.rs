@@ -105,25 +105,18 @@ impl JavaClient {
                 let pos = event.to;
                 let entity = &player.get_entity();
                 let last_pos = entity.pos.load();
-                player.get_entity().set_pos(pos);
-
-                let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
-                let cm = (distance * 100.0) as i32;
-                if cm > 0 {
-                    let stat = player.get_movement_statistic();
-                    player.increment_stat(StatisticCategory::Custom, stat as i32, cm);
-                }
-
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed) && packet.collision & FLAG_ON_GROUND == 0 && height_difference > 0.0 {
                     player.jump();
                 }
+                if entity.is_fall_flying() {
+                    entity.move_entity(player.as_ref(), pos - last_pos);
+                }
+                player.get_entity().set_pos(pos);
+
 
                 let new_on_ground = packet.collision & FLAG_ON_GROUND != 0;
                 entity.on_ground.store(new_on_ground, Ordering::Relaxed);
-                if new_on_ground && entity.is_fall_flying() {
-                    entity.set_fall_flying(false);
-                }
                 let world = &player.world();
 
                 // TODO: Warn when player moves to quickly
@@ -161,6 +154,13 @@ impl JavaClient {
                         player.gamemode.load() == GameMode::Creative,
                     );
                 }
+                let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
+                let cm = (distance as f32 * 100.0).round() as i32;
+                if cm > 0 {
+                    let stat = player.get_movement_statistic();
+                    player.increment_stat(StatisticCategory::Custom, stat as i32, cm);
+                }
+
                 chunker::update_position(player);
                 let delta = Vector3::new(
                     pos.x - last_pos.x,
@@ -171,6 +171,9 @@ impl JavaClient {
                 if delta.length_squared() > 1.0E-5 {
                     player.update_last_action_time();
                     player.check_location_enchantments(pos, packet.collision & FLAG_ON_GROUND != 0);
+                }
+                if height_difference > 0.0 {
+                    player.living_entity.fall_distance.store(0.0);
                 }
                 player.progress_motion(delta);
             }
@@ -246,22 +249,18 @@ impl JavaClient {
                 let pos = event.to;
                 let entity = &player.get_entity();
                 let last_pos = entity.pos.load();
-                player.get_entity().set_pos(pos);
-
-                let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
-                let cm = (distance * 100.0) as i32;
-                if cm > 0 {
-                    let stat = player.get_movement_statistic();
-                    player.increment_stat(StatisticCategory::Custom, stat as i32, cm);
-                }
-
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed)
-                    && (packet.collision & FLAG_ON_GROUND) != 0
+                    && (packet.collision & FLAG_ON_GROUND) == 0
                     && height_difference > 0.0
                 {
                     player.jump();
                 }
+                if entity.is_fall_flying() {
+                    entity.move_entity(player.as_ref(), pos - last_pos);
+                }
+                player.get_entity().set_pos(pos);
+
                 entity
                     .on_ground
                     .store((packet.collision & FLAG_ON_GROUND) != 0, Ordering::Relaxed);
@@ -320,6 +319,13 @@ impl JavaClient {
                         player.gamemode.load() == GameMode::Creative,
                     );
                 }
+                let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
+                let cm = (distance as f32 * 100.0).round() as i32;
+                if cm > 0 {
+                    let stat = player.get_movement_statistic();
+                    player.increment_stat(StatisticCategory::Custom, stat as i32, cm);
+                }
+
                 chunker::update_position(player);
                 let delta = Vector3::new(
                     pos.x - last_pos.x,
@@ -330,6 +336,9 @@ impl JavaClient {
                 if delta.length_squared() > 1.0E-5 {
                     player.update_last_action_time();
                     player.check_location_enchantments(pos, (packet.collision & FLAG_ON_GROUND) != 0);
+                }
+                if height_difference > 0.0 {
+                    player.living_entity.fall_distance.store(0.0);
                 }
                 player.progress_motion(delta);
             }
