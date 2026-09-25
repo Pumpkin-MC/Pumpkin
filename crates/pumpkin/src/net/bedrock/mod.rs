@@ -70,6 +70,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use pumpkin_protocol::bedrock::server::login::ClientData;
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::version::BedrockMinecraftVersion;
 use pumpkin_world::level::SyncChunk;
 
@@ -356,30 +357,23 @@ impl BedrockClient {
         self.close().await;
     }
 
-    pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
+    /// Returns the positions actually queued -> cancelled or unencodable chunks are left out.
+    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> Vec<Vector2<i32>> {
         let player = self.player.load_full();
         let Some(player) = player.as_ref() else {
             debug!(
                 "send_chunks: player not set yet, dropping {} chunks",
                 chunks.len()
             );
-            return;
+            return Vec::new();
         };
         let Some(server) = player.world().server.upgrade() else {
-            return;
+            return Vec::new();
         };
 
-        let mut valid_chunks = Vec::with_capacity(chunks.len());
-        for chunk in chunks {
-            let mut event = ChunkSend::new(player.world(), chunk.clone());
-            server.plugin_manager.fire(&server, &mut event).await;
-            if !event.cancelled {
-                valid_chunks.push(chunk.clone());
-            }
-        }
-
+        let valid_chunks = ChunkSend::filter(&server, &player.world(), chunks).await;
         if valid_chunks.is_empty() {
-            return;
+            return Vec::new();
         }
 
         let bedrock_dimension =
@@ -408,7 +402,7 @@ impl BedrockClient {
                     &block_actors,
                 ) {
                     Ok((payload, blobs)) => {
-                        encoded_payloads.push(payload);
+                        encoded_payloads.push((Vector2::new(chunk.x, chunk.z), payload));
                         new_blobs.extend(blobs);
                     }
                     Err(e) => error!("Failed to serialize Bedrock chunk: {:?}", e),
@@ -418,7 +412,7 @@ impl BedrockClient {
         });
 
         let Ok((encoded_payloads, new_blobs)) = rx.await else {
-            return;
+            return Vec::new();
         };
 
         if !new_blobs.is_empty() {
@@ -434,7 +428,7 @@ impl BedrockClient {
         let mut packets_to_enqueue = Vec::with_capacity(encoded_payloads.len());
         {
             let encoder = self.network_writer.read().await;
-            for payload in encoded_payloads {
+            for (pos, payload) in encoded_payloads {
                 let mut packet_buf = Vec::new();
                 match encoder.write_game_packet(
                     CLevelChunk::PACKET_ID as u16,
@@ -443,14 +437,17 @@ impl BedrockClient {
                     &payload,
                     &mut packet_buf,
                 ) {
-                    Ok(()) => packets_to_enqueue.push(packet_buf),
+                    Ok(()) => packets_to_enqueue.push((pos, packet_buf)),
                     Err(err) => error!("Failed to write game packet wrapper: {err}"),
                 }
             }
         }
-        for packet_buf in packets_to_enqueue {
+        let mut sent = Vec::with_capacity(packets_to_enqueue.len());
+        for (pos, packet_buf) in packets_to_enqueue {
             self.enqueue_packet_data(packet_buf.into()).await;
+            sent.push(pos);
         }
+        sent
     }
 
     pub fn set_player(&self, player: Arc<Player>) {

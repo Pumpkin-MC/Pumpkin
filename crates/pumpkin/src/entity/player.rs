@@ -2852,11 +2852,13 @@ impl Player {
                         let world = world.clone();
                         let uuid = self.gameprofile.id;
                         self.spawn_task(async move {
-                            let (deliveries, chunks): (Vec<_>, Vec<_>) = chunks
+                            let (mut deliveries, chunks): (Vec<_>, Vec<_>) = chunks
                                 .into_iter()
                                 .map(|c| ((c.position, c.delivery_token), c.chunk))
                                 .unzip();
-                            client.send_chunks(&chunks).await;
+                            let sent = client.send_chunks(&chunks).await;
+                            // A cancelled `ChunkSend` never reached the client -> keep it not ready.
+                            deliveries.retain(|(pos, _)| sent.contains(pos));
                             if let Some(player) = world.get_player_by_uuid(uuid) {
                                 // dispatcher sets a reset or a re-enqueue since then holds a newer token.
                                 let delivered = player
