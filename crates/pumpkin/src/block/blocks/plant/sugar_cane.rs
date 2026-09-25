@@ -11,13 +11,18 @@ use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
     RandomTickArgs,
 };
+use crate::world::World;
 
 #[pumpkin_block("minecraft:sugar_cane")]
 pub struct SugarCaneBlock;
 
 impl BlockBehaviour for SugarCaneBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !can_place_at(args.world.as_ref(), args.position) {
+        if !can_place_at(
+            args.world.as_ref(),
+            Some(args.world.as_ref()),
+            args.position,
+        ) {
             args.world
                 .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
         }
@@ -54,7 +59,7 @@ impl BlockBehaviour for SugarCaneBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if !can_place_at(args.world, args.position) {
+        if !can_place_at(args.world, Some(args.world), args.position) {
             args.world
                 .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
         }
@@ -62,11 +67,15 @@ impl BlockBehaviour for SugarCaneBlock {
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        can_place_at(args.block_accessor, args.position)
+        can_place_at(args.block_accessor, args.world, args.position)
     }
 }
 
-fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+fn can_place_at(
+    block_accessor: &dyn BlockAccessor,
+    world: Option<&World>,
+    block_pos: &BlockPos,
+) -> bool {
     let block_below = block_accessor.get_block(&block_pos.down());
 
     if block_below == &Block::SUGAR_CANE {
@@ -75,11 +84,17 @@ fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> boo
 
     if block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE) {
         for direction in HorizontalFacing::all() {
-            let block = block_accessor.get_block(&block_pos.down().offset(direction.to_offset()));
-            // TODO: use fluid
-            if block.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
-                && block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
-            {
+            let adj_pos = block_pos.down().offset(direction.to_offset());
+            let block = block_accessor.get_block(&adj_pos);
+
+            let fluid_ok = world.is_some_and(|w| {
+                w.get_fluid(&adj_pos)
+                    .has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
+            });
+
+            let block_ok = block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY);
+
+            if fluid_ok || block_ok {
                 return true;
             }
         }
