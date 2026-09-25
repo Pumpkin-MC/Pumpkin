@@ -550,6 +550,8 @@ pub fn get_random_pos_within(
     BlockPos::new(x, y, z)
 }
 
+/// Spawns the initial passive creatures for a newly generated chunk, like vanilla
+/// `NaturalSpawner::spawnMobsForChunkGeneration`.
 pub fn spawn_mobs_for_chunk_generation(
     world: &Arc<World>,
     cache: &mut dyn GenerationCache,
@@ -568,7 +570,7 @@ pub fn spawn_mobs_for_chunk_generation(
     let zo = chunk_z << 4;
 
     while rand::random::<f32>() < biome.creature_spawn_probability {
-        let Some(spawner_data) = creatures.choose(&mut rand::rng()) else {
+        let Some(spawner_data) = choose_spawner(creatures, &mut rand::rng()) else {
             continue;
         };
 
@@ -919,6 +921,8 @@ pub fn can_spawn_mob_at(
     })
 }
 
+/// Picks a weighted random spawner for `category` from the biome at `block_pos`, like
+/// vanilla `NaturalSpawner::getRandomSpawnMobAt`.
 #[must_use]
 pub fn get_random_spawn_mob_at(
     world: &Arc<World>,
@@ -932,7 +936,7 @@ pub fn get_random_spawn_mob_at(
     {
         None
     } else {
-        match category.id {
+        let spawners = match category.id {
             id if id == MobCategory::MONSTER.id => biome.spawners.monster,
             id if id == MobCategory::CREATURE.id => biome.spawners.creature,
             id if id == MobCategory::AMBIENT.id => biome.spawners.ambient,
@@ -944,9 +948,18 @@ pub fn get_random_spawn_mob_at(
             id if id == MobCategory::WATER_AMBIENT.id => biome.spawners.water_ambient,
             id if id == MobCategory::MISC.id => biome.spawners.misc,
             _ => biome.spawners.misc,
-        }
-        .choose(&mut rng())
+        };
+        choose_spawner(spawners, &mut rng())
     }
+}
+
+/// Picks a spawner in proportion to its weight, like vanilla `WeightedList::getRandom`.
+/// Returns `None` for an empty list or when every weight is zero.
+fn choose_spawner<'a, R: rand::Rng + ?Sized>(
+    spawners: &'a [Spawner],
+    rng: &mut R,
+) -> Option<&'a Spawner> {
+    spawners.choose_weighted(rng, |s| s.weight).ok()
 }
 
 #[must_use]
@@ -1150,5 +1163,46 @@ mod tests {
                 block.name
             );
         }
+    }
+
+    #[test]
+    fn spawners_are_picked_by_weight() {
+        use rand::{SeedableRng, rngs::StdRng};
+
+        let spawner = |r#type, weight| Spawner {
+            r#type,
+            min_count: 1,
+            max_count: 1,
+            weight,
+        };
+        let mut rng = StdRng::seed_from_u64(0);
+
+        let spawners = [
+            spawner("minecraft:common", 99),
+            spawner("minecraft:rare", 1),
+        ];
+        let rare = (0..10_000)
+            .filter(|_| {
+                choose_spawner(&spawners, &mut rng).map(|s| s.r#type) == Some("minecraft:rare")
+            })
+            .count();
+        // Expect about 100; a uniform pick would give about 5000.
+        assert!(
+            (50..=150).contains(&rare),
+            "rare spawner picked {rare} times"
+        );
+
+        let spawners = [
+            spawner("minecraft:never", 0),
+            spawner("minecraft:always", 1),
+        ];
+        for _ in 0..1_000 {
+            assert_eq!(
+                choose_spawner(&spawners, &mut rng).map(|s| s.r#type),
+                Some("minecraft:always")
+            );
+        }
+        assert!(choose_spawner(&spawners[..1], &mut rng).is_none());
+        assert!(choose_spawner(&[], &mut rng).is_none());
     }
 }
