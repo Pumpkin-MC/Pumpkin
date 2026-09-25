@@ -1246,6 +1246,35 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
         host.get().add(entity)
     }
 
+    async fn spawn_falling_block(
+        mut host: Access<'_, PluginHostState, Self>,
+        world: Resource<World>,
+        pos: pumpkin::plugin::common::Position,
+        block_state: u16,
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::world::Entity>> {
+        let (world, plugin) = world_and_plugin(host.get(), &world)?;
+        let block_state = BlockStateId::new(block_state)
+            .ok_or_else(|| wasmtime::Error::msg("invalid falling block state ID"))?;
+        let pos = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
+        let base = crate::entity::Entity::new(
+            Arc::clone(&world),
+            pos,
+            &pumpkin_data::entity::EntityType::FALLING_BLOCK,
+        );
+        let falling = Arc::new(crate::entity::falling::FallingEntity::new(
+            base,
+            block_state,
+        ));
+        falling.set_block_state(block_state);
+        let entity: Arc<dyn crate::entity::EntityBase> = falling;
+        let spawned_entity = Arc::clone(&entity);
+        plugin
+            .store
+            .pump_blocking(&mut host, move || world.spawn_entity(spawned_entity))
+            .await?;
+        host.get().add_entity(entity)
+    }
+
     async fn strike_lightning(
         mut host: Access<'_, PluginHostState, Self>,
         world: Resource<World>,
