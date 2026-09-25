@@ -77,6 +77,30 @@ world plugin {
     import potions;
     /// Provides entity status / animation event types.
     import entity-statuses;
+    /// Provides Bedrock packet types.
+    import bedrock-packets;
+    /// Provides biome types.
+    import biomes;
+    /// Provides common shared data types.
+    import common;
+    /// Provides item data component types.
+    import data-components;
+    /// Provides entity type identifiers.
+    import entity-types;
+    /// Provides event data and priority types.
+    import event;
+    /// Provides item stack construction and manipulation.
+    import item-stack;
+    /// Provides Java packet types.
+    import java-packets;
+    /// Provides particle types.
+    import particles;
+    /// Provides permission types.
+    import permission;
+    /// Provides sound types.
+    import sounds;
+    /// Provides UUID types.
+    import uuid;
 
     // --- Plugin-provided exports ---
 
