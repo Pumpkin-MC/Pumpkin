@@ -1,6 +1,6 @@
 use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    OnScheduledTickArgs, PathComputationType,
+    OnScheduledTickArgs, PathComputationType, push_entities_up,
 };
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
@@ -14,7 +14,7 @@ pub struct DirtPathBlock;
 
 impl BlockBehaviour for DirtPathBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        // TODO: push up entities
+        push_entities_up(args.world, args.position);
         args.world.set_block_state(
             args.position,
             Block::DIRT.default_state.id,
