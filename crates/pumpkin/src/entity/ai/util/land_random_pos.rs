@@ -1,13 +1,14 @@
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
+use rand::RngExt;
+
 use super::{goal_utils, random_pos};
 use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::mob::Mob;
 use crate::world::World;
 
-/// Like [`super::default_random_pos::get_pos`], but the candidate is pushed up out of solid blocks
-/// and water is rejected.
+/// Like [`super::default_random_pos::get_pos`], but pushed out of solids and off water.
 #[must_use]
 pub fn get_pos(mob: &dyn Mob, horizontal_dist: i32, vertical_dist: i32) -> Option<Vector3<f64>> {
     let restrict = goal_utils::mob_restricted(mob, f64::from(horizontal_dist));
@@ -23,6 +24,55 @@ pub fn get_pos(mob: &dyn Mob, horizontal_dist: i32, vertical_dist: i32) -> Optio
         || {
             let direction =
                 random_pos::generate_random_direction(&mut rng, horizontal_dist, vertical_dist);
+            let pos = toward_direction(
+                mob,
+                &world,
+                f64::from(horizontal_dist),
+                restrict,
+                direction,
+                &mut rng,
+            )?;
+            move_pos_up_out_of_solid(mob, &world, &mut context, pos)
+        },
+        |pos| f64::from(mob.get_walk_target_value(pos)),
+    )
+}
+
+/// Like [`super::default_random_pos::get_pos_away`], but with the land rules of [`get_pos`].
+#[must_use]
+pub fn get_pos_away(
+    mob: &dyn Mob,
+    horizontal_dist: i32,
+    vertical_dist: i32,
+    avoid_pos: Vector3<f64>,
+) -> Option<Vector3<f64>> {
+    let restrict = goal_utils::mob_restricted(mob, f64::from(horizontal_dist));
+    let world = mob.get_entity().world.load_full();
+    let block_pos = mob.get_entity().block_pos.load();
+    let mut context = PathfindingContext::new(
+        Vector3::new(block_pos.0.x, block_pos.0.y, block_pos.0.z),
+        world.clone(),
+    );
+    let mut rng = mob.get_random();
+
+    let mut dir_away = mob.get_entity().pos.load() - avoid_pos;
+    if dir_away.length_squared() <= 0.0 {
+        // Standing on the target (vanilla picks a random horizontal direction)
+        dir_away = Vector3::new(rng.random::<f64>() - 0.5, 0.0, rng.random::<f64>() - 0.5);
+    }
+
+    random_pos::generate_random_pos(
+        || {
+            let direction = random_pos::generate_random_direction_within_radians(
+                &mut rng,
+                0.0,
+                f64::from(horizontal_dist),
+                vertical_dist,
+                0,
+                dir_away.x,
+                dir_away.z,
+                std::f64::consts::FRAC_PI_2,
+            )?;
             let pos = toward_direction(
                 mob,
                 &world,

@@ -14,6 +14,10 @@ pub trait PositionTracker: Send + Sync + fmt::Debug {
     fn current_position(&self) -> Vector3<f64>;
     fn current_block_position(&self) -> BlockPos;
     fn is_visible_by(&self, ctx: &VisibilityContext<'_>) -> bool;
+
+    fn tracks_spectator(&self) -> bool {
+        false
+    }
 }
 
 pub struct EntityTracker {
@@ -52,6 +56,10 @@ impl EntityTracker {
 }
 
 impl PositionTracker for EntityTracker {
+    fn tracks_spectator(&self) -> bool {
+        self.entity.is_spectator()
+    }
+
     fn current_position(&self) -> Vector3<f64> {
         if self.track_eye_height {
             self.entity.get_eye_pos()
@@ -72,7 +80,7 @@ impl PositionTracker for EntityTracker {
         if self.entity.get_living_entity().is_none() {
             return true;
         }
-        if !self.entity.get_entity().is_alive() {
+        if !super::super::behavior::utils::is_alive(self.entity.as_ref()) {
             return false;
         }
         ctx.brain

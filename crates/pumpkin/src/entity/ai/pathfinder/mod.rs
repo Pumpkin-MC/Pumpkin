@@ -510,6 +510,55 @@ impl PathNavigation {
         self.reset_stuck_timeout();
     }
 
+    pub fn adopt_path(
+        &mut self,
+        path: Path,
+        speed: f64,
+        entity: &LivingEntity,
+        stuck_check_pos: Vector3<f64>,
+    ) -> bool {
+        if !path.same_as(self.path.as_ref()) {
+            self.path = Some(path);
+        }
+        if self.path.as_ref().is_none_or(Path::is_done) {
+            return false;
+        }
+        self.trim_path(entity);
+        let Some(target) = self
+            .path
+            .as_ref()
+            .filter(|path| path.get_node_count() > 0)
+            .map(Path::get_target)
+        else {
+            return false;
+        };
+        // The tick idles without a goal, so install the one matching this path
+        self.current_goal = Some(NavigatorGoal::new(
+            entity.entity.pos.load(),
+            Vector3::new(
+                f64::from(target.0.x) + 0.5,
+                f64::from(target.0.y),
+                f64::from(target.0.z) + 0.5,
+            ),
+            speed,
+        ));
+        self.speed_modifier = speed;
+        self.last_stuck_check = self.tick_count;
+        self.last_stuck_check_pos = stuck_check_pos;
+        self.reset_stuck_timeout();
+        self.ticks_on_current_node = 0;
+        self.last_node_index = 0;
+        self.path_start_pos = Some(entity.entity.pos.load());
+        self.is_idle.store(false, Ordering::Relaxed);
+        true
+    }
+
+    pub fn clear_path(&mut self) {
+        self.path = None;
+        self.current_goal = None;
+        self.is_idle.store(true, Ordering::Relaxed);
+    }
+
     pub const fn set_speed(&mut self, speed: f64) {
         self.speed_modifier = speed;
         if let Some(goal) = &mut self.current_goal {
@@ -1270,37 +1319,14 @@ impl PathNavigationTrait for GroundPathNavigation {
     }
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
-        if let Some(new_path) = path {
-            self.inner.path = Some(new_path);
-            if self.is_done() {
-                return false;
-            }
-            self.inner.trim_path(entity);
-            if self
-                .inner
-                .path
-                .as_ref()
-                .map_or(0, path::Path::get_node_count)
-                == 0
-            {
-                return false;
-            }
-            self.inner.speed_modifier = speed;
-            let mob_pos = Vector3::new(
-                entity.entity.pos.load().x,
-                self.inner.get_surface_y(entity),
-                entity.entity.pos.load().z,
-            );
-            self.inner.last_stuck_check = self.inner.tick_count;
-            self.inner.last_stuck_check_pos = mob_pos;
-            self.inner.reset_stuck_timeout();
-            self.inner.is_idle.store(false, Ordering::Relaxed);
-            true
-        } else {
-            self.inner.path = None;
-            self.inner.is_idle.store(true, Ordering::Relaxed);
-            false
-        }
+        let Some(new_path) = path else {
+            self.inner.clear_path();
+            return false;
+        };
+        let pos = entity.entity.pos.load();
+        let stuck_check_pos = Vector3::new(pos.x, self.inner.get_surface_y(entity), pos.z);
+        self.inner
+            .adopt_path(new_path, speed, entity, stuck_check_pos)
     }
 
     fn create_path(
@@ -1591,23 +1617,13 @@ impl PathNavigationTrait for FlyingPathNavigation {
     }
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
-        if let Some(new_path) = path {
-            self.inner.path = Some(new_path);
-            if self.is_done() {
-                return false;
-            }
-            self.inner.speed_modifier = speed;
-            let mob_pos = entity.entity.pos.load();
-            self.inner.last_stuck_check = self.inner.tick_count;
-            self.inner.last_stuck_check_pos = mob_pos;
-            self.inner.reset_stuck_timeout();
-            self.inner.is_idle.store(false, Ordering::Relaxed);
-            true
-        } else {
-            self.inner.path = None;
-            self.inner.is_idle.store(true, Ordering::Relaxed);
-            false
-        }
+        let Some(new_path) = path else {
+            self.inner.clear_path();
+            return false;
+        };
+        let stuck_check_pos = entity.entity.pos.load();
+        self.inner
+            .adopt_path(new_path, speed, entity, stuck_check_pos)
     }
 
     fn create_path(
@@ -1890,27 +1906,15 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
     }
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
-        if let Some(new_path) = path {
-            self.inner.path = Some(new_path);
-            if self.is_done() {
-                return false;
-            }
-            self.inner.speed_modifier = speed;
-            let mob_pos = Vector3::new(
-                entity.entity.pos.load().x,
-                entity.entity.pos.load().y + f64::from(self.inner.mob_height) * 0.5,
-                entity.entity.pos.load().z,
-            );
-            self.inner.last_stuck_check = self.inner.tick_count;
-            self.inner.last_stuck_check_pos = mob_pos;
-            self.inner.reset_stuck_timeout();
-            self.inner.is_idle.store(false, Ordering::Relaxed);
-            true
-        } else {
-            self.inner.path = None;
-            self.inner.is_idle.store(true, Ordering::Relaxed);
-            false
-        }
+        let Some(new_path) = path else {
+            self.inner.clear_path();
+            return false;
+        };
+        let pos = entity.entity.pos.load();
+        let stuck_check_pos =
+            Vector3::new(pos.x, pos.y + f64::from(self.inner.mob_height) * 0.5, pos.z);
+        self.inner
+            .adopt_path(new_path, speed, entity, stuck_check_pos)
     }
 
     fn create_path(
@@ -2420,27 +2424,15 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
     }
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
-        if let Some(new_path) = path {
-            self.inner.path = Some(new_path);
-            if self.is_done() {
-                return false;
-            }
-            self.inner.speed_modifier = speed;
-            let mob_pos = Vector3::new(
-                entity.entity.pos.load().x,
-                entity.entity.pos.load().y + f64::from(self.inner.mob_height) * 0.5,
-                entity.entity.pos.load().z,
-            );
-            self.inner.last_stuck_check = self.inner.tick_count;
-            self.inner.last_stuck_check_pos = mob_pos;
-            self.inner.reset_stuck_timeout();
-            self.inner.is_idle.store(false, Ordering::Relaxed);
-            true
-        } else {
-            self.inner.path = None;
-            self.inner.is_idle.store(true, Ordering::Relaxed);
-            false
-        }
+        let Some(new_path) = path else {
+            self.inner.clear_path();
+            return false;
+        };
+        let pos = entity.entity.pos.load();
+        let stuck_check_pos =
+            Vector3::new(pos.x, pos.y + f64::from(self.inner.mob_height) * 0.5, pos.z);
+        self.inner
+            .adopt_path(new_path, speed, entity, stuck_check_pos)
     }
 
     fn create_path(

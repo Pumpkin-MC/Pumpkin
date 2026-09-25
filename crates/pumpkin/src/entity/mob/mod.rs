@@ -1,6 +1,6 @@
 use super::{Entity, EntityBase, ai::pathfinder::Navigator, living::LivingEntity};
-use crate::entity::ai::brain::Brain;
 use crate::entity::ai::brain::memory::PackedMemories;
+use crate::entity::ai::brain::{Brain, BrainTick};
 use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
@@ -35,6 +35,7 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
 use uuid::Uuid;
 
+pub mod abstract_piglin;
 pub mod bat;
 pub mod blaze;
 pub mod breeze;
@@ -58,6 +59,7 @@ pub mod phantom;
 pub mod piglin;
 pub mod piglin_ai;
 pub mod piglin_brute;
+pub mod piglin_brute_ai;
 pub mod pillager;
 pub mod raider;
 pub mod ravager;
@@ -75,6 +77,9 @@ pub mod zoglin;
 pub mod zombie;
 pub mod zombified_piglin;
 
+/// Work posted by another mob's tick, run against the owner's own brain on its next tick.
+pub type BrainMessage = Box<dyn FnOnce(&mut BrainTick<'_>) + Send>;
+
 pub struct MobEntity {
     pub living_entity: LivingEntity,
     pub goals_selector: std::sync::Mutex<GoalSelector>,
@@ -85,6 +90,7 @@ pub struct MobEntity {
     pub sensing: std::sync::Mutex<Sensing>,
     pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
     pub brain: std::sync::Mutex<Brain>,
+    pub brain_inbox: std::sync::Mutex<Vec<BrainMessage>>,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
     pub love_ticks: AtomicI32,
@@ -171,6 +177,7 @@ impl MobEntity {
             sensing: std::sync::Mutex::new(Sensing::default()),
             move_control: std::sync::Mutex::new(Box::new(MoveControl::default())),
             brain: std::sync::Mutex::new(Brain::default()),
+            brain_inbox: std::sync::Mutex::new(Vec::new()),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
             love_ticks: AtomicI32::new(0),
@@ -336,13 +343,103 @@ impl MobEntity {
         }
     }
 
+    /// Queues a write to this mob's brain; writing another mob's brain directly deadlocks.
+    pub fn post_to_brain(&self, message: BrainMessage) {
+        self.brain_inbox
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(message);
+    }
+
+    fn apply_brain_messages(tick: &mut BrainTick<'_>, messages: Vec<BrainMessage>) {
+        for message in messages {
+            message(tick);
+        }
+    }
+
+    fn take_brain_messages(&self) -> Vec<BrainMessage> {
+        std::mem::take(
+            &mut *self
+                .brain_inbox
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
+    }
+
+    /// Applies queued messages without running the brain, for a mob that died this tick.
+    pub fn apply_brain_inbox(&self, mob: &dyn Mob) {
+        let messages = self.take_brain_messages();
+        if messages.is_empty() {
+            return;
+        }
+        let world = self.living_entity.entity.world.load_full();
+        let time = world.get_world_age();
+        let mut brain = self
+            .brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Self::apply_brain_messages(
+            &mut BrainTick {
+                brain: &mut brain,
+                world: &world,
+                mob,
+                time,
+            },
+            messages,
+        );
+    }
+
     pub fn tick_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
         let time = world.get_world_age();
-        self.brain
+        let messages = self.take_brain_messages();
+        let mut brain = self
+            .brain
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .tick(&world, mob, time);
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Self::apply_brain_messages(
+            &mut BrainTick {
+                brain: &mut brain,
+                world: &world,
+                mob,
+                time,
+            },
+            messages,
+        );
+        brain.tick(&world, mob, time);
+        let mut tick = BrainTick {
+            brain: &mut brain,
+            world: &world,
+            mob,
+            time,
+        };
+        mob.after_brain_tick(&mut tick);
+    }
+
+    /// Builds the mob's brain from its provider, as vanilla does in the constructor.
+    pub fn init_brain(&self, mob: &dyn Mob) {
+        *self
+            .brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            mob.make_brain(&PackedMemories::empty());
+    }
+
+    /// Reaches the brain from outside a brain tick; a tick never waits on another mob's brain.
+    pub fn with_brain<R>(&self, mob: &dyn Mob, f: impl FnOnce(&mut BrainTick<'_>) -> R) -> R {
+        let world = self.living_entity.entity.world.load_full();
+        let time = world.get_world_age();
+        let mut brain = self
+            .brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut tick = BrainTick {
+            brain: &mut brain,
+            world: &world,
+            mob,
+            time,
+        };
+        f(&mut tick)
     }
 
     pub fn write_mob_nbt(&self, nbt: &mut NbtCompound) {
@@ -1064,6 +1161,28 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Runs after navigation and before the movement controls, where vanilla ticks a mob's brain.
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {}
 
+    /// Vanilla `Mob.wantsToPickUp`, which a plain mob answers with `canHoldItem`, always true.
+    /// Takes the brain because the nearest item sensor asks from inside the brain tick, where
+    /// locking it again would deadlock.
+    fn wants_to_pick_up(&self, _brain: &Brain, _stack: &ItemStack) -> bool {
+        true
+    }
+
+    /// Vanilla `Mob.canUseNonMeleeWeapon`, false unless the mob knows how to fire what it holds.
+    fn can_use_non_melee_weapon(&self, _stack: &ItemStack) -> bool {
+        false
+    }
+
+    /// Vanilla reads `ProjectileWeaponItem.getDefaultProjectileRange` off the main hand; a mob
+    /// answers `None` when it is not holding a weapon it can use at range.
+    fn non_melee_weapon_range(&self) -> Option<i32> {
+        None
+    }
+
+    /// Runs inside the brain lock right after `Brain::tick`, where vanilla mobs run their own
+    /// `updateActivity`.
+    fn after_brain_tick(&self, _tick: &mut BrainTick<'_>) {}
+
     /// Builds this mob's brain from its saved memories; goal mobs keep the brain-dead default.
     fn make_brain(&self, _packed: &PackedMemories) -> Brain {
         Brain::default()
@@ -1509,6 +1628,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_home_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
         <T as Mob>::get_home(self)
+    }
+
+    fn as_mob_entity(&self) -> Option<&MobEntity> {
+        Some(<T as Mob>::get_mob_entity(self))
     }
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
