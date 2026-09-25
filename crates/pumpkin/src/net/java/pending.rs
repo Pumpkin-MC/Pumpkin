@@ -75,7 +75,7 @@ pub struct PendingConnection {
     pub packet_limiter: PacketRateLimiter,
     pub verify_token: Option<[u8; 4]>,
     pub vine_challenge: Option<[u8; 16]>,
-    /// For the connection packet events.
+    /// For the multiversion plugin's connection packet events.
     server: Weak<Server>,
 }
 
@@ -176,8 +176,8 @@ impl PendingConnection {
         }
     }
 
-    /// Server for the connection packet events, only for clients below 26.3 after handshake.
-    fn translating_server(&self) -> Option<Arc<Server>> {
+    /// Connection packet events for clients below 26.3, after handshake.
+    fn multiversion_server(&self) -> Option<Arc<Server>> {
         if self.version.load() == CURRENT_MC_VERSION
             || self.connection_state.load() == ConnectionState::HandShake
         {
@@ -204,9 +204,9 @@ impl PendingConnection {
         let _ = self.network_writer.flush().await;
     }
 
-    /// `ConnectionPacketSentEvent` with the 26.3 packet. `None` when cancelled.
+    /// `ConnectionPacketSentEvent` in the server's 26.3 format. `None` when cancelled.
     async fn translate_outgoing(&self, packet_data: Bytes) -> Option<Bytes> {
-        let Some(server) = self.translating_server() else {
+        let Some(server) = self.multiversion_server() else {
             return Some(packet_data);
         };
         if !server
@@ -239,21 +239,23 @@ impl PendingConnection {
         Some(framed.into())
     }
 
-    /// `ConnectionPacketReceivedEvent` with the client's packet; handlers rewrite it to 26.3.
+    /// `ConnectionPacketReceivedEvent` in the client's format; handlers rewrite to 26.3.
     /// `None` when cancelled.
     async fn translate_incoming(&self, packet: &RawPacket) -> Option<RawPacket> {
-        let unchanged = || RawPacket {
-            id: packet.id,
-            payload: packet.payload.clone(),
-        };
-        let Some(server) = self.translating_server() else {
-            return Some(unchanged());
+        let Some(server) = self.multiversion_server() else {
+            return Some(RawPacket {
+                id: packet.id,
+                payload: packet.payload.clone(),
+            });
         };
         if !server
             .plugin_manager
             .has_handlers::<ConnectionPacketReceivedEvent>()
         {
-            return Some(unchanged());
+            return Some(RawPacket {
+                id: packet.id,
+                payload: packet.payload.clone(),
+            });
         }
 
         let mut event = ConnectionPacketReceivedEvent::new(

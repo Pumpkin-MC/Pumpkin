@@ -106,7 +106,7 @@ pub(crate) fn from_wit_server_link(
     Ok((label, link.url))
 }
 
-const fn to_wasm_java_version(
+pub(crate) const fn to_wasm_java_version(
     version: JavaMinecraftVersion,
 ) -> pumpkin::plugin::player::JavaMinecraftVersion {
     match version {
