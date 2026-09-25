@@ -54,6 +54,9 @@ impl BlockBehaviour for RespawnAnchorBlock {
         let props = RespawnAnchorLikeProperties::from_state_id(state_id);
 
         if !args.world.dimension.respawn_anchor_works {
+            if props.charges == 0 {
+                return BlockActionResult::Pass;
+            }
             args.world
                 .break_block(args.position, None, BlockFlags::SKIP_DROPS);
             let center_pos = args.position.to_centered_f64();
