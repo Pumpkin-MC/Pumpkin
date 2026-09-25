@@ -503,11 +503,11 @@ impl EntityBase for MinecartEntity {
             self.vehicle.entity.send_velocity();
         }
 
-        if attempted_to != from {
-            if let Ok(passengers) = self.vehicle.entity.passengers.try_lock() {
-                for passenger in passengers.iter() {
-                    passenger.get_entity().set_pos(to);
-                }
+        if attempted_to != from
+            && let Ok(passengers) = self.vehicle.entity.passengers.try_lock()
+        {
+            for passenger in passengers.iter() {
+                passenger.get_entity().set_pos(to);
             }
         }
 
