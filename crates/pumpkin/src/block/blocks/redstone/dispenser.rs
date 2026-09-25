@@ -418,8 +418,12 @@ impl DispenserBlock {
         } else if Self::dispense_equipment(ctx, item) {
             // Armor, elytra, heads, saddles, horse/wolf armor and llama carpets
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+        } else if item.item.id == Item::BONE_MEAL.id {
+            if !Self::dispense_bone_meal(ctx, item) {
+                Self::drop_item(ctx, item);
+            }
         } else {
-            // TODO: Bone meal, bottles o' enchanting, chests onto llamas, brushes onto armadillos
+            // TODO: Bottles o' enchanting, chests onto llamas, brushes onto armadillos
             // Default / Drop
             Self::drop_item(ctx, item);
         }
@@ -1064,6 +1068,24 @@ impl DispenserBlock {
             .set_block_state(&target, Block::MUD.default_state.id, BlockFlags::NOTIFY_ALL);
 
         *item = ItemStack::new(1, &Item::GLASS_BOTTLE);
+        Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+        true
+    }
+
+    fn dispense_bone_meal(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
+        let target = Self::target_position(ctx);
+        let (block, state) = ctx.world.get_block_and_state(&target);
+        if !ctx
+            .world
+            .block_registry
+            .bone_meal(block, ctx.world, &target, state.id)
+        {
+            return false;
+        }
+
+        ctx.world
+            .sync_world_event(WorldEvent::ParticlesAndSoundPlantGrowth, target, 15);
+        let _ = item.split(1);
         Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
         true
     }
