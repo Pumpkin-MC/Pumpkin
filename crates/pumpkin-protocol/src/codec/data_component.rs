@@ -2821,20 +2821,35 @@ mod tests {
         }
     }
 
-    #[test]
-    fn partial_profile_is_tagged_false() {
-        let mut encoded = Vec::new();
-        textured_profile().serialize(&mut encoded).unwrap();
-        assert_eq!(encoded[0], 0);
+    /// The wire form vanilla expects for `textured_profile`.
+    fn textured_profile_bytes() -> Vec<u8> {
+        let mut bytes = vec![
+            0, // partial profile tag
+            1, 5, // name present, 5 bytes
+        ];
+        bytes.extend_from_slice(b"Notch");
+        bytes.push(0); // no id
+        bytes.push(1); // one property
+        bytes.push(8); // property name, 8 bytes
+        bytes.extend_from_slice(b"textures");
+        bytes.push(20); // property value, 20 bytes
+        bytes.extend_from_slice(b"eyJ0ZXh0dXJlcyI6e319");
+        bytes.push(0); // no signature
+        bytes.extend_from_slice(&[0, 0, 0, 0]); // no texture, cape, elytra, model
+        bytes
     }
 
     #[test]
-    fn partial_profile_round_trips() {
-        let profile = textured_profile();
+    fn partial_profile_is_written_with_a_false_tag() {
         let mut encoded = Vec::new();
-        profile.serialize(&mut encoded).unwrap();
-        let decoded = ProfileImpl::deserialize(&mut encoded.as_slice()).unwrap();
-        assert_eq!(decoded, profile);
+        textured_profile().serialize(&mut encoded).unwrap();
+        assert_eq!(encoded, textured_profile_bytes());
+    }
+
+    #[test]
+    fn partial_profile_is_read_as_name_then_id() {
+        let decoded = ProfileImpl::deserialize(&mut textured_profile_bytes().as_slice()).unwrap();
+        assert_eq!(decoded, textured_profile());
     }
 
     #[test]
