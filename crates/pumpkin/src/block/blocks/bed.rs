@@ -9,6 +9,7 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
+use pumpkin_data::entity::EntityPose;
 
 use crate::block::OnLandedUponArgs;
 use crate::block::UpdateEntityMovementAfterFallOnArgs;
@@ -19,6 +20,7 @@ use crate::block::{
     PathComputationType, PlacedArgs,
 };
 use crate::entity::{Entity, EntityBase, player::Player};
+use crate::entity::passive::villager::VillagerEntity;
 use crate::world::World;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
@@ -247,15 +249,32 @@ impl BedBlock {
 
         // Make sure the bed is not occupied
         if bed_props.occupied {
-            // TODO: Wake up villager
+            let mut villager_found = false;
 
-            player.send_system_message_raw(
+            for entity in world.entities.load().iter() {
+                if entity.get_entity().entity_type != &EntityType::VILLAGER {
+                    continue;
+                }
+                let Some(villager) = entity.cast_any().downcast_ref::<VillagerEntity>() else {
+                    continue;
+                };
+                if villager.get_home_pos() == Some(bed_head_pos) && entity.get_entity().pose.load() == EntityPose::Sleeping {
+                    villager_found = true;
+                    entity.get_entity().set_pose(EntityPose::Standing);
+                    entity.get_entity().set_synced_data(pumpkin_data::tracked_data::villager::SLEEPING_POS_ID, None::<BlockPos>);
+                    break;
+                }
+            }
+
+            if !villager_found {
+                player.send_system_message_raw(
                 &pumpkin_macros::translate_cross!(
-                    translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
-                    translation::bedrock::TILE_BED_OCCUPIED
-                ),
-                true,
-            );
+                        translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
+                        translation::bedrock::TILE_BED_OCCUPIED
+                    ),
+                    true,
+                );
+            }
             return BlockActionResult::SuccessServer;
         }
 
