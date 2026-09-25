@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::block::entities::bed::BedBlockEntity;
 use pumpkin_data::block_properties::BedPart;
+use pumpkin_data::entity::EntityPose;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
 use pumpkin_data::{Block, BlockState, BlockStateId};
@@ -9,7 +10,6 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
-use pumpkin_data::entity::EntityPose;
 
 use crate::block::OnLandedUponArgs;
 use crate::block::UpdateEntityMovementAfterFallOnArgs;
@@ -19,8 +19,8 @@ use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
     PathComputationType, PlacedArgs,
 };
-use crate::entity::{Entity, EntityBase, player::Player};
 use crate::entity::passive::villager::VillagerEntity;
+use crate::entity::{Entity, EntityBase, player::Player};
 use crate::world::World;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
@@ -258,17 +258,22 @@ impl BedBlock {
                 let Some(villager) = entity.cast_any().downcast_ref::<VillagerEntity>() else {
                     continue;
                 };
-                if villager.get_home_pos() == Some(bed_head_pos) && entity.get_entity().pose.load() == EntityPose::Sleeping {
+                if villager.get_home_pos() == Some(bed_head_pos)
+                    && entity.get_entity().pose.load() == EntityPose::Sleeping
+                {
                     villager_found = true;
                     entity.get_entity().set_pose(EntityPose::Standing);
-                    entity.get_entity().set_synced_data(pumpkin_data::tracked_data::villager::SLEEPING_POS_ID, None::<BlockPos>);
+                    entity.get_entity().set_synced_data(
+                        pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
+                        None::<BlockPos>,
+                    );
                     break;
                 }
             }
 
             if !villager_found {
                 player.send_system_message_raw(
-                &pumpkin_macros::translate_cross!(
+                    &pumpkin_macros::translate_cross!(
                         translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
                         translation::bedrock::TILE_BED_OCCUPIED
                     ),
