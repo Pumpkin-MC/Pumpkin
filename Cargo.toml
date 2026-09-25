@@ -17,7 +17,7 @@ members = [
     "crates/pumpkin-plugin-runtime",
     "crates/pumpkin-plugin-utils",
     "crates/pumpkin-protocol",
-    "crates/pumpkin-util", 
+    "crates/pumpkin-util",
     "crates/pumpkin-host-bindings",
     "crates/pumpkin-world",
     "tools/pumpkin-codegen",
@@ -226,9 +226,12 @@ rustc_version_runtime = { version = "0.3", default-features = false }
 ordered-float = { version = "5.4", default-features = false, features = ["std"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
-wasmtime = { version = "49", default-features = false, features = ["runtime", "component-model", "component-model-async", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
-wasmtime-wasi = { version = "49", default-features = false, features = ["p2", "p3"] }
-wasmtime-wasi-http = { version = "49", default-features = false, features = ["p2", "p3", "default-send-request"] }
+# Temporary pin to the approved implementation of Component Model sync reentry:
+# https://github.com/bytecodealliance/wasmtime/commit/f6b3140dbb1d9b436ef523d14740292c956b0364
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", rev = "f6b3140dbb1d9b436ef523d14740292c956b0364", default-features = false, features = ["runtime", "component-model", "component-model-async", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
+wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", rev = "f6b3140dbb1d9b436ef523d14740292c956b0364", default-features = false, features = ["p2", "p3"] }
+wasmtime-wasi-http = { git = "https://github.com/bytecodealliance/wasmtime", rev = "f6b3140dbb1d9b436ef523d14740292c956b0364", default-features = false, features = ["p2", "p3", "default-send-request"] }
+
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.11", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
