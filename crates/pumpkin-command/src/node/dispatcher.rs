@@ -151,6 +151,26 @@ impl<S: CommandSource> CommandDispatcher<S> {
         }
     }
 
+    pub fn remove_commands_from_source(&mut self, source: &str) {
+        let primary_names = self
+            .tree
+            .get_root_children()
+            .into_iter()
+            .filter_map(|node_id| {
+                let metadata = &self.tree[node_id].meta;
+                (metadata.source.as_deref() == Some(source)).then(|| metadata.literal.to_string())
+            })
+            .collect::<Vec<_>>();
+
+        for primary_name in primary_names {
+            for alias in self.tree_alias_names(&primary_name) {
+                self.tree.remove_root_child(&alias);
+            }
+            self.tree.remove_root_child(&primary_name);
+            self.reactivate_plugin_command(&primary_name);
+        }
+    }
+
     /// Returns `true` if a command is disabled or its plugin is inactive.
     #[must_use]
     pub fn is_disabled(&self, name: &str) -> bool {
@@ -1109,6 +1129,39 @@ mod test {
             dispatcher
                 .execute_input("plugin-command", &source)
                 .is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND)
+        );
+    }
+
+    #[test]
+    fn removing_plugin_commands_drops_their_subtree() {
+        let mut dispatcher = CommandDispatcher::new();
+        let executor: fn(&CommandContext) -> CommandExecutorResult = |_| Ok(1);
+        let command = |child: &'static str| {
+            CommandArgumentBuilder::new("plugin-command", "A plugin command")
+                .with_source("test-plugin")
+                .then(LiteralArgumentBuilder::new(child).executes(executor))
+        };
+        let source = DummySource::dummy();
+
+        dispatcher.register_with_aliases(command("old"), &["plugin-alias"]);
+        assert_eq!(dispatcher.execute_input("plugin-alias old", &source), Ok(1));
+
+        dispatcher.remove_commands_from_source("test-plugin");
+        assert!(dispatcher.tree.get("plugin-command").is_none());
+        assert!(dispatcher.tree.get("plugin-alias").is_none());
+        assert!(
+            dispatcher
+                .execute_input("plugin-command old", &source)
+                .is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND)
+        );
+
+        dispatcher.register_with_aliases(command("new"), &["plugin-alias"]);
+        assert_eq!(dispatcher.execute_input("plugin-command new", &source), Ok(1));
+        assert_eq!(dispatcher.execute_input("plugin-alias new", &source), Ok(1));
+        assert!(dispatcher.execute_input("plugin-command old", &source).is_err());
+        assert_eq!(
+            dispatcher.tree_alias_names("plugin-command"),
+            vec!["plugin-alias"]
         );
     }
 

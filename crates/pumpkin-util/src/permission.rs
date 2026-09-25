@@ -112,6 +112,11 @@ impl PermissionRegistry {
             .expect("Permission should have been registered successfully");
     }
 
+    pub fn unregister_namespace(&self, namespace: &str) {
+        let prefix = format!("{namespace}:");
+        self.permissions.retain(|node, _| !node.starts_with(&prefix));
+    }
+
     /// Retrieves a permission node by its name.
     ///
     /// # Parameters
@@ -256,6 +261,10 @@ impl PermissionManager {
     /// Registers a new permission node in the global registry or panics if already registered.
     pub fn register_permission_or_panic(&self, permission: Permission) {
         self.registry.register_permission_or_panic(permission);
+    }
+
+    pub fn unregister_namespace(&self, namespace: &str) {
+        self.registry.unregister_namespace(namespace);
     }
 
     /// Retrieves a permission node by its name from the registry.
@@ -450,5 +459,32 @@ impl<'de> Deserialize<'de> for PermissionLvl {
                 "Invalid value for OpLevel: {value}"
             ))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Permission, PermissionDefault, PermissionRegistry};
+
+    #[test]
+    fn unregister_namespace_removes_only_that_plugin() {
+        let registry = PermissionRegistry::new();
+        for node in ["a:x", "a:y", "a-b:x", "b:x"] {
+            assert!(
+                registry
+                    .register_permission(Permission::new(node, "", PermissionDefault::Allow))
+                    .is_ok()
+            );
+        }
+
+        registry.unregister_namespace("a");
+        assert!(!registry.has_permission("a:x"));
+        assert!(registry.has_permission("a-b:x"));
+        assert!(registry.has_permission("b:x"));
+        assert!(
+            registry
+                .register_permission(Permission::new("a:x", "", PermissionDefault::Allow))
+                .is_ok()
+        );
     }
 }
