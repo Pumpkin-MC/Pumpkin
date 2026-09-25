@@ -56,6 +56,10 @@ impl TrackTargetGoal {
     fn can_navigate_to_entity(&mut self, mob: &dyn Mob) -> bool {
         self.check_can_navigate_cooldown = to_goal_ticks(10 + mob.get_random().random_range(0..5));
         // TODO: after implementing path
+        // Path inside `can_start`, claim `TARGET` only afterwards: the selector runs
+        // `can_replace_all` -> `can_start` -> claim -> `start`, so a failed path must not evict revenge.
+        // No navigator lock earlier in the tick (`has_malus` callers must not hold it).
+        // Selectors are `mem::take`n during the AI tick: never lock them from a goal.
         false
     }
 

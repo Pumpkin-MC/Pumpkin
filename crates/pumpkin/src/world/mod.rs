@@ -20,6 +20,7 @@ use std::{
 use tracing::{debug, error, info, trace, warn};
 
 mod active_chunks;
+pub mod brightness;
 pub mod chunker;
 pub mod explosion;
 pub mod generation_cache;
@@ -5294,10 +5295,27 @@ impl World {
         )
     }
 
+    /// Sunlight only: no block light, so torches cannot shift it. Same curve as
+    /// [`Self::get_light_level_dependent_magic_value`].
+    #[must_use]
+    pub fn get_sunlight_brightness(&self, pos: &BlockPos) -> f32 {
+        self.sunlight_from_sky_light(self.get_sky_light_level(pos))
+    }
+
+    /// [`Self::get_sunlight_brightness`] for a sky light the caller already read.
+    #[must_use]
+    pub fn sunlight_from_sky_light(&self, sky_light: u8) -> f32 {
+        let effective = self.effective_sky_brightness_from(sky_light).clamp(0, 15);
+        brightness::light_level_curve(effective as u8, self.dimension.ambient_light)
+    }
+
     #[must_use]
     pub fn get_effective_sky_brightness(&self, pos: &BlockPos) -> i32 {
-        let sky_light = self.get_sky_light_level(pos) as i32;
-        sky_light - self.get_sky_darken()
+        self.effective_sky_brightness_from(self.get_sky_light_level(pos))
+    }
+
+    fn effective_sky_brightness_from(&self, sky_light: u8) -> i32 {
+        i32::from(sky_light) - self.get_sky_darken()
     }
 
     #[must_use]
@@ -5346,6 +5364,15 @@ impl World {
         self.get_raw_brightness(pos, self.get_sky_darken() as u8)
     }
 
+    /// local brightness through the dimension curve.
+    #[must_use]
+    pub fn get_light_level_dependent_magic_value(&self, pos: &BlockPos) -> f32 {
+        brightness::light_level_curve(
+            self.get_max_local_raw_brightness(pos),
+            self.dimension.ambient_light,
+        )
+    }
+
     pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
         self.level
             .light_engine
@@ -5360,9 +5387,19 @@ impl World {
 
     #[must_use]
     pub fn can_see_sky(&self, position: &BlockPos) -> bool {
+        self.is_within_build_height(position)
+            && self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
+    }
+
+    /// [`Self::can_see_sky`] for a sky light the caller already read.
+    #[must_use]
+    pub const fn can_see_sky_with_light(&self, position: &BlockPos, sky_light: u8) -> bool {
+        self.is_within_build_height(position) && sky_light >= MAX_LIGHT_LEVEL
+    }
+
+    const fn is_within_build_height(&self, position: &BlockPos) -> bool {
         position.0.y >= self.dimension.min_y
             && position.0.y < self.dimension.min_y + self.dimension.height
-            && self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
     }
 
     pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {

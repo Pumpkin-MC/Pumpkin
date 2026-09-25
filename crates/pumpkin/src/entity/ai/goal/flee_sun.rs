@@ -1,7 +1,7 @@
 use super::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
-use pumpkin_data::data_component_impl::EquipmentSlot;
+use crate::entity::mob::sun_burn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -68,14 +68,7 @@ impl Goal for FleeSunGoal {
             return false;
         }
 
-        let has_helmet = mob
-            .get_mob_entity()
-            .living_entity
-            .entity_equipment
-            .try_lock()
-            .is_ok_and(|eq| !eq.get(&EquipmentSlot::HEAD).is_empty());
-
-        if has_helmet {
+        if sun_burn::is_protected(mob) {
             return false;
         }
 

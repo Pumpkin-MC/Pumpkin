@@ -67,3 +67,35 @@ pub fn has_malus(mob: &dyn Mob, context: &mut PathfindingContext, pos: &BlockPos
 pub fn is_solid(world: &World, pos: &BlockPos) -> bool {
     world.get_block_state(pos).is_solid()
 }
+
+const ALERT_RANGE_Y: f64 = 10.0;
+
+/// Nearby mobs of the same type that are free to take over `mob`'s grievance.
+/// Anchored on a unit cube at the mob's feet, so a wide hitbox does not widen the call.
+pub fn nearby_same_type(mob: &dyn Mob) -> Vec<std::sync::Arc<dyn crate::entity::EntityBase>> {
+    use crate::entity::predicate::EntityPredicate;
+    use pumpkin_data::attributes::Attributes;
+    use pumpkin_util::math::boundingbox::BoundingBox;
+
+    let mob_entity = mob.get_mob_entity();
+    let entity = &mob_entity.living_entity.entity;
+    let within = mob_entity
+        .living_entity
+        .get_attribute_value(&Attributes::FOLLOW_RANGE);
+
+    let world = entity.world.load();
+    let pos = entity.pos.load();
+    let search_box =
+        BoundingBox::new(pos, pos.add_raw(1.0, 1.0, 1.0)).expand(within, ALERT_RANGE_Y, within);
+
+    world
+        .get_entities_at_box(&search_box)
+        .into_iter()
+        .filter(|other| {
+            let other_entity = other.get_entity();
+            other_entity.entity_id != entity.entity_id
+                && other_entity.entity_type == entity.entity_type
+                && EntityPredicate::ExceptSpectator.test(other_entity)
+        })
+        .collect()
+}

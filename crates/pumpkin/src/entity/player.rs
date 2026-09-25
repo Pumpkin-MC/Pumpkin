@@ -4799,6 +4799,7 @@ impl Player {
         self.trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilled,
         );
+        crate::entity::mob::neutral::tell_neutral_mobs_player_died(self, &self.world());
         let block_pos = self.position().to_block_pos();
 
         let keep_inventory = { self.world().level_info.load().game_rules.keep_inventory };
@@ -6343,6 +6344,18 @@ impl Player {
 
     pub fn is_creative(&self) -> bool {
         self.gamemode.load() == GameMode::Creative
+    }
+
+    /// Whether mobs may target this player at all: not creative or spectator, and the world
+    /// is not Peaceful. Alive state is left out on purpose, a grudge may outlives the death.
+    // TODO: vanilla `Player.canBeSeenAsEnemy` also excludes `abilities.invulnerable`. The plugin
+    // `set_invulnerable` sets only that, so such a survival player is still targeted. Check it
+    // here and route `TargetPredicate` through this for players.
+    #[must_use]
+    pub fn is_valid_mob_target(&self) -> bool {
+        !self.is_creative()
+            && !self.is_spectator()
+            && self.world().level_info.load().difficulty != Difficulty::Peaceful
     }
 
     /// Swing the hand of the player

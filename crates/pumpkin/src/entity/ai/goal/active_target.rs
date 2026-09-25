@@ -4,14 +4,62 @@ use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
+use crate::entity::mob::neutral::{NeutralMob, find_by_uuid};
 use crate::entity::{EntityBase, mob::MobEntity, player::Player};
 use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use rand::RngExt;
 use std::sync::Arc;
+use uuid::Uuid;
 
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
+
+/// Extra gate on top of the target predicate, for mobs that pick targets conditionally.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub enum TargetCondition {
+    #[default]
+    Always,
+    /// Only what the mob holds a grudge against. Neutral mobs.
+    AngryAt,
+    /// Nothing at all in daylight. Spiders.
+    NoDaylight,
+}
+
+impl TargetCondition {
+    /// Checked once per search attempt and every tick the goal continues.
+    fn allows_search(self, mob: &dyn Mob) -> bool {
+        match self {
+            Self::NoDaylight => !mob.get_mob_entity().is_in_daylight(),
+            // A calm mob matches nobody: skip the search. Grudge check first, it is lock-free.
+            Self::AngryAt => mob.as_neutral().is_some_and(|neutral| {
+                neutral.get_persistent_anger_target().is_some() || neutral.is_angry()
+            }),
+            Self::Always => true,
+        }
+    }
+
+    /// Fixed candidate the grudge points at. Replaces the area search.
+    /// Universal anger has no such target and still searches.
+    fn grudge_target(self, mob: &dyn Mob) -> Option<Uuid> {
+        match self {
+            Self::AngryAt => mob
+                .as_neutral()
+                .and_then(NeutralMob::get_persistent_anger_target),
+            Self::Always | Self::NoDaylight => None,
+        }
+    }
+
+    /// Checked per candidate and against the held target while the goal continues.
+    fn allows_target(self, mob: &dyn Mob, target: &dyn EntityBase, world: &World) -> bool {
+        match self {
+            Self::AngryAt => mob
+                .as_neutral()
+                .is_some_and(|neutral| neutral.is_angry_at(target, world)),
+            Self::Always | Self::NoDaylight => true,
+        }
+    }
+}
 
 pub struct ActiveTargetGoal {
     track_target_goal: TrackTargetGoal,
@@ -19,6 +67,7 @@ pub struct ActiveTargetGoal {
     reciprocal_chance: i32,
     target_type: Option<&'static EntityType>,
     target_predicate: TargetPredicate,
+    condition: TargetCondition,
 }
 
 impl ActiveTargetGoal {
@@ -49,7 +98,15 @@ impl ActiveTargetGoal {
             reciprocal_chance: to_goal_ticks(reciprocal_chance),
             target_type: Some(target_type),
             target_predicate,
+            condition: TargetCondition::Always,
         }
+    }
+
+    /// Chains onto any of the constructors, including the boxed ones.
+    #[must_use]
+    pub fn when(mut self: Box<Self>, condition: TargetCondition) -> Box<Self> {
+        self.condition = condition;
+        self
     }
 
     #[must_use]
@@ -70,6 +127,7 @@ impl ActiveTargetGoal {
             reciprocal_chance: to_goal_ticks(DEFAULT_RECIPROCAL_CHANCE),
             target_type: Some(target_type),
             target_predicate,
+            condition: TargetCondition::Always,
         })
     }
 
@@ -96,6 +154,7 @@ impl ActiveTargetGoal {
             reciprocal_chance: to_goal_ticks(reciprocal_chance),
             target_type: None,
             target_predicate,
+            condition: TargetCondition::Always,
         })
     }
 
@@ -125,10 +184,23 @@ impl ActiveTargetGoal {
 
         // Pick the nearest candidate that passes the conditions, not the nearest overall.
         let predicate = &self.target_predicate;
-        let found = if self.target_type == Some(&EntityType::PLAYER) {
+        let condition = self.condition;
+        let found = if let Some(uuid) = condition.grudge_target(mob) {
+            // Same range rule as the area search: follow range from the eye.
+            find_by_uuid(&world, uuid).filter(|candidate| {
+                let entity = candidate.get_entity();
+                self.target_type
+                    .is_none_or(|target_type| entity.entity_type == target_type)
+                    && entity.pos.load().squared_distance_to_vec(&search_pos)
+                        <= follow_range * follow_range
+                    && predicate.test(&world, Some(mob), candidate.as_ref())
+                    && condition.allows_target(mob, candidate.as_ref(), &world)
+            })
+        } else if self.target_type == Some(&EntityType::PLAYER) {
             world
                 .get_nearest_player(search_pos, follow_range, |player| {
                     predicate.test(&world, Some(mob), player.as_ref())
+                        && condition.allows_target(mob, player.as_ref(), &world)
                 })
                 .map(|p: Arc<Player>| p as Arc<dyn EntityBase>)
         } else {
@@ -137,7 +209,10 @@ impl ActiveTargetGoal {
                 search_pos,
                 follow_range,
                 entity_types.as_ref().map(<[&EntityType; 1]>::as_slice),
-                |entity| predicate.test(&world, Some(mob), entity.as_ref()),
+                |entity| {
+                    predicate.test(&world, Some(mob), entity.as_ref())
+                        && condition.allows_target(mob, entity.as_ref(), &world)
+                },
             )
         };
 
@@ -152,11 +227,24 @@ impl Goal for ActiveTargetGoal {
         {
             return false;
         }
+        if !self.condition.allows_search(mob) {
+            return false;
+        }
         self.find_closest_target(mob);
         self.target.is_some()
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        // Condition holding at start must keep holding. daylight, grudge.
+        if !self.condition.allows_search(mob) {
+            return false;
+        }
+        if let Some(target) = mob.get_mob_entity().get_target() {
+            let world = mob.get_mob_entity().living_entity.entity.world.load();
+            if !self.condition.allows_target(mob, target.as_ref(), &world) {
+                return false;
+            }
+        }
         self.track_target_goal.should_continue(mob)
     }
 
