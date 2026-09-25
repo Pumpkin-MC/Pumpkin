@@ -159,13 +159,35 @@ impl MobEntity {
         }
     }
 
+    fn navigation_for_entity_type(entity_type: &EntityType) -> Navigator {
+        const WATER_BOUND_ENTITY_IDS: [u16; 9] = [
+            EntityType::COD.id,
+            EntityType::SALMON.id,
+            EntityType::TROPICAL_FISH.id,
+            EntityType::PUFFERFISH.id,
+            EntityType::SQUID.id,
+            EntityType::GLOW_SQUID.id,
+            EntityType::DOLPHIN.id,
+            EntityType::TADPOLE.id,
+            EntityType::AXOLOTL.id,
+        ];
+
+        if WATER_BOUND_ENTITY_IDS.contains(&entity_type.id) {
+            Navigator::water_bound(entity_type.id == EntityType::DOLPHIN.id)
+        } else {
+            Navigator::default()
+        }
+    }
+
     #[must_use]
     pub fn new(entity: Entity) -> Self {
+        let navigator = Self::navigation_for_entity_type(entity.entity_type);
+
         Self {
             living_entity: LivingEntity::new(entity),
             goals_selector: std::sync::Mutex::new(GoalSelector::default()),
             target_selector: std::sync::Mutex::new(GoalSelector::default()),
-            navigator: std::sync::Mutex::new(Navigator::default()),
+            navigator: std::sync::Mutex::new(navigator),
             target: std::sync::Mutex::new(None),
             look_control: std::sync::Mutex::new(LookControl::default()),
             sensing: std::sync::Mutex::new(Sensing::default()),
@@ -1622,4 +1644,32 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
 pub trait RangedAttackMob: Mob + Send + Sync {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, power: f32);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::entity::EntityType;
+
+    #[test]
+    fn aquatic_mobs_do_not_use_ground_navigation() {
+        for entity_type in [
+            &EntityType::COD,
+            &EntityType::SALMON,
+            &EntityType::TROPICAL_FISH,
+            &EntityType::PUFFERFISH,
+            &EntityType::SQUID,
+            &EntityType::GLOW_SQUID,
+            &EntityType::DOLPHIN,
+            &EntityType::TADPOLE,
+            &EntityType::AXOLOTL,
+        ] {
+            let navigator = MobEntity::navigation_for_entity_type(entity_type);
+            assert!(
+                !navigator.can_navigate_ground(),
+                "{} should use water-bound navigation",
+                entity_type.resource_name
+            );
+        }
+    }
 }
