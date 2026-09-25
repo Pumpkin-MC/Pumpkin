@@ -10,6 +10,7 @@ impl JavaClient {
         let last_pos = entity.pos.load();
         let pos = Vector3::new(packet.x, packet.y, packet.z);
         let mut final_pos = pos;
+        let mut other_player_passengers = Vec::new();
         let vehicle = entity
             .vehicle
             .lock()
@@ -25,6 +26,22 @@ impl JavaClient {
                 let move_result = vehicle.move_vehicle(from, pos);
                 final_pos = move_result.position;
                 vehicle_entity.set_pos(final_pos);
+
+                let passengers = vehicle_entity
+                    .passengers
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                let world = vehicle_entity.world.load();
+                for passenger in passengers {
+                    let passenger_entity = passenger.get_entity();
+                    passenger_entity.set_pos(final_pos);
+                    if passenger_entity.entity_id != entity.entity_id
+                        && let Some(player) = world.get_player_by_id(passenger_entity.entity_id)
+                    {
+                        other_player_passengers.push(player);
+                    }
+                }
 
                 if move_result.cancelled {
                     vehicle_entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
@@ -43,6 +60,9 @@ impl JavaClient {
             }
         }
         entity.set_pos(final_pos);
+        for passenger in other_player_passengers {
+            chunker::update_position(&passenger);
+        }
         let distance = last_pos.squared_distance_to_vec(&final_pos).sqrt();
         let cm = (distance * 100.0).round() as i32;
         if cm > 0 {
