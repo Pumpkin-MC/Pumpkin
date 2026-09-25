@@ -1435,7 +1435,9 @@ impl Player {
             } else {
                 DamageType::PLAYER_ATTACK
             },
-            None,
+            // The attacker's position lets the victim's shield run the vanilla
+            // directional block check for melee hits.
+            Some(attacker_entity.pos.load()),
             Some(self),
             Some(self),
         ) {
@@ -1554,7 +1556,7 @@ impl Player {
                                 other_victim.as_ref(),
                                 sweep_damage,
                                 DamageType::PLAYER_ATTACK,
-                                None,
+                                Some(attacker_entity.pos.load()),
                                 Some(self),
                                 Some(self),
                             );

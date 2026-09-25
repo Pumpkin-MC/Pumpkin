@@ -569,7 +569,9 @@ impl MobEntity {
             target,
             attack_damage,
             DamageType::MOB_ATTACK,
-            None,
+            // The attacker's position lets the victim's shield run the vanilla
+            // directional block check for melee hits.
+            Some(caller.get_entity().pos.load()),
             Some(caller),
             Some(caller),
         );
