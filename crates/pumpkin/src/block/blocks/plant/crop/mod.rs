@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{
     Block,
     BlockDirection::{East, North, South, West},
@@ -26,9 +27,15 @@ pub mod torch_flower;
 pub mod wheat;
 
 trait CropBlockBase: PlantBlockBase {
-    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        let block = block_accessor.get_block(pos);
-        block == &Block::FARMLAND
+    // Deliberately NOT named `can_plant_on_top`: that would collide with the
+    // `PlantBlockBase` method of the same name without overriding it, and
+    // `PlantBlockBase`'s defaults would silently keep using the generic
+    // `supports_vegetation` check. Crops must override
+    // `PlantBlockBase::can_plant_on_top` and delegate here.
+    fn can_plant_crop_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        block_accessor
+            .get_block(pos)
+            .has_tag(&tag::Block::MINECRAFT_SUPPORTS_CROPS)
     }
 
     fn max_age(&self) -> i32 {
@@ -73,7 +80,24 @@ trait CropBlockBase: PlantBlockBase {
             let f = get_available_moisture(world, pos, block);
             if rand::rng().random_range(0..=(25.0 / f).floor() as i64) == 0 {
                 let new_state_id = self.state_with_age(block, state, age + 1);
-                world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_LISTENERS);
+                if let Some(server) = world.server.upgrade() {
+                    let mut event =
+                        crate::plugin::api::events::block::block_grow::BlockGrowEvent::new(
+                            world.clone(),
+                            block,
+                            state,
+                            block,
+                            new_state_id,
+                            *pos,
+                        );
+                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    if event.cancelled {
+                        return;
+                    }
+                    world.set_block_state(pos, event.new_state_id, BlockFlags::NOTIFY_LISTENERS);
+                } else {
+                    world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_LISTENERS);
+                }
             }
         }
     }

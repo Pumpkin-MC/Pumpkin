@@ -13,8 +13,9 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::statistic::{CustomStatistic, StatisticCategory};
 use pumpkin_data::villager::{
     TRADES_WANDERING_TRADER_BUYING, TRADES_WANDERING_TRADER_COMMON,
-    TRADES_WANDERING_TRADER_UNCOMMON, VillagerTrade, VillagerTradeModifier,
+    TRADES_WANDERING_TRADER_UNCOMMON, VillagerTrade,
 };
+use pumpkin_inventory::SimpleInventory;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
@@ -26,7 +27,6 @@ use pumpkin_protocol::java::client::play::CMerchantOffers;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::SimpleInventory;
 use rand::RngExt;
 use rand::seq::IndexedRandom;
 
@@ -43,7 +43,7 @@ use crate::entity::ai::goal::wander_around::WanderAroundGoal;
 use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::experience_orb::ExperienceOrbEntity;
-use crate::entity::mob::{Mob, MobEntity, NIGHT_END, NIGHT_START};
+use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
@@ -56,9 +56,11 @@ fn create_invisibility_potion() -> ItemStack {
     stack
 }
 
-fn add_offers_from_trade_set(
+use crate::data::datapack::trade_loader::{DynamicTradeModifier, DynamicVillagerTrade};
+
+fn add_offers_from_dynamic_trades(
     offers: &mut Vec<pumpkin_protocol::java::client::play::MerchantOffer>,
-    trade_pool: &'static [VillagerTrade],
+    trade_pool: &[DynamicVillagerTrade],
     amount: usize,
     rng: &mut impl rand::Rng,
 ) {
@@ -75,19 +77,19 @@ fn add_offers_from_trade_set(
             .as_ref()
             .map(|b| ItemStack::new(b.count as u8, b.item));
 
-        match trade.modifier {
-            VillagerTradeModifier::RandomDyes => apply_random_dye(rng, &mut output),
-            VillagerTradeModifier::RandomPotion => {
+        match &trade.modifier {
+            DynamicTradeModifier::RandomDyes => apply_random_dye(rng, &mut output),
+            DynamicTradeModifier::RandomPotion => {
                 if let Some(potion_name) =
                     pumpkin_data::tag::Potion::MINECRAFT_TRADEABLE.0.choose(rng)
                 {
                     apply_potion(&mut output, potion_name);
                 }
             }
-            VillagerTradeModifier::SuspiciousStew => {
+            DynamicTradeModifier::SuspiciousStew => {
                 apply_random_stew_effect(rng, &mut output);
             }
-            VillagerTradeModifier::Potion(potion) => apply_potion(&mut output, potion),
+            DynamicTradeModifier::Potion(potion) => apply_potion(&mut output, potion),
             _ => {}
         }
 
@@ -105,6 +107,17 @@ fn add_offers_from_trade_set(
         });
         added += 1;
     }
+}
+
+fn add_offers_from_trade_set(
+    offers: &mut Vec<pumpkin_protocol::java::client::play::MerchantOffer>,
+    trade_pool: &'static [VillagerTrade],
+    amount: usize,
+    rng: &mut impl rand::Rng,
+) {
+    let dynamic_trades: Vec<DynamicVillagerTrade> =
+        trade_pool.iter().map(DynamicVillagerTrade::from).collect();
+    add_offers_from_dynamic_trades(offers, &dynamic_trades, amount, rng);
 }
 
 pub struct WanderingTraderEntity {
@@ -168,7 +181,7 @@ impl WanderingTraderEntity {
             );
 
             // Priority 1: TradeWithPlayerGoal
-            goal_selector.add_goal(1, Box::new(TradeWithPlayerGoal::new(0.5)));
+            goal_selector.add_goal(1, Box::new(TradeWithPlayerGoal::new()));
 
             // Priority 1: AvoidEntityGoals
             goal_selector.add_goal(
@@ -292,9 +305,56 @@ impl WanderingTraderEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         offers.clear();
         let mut rng = rand::rng();
-        add_offers_from_trade_set(&mut offers, TRADES_WANDERING_TRADER_BUYING, 2, &mut rng);
-        add_offers_from_trade_set(&mut offers, TRADES_WANDERING_TRADER_UNCOMMON, 2, &mut rng);
-        add_offers_from_trade_set(&mut offers, TRADES_WANDERING_TRADER_COMMON, 5, &mut rng);
+
+        let datapack_manager = self
+            .get_entity()
+            .world
+            .load()
+            .server
+            .upgrade()
+            .map(|server| server.datapack_manager.clone());
+
+        if let Some(buying) = datapack_manager
+            .as_ref()
+            .and_then(|dm| dm.get_wandering_trader_trade_set("buying"))
+        {
+            add_offers_from_dynamic_trades(
+                &mut offers,
+                &buying.trades,
+                buying.amount as usize,
+                &mut rng,
+            );
+        } else {
+            add_offers_from_trade_set(&mut offers, TRADES_WANDERING_TRADER_BUYING, 2, &mut rng);
+        }
+
+        if let Some(uncommon) = datapack_manager
+            .as_ref()
+            .and_then(|dm| dm.get_wandering_trader_trade_set("uncommon"))
+        {
+            add_offers_from_dynamic_trades(
+                &mut offers,
+                &uncommon.trades,
+                uncommon.amount as usize,
+                &mut rng,
+            );
+        } else {
+            add_offers_from_trade_set(&mut offers, TRADES_WANDERING_TRADER_UNCOMMON, 2, &mut rng);
+        }
+
+        if let Some(common) = datapack_manager
+            .as_ref()
+            .and_then(|dm| dm.get_wandering_trader_trade_set("common"))
+        {
+            add_offers_from_dynamic_trades(
+                &mut offers,
+                &common.trades,
+                common.amount as usize,
+                &mut rng,
+            );
+        } else {
+            add_offers_from_trade_set(&mut offers, TRADES_WANDERING_TRADER_COMMON, 5, &mut rng);
+        }
     }
 
     pub fn open_trading_screen(&self, player: &Arc<Player>) {
@@ -588,6 +648,13 @@ impl Mob for WanderingTraderEntity {
         &self.mob_entity
     }
 
+    fn clear_trading_player(&self) {
+        *self
+            .trading_player
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
+
     fn get_trading_player(&self) -> Option<Arc<Player>> {
         let trading = self
             .trading_player
@@ -852,7 +919,7 @@ impl Goal for LookAtTradingPlayerGoal {
         mob_pos.squared_distance_to_vec(&player_pos) <= self.range * self.range
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let Some(player) = mob.get_trading_player() else {
             return false;
         };
@@ -932,7 +999,7 @@ impl Goal for WanderToPositionGoal {
         Self::is_too_far_away(&wander_pos, &entity_pos, self.stop_distance)
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         let Some(trader) = self.trader.upgrade() else {
             return false;
         };
@@ -1038,7 +1105,7 @@ impl Goal for MoveTowardsRestrictionGoal {
         mob_entity.has_position_target() && !mob_entity.is_in_position_target_range()
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let mob_entity = mob.get_mob_entity();
         !mob_entity
             .navigator
@@ -1103,8 +1170,8 @@ impl Goal for WanderingTraderUseItemGoal {
             return false;
         }
         let world = trader.mob_entity.living_entity.entity.world.load();
-        let day_time = world.get_time_of_day() % 24000;
-        let is_dark = (NIGHT_START..=NIGHT_END).contains(&day_time);
+        let is_dark = world.is_dark_outside();
+        let is_bright = world.is_bright_outside();
         let is_invisible = trader
             .mob_entity
             .living_entity
@@ -1114,14 +1181,14 @@ impl Goal for WanderingTraderUseItemGoal {
             self.goal_type = Some(PotionGoalType::Invisibility);
             return true;
         }
-        if !is_dark && is_invisible {
+        if is_bright && is_invisible {
             self.goal_type = Some(PotionGoalType::Milk);
             return true;
         }
         false
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         let Some(trader) = self.trader.upgrade() else {
             return false;
         };

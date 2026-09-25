@@ -193,13 +193,13 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
                 input1_density - input2_density
             }
             BinaryOperation::Div => {
-                let input2_density = ChunkNoiseFunctionComponent::sample_from_stack(
-                    &mut component_stack[..=self.input2_index],
-                    pos,
-                );
-                if input2_density == 0.0 {
+                if input1_density == 0.0 {
                     0.0
                 } else {
+                    let input2_density = ChunkNoiseFunctionComponent::sample_from_stack(
+                        &mut component_stack[..=self.input2_index],
+                        pos,
+                    );
                     input1_density / input2_density
                 }
             }
@@ -208,7 +208,7 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
                     &mut component_stack[..=self.input2_index],
                     pos,
                 );
-                input1_density.powf(input2_density)
+                f64::from(input1_density).powf(f64::from(input2_density)) as f32
             }
         }
     }
@@ -233,12 +233,17 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
         match self.data.operation {
             BinaryOperation::Mul => {
                 for (value, input2) in buffer.iter_mut().zip(input2.iter()) {
-                    *value = if *value == 0.0 { 0.0 } else { *value * *input2 };
+                    *value *= input2;
+                }
+            }
+            BinaryOperation::Div => {
+                for (value, input2) in buffer.iter_mut().zip(input2.iter()) {
+                    *value /= input2;
                 }
             }
             BinaryOperation::Pow => {
                 for (value, input2) in buffer.iter_mut().zip(input2.iter()) {
-                    *value = value.powf(*input2);
+                    *value = f64::from(*value).powf(f64::from(*input2)) as f32;
                 }
             }
             _ => {
@@ -434,6 +439,18 @@ impl StaticChunkNoiseFunctionComponentImpl for Lerp {
             &mut component_stack[..=self.alpha_index],
             pos,
         );
+        if alpha == 0.0 {
+            return ChunkNoiseFunctionComponent::sample_from_stack(
+                &mut component_stack[..=self.first_index],
+                pos,
+            );
+        }
+        if alpha == 1.0 {
+            return ChunkNoiseFunctionComponent::sample_from_stack(
+                &mut component_stack[..=self.second_index],
+                pos,
+            );
+        }
         let first = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.first_index],
             pos,
@@ -469,7 +486,14 @@ impl StaticChunkNoiseFunctionComponentImpl for Lerp {
             volume,
         );
         for ((value, first), second) in buffer.iter_mut().zip(first.iter()).zip(second.iter()) {
-            *value = first + *value * (second - first);
+            let alpha = *value;
+            *value = if alpha == 0.0 {
+                *first
+            } else if alpha == 1.0 {
+                *second
+            } else {
+                first + alpha * (second - first)
+            };
         }
     }
 }

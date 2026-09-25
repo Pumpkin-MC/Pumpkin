@@ -2,15 +2,18 @@ use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::decoration::item_frame::ItemFrameEntity;
 use crate::entity::decoration::painting::PaintingEntity;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
+use pumpkin_data::data_component_impl::PaintingVariantImpl;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::painting_variant::PaintingVariant;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
@@ -39,7 +42,7 @@ impl ItemBehaviour for HangingEntityItem {
         _cursor_pos: Vector3<f32>,
         _block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let target_pos = location.offset(face.to_offset());
         let pos = Vector3::new(
@@ -50,15 +53,41 @@ impl ItemBehaviour for HangingEntityItem {
 
         if item.item.id == Item::PAINTING.id {
             if face == BlockDirection::Up || face == BlockDirection::Down {
-                return;
+                return BlockActionResult::Fail;
             }
 
-            let entity = Entity::new(world.clone(), pos, &EntityType::PAINTING);
+            let variant = if let Some(comp) = item.get_data_component::<PaintingVariantImpl>() {
+                if let Some(v) = PaintingVariant::from_name(&comp.value) {
+                    if !PaintingEntity::painting_fits(&world, location, face, v) {
+                        return BlockActionResult::Fail;
+                    }
+                    v
+                } else {
+                    return BlockActionResult::Fail;
+                }
+            } else {
+                let Some(v) = PaintingEntity::choose_variant(&world, location, face) else {
+                    return BlockActionResult::Fail;
+                };
+                v
+            };
+
+            let spawn_pos = PaintingEntity::calculate_center_pos(
+                location,
+                face,
+                variant.width(),
+                variant.height(),
+            );
+            let entity = Entity::new(world.clone(), spawn_pos, &EntityType::PAINTING);
             entity
                 .data
                 .store(i32::from(face.to_index()), Ordering::Relaxed);
-            let painting = Arc::new(PaintingEntity::new(entity));
-            world.play_sound(Sound::EntityPaintingPlace, SoundCategory::Blocks, &pos);
+            let painting = Arc::new(PaintingEntity::new_with_variant(entity, variant));
+            world.play_sound(
+                Sound::EntityPaintingPlace,
+                SoundCategory::Blocks,
+                &spawn_pos,
+            );
             world.spawn_entity(painting);
         } else {
             let entity_type = if item.item.id == Item::GLOW_ITEM_FRAME.id {
@@ -76,6 +105,7 @@ impl ItemBehaviour for HangingEntityItem {
             world.spawn_entity(frame_arc);
         }
         item.decrement_unless_creative(player.gamemode.load(), 1);
+        BlockActionResult::Success
     }
 
     fn as_any(&self) -> &dyn Any {

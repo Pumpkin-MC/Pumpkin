@@ -29,7 +29,7 @@ use crate::plugin::{
 impl ToFromWasmEvent for PacketReceivedEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player_res = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         let packet = match self.player.client.as_ref() {
@@ -85,7 +85,7 @@ impl ToFromWasmEvent for PacketReceivedEvent {
 impl ToFromWasmEvent for PacketSentEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player_res = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         let packet = match self.player.client.as_ref() {
@@ -147,10 +147,10 @@ impl ToFromWasmEvent for ServerCommandEvent {
 impl ToFromWasmEvent for ServerBroadcastEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let message = state
-            .add_text_component(self.message.clone())
+            .add(self.message.clone())
             .expect("failed to add text-component resource");
         let sender = state
-            .add_text_component(self.sender.clone())
+            .add(self.sender.clone())
             .expect("failed to add text-component resource");
 
         Event::ServerBroadcastEvent(ServerBroadcastEventData {
@@ -175,7 +175,7 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
 impl ToFromWasmEvent for ServerListPingEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let motd = state
-            .add_text_component(self.motd.clone())
+            .add(self.motd.clone())
             .expect("failed to add text-component resource");
 
         Event::ServerListPingEvent(ServerListPingEventData {
@@ -209,16 +209,16 @@ impl ToFromWasmEvent for ServerListPingEvent {
     }
 
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        match event {
-            Event::ServerListPingEvent(data) => {
-                self.motd = consume_text_component(state, &data.motd);
-                self.max_players = data.max_players;
-                self.num_players = data.num_players;
-                self.favicon = data.favicon;
-            }
-            _ => panic!("unexpected event type"),
+        if !matches!(&event, Event::ServerListPingEvent(_)) {
+            cleanup_event(&event, state);
+            panic!("unexpected event type");
         }
+
+        let returned = Self::from_wasm_event(event, state);
+        self.motd = returned.motd;
+        self.max_players = returned.max_players;
+        self.num_players = returned.num_players;
+        self.favicon = returned.favicon;
     }
 }
 
@@ -291,5 +291,60 @@ impl ToFromWasmEvent for MapInitializeEvent {
             },
             _ => panic!("unexpected event type"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_util::text::TextComponent;
+    use wasmtime::component::Resource;
+
+    #[test]
+    fn server_list_ping_applies_and_consumes_returned_resources() {
+        let mut state = PluginHostState::new();
+        let original_motd = TextComponent::text("Original");
+        let returned_motd = TextComponent::text("Returned");
+        let mut event = ServerListPingEvent::new(
+            "original.example".to_string(),
+            "127.0.0.1:25565"
+                .parse()
+                .expect("test address should parse"),
+            original_motd,
+            20,
+            1,
+            None,
+        );
+        let motd = state
+            .add(returned_motd.clone())
+            .expect("text component resource should be inserted");
+        let motd_rep = motd.rep();
+        let returned = Event::ServerListPingEvent(ServerListPingEventData {
+            hostname: "replacement.example".to_string(),
+            address: ServerListPingAddress {
+                host: "192.0.2.1".to_string(),
+                port: 25_566,
+            },
+            motd,
+            max_players: 40,
+            num_players: 2,
+            favicon: Some("data:image/png;base64,test".to_string()),
+        });
+
+        event.apply_wasm_event(returned, &mut state);
+
+        assert_eq!(event.hostname(), "original.example");
+        assert_eq!(event.address().host(), "127.0.0.1");
+        assert_eq!(event.address().port(), 25_565);
+        assert_eq!(event.motd, returned_motd);
+        assert_eq!(event.max_players, 40);
+        assert_eq!(event.num_players, 2);
+        assert_eq!(event.favicon.as_deref(), Some("data:image/png;base64,test"));
+        assert!(
+            state
+                .resource_table
+                .get::<TextComponent>(&Resource::new_own(motd_rep))
+                .is_err()
+        );
     }
 }

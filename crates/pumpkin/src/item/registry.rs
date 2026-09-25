@@ -1,3 +1,4 @@
+use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -5,12 +6,17 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use super::{ItemBehaviour, ItemMetadata};
+
+pub(crate) const fn should_try_block_placement(result: &BlockActionResult) -> bool {
+    matches!(result, BlockActionResult::Pass)
+}
 
 #[derive(Default)]
 pub struct ItemRegistry {
@@ -26,7 +32,19 @@ impl ItemRegistry {
         }
     }
 
-    pub fn on_use(&self, stack: &ItemStack, player: &Player) {
+    pub fn on_use(&self, stack: &ItemStack, player: &Player, hand: Hand) {
+        let (yaw, pitch) = player.rotation();
+        self.on_use_with_rotation(stack, player, yaw, pitch, hand);
+    }
+
+    pub fn on_use_with_rotation(
+        &self,
+        stack: &ItemStack,
+        player: &Player,
+        yaw: f32,
+        pitch: f32,
+        hand: Hand,
+    ) {
         let item = stack.item;
         let cooldown = stack.get_use_cooldown();
         let cooldown_group = cooldown
@@ -39,7 +57,7 @@ impl ItemRegistry {
 
         let pumpkin_item = self.get_pumpkin_item(item.id);
         if let Some(pumpkin_item) = pumpkin_item {
-            pumpkin_item.normal_use(item, player);
+            pumpkin_item.normal_use_with_hand(item, player, yaw, pitch, hand);
         }
 
         if let Some(cooldown) = cooldown {
@@ -84,7 +102,7 @@ impl ItemRegistry {
         cursor_pos: Vector3<f32>,
         block: &Block,
         server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let cooldown = stack.get_use_cooldown().cloned();
         let cooldown_group = cooldown
             .as_ref()
@@ -92,17 +110,19 @@ impl ItemRegistry {
             .unwrap_or_else(|| stack.item.registry_key.to_string());
 
         if player.is_on_cooldown(&cooldown_group) {
-            return;
+            return BlockActionResult::Pass;
         }
 
         let pumpkin_item = self.get_pumpkin_item(stack.item.id);
-        if let Some(pumpkin_item) = pumpkin_item {
-            pumpkin_item.use_on_block(stack, player, location, face, cursor_pos, block, server);
-        }
+        let result = pumpkin_item.map_or(BlockActionResult::Pass, |pumpkin_item| {
+            pumpkin_item.use_on_block(stack, player, location, face, cursor_pos, block, server)
+        });
 
         if let Some(cooldown) = cooldown {
             player.start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32);
         }
+
+        result
     }
 
     pub fn use_on_entity(
@@ -142,5 +162,26 @@ impl ItemRegistry {
     #[must_use]
     pub fn get_pumpkin_item(&self, item: u16) -> Option<&Arc<dyn ItemBehaviour>> {
         self.items.get(&item)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_try_block_placement;
+    use crate::block::registry::BlockActionResult;
+
+    #[test]
+    fn block_placement_only_follows_pass() {
+        assert!(should_try_block_placement(&BlockActionResult::Pass));
+
+        for result in [
+            BlockActionResult::Success,
+            BlockActionResult::SuccessServer,
+            BlockActionResult::Consume,
+            BlockActionResult::Fail,
+            BlockActionResult::PassToDefaultBlockAction,
+        ] {
+            assert!(!should_try_block_placement(&result));
+        }
     }
 }

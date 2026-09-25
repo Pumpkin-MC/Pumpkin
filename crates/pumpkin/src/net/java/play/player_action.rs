@@ -160,9 +160,22 @@ impl JavaClient {
                         self.update_sequence(player_action.sequence.0);
                         return;
                     }
-                    player.mining.store(false, Ordering::Relaxed);
                     let entity = &player.get_entity();
-                    entity.world.load().set_block_breaking(
+                    let world = entity.world.load_full();
+                    if let Some(server_arc) = world.server.upgrade() {
+                        let mut abort_event = crate::plugin::api::events::block::block_damage_abort::BlockDamageAbortEvent::new(
+                            player.clone(),
+                            player_action.position,
+                            world.clone(),
+                            player.inventory().held_item(),
+                        );
+                        server_arc
+                            .plugin_manager
+                            .fire_blocking(&server_arc, &mut abort_event);
+                    }
+
+                    player.mining.store(false, Ordering::Relaxed);
+                    world.set_block_breaking(
                         entity,
                         player_action.position,
                         BlockBreakingProgress::Stop,
@@ -253,6 +266,8 @@ impl JavaClient {
                     let stack = player.inventory().held_item();
                     server.item_registry.on_spear_jab(&stack, player);
                 }
+                // The block being mined does not change, so there is nothing to update
+                Status::ChangeDestroyDirection => {}
             },
             Err(_) => self.try_kick(&TextComponent::text("Invalid status")),
         }

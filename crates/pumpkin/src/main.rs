@@ -49,6 +49,10 @@ static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 async fn main() {
     let _ = MAIN_THREAD.set(thread::current().id());
 
+    // reqwest is built with `rustls-no-provider`, so pick the ring provider (the one
+    // wasmtime-wasi-http/rtc already force) before any client can be constructed.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     // Initialize global Rayon thread pool with named worker threads
     let _ = rayon::ThreadPoolBuilder::new()
         .thread_name(|i| format!("Rayon-Worker-{i}"))
@@ -116,7 +120,17 @@ async fn main() {
         }
     });
 
-    let pumpkin_server = PumpkinServer::new(config.basic, config.advanced, vanilla_data).await;
+    let pumpkin_server = PumpkinServer::new(
+        config.basic,
+        config.advanced,
+        config.telemetry,
+        vanilla_data,
+    )
+    .await
+    .unwrap_or_else(|error| {
+        tracing::error!("Failed to initialize world storage: {error}");
+        exit(1);
+    });
     let plugin_wait_time = pumpkin_server.init_plugins().await;
 
     let time_elapsed = time.elapsed().saturating_sub(plugin_wait_time);

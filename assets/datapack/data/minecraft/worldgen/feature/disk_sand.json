@@ -1,0 +1,38 @@
+{
+  "type": "minecraft:disk",
+  "half_height": 2,
+  "radius": {
+    "type": "minecraft:uniform",
+    "max_inclusive": 6,
+    "min_inclusive": 2
+  },
+  "state_provider": {
+    "type": "minecraft:rule_based",
+    "fallback": {
+      "id": "minecraft:sand"
+    },
+    "rules": [
+      {
+        "if_true": {
+          "type": "minecraft:matching_blocks",
+          "blocks": "minecraft:air",
+          "offset": [
+            0,
+            -1,
+            0
+          ]
+        },
+        "then": {
+          "id": "minecraft:sandstone"
+        }
+      }
+    ]
+  },
+  "target": {
+    "type": "minecraft:matching_blocks",
+    "blocks": [
+      "minecraft:dirt",
+      "minecraft:grass_block"
+    ]
+  }
+}

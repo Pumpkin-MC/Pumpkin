@@ -39,7 +39,9 @@ impl DungeonFeature {
             for dy in -1..=4i32 {
                 for dz in min_z..=max_z {
                     let check_pos = pos.0.add(&Vector3::new(dx, dy, dz));
-                    let solid = !chunk.is_air(&check_pos);
+                    let solid = GenerationCache::get_block_state(chunk, &check_pos)
+                        .to_state()
+                        .is_solid();
 
                     if dy == -1 && !solid {
                         return false;
@@ -78,11 +80,13 @@ impl DungeonFeature {
 
                     if on_boundary {
                         let below_pos = wall_pos.add(&Vector3::new(0, -1, 0));
-                        let below_solid = !chunk.is_air(&below_pos);
-                        let cur_solid = !chunk.is_air(&wall_pos);
-                        let is_chest = GenerationCache::get_block_state(chunk, &wall_pos)
-                            .to_block()
-                            == &Block::CHEST;
+                        let below_solid = GenerationCache::get_block_state(chunk, &below_pos)
+                            .to_state()
+                            .is_solid();
+                        let cur_state =
+                            GenerationCache::get_block_state(chunk, &wall_pos).to_state();
+                        let cur_solid = cur_state.is_solid();
+                        let is_chest = cur_state.id.to_block() == &Block::CHEST;
 
                         let world_min_y = chunk.bottom_y() as i32;
                         if wall_pos.y >= world_min_y && !below_solid {
@@ -98,9 +102,9 @@ impl DungeonFeature {
                             }
                         }
                     } else {
-                        let state = GenerationCache::get_block_state(chunk, &wall_pos);
-                        let is_chest = state.to_block() == &Block::CHEST;
-                        let is_spawner = state.to_block() == &Block::SPAWNER;
+                        let state = GenerationCache::get_block_state(chunk, &wall_pos).to_state();
+                        let is_chest = state.id.to_block() == &Block::CHEST;
+                        let is_spawner = state.id.to_block() == &Block::SPAWNER;
                         if !is_chest && !is_spawner {
                             chunk.set_block_state(&wall_pos, Block::CAVE_AIR.default_state);
                         }
@@ -122,22 +126,20 @@ impl DungeonFeature {
 
                 let wall_count = BlockDirection::horizontal()
                     .iter()
-                    .filter(|d| !chunk.is_air(&chest_pos.add(&d.to_offset())))
+                    .filter(|d| {
+                        GenerationCache::get_block_state(chunk, &chest_pos.add(&d.to_offset()))
+                            .to_state()
+                            .is_solid()
+                    })
                     .count();
 
                 if wall_count == 1 {
-                    let facing_dir = BlockDirection::horizontal()
-                        .iter()
-                        .find(|d| !chunk.is_air(&chest_pos.add(&d.to_offset())))
-                        .copied();
-
-                    let chest_state = facing_dir.map_or(Block::CHEST.default_state, |dir| {
-                        use pumpkin_data::block_properties::ChestLikeProperties;
-                        let mut props = ChestLikeProperties::default(&Block::CHEST);
-                        props.facing = dir.opposite();
-                        let state_id = props.to_state_id(&Block::CHEST);
-                        pumpkin_data::BlockState::from_id(state_id)
-                    });
+                    let chest_state =
+                        crate::generation::structure::structures::StructurePiece::reorient(
+                            &chest_pos,
+                            Block::CHEST.default_state,
+                            |p| GenerationCache::get_block_state(chunk, p),
+                        );
 
                     chunk.set_block_state(&chest_pos, chest_state);
 

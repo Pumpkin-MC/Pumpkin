@@ -1,0 +1,115 @@
+{
+  "elements": [
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:abandoned_camp/tent/bamboo_jungle/tent_bamboo_jungle_1",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:abandoned_camp/tent/bamboo_jungle/tent_bamboo_jungle_2",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:abandoned_camp/tent/bamboo_jungle/tent_bamboo_jungle_3",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:abandoned_camp/tent/bamboo_jungle/tent_bamboo_jungle_4",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:abandoned_camp/tent/bamboo_jungle/tent_bamboo_jungle_5",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:abandoned_camp/tent/bamboo_jungle/tent_bamboo_jungle_6",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:abandoned_camp/tent/bamboo_jungle/tent_bamboo_jungle_7",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:abandoned_camp/tent/bamboo_jungle/tent_bamboo_jungle_8",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:abandoned_camp/tent/bamboo_jungle/tent_bamboo_jungle_9",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:abandoned_camp/tent/bamboo_jungle/tent_bamboo_jungle_10",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid"
+      },
+      "weight": 1
+    }
+  ],
+  "fallback": "minecraft:empty"
+}

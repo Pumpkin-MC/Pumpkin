@@ -13,7 +13,7 @@ use pumpkin_data::tag::Block::MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE;
 use pumpkin_data::tag::Fluid::{MINECRAFT_LAVA, MINECRAFT_WATER};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::WorldgenBiome::MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS;
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState, SpawnFloorPredicate};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::get_section_cord;
 use pumpkin_util::math::position::BlockPos;
@@ -75,7 +75,7 @@ impl MobCounts {
 
 pub struct LocalMobCapCalculator {
     player_mob_counts: DashMap<i32, MobCounts>,
-    players_near_chunk: DashMap<Vector2<i32>, Vec<i32>>,
+    players_near_chunk: DashMap<Vector2<i32>, Arc<[i32]>>,
 }
 
 impl Clone for LocalMobCapCalculator {
@@ -119,7 +119,7 @@ impl LocalMobCapCalculator {
         dx * dx + dy * dy
     }
 
-    fn get_players_near(&self, world: &World, chunk_pos: Vector2<i32>) -> Vec<i32> {
+    fn get_players_near(&self, world: &World, chunk_pos: Vector2<i32>) -> Arc<[i32]> {
         if let Some(players) = self.players_near_chunk.get(&chunk_pos) {
             return players.value().clone();
         }
@@ -133,13 +133,14 @@ impl LocalMobCapCalculator {
                 players.push(player.entity_id());
             }
         }
+        let players: Arc<[i32]> = players.into();
         self.players_near_chunk.insert(chunk_pos, players.clone());
         players
     }
 
     pub fn add_mob(&self, chunk_pos: Vector2<i32>, world: &World, category: &'static MobCategory) {
         let players = self.get_players_near(world, chunk_pos);
-        for player in players {
+        for &player in players.iter() {
             self.player_mob_counts
                 .entry(player)
                 .or_default()
@@ -154,7 +155,7 @@ impl LocalMobCapCalculator {
         category: &'static MobCategory,
     ) {
         let players = self.get_players_near(world, chunk_pos);
-        for player in players {
+        for &player in players.iter() {
             if let Some(count) = self.player_mob_counts.get(&player) {
                 count.remove(category);
             }
@@ -168,7 +169,7 @@ impl LocalMobCapCalculator {
         chunk_pos: Vector2<i32>,
     ) -> bool {
         let players = self.get_players_near(world, chunk_pos);
-        for player in players {
+        for &player in players.iter() {
             if let Some(count) = self.player_mob_counts.get(&player) {
                 if count.can_spawn(category) {
                     return true;
@@ -360,7 +361,10 @@ impl SpawnState {
         let potential = PotentialCalculator::default();
         let local_mob_cap = LocalMobCapCalculator::default();
         let counter = MobCounts::default();
-        let active_chunks = world.active_chunks.load();
+        let active_chunks = world
+            .active_chunks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for entity in entities.load().iter() {
             if let Some(mob) = entity.get_mob()
                 && (mob.get_mob_entity().persistence_required.load(Relaxed)
@@ -873,7 +877,11 @@ pub fn is_right_distance_to_player_and_spawn_point(
     let chunk_z = get_section_cord(pos.0.z);
     let target_chunk = Vector2::new(chunk_x, chunk_z);
     target_chunk == *chunk_pos
-        || (world.active_chunks.load().contains(&target_chunk)
+        || (world
+            .active_chunks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(&target_chunk)
             && world
                 .worldborder
                 .lock()
@@ -1010,8 +1018,7 @@ pub fn is_spawn_position_ok(
             let down = world.get_block_state(&block_pos.down());
             let up = world.get_block_state(&block_pos.up());
             let cur = world.get_block_state(block_pos);
-            let is_valid_spawn_below =
-                down.is_side_solid(BlockDirection::Up) && down.luminance < 14;
+            let is_valid_spawn_below = is_valid_spawn_floor(down, entity_type);
 
             if is_valid_spawn_below {
                 is_valid_empty_spawn_block(cur, entity_type)
@@ -1052,8 +1059,7 @@ pub fn is_spawn_position_ok_cache(
             let down = GenerationCache::get_block_state(cache, &down_pos).to_state();
             let up = GenerationCache::get_block_state(cache, &up_pos).to_state();
 
-            let is_valid_spawn_below =
-                down.is_side_solid(BlockDirection::Up) && down.luminance < 14;
+            let is_valid_spawn_below = is_valid_spawn_floor(down, entity_type);
 
             if is_valid_spawn_below {
                 is_valid_empty_spawn_block(state, entity_type)
@@ -1083,6 +1089,22 @@ pub fn is_valid_empty_spawn_block(
     !is_block_dangerous(entity_type, state)
 }
 
+#[must_use]
+fn is_valid_spawn_floor(state: &'static BlockState, entity_type: &'static EntityType) -> bool {
+    match Block::from_state_id(state.id).spawn_floor_predicate() {
+        SpawnFloorPredicate::Default => {
+            state.is_side_solid(BlockDirection::Up) && state.luminance < 14
+        }
+        SpawnFloorPredicate::Never => false,
+        SpawnFloorPredicate::Always => true,
+        SpawnFloorPredicate::OcelotOrParrot => {
+            entity_type == &EntityType::OCELOT || entity_type == &EntityType::PARROT
+        }
+        SpawnFloorPredicate::PolarBear => entity_type == &EntityType::POLAR_BEAR,
+        SpawnFloorPredicate::FireImmune => entity_type.fire_immune,
+    }
+}
+
 fn is_block_dangerous(entity_type: &'static EntityType, state: &'static BlockState) -> bool {
     let block = Block::from_state_id(state.id);
     if !entity_type.fire_immune && is_burning_block(block) {
@@ -1101,4 +1123,32 @@ fn is_burning_block(block: &Block) -> bool {
         || block.id == Block::LAVA_CAULDRON.id
         || block.id == Block::CAMPFIRE.id
         || block.id == Block::SOUL_CAMPFIRE.id
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vanilla_spawn_floor_predicates_are_preserved() {
+        for (block, entity_type, expected) in [
+            (&Block::BEDROCK, &EntityType::CREEPER, false),
+            (&Block::STONE, &EntityType::CREEPER, true),
+            (&Block::GLASS, &EntityType::CREEPER, false),
+            (&Block::OAK_LEAVES, &EntityType::OCELOT, true),
+            (&Block::OAK_LEAVES, &EntityType::CREEPER, false),
+            (&Block::ICE, &EntityType::POLAR_BEAR, true),
+            (&Block::ICE, &EntityType::CREEPER, false),
+            (&Block::MAGMA_BLOCK, &EntityType::BLAZE, true),
+            (&Block::MAGMA_BLOCK, &EntityType::CREEPER, false),
+            (&Block::JACK_O_LANTERN, &EntityType::CREEPER, true),
+        ] {
+            assert_eq!(
+                is_valid_spawn_floor(block.default_state, entity_type),
+                expected,
+                "{}",
+                block.name
+            );
+        }
+    }
 }

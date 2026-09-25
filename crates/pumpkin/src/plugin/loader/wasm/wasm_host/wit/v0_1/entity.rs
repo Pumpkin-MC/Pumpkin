@@ -1,10 +1,10 @@
 use std::sync::Arc;
-use wasmtime::component::Resource;
+use wasmtime::component::{Access, HasSelf, Resource};
 
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::plugin::loader::wasm::wasm_host::{
-    state::{EntityResource, PluginHostState},
+    state::PluginHostState,
     wit::v0_1::events::to_wasm_position,
     wit::v0_1::pumpkin::plugin::{
         common::{EntityPose, NbtTree as WitNbtTree, Position},
@@ -28,15 +28,14 @@ use pumpkin_data::entity::EntityPose as InternalEntityPose;
 impl Host for PluginHostState {}
 impl entity_types::Host for PluginHostState {}
 
-pub fn entity_from_resource(
+fn active_plugin(
     state: &PluginHostState,
-    entity: &Resource<Entity>,
-) -> wasmtime::Result<std::sync::Arc<dyn crate::entity::EntityBase>> {
+) -> wasmtime::Result<Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>> {
     state
-        .resource_table
-        .get::<EntityResource>(&Resource::new_own(entity.rep()))
-        .map_err(|_| wasmtime::Error::msg("invalid entity resource handle"))
-        .map(|resource| resource.provider.clone())
+        .plugin
+        .as_ref()
+        .and_then(std::sync::Weak::upgrade)
+        .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))
 }
 
 const fn map_entity_pose(pose: InternalEntityPose) -> EntityPose {
@@ -64,12 +63,12 @@ const fn map_entity_pose(pose: InternalEntityPose) -> EntityPose {
 
 impl HostEntity for PluginHostState {
     async fn get_id(&mut self, entity: Resource<Entity>) -> wasmtime::Result<u32> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity.get_entity().entity_id as u32)
     }
 
     async fn get_uuid(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Uuid> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(Uuid::to_wit(&entity.get_entity().entity_uuid))
     }
 
@@ -77,55 +76,40 @@ impl HostEntity for PluginHostState {
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<entity_types::EntityType> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         let original_name = entity.get_entity().entity_type.resource_name;
-
-        let mut names: Vec<String> = serde_json::from_str::<
-            std::collections::BTreeMap<String, serde_json::Value>,
-        >(&std::fs::read_to_string("assets/entities.json")?)?
-        .keys()
-        .cloned()
-        .collect();
-        names.sort();
-
-        let index = names
-            .iter()
-            .position(|n| n == original_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown entity type: {original_name}")))?;
-
-        // SAFETY: The WIT enum is generated from the sorted keys of assets/entities.json.
-        Ok(unsafe { std::mem::transmute::<u8, entity_types::EntityType>(index as u8) })
+        to_wit_entity_type(original_name)
     }
 
     async fn get_position(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(to_wasm_position(entity.get_entity().pos.load()))
     }
 
     async fn get_world(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Resource<World>> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         let world = entity.get_entity().world.load_full();
-        self.add_world(world)
+        self.add(world)
             .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
     }
 
     async fn get_yaw(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity.get_entity().yaw.load())
     }
 
     async fn get_pitch(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity.get_entity().pitch.load())
     }
 
     async fn get_head_yaw(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity.get_entity().head_yaw.load())
     }
 
     async fn is_on_ground(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .on_ground
@@ -133,7 +117,7 @@ impl HostEntity for PluginHostState {
     }
 
     async fn is_sneaking(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .sneaking
@@ -141,7 +125,7 @@ impl HostEntity for PluginHostState {
     }
 
     async fn is_sprinting(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .sprinting
@@ -149,7 +133,7 @@ impl HostEntity for PluginHostState {
     }
 
     async fn is_invisible(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .invisible
@@ -157,34 +141,11 @@ impl HostEntity for PluginHostState {
     }
 
     async fn is_glowing(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .glowing
             .load(std::sync::atomic::Ordering::Relaxed))
-    }
-
-    async fn teleport(
-        &mut self,
-        entity: Resource<Entity>,
-        pos: Position,
-        world_ref: Resource<World>,
-    ) -> wasmtime::Result<()> {
-        let entity_base = entity_from_resource(self, &entity)?;
-        let world = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::WorldResource>(
-                &Resource::new_own(world_ref.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid world resource handle"))?;
-        let world = world.provider.clone();
-        entity_base.teleport(
-            pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
-            None,
-            None,
-            world,
-        );
-        Ok(())
     }
 
     async fn set_velocity(
@@ -192,7 +153,7 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         velocity: Position,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity
             .get_entity()
             .velocity
@@ -203,7 +164,7 @@ impl HostEntity for PluginHostState {
     }
 
     async fn get_velocity(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(to_wasm_position(entity.get_entity().velocity.load()))
     }
 
@@ -212,7 +173,7 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         sneaking: bool,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity.get_entity().set_sneaking(sneaking);
         Ok(())
     }
@@ -222,27 +183,17 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         sprinting: bool,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity.get_entity().set_sprinting(sprinting);
         Ok(())
     }
 
     async fn is_swimming(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .swimming
             .load(std::sync::atomic::Ordering::Relaxed))
-    }
-
-    async fn set_swimming(
-        &mut self,
-        entity: Resource<Entity>,
-        swimming: bool,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        entity.get_entity().set_swimming(swimming);
-        Ok(())
     }
 
     async fn set_invisible(
@@ -250,7 +201,7 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         invisible: bool,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity.get_entity().set_invisible(invisible);
         Ok(())
     }
@@ -260,13 +211,13 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         glowing: bool,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity.get_entity().set_glowing(glowing);
         Ok(())
     }
 
     async fn is_fall_flying(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .fall_flying
@@ -278,13 +229,13 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         fall_flying: bool,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity.get_entity().set_fall_flying(fall_flying);
         Ok(())
     }
 
     async fn is_on_fire(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .fire_ticks
@@ -297,13 +248,13 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         on_fire: bool,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity.get_entity().set_on_fire(on_fire);
         Ok(())
     }
 
     async fn get_pose(&mut self, entity: Resource<Entity>) -> wasmtime::Result<EntityPose> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(map_entity_pose(entity.get_entity().pose.load()))
     }
 
@@ -311,9 +262,9 @@ impl HostEntity for PluginHostState {
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Resource<TextComponent>> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         let name = entity.get_name();
-        self.add_text_component(name)
+        self.add(name)
             .map_err(|_| wasmtime::Error::msg("failed to add text component resource"))
     }
 
@@ -322,14 +273,8 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         name: Resource<TextComponent>,
     ) -> wasmtime::Result<()> {
-        let entity_base = entity_from_resource(self, &entity)?;
-        let text_res = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::TextComponentResource>(
-                &Resource::new_own(name.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid text component resource handle"))?;
-        let text = text_res.provider.clone();
+        let text = self.take(name)?;
+        let entity_base = self.get(&entity)?;
         entity_base.get_entity().set_custom_name(text);
         Ok(())
     }
@@ -338,12 +283,12 @@ impl HostEntity for PluginHostState {
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<TextComponent>>> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         let name = entity.get_entity().custom_name.load();
         if let Some(name) = name.as_ref() {
-            Ok(Some(self.add_text_component(name.clone()).map_err(
-                |_| wasmtime::Error::msg("failed to add text component resource"),
-            )?))
+            Ok(Some(self.add(name.clone()).map_err(|_| {
+                wasmtime::Error::msg("failed to add text component resource")
+            })?))
         } else {
             Ok(None)
         }
@@ -354,13 +299,13 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         visible: bool,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity.get_entity().set_custom_name_visible(visible);
         Ok(())
     }
 
     async fn is_custom_name_visible(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .custom_name_visible
@@ -368,7 +313,7 @@ impl HostEntity for PluginHostState {
     }
 
     async fn is_invulnerable(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .invulnerable
@@ -380,7 +325,7 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         invulnerable: bool,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity
             .get_entity()
             .invulnerable
@@ -389,7 +334,7 @@ impl HostEntity for PluginHostState {
     }
 
     async fn get_fire_ticks(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .fire_ticks
@@ -401,7 +346,7 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         ticks: i32,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity
             .get_entity()
             .fire_ticks
@@ -410,7 +355,7 @@ impl HostEntity for PluginHostState {
     }
 
     async fn get_fall_distance(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_living_entity()
             .map_or(0.0, |living| living.fall_distance.load()))
@@ -421,7 +366,7 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         distance: f32,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         if let Some(living) = entity.get_living_entity() {
             living.fall_distance.store(distance);
         }
@@ -429,18 +374,18 @@ impl HostEntity for PluginHostState {
     }
 
     async fn is_silent(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity.get_entity().is_silent())
     }
 
     async fn set_silent(&mut self, entity: Resource<Entity>, silent: bool) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity.get_entity().set_silent(silent);
         Ok(())
     }
 
     async fn has_gravity(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(!entity.get_entity().has_no_gravity())
     }
 
@@ -449,18 +394,18 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         gravity: bool,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity.get_entity().set_has_no_gravity(!gravity);
         Ok(())
     }
 
     async fn get_eye_height(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity.get_entity().entity_dimension.load().eye_height)
     }
 
     async fn get_eye_position(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(to_wasm_position(entity.get_eye_pos()))
     }
 
@@ -471,7 +416,7 @@ impl HostEntity for PluginHostState {
         y: f64,
         z: f64,
     ) -> wasmtime::Result<Vec<Resource<Entity>>> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?.clone();
         let pos = entity.get_entity().pos.load();
         let box_range = pumpkin_util::math::boundingbox::BoundingBox::new(
             Vector3::new(pos.x - x, pos.y - y, pos.z - z),
@@ -485,7 +430,7 @@ impl HostEntity for PluginHostState {
             // Don't include the entity itself
             if e.get_entity().entity_id != entity.get_entity().entity_id {
                 result.push(
-                    self.add_entity(e)
+                    self.add(e)
                         .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?,
                 );
             }
@@ -497,14 +442,14 @@ impl HostEntity for PluginHostState {
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<Entity>>> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?.clone();
         let vehicle = entity
             .get_entity()
             .vehicle
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(v) = vehicle.as_ref() {
-            Ok(Some(self.add_entity(Arc::clone(v)).map_err(|_| {
+            Ok(Some(self.add(Arc::clone(v)).map_err(|_| {
                 wasmtime::Error::msg("failed to add entity resource")
             })?))
         } else {
@@ -512,40 +457,11 @@ impl HostEntity for PluginHostState {
         }
     }
 
-    async fn set_vehicle(
-        &mut self,
-        entity: Resource<Entity>,
-        vehicle: Option<Resource<Entity>>,
-    ) -> wasmtime::Result<()> {
-        let entity_base = entity_from_resource(self, &entity)?;
-
-        // Remove from current vehicle if any
-        let current_vehicle = entity_base
-            .get_entity()
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        if let Some(v) = current_vehicle {
-            v.get_entity()
-                .remove_passenger(entity_base.get_entity().entity_id);
-        }
-
-        if let Some(vehicle_res) = vehicle {
-            let vehicle_base = entity_from_resource(self, &vehicle_res)?;
-            vehicle_base
-                .get_entity()
-                .add_passenger(vehicle_base.clone(), entity_base);
-        }
-
-        Ok(())
-    }
-
     async fn get_passengers(
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Vec<Resource<Entity>>> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?.clone();
         let passengers = entity
             .get_entity()
             .passengers
@@ -554,60 +470,18 @@ impl HostEntity for PluginHostState {
         let mut result = Vec::new();
         for p in passengers.iter() {
             result.push(
-                self.add_entity(Arc::clone(p))
+                self.add(Arc::clone(p))
                     .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?,
             );
         }
         Ok(result)
     }
 
-    async fn add_passenger(
-        &mut self,
-        entity: Resource<Entity>,
-        passenger: Resource<Entity>,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        let passenger = entity_from_resource(self, &passenger)?;
-        entity
-            .get_entity()
-            .add_passenger(Arc::clone(&entity), passenger);
-        Ok(())
-    }
-
-    async fn remove_passenger(
-        &mut self,
-        entity: Resource<Entity>,
-        passenger: Resource<Entity>,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        let passenger = entity_from_resource(self, &passenger)?;
-        entity
-            .get_entity()
-            .remove_passenger(passenger.get_entity().entity_id);
-        Ok(())
-    }
-
-    async fn eject_passengers(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        let ids: Vec<i32> = entity
-            .get_entity()
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .iter()
-            .map(|p| p.get_entity().entity_id)
-            .collect();
-        for id in ids {
-            entity.get_entity().remove_passenger(id);
-        }
-        Ok(())
-    }
-
     async fn get_bounding_box(
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<WitBoundingBox> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         let bb = entity.get_entity().bounding_box.load();
         Ok(WitBoundingBox {
             min: to_wasm_position(bb.min),
@@ -616,7 +490,7 @@ impl HostEntity for PluginHostState {
     }
 
     async fn is_in_water(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .touching_water
@@ -624,7 +498,7 @@ impl HostEntity for PluginHostState {
     }
 
     async fn is_in_lava(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .touching_lava
@@ -632,7 +506,7 @@ impl HostEntity for PluginHostState {
     }
 
     async fn get_ticks_lived(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .age
@@ -644,7 +518,7 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         ticks: i32,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity
             .get_entity()
             .age
@@ -653,12 +527,12 @@ impl HostEntity for PluginHostState {
     }
 
     async fn get_width(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity.get_entity().entity_dimension.load().width)
     }
 
     async fn get_height(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity.get_entity().entity_dimension.load().height)
     }
 
@@ -668,13 +542,13 @@ impl HostEntity for PluginHostState {
         yaw: f32,
         pitch: f32,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity.get_entity().set_rotation(yaw, pitch);
         Ok(())
     }
 
     async fn has_visual_fire(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .has_visual_fire
@@ -686,13 +560,13 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         visual_fire: bool,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity.get_entity().set_on_fire(visual_fire);
         Ok(())
     }
 
     async fn get_portal_cooldown(&mut self, entity: Resource<Entity>) -> wasmtime::Result<u32> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
             .portal_cooldown
@@ -704,7 +578,7 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         cooldown: u32,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity
             .get_entity()
             .portal_cooldown
@@ -713,7 +587,7 @@ impl HostEntity for PluginHostState {
     }
 
     async fn get_remaining_air(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         Ok(entity.get_player().map_or(0, |player| {
             player
                 .breath_manager
@@ -727,7 +601,7 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         air: i32,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         if let Some(player) = entity.get_player() {
             player
                 .breath_manager
@@ -743,7 +617,7 @@ impl HostEntity for PluginHostState {
     }
 
     async fn remove(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         entity.get_entity().remove();
         Ok(())
     }
@@ -754,7 +628,7 @@ impl HostEntity for PluginHostState {
         max_distance: f64,
         fluid_handling: bool,
     ) -> wasmtime::Result<Option<WitRaycastResult>> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         let start = entity.get_eye_pos();
         let direction = entity.get_looking_vector();
         let end = start + direction * max_distance;
@@ -778,7 +652,7 @@ impl HostEntity for PluginHostState {
         max_distance: f64,
         include_fluids: bool,
     ) -> wasmtime::Result<Option<WitRayTraceBlockResult>> {
-        let entity = entity_from_resource(self, &entity)?;
+        let entity = self.get(&entity)?;
         let start = entity.get_eye_pos();
         let direction = entity.get_looking_vector();
         let end = start + direction * max_distance;
@@ -802,7 +676,7 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         max_distance: f64,
     ) -> wasmtime::Result<Option<WitRayTraceEntityResult>> {
-        let entity_base = entity_from_resource(self, &entity)?;
+        let entity_base = self.get(&entity)?;
         let start = entity_base.get_eye_pos();
         let direction = entity_base.get_looking_vector();
         let end = start + direction * max_distance;
@@ -813,7 +687,7 @@ impl HostEntity for PluginHostState {
         for (hit_entity, hit_pos, distance) in hits {
             if hit_entity.get_entity().entity_id != self_id {
                 let entity_res = self
-                    .add_entity(hit_entity)
+                    .add(hit_entity)
                     .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?;
                 return Ok(Some(WitRayTraceEntityResult {
                     entity: entity_res,
@@ -842,7 +716,7 @@ impl HostEntity for PluginHostState {
         key: String,
         value: WitNbtTree,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         let base_entity = entity.get_entity();
         let tag = super::common::from_wit_nbt_tree(&value).map_err(wasmtime::Error::msg)?;
         base_entity.set_custom_data(&namespace, &key, tag);
@@ -855,7 +729,7 @@ impl HostEntity for PluginHostState {
         namespace: String,
         key: String,
     ) -> wasmtime::Result<Option<WitNbtTree>> {
-        let entity = entity_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         let base_entity = entity.get_entity();
         let tag = base_entity.get_custom_data(&namespace, &key);
         Ok(tag.map(super::common::to_wit_nbt_tree))
@@ -867,7 +741,7 @@ impl HostEntity for PluginHostState {
         namespace: String,
         key: String,
     ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         let base_entity = entity.get_entity();
         base_entity.remove_custom_data(&namespace, &key);
         Ok(())
@@ -879,7 +753,7 @@ impl HostEntity for PluginHostState {
         namespace: String,
         key: String,
     ) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         let base_entity = entity.get_entity();
         Ok(base_entity.has_custom_data(&namespace, &key))
     }
@@ -888,9 +762,9 @@ impl HostEntity for PluginHostState {
         &mut self,
         this: Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<WitLivingEntity>>> {
-        let entity = entity_from_resource(self, &this)?;
+        let entity = self.get(&this)?.clone();
         if entity.get_living_entity().is_some() {
-            Ok(Some(self.add_living_entity(entity)?))
+            Ok(Some(self.add(entity)?))
         } else {
             Ok(None)
         }
@@ -900,28 +774,193 @@ impl HostEntity for PluginHostState {
         &mut self,
         this: Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<WitMob>>> {
-        let entity = entity_from_resource(self, &this)?;
+        let entity = self.get(&this)?.clone();
         if entity.get_mob().is_some() {
-            Ok(Some(self.add_mob(entity)?))
+            Ok(Some(self.add(entity)?))
         } else {
             Ok(None)
         }
     }
 
     async fn is_living(&mut self, this: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         Ok(entity.get_living_entity().is_some())
     }
 
     async fn is_mob(&mut self, this: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         Ok(entity.get_mob().is_some())
     }
 
     async fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<EntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
+}
+
+impl
+    crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::HostEntityWithStore<
+        PluginHostState,
+    > for HasSelf<PluginHostState>
+{
+    async fn teleport(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        pos: Position,
+        world: Resource<World>,
+    ) -> wasmtime::Result<()> {
+        let (entity, world, plugin) = {
+            let state = host.get();
+            let world = state.take(world)?;
+            let entity = state.get(&entity)?.clone();
+            (entity, world, active_plugin(state)?)
+        };
+        let pos = Vector3::new(pos.0, pos.1, pos.2);
+        plugin
+            .store
+            .pump_blocking(&mut host, move || entity.teleport(pos, None, None, world))
+            .await
+    }
+
+    async fn set_swimming(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        swimming: bool,
+    ) -> wasmtime::Result<()> {
+        let (entity, plugin) = {
+            let state = host.get();
+            (state.get(&entity)?.clone(), active_plugin(state)?)
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                entity.get_entity().set_swimming(swimming);
+            })
+            .await
+    }
+
+    async fn set_vehicle(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        vehicle: Option<Resource<Entity>>,
+    ) -> wasmtime::Result<()> {
+        let (entity, vehicle, plugin) = {
+            let state = host.get();
+            let entity = state.get(&entity)?.clone();
+            let vehicle = vehicle.map(|vehicle| state.take(vehicle)).transpose()?;
+            (entity, vehicle, active_plugin(state)?)
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                let current_vehicle = entity
+                    .get_entity()
+                    .vehicle
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if let Some(current_vehicle) = current_vehicle {
+                    current_vehicle
+                        .get_entity()
+                        .remove_passenger(entity.get_entity().entity_id);
+                }
+                if let Some(vehicle) = vehicle {
+                    vehicle
+                        .get_entity()
+                        .add_passenger(Arc::clone(&vehicle), entity);
+                }
+            })
+            .await
+    }
+
+    async fn add_passenger(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        passenger: Resource<Entity>,
+    ) -> wasmtime::Result<()> {
+        let (entity, passenger, plugin) = {
+            let state = host.get();
+            (
+                state.get(&entity)?.clone(),
+                state.take(passenger)?,
+                active_plugin(state)?,
+            )
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                entity
+                    .get_entity()
+                    .add_passenger(Arc::clone(&entity), passenger);
+            })
+            .await
+    }
+
+    async fn remove_passenger(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        passenger: Resource<Entity>,
+    ) -> wasmtime::Result<()> {
+        let (entity, passenger_id, plugin) = {
+            let state = host.get();
+            let entity = state.get(&entity)?.clone();
+            let passenger = state.take(passenger)?;
+            (
+                entity,
+                passenger.get_entity().entity_id,
+                active_plugin(state)?,
+            )
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                entity.get_entity().remove_passenger(passenger_id);
+            })
+            .await
+    }
+
+    async fn eject_passengers(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<()> {
+        let (entity, plugin) = {
+            let state = host.get();
+            (state.get(&entity)?.clone(), active_plugin(state)?)
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                let passenger_ids: Vec<i32> = entity
+                    .get_entity()
+                    .passengers
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .iter()
+                    .map(|passenger| passenger.get_entity().entity_id)
+                    .collect();
+                for passenger_id in passenger_ids {
+                    entity.get_entity().remove_passenger(passenger_id);
+                }
+            })
+            .await
+    }
+}
+
+pub(crate) fn to_wit_entity_type(name: &str) -> wasmtime::Result<entity_types::EntityType> {
+    let name = name.strip_prefix("minecraft:").unwrap_or(name);
+    let index = pumpkin_data::entity::EntityType::ALL
+        .binary_search_by_key(&name, |e| e.resource_name)
+        .map_err(|_| wasmtime::Error::msg(format!("Unknown entity type: {name}")))?;
+
+    // SAFETY: The WIT enum is generated with variants matching EntityType::ALL in alphabetical order.
+    Ok(unsafe { std::mem::transmute::<u8, entity_types::EntityType>(index as u8) })
+}
+
+pub(crate) fn from_wit_entity_type(
+    entity_type: entity_types::EntityType,
+) -> wasmtime::Result<&'static pumpkin_data::entity::EntityType> {
+    let index = entity_type as usize;
+    pumpkin_data::entity::EntityType::ALL
+        .get(index)
+        .copied()
+        .ok_or_else(|| wasmtime::Error::msg(format!("Invalid entity type index: {index}")))
 }

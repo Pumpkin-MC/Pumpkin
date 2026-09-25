@@ -182,6 +182,18 @@ impl EntityBase for LingeringPotionEntity {
         // Spawn and configure an `AreaEffectCloud` entity
         extinguish_fire_if_water_potion(&world, hit_pos, &stack);
 
+        if let Some(server) = world.server.upgrade() {
+            let mut event = crate::plugin::api::events::entity::lingering_potion_splash::LingeringPotionSplashEvent::new(
+                self.get_entity().entity_id,
+                block_pos,
+                stack.item.registry_key.to_string(),
+            );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
+
         let cloud_entity = crate::entity::Entity::from_uuid(
             Uuid::new_v4(),
             world.clone(),

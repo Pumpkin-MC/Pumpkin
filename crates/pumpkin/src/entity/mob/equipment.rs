@@ -19,15 +19,24 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
+use pumpkin_data::AttributeModifierSlot;
 use pumpkin_data::Enchantment;
-use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::attributes::Attributes;
+use pumpkin_data::data_component_impl::{
+    AttributeModifiersImpl, CustomNameImpl, EnchantmentsImpl, EquipmentSlot, EquipmentType,
+    EquippableImpl, IDSet, Operation,
+};
+use pumpkin_data::enchantment_provider::EnchantmentProvider;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{Tag, Taggable};
 use pumpkin_util::difficulty::Difficulty;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::EntityBase;
+use crate::entity::mob::{Mob, MobEntity};
 
 // ══════════════════════════════════════════════════════════════════
 // Global constants extracted from vanilla Minecraft 26.2
@@ -122,103 +131,6 @@ static ARMOR_POPULATION_ORDER: [EquipmentSlot; 4] = [
     EquipmentSlot::CHEST,
     EquipmentSlot::LEGS,
     EquipmentSlot::FEET,
-];
-
-// ══════════════════════════════════════════════════════════════════
-// Enchantment pools — curated per item category, filtered by
-// equipment slot and exclusive set at application time
-// ══════════════════════════════════════════════════════════════════
-
-static MELEE_WEAPON_ENCHANTS: [&Enchantment; 9] = [
-    &Enchantment::SHARPNESS,
-    &Enchantment::SMITE,
-    &Enchantment::BANE_OF_ARTHROPODS,
-    &Enchantment::KNOCKBACK,
-    &Enchantment::FIRE_ASPECT,
-    &Enchantment::LOOTING,
-    &Enchantment::SWEEPING_EDGE,
-    &Enchantment::UNBREAKING,
-    &Enchantment::MENDING,
-];
-
-static TRIDENT_ENCHANTS: [&Enchantment; 6] = [
-    &Enchantment::IMPALING,
-    &Enchantment::CHANNELING,
-    &Enchantment::RIPTIDE,
-    &Enchantment::LOYALTY,
-    &Enchantment::UNBREAKING,
-    &Enchantment::MENDING,
-];
-
-static BOW_ENCHANTS: [&Enchantment; 6] = [
-    &Enchantment::POWER,
-    &Enchantment::PUNCH,
-    &Enchantment::FLAME,
-    &Enchantment::INFINITY,
-    &Enchantment::UNBREAKING,
-    &Enchantment::MENDING,
-];
-
-static CROSSBOW_ENCHANTS: [&Enchantment; 5] = [
-    &Enchantment::QUICK_CHARGE,
-    &Enchantment::MULTISHOT,
-    &Enchantment::PIERCING,
-    &Enchantment::UNBREAKING,
-    &Enchantment::MENDING,
-];
-
-static FISHING_ROD_ENCHANTS: [&Enchantment; 4] = [
-    &Enchantment::LUCK_OF_THE_SEA,
-    &Enchantment::LURE,
-    &Enchantment::UNBREAKING,
-    &Enchantment::MENDING,
-];
-
-static HEAD_ARMOR_ENCHANTS: [&Enchantment; 9] = [
-    &Enchantment::PROTECTION,
-    &Enchantment::FIRE_PROTECTION,
-    &Enchantment::BLAST_PROTECTION,
-    &Enchantment::PROJECTILE_PROTECTION,
-    &Enchantment::RESPIRATION,
-    &Enchantment::AQUA_AFFINITY,
-    &Enchantment::THORNS,
-    &Enchantment::UNBREAKING,
-    &Enchantment::MENDING,
-];
-
-static CHEST_ARMOR_ENCHANTS: [&Enchantment; 7] = [
-    &Enchantment::PROTECTION,
-    &Enchantment::FIRE_PROTECTION,
-    &Enchantment::BLAST_PROTECTION,
-    &Enchantment::PROJECTILE_PROTECTION,
-    &Enchantment::THORNS,
-    &Enchantment::UNBREAKING,
-    &Enchantment::MENDING,
-];
-
-static LEGS_ARMOR_ENCHANTS: [&Enchantment; 8] = [
-    &Enchantment::PROTECTION,
-    &Enchantment::FIRE_PROTECTION,
-    &Enchantment::BLAST_PROTECTION,
-    &Enchantment::PROJECTILE_PROTECTION,
-    &Enchantment::THORNS,
-    &Enchantment::UNBREAKING,
-    &Enchantment::MENDING,
-    &Enchantment::SWIFT_SNEAK,
-];
-
-static FEET_ARMOR_ENCHANTS: [&Enchantment; 11] = [
-    &Enchantment::PROTECTION,
-    &Enchantment::FIRE_PROTECTION,
-    &Enchantment::BLAST_PROTECTION,
-    &Enchantment::PROJECTILE_PROTECTION,
-    &Enchantment::FEATHER_FALLING,
-    &Enchantment::DEPTH_STRIDER,
-    &Enchantment::FROST_WALKER,
-    &Enchantment::SOUL_SPEED,
-    &Enchantment::THORNS,
-    &Enchantment::UNBREAKING,
-    &Enchantment::MENDING,
 ];
 
 // ══════════════════════════════════════════════════════════════════
@@ -661,150 +573,48 @@ impl RegionalDifficulty {
 #[must_use]
 fn moon_brightness(time_of_day: i64) -> f32 {
     let phase = (time_of_day / 24000 % 8) as i32;
-    if phase == 0 {
-        1.0
-    } else {
-        1.0 - (phase - 4).abs() as f32 / 4.0
-    }
+    (phase - 4).abs() as f32 / 4.0
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Enchantment system — mimics vanilla EnchantmentsByCostWithDifficulty
-//
-// Weighted selection with exclusive-set conflict resolution and cost-based
-// level calculation. Uses curated flat pools per equipment category instead
-// of the datapack-based enchantment_provider/mob_spawn_equipment.json.
+// Enchantment system — powered by data-driven EnchantmentProvider
 // ══════════════════════════════════════════════════════════════════
 
-/// Random enchantment cost in `[min, min + specialMultiplier * span]`.
-#[must_use]
-fn spawn_enchant_cost(special_multiplier: f32) -> i32 {
-    let min = MOB_SPAWN_ENCHANT_MIN_COST;
-    let max = min + (special_multiplier * MOB_SPAWN_ENCHANT_COST_SPAN as f32).round() as i32;
-    let mut rng = rand::rng();
-    rng.random_range(min..=max)
-}
-
-/// Returns the highest enchantment level whose cost is affordable.
-#[must_use]
-fn enchantment_level_from_cost(enchant: &Enchantment, cost: i32) -> i32 {
-    for lvl in (1..=enchant.max_level).rev() {
-        if cost >= enchant.min_cost.calculate(lvl) {
-            return lvl;
-        }
-    }
-    1
-}
-
-/// Selects the enchantment pool for an item/slot combination.
-///
-/// Uses a curated flat pool per equipment category (melee, trident, bow,
-/// crossbow, fishing rod, and per-armor-slot). This is an approximation of
-/// vanilla's data-driven `mob_spawn_equipment` enchantment provider which
-/// filters by `supported_items` tags.
-#[must_use]
-fn enchant_pool_for(item: &Item, slot: &EquipmentSlot) -> &'static [&'static Enchantment] {
-    let key = item.registry_key;
-    if key.contains("sword")
-        || key.contains("spear")
-        || key.contains("axe")
-        || key.contains("shovel")
-    {
-        &MELEE_WEAPON_ENCHANTS
-    } else if key.contains("trident") {
-        &TRIDENT_ENCHANTS
-    } else if key.contains("bow") {
-        &BOW_ENCHANTS
-    } else if key.contains("crossbow") {
-        &CROSSBOW_ENCHANTS
-    } else if key.contains("fishing_rod") {
-        &FISHING_ROD_ENCHANTS
-    } else if *slot == EquipmentSlot::HEAD {
-        &HEAD_ARMOR_ENCHANTS
-    } else if *slot == EquipmentSlot::CHEST {
-        &CHEST_ARMOR_ENCHANTS
-    } else if *slot == EquipmentSlot::LEGS {
-        &LEGS_ARMOR_ENCHANTS
-    } else if *slot == EquipmentSlot::FEET {
-        &FEET_ARMOR_ENCHANTS
-    } else {
-        &[]
-    }
-}
-
-/// Checks whether `candidate` conflicts with any already-applied enchantment
-/// via vanilla exclusive sets (e.g. `exclusive_set_damage`).
-#[must_use]
-fn conflicts_with(candidate: &Enchantment, applied: &[&Enchantment]) -> bool {
-    if let Some(excl) = candidate.exclusive_set {
-        let excl_keys = excl.0;
-        for existing in applied {
-            if excl_keys.contains(&existing.registry_key) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-/// Applies multiple enchantments to a stack using weighted pool selection.
-///
-/// Starts with a random cost (scaled by `special_multiplier`), picks
-/// enchantments by weight, resolves exclusive-set conflicts, and determines
-/// the level from the remaining cost. Cost is halved each iteration so
-/// later enchantments receive lower levels.
+/// Applies mob spawn equipment enchantments to a stack using the data-driven
+/// `minecraft:mob_spawn_equipment` enchantment provider.
 pub fn apply_vanilla_enchantments(
     stack: &mut ItemStack,
-    slot: &EquipmentSlot,
+    _slot: &EquipmentSlot,
     special_multiplier: f32,
 ) {
-    let pool = enchant_pool_for(stack.item, slot);
-    if pool.is_empty() {
-        return;
+    EnchantmentProvider::MOB_SPAWN_EQUIPMENT.apply_to_stack(stack, special_multiplier);
+}
+
+/// Applies pillager crossbow enchantments based on raid wave or default spawn provider.
+pub fn apply_pillager_crossbow_enchantments(stack: &mut ItemStack, wave: Option<u32>) {
+    match wave {
+        Some(w) if w >= 5 => {
+            EnchantmentProvider::RAID_PILLAGER_POST_WAVE_5.apply_to_stack(stack, 0.0);
+        }
+        Some(w) if w >= 3 => {
+            EnchantmentProvider::RAID_PILLAGER_POST_WAVE_3.apply_to_stack(stack, 0.0);
+        }
+        _ => {
+            EnchantmentProvider::PILLAGER_SPAWN_CROSSBOW.apply_to_stack(stack, 0.0);
+        }
     }
+}
 
-    let mut cost = spawn_enchant_cost(special_multiplier);
-    let mut applied: Vec<&Enchantment> = Vec::new();
-    let mut rng = rand::rng();
-
-    loop {
-        let candidates: Vec<&Enchantment> = pool
-            .iter()
-            .copied()
-            .filter(|e| !applied.contains(e) && !conflicts_with(e, &applied))
-            .collect();
-
-        if candidates.is_empty() {
-            break;
+/// Applies vindicator weapon enchantments based on raid wave.
+pub fn apply_vindicator_weapon_enchantments(stack: &mut ItemStack, wave: Option<u32>) {
+    match wave {
+        Some(w) if w >= 5 => {
+            EnchantmentProvider::RAID_VINDICATOR_POST_WAVE_5.apply_to_stack(stack, 0.0);
         }
-
-        let total_weight: f32 = candidates.iter().map(|e| e.weight as f32).sum();
-        if total_weight <= 0.0 {
-            break;
+        Some(_) => {
+            EnchantmentProvider::RAID_VINDICATOR.apply_to_stack(stack, 0.0);
         }
-
-        let mut roll = rng.random_range(0.0..total_weight);
-        let mut selected: Option<&Enchantment> = None;
-        for e in &candidates {
-            roll -= e.weight as f32;
-            if roll <= 0.0 {
-                selected = Some(e);
-                break;
-            }
-        }
-        let Some(&fallback) = candidates.last() else {
-            break;
-        };
-        let selected = selected.unwrap_or(fallback);
-
-        let level = enchantment_level_from_cost(selected, cost);
-        stack.add_enchantment(selected, level.clamp(1, selected.max_level) as u16);
-        applied.push(selected);
-
-        cost /= 2;
-        if cost < 1 {
-            break;
-        }
+        None => {}
     }
 }
 
@@ -1045,4 +855,294 @@ pub fn equip_mob_on_spawn(mob: &dyn EntityBase, world: &Arc<crate::world::World>
     drop(drop_chances);
 
     living.send_equipment_changes(&equipment_changes);
+}
+
+#[must_use]
+pub fn is_equippable_in_slot(
+    entity_type: &EntityType,
+    stack: &ItemStack,
+    slot: &EquipmentSlot,
+) -> bool {
+    stack.get_data_component::<EquippableImpl>().map_or_else(
+        || *slot == EquipmentSlot::MAIN_HAND,
+        |equippable| {
+            *equippable.slot == *slot
+                && equippable
+                    .allowed_entities
+                    .as_ref()
+                    .is_none_or(|allowed| match allowed {
+                        IDSet::Tag(tag) => entity_type.is_tagged_with(tag).unwrap_or(false),
+                        IDSet::IDs(ids) => ids.iter().any(|id| id.id == entity_type.id),
+                    })
+        },
+    )
+}
+
+#[must_use]
+pub fn get_equipment_slot_for_item(stack: &ItemStack) -> EquipmentSlot {
+    stack
+        .get_data_component::<EquippableImpl>()
+        .map_or(EquipmentSlot::MAIN_HAND, |equippable| {
+            equippable.slot.clone()
+        })
+}
+
+#[must_use]
+/// Whether `new_item` is an upgrade over `current_item` in `slot`.
+pub fn can_replace_current_item(
+    mob: &MobEntity,
+    preferred_weapon_type: Option<&'static Tag>,
+    new_item: &ItemStack,
+    current_item: &ItemStack,
+    slot: &EquipmentSlot,
+) -> bool {
+    if current_item.is_empty() {
+        return true;
+    }
+    if slot.is_armor_slot() {
+        compare_armor(mob, new_item, current_item, slot)
+    } else {
+        *slot == EquipmentSlot::MAIN_HAND
+            && compare_weapons(mob, preferred_weapon_type, new_item, current_item, slot)
+    }
+}
+
+fn compare_armor(
+    mob: &MobEntity,
+    new_item: &ItemStack,
+    current_item: &ItemStack,
+    slot: &EquipmentSlot,
+) -> bool {
+    if current_item.get_enchantment_level(&Enchantment::BINDING_CURSE) > 0 {
+        return false;
+    }
+    let new_defense = approximate_attribute_with(mob, new_item, &Attributes::ARMOR, slot);
+    let old_defense = approximate_attribute_with(mob, current_item, &Attributes::ARMOR, slot);
+    let new_toughness =
+        approximate_attribute_with(mob, new_item, &Attributes::ARMOR_TOUGHNESS, slot);
+    let old_toughness =
+        approximate_attribute_with(mob, current_item, &Attributes::ARMOR_TOUGHNESS, slot);
+    if new_defense != old_defense {
+        return new_defense > old_defense;
+    }
+    if new_toughness != old_toughness {
+        return new_toughness > old_toughness;
+    }
+    can_replace_equal_item(new_item, current_item)
+}
+
+fn compare_weapons(
+    mob: &MobEntity,
+    preferred_weapon_type: Option<&'static Tag>,
+    new_item: &ItemStack,
+    current_item: &ItemStack,
+    slot: &EquipmentSlot,
+) -> bool {
+    if let Some(preferred) = preferred_weapon_type {
+        let current_preferred = current_item.item.has_tag(preferred);
+        let new_preferred = new_item.item.has_tag(preferred);
+        if current_preferred && !new_preferred {
+            return false;
+        }
+        if !current_preferred && new_preferred {
+            return true;
+        }
+    }
+    let new_damage = approximate_attribute_with(mob, new_item, &Attributes::ATTACK_DAMAGE, slot);
+    let old_damage =
+        approximate_attribute_with(mob, current_item, &Attributes::ATTACK_DAMAGE, slot);
+    if new_damage != old_damage {
+        return new_damage > old_damage;
+    }
+    can_replace_equal_item(new_item, current_item)
+}
+
+fn approximate_attribute_with(
+    mob: &MobEntity,
+    stack: &ItemStack,
+    attribute: &Attributes,
+    slot: &EquipmentSlot,
+) -> f64 {
+    let base_value = mob.living_entity.get_attribute_base(attribute);
+    let mut add_value = 0.0;
+    let mut add_multiplied_base = 0.0;
+    let mut multiplied_total = 1.0;
+    if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
+        for modifier in modifiers.attribute_modifiers.iter() {
+            if modifier.r#type.id != attribute.id || !attribute_slot_matches(&modifier.slot, slot) {
+                continue;
+            }
+            match modifier.operation {
+                Operation::AddValue => add_value += modifier.amount,
+                Operation::AddMultipliedBase => add_multiplied_base += modifier.amount,
+                Operation::AddMultipliedTotal => multiplied_total *= 1.0 + modifier.amount,
+            }
+        }
+    }
+    (base_value + add_value) * (1.0 + add_multiplied_base) * multiplied_total
+}
+
+fn attribute_slot_matches(group: &AttributeModifierSlot, slot: &EquipmentSlot) -> bool {
+    match group {
+        AttributeModifierSlot::Any => true,
+        AttributeModifierSlot::MainHand => *slot == EquipmentSlot::MAIN_HAND,
+        AttributeModifierSlot::OffHand => *slot == EquipmentSlot::OFF_HAND,
+        AttributeModifierSlot::Hand => slot.slot_type() == EquipmentType::Hand,
+        AttributeModifierSlot::Feet => *slot == EquipmentSlot::FEET,
+        AttributeModifierSlot::Legs => *slot == EquipmentSlot::LEGS,
+        AttributeModifierSlot::Chest => *slot == EquipmentSlot::CHEST,
+        AttributeModifierSlot::Head => *slot == EquipmentSlot::HEAD,
+        AttributeModifierSlot::Armor => slot.slot_type() == EquipmentType::HumanoidArmor,
+        AttributeModifierSlot::Body => *slot == EquipmentSlot::BODY,
+        AttributeModifierSlot::Saddle => *slot == EquipmentSlot::SADDLE,
+    }
+}
+
+#[must_use]
+pub fn can_replace_equal_item(new_item: &ItemStack, current_item: &ItemStack) -> bool {
+    let enchantment_count = |stack: &ItemStack| {
+        stack
+            .get_data_component::<EnchantmentsImpl>()
+            .map_or(0, |enchantments| enchantments.enchantment.len())
+    };
+    let new_enchantments = enchantment_count(new_item);
+    let current_enchantments = enchantment_count(current_item);
+    if new_enchantments != current_enchantments {
+        return new_enchantments > current_enchantments;
+    }
+    let new_damage = new_item.get_damage();
+    let current_damage = current_item.get_damage();
+    if new_damage != current_damage {
+        return new_damage < current_damage;
+    }
+    new_item.get_data_component::<CustomNameImpl>().is_some()
+        && current_item
+            .get_data_component::<CustomNameImpl>()
+            .is_none()
+}
+
+#[must_use]
+/// Equips `stack` if it beats what is worn, returning what got equipped.
+pub fn equip_item_if_possible(mob: &dyn Mob, stack: ItemStack) -> ItemStack {
+    let mob_entity = mob.get_mob_entity();
+    let entity = &mob_entity.living_entity.entity;
+    let mut slot = get_equipment_slot_for_item(&stack);
+    if !is_equippable_in_slot(entity.entity_type, &stack, &slot) {
+        return ItemStack::EMPTY.clone();
+    }
+
+    let item_in = |slot: &EquipmentSlot| {
+        mob_entity
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(slot)
+    };
+    let mut current = item_in(&slot);
+    let mut can_replace = mob.can_replace_current_item(&stack, &current, &slot);
+    if slot.is_armor_slot() && !can_replace {
+        slot = EquipmentSlot::MAIN_HAND;
+        current = item_in(&slot);
+        can_replace = current.is_empty();
+    }
+    if !can_replace {
+        return ItemStack::EMPTY.clone();
+    }
+
+    let drop_chance = mob_entity.drop_chance(&slot);
+    if !current.is_empty() && (rand::random::<f32>() - 0.1).max(0.0) < drop_chance {
+        mob_entity.spawn_at_location(current);
+    }
+
+    let mut stack = stack;
+    let to_equip = limit_for_slot(&slot, &mut stack);
+    mob_entity.set_item_slot_and_drop_when_killed(&slot, to_equip.clone());
+    mob_entity
+        .persistence_required
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    to_equip
+}
+
+// Hand slots have no count limit, every other slot holds one item.
+fn limit_for_slot(slot: &EquipmentSlot, stack: &mut ItemStack) -> ItemStack {
+    if slot.slot_type() == EquipmentType::Hand {
+        std::mem::replace(stack, ItemStack::EMPTY.clone())
+    } else {
+        stack.split(1)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::moon_brightness;
+
+    #[test]
+    fn moon_brightness_matches_the_vanilla_phase_table() {
+        let expected = [1.0, 0.75, 0.5, 0.25, 0.0, 0.25, 0.5, 0.75];
+        for (phase, want) in expected.into_iter().enumerate() {
+            let time_of_day = phase as i64 * 24000;
+            assert!(
+                (moon_brightness(time_of_day) - want).abs() < f32::EPSILON,
+                "phase {phase}: got {}, want {want}",
+                moon_brightness(time_of_day)
+            );
+        }
+    }
+
+    #[test]
+    fn moon_brightness_wraps_every_eight_days() {
+        for phase in 0..8i64 {
+            assert!(
+                (moon_brightness(phase * 24000) - moon_brightness((phase + 8) * 24000)).abs()
+                    < f32::EPSILON,
+                "phase {phase} does not wrap"
+            );
+        }
+    }
+
+    #[test]
+    fn mob_spawn_equipment_enchantment_provider_applies_enchantments() {
+        use pumpkin_data::data_component_impl::EquipmentSlot;
+        use pumpkin_data::item::Item;
+        use pumpkin_data::item_stack::ItemStack;
+
+        let mut stack = ItemStack::new(1, &Item::DIAMOND_SWORD);
+        super::apply_vanilla_enchantments(&mut stack, &EquipmentSlot::MAIN_HAND, 1.0);
+        assert!(stack.has_enchantments());
+    }
+
+    #[test]
+    fn pillager_crossbow_enchantments() {
+        use pumpkin_data::Enchantment;
+        use pumpkin_data::item::Item;
+        use pumpkin_data::item_stack::ItemStack;
+
+        let mut stack = ItemStack::new(1, &Item::CROSSBOW);
+        super::apply_pillager_crossbow_enchantments(&mut stack, None);
+        assert_eq!(stack.get_enchantment_level(&Enchantment::PIERCING), 1);
+
+        let mut stack3 = ItemStack::new(1, &Item::CROSSBOW);
+        super::apply_pillager_crossbow_enchantments(&mut stack3, Some(3));
+        assert_eq!(stack3.get_enchantment_level(&Enchantment::QUICK_CHARGE), 1);
+
+        let mut stack5 = ItemStack::new(1, &Item::CROSSBOW);
+        super::apply_pillager_crossbow_enchantments(&mut stack5, Some(5));
+        assert_eq!(stack5.get_enchantment_level(&Enchantment::QUICK_CHARGE), 2);
+    }
+
+    #[test]
+    fn vindicator_weapon_enchantments() {
+        use pumpkin_data::Enchantment;
+        use pumpkin_data::item::Item;
+        use pumpkin_data::item_stack::ItemStack;
+
+        let mut stack = ItemStack::new(1, &Item::IRON_AXE);
+        super::apply_vindicator_weapon_enchantments(&mut stack, Some(1));
+        assert_eq!(stack.get_enchantment_level(&Enchantment::SHARPNESS), 1);
+
+        let mut stack5 = ItemStack::new(1, &Item::IRON_AXE);
+        super::apply_vindicator_weapon_enchantments(&mut stack5, Some(5));
+        assert_eq!(stack5.get_enchantment_level(&Enchantment::SHARPNESS), 2);
+    }
 }

@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::version::JavaMinecraftVersion;
 
 /// The newest protocol version used as the fallback for unknown versions in `TrackedId::get`.
-const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
+const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_3;
 
 #[derive(Deserialize)]
 struct RawTrackedField {
@@ -22,39 +22,58 @@ struct RawTrackedField {
 
 /// Generates the `TokenStream` for `TrackedId`, `TrackedData`, and all per-entity tracking modules.
 pub(crate) fn build() -> TokenStream {
-    let assets = [
-        (JavaMinecraftVersion::V_1_21, "1_21_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_2, "1_21_2_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_4, "1_21_4_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_5, "1_21_5_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_6, "1_21_6_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_7, "1_21_7_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_9, "1_21_9_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_11, "1_21_11_tracked_data.json"),
-        (JavaMinecraftVersion::V_26_1, "26_1_tracked_data.json"),
-        (JavaMinecraftVersion::V_26_2, "26_2_tracked_data.json"),
-    ];
+    let assets = [(JavaMinecraftVersion::V_26_3, "26_3_tracked_data.json")];
 
-    let mut versions = BTreeMap::new();
+    let mut raw_versions = BTreeMap::new();
     for (ver, file) in assets {
-        let path = format!("../../assets/tracked_data/{file}");
+        let path = "../../assets/tracked_data.json".to_string();
         if let Ok(content) = fs::read_to_string(&path) {
             if let Ok(parsed) = serde_json::from_str::<
                 BTreeMap<String, BTreeMap<String, RawTrackedField>>,
             >(&content)
             {
-                versions.insert(ver, parsed);
+                raw_versions.insert(ver, parsed);
             }
         }
+    }
+
+    if raw_versions.is_empty() {
+        panic!("No tracked data asset files found in assets/tracked_data");
+    }
+
+    let mojang_names: BTreeSet<String> = raw_versions
+        .get(&LATEST_VERSION)
+        .or_else(|| raw_versions.values().next_back())
+        .map(|entities| entities.keys().cloned().collect())
+        .unwrap_or_default();
+
+    let mut versions = BTreeMap::new();
+    let mut entity_aliases: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for (ver, parsed) in raw_versions {
+        let mut merged = BTreeMap::new();
+        for (entity, fields) in parsed {
+            let canonical = canonicalize_entity_name(&entity, &mojang_names);
+            if canonical != entity {
+                entity_aliases
+                    .entry(canonical.clone())
+                    .or_default()
+                    .insert(entity);
+            }
+            let dest: &mut BTreeMap<String, RawTrackedField> = merged.entry(canonical).or_default();
+            for (name, info) in fields {
+                dest.insert(name, info);
+            }
+        }
+        versions.insert(ver, merged);
     }
 
     if versions.is_empty() {
         panic!("No tracked data asset files found in assets/tracked_data");
     }
 
-    let tracked_id_struct = generate_tracked_id_struct(&versions);
+    let tracked_id_struct = generate_tracked_id_struct();
     let tracked_data_struct = generate_tracked_data_struct();
-    let entity_modules = generate_entity_modules(&versions);
+    let entity_modules = generate_entity_modules(&versions, &entity_aliases);
 
     quote! {
         use crate::meta_data_type::MetaDataType;
@@ -68,49 +87,22 @@ pub(crate) fn build() -> TokenStream {
     }
 }
 
-/// Generates the `TrackedId` struct definition with one `u8` field per supported version.
-fn generate_tracked_id_struct<T>(versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStream {
-    let mut struct_fields = TokenStream::new();
-    for ver in versions.keys() {
-        let ident = ver.to_field_ident();
-        struct_fields.extend(quote! {
-            pub #ident: u8,
-        });
-    }
-
-    let latest_field_ident = if versions.contains_key(&LATEST_VERSION) {
-        LATEST_VERSION.to_field_ident()
-    } else {
-        versions.keys().last().unwrap().to_field_ident()
-    };
-
-    let mut match_arms = TokenStream::new();
-    for ver in versions.keys() {
-        let ident = ver.to_field_ident();
-        match_arms.extend(quote! {
-            #ver => self.#ident,
-        });
-    }
-
+/// Generates the `TrackedId` struct definition for Minecraft 26.3.
+fn generate_tracked_id_struct() -> TokenStream {
     quote! {
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-        pub struct TrackedId {
-            #struct_fields
-        }
+        pub struct TrackedId(pub u8);
 
         impl TrackedId {
             #[must_use]
-            pub const fn get(&self, version: &JavaMinecraftVersion) -> u8 {
-                match version {
-                    #match_arms
-                    _ => self.#latest_field_ident,
-                }
+            pub const fn get(&self, _version: &JavaMinecraftVersion) -> u8 {
+                self.0
             }
         }
 
         impl From<TrackedId> for u8 {
             fn from(id: TrackedId) -> u8 {
-                id.#latest_field_ident
+                id.0
             }
         }
     }
@@ -132,8 +124,8 @@ fn generate_tracked_data_struct() -> TokenStream {
             }
 
             #[must_use]
-            pub const fn get(&self, version: &JavaMinecraftVersion) -> u8 {
-                self.id.get(version)
+            pub const fn get(&self, _version: &JavaMinecraftVersion) -> u8 {
+                self.id.0
             }
         }
     }
@@ -142,6 +134,7 @@ fn generate_tracked_data_struct() -> TokenStream {
 /// Generates entity-specific modules containing constants for all tracked fields.
 fn generate_entity_modules(
     versions: &BTreeMap<JavaMinecraftVersion, BTreeMap<String, BTreeMap<String, RawTrackedField>>>,
+    entity_aliases: &BTreeMap<String, BTreeSet<String>>,
 ) -> TokenStream {
     let mut modules = TokenStream::new();
 
@@ -157,6 +150,7 @@ fn generate_entity_modules(
             .values()
             .filter_map(|entities| entities.get(entity))
             .flat_map(|fields| fields.keys().cloned())
+            .map(|name| canonicalize_tracked_field_name(&name))
             .collect();
 
         let mut field_consts = TokenStream::new();
@@ -168,26 +162,22 @@ fn generate_entity_modules(
             let field_ident = format_ident!("{}", field_upper);
             defined_idents.insert(field_upper.clone());
 
-            let mut id_fields = TokenStream::new();
-            let mut latest_type = String::new();
-
-            for (ver, entities) in versions {
-                let ver_ident = ver.to_field_ident();
-                let field_info = entities.get(entity).and_then(|f| f.get(field));
-                let id = field_info.map_or(255u8, |info| info.id);
-                if let Some(info) = field_info {
-                    latest_type = info.r#type.clone();
-                }
-                id_fields.extend(quote! {
-                    #ver_ident: #id,
-                });
-            }
+            let field_info = versions
+                .get(&LATEST_VERSION)
+                .or_else(|| versions.values().next_back())
+                .and_then(|entities| entities.get(entity))
+                .and_then(|f| lookup_tracked_field(f, field));
+            let id = field_info.map_or(255u8, |info| info.id);
+            let latest_type = field_info.map_or_else(
+                || "byte".to_string(),
+                |info| canonicalize_field_type(&info.r#type),
+            );
 
             let type_const_ident = format_ident!("{}", latest_type.to_uppercase());
 
             field_consts.extend(quote! {
                 pub const #field_ident: TrackedData = TrackedData {
-                    id: TrackedId { #id_fields },
+                    id: TrackedId(#id),
                     r#type: MetaDataType::#type_const_ident,
                 };
             });
@@ -236,7 +226,155 @@ fn generate_entity_modules(
         });
     }
 
+    for (canonical, aliases) in entity_aliases {
+        if !all_entities.contains(canonical) {
+            continue;
+        }
+        let canonical_ident = format_ident!("{canonical}");
+        for alias in aliases {
+            if all_entities.contains(alias) || !is_valid_ident(alias) {
+                continue;
+            }
+            let alias_ident = format_ident!("{alias}");
+            modules.extend(quote! {
+                pub mod #alias_ident {
+                    pub use super::#canonical_ident::*;
+                }
+            });
+        }
+    }
+
     modules
+}
+
+fn canonicalize_entity_name(name: &str, mojang_names: &BTreeSet<String>) -> String {
+    if mojang_names.contains(name) {
+        return name.to_string();
+    }
+    let mapped = match name.strip_suffix("_entity") {
+        None => return name.to_string(),
+        Some("tameable") => "tamable_animal".to_string(),
+        Some("tameable_shoulder") => "shoulder_riding_entity".to_string(),
+        Some("mooshroom") => "mushroom_cow".to_string(),
+        Some("enderman") => "ender_man".to_string(),
+        Some("fishing_bobber") => "fishing_hook".to_string(),
+        Some("leash_knot") => "leash_fence_knot_entity".to_string(),
+        Some("water_creature") => "water_animal".to_string(),
+        Some("hostile") => "monster".to_string(),
+        Some("illager") => "abstract_illager".to_string(),
+        Some("spellcasting_illager") => "spellcaster_illager".to_string(),
+        Some("merchant") => "abstract_villager".to_string(),
+        Some("golem") => "abstract_golem".to_string(),
+        Some("fish") => "abstract_fish".to_string(),
+        Some("schooling_fish") => "abstract_schooling_fish".to_string(),
+        Some("abstract_donkey") => "abstract_chested_horse".to_string(),
+        Some("ambient") => "ambient_creature".to_string(),
+        Some("path_aware") => "pathfinder_mob".to_string(),
+        Some("patrol") => "patrolling_monster".to_string(),
+        Some("abstract_decoration") => "hanging_entity".to_string(),
+        Some("player_like") => "avatar".to_string(),
+        Some("passive") => "ageable_mob".to_string(),
+        Some("lightning") => "lightning_bolt".to_string(),
+        Some("thrown_item") => "throwable_item_projectile".to_string(),
+        Some("thrown") => "throwable_projectile".to_string(),
+        Some("egg") => "thrown_egg".to_string(),
+        Some("ender_pearl") => "thrown_enderpearl".to_string(),
+        Some("experience_bottle") => "thrown_experience_bottle".to_string(),
+        Some("lingering_potion") => "thrown_lingering_potion".to_string(),
+        Some("splash_potion") => "thrown_splash_potion".to_string(),
+        Some("trident") => "thrown_trident".to_string(),
+        Some("potion") => "abstract_thrown_potion".to_string(),
+        Some("explosive_projectile" | "abstract_fireball") => {
+            "abstract_hurting_projectile".to_string()
+        }
+        Some("persistent_projectile") => "abstract_arrow".to_string(),
+        Some("storage_minecart") => "abstract_minecart_container".to_string(),
+        Some(other) => other.to_string(),
+    };
+    if mojang_names.contains(&mapped) {
+        mapped
+    } else {
+        name.to_string()
+    }
+}
+
+fn canonicalize_field_type(ty: &str) -> String {
+    match ty {
+        "integer" | "int" => "int".to_string(),
+        "entity_pose" | "pose" => "pose".to_string(),
+        "facing" | "direction" => "direction".to_string(),
+        "text_component" | "component" => "component".to_string(),
+        "optional_text_component" | "optional_component" => "optional_component".to_string(),
+        "optional_int" | "optional_unsigned_int" => "optional_unsigned_int".to_string(),
+        "vector_3f" | "vector3" => "vector3".to_string(),
+        "quaternion_f" | "quaternion" => "quaternion".to_string(),
+        "rotation" | "rotations" => "rotations".to_string(),
+        "particle_list" | "particles" => "particles".to_string(),
+        "lazy_entity_reference" | "optional_living_entity_reference" => {
+            "optional_living_entity_reference".to_string()
+        }
+        "nbt_compound" | "compound_tag" => "nbt_compound".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn canonicalize_tracked_field_name(name: &str) -> String {
+    match name.to_uppercase().as_str() {
+        // Yarn (1.21.x assets) vs Mojang (26.x assets) names for the same index.
+        "FLAGS" => "DATA_SHARED_FLAGS_ID".to_string(),
+        "AIR" => "DATA_AIR_SUPPLY_ID".to_string(),
+        "CUSTOM_NAME" => "DATA_CUSTOM_NAME".to_string(),
+        "NAME_VISIBLE" => "DATA_CUSTOM_NAME_VISIBLE".to_string(),
+        "SILENT" => "DATA_SILENT".to_string(),
+        "NO_GRAVITY" => "DATA_NO_GRAVITY".to_string(),
+        "POSE" => "DATA_POSE".to_string(),
+        "FROZEN_TICKS" => "DATA_TICKS_FROZEN".to_string(),
+        "LIVING_FLAGS" => "DATA_LIVING_ENTITY_FLAGS".to_string(),
+        "HEALTH" => "DATA_HEALTH_ID".to_string(),
+        "POTION_SWIRLS" => "DATA_EFFECT_PARTICLES".to_string(),
+        "POTION_SWIRLS_AMBIENT" => "DATA_EFFECT_AMBIENCE_ID".to_string(),
+        "STUCK_ARROW_COUNT" => "DATA_ARROW_COUNT_ID".to_string(),
+        "STINGER_COUNT" => "DATA_STINGER_COUNT_ID".to_string(),
+        "SLEEPING_POSITION" => "SLEEPING_POS_ID".to_string(),
+        "MOB_FLAGS" => "DATA_MOB_FLAGS_ID".to_string(),
+        "CHILD" | "BABY" => "DATA_BABY_ID".to_string(),
+        "DAMAGE_WOBBLE_TICKS" => "DATA_ID_HURT".to_string(),
+        "DAMAGE_WOBBLE_SIDE" => "DATA_ID_HURTDIR".to_string(),
+        "DAMAGE_WOBBLE_STRENGTH" => "DATA_ID_DAMAGE".to_string(),
+        "LEFT_PADDLE_MOVING" => "DATA_ID_PADDLE_LEFT".to_string(),
+        "RIGHT_PADDLE_MOVING" => "DATA_ID_PADDLE_RIGHT".to_string(),
+        "BUBBLE_WOBBLE_TICKS" => "DATA_ID_BUBBLE_TIME".to_string(),
+        "STACK" | "ITEM" => "DATA_ITEM".to_string(),
+        "HEAD_ROLLING_TIME_LEFT" | "UNHAPPY_COUNTER" => "DATA_UNHAPPY_COUNTER".to_string(),
+        "VILLAGER_DATA" => "DATA_VILLAGER_DATA".to_string(),
+        "ABSORPTION_AMOUNT" => "DATA_PLAYER_ABSORPTION_ID".to_string(),
+        "SCORE" => "DATA_SCORE_ID".to_string(),
+        "PLAYER_MODEL_PARTS" => "DATA_PLAYER_MODE_CUSTOMISATION".to_string(),
+        "MAIN_ARM" => "DATA_PLAYER_MAIN_HAND".to_string(),
+        "LEFT_SHOULDER_ENTITY" | "LEFT_SHOULDER_PARROT_VARIANT_ID" => {
+            "DATA_SHOULDER_PARROT_LEFT".to_string()
+        }
+        "RIGHT_SHOULDER_ENTITY" | "RIGHT_SHOULDER_PARROT_VARIANT_ID" => {
+            "DATA_SHOULDER_PARROT_RIGHT".to_string()
+        }
+        "TAMEABLE_FLAGS" | "SPIDER_FLAGS" | "BLAZE_FLAGS" => "DATA_FLAGS_ID".to_string(),
+        "HORSE_FLAGS" => "DATA_ID_FLAGS".to_string(),
+        "OWNER_UUID" => "DATA_OWNERUUID_ID".to_string(),
+        "PARTICLE" => "DATA_PARTICLE".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn lookup_tracked_field<'a>(
+    fields: &'a BTreeMap<String, RawTrackedField>,
+    canonical: &str,
+) -> Option<&'a RawTrackedField> {
+    if let Some(info) = fields.get(canonical) {
+        return Some(info);
+    }
+    fields.iter().find_map(|(name, info)| {
+        (canonicalize_tracked_field_name(name) == canonical).then_some(info)
+    })
 }
 
 fn is_valid_ident(name: &str) -> bool {
@@ -308,6 +446,35 @@ fn is_valid_ident(name: &str) -> bool {
 
 fn add_semantic_aliases(entity: &str, field: &str, aliases: &mut Vec<String>) {
     match (entity, field) {
+        (_, "DATA_LIVING_ENTITY_FLAGS") => {
+            aliases.push("LIVING_FLAGS".to_string());
+        }
+        (_, "DATA_ITEM") => {
+            aliases.push("STACK".to_string());
+            aliases.push("ITEM".to_string());
+        }
+        (_, "DATA_UNHAPPY_COUNTER") => {
+            aliases.push("HEAD_ROLLING_TIME_LEFT".to_string());
+            aliases.push("UNHAPPY_COUNTER".to_string());
+        }
+        (_, "DATA_PLAYER_ABSORPTION_ID") => {
+            aliases.push("ABSORPTION_AMOUNT".to_string());
+        }
+        (_, "DATA_ID_HURT") => {
+            aliases.push("DAMAGE_WOBBLE_TICKS".to_string());
+        }
+        (_, "DATA_ID_HURTDIR") => {
+            aliases.push("DAMAGE_WOBBLE_SIDE".to_string());
+        }
+        (_, "DATA_ID_DAMAGE") => {
+            aliases.push("DAMAGE_WOBBLE_STRENGTH".to_string());
+        }
+        (_, "DATA_AIR_SUPPLY_ID") => {
+            aliases.push("AIR".to_string());
+        }
+        (_, "DATA_TICKS_FROZEN") => {
+            aliases.push("FROZEN_TICKS".to_string());
+        }
         (_, "DATA_FLAGS_ID") => {
             aliases.push("TAMEABLE_FLAGS".to_string());
             aliases.push("FLAGS".to_string());
@@ -440,7 +607,62 @@ fn add_semantic_aliases(entity: &str, field: &str, aliases: &mut Vec<String>) {
 #[cfg(test)]
 mod tests {
     use super::build;
-    use quote::quote;
+
+    #[test]
+    fn living_entity_flags_merge_yarn_and_mojang_names() {
+        let generated = build().to_string();
+        let living = generated
+            .split("pub mod living_entity")
+            .nth(1)
+            .expect("living_entity module");
+        let flags = living
+            .split("DATA_LIVING_ENTITY_FLAGS")
+            .nth(1)
+            .expect("DATA_LIVING_ENTITY_FLAGS constant")
+            .split("pub const")
+            .next()
+            .expect("constant body");
+        assert!(flags.contains("TrackedId (8u8)"));
+    }
+
+    fn field_body(generated: &str, module: &str, field: &str) -> String {
+        let module_src = generated
+            .split(&format!("pub mod {module}"))
+            .nth(1)
+            .unwrap_or_else(|| panic!("{module} module"));
+        module_src
+            .split(field)
+            .nth(1)
+            .unwrap_or_else(|| panic!("{module}::{field}"))
+            .split("pub const")
+            .next()
+            .expect("constant body")
+            .to_string()
+    }
+
+    #[test]
+    fn living_health_and_air_merge_yarn_names() {
+        let generated = build().to_string();
+        let health = field_body(&generated, "living_entity", "DATA_HEALTH_ID");
+        assert!(health.contains("TrackedId (9u8)"));
+
+        let air = field_body(&generated, "entity", "DATA_AIR_SUPPLY_ID");
+        assert!(!air.contains("TrackedId (255u8)"));
+    }
+
+    #[test]
+    fn yarn_entity_modules_merge_into_mojang_names() {
+        let generated = build().to_string();
+
+        let boat_hurt = field_body(&generated, "boat", "DATA_ID_HURT");
+        assert!(boat_hurt.contains("TrackedId (8u8)"));
+
+        let baby = field_body(&generated, "ageable_mob", "DATA_BABY_ID");
+        assert!(!baby.contains("TrackedId (255u8)"));
+
+        let item = field_body(&generated, "item", "DATA_ITEM");
+        assert!(!item.contains("TrackedId (255u8)"));
+    }
 
     #[test]
     fn wolf_and_cat_have_correct_entity_specific_tracker_constants() {

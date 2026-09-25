@@ -1,0 +1,4 @@
+{
+  "type": "minecraft:simple_block",
+  "to_place": "minecraft:flower_meadow"
+}

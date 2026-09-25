@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin-plugin-utils"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 license = "MIT OR Apache-2.0"
 description = "Utilities for Pumpkin plugins: licensing, lease caching, and update checks."
@@ -12,6 +12,7 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 reqwest = { workspace = true, features = ["blocking", "json"] }
+rustls.workspace = true
 webpki-root-certs = { workspace = true }
 
 [dev-dependencies]

@@ -1072,13 +1072,13 @@ pub trait NetworkWriteExt {
         data: Option<&NbtCompound>,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        let tag = data.map(|c| NbtTag::Compound(c.clone()));
+        let tag = data.cloned().map(NbtTag::Compound);
         self.write_nbt_with_version(tag.as_ref(), version)
     }
 
     #[inline]
     fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError> {
-        self.write_nbt_with_version(Some(&data), &JavaMinecraftVersion::V_26_2)
+        self.write_nbt_with_version(Some(&data), &JavaMinecraftVersion::V_26_3)
     }
 }
 

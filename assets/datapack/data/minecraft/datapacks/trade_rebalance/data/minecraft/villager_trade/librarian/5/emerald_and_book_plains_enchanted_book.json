@@ -1,0 +1,59 @@
+{
+  "additional_wants": {
+    "id": "minecraft:book"
+  },
+  "double_trade_price_enchantments": "#minecraft:double_trade_price",
+  "given_item_modifier": [
+    {
+      "type": "minecraft:set_enchantments",
+      "enchantments": {
+        "minecraft:protection": 3
+      }
+    },
+    {
+      "type": "minecraft:filtered",
+      "item_filter": {
+        "items": "minecraft:enchanted_book",
+        "predicates": {
+          "minecraft:stored_enchantments": [
+            {
+              "levels": 3
+            }
+          ]
+        }
+      },
+      "on_fail": {
+        "type": "minecraft:discard"
+      }
+    }
+  ],
+  "gives": {
+    "id": "minecraft:enchanted_book"
+  },
+  "max_uses": 12,
+  "merchant_predicate": {
+    "type": "minecraft:entity_properties",
+    "entity": "this",
+    "predicate": {
+      "minecraft:predicates": {
+        "minecraft:villager/variant": "minecraft:plains"
+      }
+    }
+  },
+  "reputation_discount": 0.2,
+  "wants": {
+    "count": {
+      "type": "minecraft:add",
+      "inputs": [
+        11,
+        {
+          "type": "minecraft:uniform",
+          "max": 35,
+          "min": 0
+        }
+      ]
+    },
+    "id": "minecraft:emerald"
+  },
+  "xp": 30
+}

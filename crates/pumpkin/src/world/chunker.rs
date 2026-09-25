@@ -28,16 +28,15 @@ pub fn get_view_distance(player: &Player) -> NonZero<u8> {
         .clamp(fallback, max_view_distance)
 }
 
-// Checks if the target chunk is within the view distance
-// of the center chunk. Uses Chebyshev distance.
+// Checks if the target chunk is within Chebyshev distance (L_infinity) of the center chunk.
 #[must_use]
 #[inline]
-pub fn is_within_view_distance(
+pub fn is_within_chebyshev_distance(
     center: Vector2<i32>,
     target: Vector2<i32>,
-    view_distance: i32,
+    distance: i32,
 ) -> bool {
-    (target.x - center.x).abs().max((target.y - center.y).abs()) <= view_distance
+    (target.x - center.x).abs().max((target.y - center.y).abs()) <= distance
 }
 
 #[allow(clippy::too_many_lines)]
@@ -45,6 +44,10 @@ pub fn update_position(player: &Arc<Player>) {
     let entity = &player.get_entity();
     let new_chunk_center = entity.chunk_pos.load();
     let old_cylindrical = player.watched_section.load();
+
+    // Vanilla `ChunkMap.move` -> re-pair on every move, not only on a view change.
+    let world = player.world();
+    world.entity_tracker.update_player_position(player, &world);
 
     // This does break when a new player spawns
     // if old_cylindrical.center == new_chunk_center {
@@ -79,7 +82,6 @@ pub fn update_position(player: &Arc<Player>) {
     let loading_chunks: Vec<_> = loading_iter.collect();
     let unloading_chunks: Vec<_> = unloading_iter.collect();
 
-    let world = player.world();
     let level = &world.level;
     let mut held_tickets = player
         .held_chunk_tickets
@@ -99,7 +101,7 @@ pub fn update_position(player: &Arc<Player>) {
         )
     });
 
-    let new_sim_level = (!is_spectator).then(|| {
+    let new_sim_level = (!is_spectator || spectators_generate_chunks).then(|| {
         let sim_dist = world.server.upgrade().map_or(10, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         });
@@ -173,7 +175,6 @@ pub fn update_position(player: &Arc<Player>) {
     }
 
     if !loading_chunks.is_empty() {
-        world.spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);
+        world.spawn_world_entity_chunks(player.clone(), loading_chunks);
     }
-    world.entity_tracker.update_player_position(player, &world);
 }

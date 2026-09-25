@@ -51,12 +51,15 @@ impl VarLong {
         Ok(())
     }
 
-    // TODO: Validate that the first byte will not overflow a i64
     #[inline]
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8()?;
+            // Reject encodings that set payload bits beyond bit 63 in the final byte.
+            if i == Self::MAX_SIZE.get() - 1 && byte & 0x7E != 0 {
+                return Err(ReadingError::TooLarge("VarLong".to_string()));
+            }
             val |= (i64::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(val));
@@ -112,6 +115,13 @@ impl PacketRead for VarLong {
 
         loop {
             let byte = u8::read(reader)?;
+            // Reject encodings that set payload bits beyond bit 63 in the final byte.
+            if shift == 63 && (byte & 0x7E) != 0 {
+                return Err(Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "VarLong is too big (overflow)",
+                ));
+            }
             val |= ((byte & 0x7F) as u64) << shift;
 
             if (byte & 0x80) == 0 {
@@ -144,5 +154,27 @@ impl PacketWrite for VarLong {
 
         (val as u8).write(writer)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod overflow_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_overflowing_final_byte() {
+        let mut too_big = vec![0x80; 9];
+        too_big.push(0x02);
+        assert!(VarLong::decode(&mut &too_big[..]).is_err());
+        let mut max_ok = vec![0xFF; 9];
+        max_ok.push(0x01);
+        assert_eq!(VarLong::decode(&mut &max_ok[..]).unwrap().0, -1);
+    }
+
+    #[test]
+    fn packet_read_rejects_overflowing_final_byte() {
+        let mut too_big = vec![0x80; 9];
+        too_big.push(0x02);
+        assert!(VarLong::read(&mut &too_big[..]).is_err());
     }
 }

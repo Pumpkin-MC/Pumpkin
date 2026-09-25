@@ -44,6 +44,16 @@ pub struct Block {
     pub experience: Option<Experience>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpawnFloorPredicate {
+    Default,
+    Never,
+    Always,
+    OcelotOrParrot,
+    PolarBear,
+    FireImmune,
+}
+
 /// Helper struct to ensure the validity of BlockIds parsed from external sources.
 /// Every [`BlockId`] is guaranteed to correspond to a valid [`Block`].
 ///
@@ -195,6 +205,26 @@ impl Block {
         })
     }
 
+    #[must_use]
+    pub fn state_from_properties(
+        &'static self,
+        properties: &[(&str, &str)],
+    ) -> Option<&'static BlockState> {
+        self.states.iter().find(|state| {
+            let Some(state_properties) = self.properties(state.id) else {
+                return properties.is_empty();
+            };
+            let state_properties = state_properties.to_props();
+
+            state_properties.len() == properties.len()
+                && properties.iter().all(|(name, value)| {
+                    state_properties.iter().any(|(state_name, state_value)| {
+                        *state_name == *name && *state_value == *value
+                    })
+                })
+        })
+    }
+
     /// Returns whether this block is solid (based on default state)
     #[must_use]
     pub const fn is_solid(&self) -> bool {
@@ -338,6 +368,20 @@ impl From<BlockId> for u16 {
     #[inline]
     fn from(value: BlockId) -> Self {
         value.as_u16()
+    }
+}
+
+impl From<Block> for BlockId {
+    #[inline]
+    fn from(value: Block) -> Self {
+        value.id
+    }
+}
+
+impl From<&Block> for BlockId {
+    #[inline]
+    fn from(value: &Block) -> Self {
+        value.id
     }
 }
 

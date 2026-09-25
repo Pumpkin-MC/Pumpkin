@@ -57,6 +57,9 @@ impl BlockBehaviour for DecoratedPotBlock {
                     SoundCategory::Blocks,
                     &args.position.to_f64(),
                 );
+                // Vanilla `BlockEntity.setChanged` notifies comparators.
+                args.world
+                    .update_neighbour_for_output_signal(args.position, args.block);
             } else {
                 args.world.play_sound(
                     Sound::BlockDecoratedPotInsertFail,

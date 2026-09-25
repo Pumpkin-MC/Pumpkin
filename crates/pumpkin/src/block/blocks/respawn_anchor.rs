@@ -1,5 +1,4 @@
 use pumpkin_data::block_properties::RespawnAnchorLikeProperties;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{BlockState, translation};
@@ -7,8 +6,13 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, NormalUseArgs, PathComputationType, UseWithItemArgs};
+use crate::block::{
+    BlockBehaviour, GetComparatorOutputArgs, NormalUseArgs, PathComputationType, UseWithItemArgs,
+};
 use crate::entity::EntityBase;
+
+/// Vanilla `RespawnAnchorBlock.MAX_CHARGES`.
+const MAX_CHARGES: u8 = 4;
 
 #[pumpkin_block("minecraft:respawn_anchor")]
 pub struct RespawnAnchorBlock;
@@ -49,7 +53,7 @@ impl BlockBehaviour for RespawnAnchorBlock {
         let state_id = args.world.get_block_state_id(args.position);
         let props = RespawnAnchorLikeProperties::from_state_id(state_id);
 
-        if args.world.dimension != Dimension::THE_NETHER {
+        if !args.world.dimension.respawn_anchor_works {
             args.world
                 .break_block(args.position, None, BlockFlags::SKIP_DROPS);
             let center_pos = args.position.to_centered_f64();
@@ -90,6 +94,12 @@ impl BlockBehaviour for RespawnAnchorBlock {
         }
 
         BlockActionResult::SuccessServer
+    }
+
+    /// Charges scale over the full signal range, so each charge is worth 15 / 4.
+    fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        let props = RespawnAnchorLikeProperties::from_state_id(args.state.id);
+        Some(props.charges * 15 / MAX_CHARGES)
     }
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {

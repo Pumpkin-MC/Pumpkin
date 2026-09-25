@@ -1,4 +1,4 @@
-use super::{Controls, Goal, to_goal_ticks};
+use super::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::ai::pathfinder::node::PathType;
 use crate::entity::mob::Mob;
@@ -150,15 +150,8 @@ impl Goal for FollowOwnerGoal {
         true
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
-        let is_idle = {
-            let navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            navigator.is_idle()
-        };
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        let is_idle = mob.is_navigator_idle();
         if is_idle {
             return false;
         }
@@ -222,7 +215,7 @@ impl Goal for FollowOwnerGoal {
 
         self.time_to_recalc_path -= 1;
         if self.time_to_recalc_path <= 0 {
-            self.time_to_recalc_path = to_goal_ticks(10);
+            self.time_to_recalc_path = self.get_tick_count(10);
             if is_owner_far_away {
                 Self::try_teleport_to_owner(mob, owner);
             } else {
@@ -236,10 +229,6 @@ impl Goal for FollowOwnerGoal {
                 navigator.set_progress(NavigatorGoal::new(mob_pos, owner_pos, self.speed_modifier));
             }
         }
-    }
-
-    fn should_run_every_tick(&self) -> bool {
-        true
     }
 
     fn controls(&self) -> Controls {

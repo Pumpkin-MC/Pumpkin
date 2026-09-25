@@ -1,8 +1,5 @@
 use crate::plugin::loader::wasm::wasm_host::{
-    state::{
-        EntityResource, ItemStackResource, PlayerResource, PluginHostState, ServerResource,
-        TextComponentResource, WorldResource,
-    },
+    state::PluginHostState,
     wit::v0_1::pumpkin::plugin::{
         entity::Entity, event::Event, item_stack::ItemStack, player::Player, server::Server,
         text::TextComponent, world::World,
@@ -10,43 +7,28 @@ use crate::plugin::loader::wasm::wasm_host::{
 };
 use wasmtime::component::Resource;
 
-pub fn cleanup_player(state: &mut PluginHostState, player: &Resource<Player>) {
-    let _ = state
-        .resource_table
-        .delete::<PlayerResource>(Resource::new_own(player.rep()));
+fn cleanup_player(state: &mut PluginHostState, player: &Resource<Player>) {
+    state.discard_to_be_removed(player);
 }
 
-pub fn cleanup_world(state: &mut PluginHostState, world: &Resource<World>) {
-    let _ = state
-        .resource_table
-        .delete::<WorldResource>(Resource::new_own(world.rep()));
+fn cleanup_world(state: &mut PluginHostState, world: &Resource<World>) {
+    state.discard_to_be_removed(world);
 }
 
-pub fn cleanup_text_component(
-    state: &mut PluginHostState,
-    text_component: &Resource<TextComponent>,
-) {
-    let _ = state
-        .resource_table
-        .delete::<TextComponentResource>(Resource::new_own(text_component.rep()));
+fn cleanup_text_component(state: &mut PluginHostState, text_component: &Resource<TextComponent>) {
+    state.discard_to_be_removed(text_component);
 }
 
-pub fn cleanup_item_stack(state: &mut PluginHostState, item: &Resource<ItemStack>) {
-    let _ = state
-        .resource_table
-        .delete::<ItemStackResource>(Resource::new_own(item.rep()));
+fn cleanup_item_stack(state: &mut PluginHostState, item: &Resource<ItemStack>) {
+    state.discard_to_be_removed(item);
 }
 
 pub fn cleanup_entity(state: &mut PluginHostState, entity: &Resource<Entity>) {
-    let _ = state
-        .resource_table
-        .delete::<EntityResource>(Resource::new_own(entity.rep()));
+    state.discard_to_be_removed(entity);
 }
 
 pub fn cleanup_server(state: &mut PluginHostState, server: &Resource<Server>) {
-    let _ = state
-        .resource_table
-        .delete::<ServerResource>(Resource::new_own(server.rep()));
+    state.discard_to_be_removed(server);
 }
 
 #[allow(clippy::too_many_lines, clippy::match_same_arms)]

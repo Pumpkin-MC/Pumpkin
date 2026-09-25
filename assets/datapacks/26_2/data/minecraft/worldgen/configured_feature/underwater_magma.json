@@ -1,8 +1,0 @@
-{
-  "type": "minecraft:underwater_magma",
-  "config": {
-    "floor_search_range": 5,
-    "placement_probability_per_valid_position": 0.5,
-    "placement_radius_around_floor": 1
-  }
-}

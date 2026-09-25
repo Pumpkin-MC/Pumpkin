@@ -14,6 +14,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{Enchantment as EnchantmentTag, Taggable};
 use pumpkin_data::tracked_data;
+use pumpkin_inventory::SimpleInventory;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
@@ -29,7 +30,6 @@ use pumpkin_protocol::java::client::play::{CMerchantOffers, Metadata};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
-use pumpkin_world::inventory::SimpleInventory;
 
 use crate::entity::player::Player;
 use crate::entity::{
@@ -251,6 +251,85 @@ pub(crate) fn apply_potion(stack: &mut ItemStack, potion_name: &str) {
     ));
 }
 
+/// Resolves a trade destination to its structure set, structure, fallback map
+/// name and decoration. 26.3 prefixes these with `#` and renamed several, so
+/// both spellings are accepted.
+fn explorer_map_target(
+    destination: &str,
+) -> Option<(
+    &'static str,
+    pumpkin_data::structures::StructureKeys,
+    &'static str,
+    i32,
+)> {
+    use pumpkin_data::structures::StructureKeys;
+
+    let destination = destination.strip_prefix('#').unwrap_or(destination);
+    Some(match destination {
+        "minecraft:on_jungle_pyramid_maps" | "minecraft:on_jungle_explorer_maps" => (
+            "jungle_temples",
+            StructureKeys::JunglePyramid,
+            "filled_map.explorer_jungle",
+            32,
+        ),
+        "minecraft:on_swamp_hut_maps" | "minecraft:on_swamp_explorer_maps" => (
+            "swamp_huts",
+            StructureKeys::SwampHut,
+            "filled_map.explorer_swamp",
+            33,
+        ),
+        "minecraft:on_desert_village_maps" => (
+            "villages",
+            StructureKeys::VillageDesert,
+            "filled_map.village_desert",
+            27,
+        ),
+        "minecraft:on_plains_village_maps" => (
+            "villages",
+            StructureKeys::VillagePlains,
+            "filled_map.village_plains",
+            28,
+        ),
+        "minecraft:on_savanna_village_maps" => (
+            "villages",
+            StructureKeys::VillageSavanna,
+            "filled_map.village_savanna",
+            29,
+        ),
+        "minecraft:on_snowy_village_maps" => (
+            "villages",
+            StructureKeys::VillageSnowy,
+            "filled_map.village_snowy",
+            30,
+        ),
+        "minecraft:on_taiga_village_maps" => (
+            "villages",
+            StructureKeys::VillageTaiga,
+            "filled_map.village_taiga",
+            31,
+        ),
+        "minecraft:on_ocean_monument_maps" | "minecraft:on_ocean_explorer_maps" => (
+            "ocean_monuments",
+            StructureKeys::Monument,
+            "filled_map.monument",
+            9,
+        ),
+        "minecraft:on_buried_trial_chambers_maps" | "minecraft:on_trial_chambers_maps" => (
+            "trial_chambers",
+            StructureKeys::TrialChambers,
+            "filled_map.trial_chambers",
+            34,
+        ),
+        "minecraft:on_woodland_mansion_maps" | "minecraft:on_woodland_explorer_maps" => (
+            "woodland_mansions",
+            StructureKeys::Mansion,
+            "filled_map.mansion",
+            8,
+        ),
+        _ => return None,
+    })
+}
+
 pub struct VillagerEntity {
     pub mob_entity: MobEntity,
     pub villager_data: std::sync::Mutex<VillagerData>,
@@ -414,7 +493,7 @@ impl VillagerEntity {
                 Box::new(AvoidEntityGoal::new(&EntityType::VEX, 12.0, 0.5, 0.5)),
             );
 
-            goal_selector.add_goal(2, Box::new(TradeWithPlayerGoal::new(0.5)));
+            goal_selector.add_goal(2, Box::new(TradeWithPlayerGoal::new()));
             // Basic movement and looking (Vanilla uses 0.5 speed)
             goal_selector.add_goal(3, Box::new(WorkAtJobSiteGoal::new(0.5)));
             goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(0.5)));
@@ -517,76 +596,13 @@ impl VillagerEntity {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
-    fn create_explorer_map(&self, destination: &str) -> Option<ItemStack> {
+    fn create_explorer_map(&self, destination: &str, given: &ItemStack) -> Option<ItemStack> {
         use pumpkin_data::data_component::DataComponent;
         use pumpkin_data::data_component_impl::{DataComponentImpl, ItemNameImpl, MapIdImpl};
-        use pumpkin_data::structures::{StructureKeys, StructureSet};
+        use pumpkin_data::structures::StructureSet;
         use pumpkin_world::generation::generator::structure_finder::find_nearest_structure_start;
 
-        let (structure_set, structure, name, icon_type) = match destination {
-            "minecraft:on_jungle_explorer_maps" => (
-                "jungle_temples",
-                StructureKeys::JunglePyramid,
-                "filled_map.explorer_jungle",
-                32,
-            ),
-            "minecraft:on_swamp_explorer_maps" => (
-                "swamp_huts",
-                StructureKeys::SwampHut,
-                "filled_map.explorer_swamp",
-                33,
-            ),
-            "minecraft:on_desert_village_maps" => (
-                "villages",
-                StructureKeys::VillageDesert,
-                "filled_map.village_desert",
-                27,
-            ),
-            "minecraft:on_plains_village_maps" => (
-                "villages",
-                StructureKeys::VillagePlains,
-                "filled_map.village_plains",
-                28,
-            ),
-            "minecraft:on_savanna_village_maps" => (
-                "villages",
-                StructureKeys::VillageSavanna,
-                "filled_map.village_savanna",
-                29,
-            ),
-            "minecraft:on_snowy_village_maps" => (
-                "villages",
-                StructureKeys::VillageSnowy,
-                "filled_map.village_snowy",
-                30,
-            ),
-            "minecraft:on_taiga_village_maps" => (
-                "villages",
-                StructureKeys::VillageTaiga,
-                "filled_map.village_taiga",
-                31,
-            ),
-            "minecraft:on_ocean_explorer_maps" => (
-                "ocean_monuments",
-                StructureKeys::Monument,
-                "filled_map.monument",
-                9,
-            ),
-            "minecraft:on_trial_chambers_maps" => (
-                "trial_chambers",
-                StructureKeys::TrialChambers,
-                "filled_map.trial_chambers",
-                34,
-            ),
-            "minecraft:on_woodland_explorer_maps" => (
-                "woodland_mansions",
-                StructureKeys::Mansion,
-                "filled_map.mansion",
-                8,
-            ),
-            _ => return None,
-        };
+        let (structure_set, structure, name, icon_type) = explorer_map_target(destination)?;
 
         let world = self.get_entity().world.load().clone();
         let generator = world.level.world_gen();
@@ -617,20 +633,28 @@ impl VillagerEntity {
                 display_name: None,
             });
 
-        let mut stack = ItemStack::new(1, &Item::FILLED_MAP);
+        // 26.3 trades hand out a dedicated map item that already carries its own
+        // name; older data trades a plain filled map that has to be named here.
+        let mut stack = if given.is_empty() || given.item.id == Item::FILLED_MAP.id {
+            let mut stack = ItemStack::new(1, &Item::FILLED_MAP);
+            stack.patch.push((
+                DataComponent::ItemName,
+                Some(ItemNameImpl { name: name.into() }.to_dyn()),
+            ));
+            stack
+        } else {
+            given.clone()
+        };
         stack.patch.push((
             DataComponent::MapId,
             Some(MapIdImpl { id: map_id }.to_dyn()),
         ));
-        stack.patch.push((
-            DataComponent::ItemName,
-            Some(ItemNameImpl { name: name.into() }.to_dyn()),
-        ));
         Some(stack)
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn add_trades(&self, profession: VillagerProfession, level: i32) {
-        use pumpkin_data::villager::VillagerTradeModifier;
+        use crate::data::datapack::trade_loader::{DynamicTradeModifier, DynamicVillagerTradeSet};
         use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
         use rand::seq::IndexedRandom;
         use rand::{RngExt, SeedableRng, rngs::StdRng};
@@ -643,9 +667,26 @@ impl VillagerEntity {
             .type_enum();
         let mut new_offers = Vec::new();
 
-        if let Some(trade_set) = profession.trade_set(level) {
+        let trade_set = self
+            .get_entity()
+            .world
+            .load()
+            .server
+            .upgrade()
+            .and_then(|server| {
+                server
+                    .datapack_manager
+                    .get_villager_trade_set(profession.to_name(), level)
+            })
+            .or_else(|| {
+                profession
+                    .trade_set(level)
+                    .map(DynamicVillagerTradeSet::from)
+            });
+
+        if let Some(trade_set) = trade_set {
             let mut rng = StdRng::from_rng(&mut rand::rng());
-            let mut remaining_trades = trade_set.trades.iter().collect::<Vec<_>>();
+            let mut remaining_trades = trade_set.trades.clone();
             let mut added = 0;
             while added < trade_set.amount && !remaining_trades.is_empty() {
                 let index = rng.random_range(0..remaining_trades.len());
@@ -661,17 +702,17 @@ impl VillagerEntity {
                     .as_ref()
                     .map(|b| ItemStack::new(b.count as u8, b.item));
 
-                match trade.modifier {
-                    VillagerTradeModifier::None => {}
-                    VillagerTradeModifier::EnchantRandomly => {
+                match &trade.modifier {
+                    DynamicTradeModifier::None => {}
+                    DynamicTradeModifier::EnchantRandomly => {
                         let Some(items) = enchanted_book_offer_items(&mut rng) else {
                             continue;
                         };
                         (base_cost_a, output, cost_b) = items;
                     }
-                    VillagerTradeModifier::EnchantWithLevels { min, max } => {
+                    DynamicTradeModifier::EnchantWithLevels { min, max } => {
                         let Some((enchanted, additional_cost)) =
-                            enchant_trade_item(&mut rng, trade.gives.item, min, max)
+                            enchant_trade_item(&mut rng, trade.gives.item, *min, *max)
                         else {
                             continue;
                         };
@@ -684,14 +725,14 @@ impl VillagerEntity {
                         }
                         base_cost_a.set_count(count as u8);
                     }
-                    VillagerTradeModifier::ExplorationMap { destination } => {
-                        let Some(map) = self.create_explorer_map(destination) else {
+                    DynamicTradeModifier::ExplorationMap { destination } => {
+                        let Some(map) = self.create_explorer_map(destination, &output) else {
                             continue;
                         };
                         output = map;
                     }
-                    VillagerTradeModifier::RandomDyes => apply_random_dye(&mut rng, &mut output),
-                    VillagerTradeModifier::RandomPotion => {
+                    DynamicTradeModifier::RandomDyes => apply_random_dye(&mut rng, &mut output),
+                    DynamicTradeModifier::RandomPotion => {
                         let Some(potion_name) = pumpkin_data::tag::Potion::MINECRAFT_TRADEABLE
                             .0
                             .choose(&mut rng)
@@ -700,10 +741,10 @@ impl VillagerEntity {
                         };
                         apply_potion(&mut output, potion_name);
                     }
-                    VillagerTradeModifier::SuspiciousStew => {
+                    DynamicTradeModifier::SuspiciousStew => {
                         apply_random_stew_effect(&mut rng, &mut output);
                     }
-                    VillagerTradeModifier::Potion(potion) => apply_potion(&mut output, potion),
+                    DynamicTradeModifier::Potion(potion) => apply_potion(&mut output, potion),
                 }
                 new_offers.push(pumpkin_protocol::java::client::play::MerchantOffer {
                     base_cost_a: ItemStackSerializer(Cow::Owned(base_cost_a)),
@@ -2141,6 +2182,9 @@ impl Mob for VillagerEntity {
     }
 
     fn mob_java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+        if version < JavaMinecraftVersion::V_1_9 {
+            return None;
+        }
         let mut metadata = Vec::new();
         Metadata::new(
             tracked_data::villager::VILLAGER_DATA,
@@ -2194,6 +2238,13 @@ impl Mob for VillagerEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
             self.job_site_pending.store(false, Ordering::Relaxed);
         }
+    }
+
+    fn clear_trading_player(&self) {
+        *self
+            .trading_player
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
     fn get_trading_player(&self) -> Option<Arc<Player>> {
@@ -2334,7 +2385,7 @@ mod tests {
         let mut bytes = Vec::new();
 
         metadata
-            .write(&mut bytes, &JavaMinecraftVersion::V_26_2)
+            .write(&mut bytes, &JavaMinecraftVersion::V_26_3)
             .unwrap();
 
         assert_eq!(bytes, [19, 18, 2, 9, 1]);
@@ -2375,7 +2426,7 @@ mod tests {
         let mut bytes = Vec::new();
 
         metadata
-            .write(&mut bytes, &JavaMinecraftVersion::V_26_2)
+            .write(&mut bytes, &JavaMinecraftVersion::V_26_3)
             .unwrap();
 
         assert_eq!(bytes, [18, 1, 40]);
@@ -2400,6 +2451,33 @@ mod tests {
                 .has_tag(&EnchantmentTag::MINECRAFT_TRADEABLE)
         );
         assert!((1..=stored.enchantment[0].0.max_level).contains(&stored.enchantment[0].1));
+    }
+
+    #[test]
+    fn every_exploration_map_destination_resolves() {
+        // An unresolved destination makes the trade get skipped silently, so the
+        // generated data and the lookup have to stay in step.
+        let mut checked = 0;
+        for id in 0..=14 {
+            let Some(profession) = VillagerProfession::from_i32(id) else {
+                continue;
+            };
+            for level in 1..=5 {
+                let Some(trade_set) = profession.trade_set(level) else {
+                    continue;
+                };
+                for trade in trade_set.trades {
+                    if let VillagerTradeModifier::ExplorationMap { destination } = trade.modifier {
+                        assert!(
+                            explorer_map_target(destination).is_some(),
+                            "unresolved exploration map destination: {destination}"
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert!(checked > 0, "no exploration map trades found");
     }
 
     #[test]

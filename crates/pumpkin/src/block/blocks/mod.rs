@@ -28,6 +28,7 @@ pub mod jigsaw;
 pub mod note;
 pub mod piston;
 pub mod redstone;
+pub mod test_block;
 
 // Doors, gates & openings
 pub mod doors;
@@ -62,6 +63,7 @@ pub mod lectern;
 pub mod shelf;
 pub mod signs;
 pub mod skull_block;
+pub mod straw_bed;
 pub mod wither_skull;
 
 // Lighting, heat & fire
@@ -98,12 +100,14 @@ pub mod grass_block;
 pub mod ice;
 pub mod infested;
 pub mod mud;
+pub mod netherrack;
 pub mod nylium;
 pub mod powder_snow;
 pub mod rooted_dirt;
 pub mod snow;
 pub mod soul_sand;
 pub mod sponge;
+pub mod spreading_snowy_block;
 
 // Entities, hazards & misc gameplay blocks
 pub mod anvil;
@@ -132,7 +136,6 @@ pub mod loom;
 pub mod smithing_table;
 pub mod sniffer_egg;
 pub mod structure_block;
-pub mod test_block;
 pub mod trial_spawner;
 pub mod turtle_egg;
 pub mod vault;

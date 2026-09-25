@@ -117,6 +117,8 @@ pub struct Interpolated {
     pub(crate) input_index: usize,
     cell_size_xz: i32,
     cell_size_y: i32,
+    cell_size_xz_inv: f32,
+    cell_size_y_inv: f32,
     min_value: f32,
     max_value: f32,
 }
@@ -134,6 +136,8 @@ impl Interpolated {
             input_index,
             cell_size_xz,
             cell_size_y,
+            cell_size_xz_inv: 1.0 / cell_size_xz as f32,
+            cell_size_y_inv: 1.0 / cell_size_y as f32,
             min_value,
             max_value,
         }
@@ -237,23 +241,23 @@ impl Interpolated {
         let z1 = self.cell_size_xz.min(volume.size_z as i32 - cell_out_z) - 1;
 
         for z in z0..=z1 {
-            let delta_z = z as f32 / self.cell_size_xz as f32;
+            let alpha_z = z as f32 * self.cell_size_xz_inv;
             let out_z = (cell_out_z + z) as usize;
+            let v00 = lerp(alpha_z, v000, v001);
+            let v01 = lerp(alpha_z, v010, v011);
+            let v10 = lerp(alpha_z, v100, v101);
+            let v11 = lerp(alpha_z, v110, v111);
             for x in x0..=x1 {
-                let delta_x = x as f32 / self.cell_size_xz as f32;
+                let alpha_x = x as f32 * self.cell_size_xz_inv;
                 let out_x = (cell_out_x + x) as usize;
-                let x0y0z0 = lerp(delta_x, v000, v100);
-                let x0y1z0 = lerp(delta_x, v010, v110);
-                let x0y0z1 = lerp(delta_x, v001, v101);
-                let x0y1z1 = lerp(delta_x, v011, v111);
+                let v_0 = lerp(alpha_x, v00, v10);
+                let v_1 = lerp(alpha_x, v01, v11);
+                let value_step = (v_1 - v_0) * self.cell_size_y_inv;
+                let mut value = v_0 + value_step * y0 as f32;
                 let start = volume.index_unchecked(out_x, (cell_out_y + y0) as usize, out_z);
-                for (index, y) in (start..).zip(y0..=y1) {
-                    let delta_y = y as f32 / self.cell_size_y as f32;
-                    buffer[index] = lerp(
-                        delta_z,
-                        lerp(delta_y, x0y0z0, x0y1z0),
-                        lerp(delta_y, x0y0z1, x0y1z1),
-                    );
+                for slot in &mut buffer[start..start + (y1 - y0 + 1) as usize] {
+                    *slot = value;
+                    value += value_step;
                 }
             }
         }

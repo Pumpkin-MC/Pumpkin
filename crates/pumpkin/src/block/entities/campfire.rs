@@ -108,7 +108,22 @@ impl BlockEntity for CampfireBlockEntity {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 if *total <= 0 {
-                    *total = recipe.cookingtime;
+                    let mut cooking_time = recipe.cookingtime;
+                    if let Some(server) = world.server.upgrade() {
+                        let mut event = crate::plugin::api::events::block::campfire_start::CampfireStartEvent::new(
+                            self.position,
+                            world.clone(),
+                            stack.clone(),
+                            slot as u8,
+                            cooking_time,
+                        );
+                        server.plugin_manager.fire_blocking(&server, &mut event);
+                        if event.cancelled {
+                            continue;
+                        }
+                        cooking_time = event.cooking_time;
+                    }
+                    *total = cooking_time;
                 }
                 *total
             };
@@ -130,7 +145,20 @@ impl BlockEntity for CampfireBlockEntity {
                 continue;
             };
 
-            let result = ItemStack::new(recipe.result.count, result_item);
+            let mut result = ItemStack::new(recipe.result.count, result_item);
+            if let Some(server) = world.server.upgrade() {
+                let mut event = crate::plugin::api::events::block::block_cook::BlockCookEvent::new(
+                    self.position,
+                    world.clone(),
+                    stack.clone(),
+                    result.clone(),
+                );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    continue;
+                }
+                result = event.result;
+            }
             Self::spawn_cooked_item(world, self.position, result);
 
             *self.items[slot]

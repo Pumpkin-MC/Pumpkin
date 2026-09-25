@@ -53,6 +53,15 @@ pub struct MaterialRuleContext<'a> {
     pub terrain_builder: &'a SurfaceTerrainBuilder,
     pub sea_level: i32,
     steep_material_condition: Option<bool>,
+    /// Noise samplers built by [`test_noise_threshold`], keyed by noise parameter id.
+    ///
+    /// For generated constants, `DoublePerlinNoiseParameters::id` uniquely identifies
+    /// the complete parameter set; generated surface rules only reference those constants.
+    ///
+    /// Building one is expensive and only depends on `random_deriver`, so they are
+    /// reused for the lifetime of the context. Surface rules reference very few
+    /// distinct noises, so a linear scan beats hashing here.
+    noise_threshold_samplers: Vec<(usize, DoublePerlinNoiseSampler)>,
 }
 
 impl<'a> MaterialRuleContext<'a> {
@@ -90,13 +99,14 @@ impl<'a> MaterialRuleContext<'a> {
             stone_depth_above: 0,
             sea_level,
             steep_material_condition: None,
+            noise_threshold_samplers: Vec::new(),
         }
     }
 
     fn sample_run_depth(&self) -> i32 {
         let noise =
             self.surface_noise
-                .sample(self.block_pos_x as f32, 0.0, self.block_pos_z as f32);
+                .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64);
         (noise * 2.75
             + 3.0
             + (self
@@ -131,7 +141,7 @@ impl<'a> MaterialRuleContext<'a> {
             self.last_unique_horizontal_pos_value = self.unique_horizontal_pos_value;
             self.secondary_depth =
                 self.secondary_noise
-                    .sample(self.block_pos_x as f32, 0.0, self.block_pos_z as f32);
+                    .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64);
         }
         self.secondary_depth
     }
@@ -305,13 +315,26 @@ pub fn test_noise_threshold(
     condition: &NoiseThresholdMaterialCondition,
     context: &mut MaterialRuleContext,
 ) -> bool {
-    // TODO: we want to cache these
-    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
-        context.random_deriver,
-        &condition.noise,
-    );
-    let value = sampler.sample(context.block_pos_x as f32, 0.0, context.block_pos_z as f32);
-    value >= condition.min_threshold as f32 && value <= condition.max_threshold as f32
+    let cached = context
+        .noise_threshold_samplers
+        .iter()
+        .position(|(id, _)| *id == condition.noise.id);
+    let index = cached.unwrap_or_else(|| {
+        let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+            context.random_deriver,
+            &condition.noise,
+        );
+        context
+            .noise_threshold_samplers
+            .push((condition.noise.id, sampler));
+        context.noise_threshold_samplers.len() - 1
+    });
+    let value = f64::from(context.noise_threshold_samplers[index].1.sample(
+        context.block_pos_x as f64,
+        0.0,
+        context.block_pos_z as f64,
+    ));
+    value >= condition.min_threshold && value <= condition.max_threshold
 }
 
 pub fn test_stone_depth(

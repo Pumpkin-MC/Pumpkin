@@ -13,13 +13,11 @@ pumpkin-data = { workspace = true, features = [
     "data_component",
     "recipes",
     "tag",
-    "fuels",
     "enchantment",
     "potion",
     "statistic",
 ] }
 
-pumpkin-world.workspace = true
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
 

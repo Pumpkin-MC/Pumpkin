@@ -14,13 +14,14 @@ use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use crate::world::World;
 use pumpkin_data::block_properties::{CrafterLikeProperties, HorizontalFacing, Orientation};
+use pumpkin_data::data_component_impl::UseRemainderImpl;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::recipe_remainder::get_recipe_remainder_id;
 use pumpkin_data::translation;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{Block, BlockDirection, BlockStateId};
+use pumpkin_data::{Block, BlockDirection, BlockStateId, FacingExt};
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::crafting::crafting_screen_handler::match_crafting_recipe;
 use pumpkin_inventory::generic_container_screen_handler::create_crafter_3x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -31,7 +32,6 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::Inventory;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
@@ -133,13 +133,29 @@ impl CrafterBlock {
             world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_LISTENERS);
 
             let mut result_stack = ItemStack::new(recipe_result.count, item);
+            if let Some(server) = world.server.upgrade() {
+                let mut event =
+                    crate::plugin::api::events::block::crafter_craft::CrafterCraftEvent::new(
+                        *pos,
+                        world.clone(),
+                        result_stack.clone(),
+                    );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+                result_stack = event.result;
+            }
             Self::dispense_item(world, pos, crafter, &mut result_stack, props.orientation);
 
             for i in 0..CrafterBlockEntity::INVENTORY_SIZE {
                 let stack = crafter.get_stack(i);
                 if !stack.is_empty()
-                    && let Some(remainder_id) = get_recipe_remainder_id(stack.item.id)
-                    && let Some(remainder_item) = Item::from_id(remainder_id)
+                    && let Some(remainder) = stack.get_data_component::<UseRemainderImpl>()
+                    && let Some(remainder_item) = remainder
+                        .remainder
+                        .as_deref()
+                        .and_then(Item::from_registry_key)
                 {
                     let mut remainder_stack = ItemStack::new(1, remainder_item);
                     Self::dispense_item(
@@ -245,7 +261,13 @@ impl BlockBehaviour for CrafterBlock {
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = CrafterLikeProperties::default(args.block);
-        let facing = args.direction;
+        let facing = args
+            .player
+            .living_entity
+            .entity
+            .get_facing()
+            .opposite()
+            .to_block_direction();
         let horizontal = args.player.living_entity.entity.get_horizontal_facing();
         props.orientation = match facing {
             BlockDirection::Down => match horizontal {
