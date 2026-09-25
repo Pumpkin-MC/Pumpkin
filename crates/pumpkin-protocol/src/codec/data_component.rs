@@ -385,10 +385,16 @@ impl DataComponentCodec<Self> for ItemNameImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let name = seq.get_str()?;
-        Ok(Self {
-            name: Cow::Owned(name.into()),
-        })
+        let tag = seq.get_nbt_with_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)?;
+        let text = tag.as_ref().map_or_else(
+            pumpkin_util::text::TextComponent::empty,
+            pumpkin_util::text::TextComponent::from_nbt,
+        );
+        let name = match &*text.0.content {
+            pumpkin_util::text::TextContent::Translate { translate, .. } => translate.clone(),
+            _ => Cow::Owned(text.get_text()),
+        };
+        Ok(Self { name })
     }
 }
 
@@ -2802,5 +2808,24 @@ impl DataComponentCodec<Self> for BreakSoundImpl {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let _ = seq.get_var_int()?;
         Ok(Self)
+    }
+}
+
+#[cfg(test)]
+mod item_name_tests {
+    use super::{DataComponentCodec, ItemNameImpl};
+    use std::borrow::Cow;
+
+    #[test]
+    fn item_name_round_trips_through_its_own_encoding() {
+        let original = ItemNameImpl {
+            name: Cow::Borrowed("item.minecraft.diamond"),
+        };
+        let mut bytes = Vec::new();
+        assert!(original.serialize(&mut bytes).is_ok());
+
+        let mut cursor = std::io::Cursor::new(bytes);
+        let decoded = ItemNameImpl::deserialize(&mut cursor).ok();
+        assert_eq!(decoded.map(|d| d.name), Some(original.name));
     }
 }
