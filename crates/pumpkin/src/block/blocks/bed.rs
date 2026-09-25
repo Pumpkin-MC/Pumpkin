@@ -267,6 +267,7 @@ impl BedBlock {
                         pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
                         None::<BlockPos>,
                     );
+                    Self::set_occupied(false, world, block, position, state_id);
                     break;
                 }
             }
