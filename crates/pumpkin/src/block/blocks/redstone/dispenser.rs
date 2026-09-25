@@ -418,8 +418,11 @@ impl DispenserBlock {
         } else if Self::dispense_equipment(ctx, item) {
             // Armor, elytra, heads, saddles, horse/wolf armor and llama carpets
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+        } else if item.item.id == Item::EXPERIENCE_BOTTLE.id {
+            // Experience bottles (bottles o' enchanting) are thrown like splash potions
+            Self::dispense_experience_bottle(ctx, item);
         } else {
-            // TODO: Bone meal, bottles o' enchanting, chests onto llamas, brushes onto armadillos
+            // TODO: Bone meal, chests onto llamas, brushes onto armadillos
             // Default / Drop
             Self::drop_item(ctx, item);
         }
@@ -1093,6 +1096,28 @@ impl DispenserBlock {
         );
 
         Some(true)
+    }
+
+    fn dispense_experience_bottle(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
+        let projectile = item.split(1);
+        let entity = Entity::new(
+            ctx.world.clone(),
+            Self::projectile_spawn_position(ctx),
+            &EntityType::EXPERIENCE_BOTTLE,
+        );
+        let bottle = SplashPotionEntity::new(entity);
+        bottle.set_item_stack(projectile);
+        Self::launch_thrown(
+            ctx,
+            &bottle.thrown,
+            Self::POTION_PROJECTILE_POWER,
+            Self::POTION_PROJECTILE_UNCERTAINTY,
+        );
+        Self::finish_projectile_launch(
+            ctx,
+            Arc::new(bottle),
+            WorldEvent::SoundDispenserProjectileLaunch,
+        );
     }
 
     fn dispense_mob_head(ctx: &DispenseContext<'_>, item: &mut ItemStack, block: &'static Block) {
