@@ -72,14 +72,26 @@ impl EntityBase for FallingEntity {
             {
                 state_id = concrete.default_state.id;
             }
-            world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
-            // block updates to watchers before the despawn, else a invisible block gap until the tick flush.
-            let placed = world.get_block_state_id(&landing_pos);
-            world.send_to_tracking_players_editioned(
-                entity,
-                &CBlockUpdate::new(landing_pos, i32::from(placed.as_u16()).into()),
-                &CUpdateBlock::new(landing_pos, BlockState::to_be_network_id(placed)),
+            let block = Block::from_state_id(state_id);
+            let mut event = crate::plugin::api::events::entity::entity_change_block::EntityChangeBlockEvent::new(
+                entity.entity_id,
+                landing_pos,
+                format!("minecraft:{}", block.name),
             );
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire_blocking(&server, &mut event);
+            }
+            if !event.cancelled {
+                world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
+                // Block updates must reach watchers before the entity despawns, or an invisible
+                // gap persists until the next tick flush.
+                let placed = world.get_block_state_id(&landing_pos);
+                world.send_to_tracking_players_editioned(
+                    entity,
+                    &CBlockUpdate::new(landing_pos, i32::from(placed.as_u16()).into()),
+                    &CUpdateBlock::new(landing_pos, BlockState::to_be_network_id(placed)),
+                );
+            }
             self.entity.remove();
         }
 
