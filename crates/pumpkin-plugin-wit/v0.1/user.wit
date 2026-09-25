@@ -1,0 +1,39 @@
+interface user {
+    use uuid.{uuid};
+    use player.{player, java-player-settings};
+
+    enum edition { java, bedrock }
+    enum connection-state { handshake, status, login, transfer, config, play }
+
+    record profile-property {
+        name: string,
+        value: string,
+        signature: option<string>,
+    }
+
+    record user-info {
+        id: uuid,
+        edition: edition,
+        decoder-state: connection-state,
+        encoder-state: connection-state,
+        address: string,
+        server-address: string,
+        server-port: option<u16>,
+        protocol-version: option<s32>,
+        name: option<string>,
+        uuid: option<uuid>,
+        properties: list<profile-property>,
+        settings: option<java-player-settings>,
+        brand: option<string>,
+        closed: bool,
+    }
+
+    resource user {
+        get-info: func() -> user-info;
+        get-player: func() -> option<player>;
+        /// Queues body bytes without the packet ID or transport framing.
+        send-packet: func(packet-id: s32, payload: list<u8>, silent: bool) -> result<_, string>;
+        close: func();
+        clone: func() -> user;
+    }
+}

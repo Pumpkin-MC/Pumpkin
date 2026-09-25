@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use pumpkin_protocol::packet::MultiVersionJavaPacket;
 
 fn may_omit_verify_token(version: JavaMinecraftVersion) -> bool {
     (JavaMinecraftVersion::V_1_19_3..JavaMinecraftVersion::V_1_20_2).contains(&version)
@@ -141,7 +142,6 @@ impl PendingConnection {
             pumpkin_protocol::codec::var_int::VarInt(compression.threshold as i32),
         ))
         .await;
-        self.set_compression(&compression);
     }
 
     pub(super) async fn finish_login(
@@ -174,7 +174,15 @@ impl PendingConnection {
             false,
             uuid::Uuid::new_v4(),
         );
-        self.send_packet_now(&packet).await;
+        let Some(sent) = self.send_packet_checked(&packet).await else {
+            return self.is_closed().then_some(PacketHandlerResult::Stop);
+        };
+        if self.is_closed() {
+            return Some(PacketHandlerResult::Stop);
+        }
+        if sent.id != CLoginSuccess::to_id(self.version.load()) {
+            return None;
+        }
         if self.version.load().supports_configuration_state() {
             return None;
         }

@@ -70,12 +70,30 @@ impl<R: AsyncRead + Unpin> AsyncRead for DecryptionReader<R> {
     }
 }
 
-/// Decoder: Client -> Server
-/// Supports `ZLib` decoding/decompression
-/// Supports Aes128 Encryption
+/// Allows an outbound compression change while an inbound read remains pending.
+#[derive(Clone, Default)]
+pub struct CompressionState(std::sync::Arc<std::sync::RwLock<Option<CompressionThreshold>>>);
+
+impl CompressionState {
+    pub fn threshold(&self) -> Option<CompressionThreshold> {
+        *self
+            .0
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    pub fn set(&self, threshold: Option<CompressionThreshold>) {
+        *self
+            .0
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = threshold;
+    }
+}
+
+/// Decoder: Client -> Server, with Zlib decompression and AES-128 encryption.
 pub struct TCPNetworkDecoder<R: AsyncRead + Unpin> {
     reader: Option<DecryptionReader<R>>,
-    compression: Option<CompressionThreshold>,
+    compression: CompressionState,
     payload_scratch: BytesMut,
 }
 
@@ -83,13 +101,21 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
     pub fn new(reader: R) -> Self {
         Self {
             reader: Some(DecryptionReader::None(reader)),
-            compression: None,
+            compression: CompressionState::default(),
             payload_scratch: BytesMut::new(),
         }
     }
 
-    pub const fn set_compression(&mut self, threshold: CompressionThreshold) {
-        self.compression = Some(threshold);
+    pub fn set_compression(&mut self, threshold: CompressionThreshold) {
+        self.compression.set(Some(threshold));
+    }
+
+    pub fn disable_compression(&mut self) {
+        self.compression.set(None);
+    }
+
+    pub fn compression_state(&self) -> CompressionState {
+        self.compression.clone()
     }
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
@@ -131,7 +157,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         let mut expected_packet_data_len = packet_len as usize;
         let mut expected_uncompressed_packet_data_len = None;
 
-        let mut reader = if let Some(threshold) = self.compression {
+        let mut reader = if let Some(threshold) = self.compression.threshold() {
             let decompressed_length = VarInt::decode_async(&mut bounded_reader).await?;
             let raw_packet_length = packet_len - decompressed_length.written_size() as u64;
             let decompressed_length = decompressed_length.0 as usize;

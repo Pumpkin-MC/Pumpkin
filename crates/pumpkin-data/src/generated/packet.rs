@@ -5,141 +5,412 @@ pub const CURRENT_MC_VERSION: JavaMinecraftVersion =
 pub const LOWEST_SUPPORTED_MC_VERSION: JavaMinecraftVersion =
     pumpkin_util::version::JavaMinecraftVersion::V_26_3;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PacketId(pub i32);
+pub enum PacketState {
+    Handshake,
+    Status,
+    Login,
+    Config,
+    Play,
+    Unknown,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PacketId {
+    pub id: i32,
+    pub state: PacketState,
+}
 impl PacketId {
     #[doc = r" Converts the requested protocol version into the corresponding packet ID."]
     #[must_use]
     pub const fn to_id(&self, _version: JavaMinecraftVersion) -> i32 {
-        self.0
+        self.id
     }
 }
 impl PartialEq<i32> for PacketId {
     fn eq(&self, other: &i32) -> bool {
-        self.0 == *other
+        self.id == *other
     }
 }
 impl PartialEq<PacketId> for i32 {
     fn eq(&self, other: &PacketId) -> bool {
-        *self == other.0
+        *self == other.id
     }
 }
 impl From<PacketId> for i32 {
     fn from(id: PacketId) -> Self {
-        id.0
+        id.id
     }
 }
 impl From<i32> for PacketId {
     fn from(id: i32) -> Self {
-        Self(id)
+        Self {
+            id,
+            state: PacketState::Unknown,
+        }
     }
 }
 pub mod serverbound {
     pub mod handshake {
-        pub const INTENTION: super::super::PacketId = super::super::PacketId(0i32);
+        pub const INTENTION: super::super::PacketId = super::super::PacketId {
+            id: 0i32,
+            state: super::super::PacketState::Handshake,
+        };
         pub const HANDSHAKE: super::super::PacketId = INTENTION;
         pub const HANDSHAKING: super::super::PacketId = INTENTION;
     }
     pub mod status {
-        pub const PING_REQUEST: super::super::PacketId = super::super::PacketId(1i32);
-        pub const STATUS_REQUEST: super::super::PacketId = super::super::PacketId(0i32);
+        pub const PING_REQUEST: super::super::PacketId = super::super::PacketId {
+            id: 1i32,
+            state: super::super::PacketState::Status,
+        };
+        pub const STATUS_REQUEST: super::super::PacketId = super::super::PacketId {
+            id: 0i32,
+            state: super::super::PacketState::Status,
+        };
     }
     pub mod login {
-        pub const COOKIE_RESPONSE: super::super::PacketId = super::super::PacketId(4i32);
-        pub const CUSTOM_QUERY_ANSWER: super::super::PacketId = super::super::PacketId(2i32);
-        pub const HELLO: super::super::PacketId = super::super::PacketId(0i32);
-        pub const KEY: super::super::PacketId = super::super::PacketId(1i32);
-        pub const LOGIN_ACKNOWLEDGED: super::super::PacketId = super::super::PacketId(3i32);
+        pub const COOKIE_RESPONSE: super::super::PacketId = super::super::PacketId {
+            id: 4i32,
+            state: super::super::PacketState::Login,
+        };
+        pub const CUSTOM_QUERY_ANSWER: super::super::PacketId = super::super::PacketId {
+            id: 2i32,
+            state: super::super::PacketState::Login,
+        };
+        pub const HELLO: super::super::PacketId = super::super::PacketId {
+            id: 0i32,
+            state: super::super::PacketState::Login,
+        };
+        pub const KEY: super::super::PacketId = super::super::PacketId {
+            id: 1i32,
+            state: super::super::PacketState::Login,
+        };
+        pub const LOGIN_ACKNOWLEDGED: super::super::PacketId = super::super::PacketId {
+            id: 3i32,
+            state: super::super::PacketState::Login,
+        };
         pub const LOGIN_START: super::super::PacketId = HELLO;
         pub const ENCRYPTION_RESPONSE: super::super::PacketId = KEY;
         pub const LOGIN_PLUGIN_RESPONSE: super::super::PacketId = CUSTOM_QUERY_ANSWER;
     }
     pub mod config {
-        pub const ACCEPT_CODE_OF_CONDUCT: super::super::PacketId = super::super::PacketId(9i32);
-        pub const CLIENT_INFORMATION: super::super::PacketId = super::super::PacketId(0i32);
-        pub const COOKIE_RESPONSE: super::super::PacketId = super::super::PacketId(1i32);
-        pub const CUSTOM_CLICK_ACTION: super::super::PacketId = super::super::PacketId(8i32);
-        pub const CUSTOM_PAYLOAD: super::super::PacketId = super::super::PacketId(2i32);
-        pub const FINISH_CONFIGURATION: super::super::PacketId = super::super::PacketId(3i32);
-        pub const KEEP_ALIVE: super::super::PacketId = super::super::PacketId(4i32);
-        pub const PONG: super::super::PacketId = super::super::PacketId(5i32);
-        pub const RESOURCE_PACK: super::super::PacketId = super::super::PacketId(6i32);
-        pub const SELECT_KNOWN_PACKS: super::super::PacketId = super::super::PacketId(7i32);
+        pub const ACCEPT_CODE_OF_CONDUCT: super::super::PacketId = super::super::PacketId {
+            id: 9i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const CLIENT_INFORMATION: super::super::PacketId = super::super::PacketId {
+            id: 0i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const COOKIE_RESPONSE: super::super::PacketId = super::super::PacketId {
+            id: 1i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const CUSTOM_CLICK_ACTION: super::super::PacketId = super::super::PacketId {
+            id: 8i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const CUSTOM_PAYLOAD: super::super::PacketId = super::super::PacketId {
+            id: 2i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const FINISH_CONFIGURATION: super::super::PacketId = super::super::PacketId {
+            id: 3i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const KEEP_ALIVE: super::super::PacketId = super::super::PacketId {
+            id: 4i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const PONG: super::super::PacketId = super::super::PacketId {
+            id: 5i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const RESOURCE_PACK: super::super::PacketId = super::super::PacketId {
+            id: 6i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const SELECT_KNOWN_PACKS: super::super::PacketId = super::super::PacketId {
+            id: 7i32,
+            state: super::super::PacketState::Config,
+        };
     }
     pub mod play {
-        pub const ACCEPT_TELEPORTATION: super::super::PacketId = super::super::PacketId(0i32);
-        pub const ATTACK: super::super::PacketId = super::super::PacketId(1i32);
-        pub const BLOCK_ENTITY_TAG_QUERY: super::super::PacketId = super::super::PacketId(2i32);
-        pub const BUNDLE_ITEM_SELECTED: super::super::PacketId = super::super::PacketId(3i32);
-        pub const CHANGE_DIFFICULTY: super::super::PacketId = super::super::PacketId(4i32);
-        pub const CHANGE_GAME_MODE: super::super::PacketId = super::super::PacketId(5i32);
-        pub const CHAT: super::super::PacketId = super::super::PacketId(9i32);
-        pub const CHAT_ACK: super::super::PacketId = super::super::PacketId(6i32);
-        pub const CHAT_COMMAND: super::super::PacketId = super::super::PacketId(7i32);
-        pub const CHAT_COMMAND_SIGNED: super::super::PacketId = super::super::PacketId(8i32);
-        pub const CHAT_SESSION_UPDATE: super::super::PacketId = super::super::PacketId(10i32);
-        pub const CHUNK_BATCH_RECEIVED: super::super::PacketId = super::super::PacketId(11i32);
-        pub const CLIENT_COMMAND: super::super::PacketId = super::super::PacketId(12i32);
-        pub const CLIENT_INFORMATION: super::super::PacketId = super::super::PacketId(14i32);
-        pub const CLIENT_TICK_END: super::super::PacketId = super::super::PacketId(13i32);
-        pub const COMMAND_SUGGESTION: super::super::PacketId = super::super::PacketId(15i32);
-        pub const CONFIGURATION_ACKNOWLEDGED: super::super::PacketId =
-            super::super::PacketId(16i32);
-        pub const CONTAINER_BUTTON_CLICK: super::super::PacketId = super::super::PacketId(17i32);
-        pub const CONTAINER_CLICK: super::super::PacketId = super::super::PacketId(18i32);
-        pub const CONTAINER_CLOSE: super::super::PacketId = super::super::PacketId(19i32);
-        pub const CONTAINER_SLOT_STATE_CHANGED: super::super::PacketId =
-            super::super::PacketId(20i32);
-        pub const COOKIE_RESPONSE: super::super::PacketId = super::super::PacketId(21i32);
-        pub const CUSTOM_CLICK_ACTION: super::super::PacketId = super::super::PacketId(68i32);
-        pub const CUSTOM_PAYLOAD: super::super::PacketId = super::super::PacketId(22i32);
-        pub const DEBUG_SUBSCRIPTION_REQUEST: super::super::PacketId =
-            super::super::PacketId(23i32);
-        pub const EDIT_BOOK: super::super::PacketId = super::super::PacketId(24i32);
-        pub const ENTITY_TAG_QUERY: super::super::PacketId = super::super::PacketId(25i32);
-        pub const INTERACT: super::super::PacketId = super::super::PacketId(26i32);
-        pub const JIGSAW_GENERATE: super::super::PacketId = super::super::PacketId(27i32);
-        pub const KEEP_ALIVE: super::super::PacketId = super::super::PacketId(28i32);
-        pub const LOCK_DIFFICULTY: super::super::PacketId = super::super::PacketId(29i32);
-        pub const MOVE_PLAYER_POS: super::super::PacketId = super::super::PacketId(30i32);
-        pub const MOVE_PLAYER_POS_ROT: super::super::PacketId = super::super::PacketId(31i32);
-        pub const MOVE_PLAYER_ROT: super::super::PacketId = super::super::PacketId(32i32);
-        pub const MOVE_PLAYER_STATUS_ONLY: super::super::PacketId = super::super::PacketId(33i32);
-        pub const MOVE_VEHICLE: super::super::PacketId = super::super::PacketId(34i32);
-        pub const PADDLE_BOAT: super::super::PacketId = super::super::PacketId(35i32);
-        pub const PICK_ITEM_FROM_BLOCK: super::super::PacketId = super::super::PacketId(36i32);
-        pub const PICK_ITEM_FROM_ENTITY: super::super::PacketId = super::super::PacketId(37i32);
-        pub const PING_REQUEST: super::super::PacketId = super::super::PacketId(38i32);
-        pub const PLACE_RECIPE: super::super::PacketId = super::super::PacketId(39i32);
-        pub const PLAYER_ABILITIES: super::super::PacketId = super::super::PacketId(40i32);
-        pub const PLAYER_ACTION: super::super::PacketId = super::super::PacketId(41i32);
-        pub const PLAYER_COMMAND: super::super::PacketId = super::super::PacketId(42i32);
-        pub const PLAYER_INPUT: super::super::PacketId = super::super::PacketId(43i32);
-        pub const PLAYER_LOADED: super::super::PacketId = super::super::PacketId(44i32);
-        pub const PONG: super::super::PacketId = super::super::PacketId(45i32);
-        pub const PUNCH: super::super::PacketId = super::super::PacketId(46i32);
-        pub const RECIPE_BOOK_CHANGE_SETTINGS: super::super::PacketId =
-            super::super::PacketId(47i32);
-        pub const RECIPE_BOOK_SEEN_RECIPE: super::super::PacketId = super::super::PacketId(48i32);
-        pub const RENAME_ITEM: super::super::PacketId = super::super::PacketId(49i32);
-        pub const RESOURCE_PACK: super::super::PacketId = super::super::PacketId(50i32);
-        pub const SEEN_ADVANCEMENTS: super::super::PacketId = super::super::PacketId(51i32);
-        pub const SELECT_TRADE: super::super::PacketId = super::super::PacketId(52i32);
-        pub const SET_BEACON: super::super::PacketId = super::super::PacketId(53i32);
-        pub const SET_CARRIED_ITEM: super::super::PacketId = super::super::PacketId(54i32);
-        pub const SET_COMMAND_BLOCK: super::super::PacketId = super::super::PacketId(55i32);
-        pub const SET_COMMAND_MINECART: super::super::PacketId = super::super::PacketId(56i32);
-        pub const SET_CREATIVE_MODE_SLOT: super::super::PacketId = super::super::PacketId(57i32);
-        pub const SET_GAME_RULE: super::super::PacketId = super::super::PacketId(58i32);
-        pub const SET_JIGSAW_BLOCK: super::super::PacketId = super::super::PacketId(59i32);
-        pub const SET_STRUCTURE_BLOCK: super::super::PacketId = super::super::PacketId(60i32);
-        pub const SET_TEST_BLOCK: super::super::PacketId = super::super::PacketId(61i32);
-        pub const SIGN_UPDATE: super::super::PacketId = super::super::PacketId(62i32);
-        pub const SPECTATOR_ACTION: super::super::PacketId = super::super::PacketId(63i32);
-        pub const TELEPORT_TO_ENTITY: super::super::PacketId = super::super::PacketId(64i32);
-        pub const TEST_INSTANCE_BLOCK_ACTION: super::super::PacketId =
-            super::super::PacketId(65i32);
-        pub const USE_ITEM: super::super::PacketId = super::super::PacketId(67i32);
-        pub const USE_ITEM_ON: super::super::PacketId = super::super::PacketId(66i32);
+        pub const ACCEPT_TELEPORTATION: super::super::PacketId = super::super::PacketId {
+            id: 0i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const ATTACK: super::super::PacketId = super::super::PacketId {
+            id: 1i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const BLOCK_ENTITY_TAG_QUERY: super::super::PacketId = super::super::PacketId {
+            id: 2i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const BUNDLE_ITEM_SELECTED: super::super::PacketId = super::super::PacketId {
+            id: 3i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CHANGE_DIFFICULTY: super::super::PacketId = super::super::PacketId {
+            id: 4i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CHANGE_GAME_MODE: super::super::PacketId = super::super::PacketId {
+            id: 5i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CHAT: super::super::PacketId = super::super::PacketId {
+            id: 9i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CHAT_ACK: super::super::PacketId = super::super::PacketId {
+            id: 6i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CHAT_COMMAND: super::super::PacketId = super::super::PacketId {
+            id: 7i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CHAT_COMMAND_SIGNED: super::super::PacketId = super::super::PacketId {
+            id: 8i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CHAT_SESSION_UPDATE: super::super::PacketId = super::super::PacketId {
+            id: 10i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CHUNK_BATCH_RECEIVED: super::super::PacketId = super::super::PacketId {
+            id: 11i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CLIENT_COMMAND: super::super::PacketId = super::super::PacketId {
+            id: 12i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CLIENT_INFORMATION: super::super::PacketId = super::super::PacketId {
+            id: 14i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CLIENT_TICK_END: super::super::PacketId = super::super::PacketId {
+            id: 13i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const COMMAND_SUGGESTION: super::super::PacketId = super::super::PacketId {
+            id: 15i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CONFIGURATION_ACKNOWLEDGED: super::super::PacketId = super::super::PacketId {
+            id: 16i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CONTAINER_BUTTON_CLICK: super::super::PacketId = super::super::PacketId {
+            id: 17i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CONTAINER_CLICK: super::super::PacketId = super::super::PacketId {
+            id: 18i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CONTAINER_CLOSE: super::super::PacketId = super::super::PacketId {
+            id: 19i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CONTAINER_SLOT_STATE_CHANGED: super::super::PacketId = super::super::PacketId {
+            id: 20i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const COOKIE_RESPONSE: super::super::PacketId = super::super::PacketId {
+            id: 21i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CUSTOM_CLICK_ACTION: super::super::PacketId = super::super::PacketId {
+            id: 68i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CUSTOM_PAYLOAD: super::super::PacketId = super::super::PacketId {
+            id: 22i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const DEBUG_SUBSCRIPTION_REQUEST: super::super::PacketId = super::super::PacketId {
+            id: 23i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const EDIT_BOOK: super::super::PacketId = super::super::PacketId {
+            id: 24i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const ENTITY_TAG_QUERY: super::super::PacketId = super::super::PacketId {
+            id: 25i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const INTERACT: super::super::PacketId = super::super::PacketId {
+            id: 26i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const JIGSAW_GENERATE: super::super::PacketId = super::super::PacketId {
+            id: 27i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const KEEP_ALIVE: super::super::PacketId = super::super::PacketId {
+            id: 28i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const LOCK_DIFFICULTY: super::super::PacketId = super::super::PacketId {
+            id: 29i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const MOVE_PLAYER_POS: super::super::PacketId = super::super::PacketId {
+            id: 30i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const MOVE_PLAYER_POS_ROT: super::super::PacketId = super::super::PacketId {
+            id: 31i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const MOVE_PLAYER_ROT: super::super::PacketId = super::super::PacketId {
+            id: 32i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const MOVE_PLAYER_STATUS_ONLY: super::super::PacketId = super::super::PacketId {
+            id: 33i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const MOVE_VEHICLE: super::super::PacketId = super::super::PacketId {
+            id: 34i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PADDLE_BOAT: super::super::PacketId = super::super::PacketId {
+            id: 35i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PICK_ITEM_FROM_BLOCK: super::super::PacketId = super::super::PacketId {
+            id: 36i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PICK_ITEM_FROM_ENTITY: super::super::PacketId = super::super::PacketId {
+            id: 37i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PING_REQUEST: super::super::PacketId = super::super::PacketId {
+            id: 38i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLACE_RECIPE: super::super::PacketId = super::super::PacketId {
+            id: 39i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_ABILITIES: super::super::PacketId = super::super::PacketId {
+            id: 40i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_ACTION: super::super::PacketId = super::super::PacketId {
+            id: 41i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_COMMAND: super::super::PacketId = super::super::PacketId {
+            id: 42i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_INPUT: super::super::PacketId = super::super::PacketId {
+            id: 43i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_LOADED: super::super::PacketId = super::super::PacketId {
+            id: 44i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PONG: super::super::PacketId = super::super::PacketId {
+            id: 45i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PUNCH: super::super::PacketId = super::super::PacketId {
+            id: 46i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const RECIPE_BOOK_CHANGE_SETTINGS: super::super::PacketId = super::super::PacketId {
+            id: 47i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const RECIPE_BOOK_SEEN_RECIPE: super::super::PacketId = super::super::PacketId {
+            id: 48i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const RENAME_ITEM: super::super::PacketId = super::super::PacketId {
+            id: 49i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const RESOURCE_PACK: super::super::PacketId = super::super::PacketId {
+            id: 50i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SEEN_ADVANCEMENTS: super::super::PacketId = super::super::PacketId {
+            id: 51i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SELECT_TRADE: super::super::PacketId = super::super::PacketId {
+            id: 52i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_BEACON: super::super::PacketId = super::super::PacketId {
+            id: 53i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_CARRIED_ITEM: super::super::PacketId = super::super::PacketId {
+            id: 54i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_COMMAND_BLOCK: super::super::PacketId = super::super::PacketId {
+            id: 55i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_COMMAND_MINECART: super::super::PacketId = super::super::PacketId {
+            id: 56i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_CREATIVE_MODE_SLOT: super::super::PacketId = super::super::PacketId {
+            id: 57i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_GAME_RULE: super::super::PacketId = super::super::PacketId {
+            id: 58i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_JIGSAW_BLOCK: super::super::PacketId = super::super::PacketId {
+            id: 59i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_STRUCTURE_BLOCK: super::super::PacketId = super::super::PacketId {
+            id: 60i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_TEST_BLOCK: super::super::PacketId = super::super::PacketId {
+            id: 61i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SIGN_UPDATE: super::super::PacketId = super::super::PacketId {
+            id: 62i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SPECTATOR_ACTION: super::super::PacketId = super::super::PacketId {
+            id: 63i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const TELEPORT_TO_ENTITY: super::super::PacketId = super::super::PacketId {
+            id: 64i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const TEST_INSTANCE_BLOCK_ACTION: super::super::PacketId = super::super::PacketId {
+            id: 65i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const USE_ITEM: super::super::PacketId = super::super::PacketId {
+            id: 67i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const USE_ITEM_ON: super::super::PacketId = super::super::PacketId {
+            id: 66i32,
+            state: super::super::PacketState::Play,
+        };
         pub const CHAT_MESSAGE: super::super::PacketId = CHAT;
         pub const TELEPORT_CONFIRM: super::super::PacketId = ACCEPT_TELEPORTATION;
         pub const SELECT_BUNDLE_ITEM: super::super::PacketId = BUNDLE_ITEM_SELECTED;
@@ -170,16 +441,40 @@ pub mod serverbound {
 pub mod clientbound {
     pub mod handshake {}
     pub mod status {
-        pub const PONG_RESPONSE: super::super::PacketId = super::super::PacketId(1i32);
-        pub const STATUS_RESPONSE: super::super::PacketId = super::super::PacketId(0i32);
+        pub const PONG_RESPONSE: super::super::PacketId = super::super::PacketId {
+            id: 1i32,
+            state: super::super::PacketState::Status,
+        };
+        pub const STATUS_RESPONSE: super::super::PacketId = super::super::PacketId {
+            id: 0i32,
+            state: super::super::PacketState::Status,
+        };
     }
     pub mod login {
-        pub const COOKIE_REQUEST: super::super::PacketId = super::super::PacketId(5i32);
-        pub const CUSTOM_QUERY: super::super::PacketId = super::super::PacketId(4i32);
-        pub const HELLO: super::super::PacketId = super::super::PacketId(1i32);
-        pub const LOGIN_COMPRESSION: super::super::PacketId = super::super::PacketId(3i32);
-        pub const LOGIN_DISCONNECT: super::super::PacketId = super::super::PacketId(0i32);
-        pub const LOGIN_FINISHED: super::super::PacketId = super::super::PacketId(2i32);
+        pub const COOKIE_REQUEST: super::super::PacketId = super::super::PacketId {
+            id: 5i32,
+            state: super::super::PacketState::Login,
+        };
+        pub const CUSTOM_QUERY: super::super::PacketId = super::super::PacketId {
+            id: 4i32,
+            state: super::super::PacketState::Login,
+        };
+        pub const HELLO: super::super::PacketId = super::super::PacketId {
+            id: 1i32,
+            state: super::super::PacketState::Login,
+        };
+        pub const LOGIN_COMPRESSION: super::super::PacketId = super::super::PacketId {
+            id: 3i32,
+            state: super::super::PacketState::Login,
+        };
+        pub const LOGIN_DISCONNECT: super::super::PacketId = super::super::PacketId {
+            id: 0i32,
+            state: super::super::PacketState::Login,
+        };
+        pub const LOGIN_FINISHED: super::super::PacketId = super::super::PacketId {
+            id: 2i32,
+            state: super::super::PacketState::Login,
+        };
         pub const LOGIN_SUCCESS: super::super::PacketId = LOGIN_FINISHED;
         pub const GAME_PROFILE: super::super::PacketId = LOGIN_FINISHED;
         pub const SET_COMPRESSION: super::super::PacketId = LOGIN_COMPRESSION;
@@ -187,176 +482,668 @@ pub mod clientbound {
         pub const LOGIN_PLUGIN_REQUEST: super::super::PacketId = CUSTOM_QUERY;
     }
     pub mod config {
-        pub const CLEAR_DIALOG: super::super::PacketId = super::super::PacketId(18i32);
-        pub const CODE_OF_CONDUCT: super::super::PacketId = super::super::PacketId(20i32);
-        pub const COOKIE_REQUEST: super::super::PacketId = super::super::PacketId(0i32);
-        pub const CUSTOM_PAYLOAD: super::super::PacketId = super::super::PacketId(1i32);
-        pub const CUSTOM_REPORT_DETAILS: super::super::PacketId = super::super::PacketId(16i32);
-        pub const DISCONNECT: super::super::PacketId = super::super::PacketId(2i32);
-        pub const FINISH_CONFIGURATION: super::super::PacketId = super::super::PacketId(3i32);
-        pub const KEEP_ALIVE: super::super::PacketId = super::super::PacketId(4i32);
-        pub const PING: super::super::PacketId = super::super::PacketId(5i32);
-        pub const POST_EFFECTS: super::super::PacketId = super::super::PacketId(10i32);
-        pub const REGISTRY_DATA: super::super::PacketId = super::super::PacketId(7i32);
-        pub const RESET_CHAT: super::super::PacketId = super::super::PacketId(6i32);
-        pub const RESOURCE_PACK_POP: super::super::PacketId = super::super::PacketId(8i32);
-        pub const RESOURCE_PACK_PUSH: super::super::PacketId = super::super::PacketId(9i32);
-        pub const SELECT_KNOWN_PACKS: super::super::PacketId = super::super::PacketId(15i32);
-        pub const SERVER_LINKS: super::super::PacketId = super::super::PacketId(17i32);
-        pub const SHOW_DIALOG: super::super::PacketId = super::super::PacketId(19i32);
-        pub const STORE_COOKIE: super::super::PacketId = super::super::PacketId(11i32);
-        pub const TRANSFER: super::super::PacketId = super::super::PacketId(12i32);
-        pub const UPDATE_ENABLED_FEATURES: super::super::PacketId = super::super::PacketId(13i32);
-        pub const UPDATE_TAGS: super::super::PacketId = super::super::PacketId(14i32);
+        pub const CLEAR_DIALOG: super::super::PacketId = super::super::PacketId {
+            id: 18i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const CODE_OF_CONDUCT: super::super::PacketId = super::super::PacketId {
+            id: 20i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const COOKIE_REQUEST: super::super::PacketId = super::super::PacketId {
+            id: 0i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const CUSTOM_PAYLOAD: super::super::PacketId = super::super::PacketId {
+            id: 1i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const CUSTOM_REPORT_DETAILS: super::super::PacketId = super::super::PacketId {
+            id: 16i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const DISCONNECT: super::super::PacketId = super::super::PacketId {
+            id: 2i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const FINISH_CONFIGURATION: super::super::PacketId = super::super::PacketId {
+            id: 3i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const KEEP_ALIVE: super::super::PacketId = super::super::PacketId {
+            id: 4i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const PING: super::super::PacketId = super::super::PacketId {
+            id: 5i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const POST_EFFECTS: super::super::PacketId = super::super::PacketId {
+            id: 10i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const REGISTRY_DATA: super::super::PacketId = super::super::PacketId {
+            id: 7i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const RESET_CHAT: super::super::PacketId = super::super::PacketId {
+            id: 6i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const RESOURCE_PACK_POP: super::super::PacketId = super::super::PacketId {
+            id: 8i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const RESOURCE_PACK_PUSH: super::super::PacketId = super::super::PacketId {
+            id: 9i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const SELECT_KNOWN_PACKS: super::super::PacketId = super::super::PacketId {
+            id: 15i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const SERVER_LINKS: super::super::PacketId = super::super::PacketId {
+            id: 17i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const SHOW_DIALOG: super::super::PacketId = super::super::PacketId {
+            id: 19i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const STORE_COOKIE: super::super::PacketId = super::super::PacketId {
+            id: 11i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const TRANSFER: super::super::PacketId = super::super::PacketId {
+            id: 12i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const UPDATE_ENABLED_FEATURES: super::super::PacketId = super::super::PacketId {
+            id: 13i32,
+            state: super::super::PacketState::Config,
+        };
+        pub const UPDATE_TAGS: super::super::PacketId = super::super::PacketId {
+            id: 14i32,
+            state: super::super::PacketState::Config,
+        };
     }
     pub mod play {
-        pub const ADD_ENTITY: super::super::PacketId = super::super::PacketId(1i32);
-        pub const ADD_TRANSIENT_BLOCK: super::super::PacketId = super::super::PacketId(37i32);
-        pub const ANIMATE: super::super::PacketId = super::super::PacketId(2i32);
-        pub const AWARD_STATS: super::super::PacketId = super::super::PacketId(3i32);
-        pub const BLOCK_CHANGED_ACK: super::super::PacketId = super::super::PacketId(4i32);
-        pub const BLOCK_DESTRUCTION: super::super::PacketId = super::super::PacketId(5i32);
-        pub const BLOCK_ENTITY_DATA: super::super::PacketId = super::super::PacketId(6i32);
-        pub const BLOCK_EVENT: super::super::PacketId = super::super::PacketId(7i32);
-        pub const BLOCK_UPDATE: super::super::PacketId = super::super::PacketId(8i32);
-        pub const BOSS_EVENT: super::super::PacketId = super::super::PacketId(9i32);
-        pub const BUNDLE_DELIMITER: super::super::PacketId = super::super::PacketId(0i32);
-        pub const CHANGE_DIFFICULTY: super::super::PacketId = super::super::PacketId(10i32);
-        pub const CHUNKS_BIOMES: super::super::PacketId = super::super::PacketId(13i32);
-        pub const CHUNK_BATCH_FINISHED: super::super::PacketId = super::super::PacketId(11i32);
-        pub const CHUNK_BATCH_START: super::super::PacketId = super::super::PacketId(12i32);
-        pub const CLEAR_DIALOG: super::super::PacketId = super::super::PacketId(142i32);
-        pub const CLEAR_TITLES: super::super::PacketId = super::super::PacketId(14i32);
-        pub const COMMANDS: super::super::PacketId = super::super::PacketId(16i32);
-        pub const COMMAND_SUGGESTIONS: super::super::PacketId = super::super::PacketId(15i32);
-        pub const CONTAINER_CLOSE: super::super::PacketId = super::super::PacketId(17i32);
-        pub const CONTAINER_SET_CONTENT: super::super::PacketId = super::super::PacketId(18i32);
-        pub const CONTAINER_SET_DATA: super::super::PacketId = super::super::PacketId(19i32);
-        pub const CONTAINER_SET_SLOT: super::super::PacketId = super::super::PacketId(20i32);
-        pub const COOKIE_REQUEST: super::super::PacketId = super::super::PacketId(21i32);
-        pub const COOLDOWN: super::super::PacketId = super::super::PacketId(22i32);
-        pub const CUSTOM_CHAT_COMPLETIONS: super::super::PacketId = super::super::PacketId(23i32);
-        pub const CUSTOM_PAYLOAD: super::super::PacketId = super::super::PacketId(24i32);
-        pub const CUSTOM_REPORT_DETAILS: super::super::PacketId = super::super::PacketId(139i32);
-        pub const DAMAGE_EVENT: super::super::PacketId = super::super::PacketId(25i32);
-        pub const DEBUG_BLOCK_VALUE: super::super::PacketId = super::super::PacketId(26i32);
-        pub const DEBUG_CHUNK_VALUE: super::super::PacketId = super::super::PacketId(27i32);
-        pub const DEBUG_ENTITY_VALUE: super::super::PacketId = super::super::PacketId(28i32);
-        pub const DEBUG_EVENT: super::super::PacketId = super::super::PacketId(29i32);
-        pub const DEBUG_SAMPLE: super::super::PacketId = super::super::PacketId(30i32);
-        pub const DELETE_CHAT: super::super::PacketId = super::super::PacketId(31i32);
-        pub const DISCONNECT: super::super::PacketId = super::super::PacketId(32i32);
-        pub const DISGUISED_CHAT: super::super::PacketId = super::super::PacketId(33i32);
-        pub const ENTITY_EVENT: super::super::PacketId = super::super::PacketId(34i32);
-        pub const ENTITY_POSITION_SYNC: super::super::PacketId = super::super::PacketId(35i32);
-        pub const EXPLODE: super::super::PacketId = super::super::PacketId(36i32);
-        pub const FORGET_LEVEL_CHUNK: super::super::PacketId = super::super::PacketId(38i32);
-        pub const GAME_EVENT: super::super::PacketId = super::super::PacketId(39i32);
-        pub const GAME_RULE_VALUES: super::super::PacketId = super::super::PacketId(40i32);
-        pub const GAME_TEST_HIGHLIGHT_POS: super::super::PacketId = super::super::PacketId(41i32);
-        pub const HURT_ANIMATION: super::super::PacketId = super::super::PacketId(43i32);
-        pub const INITIALIZE_BORDER: super::super::PacketId = super::super::PacketId(44i32);
-        pub const KEEP_ALIVE: super::super::PacketId = super::super::PacketId(45i32);
-        pub const LEVEL_CHUNK_WITH_LIGHT: super::super::PacketId = super::super::PacketId(46i32);
-        pub const LEVEL_EVENT: super::super::PacketId = super::super::PacketId(47i32);
-        pub const LEVEL_PARTICLES: super::super::PacketId = super::super::PacketId(48i32);
-        pub const LIGHT_UPDATE: super::super::PacketId = super::super::PacketId(49i32);
-        pub const LOGIN: super::super::PacketId = super::super::PacketId(50i32);
-        pub const LOW_DISK_SPACE_WARNING: super::super::PacketId = super::super::PacketId(51i32);
-        pub const MAP_ITEM_DATA: super::super::PacketId = super::super::PacketId(52i32);
-        pub const MERCHANT_OFFERS: super::super::PacketId = super::super::PacketId(53i32);
-        pub const MOUNT_SCREEN_OPEN: super::super::PacketId = super::super::PacketId(42i32);
-        pub const MOVE_ENTITY_POS: super::super::PacketId = super::super::PacketId(54i32);
-        pub const MOVE_ENTITY_POS_ROT: super::super::PacketId = super::super::PacketId(55i32);
-        pub const MOVE_ENTITY_ROT: super::super::PacketId = super::super::PacketId(57i32);
-        pub const MOVE_MINECART_ALONG_TRACK: super::super::PacketId = super::super::PacketId(56i32);
-        pub const MOVE_VEHICLE: super::super::PacketId = super::super::PacketId(58i32);
-        pub const OPEN_BOOK: super::super::PacketId = super::super::PacketId(59i32);
-        pub const OPEN_SCREEN: super::super::PacketId = super::super::PacketId(60i32);
-        pub const OPEN_SIGN_EDITOR: super::super::PacketId = super::super::PacketId(61i32);
-        pub const PING: super::super::PacketId = super::super::PacketId(62i32);
-        pub const PLACE_GHOST_RECIPE: super::super::PacketId = super::super::PacketId(64i32);
-        pub const PLAYER_ABILITIES: super::super::PacketId = super::super::PacketId(65i32);
-        pub const PLAYER_CHAT: super::super::PacketId = super::super::PacketId(66i32);
-        pub const PLAYER_COMBAT_END: super::super::PacketId = super::super::PacketId(67i32);
-        pub const PLAYER_COMBAT_ENTER: super::super::PacketId = super::super::PacketId(68i32);
-        pub const PLAYER_COMBAT_KILL: super::super::PacketId = super::super::PacketId(69i32);
-        pub const PLAYER_INFO_REMOVE: super::super::PacketId = super::super::PacketId(70i32);
-        pub const PLAYER_INFO_UPDATE: super::super::PacketId = super::super::PacketId(71i32);
-        pub const PLAYER_LOOK_AT: super::super::PacketId = super::super::PacketId(72i32);
-        pub const PLAYER_POSITION: super::super::PacketId = super::super::PacketId(73i32);
-        pub const PLAYER_ROTATION: super::super::PacketId = super::super::PacketId(74i32);
-        pub const PONG_RESPONSE: super::super::PacketId = super::super::PacketId(63i32);
-        pub const POST_EFFECTS: super::super::PacketId = super::super::PacketId(83i32);
-        pub const PROJECTILE_POWER: super::super::PacketId = super::super::PacketId(138i32);
-        pub const RECIPE_BOOK_ADD: super::super::PacketId = super::super::PacketId(75i32);
-        pub const RECIPE_BOOK_REMOVE: super::super::PacketId = super::super::PacketId(76i32);
-        pub const RECIPE_BOOK_SETTINGS: super::super::PacketId = super::super::PacketId(77i32);
-        pub const REMOVE_ENTITIES: super::super::PacketId = super::super::PacketId(78i32);
-        pub const REMOVE_MOB_EFFECT: super::super::PacketId = super::super::PacketId(79i32);
-        pub const RESET_SCORE: super::super::PacketId = super::super::PacketId(80i32);
-        pub const RESOURCE_PACK_POP: super::super::PacketId = super::super::PacketId(81i32);
-        pub const RESOURCE_PACK_PUSH: super::super::PacketId = super::super::PacketId(82i32);
-        pub const RESPAWN: super::super::PacketId = super::super::PacketId(84i32);
-        pub const ROTATE_HEAD: super::super::PacketId = super::super::PacketId(85i32);
-        pub const SECTION_BLOCKS_UPDATE: super::super::PacketId = super::super::PacketId(86i32);
-        pub const SELECT_ADVANCEMENTS_TAB: super::super::PacketId = super::super::PacketId(87i32);
-        pub const SERVER_DATA: super::super::PacketId = super::super::PacketId(88i32);
-        pub const SERVER_LINKS: super::super::PacketId = super::super::PacketId(140i32);
-        pub const SET_ACTION_BAR_TEXT: super::super::PacketId = super::super::PacketId(89i32);
-        pub const SET_BORDER_CENTER: super::super::PacketId = super::super::PacketId(90i32);
-        pub const SET_BORDER_LERP_SIZE: super::super::PacketId = super::super::PacketId(91i32);
-        pub const SET_BORDER_SIZE: super::super::PacketId = super::super::PacketId(92i32);
-        pub const SET_BORDER_WARNING_DELAY: super::super::PacketId = super::super::PacketId(93i32);
-        pub const SET_BORDER_WARNING_DISTANCE: super::super::PacketId =
-            super::super::PacketId(94i32);
-        pub const SET_CAMERA: super::super::PacketId = super::super::PacketId(95i32);
-        pub const SET_CHUNK_CACHE_CENTER: super::super::PacketId = super::super::PacketId(96i32);
-        pub const SET_CHUNK_CACHE_RADIUS: super::super::PacketId = super::super::PacketId(97i32);
-        pub const SET_CURSOR_ITEM: super::super::PacketId = super::super::PacketId(98i32);
-        pub const SET_DEFAULT_SPAWN_POSITION: super::super::PacketId =
-            super::super::PacketId(99i32);
-        pub const SET_DISPLAY_OBJECTIVE: super::super::PacketId = super::super::PacketId(100i32);
-        pub const SET_ENTITY_DATA: super::super::PacketId = super::super::PacketId(101i32);
-        pub const SET_ENTITY_LINK: super::super::PacketId = super::super::PacketId(102i32);
-        pub const SET_ENTITY_MOTION: super::super::PacketId = super::super::PacketId(103i32);
-        pub const SET_EQUIPMENT: super::super::PacketId = super::super::PacketId(104i32);
-        pub const SET_EXPERIENCE: super::super::PacketId = super::super::PacketId(105i32);
-        pub const SET_HEALTH: super::super::PacketId = super::super::PacketId(106i32);
-        pub const SET_HELD_SLOT: super::super::PacketId = super::super::PacketId(107i32);
-        pub const SET_OBJECTIVE: super::super::PacketId = super::super::PacketId(108i32);
-        pub const SET_PASSENGERS: super::super::PacketId = super::super::PacketId(109i32);
-        pub const SET_PLAYER_INVENTORY: super::super::PacketId = super::super::PacketId(110i32);
-        pub const SET_PLAYER_TEAM: super::super::PacketId = super::super::PacketId(111i32);
-        pub const SET_SCORE: super::super::PacketId = super::super::PacketId(112i32);
-        pub const SET_SIMULATION_DISTANCE: super::super::PacketId = super::super::PacketId(113i32);
-        pub const SET_SUBTITLE_TEXT: super::super::PacketId = super::super::PacketId(114i32);
-        pub const SET_TIME: super::super::PacketId = super::super::PacketId(115i32);
-        pub const SET_TITLES_ANIMATION: super::super::PacketId = super::super::PacketId(117i32);
-        pub const SET_TITLE_TEXT: super::super::PacketId = super::super::PacketId(116i32);
-        pub const SHOW_DIALOG: super::super::PacketId = super::super::PacketId(143i32);
-        pub const SOUND: super::super::PacketId = super::super::PacketId(119i32);
-        pub const SOUND_ENTITY: super::super::PacketId = super::super::PacketId(118i32);
-        pub const START_CONFIGURATION: super::super::PacketId = super::super::PacketId(120i32);
-        pub const STOP_SOUND: super::super::PacketId = super::super::PacketId(121i32);
-        pub const STORE_COOKIE: super::super::PacketId = super::super::PacketId(122i32);
-        pub const SWING_ANIMATION: super::super::PacketId = super::super::PacketId(123i32);
-        pub const SYSTEM_CHAT: super::super::PacketId = super::super::PacketId(124i32);
-        pub const TAB_LIST: super::super::PacketId = super::super::PacketId(125i32);
-        pub const TAG_QUERY: super::super::PacketId = super::super::PacketId(126i32);
-        pub const TAKE_ITEM_ENTITY: super::super::PacketId = super::super::PacketId(127i32);
-        pub const TELEPORT_ENTITY: super::super::PacketId = super::super::PacketId(128i32);
-        pub const TEST_INSTANCE_BLOCK_STATUS: super::super::PacketId =
-            super::super::PacketId(129i32);
-        pub const TICKING_STATE: super::super::PacketId = super::super::PacketId(130i32);
-        pub const TICKING_STEP: super::super::PacketId = super::super::PacketId(131i32);
-        pub const TRANSFER: super::super::PacketId = super::super::PacketId(132i32);
-        pub const UPDATE_ADVANCEMENTS: super::super::PacketId = super::super::PacketId(133i32);
-        pub const UPDATE_ATTRIBUTES: super::super::PacketId = super::super::PacketId(134i32);
-        pub const UPDATE_MOB_EFFECT: super::super::PacketId = super::super::PacketId(135i32);
-        pub const UPDATE_RECIPES: super::super::PacketId = super::super::PacketId(136i32);
-        pub const UPDATE_TAGS: super::super::PacketId = super::super::PacketId(137i32);
-        pub const WAYPOINT: super::super::PacketId = super::super::PacketId(141i32);
+        pub const ADD_ENTITY: super::super::PacketId = super::super::PacketId {
+            id: 1i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const ADD_TRANSIENT_BLOCK: super::super::PacketId = super::super::PacketId {
+            id: 37i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const ANIMATE: super::super::PacketId = super::super::PacketId {
+            id: 2i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const AWARD_STATS: super::super::PacketId = super::super::PacketId {
+            id: 3i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const BLOCK_CHANGED_ACK: super::super::PacketId = super::super::PacketId {
+            id: 4i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const BLOCK_DESTRUCTION: super::super::PacketId = super::super::PacketId {
+            id: 5i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const BLOCK_ENTITY_DATA: super::super::PacketId = super::super::PacketId {
+            id: 6i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const BLOCK_EVENT: super::super::PacketId = super::super::PacketId {
+            id: 7i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const BLOCK_UPDATE: super::super::PacketId = super::super::PacketId {
+            id: 8i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const BOSS_EVENT: super::super::PacketId = super::super::PacketId {
+            id: 9i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const BUNDLE_DELIMITER: super::super::PacketId = super::super::PacketId {
+            id: 0i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CHANGE_DIFFICULTY: super::super::PacketId = super::super::PacketId {
+            id: 10i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CHUNKS_BIOMES: super::super::PacketId = super::super::PacketId {
+            id: 13i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CHUNK_BATCH_FINISHED: super::super::PacketId = super::super::PacketId {
+            id: 11i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CHUNK_BATCH_START: super::super::PacketId = super::super::PacketId {
+            id: 12i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CLEAR_DIALOG: super::super::PacketId = super::super::PacketId {
+            id: 142i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CLEAR_TITLES: super::super::PacketId = super::super::PacketId {
+            id: 14i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const COMMANDS: super::super::PacketId = super::super::PacketId {
+            id: 16i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const COMMAND_SUGGESTIONS: super::super::PacketId = super::super::PacketId {
+            id: 15i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CONTAINER_CLOSE: super::super::PacketId = super::super::PacketId {
+            id: 17i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CONTAINER_SET_CONTENT: super::super::PacketId = super::super::PacketId {
+            id: 18i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CONTAINER_SET_DATA: super::super::PacketId = super::super::PacketId {
+            id: 19i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CONTAINER_SET_SLOT: super::super::PacketId = super::super::PacketId {
+            id: 20i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const COOKIE_REQUEST: super::super::PacketId = super::super::PacketId {
+            id: 21i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const COOLDOWN: super::super::PacketId = super::super::PacketId {
+            id: 22i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CUSTOM_CHAT_COMPLETIONS: super::super::PacketId = super::super::PacketId {
+            id: 23i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CUSTOM_PAYLOAD: super::super::PacketId = super::super::PacketId {
+            id: 24i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const CUSTOM_REPORT_DETAILS: super::super::PacketId = super::super::PacketId {
+            id: 139i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const DAMAGE_EVENT: super::super::PacketId = super::super::PacketId {
+            id: 25i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const DEBUG_BLOCK_VALUE: super::super::PacketId = super::super::PacketId {
+            id: 26i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const DEBUG_CHUNK_VALUE: super::super::PacketId = super::super::PacketId {
+            id: 27i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const DEBUG_ENTITY_VALUE: super::super::PacketId = super::super::PacketId {
+            id: 28i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const DEBUG_EVENT: super::super::PacketId = super::super::PacketId {
+            id: 29i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const DEBUG_SAMPLE: super::super::PacketId = super::super::PacketId {
+            id: 30i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const DELETE_CHAT: super::super::PacketId = super::super::PacketId {
+            id: 31i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const DISCONNECT: super::super::PacketId = super::super::PacketId {
+            id: 32i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const DISGUISED_CHAT: super::super::PacketId = super::super::PacketId {
+            id: 33i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const ENTITY_EVENT: super::super::PacketId = super::super::PacketId {
+            id: 34i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const ENTITY_POSITION_SYNC: super::super::PacketId = super::super::PacketId {
+            id: 35i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const EXPLODE: super::super::PacketId = super::super::PacketId {
+            id: 36i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const FORGET_LEVEL_CHUNK: super::super::PacketId = super::super::PacketId {
+            id: 38i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const GAME_EVENT: super::super::PacketId = super::super::PacketId {
+            id: 39i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const GAME_RULE_VALUES: super::super::PacketId = super::super::PacketId {
+            id: 40i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const GAME_TEST_HIGHLIGHT_POS: super::super::PacketId = super::super::PacketId {
+            id: 41i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const HURT_ANIMATION: super::super::PacketId = super::super::PacketId {
+            id: 43i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const INITIALIZE_BORDER: super::super::PacketId = super::super::PacketId {
+            id: 44i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const KEEP_ALIVE: super::super::PacketId = super::super::PacketId {
+            id: 45i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const LEVEL_CHUNK_WITH_LIGHT: super::super::PacketId = super::super::PacketId {
+            id: 46i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const LEVEL_EVENT: super::super::PacketId = super::super::PacketId {
+            id: 47i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const LEVEL_PARTICLES: super::super::PacketId = super::super::PacketId {
+            id: 48i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const LIGHT_UPDATE: super::super::PacketId = super::super::PacketId {
+            id: 49i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const LOGIN: super::super::PacketId = super::super::PacketId {
+            id: 50i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const LOW_DISK_SPACE_WARNING: super::super::PacketId = super::super::PacketId {
+            id: 51i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const MAP_ITEM_DATA: super::super::PacketId = super::super::PacketId {
+            id: 52i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const MERCHANT_OFFERS: super::super::PacketId = super::super::PacketId {
+            id: 53i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const MOUNT_SCREEN_OPEN: super::super::PacketId = super::super::PacketId {
+            id: 42i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const MOVE_ENTITY_POS: super::super::PacketId = super::super::PacketId {
+            id: 54i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const MOVE_ENTITY_POS_ROT: super::super::PacketId = super::super::PacketId {
+            id: 55i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const MOVE_ENTITY_ROT: super::super::PacketId = super::super::PacketId {
+            id: 57i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const MOVE_MINECART_ALONG_TRACK: super::super::PacketId = super::super::PacketId {
+            id: 56i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const MOVE_VEHICLE: super::super::PacketId = super::super::PacketId {
+            id: 58i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const OPEN_BOOK: super::super::PacketId = super::super::PacketId {
+            id: 59i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const OPEN_SCREEN: super::super::PacketId = super::super::PacketId {
+            id: 60i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const OPEN_SIGN_EDITOR: super::super::PacketId = super::super::PacketId {
+            id: 61i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PING: super::super::PacketId = super::super::PacketId {
+            id: 62i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLACE_GHOST_RECIPE: super::super::PacketId = super::super::PacketId {
+            id: 64i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_ABILITIES: super::super::PacketId = super::super::PacketId {
+            id: 65i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_CHAT: super::super::PacketId = super::super::PacketId {
+            id: 66i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_COMBAT_END: super::super::PacketId = super::super::PacketId {
+            id: 67i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_COMBAT_ENTER: super::super::PacketId = super::super::PacketId {
+            id: 68i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_COMBAT_KILL: super::super::PacketId = super::super::PacketId {
+            id: 69i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_INFO_REMOVE: super::super::PacketId = super::super::PacketId {
+            id: 70i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_INFO_UPDATE: super::super::PacketId = super::super::PacketId {
+            id: 71i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_LOOK_AT: super::super::PacketId = super::super::PacketId {
+            id: 72i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_POSITION: super::super::PacketId = super::super::PacketId {
+            id: 73i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PLAYER_ROTATION: super::super::PacketId = super::super::PacketId {
+            id: 74i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PONG_RESPONSE: super::super::PacketId = super::super::PacketId {
+            id: 63i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const POST_EFFECTS: super::super::PacketId = super::super::PacketId {
+            id: 83i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const PROJECTILE_POWER: super::super::PacketId = super::super::PacketId {
+            id: 138i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const RECIPE_BOOK_ADD: super::super::PacketId = super::super::PacketId {
+            id: 75i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const RECIPE_BOOK_REMOVE: super::super::PacketId = super::super::PacketId {
+            id: 76i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const RECIPE_BOOK_SETTINGS: super::super::PacketId = super::super::PacketId {
+            id: 77i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const REMOVE_ENTITIES: super::super::PacketId = super::super::PacketId {
+            id: 78i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const REMOVE_MOB_EFFECT: super::super::PacketId = super::super::PacketId {
+            id: 79i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const RESET_SCORE: super::super::PacketId = super::super::PacketId {
+            id: 80i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const RESOURCE_PACK_POP: super::super::PacketId = super::super::PacketId {
+            id: 81i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const RESOURCE_PACK_PUSH: super::super::PacketId = super::super::PacketId {
+            id: 82i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const RESPAWN: super::super::PacketId = super::super::PacketId {
+            id: 84i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const ROTATE_HEAD: super::super::PacketId = super::super::PacketId {
+            id: 85i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SECTION_BLOCKS_UPDATE: super::super::PacketId = super::super::PacketId {
+            id: 86i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SELECT_ADVANCEMENTS_TAB: super::super::PacketId = super::super::PacketId {
+            id: 87i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SERVER_DATA: super::super::PacketId = super::super::PacketId {
+            id: 88i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SERVER_LINKS: super::super::PacketId = super::super::PacketId {
+            id: 140i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_ACTION_BAR_TEXT: super::super::PacketId = super::super::PacketId {
+            id: 89i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_BORDER_CENTER: super::super::PacketId = super::super::PacketId {
+            id: 90i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_BORDER_LERP_SIZE: super::super::PacketId = super::super::PacketId {
+            id: 91i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_BORDER_SIZE: super::super::PacketId = super::super::PacketId {
+            id: 92i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_BORDER_WARNING_DELAY: super::super::PacketId = super::super::PacketId {
+            id: 93i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_BORDER_WARNING_DISTANCE: super::super::PacketId = super::super::PacketId {
+            id: 94i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_CAMERA: super::super::PacketId = super::super::PacketId {
+            id: 95i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_CHUNK_CACHE_CENTER: super::super::PacketId = super::super::PacketId {
+            id: 96i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_CHUNK_CACHE_RADIUS: super::super::PacketId = super::super::PacketId {
+            id: 97i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_CURSOR_ITEM: super::super::PacketId = super::super::PacketId {
+            id: 98i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_DEFAULT_SPAWN_POSITION: super::super::PacketId = super::super::PacketId {
+            id: 99i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_DISPLAY_OBJECTIVE: super::super::PacketId = super::super::PacketId {
+            id: 100i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_ENTITY_DATA: super::super::PacketId = super::super::PacketId {
+            id: 101i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_ENTITY_LINK: super::super::PacketId = super::super::PacketId {
+            id: 102i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_ENTITY_MOTION: super::super::PacketId = super::super::PacketId {
+            id: 103i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_EQUIPMENT: super::super::PacketId = super::super::PacketId {
+            id: 104i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_EXPERIENCE: super::super::PacketId = super::super::PacketId {
+            id: 105i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_HEALTH: super::super::PacketId = super::super::PacketId {
+            id: 106i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_HELD_SLOT: super::super::PacketId = super::super::PacketId {
+            id: 107i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_OBJECTIVE: super::super::PacketId = super::super::PacketId {
+            id: 108i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_PASSENGERS: super::super::PacketId = super::super::PacketId {
+            id: 109i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_PLAYER_INVENTORY: super::super::PacketId = super::super::PacketId {
+            id: 110i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_PLAYER_TEAM: super::super::PacketId = super::super::PacketId {
+            id: 111i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_SCORE: super::super::PacketId = super::super::PacketId {
+            id: 112i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_SIMULATION_DISTANCE: super::super::PacketId = super::super::PacketId {
+            id: 113i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_SUBTITLE_TEXT: super::super::PacketId = super::super::PacketId {
+            id: 114i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_TIME: super::super::PacketId = super::super::PacketId {
+            id: 115i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_TITLES_ANIMATION: super::super::PacketId = super::super::PacketId {
+            id: 117i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SET_TITLE_TEXT: super::super::PacketId = super::super::PacketId {
+            id: 116i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SHOW_DIALOG: super::super::PacketId = super::super::PacketId {
+            id: 143i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SOUND: super::super::PacketId = super::super::PacketId {
+            id: 119i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SOUND_ENTITY: super::super::PacketId = super::super::PacketId {
+            id: 118i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const START_CONFIGURATION: super::super::PacketId = super::super::PacketId {
+            id: 120i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const STOP_SOUND: super::super::PacketId = super::super::PacketId {
+            id: 121i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const STORE_COOKIE: super::super::PacketId = super::super::PacketId {
+            id: 122i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SWING_ANIMATION: super::super::PacketId = super::super::PacketId {
+            id: 123i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const SYSTEM_CHAT: super::super::PacketId = super::super::PacketId {
+            id: 124i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const TAB_LIST: super::super::PacketId = super::super::PacketId {
+            id: 125i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const TAG_QUERY: super::super::PacketId = super::super::PacketId {
+            id: 126i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const TAKE_ITEM_ENTITY: super::super::PacketId = super::super::PacketId {
+            id: 127i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const TELEPORT_ENTITY: super::super::PacketId = super::super::PacketId {
+            id: 128i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const TEST_INSTANCE_BLOCK_STATUS: super::super::PacketId = super::super::PacketId {
+            id: 129i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const TICKING_STATE: super::super::PacketId = super::super::PacketId {
+            id: 130i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const TICKING_STEP: super::super::PacketId = super::super::PacketId {
+            id: 131i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const TRANSFER: super::super::PacketId = super::super::PacketId {
+            id: 132i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const UPDATE_ADVANCEMENTS: super::super::PacketId = super::super::PacketId {
+            id: 133i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const UPDATE_ATTRIBUTES: super::super::PacketId = super::super::PacketId {
+            id: 134i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const UPDATE_MOB_EFFECT: super::super::PacketId = super::super::PacketId {
+            id: 135i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const UPDATE_RECIPES: super::super::PacketId = super::super::PacketId {
+            id: 136i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const UPDATE_TAGS: super::super::PacketId = super::super::PacketId {
+            id: 137i32,
+            state: super::super::PacketState::Play,
+        };
+        pub const WAYPOINT: super::super::PacketId = super::super::PacketId {
+            id: 141i32,
+            state: super::super::PacketState::Play,
+        };
         pub const SET_CARRIED_ITEM: super::super::PacketId = SET_CURSOR_ITEM;
         pub const CHAT: super::super::PacketId = SYSTEM_CHAT;
         pub const BUNDLE: super::super::PacketId = BUNDLE_DELIMITER;

@@ -136,37 +136,50 @@ pub(crate) fn build() -> TokenStream {
 fn generate_struct<T>(_versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStream {
     quote! {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        pub struct PacketId(pub i32);
+        pub enum PacketState {
+            Handshake,
+            Status,
+            Login,
+            Config,
+            Play,
+            Unknown,
+        }
+
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub struct PacketId {
+            pub id: i32,
+            pub state: PacketState,
+        }
 
         impl PacketId {
             /// Converts the requested protocol version into the corresponding packet ID.
             #[must_use]
             pub const fn to_id(&self, _version: JavaMinecraftVersion) -> i32 {
-                self.0
+                self.id
             }
         }
 
         impl PartialEq<i32> for PacketId {
             fn eq(&self, other: &i32) -> bool {
-                self.0 == *other
+                self.id == *other
             }
         }
 
         impl PartialEq<PacketId> for i32 {
             fn eq(&self, other: &PacketId) -> bool {
-                *self == other.0
+                *self == other.id
             }
         }
 
         impl From<PacketId> for i32 {
             fn from(id: PacketId) -> Self {
-                id.0
+                id.id
             }
         }
 
         impl From<i32> for PacketId {
             fn from(id: i32) -> Self {
-                Self(id)
+                Self { id, state: PacketState::Unknown }
             }
         }
     }
@@ -355,6 +368,14 @@ fn generate_phase_modules(
 
     for phase_name in expected_phases {
         let phase_ident = format_ident!("{}", phase_name);
+        let phase_state = match phase_name {
+            "handshake" => quote!(Handshake),
+            "status" => quote!(Status),
+            "login" => quote!(Login),
+            "config" => quote!(Config),
+            "play" => quote!(Play),
+            _ => unreachable!(),
+        };
         let mut consts_ts = TokenStream::new();
         let empty_map = BTreeMap::new();
         let packets_in_phase = phase_packets.get(phase_name).unwrap_or(&empty_map);
@@ -363,7 +384,10 @@ fn generate_phase_modules(
             let id = values.get(&LATEST_VERSION).copied().unwrap_or(-1);
             let const_name = format_ident!("{}", name);
             consts_ts.extend(quote! {
-                pub const #const_name: super::super::PacketId = super::super::PacketId(#id);
+                pub const #const_name: super::super::PacketId = super::super::PacketId {
+                    id: #id,
+                    state: super::super::PacketState::#phase_state,
+                };
             });
         }
 

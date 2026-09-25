@@ -51,6 +51,7 @@ world plugin {
     import attributes;
     /// Provides player management.
     import player;
+    import user;
     /// Provides advancement definitions and progress types.
     import advancement;
     /// Provides custom recipe registration and management.
