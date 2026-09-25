@@ -96,6 +96,29 @@ pub trait CommandSuggestionHandler: Send + Sync {
     ) -> CommandSuggestions;
 }
 
+/// Handles a command-node requirement check.
+///
+/// Return `true` when the sender should be allowed to use the node and `false`
+/// when the node should be rejected during command parsing.
+/// Requirement callbacks reuse the existing command export to preserve WIT 0.1 compatibility.
+pub trait CommandRequirementHandler: Send + Sync {
+    /// Checks whether `sender` satisfies this requirement.
+    fn check(&self, sender: CommandSender, server: Server) -> bool;
+}
+
+struct CommandRequirementAdapter(Arc<dyn CommandRequirementHandler>);
+
+impl CommandHandler for CommandRequirementAdapter {
+    fn handle(
+        &self,
+        sender: CommandSender,
+        server: Server,
+        _args: ConsumedArgs,
+    ) -> Result<i32, CommandError> {
+        Ok(i32::from(self.0.check(sender, server)))
+    }
+}
+
 impl Command {
     /// Attaches an execution handler to this command.
     ///
@@ -144,6 +167,25 @@ impl CommandNode {
             .insert(id, Arc::new(handler));
 
         self.suggest_with_handler_id(id)
+    }
+
+    /// Attaches a requirement handler to this command node.
+    ///
+    /// The node is only eligible for parsing and execution when `handler` returns
+    /// `true` for the command sender.
+    pub fn requires<H: CommandRequirementHandler + Send + Sync + 'static>(
+        self,
+        handler: H,
+    ) -> Self {
+        let id = NEXT_COMMAND_ID.fetch_add(1, Ordering::Relaxed);
+        let handler: Arc<dyn CommandRequirementHandler> = Arc::new(handler);
+
+        COMMAND_HANDLERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id, Arc::new(CommandRequirementAdapter(handler)));
+
+        self.require_with_handler_id(id)
     }
 }
 
