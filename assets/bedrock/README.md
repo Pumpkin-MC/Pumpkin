@@ -23,6 +23,10 @@ This directory contains a number of different data files used to help support co
     - downloaded from [Kaooot/bedrock-network-data](https://github.com/Kaooot/bedrock-network-data/blob/master/release/1.26.40/biome_definitions.nbt)
     - Contains the gzip-compressed vanilla biome registry extracted from Bedrock Dedicated Server 1.26.40.
     - Validated and converted by `pumpkin-codegen` into the static `BiomeDefinitionList` wire payload used during Bedrock world initialization.
+- `advancement_translations.mcpack`
+    - Java advancement translations for client-side Bedrock chat and server-rendered toast text.
+    - The translations are derived from the matching `26.2-assets` tag in [misode/mcmeta](https://github.com/misode/mcmeta/tree/26.2-assets/assets/minecraft/lang), which tracks assets obtained through Mojang's public API.
+    - Contains only locales advertised by Bedrock Dedicated Server 1.26.40.8, plus `en_US`. To update it, use the matching Java language assets and retain the `advancements.*.title` keys and the `advancements.toast.*` frame labels.
 - `player_geometry.json`
     - adapted from [GeyserMC/Geyser](https://github.com/GeyserMC/Geyser/blob/master/core/src/main/resources/bedrock/geometries/geo.json) (MIT License)
     - Provides valid standard wide and slim Bedrock player geometry for Java Edition player skins.
