@@ -57,6 +57,7 @@ notify.workspace = true
 serde.workspace = true
 serde_repr.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 
 colored.workspace = true
 
@@ -129,8 +130,8 @@ bitflags = { workspace = true }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 
 indexmap.workspace = true
+either = "1.17.0"
 xxhash-rust.workspace = true
-
 
 [dev-dependencies]
 tempfile.workspace = true

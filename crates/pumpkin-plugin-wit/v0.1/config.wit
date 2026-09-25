@@ -1,0 +1,95 @@
+/// Provides a configuration API for plugins. Useful if you don't want to manually manage config files.
+interface config {
+    type node-id = u32;
+    type config-path = list<config-path-element>;
+
+    variant config-path-element {
+        key(string),
+        index(u32),
+    }
+
+    variant config-value {
+        %bool(bool),
+        %s64(s64),
+        %f64(f64),
+        %string(string),
+        %list(list<node-id>),
+        %object(list<tuple<string, node-id>>),
+        /// `null` may be represented as either a `null` value
+        /// (like in JSON), or the field may be omitted entirely.
+        /// If the underlying data format supports `null` values,
+        /// the value will be such a `null` value, otherwise it
+        /// will be entirely omitted from the config (and also
+        /// omitted from nested objects and lists).
+        null,
+    }
+
+    record config-tree {
+        /// A list of values, where the `node-id` is the index of the value.
+        nodes: list<config-value>,
+        root-id: node-id,
+    }
+
+    resource config {
+        /// Get a value from the config, or `none` if the key does not exist.
+        ///
+        /// The format of the `key` works just like in most programming languages.
+        /// Arrays are indexed using [square brackets] and nested fields are
+        /// separated by `.` dots.
+        /// Example: `players[0].uuid`
+        get: func(key: string) -> option<config-tree>;
+        /// Same as `get`, except inserts the provided default into the config if the
+        /// key does not exist.
+        ///
+        /// If the config does not exist, it will be created.
+        ///
+        /// The format of the `key` works just like in most programming languages.
+        /// Arrays are indexed using [square brackets] and nested fields are
+        /// separated by `.` dots.
+        /// Example: `players[0].uuid`
+        get-or-default: func(key: string, default: config-tree) -> config-tree;
+        /// Set a value in the config.
+        ///
+        /// If the config does not exist, it will be created.
+        ///
+        /// The format of the `key` works just like in most programming languages.
+        /// Arrays are indexed using [square brackets] and nested fields are
+        /// separated by `.` dots.
+        /// Example: `players[0].uuid`
+        set: func(key: string, value: config-tree);
+        /// Remove the field from the config. Unlike setting the field to
+        /// `%option(none)`, this is guaranteed to remove the field instead
+        /// of, for example, only setting it to "null" (like in JSON).
+        ///
+        /// Returns `true` if the specified key existed in the config, and `false`
+        /// if it did not.
+        ///
+        /// The format of the `key` works just like in most programming languages.
+        /// Arrays are indexed using [square brackets] and nested fields are
+        /// separated by `.` dots.
+        /// Example: `players[0].uuid`
+        remove: func(key: string) -> bool;
+        /// Overwrite/replace the entire config with the specified config.
+        ///
+        /// If the config does not exist, it will be created.
+        overwrite: func(config: config-tree);
+        /// Whether the config has the specified `key` present.
+        ///
+        /// The format of the `key` works just like in most programming languages.
+        /// Arrays are indexed using [square brackets] and nested fields are
+        /// separated by `.` dots.
+        /// Example: `players[0].uuid`
+        has-key: func(key: string) -> bool;
+
+        /// Same as `get`, but accepts a `config-path`.
+        path-get: func(key: config-path) -> option<config-tree>;
+        /// Same as `get-or-default`, but accepts a `config-path`.
+        path-get-or-default: func(key: config-path, default: config-tree) -> config-tree;
+        /// Same as `set`, but accepts a `config-path`.
+        path-set: func(key: config-path, value: config-tree);
+        /// Same as `remove`, but accepts a `config-path`.
+        path-remove: func(key: config-path) -> bool;
+        /// Same as `has-key`, but accepts a `config-path`.
+        path-has-key: func(key: config-path) -> bool;
+    }
+}
