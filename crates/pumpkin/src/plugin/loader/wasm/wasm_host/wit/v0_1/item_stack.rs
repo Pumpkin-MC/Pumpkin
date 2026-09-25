@@ -661,12 +661,18 @@ impl HostItemStack for PluginHostState {
         let id = from_wit_data_component(component);
         let mut cursor = std::io::Cursor::new(value);
 
-        if let Ok(component_impl) = deserialize(id, &mut cursor) {
-            if let Some((_, data)) = stack.patch.iter_mut().find(|(pid, _)| *pid == id) {
-                *data = Some(component_impl);
-            } else {
-                stack.patch.push((id, Some(component_impl)));
+        match deserialize(id, &mut cursor) {
+            Ok(component_impl) => {
+                if let Some((_, data)) = stack.patch.iter_mut().find(|(pid, _)| *pid == id) {
+                    *data = Some(component_impl);
+                } else {
+                    stack.patch.push((id, Some(component_impl)));
+                }
             }
+            Err(error) => tracing::warn!(
+                "Ignoring malformed value for item component {}: {error}",
+                id.to_name()
+            ),
         }
         Ok(())
     }
