@@ -13,11 +13,11 @@ use crate::{ClientPacket, ServerPacket};
 #[java_packet(UPDATE_ATTRIBUTES)]
 pub struct CUpdateAttributes {
     pub entity_id: VarInt,
-    pub properties: Vec<Property>,
+    pub properties: Vec<AttributeProperty>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Property {
+pub struct AttributeProperty {
     pub id: VarInt,
     pub value: f64,
     pub modifiers: Vec<AttributeModifier>,
@@ -32,7 +32,7 @@ pub struct AttributeModifier {
 
 impl CUpdateAttributes {
     #[must_use]
-    pub const fn new(entity_id: VarInt, properties: Vec<Property>) -> Self {
+    pub const fn new(entity_id: VarInt, properties: Vec<AttributeProperty>) -> Self {
         Self {
             entity_id,
             properties,
@@ -40,7 +40,7 @@ impl CUpdateAttributes {
     }
 }
 
-impl Property {
+impl AttributeProperty {
     #[must_use]
     pub const fn new(id: VarInt, value: f64, modifiers: Vec<AttributeModifier>) -> Self {
         Self {
@@ -393,7 +393,7 @@ impl<'a> ServerPacket<'a> for CUpdateAttributes {
                 modifiers.push(AttributeModifier::new(id, amount, operation));
             }
 
-            properties.push(Property::new(id, value, modifiers));
+            properties.push(AttributeProperty::new(id, value, modifiers));
         }
 
         Ok(Self {
@@ -411,12 +411,12 @@ mod tests {
 
     use crate::{ClientPacket, VarInt, packet::MultiVersionJavaPacket, ser::NetworkReadExt};
 
-    use super::{AttributeModifier, CUpdateAttributes, Property};
+    use super::{AttributeModifier, AttributeProperty, CUpdateAttributes};
 
     fn encoded_armor_attributes(version: JavaMinecraftVersion) -> Vec<u8> {
         let packet = CUpdateAttributes::new(
             VarInt(1),
-            vec![Property::new(
+            vec![AttributeProperty::new(
                 VarInt(i32::from(Attributes::ARMOR.id)),
                 0.0,
                 vec![AttributeModifier::new(

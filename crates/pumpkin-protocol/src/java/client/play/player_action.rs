@@ -1,11 +1,11 @@
 use pumpkin_util::text::TextComponent;
 
-use crate::{Property, VarInt};
+use crate::{Property as ProfileProperty, VarInt};
 
 pub enum PlayerAction<'a> {
     AddPlayer {
         name: &'a str,
-        properties: &'a [Property],
+        properties: &'a [ProfileProperty],
     },
     InitializeChat(Option<InitChat>),
     UpdateGameMode(VarInt),

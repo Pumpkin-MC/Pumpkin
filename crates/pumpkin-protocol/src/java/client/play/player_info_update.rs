@@ -5,7 +5,7 @@ use pumpkin_data::packet::clientbound::play::PLAYER_INFO_UPDATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-use crate::{ClientPacket, Property, WritingError, ser::NetworkWriteExt};
+use crate::{ClientPacket, Property as ProfileProperty, WritingError, ser::NetworkWriteExt};
 
 use super::PlayerAction;
 
@@ -87,7 +87,7 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
                 match action {
                     PlayerAction::AddPlayer { name, properties } => {
                         p.write_string(name)?;
-                        p.write_list::<Property>(properties, |p, v| {
+                        p.write_list::<ProfileProperty>(properties, |p, v| {
                             p.write_string(&v.name)?;
                             p.write_string(&v.value)?;
                             p.write_option(&v.signature, |p, v| p.write_string(v))
