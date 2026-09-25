@@ -1,7 +1,5 @@
 // Last verified for v2169
 
-use std::io::{Error, Write};
-
 use crate::{codec::var_int::VarInt, serial::PacketWrite};
 use pumpkin_macros::packet;
 
@@ -18,8 +16,9 @@ pub struct CSetTitle {
     pub filtered_title_message: String,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
 #[repr(i32)]
+#[serial(varint)]
 pub enum TitleType {
     Clear,
     Reset,
@@ -30,12 +29,6 @@ pub enum TitleType {
     TitleTextObject,
     SubtitleTextObject,
     ActionbarTextObject,
-}
-
-impl PacketWrite for TitleType {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        VarInt(*self as i32).write(writer)
-    }
 }
 
 impl CSetTitle {
