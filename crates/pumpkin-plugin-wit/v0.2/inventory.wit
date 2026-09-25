@@ -1,0 +1,78 @@
+package pumpkin:plugin@0.2.0;
+
+interface inventory {
+    use item-stack.{item-stack};
+    use common.{hand};
+
+    /// Common inventory resource used across GUIs, player inventories, and containers.
+    resource inventory {
+        /// Returns the number of slots in this inventory.
+        get-size: async func() -> u32;
+
+        /// Returns true if all slots in this inventory are empty.
+        is-empty: async func() -> bool;
+
+        /// Returns the item in the specified slot index, or none if empty.
+        get-item: async func(slot: u32) -> option<item-stack>;
+
+        /// Sets the item in the specified slot index.
+        set-item: async func(slot: u32, item: option<item-stack>);
+
+        /// Removes and returns the item in the specified slot index.
+        remove-item: async func(slot: u32) -> option<item-stack>;
+
+        /// Clears all items from this inventory.
+        clear: async func();
+
+        /// Returns all items in this inventory as a list of slots.
+        get-all-items: async func() -> list<option<item-stack>>;
+
+        /// Sets all items in this inventory from a list.
+        set-all-items: async func(items: list<option<item-stack>>);
+
+        /// Counts the total number of items with the given ID in this inventory.
+        count-item: async func(item-id: string) -> u32;
+
+        /// Checks if the inventory contains at least one item with the given ID.
+        contains-item: async func(item-id: string) -> bool;
+    }
+
+    /// Specialized player inventory handle providing access to main inventory, armor, offhand, and hotbar.
+    resource player-inventory {
+        /// Returns the generic 36-slot inventory handle (hotbar + main storage).
+        as-inventory: async func() -> inventory;
+
+        /// Returns the item currently held in the specified hand.
+        get-item-in-hand: async func(hand: hand) -> option<item-stack>;
+        /// Sets the item in the specified hand.
+        set-item-in-hand: async func(hand: hand, item: option<item-stack>);
+
+        /// Returns the currently selected hotbar slot index (0-8).
+        get-selected-slot: async func() -> u8;
+        /// Sets the currently selected hotbar slot index (0-8).
+        set-selected-slot: async func(slot: u8);
+
+        /// Armor slot accessors
+        get-helmet: async func() -> option<item-stack>;
+        set-helmet: async func(item: option<item-stack>);
+
+        get-chestplate: async func() -> option<item-stack>;
+        set-chestplate: async func(item: option<item-stack>);
+
+        get-leggings: async func() -> option<item-stack>;
+        set-leggings: async func(item: option<item-stack>);
+
+        get-boots: async func() -> option<item-stack>;
+        set-boots: async func(item: option<item-stack>);
+
+        get-off-hand: async func() -> option<item-stack>;
+        set-off-hand: async func(item: option<item-stack>);
+
+        /// Clears all armor slots.
+        clear-armor: async func();
+        /// Clears the 36 main inventory slots.
+        clear-main: async func();
+        /// Clears all slots (main inventory, armor, offhand).
+        clear-all: async func();
+    }
+}

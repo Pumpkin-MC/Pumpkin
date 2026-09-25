@@ -1,0 +1,176 @@
+interface display {
+    use %world.{entity};
+    use text.{text-component};
+    use item-stack.{item-stack};
+    use uuid.{uuid};
+
+    /// Billboard rendering constraints for display entities.
+    enum billboard-mode {
+        fixed,
+        vertical,
+        horizontal,
+        center,
+    }
+
+    /// Item display transformation modes for item display entities.
+    enum item-display-mode {
+        none,
+        thirdperson-lefthand,
+        thirdperson-righthand,
+        firstperson-lefthand,
+        firstperson-righthand,
+        head,
+        gui,
+        ground,
+        fixed,
+    }
+
+    /// Text alignment options for text display entities.
+    enum text-alignment {
+        center,
+        left,
+        right,
+    }
+
+    /// 3D single-precision vector.
+    record vector3f {
+        x: f32,
+        y: f32,
+        z: f32,
+    }
+
+    /// Single-precision quaternion representing a 3D rotation.
+    record quaternionf {
+        x: f32,
+        y: f32,
+        z: f32,
+        w: f32,
+    }
+
+    /// Transformation (translation, scale, left and right rotations) for display entities.
+    record display-transformation {
+        translation: vector3f,
+        scale: vector3f,
+        left-rotation: quaternionf,
+        right-rotation: quaternionf,
+    }
+
+    /// Common base resource for all display entities.
+    resource display-entity {
+        /// Converts an owned entity handle to a display entity, if possible.
+        from-entity: static async func(entity: entity) -> option<display-entity>;
+        get-entity: async func() -> entity;
+
+        get-transformation: async func() -> display-transformation;
+        set-transformation: async func(transformation: display-transformation);
+
+        get-interpolation-duration: async func() -> s32;
+        set-interpolation-duration: async func(duration: s32);
+
+        get-interpolation-start: async func() -> s32;
+        set-interpolation-start: async func(delta-ticks: s32);
+
+        get-teleport-duration: async func() -> s32;
+        set-teleport-duration: async func(duration: s32);
+
+        get-billboard: async func() -> billboard-mode;
+        set-billboard: async func(mode: billboard-mode);
+
+        get-view-range: async func() -> f32;
+        set-view-range: async func(range: f32);
+
+        get-shadow-radius: async func() -> f32;
+        set-shadow-radius: async func(radius: f32);
+
+        get-shadow-strength: async func() -> f32;
+        set-shadow-strength: async func(strength: f32);
+
+        get-display-width: async func() -> f32;
+        set-display-width: async func(width: f32);
+
+        get-display-height: async func() -> f32;
+        set-display-height: async func(height: f32);
+
+        get-glow-color-override: async func() -> s32;
+        set-glow-color-override: async func(color: s32);
+
+        get-brightness: async func() -> s32;
+        set-brightness: async func(brightness: s32);
+    }
+
+    /// Resource specifically for Block Display entities.
+    resource block-display-entity {
+        /// Converts an owned entity handle to a block display, if possible.
+        from-entity: static async func(entity: entity) -> option<block-display-entity>;
+        get-display: async func() -> display-entity;
+        get-entity: async func() -> entity;
+
+        get-block-state-id: async func() -> u16;
+        set-block-state-id: async func(state-id: u16);
+    }
+
+    /// Resource specifically for Item Display entities.
+    resource item-display-entity {
+        /// Converts an owned entity handle to an item display, if possible.
+        from-entity: static async func(entity: entity) -> option<item-display-entity>;
+        get-display: async func() -> display-entity;
+        get-entity: async func() -> entity;
+
+        get-item: async func() -> option<item-stack>;
+        set-item: async func(item: option<item-stack>);
+
+        get-item-display-mode: async func() -> item-display-mode;
+        set-item-display-mode: async func(mode: item-display-mode);
+    }
+
+    /// Resource specifically for Text Display entities.
+    resource text-display-entity {
+        /// Converts an owned entity handle to a text display, if possible.
+        from-entity: static async func(entity: entity) -> option<text-display-entity>;
+        get-display: async func() -> display-entity;
+        get-entity: async func() -> entity;
+
+        get-text: async func() -> text-component;
+        set-text: async func(text: text-component);
+
+        get-line-width: async func() -> s32;
+        set-line-width: async func(width: s32);
+
+        get-background: async func() -> s32;
+        set-background: async func(color: s32);
+
+        get-text-opacity: async func() -> s8;
+        set-text-opacity: async func(opacity: s8);
+
+        get-shadow: async func() -> bool;
+        set-shadow: async func(shadow: bool);
+
+        get-see-through: async func() -> bool;
+        set-see-through: async func(see-through: bool);
+
+        get-default-background: async func() -> bool;
+        set-default-background: async func(default-background: bool);
+
+        get-alignment: async func() -> text-alignment;
+        set-alignment: async func(alignment: text-alignment);
+    }
+
+    /// Resource specifically for Interaction entities.
+    resource interaction-entity {
+        /// Converts an owned entity handle to an interaction entity, if possible.
+        from-entity: static async func(entity: entity) -> option<interaction-entity>;
+        get-entity: async func() -> entity;
+
+        get-width: async func() -> f32;
+        set-width: async func(width: f32);
+
+        get-height: async func() -> f32;
+        set-height: async func(height: f32);
+
+        get-response: async func() -> bool;
+        set-response: async func(response: bool);
+
+        get-last-attacker: async func() -> option<uuid>;
+        get-last-interaction: async func() -> option<uuid>;
+    }
+}
