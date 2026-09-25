@@ -119,8 +119,7 @@ impl FireBlockBase {
     /// Shared fire collision behavior used by `fire` and `soul_fire`.
     pub fn apply_fire_collision(args: &OnEntityCollisionArgs<'_>, extra_damage_for_living: bool) {
         let base_entity = args.entity.get_entity();
-        if !base_entity.entity_type.fire_immune && !base_entity.fire_immune.load(Ordering::Relaxed)
-        {
+        if !base_entity.is_fire_immune() {
             let ticks = base_entity.fire_ticks.load(Ordering::Relaxed);
 
             // Timer logic
