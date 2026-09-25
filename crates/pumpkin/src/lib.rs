@@ -753,9 +753,16 @@ fn setup_stdin_console(server: &Arc<Server>) {
     });
     let server_clone = server.clone();
     server.spawn_task(async move {
-        while !SHOULD_STOP.load(Ordering::Relaxed)
-            && let Some(command) = rx.recv().await
-        {
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
+            let command = select! {
+                command = rx.recv() => command,
+                () = STOP_INTERRUPT.cancelled() => None,
+            };
+
+            let Some(command) = command else {
+                break;
+            };
+
             let mut event = ServerCommandEvent::new(command.clone());
             server_clone
                 .plugin_manager
