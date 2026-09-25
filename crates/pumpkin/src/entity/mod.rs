@@ -881,6 +881,10 @@ pub struct Entity {
     pub on_ground: AtomicBool,
     /// Indicates whether the entity is touching water
     pub touching_water: AtomicBool,
+    /// Indicates whether the entity's eyes are inside water
+    pub eye_in_water: AtomicBool,
+    /// The previous tick's value of `eye_in_water`
+    pub was_eye_in_water: AtomicBool,
     /// Indicates the fluid height
     pub water_height: AtomicCell<f64>,
     /// Indicates whether the entity is touching lava
@@ -1029,6 +1033,8 @@ impl Entity {
             entity_type,
             on_ground: AtomicBool::new(false),
             touching_water: AtomicBool::new(false),
+            eye_in_water: AtomicBool::new(false),
+            was_eye_in_water: AtomicBool::new(false),
             water_height: AtomicCell::new(0.0),
             touching_lava: AtomicBool::new(false),
             lava_height: AtomicCell::new(0.0),
@@ -1707,6 +1713,20 @@ impl Entity {
         old
     }
 
+    /// Index into the water/lava pair for the fluid covering `pos` at height `eye_y`, if any.
+    fn eye_fluid_index(world: &World, pos: &BlockPos, eye_y: f64) -> Option<usize> {
+        let (fluid, state) = world.get_fluid_and_fluid_state(pos);
+
+        if fluid.id == Fluid::EMPTY.id {
+            return None;
+        }
+
+        let surface_y = f64::from(world.get_fluid_height(pos, fluid, &state)) + f64::from(pos.0.y);
+
+        (surface_y > eye_y)
+            .then(|| usize::from(fluid.id == Fluid::FLOWING_LAVA.id || fluid.id == Fluid::LAVA.id))
+    }
+
     // updateWaterState() in yarn
 
     fn update_fluid_state(&self, caller: &dyn EntityBase) {
@@ -1727,18 +1747,33 @@ impl Entity {
 
         let mut in_fluid = [false, false];
 
+        let mut eyes_inside = [false, false];
+
         // The maximum fluid height found
 
         let mut fluid_height: [f64; 2] = [0.0, 0.0];
 
-        let entity_box = self.bounding_box.load();
-        let bounding_box = entity_box.expand(-0.001, -0.001, -0.001);
+        let eye_y = self.get_eye_y() - 0.111_111_11;
+
+        let eye_block = self.block_pos.load();
+
+        let eye_pos = BlockPos::new(eye_block.0.x, eye_y.floor() as i32, eye_block.0.z);
+
+        let bounding_box = self.bounding_box.load().expand(-0.001, -0.001, -0.001);
 
         let min = bounding_box.min_block_pos();
 
         let max = bounding_box.max_block_pos();
 
         let world = self.world.load();
+
+        let eye_scanned = (min.0.x..=max.0.x).contains(&eye_pos.0.x)
+            && (min.0.y..=max.0.y).contains(&eye_pos.0.y)
+            && (min.0.z..=max.0.z).contains(&eye_pos.0.z);
+
+        if !eye_scanned && let Some(i) = Self::eye_fluid_index(&world, &eye_pos, eye_y) {
+            eyes_inside[i] = true;
+        }
 
         for x in min.0.x..=max.0.x {
             for y in min.0.y..=max.0.y {
@@ -1750,12 +1785,16 @@ impl Entity {
                     if fluid.id != Fluid::EMPTY.id {
                         let surface_y =
                             f64::from(world.get_fluid_height(&pos, fluid, &state)) + f64::from(y);
+                        let i = usize::from(
+                            fluid.id == Fluid::FLOWING_LAVA.id || fluid.id == Fluid::LAVA.id,
+                        );
+
+                        if pos == eye_pos && surface_y > eye_y {
+                            eyes_inside[i] = true;
+                        }
 
                         if surface_y >= bounding_box.min.y {
-                            let marginal_height = surface_y - entity_box.min.y;
-                            let i = usize::from(
-                                fluid.id == Fluid::FLOWING_LAVA.id || fluid.id == Fluid::LAVA.id,
-                            );
+                            let marginal_height = surface_y - bounding_box.min.y;
 
                             fluid_height[i] = fluid_height[i].max(marginal_height);
 
@@ -1805,6 +1844,8 @@ impl Entity {
         let water_height = fluid_height[0];
 
         let in_water = in_fluid[0];
+
+        self.eye_in_water.store(eyes_inside[0], Ordering::Relaxed);
 
         if in_water {
             if let Some(living) = caller.get_living_entity() {
@@ -2529,20 +2570,12 @@ impl Entity {
 
     #[must_use]
     pub fn is_submerged_in_water(&self) -> bool {
-        let pos = self.pos.load();
-        let eye_y = pos.y + self.get_eye_height();
-        let eye_pos = BlockPos::floored(pos.x, eye_y, pos.z);
-        let world = self.world.load();
-        let (fluid, state) = world.get_fluid_and_fluid_state(&eye_pos);
-        fluid.matches_type(&Fluid::WATER)
-            && eye_y
-                <= f64::from(eye_pos.0.y)
-                    + f64::from(world.get_fluid_height(&eye_pos, fluid, &state))
+        self.eye_in_water.load(Ordering::Relaxed)
     }
 
     #[must_use]
     pub fn is_under_water(&self) -> bool {
-        self.is_in_water() && self.is_submerged_in_water()
+        self.was_eye_in_water.load(Ordering::Relaxed) && self.is_in_water()
     }
 
     #[must_use]
@@ -4108,6 +4141,9 @@ impl EntityBase for Entity {
         self.was_in_powder_snow
             .store(was_in_powder_snow, Ordering::Relaxed);
         self.is_in_powder_snow.store(false, Ordering::Relaxed);
+
+        self.was_eye_in_water
+            .store(self.eye_in_water.load(Ordering::Relaxed), Ordering::Relaxed);
 
         self.update_last_pos();
         self.tick_portal(caller);
