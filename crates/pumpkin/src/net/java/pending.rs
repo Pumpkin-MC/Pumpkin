@@ -166,6 +166,8 @@ impl PendingConnection {
         }
     }
 
+    // TODO: no translation hook before play (packet events need a player), so older clients
+    // still go through core's own per-version codec and login flow here.
     pub async fn send_packet_now<P: ClientPacket>(&mut self, packet: &P) {
         let mut packet_buf = Vec::new();
         if let Err(err) =

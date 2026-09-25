@@ -4,11 +4,10 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::num::NonZero;
 use std::sync::{Arc, Weak};
 
-use crate::net::java::chunk_data::{CChunkData, ChunkLightExt};
+use crate::net::java::chunk_data::CChunkData;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{
-    CChunkBatchEnd, CChunkBatchStart, CLightUpdate, CUnloadChunk,
-};
+use pumpkin_protocol::java::client::play::{CChunkBatchEnd, CChunkBatchStart, CUnloadChunk};
 use pumpkin_protocol::ser::NetworkWriteExt;
 use pumpkin_protocol::{ClientPacket, MultiVersionJavaPacket};
 use pumpkin_util::math::vector2::Vector2;
@@ -39,6 +38,7 @@ pub struct DispatchedChunk {
 pub struct PreparedBatch {
     pub chunks: Vec<PreparedChunk>,
     pub epoch_snapshot: u32,
+    /// Client protocol, only for batch flow -> chunks are always encoded as `CURRENT_MC_VERSION`.
     pub target_version: JavaMinecraftVersion,
 }
 
@@ -46,7 +46,6 @@ pub struct PreparedBatch {
 pub struct EncodedChunk {
     pub position: Vector2<i32>,
     pub payload: Bytes,
-    pub light_payload: Option<Bytes>,
     pub chunk_ref: Weak<ChunkData>,
 }
 
@@ -276,7 +275,6 @@ impl ChunkSender {
         batch: &PreparedBatch,
         cache: &mut FxHashMap<Vector2<i32>, EncodedChunk>,
     ) -> Vec<EncodedChunk> {
-        let version = batch.target_version;
         let cached_map = &*cache;
 
         let encoded_results: Vec<Option<EncodedChunk>> = batch
@@ -293,41 +291,21 @@ impl ChunkSender {
                 let chunk = &candidate.chunk;
                 let mut chunk_buf = Vec::with_capacity(32 * 1024);
                 if chunk_buf
-                    .write_var_int(&VarInt(CChunkData::to_id(version)))
+                    .write_var_int(&VarInt(CChunkData::to_id(CURRENT_MC_VERSION)))
                     .is_err()
                 {
                     return None;
                 }
                 if CChunkData(chunk)
-                    .write_packet_data(&mut chunk_buf, &version)
+                    .write_packet_data(&mut chunk_buf, &CURRENT_MC_VERSION)
                     .is_err()
                 {
                     return None;
                 }
 
-                let light_payload = if version >= JavaMinecraftVersion::V_1_14
-                    && version < JavaMinecraftVersion::V_1_18
-                {
-                    CLightUpdate::from_chunk(chunk, version)
-                        .ok()
-                        .and_then(|light_packet| {
-                            let mut light_buf = Vec::new();
-                            (light_buf
-                                .write_var_int(&VarInt(CLightUpdate::to_id(version)))
-                                .is_ok()
-                                && light_packet
-                                    .write_packet_data(&mut light_buf, &version)
-                                    .is_ok())
-                            .then(|| Bytes::from(light_buf))
-                        })
-                } else {
-                    None
-                };
-
                 Some(EncodedChunk {
                     position: pos,
                     payload: Bytes::from(chunk_buf),
-                    light_payload,
                     chunk_ref: Arc::downgrade(chunk),
                 })
             })
@@ -368,9 +346,6 @@ impl ChunkSender {
             }
 
             client.try_enqueue_packet(chunk.payload.clone());
-            if let Some(ref light) = chunk.light_payload {
-                client.try_enqueue_packet(light.clone());
-            }
 
             self.pending_chunks.remove(&chunk.position);
             self.sent_chunks.insert(chunk.position);

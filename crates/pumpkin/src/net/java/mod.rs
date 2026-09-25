@@ -1,6 +1,4 @@
-use pumpkin_protocol::java::client::play::{
-    CChunkBatchEnd, CChunkBatchStart, CLightUpdate, CPlayDisconnect,
-};
+use pumpkin_protocol::java::client::play::{CChunkBatchEnd, CChunkBatchStart, CPlayDisconnect};
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
@@ -9,6 +7,7 @@ use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::server::play::{
     SAttack, SBlockEntityTagQuery, SBundleItemSelected, SChangeDifficulty, SChangeGameMode,
@@ -35,7 +34,7 @@ use pumpkin_protocol::{
         packet_decoder::TCPNetworkDecoder,
         packet_encoder::TCPNetworkEncoder,
     },
-    ser::{NetworkWriteExt, WritingError},
+    ser::{NetworkReadExt, NetworkWriteExt, WritingError},
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -77,10 +76,14 @@ use crate::net::{
 };
 use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
+use crate::plugin::server::packet::PacketSentEvent;
 use crate::{error::PumpkinError, server::Server};
 
 pub struct JavaClient {
     pub id: u64,
+    /// The protocol the client speaks. Play packets are always encoded/decoded as
+    /// `CURRENT_MC_VERSION`; older clients only get in with the `pumpkin-java-multiversion`
+    /// plugin, which converts at `PacketReceivedEvent` / `PacketSentEvent`.
     pub version: AtomicCell<JavaMinecraftVersion>,
     /// The client's game profile information. Direct field (lock-free).
     pub gameprofile: GameProfile,
@@ -352,45 +355,18 @@ impl JavaClient {
             let mut serialized = Vec::with_capacity(valid_chunks.len());
             for chunk in valid_chunks {
                 let mut buf = Vec::with_capacity(32 * 1024);
-                if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(version))) {
+                if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(CURRENT_MC_VERSION)))
+                {
                     error!("Failed to write chunk data id: {err:?}");
                     continue;
                 }
-                if let Err(err) = CChunkData(&chunk).write_packet_data(&mut buf, &version) {
+                if let Err(err) =
+                    CChunkData(&chunk).write_packet_data(&mut buf, &CURRENT_MC_VERSION)
+                {
                     error!("Failed to write chunk data: {err:?}");
                     continue;
                 }
-
-                let light_buf = if version >= JavaMinecraftVersion::V_1_14
-                    && version < JavaMinecraftVersion::V_1_18
-                {
-                    match CLightUpdate::from_chunk(&chunk, version) {
-                        Ok(light_packet) => {
-                            let mut light_buf = Vec::new();
-                            if let Err(err) =
-                                light_buf.write_var_int(&VarInt(CLightUpdate::to_id(version)))
-                            {
-                                error!("Failed to write light update id: {err:?}");
-                                None
-                            } else if let Err(err) =
-                                light_packet.write_packet_data(&mut light_buf, &version)
-                            {
-                                error!("Failed to write light update data: {err:?}");
-                                None
-                            } else {
-                                Some(Bytes::from(light_buf))
-                            }
-                        }
-                        Err(err) => {
-                            error!("Failed to create light update packet: {err:?}");
-                            None
-                        }
-                    }
-                } else {
-                    None
-                };
-
-                serialized.push((Bytes::from(buf), light_buf));
+                serialized.push(Bytes::from(buf));
             }
             let _ = tx.send(serialized);
         });
@@ -408,11 +384,8 @@ impl JavaClient {
         }
 
         // One FIFO per connection: batch start/data/end stay in enqueue order.
-        for (chunk_data, light_data) in serialized {
+        for chunk_data in serialized {
             self.send_packet_now_data(chunk_data).await;
-            if let Some(light_data) = light_data {
-                self.send_packet_now_data(light_data).await;
-            }
         }
 
         if version >= JavaMinecraftVersion::V_1_20_2 {
@@ -427,7 +400,7 @@ impl JavaClient {
 
     /// Awaits a full FIFO instead of dropping the packet.
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
-        let Some(packet_len) = self.reserve_pending_bytes(&packet_data) else {
+        let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data) else {
             return;
         };
 
@@ -451,16 +424,14 @@ impl JavaClient {
         }
     }
 
-    /// `None` when the packet must be dropped.
-    fn reserve_pending_bytes(&self, packet_data: &Bytes) -> Option<usize> {
+    /// Outbound choke point of all enqueue/send paths. `None` when the packet must be dropped.
+    fn reserve_pending_bytes(&self, packet_data: Bytes) -> Option<(Bytes, usize)> {
         if self.close_token.is_cancelled() {
             return None;
         }
+        let packet_data = self.translate_outgoing(packet_data)?;
 
         // Reserve first, release again if it does not fit.
-        // TODO: `PacketSentEvent` hook (outbound choke point, shared by all three enqueue/send
-        // paths below): gate `has_handlers` + non-current version, split id VarInt,
-        // `fire_blocking`, re-frame id + payload, drop if cancelled.
         let packet_len = packet_data.len();
         let prev_bytes = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
         let new_bytes = prev_bytes.saturating_add(packet_len);
@@ -477,7 +448,43 @@ impl JavaClient {
             return None;
         }
 
-        Some(packet_len)
+        Some((packet_data, packet_len))
+    }
+
+    /// `PacketSentEvent` for clients the multiversion plugin admitted below
+    /// `CURRENT_MC_VERSION`: it gets the 26.3 id + payload and rewrites both.
+    /// `None` when cancelled.
+    fn translate_outgoing(&self, packet_data: Bytes) -> Option<Bytes> {
+        if self.version.load() == CURRENT_MC_VERSION {
+            return Some(packet_data);
+        }
+        // TODO: packets sent before `set_player` (e.g. an `add_player` kick) go out untranslated.
+        let player = self.player.load_full();
+        let Some(player) = player.as_ref() else {
+            return Some(packet_data);
+        };
+        let Some(server) = player.world().server.upgrade() else {
+            return Some(packet_data);
+        };
+        if !server.plugin_manager.has_handlers::<PacketSentEvent>() {
+            return Some(packet_data);
+        }
+
+        let mut reader = &packet_data[..];
+        let Ok(packet_id) = reader.get_var_int() else {
+            return Some(packet_data);
+        };
+        let payload = packet_data.slice(packet_data.len() - reader.len()..);
+        let mut event = PacketSentEvent::new_raw(player.clone(), packet_id.0, payload);
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        if event.cancelled {
+            return None;
+        }
+
+        let mut framed = Vec::with_capacity(5 + event.payload.len());
+        framed.write_var_int(&VarInt(event.packet_id)).ok()?;
+        framed.extend_from_slice(&event.payload);
+        Some(framed.into())
     }
 
     pub fn try_enqueue_packet(&self, packet_data: Bytes) {
@@ -485,7 +492,7 @@ impl JavaClient {
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
-        let Some(packet_len) = self.reserve_pending_bytes(&packet_data) else {
+        let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data) else {
             return;
         };
 
@@ -566,7 +573,10 @@ impl JavaClient {
     }
 
     pub fn try_kick(&self, reason: &TextComponent) {
-        if let Some(data) = self.serialize_disconnect(reason) {
+        if let Some(data) = self
+            .serialize_disconnect(reason)
+            .and_then(|data| self.translate_outgoing(data))
+        {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
             match self.outgoing_packet_queue_send.try_reserve() {
@@ -632,7 +642,7 @@ impl JavaClient {
         packet: Bytes,
         make: fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket,
     ) {
-        let Some(packet_len) = self.reserve_pending_bytes(&packet) else {
+        let Some((packet, packet_len)) = self.reserve_pending_bytes(packet) else {
             return;
         };
 
@@ -670,7 +680,6 @@ impl JavaClient {
         pumpkin_protocol::java::packet_encoder::write_packet(packet, &version, write)
     }
 
-    // TODO: translator active -> `CURRENT_MC_VERSION` (multiversion plugin parses 26.3).
     pub fn serialize_packet_for_version<P: ClientPacket>(
         packet: &P,
         version: JavaMinecraftVersion,
@@ -679,7 +688,7 @@ impl JavaClient {
     }
 
     pub fn serialize_packet<P: ClientPacket>(&self, packet: &P) -> Result<Bytes, WritingError> {
-        Self::serialize_packet_for_version(packet, self.version.load())
+        Self::serialize_packet_for_version(packet, CURRENT_MC_VERSION)
     }
 
     pub fn try_send_packet<P: ClientPacket>(&self, packet: &P) {
@@ -705,7 +714,7 @@ impl JavaClient {
         packet: &P,
         write: impl Write,
     ) -> Result<(), WritingError> {
-        Self::write_packet_for_version(packet, self.version.load(), write)
+        Self::write_packet_for_version(packet, CURRENT_MC_VERSION, write)
     }
 
     /// Handles an incoming packet, routing it to the appropriate handler based on the current connection state.
@@ -773,7 +782,8 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
-        let version = self.version.load();
+        // The multiversion plugin has converted older clients' packets to 26.3 by now.
+        let version = CURRENT_MC_VERSION;
 
         let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
             player.clone(),

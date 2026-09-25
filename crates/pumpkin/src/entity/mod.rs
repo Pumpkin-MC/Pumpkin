@@ -20,6 +20,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
@@ -441,15 +442,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn send_java_spawn_packet(&self, client: &JavaClient) {
         let entity = self.get_entity();
-        let version = client.version.load();
-        let metadata = self.java_spawn_metadata(version);
+        let metadata = self.java_spawn_metadata(CURRENT_MC_VERSION);
         let spawn_packet = entity.create_spawn_packet();
         if let Ok(data) = client.serialize_packet(&spawn_packet) {
             client.try_enqueue_packet(data);
         }
-        if let Some(meta) = metadata
-            && (version >= JavaMinecraftVersion::V_1_9 || meta.last().copied() == Some(127))
-        {
+        if let Some(meta) = metadata {
             let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
             if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
                 client.try_enqueue_packet(meta_data);
@@ -2900,9 +2898,6 @@ impl Entity {
             World::collect_java_recipients_by_version(java_recipients.into_iter());
 
         for (version, recipients) in recipients_by_version {
-            if version < JavaMinecraftVersion::V_1_21 {
-                continue;
-            }
             let mut buf = Vec::new();
             for m in meta {
                 let _ = m.write(&mut buf, &version);

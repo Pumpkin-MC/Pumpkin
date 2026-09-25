@@ -3166,11 +3166,7 @@ impl Player {
         packet_id: i32,
         payload: Bytes,
     ) -> PacketSentEvent {
-        // This is a dummy object to satisfy the non-optional requirement in WIT
-        // In the future we should make all packets 'static or have a way to represent raw packets in WIT
-        struct RawPacket;
-
-        let mut event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(RawPacket));
+        let mut event = PacketSentEvent::new_raw(self.clone(), packet_id, payload);
         if let Some(server) = self.world().server.upgrade() {
             server.plugin_manager.fire(&server, &mut event).await;
         }

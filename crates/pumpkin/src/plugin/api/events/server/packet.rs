@@ -47,4 +47,10 @@ impl PacketSentEvent {
             cancelled: false,
         }
     }
+
+    /// For already serialized packets. `packet` is a placeholder (WIT needs one).
+    pub fn new_raw(player: Arc<Player>, packet_id: i32, payload: Bytes) -> Self {
+        struct RawPacket;
+        Self::new(player, packet_id, payload, Arc::new(RawPacket))
+    }
 }

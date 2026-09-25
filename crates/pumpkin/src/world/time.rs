@@ -142,6 +142,8 @@ impl LevelTime {
     /// `CUpdateTime.game_time` is global, Bedrock's `CSetTime` is a day time:
     /// the overworld's would snap a Nether or End client back to it. Runs before
     /// any world ticks, so every `time_of_day` read here is this tick's.
+    // TODO: multiversion plugin: < 26.1 reads day time from this packet; fill it from the
+    // client's last clock update instead of the empty list's day 0.
     pub fn send_game_time_sync(&self, server: &crate::server::Server) {
         let java = CUpdateTime {
             game_time: self.world_age,
