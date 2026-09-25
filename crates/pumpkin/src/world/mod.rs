@@ -25,6 +25,7 @@ pub mod explosion;
 pub mod generation_cache;
 pub mod loot;
 pub mod map;
+mod neighbor_updater;
 pub mod portal;
 pub mod raid;
 pub mod random_sequences;
@@ -5197,7 +5198,8 @@ impl World {
             Block::AIR.default_state.id
         };
 
-        let broken_state_id = self.set_block_state(position, new_state_id, flags);
+        let broken_state_id =
+            self.set_block_state(position, new_state_id, flags - BlockFlags::SKIP_DROPS);
         let broken_block = Block::from_state_id(broken_state_id);
         if !broken_block.is_air()
             && broken_state_id != new_state_id
@@ -5838,49 +5840,7 @@ impl World {
         source_block: &Block,
         except: Option<BlockDirection>,
     ) {
-        for direction in BlockDirection::update_order() {
-            if except.is_some_and(|d| d == direction) {
-                continue;
-            }
-
-            let neighbor_pos = block_pos.offset(direction.to_offset());
-            let (neighbor_block, neighbor_fluid) = self.get_block_and_fluid(&neighbor_pos);
-
-            let mut event =
-                crate::plugin::api::events::block::block_physics::BlockPhysicsEvent::new(
-                    neighbor_pos,
-                    *block_pos,
-                );
-            if let Some(server) = self.server.upgrade() {
-                server.plugin_manager.fire_blocking(&server, &mut event);
-            }
-            if event.cancelled {
-                continue;
-            }
-
-            if let Some(neighbor_pumpkin_block) =
-                self.block_registry.get_pumpkin_block(neighbor_block.id)
-            {
-                neighbor_pumpkin_block.on_neighbor_update(OnNeighborUpdateArgs {
-                    world: self,
-                    block: neighbor_block,
-                    position: &neighbor_pos,
-                    source_block,
-                    notify: false,
-                });
-            }
-
-            if let Some(neighbor_pumpkin_fluid) =
-                self.block_registry.get_pumpkin_fluid(neighbor_fluid.id)
-            {
-                neighbor_pumpkin_fluid.on_neighbor_update(
-                    self,
-                    neighbor_fluid,
-                    &neighbor_pos,
-                    false,
-                );
-            }
-        }
+        neighbor_updater::update_neighbors_at(self, block_pos, source_block, except);
     }
 
     /// Updates neighboring blocks of a block
@@ -5894,11 +5854,26 @@ impl World {
     }
 
     pub fn update_neighbor(self: &Arc<Self>, neighbor_block_pos: &BlockPos, source_block: &Block) {
-        let neighbor_block = self.get_block(neighbor_block_pos);
+        neighbor_updater::update_neighbor(self, neighbor_block_pos, source_block);
+    }
+
+    fn execute_neighbor_update(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        source_position: &BlockPos,
+        source_block: &Block,
+        include_fluid: bool,
+    ) {
+        let (block, fluid) = if include_fluid {
+            let (block, fluid) = self.get_block_and_fluid(position);
+            (block, Some(fluid))
+        } else {
+            (self.get_block(position), None)
+        };
 
         let mut event = crate::plugin::api::events::block::block_physics::BlockPhysicsEvent::new(
-            *neighbor_block_pos,
-            *neighbor_block_pos,
+            *position,
+            *source_position,
         );
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
@@ -5907,16 +5882,20 @@ impl World {
             return;
         }
 
-        if let Some(neighbor_pumpkin_block) =
-            self.block_registry.get_pumpkin_block(neighbor_block.id)
-        {
-            neighbor_pumpkin_block.on_neighbor_update(OnNeighborUpdateArgs {
+        if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id) {
+            pumpkin_block.on_neighbor_update(OnNeighborUpdateArgs {
                 world: self,
-                block: neighbor_block,
-                position: neighbor_block_pos,
+                block,
+                position,
                 source_block,
                 notify: false,
             });
+        }
+
+        if let Some(fluid) = fluid
+            && let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid.id)
+        {
+            pumpkin_fluid.on_neighbor_update(self, fluid, position, false);
         }
     }
 
@@ -5984,6 +5963,15 @@ impl World {
     }
 
     pub fn replace_with_state_for_neighbor_update(
+        self: &Arc<Self>,
+        block_pos: &BlockPos,
+        direction: BlockDirection,
+        flags: BlockFlags,
+    ) {
+        neighbor_updater::update_shape(self, block_pos, direction, flags);
+    }
+
+    fn execute_shape_update(
         self: &Arc<Self>,
         block_pos: &BlockPos,
         direction: BlockDirection,
