@@ -1015,7 +1015,10 @@ mod test {
                 .execute_input(input, &DummySource::dummy())
                 .expect_err("unknown or unavailable command");
             let expected = "Unknown command: x. Please check that the command exists and that you have permission to use it.";
-            assert_eq!(error.message.clone().to_pretty_console(), expected);
+            assert_eq!(
+                error.message.clone().to_pretty_console(),
+                "Unknown or incomplete command. See below for error"
+            );
             assert_eq!(error.message.0.to_bedrock_legacy(Locale::EnUs), expected);
             let java = serde_json::to_value(&error.message).expect("Java text component");
             assert_eq!(java["translate"], "command.unknown.command");
