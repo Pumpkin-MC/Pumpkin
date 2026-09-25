@@ -8,7 +8,7 @@ impl BedrockClient {
         &self,
         player: &Arc<Player>,
         server: &Server,
-        packet: SPlayerAction,
+        packet: &SPlayerAction,
     ) {
         if !player.has_client_loaded()
             || ((player.living_entity.dead.load(Ordering::Relaxed)

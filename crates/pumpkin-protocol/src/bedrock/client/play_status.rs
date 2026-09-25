@@ -1,13 +1,12 @@
 // Last verified for v2169
 
-use std::io::{Error, Write};
-
 use pumpkin_macros::packet;
 
 use crate::serial::PacketWrite;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PacketWrite)]
 #[repr(i32)]
+#[serial(big_endian)]
 #[packet(2)]
 pub enum CPlayStatus {
     LoginSuccess = 0,
@@ -20,12 +19,6 @@ pub enum CPlayStatus {
     ServerFullSubClient = 7,
     EditorMismatchEditorToVanilla = 8,
     EditorMismatchVanillaToEditor = 9,
-}
-
-impl PacketWrite for CPlayStatus {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as i32).write_be(writer)
-    }
 }
 
 #[cfg(test)]
