@@ -7,9 +7,11 @@ use pumpkin_data::{
     particle::Particle,
     sound::{Sound, SoundCategory},
 };
+use pumpkin_protocol::java::client::play::CParticle;
 use pumpkin_util::{
     Difficulty,
     math::{position::BlockPos, vector3::Vector3},
+    version::JavaMinecraftVersion,
 };
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 use rand::RngExt;
@@ -19,11 +21,14 @@ use crate::{
         BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
         OnEntityCollisionArgs, OnScheduledTickArgs, RandomTickArgs, blocks::plant::PlantBlockBase,
     },
+    net::ClientPlatform,
     world::World,
 };
 
 const EYEBLOSSOM_XZ_RANGE: i32 = 3;
 const EYEBLOSSOM_Y_RANGE: i32 = 2;
+const OPEN_EYEBLOSSOM_PARTICLE_COLOR: i32 = 16_545_810;
+const CLOSED_EYEBLOSSOM_PARTICLE_COLOR: i32 = 6_250_335;
 
 pub struct EyeblossomBlock;
 
@@ -114,6 +119,37 @@ impl BlockBehaviour for EyeblossomBlock {
 
 impl PlantBlockBase for EyeblossomBlock {}
 
+fn encode_trail_particle_data(target: Vector3<f64>, color: i32, duration: Option<u8>) -> Vec<u8> {
+    let mut data = Vec::with_capacity(if duration.is_some() { 29 } else { 28 });
+    data.extend_from_slice(&target.x.to_be_bytes());
+    data.extend_from_slice(&target.y.to_be_bytes());
+    data.extend_from_slice(&target.z.to_be_bytes());
+    data.extend_from_slice(&color.to_be_bytes());
+    // Duration was added to Trail in 1.21.4. Eyeblossom durations are 10..30 ticks,
+    // so their VarInt encoding is always one byte.
+    if let Some(duration) = duration {
+        data.push(duration);
+    }
+    data
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TrailParticleDelivery {
+    LegacyFallback,
+    PreDurationPacket,
+    DurationPacket,
+}
+
+fn trail_particle_delivery_for_version(version: JavaMinecraftVersion) -> TrailParticleDelivery {
+    if version == JavaMinecraftVersion::Unknown || version < JavaMinecraftVersion::V_1_21_2 {
+        TrailParticleDelivery::LegacyFallback
+    } else if version < JavaMinecraftVersion::V_1_21_4 {
+        TrailParticleDelivery::PreDurationPacket
+    } else {
+        TrailParticleDelivery::DurationPacket
+    }
+}
+
 pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &BlockPos) -> bool {
     let is_open = current_block == &Block::OPEN_EYEBLOSSOM;
     let should_be_open = world.eyeblossom_open(pos).unwrap_or(is_open);
@@ -130,15 +166,60 @@ pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &Block
 
     world.set_block_state(pos, new_block.default_state.id, BlockFlags::NOTIFY_ALL);
 
-    world.spawn_particle(
-        pos.to_centered_f64(),
+    let center = pos.to_centered_f64();
+    let mut rng = rand::rng();
+    let distance = 0.5 + rng.random::<f64>();
+    let target = Vector3::new(
+        center.x + (rng.random::<f64>() - 0.5) * distance,
+        center.y + (rng.random::<f64>() + 1.0) * distance,
+        center.z + (rng.random::<f64>() - 0.5) * distance,
+    );
+    let color = if is_open {
+        CLOSED_EYEBLOSSOM_PARTICLE_COLOR
+    } else {
+        OPEN_EYEBLOSSOM_PARTICLE_COLOR
+    };
+    let duration = (20.0 * distance) as u8;
+    let data_1_21_2 = encode_trail_particle_data(target, color, None);
+    let data_1_21_4 = encode_trail_particle_data(target, color, Some(duration));
+    let particle_1_21_2 = CParticle::new(
+        false,
+        false,
+        center,
         Vector3::new(0.0, 0.0, 0.0),
         0.0,
         1,
-        Particle::Trail,
+        (Particle::Trail as i32).into(),
+        &data_1_21_2,
+    );
+    let particle_1_21_4 = CParticle::new(
+        false,
+        false,
+        center,
+        Vector3::new(0.0, 0.0, 0.0),
+        0.0,
+        1,
+        (Particle::Trail as i32).into(),
+        &data_1_21_4,
     );
 
-    let mut rng = rand::rng();
+    for player in world.players.load().iter() {
+        let ClientPlatform::Java(client) = player.client.as_ref() else {
+            continue;
+        };
+        match trail_particle_delivery_for_version(client.version.load()) {
+            TrailParticleDelivery::LegacyFallback => {
+                player.spawn_particle(center, Vector3::new(0.0, 0.0, 0.0), 0.0, 1, Particle::Trail);
+            }
+            TrailParticleDelivery::PreDurationPacket => {
+                player.try_send_client_packet(&particle_1_21_2);
+            }
+            TrailParticleDelivery::DurationPacket => {
+                player.try_send_client_packet(&particle_1_21_4);
+            }
+        }
+    }
+
     for dx in -EYEBLOSSOM_XZ_RANGE..=EYEBLOSSOM_XZ_RANGE {
         for dy in -EYEBLOSSOM_Y_RANGE..=EYEBLOSSOM_Y_RANGE {
             for dz in -EYEBLOSSOM_XZ_RANGE..=EYEBLOSSOM_XZ_RANGE {
@@ -169,4 +250,50 @@ pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &Block
     }
 
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        TrailParticleDelivery, encode_trail_particle_data, trail_particle_delivery_for_version,
+    };
+    use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+
+    #[test]
+    fn trail_particle_data_matches_versioned_protocol_layouts() {
+        let target = Vector3::new(1.25, 64.5, -3.75);
+        let color = 0x12_34_56;
+
+        let pre_duration = encode_trail_particle_data(target, color, None);
+        assert_eq!(pre_duration.len(), 28);
+        assert_eq!(&pre_duration[0..8], &target.x.to_be_bytes());
+        assert_eq!(&pre_duration[8..16], &target.y.to_be_bytes());
+        assert_eq!(&pre_duration[16..24], &target.z.to_be_bytes());
+        assert_eq!(&pre_duration[24..28], &color.to_be_bytes());
+
+        let with_duration = encode_trail_particle_data(target, color, Some(20));
+        assert_eq!(with_duration.len(), 29);
+        assert_eq!(&with_duration[..28], &pre_duration);
+        assert_eq!(with_duration[28], 20);
+    }
+
+    #[test]
+    fn trail_particle_delivery_matches_protocol_boundaries() {
+        assert_eq!(
+            trail_particle_delivery_for_version(JavaMinecraftVersion::Unknown),
+            TrailParticleDelivery::LegacyFallback
+        );
+        assert_eq!(
+            trail_particle_delivery_for_version(JavaMinecraftVersion::V_1_21),
+            TrailParticleDelivery::LegacyFallback
+        );
+        assert_eq!(
+            trail_particle_delivery_for_version(JavaMinecraftVersion::V_1_21_2),
+            TrailParticleDelivery::PreDurationPacket
+        );
+        assert_eq!(
+            trail_particle_delivery_for_version(JavaMinecraftVersion::V_1_21_4),
+            TrailParticleDelivery::DurationPacket
+        );
+    }
 }
