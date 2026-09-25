@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId, HorizontalFacingExt,
+    game_event::GameEvent,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
@@ -290,17 +291,20 @@ impl TripwireHookBlock {
         let pos = block_pos.to_f64();
         if on && !off {
             world.play_sound_raw(Sound::BlockTripwireClickOn as u16, cat, &pos, 0.4, 0.6);
-            // TODO world.emitGameEvent((Entity)null, GameEvent.BLOCK_ACTIVATE, pos);
+            world.emit_game_event(GameEvent::BlockActivate.name(), block_pos.to_centered_f64());
         } else if !on && off {
             world.play_sound_raw(Sound::BlockTripwireClickOff as u16, cat, &pos, 0.4, 0.5);
-            // TODO world.emitGameEvent((Entity)null, GameEvent.BLOCK_DEACTIVATE, pos);
+            world.emit_game_event(
+                GameEvent::BlockDeactivate.name(),
+                block_pos.to_centered_f64(),
+            );
         } else if attached && !detached {
             world.play_sound_raw(Sound::BlockTripwireAttach as u16, cat, &pos, 0.4, 0.7);
-            // TODO world.emitGameEvent((Entity)null, GameEvent.BLOCK_ATTACH, pos);
+            world.emit_game_event(GameEvent::BlockAttach.name(), block_pos.to_centered_f64());
         } else if !attached && detached {
             let pitch = 1.2 / rng().random::<f32>().mul_add(0.2, 0.9);
             world.play_sound_raw(Sound::BlockTripwireDetach as u16, cat, &pos, 0.4, pitch);
-            // TODO world.emitGameEvent((Entity)null, GameEvent.BLOCK_DETACH, pos);
+            world.emit_game_event(GameEvent::BlockDetach.name(), block_pos.to_centered_f64());
         }
     }
 
