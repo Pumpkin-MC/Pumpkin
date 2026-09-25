@@ -15,7 +15,7 @@ use tokio::{
     io::{AsyncSeekExt, AsyncWrite, AsyncWriteExt, BufWriter},
     sync::Mutex,
 };
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use crate::chunk::{
     ChunkParsingError, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
@@ -575,29 +575,37 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
                 continue;
             }
 
-            if end_offset > last_offset {
-                last_offset = end_offset;
-            }
-
             // We always subtract 2 for the first two sectors for the timestamp and location tables
             // that we walked earlier
             let bytes_offset = (sector_offset - 2) * SECTOR_BYTES;
             let bytes_count = sector_count * SECTOR_BYTES;
 
-            if bytes_offset + bytes_count > raw_file_bytes.len() {
-                return Err(ChunkReadingError::ParsingError(
-                    ChunkParsingError::ErrorDeserializingChunk(format!(
-                        "Not enough bytes available for the chunk {} ({} vs {})",
-                        i,
-                        bytes_count,
-                        raw_file_bytes.len().saturating_sub(bytes_offset)
-                    )),
-                ));
+            let available = raw_file_bytes.len().saturating_sub(bytes_offset);
+            if available < 5 {
+                warn!(
+                    "Chunk {} header is truncated: expected {} but read {}",
+                    i, bytes_count, available
+                );
+                continue;
             }
+            let bytes_count = bytes_count.min(available);
 
-            let serialized_data = AnvilChunkData::from_bytes(
+            let serialized_data = match AnvilChunkData::from_bytes(
                 raw_file_bytes.slice(bytes_offset..bytes_offset + bytes_count),
-            )?;
+            ) {
+                Ok(data) => data,
+                Err(e) => {
+                    warn!(
+                        "Chunk {} is unreadable and will be treated as missing: {:?}",
+                        i, e
+                    );
+                    continue;
+                }
+            };
+
+            if end_offset > last_offset {
+                last_offset = end_offset;
+            }
 
             chunk_file.chunks_data[i] = Some(AnvilChunkMetadata {
                 serialized_data,
@@ -1387,13 +1395,16 @@ mod tests {
     }
 
     #[test]
-    fn a_chunk_declaring_no_length_is_an_error_not_a_panic() {
+    fn a_chunk_declaring_no_length_is_treated_as_missing() {
         // The length covers the compression byte, so the smallest legal value
         // is 1 and the byte count is that minus one. Zero came from a file, so
-        // it has to be rejected rather than subtracted from.
-        let file = AnvilChunkFile::<ChunkData>::read(region_with_first_location((2 << 8) | 1, 0));
+        // the chunk is skipped as unreadable and its sectors are not kept as
+        // the end of the file.
+        let file = AnvilChunkFile::<ChunkData>::read(region_with_first_location((2 << 8) | 1, 0))
+            .expect("an unreadable chunk is skipped, not an error");
 
-        assert!(file.is_err());
+        assert!(file.chunks_data[0].is_none());
+        assert_eq!(file.end_sector, 2);
     }
 
     #[test]
