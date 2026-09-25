@@ -37,6 +37,7 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub const PLUGIN_API_VERSION: u32 = 2;
 
 const PLUGIN_DIR: &str = "./plugins";
+const HOT_RELOAD_DEBOUNCE: Duration = Duration::from_millis(500);
 
 /// A trait for handling events dynamically.
 ///
@@ -312,52 +313,61 @@ impl PluginManager {
         let task = server.spawn_task(async move {
             // Keep watcher alive by moving it into the task
             let _watcher = watcher;
+            let mut pending: HashMap<PathBuf, tokio::time::Instant> = HashMap::new();
 
-            while let Some(event) = rx.recv().await {
+            loop {
+                let deadline = pending
+                    .values()
+                    .min()
+                    .map(|seen| *seen + HOT_RELOAD_DEBOUNCE);
+                let event = tokio::select! {
+                    event = rx.recv() => match event {
+                        Some(event) => Some(event),
+                        None => break,
+                    },
+                    () = async {
+                        match deadline {
+                            Some(deadline) => tokio::time::sleep_until(deadline).await,
+                            None => std::future::pending().await,
+                        }
+                    } => None,
+                };
+
                 if !manager
                     .hot_reload_enabled
                     .load(std::sync::atomic::Ordering::Relaxed)
                 {
+                    pending.clear();
                     continue;
                 }
 
-                match event.kind {
-                    EventKind::Modify(ModifyKind::Data(_)) | EventKind::Create(_) => {
+                if let Some(event) = event {
+                    if matches!(
+                        event.kind,
+                        EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Name(_))
+                            | EventKind::Create(_)
+                    ) {
                         for path in event.paths {
                             if path.extension().is_some_and(|ext| ext == "wasm") {
                                 debug!("Detected change in plugin: {:?}", path);
-                                // Give it a small delay to ensure file is completely written
-                                tokio::time::sleep(Duration::from_millis(100)).await;
-
-                                // We need to find if this plugin is already loaded to unload it first
-                                let plugin_name = {
-                                    let plugins = manager
-                                        .plugins
-                                        .read()
-                                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                                    plugins
-                                        .iter()
-                                        .find(|p| p.path == path)
-                                        .map(|p| p.metadata.name.clone())
-                                };
-
-                                if let Some(name) = plugin_name {
-                                    info!("Hot-reloading plugin: {}", name);
-                                    let _ = manager.unload_plugin(&name).await;
-                                }
-
-                                // For now, we just try to load it. If it's already loaded,
-                                // the loader might handle it or we might get a duplicate.
-                                // Most WASM loaders will just create a new instance.
-                                if let Err(e) =
-                                    manager.start_loading_plugin(&server_clone, &path).await
-                                {
-                                    error!("Failed to hot-reload plugin {:?}: {}", path, e);
-                                }
+                                pending.insert(path, tokio::time::Instant::now());
                             }
                         }
                     }
-                    _ => {}
+                    continue;
+                }
+
+                let now = tokio::time::Instant::now();
+                let ready: Vec<PathBuf> = pending
+                    .iter()
+                    .filter(|(_, seen)| now.duration_since(**seen) >= HOT_RELOAD_DEBOUNCE)
+                    .map(|(path, _)| path.clone())
+                    .collect();
+                for path in ready {
+                    pending.remove(&path);
+                    if path.is_file() {
+                        manager.reload_plugin_file(&server_clone, &path).await;
+                    }
                 }
             }
         });
@@ -365,6 +375,28 @@ impl PluginManager {
         *self.hot_reload_task.write().await = Some(task);
         self.set_hot_reload_enabled(true);
         Ok(())
+    }
+
+    async fn reload_plugin_file(self: &Arc<Self>, server: &Arc<Server>, path: &Path) {
+        let plugin_name = {
+            let plugins = self
+                .plugins
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            plugins
+                .iter()
+                .find(|p| p.path == path)
+                .map(|p| p.metadata.name.clone())
+        };
+
+        if let Some(name) = plugin_name {
+            info!("Hot-reloading plugin: {}", name);
+            let _ = self.unload_plugin(&name).await;
+        }
+
+        if let Err(e) = self.start_loading_plugin(server, path).await {
+            error!("Failed to hot-reload plugin {:?}: {}", path, e);
+        }
     }
 
     /// Stop watching the plugins directory for changes
