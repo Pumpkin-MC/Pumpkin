@@ -92,7 +92,10 @@ impl BlockBehaviour for StemBlock {
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
-        // TODO add light level check
+        if !crate::block::blocks::plant::crop::has_enough_light(args.world, args.position) {
+            return;
+        }
+
         let f: f32 = get_available_moisture(args.world, args.position, args.block);
         if rand::rng().random_range(0..=(25.0 / f).floor() as i32) == 0 {
             let (block, state) = args.world.get_block_and_state_id(args.position);
