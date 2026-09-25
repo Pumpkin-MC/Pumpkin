@@ -6,12 +6,14 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage};
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
 use tracing::{debug, error};
+use uuid::Uuid;
 
 /// Helper for managing player data in the server context.
 ///
@@ -21,6 +23,14 @@ pub struct ServerPlayerData {
     storage: Arc<PlayerDataStorage>,
     save_interval: Duration,
     last_save: AtomicCell<Instant>,
+    /// Serializes player-data writes and orders them per player.
+    ///
+    /// Every accepted save bumps the player's epoch in this map, and a
+    /// queued periodic snapshot is only written back while its epoch is
+    /// still current. This keeps a delayed periodic save from
+    /// overwriting a newer save of the same player (e.g. the disconnect
+    /// save).
+    write_epochs: Arc<Mutex<HashMap<Uuid, u64>>>,
 }
 
 impl ServerPlayerData {
@@ -30,7 +40,43 @@ impl ServerPlayerData {
             storage: Arc::new(PlayerDataStorage::new(data_path, enabled)),
             save_interval,
             last_save: AtomicCell::new(Instant::now()),
+            write_epochs: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    /// Saves `nbt` for `uuid` immediately, ordering the write against any
+    /// queued periodic save of the same player.
+    fn save_player_data_ordered(
+        &self,
+        uuid: &Uuid,
+        nbt: NbtCompound,
+    ) -> Result<(), PlayerDataError> {
+        let mut epochs = self
+            .write_epochs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *epochs.entry(*uuid).or_insert(0) += 1;
+        self.storage.save_player_data(uuid, nbt)
+    }
+
+    /// Writes back a queued periodic snapshot only if no newer save of the
+    /// same player superseded it while it was queued. The write happens
+    /// while holding the epoch lock, so it is serialized against every
+    /// other save of this player.
+    fn save_periodic_snapshot(
+        storage: &PlayerDataStorage,
+        write_epochs: &Mutex<HashMap<Uuid, u64>>,
+        uuid: &Uuid,
+        nbt: NbtCompound,
+        epoch: u64,
+    ) -> Result<(), PlayerDataError> {
+        let epochs = write_epochs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if epochs.get(uuid).copied().unwrap_or(0) != epoch {
+            return Ok(());
+        }
+        storage.save_player_data(uuid, nbt)
     }
 
     /// Handles a player leaving the server.
@@ -55,7 +101,7 @@ impl ServerPlayerData {
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt);
 
-        self.storage.save_player_data(&player.gameprofile.id, nbt)?;
+        self.save_player_data_ordered(&player.gameprofile.id, nbt)?;
         Ok(())
     }
 
@@ -72,13 +118,23 @@ impl ServerPlayerData {
 
         if should_save && self.storage.is_save_enabled() {
             self.last_save.store(now);
-            // Snapshot all online players periodically across all worlds
+            // Snapshot all online players periodically across all worlds,
+            // bumping each player's write epoch so a queued snapshot can
+            // tell whether it is still the newest save when it runs.
             let mut snapshots = Vec::new();
-            for world in server.worlds.load().iter() {
-                for player in world.players.load().iter() {
-                    let mut nbt = NbtCompound::new();
-                    player.write_nbt(&mut nbt);
-                    snapshots.push((player.gameprofile.id, nbt));
+            {
+                let mut epochs = self
+                    .write_epochs
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                for world in server.worlds.load().iter() {
+                    for player in world.players.load().iter() {
+                        let mut nbt = NbtCompound::new();
+                        player.write_nbt(&mut nbt);
+                        let epoch = epochs.entry(player.gameprofile.id).or_insert(0);
+                        *epoch += 1;
+                        snapshots.push((player.gameprofile.id, nbt, *epoch));
+                    }
                 }
             }
 
@@ -87,9 +143,12 @@ impl ServerPlayerData {
             }
 
             let storage = self.storage.clone();
+            let write_epochs = self.write_epochs.clone();
             rayon::spawn(move || {
-                for (uuid, nbt) in snapshots {
-                    if let Err(e) = storage.save_player_data(&uuid, nbt) {
+                for (uuid, nbt, epoch) in snapshots {
+                    if let Err(e) =
+                        Self::save_periodic_snapshot(&storage, &write_epochs, &uuid, nbt, epoch)
+                    {
                         error!("Failed to save player data for {uuid}: {e}");
                     }
                 }
@@ -174,7 +233,7 @@ impl ServerPlayerData {
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt);
 
-        self.storage.save_player_data(&uuid, nbt)?;
+        self.save_player_data_ordered(&uuid, nbt)?;
         Ok(())
     }
 }
@@ -212,6 +271,50 @@ mod test {
         let expected_path = path.join(format!("{uuid}.dat"));
 
         assert_eq!(storage.get_player_data_path(&uuid), expected_path);
+    }
+
+    #[test]
+    fn stale_periodic_snapshot_does_not_overwrite_newer_save() {
+        use std::collections::HashMap;
+        use std::sync::{Arc, Mutex};
+
+        let temp_dir = tempdir().unwrap();
+        let storage = PlayerDataStorage::new(temp_dir.path().to_path_buf(), true);
+        let write_epochs: Arc<Mutex<HashMap<Uuid, u64>>> = Arc::new(Mutex::new(HashMap::new()));
+
+        let uuid = Uuid::new_v4();
+
+        // Periodic tick snapshots the player at state A (epoch 1).
+        let mut epochs = write_epochs.lock().unwrap();
+        *epochs.entry(uuid).or_insert(0) += 1;
+        let snapshot_epoch = *epochs.get(&uuid).unwrap();
+        drop(epochs);
+        let mut stale_nbt = NbtCompound::new();
+        stale_nbt.put_string("TestKey", "StaleValue".to_string());
+
+        // The player disconnects before the queued task runs; the
+        // disconnect save writes the newer state B (epoch 2).
+        {
+            let mut epochs = write_epochs.lock().unwrap();
+            *epochs.entry(uuid).or_insert(0) += 1;
+        }
+        let mut newer_nbt = NbtCompound::new();
+        newer_nbt.put_string("TestKey", "NewerValue".to_string());
+        storage.save_player_data(&uuid, newer_nbt).unwrap();
+
+        // The queued periodic task must skip its stale snapshot.
+        ServerPlayerData::save_periodic_snapshot(
+            &storage,
+            &write_epochs,
+            &uuid,
+            stale_nbt,
+            snapshot_epoch,
+        )
+        .unwrap();
+
+        let (loaded, nbt) = storage.load_player_data(&uuid).unwrap();
+        assert!(loaded);
+        assert_eq!(nbt.get_string("TestKey").unwrap(), "NewerValue");
     }
 
     #[tokio::test]
