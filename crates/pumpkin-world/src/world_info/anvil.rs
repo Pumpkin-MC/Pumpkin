@@ -1,5 +1,5 @@
 use std::{
-    fs::File,
+    fs::{self, File},
     io::ErrorKind,
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
@@ -362,7 +362,14 @@ impl WorldInfoReader for AnvilLevelInfo {
     fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError> {
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
 
-        let root = read_gzip_compound_tag(File::open(path)?)
+        let file = match File::open(path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                return Err(WorldInfoError::InfoNotFound);
+            }
+            Err(error) => return Err(error.into()),
+        };
+        let root = read_gzip_compound_tag(file)
             .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
         let Some(data) = root.get_compound(LEVEL_DATA_TAG) else {
             error!("The level.dat file has no {LEVEL_DATA_TAG} compound and is therefore corrupt");
@@ -419,6 +426,8 @@ impl WorldInfoWriter for AnvilLevelInfo {
         info: &LevelData,
         level_folder: &Path,
     ) -> Result<(), WorldInfoError> {
+        fs::create_dir_all(level_folder)?;
+
         let start = SystemTime::now();
         let since_the_epoch = start.duration_since(UNIX_EPOCH).unwrap_or_default();
         let mut level_data = info.clone();
@@ -442,9 +451,9 @@ impl WorldInfoWriter for AnvilLevelInfo {
             .map_err(|e| WorldInfoError::SerializationError(e.to_string()))?;
 
         if path.exists() {
-            let _ = std::fs::copy(&path, &path_old);
+            fs::copy(&path, &path_old)?;
         }
-        let _ = std::fs::rename(&path_new, &path);
+        fs::rename(&path_new, &path)?;
 
         let data_version = level_data.data_version;
 
@@ -540,6 +549,7 @@ mod test {
     use pumpkin_util::{Difficulty, world_seed::Seed};
     use std::{
         fs::{self, File},
+        io::ErrorKind,
         path::Path,
         sync::LazyLock,
     };
@@ -618,6 +628,44 @@ mod test {
         let data = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap();
 
         assert_eq!(data.world_gen_settings.seed, seed);
+    }
+
+    #[test]
+    fn creates_missing_world_directory_when_writing() {
+        let temp_dir = TempDir::new().unwrap();
+        let level_folder = temp_dir.path().join("world");
+
+        AnvilLevelInfo
+            .write_world_info(&LevelData::default(Seed(42)), &level_folder)
+            .unwrap();
+
+        assert!(level_folder.join(LEVEL_DAT_FILE_NAME).is_file());
+        assert!(!level_folder.join("level.dat_new").exists());
+    }
+
+    #[test]
+    fn reports_missing_level_dat_as_info_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let error = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap_err();
+
+        assert!(matches!(error, WorldInfoError::InfoNotFound));
+    }
+
+    #[test]
+    fn reports_writer_io_errors_as_io_errors() {
+        let temp_dir = TempDir::new().unwrap();
+        let level_folder = temp_dir.path().join("world");
+        File::create(&level_folder).unwrap();
+
+        let error = AnvilLevelInfo
+            .write_world_info(&LevelData::default(Seed(42)), &level_folder)
+            .unwrap_err();
+
+        let WorldInfoError::IoError(error) = error else {
+            panic!("expected writer I/O error");
+        };
+        assert_eq!(error.kind(), ErrorKind::AlreadyExists);
     }
 
     #[test]

@@ -1,9 +1,19 @@
-use std::sync::{Arc, Weak};
+use std::sync::{
+    Arc, Weak,
+    atomic::{AtomicBool, AtomicU8, Ordering},
+};
 
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::pig_sound_variant::PigSoundVariant;
+use pumpkin_data::pig_variant::PigVariant;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::codec::var_int::VarInt;
 
+use crate::entity::EntityBase;
+use crate::entity::custom_sound::CustomSound;
+use crate::entity::item_steerable::{ItemBasedSteering, ItemSteerable};
 use crate::entity::{
     Entity,
     ageable::AgeableMob,
@@ -16,7 +26,6 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
-use pumpkin_nbt::compound::NbtCompound;
 
 const PIG_FOOD: &[&Item] = &[
     &Item::CARROT,
@@ -25,9 +34,6 @@ const PIG_FOOD: &[&Item] = &[
     &Item::CARROT_ON_A_STICK,
 ];
 
-use crate::entity::EntityBase;
-use crate::entity::item_steerable::{ItemBasedSteering, ItemSteerable};
-
 /// Represents a Pig, a common passive mob that provides porkchops.
 ///
 /// Wiki: <https://minecraft.wiki/w/Pig>
@@ -35,17 +41,24 @@ pub struct PigEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: crate::entity::ageable::AgeableData,
     pub steering: ItemBasedSteering,
-    pub saddled: std::sync::atomic::AtomicBool,
+    pub saddled: AtomicBool,
+    pub variant: AtomicU8,
+    pub sound_variant: AtomicU8,
 }
 
 impl PigEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
+        let world = entity.world.load();
+        let biome = world.get_biome(&entity.block_pos.load());
+        let variant = PigVariant::select_for_biome(biome.registry_id);
         let mob_entity = MobEntity::new(entity);
         let pig = Self {
             mob_entity,
             ageable_data: crate::entity::ageable::AgeableData::default(),
             steering: ItemBasedSteering::default(),
-            saddled: std::sync::atomic::AtomicBool::new(false),
+            saddled: AtomicBool::new(false),
+            variant: AtomicU8::new(variant.id()),
+            sound_variant: AtomicU8::new(PigSoundVariant::Classic as u8),
         };
         let mob_arc = Arc::new(pig);
         let mob_weak: Weak<dyn Mob> = {
@@ -75,6 +88,41 @@ impl PigEntity {
 
         mob_arc
     }
+
+    pub fn set_variant(&self, variant: PigVariant) {
+        self.variant.store(variant.id(), Ordering::Relaxed);
+        let entity = self.get_entity();
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::pig::DATA_VARIANT_ID,
+            VarInt(variant.id() as i32),
+        );
+    }
+
+    pub fn set_sound_variant(&self, sound_variant: PigSoundVariant) {
+        self.sound_variant
+            .store(sound_variant as u8, Ordering::Relaxed);
+        let entity = self.get_entity();
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::pig::DATA_SOUND_VARIANT_ID,
+            VarInt(sound_variant as u8 as i32),
+        );
+    }
+}
+
+impl CustomSound for PigEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        let is_baby = self.is_baby();
+        let sound_variant = PigSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default();
+        Some(sound_variant.death_sound(is_baby))
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        let is_baby = self.is_baby();
+        let sound_variant = PigSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default();
+        Some(sound_variant.hurt_sound(is_baby))
+    }
 }
 
 impl AgeableMob for PigEntity {
@@ -98,17 +146,68 @@ impl Mob for PigEntity {
         Some(self)
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }
 
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let is_baby = self.is_baby();
+        if is_baby {
+            entity.set_synced_data(pumpkin_data::tracked_data::pig::DATA_BABY_ID, true);
+        }
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::pig::DATA_VARIANT_ID,
+            VarInt(self.variant.load(Ordering::Relaxed) as i32),
+        );
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::pig::DATA_SOUND_VARIANT_ID,
+            VarInt(self.sound_variant.load(Ordering::Relaxed) as i32),
+        );
+    }
+
+    fn mob_set_variant_name(&self, name: &str) {
+        if let Some(v) = PigVariant::from_name(name) {
+            self.set_variant(v);
+        }
+    }
+
+    fn mob_set_sound_variant_name(&self, name: &str) {
+        if let Some(v) = PigSoundVariant::from_name(name) {
+            self.set_sound_variant(v);
+        }
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("Saddle", self.is_saddled());
+        let variant = PigVariant::from_id(self.variant.load(Ordering::Relaxed)).unwrap_or_default();
+        nbt.put_string("variant", format!("minecraft:{}", variant.to_name()));
+        let sound_variant = PigSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default();
+        nbt.put_string(
+            "sound_variant",
+            format!("minecraft:{}", sound_variant.to_name()),
+        );
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         if let Some(saddle) = nbt.get_byte("Saddle") {
             self.set_saddled(saddle == 1);
+        }
+        if let Some(variant_str) = nbt.get_string("variant")
+            && let Some(variant) = PigVariant::from_name(variant_str)
+        {
+            self.variant.store(variant.id(), Ordering::Relaxed);
+        }
+        if let Some(sound_str) = nbt.get_string("sound_variant")
+            && let Some(sound_variant) = PigSoundVariant::from_name(sound_str)
+        {
+            self.sound_variant
+                .store(sound_variant as u8, Ordering::Relaxed);
         }
     }
 
@@ -121,21 +220,18 @@ impl Mob for PigEntity {
     }
 
     fn is_saddled(&self) -> bool {
-        self.saddled.load(std::sync::atomic::Ordering::Relaxed)
+        self.saddled.load(Ordering::Relaxed)
     }
 
     fn can_be_saddled(&self) -> bool {
-        use crate::entity::ageable::AgeableMob;
         self.mob_entity.living_entity.entity.is_alive() && !self.is_baby()
     }
 
     fn set_saddled(&self, saddled: bool) {
-        self.saddled
-            .store(saddled, std::sync::atomic::Ordering::Relaxed);
+        self.saddled.store(saddled, Ordering::Relaxed);
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        use super::animal::Animal;
         if item_stack.get_item() == &pumpkin_data::item::Item::SADDLE
             && self.can_be_saddled()
             && !self.is_saddled()
@@ -163,7 +259,13 @@ impl Mob for PigEntity {
                 return true;
             }
         }
-        self.animal_interact(player, item_stack, Sound::EntityPigAmbient)
+        let sound_variant = PigSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default();
+        self.animal_interact(
+            player,
+            item_stack,
+            sound_variant.ambient_sound(self.is_baby()),
+        )
     }
 }
 

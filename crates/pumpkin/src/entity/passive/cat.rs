@@ -3,6 +3,8 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU8, Ordering},
 };
 
+use pumpkin_data::cat_sound_variant::CatSoundVariant;
+use pumpkin_data::cat_variant::CatVariant;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -13,6 +15,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use rand::RngExt;
 use uuid::Uuid;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -86,7 +89,7 @@ impl CatEntity {
         let mob_entity = MobEntity::new(entity);
         let cat = Self {
             mob_entity,
-            variant: AtomicU8::new(1),       // Default to black
+            variant: AtomicU8::new(CatVariant::Black.id()),
             sound_variant: AtomicU8::new(0), // Default to classic
             collar_color: AtomicU8::new(14), // Default to red
             tamable_data: TamableData::default(),
@@ -232,15 +235,44 @@ impl CatEntity {
         entity.set_synced_data(pumpkin_data::tracked_data::cat::RELAX_STATE_ONE, relax);
     }
 
+    pub fn set_sound_variant(&self, sound_variant: CatSoundVariant) {
+        self.sound_variant
+            .store(sound_variant as u8, Ordering::Relaxed);
+        let entity = self.get_entity();
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::cat::SOUND_VARIANT,
+            VarInt(sound_variant as u8 as i32),
+        );
+    }
+
     pub fn play_eating_sound(&self) {
         let mob_entity = self.get_mob_entity();
         let entity = &mob_entity.living_entity.entity;
+        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+        let sound_variant = CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default();
         let world = entity.world.load();
         world.play_sound(
-            pumpkin_data::sound::Sound::EntityCatEat,
+            sound_variant.eat_sound(is_baby),
             pumpkin_data::sound::SoundCategory::Neutral,
             &entity.pos.load(),
         );
+    }
+}
+
+impl CustomSound for CatEntity {
+    fn death_sound(&self) -> Option<pumpkin_data::sound::Sound> {
+        let is_baby = self.get_entity().age.load(Ordering::Relaxed) < 0;
+        let sound_variant = CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default();
+        Some(sound_variant.death_sound(is_baby))
+    }
+
+    fn hurt_sound(&self) -> Option<pumpkin_data::sound::Sound> {
+        let is_baby = self.get_entity().age.load(Ordering::Relaxed) < 0;
+        let sound_variant = CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default();
+        Some(sound_variant.hurt_sound(is_baby))
     }
 }
 
@@ -258,6 +290,10 @@ impl TamableAnimal for CatEntity {
 }
 
 impl Mob for CatEntity {
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }
@@ -267,21 +303,17 @@ impl Mob for CatEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        let variant_str = match self.variant.load(Ordering::Relaxed) {
-            0 => "minecraft:all_black",
-            1 => "minecraft:black",
-            2 => "minecraft:british_shorthair",
-            3 => "minecraft:calico",
-            4 => "minecraft:jellie",
-            5 => "minecraft:persian",
-            6 => "minecraft:ragdoll",
-            7 => "minecraft:red",
-            8 => "minecraft:siamese",
-            10 => "minecraft:white",
-            _ => "minecraft:tabby",
-        };
+        let variant_id = self.variant.load(Ordering::Relaxed);
+        let variant_str = CatVariant::all()
+            .get(variant_id as usize)
+            .map_or("minecraft:tabby", CatVariant::asset_id);
         nbt.put_string("variant", variant_str.to_string());
-        nbt.put_string("sound_variant", "minecraft:classic".to_string());
+        let sound_variant = CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default();
+        nbt.put_string(
+            "sound_variant",
+            format!("minecraft:{}", sound_variant.to_name()),
+        );
         nbt.put_byte(
             "CollarColor",
             self.collar_color.load(Ordering::Relaxed) as i8,
@@ -290,23 +322,15 @@ impl Mob for CatEntity {
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         if let Some(variant_str) = nbt.get_string("variant") {
-            let variant = match variant_str
-                .strip_prefix("minecraft:")
-                .unwrap_or(variant_str)
-            {
-                "all_black" => 0,
-                "black" => 1,
-                "british_shorthair" => 2,
-                "calico" => 3,
-                "jellie" => 4,
-                "persian" => 5,
-                "ragdoll" => 6,
-                "red" => 7,
-                "siamese" => 8,
-                "white" => 10,
-                _ => 9,
-            };
+            let variant =
+                CatVariant::from_name(variant_str).map_or(CatVariant::Tabby.id(), |v| v.id());
             self.variant.store(variant, Ordering::Relaxed);
+        }
+        if let Some(sound_str) = nbt.get_string("sound_variant")
+            && let Some(sound_variant) = CatSoundVariant::from_name(sound_str)
+        {
+            self.sound_variant
+                .store(sound_variant as u8, Ordering::Relaxed);
         }
         if let Some(collar) = nbt.get_byte("CollarColor") {
             self.collar_color.store(collar as u8, Ordering::Relaxed);
@@ -320,20 +344,14 @@ impl Mob for CatEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        let variant = match name.strip_prefix("minecraft:").unwrap_or(name) {
-            "all_black" => 0,
-            "black" => 1,
-            "british_shorthair" => 2,
-            "calico" => 3,
-            "jellie" => 4,
-            "persian" => 5,
-            "ragdoll" => 6,
-            "red" => 7,
-            "siamese" => 8,
-            "white" => 10,
-            _ => 9,
-        };
+        let variant = CatVariant::from_name(name).map_or(CatVariant::Tabby.id(), |v| v.id());
         self.variant.store(variant, Ordering::Relaxed);
+    }
+
+    fn mob_set_sound_variant_name(&self, name: &str) {
+        if let Some(v) = CatSoundVariant::from_name(name) {
+            self.set_sound_variant(v);
+        }
     }
 
     fn mob_init_data_tracker(&self) {
