@@ -84,22 +84,26 @@ impl VehicleEntity {
         }
     }
 
-    pub async fn collide_entity(&self, collided_entity_id: i32) {
-        let mut base_event =
-            crate::plugin::api::events::vehicle::vehicle_collision::VehicleCollisionEvent::new(
-                self.entity.entity_id,
-            );
-        let mut collide_event = crate::plugin::api::events::vehicle::vehicle_entity_collision::VehicleEntityCollisionEvent::new(
-            self.entity.entity_id,
-            collided_entity_id,
-        );
-        if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire(&server, &mut base_event).await;
-            server
-                .plugin_manager
-                .fire(&server, &mut collide_event)
-                .await;
-        }
+    /// Fires the vehicle collision events.
+    /// False: a plugin cancelled the collision.
+    pub fn collide_entity(&self, collided_entity_id: i32) -> bool {
+        use crate::plugin::api::events::vehicle::{
+            VehicleCollisionEvent, VehicleEntityCollisionEvent,
+        };
+        let Some(server) = self.entity.world.load().server.upgrade() else {
+            return true;
+        };
+        let mut base_event = VehicleCollisionEvent::new(self.entity.entity_id);
+        server
+            .plugin_manager
+            .fire_blocking(&server, &mut base_event);
+        let mut collide_event =
+            VehicleEntityCollisionEvent::new(self.entity.entity_id, collided_entity_id);
+        collide_event.cancelled = base_event.cancelled;
+        server
+            .plugin_manager
+            .fire_blocking(&server, &mut collide_event);
+        !collide_event.cancelled
     }
 
     pub async fn collide_block(&self, block_pos: pumpkin_util::math::position::BlockPos) {

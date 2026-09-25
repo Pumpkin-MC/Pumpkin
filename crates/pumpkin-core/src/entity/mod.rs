@@ -589,124 +589,6 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
-    fn push_entities(&self, dyn_self: &dyn EntityBase) -> bool {
-        let mut picked_up = false;
-        let mut pushed = false;
-        let self_entity = self.get_entity();
-        let entity_bb = self_entity.bounding_box.load();
-
-        if !self.is_pushable() {
-            return false;
-        }
-
-        let world = self_entity.world.load();
-
-        let is_rideable_minecart = self_entity.entity_type.id == EntityType::MINECART.id;
-        let is_abstract_minecart = is_rideable_minecart
-            || self_entity.entity_type.id == EntityType::CHEST_MINECART.id
-            || self_entity.entity_type.id == EntityType::COMMAND_BLOCK_MINECART.id
-            || self_entity.entity_type.id == EntityType::FURNACE_MINECART.id
-            || self_entity.entity_type.id == EntityType::HOPPER_MINECART.id
-            || self_entity.entity_type.id == EntityType::SPAWNER_MINECART.id
-            || self_entity.entity_type.id == EntityType::TNT_MINECART.id;
-
-        let is_minecart_fn = |id| -> bool {
-            id == EntityType::MINECART.id
-                || id == EntityType::CHEST_MINECART.id
-                || id == EntityType::COMMAND_BLOCK_MINECART.id
-                || id == EntityType::FURNACE_MINECART.id
-                || id == EntityType::HOPPER_MINECART.id
-                || id == EntityType::SPAWNER_MINECART.id
-                || id == EntityType::TNT_MINECART.id
-        };
-
-        if is_abstract_minecart {
-            let is_vehicle = self.is_vehicle();
-
-            if is_rideable_minecart && !is_vehicle {
-                let pickup_bb = entity_bb.expand(0.2, 0.0, 0.2);
-                let other_entities = world.get_entities_at_box(&pickup_bb);
-
-                for other in other_entities {
-                    if other.get_entity().entity_id != self_entity.entity_id {
-                        let other_type = other.get_entity().entity_type.id;
-                        let is_iron_golem = other_type == EntityType::IRON_GOLEM.id;
-                        let is_other_minecart = is_minecart_fn(other_type);
-
-                        if !is_iron_golem
-                            && !is_other_minecart
-                            && !other.is_passenger()
-                            && other.is_pushable()
-                            && other.get_entity().riding_cooldown.load(Relaxed) == 0
-                            && let Some(self_arc) = world.get_entity_by_id(self_entity.entity_id)
-                        {
-                            self_entity.add_passenger(self_arc, other.clone());
-                            picked_up = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            let push_bb = entity_bb.expand(1.0e-7, 1.0e-7, 1.0e-7);
-
-            let other_entities = world.get_entities_at_box(&push_bb);
-            for other in other_entities {
-                if other.get_entity().entity_id != self_entity.entity_id {
-                    let other_type = other.get_entity().entity_type.id;
-                    let is_other_minecart = is_minecart_fn(other_type);
-                    let is_iron_golem = other_type == EntityType::IRON_GOLEM.id;
-
-                    if is_rideable_minecart {
-                        if (is_iron_golem
-                            || is_other_minecart
-                            || is_vehicle
-                            || !other.get_entity().has_vehicle())
-                            && other.is_pushable()
-                        {
-                            dyn_self.push(other.as_ref());
-                            pushed = true;
-                        }
-                    } else if !self.has_passenger(other.as_ref())
-                        && other.is_pushable()
-                        && is_other_minecart
-                    {
-                        dyn_self.push(other.as_ref());
-                        pushed = true;
-                    }
-                }
-            }
-
-            let players = world.get_players_at_box(&push_bb);
-            for player in players {
-                if player.get_entity().entity_id != self_entity.entity_id && is_rideable_minecart {
-                    dyn_self.push(player.as_ref());
-                    pushed = true;
-                    // Non-rideable minecarts (hoppers, chests) do not push players in vanilla.
-                }
-            }
-        } else {
-            let other_entities = world.get_entities_at_box(&entity_bb);
-            for other in other_entities {
-                if other.get_entity().entity_id != self_entity.entity_id {
-                    dyn_self.push(other.as_ref());
-                    pushed = true;
-                }
-            }
-
-            let players = world.get_players_at_box(&entity_bb);
-            for player in players {
-                if player.get_entity().entity_id != self_entity.entity_id {
-                    dyn_self.push(player.as_ref());
-                    pushed = true;
-                }
-            }
-        }
-
-        picked_up && !pushed
-    }
-
     fn on_hit(&self, _hit: crate::entity::projectile::ProjectileHit) {}
 
     fn set_paddle_state(&self, _left: bool, _right: bool) {}
@@ -1107,6 +989,13 @@ impl Entity {
 
     pub fn add_velocity(&self, velocity: Vector3<f64>) {
         self.set_velocity(self.velocity.load() + velocity);
+    }
+
+    /// Vanilla `Entity.push(x, 0, z)`: sent with the next tick (`needsSync`).
+    pub fn push_velocity(&self, x: f64, z: f64) {
+        self.velocity
+            .store(self.velocity.load() + Vector3::new(x, 0.0, z));
+        self.velocity_dirty.store(true, Ordering::SeqCst);
     }
 
     pub fn set_velocity(&self, velocity: Vector3<f64>) {
@@ -1524,12 +1413,33 @@ impl Entity {
     /// `LivingEntity.knockback` scale `strength` with
     /// `combat::knockback_after_resistance` first; callers modelling vanilla's raw
     /// `Entity.push` (such as the ender dragon) pass `strength` unscaled.
-    pub fn apply_knockback(&self, strength: f64, mut x: f64, mut z: f64) {
+    ///
+    /// Fires `EntityKnockbackByEntityEvent` (with a `source`), then `EntityKnockbackEvent`.
+    pub fn apply_knockback(
+        &self,
+        mut strength: f64,
+        mut x: f64,
+        mut z: f64,
+        source: Option<&Self>,
+    ) {
+        use crate::plugin::api::events::entity::{
+            EntityKnockbackByEntityEvent, EntityKnockbackEvent,
+        };
+        let server = self.world.load().server.upgrade();
+
+        // Bukkit fires even at zero strength, so plugins can add knockback.
+        if let (Some(server), Some(source)) = (&server, source) {
+            let mut event =
+                EntityKnockbackByEntityEvent::new(self.entity_id, source.entity_id, strength, x, z);
+            server.plugin_manager.fire_blocking(server, &mut event);
+            if event.cancelled {
+                return;
+            }
+            (strength, x, z) = (event.force, event.x, event.z);
+        }
         if strength <= 0.0 {
             return;
         }
-
-        self.velocity_dirty.store(true, Ordering::SeqCst);
 
         // This has some vanilla magic
 
@@ -1543,7 +1453,7 @@ impl Entity {
 
         let velocity = self.velocity.load();
 
-        self.velocity.store(Vector3::new(
+        let mut knockback = Vector3::new(
             velocity.x / 2.0 - var8.x,
             if self.on_ground.load(Relaxed) {
                 (velocity.y / 2.0 + strength).min(0.4)
@@ -1551,7 +1461,24 @@ impl Entity {
                 velocity.y
             },
             velocity.z / 2.0 - var8.z,
-        ));
+        );
+
+        if let Some(server) = &server {
+            let mut event = EntityKnockbackEvent {
+                entity_id: self.entity_id,
+                hit_by_id: source.map(|source| source.entity_id),
+                knockback,
+                cancelled: false,
+            };
+            server.plugin_manager.fire_blocking(server, &mut event);
+            if event.cancelled {
+                return;
+            }
+            knockback = event.knockback;
+        }
+
+        self.velocity.store(knockback);
+        self.velocity_dirty.store(true, Ordering::SeqCst);
     }
 
     // Part of LivingEntity.tickMovement() in yarn
@@ -2506,31 +2433,6 @@ impl Entity {
 
     pub fn height(&self) -> f32 {
         self.entity_dimension.load().height
-    }
-
-    /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
-    ///
-    /// This function calculates the entity's new velocity based on the specified knockback strength and direction.
-    pub fn knockback(&self, strength: f64, x: f64, z: f64) {
-        // This has some vanilla magic
-        let mut x = x;
-        let mut z = z;
-        while x.mul_add(x, z * z) < 1.0E-5 {
-            x = (rand::random::<f64>() - rand::random::<f64>()) * 0.01;
-            z = (rand::random::<f64>() - rand::random::<f64>()) * 0.01;
-        }
-
-        let var8 = Vector3::new(x, 0.0, z).normalize() * strength;
-        let velocity = self.velocity.load();
-        self.velocity.store(Vector3::new(
-            velocity.x / 2.0 - var8.x,
-            if self.on_ground.load(Relaxed) {
-                (velocity.y / 2.0 + strength).min(0.4)
-            } else {
-                velocity.y
-            },
-            velocity.z / 2.0 - var8.z,
-        ));
     }
 
     pub fn set_sneaking(&self, sneaking: bool) {

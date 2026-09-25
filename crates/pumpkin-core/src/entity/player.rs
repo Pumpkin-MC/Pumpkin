@@ -2560,23 +2560,51 @@ impl Player {
         self.try_send_client_packet(&packet);
     }
 
-    pub fn set_velocity(&self, mut velocity: Vector3<f64>) {
-        if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
-            && let Some(server) = self.world().server.upgrade()
-        {
-            let mut event =
-                crate::plugin::api::events::player::player_velocity::PlayerVelocityEvent {
-                    player: player_arc,
-                    velocity,
-                    cancelled: false,
-                };
-            server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return;
-            }
-            velocity = event.velocity;
+    pub fn set_velocity(&self, velocity: Vector3<f64>) {
+        if let Some(velocity) = self.fire_velocity_event(velocity) {
+            self.living_entity.entity.set_velocity(velocity);
         }
-        self.living_entity.entity.set_velocity(velocity);
+    }
+
+    /// `PlayerVelocityEvent` -> the velocity to send, `None` if cancelled
+    fn fire_velocity_event(&self, velocity: Vector3<f64>) -> Option<Vector3<f64>> {
+        use crate::plugin::api::events::player::player_velocity::PlayerVelocityEvent;
+        let world = self.world();
+        let Some(server) = world.server.upgrade() else {
+            return Some(velocity);
+        };
+        if !server.plugin_manager.has_handlers::<PlayerVelocityEvent>() {
+            return Some(velocity);
+        }
+        let Some(player) = world.get_player_by_uuid(self.gameprofile.id) else {
+            return Some(velocity);
+        };
+        let mut event = PlayerVelocityEvent {
+            player,
+            velocity,
+            cancelled: false,
+        };
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        (!event.cancelled).then_some(event.velocity)
+    }
+
+    /// Tick send of pushed or knocked back velocity. `hurt` is vanilla `hurtMarked`.
+    /// Cancelling the event sends nothing, like Bukkit.
+    pub fn sync_velocity(&self, hurt: bool) {
+        let entity = &self.living_entity.entity;
+        let velocity = entity.velocity.load();
+        let Some(new_velocity) = self.fire_velocity_event(velocity) else {
+            return;
+        };
+        let changed = new_velocity != velocity;
+        if changed {
+            entity.velocity.store(new_velocity);
+        }
+        entity.send_velocity_to_watchers();
+        // Java predicts pushes itself, Bedrock does not.
+        if hurt || changed || self.client.bedrock().is_some() {
+            self.send_own_velocity(new_velocity);
+        }
     }
 
     /// Velocity to the own client. For Bedrock -> tagged with the last processed input tick.
@@ -3811,6 +3839,21 @@ impl Player {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .send_to_player(self);
             }
+        }
+    }
+
+    /// Runs `f` on the custom Java scoreboard this client sees, if a plugin set one.
+    pub fn with_java_scoreboard<R>(
+        &self,
+        f: impl FnOnce(&crate::world::scoreboard::Scoreboard) -> R,
+    ) -> Option<R> {
+        let guard = self
+            .custom_scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match guard.as_ref() {
+            Some(CustomScoreboard::Java(scoreboard)) => Some(f(scoreboard)),
+            _ => None,
         }
     }
 

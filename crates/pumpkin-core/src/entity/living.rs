@@ -91,6 +91,8 @@ pub struct LivingEntity {
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
     pub dead: AtomicBool,
+    /// Plugin switch. False: neither pushed nor pushing.
+    pub collides: AtomicBool,
     /// The distance the entity has been falling.
     pub fall_distance: AtomicCell<f32>,
     pub active_effects: std::sync::Mutex<FxHashMap<&'static StatusEffect, Effect>>,
@@ -181,17 +183,28 @@ impl EffectParticle {
     }
 }
 
-/// Vanilla `LivingEntity.canBeSeenAsEnemy`, with `Player`'s `abilities.invulnerable` override.
-#[must_use]
-pub fn can_be_seen_as_enemy(target: &dyn EntityBase) -> bool {
-    target.get_player().map_or_else(
-        || {
-            target
-                .get_living_entity()
-                .is_some_and(LivingEntity::can_take_damage)
-        },
-        crate::entity::player::Player::can_be_seen_as_enemy,
-    )
+/// Vanilla `EntitySelector.pushableBy` team part. Both teams come from one scoreboard:
+/// the custom Java one of the pushed (else pushing) player, as that client predicts it.
+pub fn is_push_allowed_by_teams(pusher: &dyn EntityBase, pushed: &dyn EntityBase) -> bool {
+    let allowed = |scoreboard: &crate::world::scoreboard::Scoreboard| {
+        scoreboard.get_teams().is_empty()
+            || is_allowed_by_team_rules(
+                scoreboard.get_entity_team(&pusher.get_scoreboard_name()),
+                scoreboard.get_entity_team(&pushed.get_scoreboard_name()),
+            )
+    };
+    [pushed, pusher]
+        .into_iter()
+        .filter_map(EntityBase::get_player)
+        .find_map(|player| player.with_java_scoreboard(allowed))
+        .unwrap_or_else(|| {
+            let world = pusher.get_entity().world.load();
+            let scoreboard = world
+                .scoreboard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            allowed(&scoreboard)
+        })
 }
 
 fn is_allowed_by_team_rules(
@@ -287,6 +300,7 @@ impl LivingEntity {
             fall_distance: AtomicCell::new(0.0),
             death_time: AtomicU8::new(0),
             dead: AtomicBool::new(false),
+            collides: AtomicBool::new(true),
             item_use_time: AtomicI32::new(0),
             item_in_use: std::sync::Mutex::new(None),
             active_hand: std::sync::Mutex::new(None),
@@ -1435,9 +1449,11 @@ impl LivingEntity {
     }
 
     fn push_entities(&self, dyn_self: &dyn EntityBase) {
+        if !self.collides.load(Relaxed) {
+            return;
+        }
         let world = self.entity.world.load();
         let entity_bb = self.entity.bounding_box.load();
-        let own_team = dyn_self.get_team();
 
         let pushable: Vec<Arc<dyn EntityBase>> = world
             .get_all_at_box(&entity_bb)
@@ -1447,7 +1463,7 @@ impl LivingEntity {
                 entity_ref.entity_id != self.entity.entity_id
                     && !entity.is_spectator()
                     && entity.is_pushable()
-                    && is_allowed_by_team_rules(own_team.as_ref(), entity.get_team().as_ref())
+                    && is_push_allowed_by_teams(dyn_self, entity.as_ref())
             })
             .collect();
 
@@ -3197,8 +3213,12 @@ impl LivingEntity {
                 let dx = source_pos.x - target_pos.x;
                 let dz = source_pos.z - target_pos.z;
                 let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
-                self.entity
-                    .apply_knockback(knockback_after_resistance(0.4, resistance), dx, dz);
+                self.entity.apply_knockback(
+                    knockback_after_resistance(0.4, resistance),
+                    dx,
+                    dz,
+                    Some(source.get_entity()),
+                );
                 self.entity.mark_hurt();
             }
         }
@@ -3380,16 +3400,11 @@ impl EntityBase for LivingEntity {
         }
 
         // Coalesce velocity sends to once per tick.
-        if self.entity.sync_velocity.swap(false, Ordering::SeqCst) {
-            self.entity.velocity_dirty.store(false, Ordering::SeqCst);
-            self.entity.send_velocity();
-        } else if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-            self.entity.send_velocity_to_watchers();
-            // Bedrock client does not predict actor pushes
-            if let Some(player) = caller.get_player()
-                && player.client.bedrock().is_some()
-            {
-                player.send_own_velocity(self.entity.velocity.load());
+        let hurt = self.entity.sync_velocity.swap(false, Ordering::SeqCst);
+        if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) || hurt {
+            match caller.get_player() {
+                Some(player) => player.sync_velocity(hurt),
+                None => self.entity.send_velocity_to_watchers(),
             }
         }
 
@@ -3625,7 +3640,7 @@ impl EntityBase for LivingEntity {
     }
 
     fn is_pushable(&self) -> bool {
-        self.health.load() > 0.0 && !self.dead.load(Relaxed)
+        self.health.load() > 0.0 && !self.dead.load(Relaxed) && self.collides.load(Relaxed)
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {
