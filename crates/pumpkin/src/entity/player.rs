@@ -5333,14 +5333,6 @@ impl Player {
         self.experience_points.store(points, Ordering::Relaxed);
         self.last_sent_xp.store(-1, Ordering::Relaxed);
         self.tick_experience();
-
-        if self.has_client_loaded() {
-            self.try_send_client_packet(&CSetExperience::new(
-                progress.clamp(0.0, 1.0),
-                level.into(),
-                points.into(),
-            ));
-        }
     }
 
     /// Sets the player's experience level directly.
