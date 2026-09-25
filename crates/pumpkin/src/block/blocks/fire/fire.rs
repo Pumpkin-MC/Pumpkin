@@ -34,6 +34,10 @@ impl FireBlock {
         30 + rand::rng().random_range(0..10)
     }
 
+    const fn scheduled_extinguish_flags() -> BlockFlags {
+        BlockFlags::NOTIFY_ALL
+    }
+
     fn is_flammable(id: BlockStateId) -> bool {
         let block = id.to_block();
 
@@ -261,7 +265,7 @@ impl BlockBehaviour for FireBlock {
             world.set_block_state(
                 pos,
                 Block::AIR.default_state.id,
-                BlockFlags::NOTIFY_NEIGHBORS,
+                Self::scheduled_extinguish_flags(),
             );
             return;
         }
@@ -293,7 +297,7 @@ impl BlockBehaviour for FireBlock {
                 world.set_block_state(
                     pos,
                     Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
+                    Self::scheduled_extinguish_flags(),
                 );
                 return;
             }
@@ -313,7 +317,11 @@ impl BlockBehaviour for FireBlock {
             if !Self::are_blocks_around_flammable(world.as_ref(), pos) {
                 let block_below_state = world.get_block_state(&pos.down());
                 if !block_below_state.is_side_solid(BlockDirection::Up) || new_age > 3 {
-                    world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
+                    world.set_block_state(
+                        pos,
+                        Block::AIR.default_state.id,
+                        Self::scheduled_extinguish_flags(),
+                    );
                     return;
                 }
             }
@@ -323,7 +331,11 @@ impl BlockBehaviour for FireBlock {
                 && rand::rng().random_range(0..4) == 0
                 && !Self::is_flammable(world.get_block_state_id(&pos.down()))
             {
-                world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
+                world.set_block_state(
+                    pos,
+                    Block::AIR.default_state.id,
+                    Self::scheduled_extinguish_flags(),
+                );
                 return;
             }
         }
@@ -459,5 +471,18 @@ impl BlockBehaviour for FireBlock {
         {
             FireBlockBase::broken(args.world, *args.position);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scheduled_extinguish_notifies_listeners() {
+        assert_eq!(
+            FireBlock::scheduled_extinguish_flags(),
+            BlockFlags::NOTIFY_ALL
+        );
     }
 }
