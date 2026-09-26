@@ -18,6 +18,7 @@ use crate::{
     },
     entity::EntityBase,
 };
+use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 #[pumpkin_block_from_tag("minecraft:campfires")]
@@ -150,7 +151,20 @@ impl BlockBehaviour for CampfireBlock {
         false
     }
 
-    // TODO: onProjectileHit
+    fn on_projectile_hit(&self, args: crate::block::OnProjectileHitArgs<'_>) {
+        let mut props = CampfireLikeProperties::from_state_id(args.state.id);
+
+        // TODO: real Minecraft has a check for && projectile.mayInteract(serverLevel, pos) i couldnt find this
+        if args.projectile.get_entity().is_on_fire() && !props.lit && !props.waterlogged {
+            props.lit = true;
+
+            args.world.set_block_state(
+                args.position,
+                props.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            );
+        }
+    }
 }
 
 fn is_signal_fire_base_block(block: &Block) -> bool {
