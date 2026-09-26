@@ -1295,10 +1295,9 @@ impl World {
         &self,
         packet: &P,
         position: &Vector3<f64>,
-        volume: f32,
+        radius_chunks: i32,
         except: Option<Uuid>,
     ) {
-        let audible_chunks = f64::from(volume.max(1.0)).ceil() as i32;
         let chunk_pos = BlockPos::floored_v(*position).chunk_position();
 
         let players = self.players.load();
@@ -1309,7 +1308,7 @@ impl World {
             is_within_chebyshev_distance(
                 chunk_pos,
                 player.get_entity().chunk_pos.load(),
-                audible_chunks,
+                radius_chunks,
             )
         });
 
@@ -1333,7 +1332,7 @@ impl World {
             1.0,
             seed,
         );
-        self.broadcast_sound_in_range(&packet, position, 1.0, None);
+        self.broadcast_sound_in_range(&packet, position, sound_event_audible_chunks(sound), None);
     }
 
     pub fn play_sound_event_expect(
@@ -1354,7 +1353,12 @@ impl World {
             1.0,
             seed,
         );
-        self.broadcast_sound_in_range(&packet, position, 1.0, Some(player.gameprofile.id));
+        self.broadcast_sound_in_range(
+            &packet,
+            position,
+            sound_event_audible_chunks(sound),
+            Some(player.gameprofile.id),
+        );
     }
 
     pub fn play_sound_fine(
@@ -1389,7 +1393,7 @@ impl World {
             pitch,
             seed,
         );
-        self.broadcast_sound_in_range(&packet, position, volume, None);
+        self.broadcast_sound_in_range(&packet, position, audible_chunks(volume), None);
     }
 
     /// Spawns a cluster of particles in the world for all players in range.
@@ -1464,7 +1468,7 @@ impl World {
         let seed = rand::rng().random::<i64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
-        self.broadcast_sound_in_range(&packet, position, volume, None);
+        self.broadcast_sound_in_range(&packet, position, audible_chunks(volume), None);
     }
 
     pub fn play_sound_raw_expect(
@@ -1479,7 +1483,12 @@ impl World {
         let seed = rand::rng().random::<i64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
-        self.broadcast_sound_in_range(&packet, position, volume, Some(player.gameprofile.id));
+        self.broadcast_sound_in_range(
+            &packet,
+            position,
+            audible_chunks(volume),
+            Some(player.gameprofile.id),
+        );
     }
 
     pub fn play_block_sound(&self, sound: Sound, category: SoundCategory, position: BlockPos) {
@@ -7160,6 +7169,21 @@ impl BlockAccessor for World {
     }
 }
 
+fn audible_chunks(volume: f32) -> i32 {
+    f64::from(volume.max(1.0)).ceil() as i32
+}
+
+fn sound_event_audible_chunks(
+    sound: &pumpkin_data::data_component_impl::IdOr<pumpkin_data::data_component_impl::SoundEvent>,
+) -> i32 {
+    match sound {
+        pumpkin_data::data_component_impl::IdOr::Value(event) => event
+            .range
+            .map_or(1, |range| (f64::from(range) / 16.0).ceil() as i32),
+        pumpkin_data::data_component_impl::IdOr::Id(_) => 1,
+    }
+}
+
 fn bedrock_block_breaking_rate(speed: f32) -> i32 {
     (speed.clamp(0.0, 1.0) * f32::from(u16::MAX)) as i32
 }
@@ -7340,7 +7364,30 @@ mod tests {
 
     use super::{
         World, bedrock_block_breaking_rate, bedrock_chest_block_actor, merge_entity_records,
+        sound_event_audible_chunks,
     };
+
+    #[test]
+    fn sound_events_reach_their_fixed_range() {
+        use pumpkin_data::data_component_impl::{IdOr, SoundEvent};
+        use pumpkin_data::sound::Sound;
+
+        let fixed = |range| {
+            IdOr::Value(SoundEvent {
+                sound_name: "minecraft:test".to_string(),
+                range,
+            })
+        };
+
+        assert_eq!(
+            sound_event_audible_chunks(&IdOr::Id(Sound::EntityArrowHit)),
+            1
+        );
+        assert_eq!(sound_event_audible_chunks(&fixed(None)), 1);
+        assert_eq!(sound_event_audible_chunks(&fixed(Some(16.0))), 1);
+        assert_eq!(sound_event_audible_chunks(&fixed(Some(17.0))), 2);
+        assert_eq!(sound_event_audible_chunks(&fixed(Some(64.0))), 4);
+    }
 
     fn record(uuid: Option<Uuid>, id: &str) -> NbtCompound {
         let mut nbt = NbtCompound::new();
