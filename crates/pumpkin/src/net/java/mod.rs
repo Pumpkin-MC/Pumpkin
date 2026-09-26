@@ -197,6 +197,11 @@ impl JavaClient {
         self.player.store(Arc::new(Some(player)));
     }
 
+    /// Drops the player again when joining was cancelled.
+    pub fn clear_player(&self) {
+        self.player.store(Arc::new(None));
+    }
+
     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
         let Some(mut network_reader) = self
             .network_reader
@@ -424,7 +429,6 @@ impl JavaClient {
         if self.version.load() == CURRENT_MC_VERSION {
             return Some(packet_data);
         }
-        // TODO: packets sent before `set_player` (e.g. an `add_player` kick) go out untranslated.
         let player = self.player.load_full();
         let Some(player) = player.as_ref() else {
             return Some(packet_data);

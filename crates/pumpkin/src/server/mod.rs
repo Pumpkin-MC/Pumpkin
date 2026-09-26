@@ -680,6 +680,10 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
+        // Joining already sends play packets (entity spawns), which must reach `PacketSentEvent`
+        if let ClientPlatform::Java(client) = player.client.as_ref() {
+            client.set_player(player.clone());
+        }
         {
             let mut advancements = player
                 .advancements
@@ -723,6 +727,9 @@ impl Server {
 
             'cancelled: {
                 player.kick(DisconnectReason::Kicked, &event.kick_message);
+                if let ClientPlatform::Java(client) = player.client.as_ref() {
+                    client.clear_player();
+                }
                 None
             }
         }}
