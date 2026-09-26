@@ -1,4 +1,6 @@
-use crate::block::entities::{BlockEntity, block_entity_from_nbt, block_entity_name};
+use crate::block::entities::{
+    BlockEntity, block_entity_from_nbt, block_entity_name, block_owns_block_entity,
+};
 use dashmap::DashMap;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
@@ -241,18 +243,15 @@ fn remove_invalid_pending_block_entities(chunk: &ChunkData) -> Vec<BlockPos> {
     let original_len = pending.len();
     pending.retain(|position, nbt| {
         let relative = position.chunk_relative_position();
-        let expected_id = chunk
+        let block = chunk
             .section
             .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
-            .and_then(|state_id| block_entity_name(Block::from_state_id(state_id)));
-        let actual_id = nbt
-            .get_string("id")
-            .map(|id| id.strip_prefix("minecraft:").unwrap_or(id));
-        let valid = matches!((expected_id, actual_id), (Some(expected), Some(actual)) if expected == actual);
+            .map(Block::from_state_id);
+        let valid = matches!((block, nbt.get_string("id")), (Some(block), Some(id)) if block_owns_block_entity(block, id));
         if !valid {
             debug!(
                 ?position,
-                ?expected_id,
+                block = ?block.map(|block| block.name),
                 block_entity_id = ?nbt.get_string("id"),
                 "Dropping pending block entity that does not match its block"
             );
@@ -1697,6 +1696,15 @@ impl World {
         block_entities.par_chunks(16).for_each(|batch| {
             let _guard = be_handle.enter();
             for be in batch {
+                // Vanilla's ticking wrapper skips a block entity whose block no longer owns
+                // it. Without this, a leftover (say, a daylight detector under a `fill` of
+                // air) reads the new block through its own property type and panics.
+                if !block_owns_block_entity(
+                    self.get_block(&be.get_position()),
+                    be.resource_location(),
+                ) {
+                    continue;
+                }
                 be.tick(self);
             }
         });
