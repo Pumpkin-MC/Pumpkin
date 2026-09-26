@@ -2824,7 +2824,7 @@ mod tests {
     use super::*;
     use pumpkin_data::data_component_impl::{
         BundleContentsImpl, DataComponentImpl, FireworkExplosionImpl, FireworkExplosionShape,
-        FireworksImpl,
+        FireworksImpl, ItemNameImpl,
     };
     use pumpkin_data::item::Item;
     use pumpkin_data::item_stack::ItemStack;
@@ -2908,6 +2908,30 @@ mod tests {
             .and_then(|data| data.as_any().downcast_ref::<CustomNameImpl>())
             .expect("nested item kept its CustomName component");
         assert_eq!(decoded_name.name.clone().get_text(), "Boost");
+    }
+
+    // Regression test for the `ItemNameImpl` decoder itself, through the same dispatch path
+    // production code uses: it must parse the wire NBT compound's `translate` field, not just
+    // happen to work because a round trip shares the same bug between its own encoder and
+    // decoder.
+    #[test]
+    fn item_name_decodes_translate_key_from_nbt() {
+        let name = ItemNameImpl {
+            name: Cow::Owned("item.minecraft.diamond_sword".to_string()),
+        };
+
+        let mut bytes = Vec::new();
+        serialize(DataComponent::ItemName, &name, &mut bytes).expect("serialize ItemName");
+
+        let mut cursor = std::io::Cursor::new(bytes.as_slice());
+        let decoded = deserialize(DataComponent::ItemName, &mut cursor)
+            .expect("deserialize ItemName without desyncing");
+        let decoded = decoded
+            .as_any()
+            .downcast_ref::<ItemNameImpl>()
+            .expect("decoded value is ItemNameImpl");
+
+        assert_eq!(decoded.name, "item.minecraft.diamond_sword");
     }
 
     fn textured_profile() -> ProfileImpl {
