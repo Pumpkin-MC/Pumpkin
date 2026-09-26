@@ -6873,6 +6873,10 @@ impl EntityBase for Player {
         self.gamemode.load() == GameMode::Spectator
     }
 
+    fn can_hit(&self) -> bool {
+        !self.is_spectator() && !self.living_entity.entity.is_removed()
+    }
+
     fn set_on_fire_for_ticks(&self, ticks: u32) {
         let entity = self.get_entity();
         let ticks = if entity.invulnerable.load(Ordering::Relaxed) {

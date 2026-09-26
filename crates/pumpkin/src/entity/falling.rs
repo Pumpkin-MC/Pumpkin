@@ -100,6 +100,11 @@ impl EntityBase for FallingEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
+
+    fn can_hit(&self) -> bool {
+        !self.entity.is_removed()
+    }
+
     fn damage(&self, _caller: &dyn EntityBase, _amount: f32, _damage_type: DamageType) -> bool {
         false
     }
