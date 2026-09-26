@@ -187,21 +187,23 @@ impl PendingConnection {
     }
 
     /// Encoded as 26.3. `ConnectionPacketSentEvent` can rewrite it.
-    pub async fn send_packet_now<P: ClientPacket>(&mut self, packet: &P) {
+    /// `false` when a handler cancelled the packet.
+    pub async fn send_packet_now<P: ClientPacket>(&mut self, packet: &P) -> bool {
         let mut packet_buf = Vec::new();
         if let Err(err) =
             JavaClient::write_packet_for_version(packet, CURRENT_MC_VERSION, &mut packet_buf)
         {
             error!("Failed to write packet: {err:?}");
-            return;
+            return false;
         }
         let Some(payload) = self.translate_outgoing(Bytes::from(packet_buf)).await else {
-            return;
+            return false;
         };
         if let Err(err) = self.network_writer.write_packet(payload).await {
             warn!("Failed to send packet to client {}: {}", self.id, err);
         }
         let _ = self.network_writer.flush().await;
+        true
     }
 
     /// `ConnectionPacketSentEvent` in the server's 26.3 format. `None` when cancelled.

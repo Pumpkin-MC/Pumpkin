@@ -79,8 +79,8 @@ use crate::{error::PumpkinError, server::Server};
 pub struct JavaClient {
     pub id: u64,
     /// The protocol the client speaks. Play packets are always encoded/decoded as
-    /// `CURRENT_MC_VERSION`. Older clients are not admitted; the packet events are the hook
-    /// for a plugin that converts them.
+    /// `CURRENT_MC_VERSION`. Older clients only get in with the `pumpkin-java-multiversion`
+    /// plugin, which converts at `PacketReceivedEvent` / `PacketSentEvent`.
     pub version: AtomicCell<JavaMinecraftVersion>,
     /// The client's game profile information. Direct field (lock-free).
     pub gameprofile: GameProfile,

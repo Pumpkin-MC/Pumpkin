@@ -9,6 +9,14 @@ use tracing::debug;
 use crate::{net::java::pending::PendingConnection, server::Server};
 use std::sync::Arc;
 
+/// Known older Java versions are admitted when the multiversion plugin is loaded.
+pub(super) fn multiversion_admits(server: &Server, version: JavaMinecraftVersion) -> bool {
+    version != JavaMinecraftVersion::Unknown
+        && server
+            .plugin_manager
+            .has_handlers::<crate::plugin::server::packet::ConnectionPacketReceivedEvent>()
+}
+
 impl PendingConnection {
     pub async fn handle_handshake(&mut self, server: &Arc<Server>, handshake: SHandShake) {
         let version = handshake.protocol_version.0 as u32;
@@ -31,7 +39,10 @@ impl PendingConnection {
         }
         if self.connection_state.load() != ConnectionState::Status {
             let protocol = version;
-            if protocol < LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32 {
+            let allows_client =
+                multiversion_admits(server, JavaMinecraftVersion::from_protocol(version));
+
+            if !allows_client && protocol < LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32 {
                 self.kick(TextComponent::translate_cross(
                     translation::java::MULTIPLAYER_DISCONNECT_OUTDATED_CLIENT,
                     translation::bedrock::DISCONNECTIONSCREEN_OUTDATEDCLIENT,

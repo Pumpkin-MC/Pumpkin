@@ -59,14 +59,19 @@ impl LpVector3d {
     }
 
     pub fn read<R: std::io::Read>(reader: &mut R) -> Result<Self, ReadingError> {
-        let mut low_16 = [0u8; 2];
+        let mut first = [0u8; 1];
         reader
-            .read_exact(&mut low_16)
+            .read_exact(&mut first)
             .map_err(|e| ReadingError::Message(e.to_string()))?;
-
-        if low_16[0] == 0 && low_16[1] == 0 {
+        if first[0] == 0 {
             return Ok(Self(Vector3::new(0.0, 0.0, 0.0)));
         }
+
+        let mut second = [0u8; 1];
+        reader
+            .read_exact(&mut second)
+            .map_err(|e| ReadingError::Message(e.to_string()))?;
+        let low_16 = [first[0], second[0]];
 
         let mut mid_32 = [0u8; 4];
         reader
@@ -165,6 +170,16 @@ mod tests {
         let mut buf = Vec::new();
         velocity.write_legacy(&mut buf)?;
         assert_eq!(buf, vec![0x0F, 0xA0, 0xF0, 0x60, 0x00, 0x00]);
+        Ok(())
+    }
+
+    #[test]
+    fn zero_velocity_is_a_single_zero_byte() -> Result<(), Box<dyn std::error::Error>> {
+        let mut buf = Vec::new();
+        LpVector3d(Vector3::new(0.0, 0.0, 0.0)).write(&mut buf)?;
+        assert_eq!(buf, vec![0]);
+        let decoded = LpVector3d::read(&mut buf.as_slice())?;
+        assert_eq!(decoded, LpVector3d(Vector3::new(0.0, 0.0, 0.0)));
         Ok(())
     }
 }
