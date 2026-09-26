@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
-use pumpkin_util::loot_table::{LootBonusFormula, LootCondition};
+use pumpkin_util::loot_table::{LootBonusFormula, LootCondition, LootStateCount};
 use quote::{format_ident, quote};
 use serde::Deserialize;
 use syn::LitStr;
@@ -52,6 +52,10 @@ enum CountStruct {
         min: f32,
         #[serde(default)]
         max: f32,
+        #[serde(default)]
+        n: Option<f32>,
+        #[serde(default)]
+        p: Option<f32>,
     },
 }
 
@@ -298,6 +302,10 @@ struct EntryFunctionStruct {
     #[serde(default)]
     parameters: Option<BonusParameterStruct>,
     count: Option<CountStruct>,
+    #[serde(default)]
+    add: bool,
+    #[serde(default)]
+    condition: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -364,8 +372,25 @@ struct ParsedEntry {
     weight: i32,
     min_count: i32,
     max_count: i32,
+    state_counts: Vec<LootStateCount>,
     condition: LootCondition,
     bonus_formula: Option<LootBonusFormula>,
+    bonus_condition: Option<LootStateCount>,
+}
+
+fn state_count_of(f: &EntryFunctionStruct) -> Option<LootStateCount> {
+    if f.function != "minecraft:set_count" {
+        return None;
+    }
+    let (min, max, p) = match f.count.as_ref()? {
+        CountStruct::Provider { n: Some(n), p, .. } => (0, n.round() as i32, *p),
+        count => (count.min(), count.max(), None),
+    };
+    LootStateCount::parse(f.condition.as_ref(), f.add, min, max, p)
+}
+
+fn state_counts_of(functions: &[EntryFunctionStruct]) -> Vec<LootStateCount> {
+    functions.iter().filter_map(state_count_of).collect()
 }
 
 fn extract_entries(
@@ -403,13 +428,13 @@ fn extract_entries_with_depth(
                 let (min_count, max_count) = entry
                     .functions
                     .iter()
-                    .find(|f| f.function == "minecraft:set_count")
+                    .find(|f| f.function == "minecraft:set_count" && state_count_of(f).is_none())
                     .and_then(|f| f.count.as_ref())
                     .map(|c| (c.min(), c.max()))
                     .unwrap_or((1, 1));
 
-                let bonus_formula = entry.functions.iter().find_map(|f| {
-                    if f.function == "minecraft:apply_bonus" {
+                let bonus = entry.functions.iter().find_map(|f| {
+                    let formula = if f.function == "minecraft:apply_bonus" {
                         match f.formula.as_deref() {
                             Some("minecraft:ore_drops") => Some(LootBonusFormula::OreDrops),
                             Some("minecraft:uniform_bonus_count") => {
@@ -440,7 +465,12 @@ fn extract_entries_with_depth(
                         Some(LootBonusFormula::UniformBonusCount(mult))
                     } else {
                         None
-                    }
+                    };
+                    formula.map(|formula| (formula, f))
+                });
+                let bonus_formula = bonus.map(|(formula, _)| formula);
+                let bonus_condition = bonus.and_then(|(_, f)| {
+                    LootStateCount::parse(f.condition.as_ref(), false, 0, 0, None)
                 });
 
                 out.push(ParsedEntry {
@@ -448,8 +478,10 @@ fn extract_entries_with_depth(
                     weight: entry.weight,
                     min_count,
                     max_count,
+                    state_counts: state_counts_of(&entry.functions),
                     condition: entry_cond,
                     bonus_formula,
+                    bonus_condition,
                 });
             }
         }
@@ -479,8 +511,10 @@ fn extract_entries_with_depth(
                                 weight: entry.weight,
                                 min_count: 1,
                                 max_count: 1,
+                                state_counts: Vec::new(),
                                 condition: entry_cond,
                                 bonus_formula: None,
+                                bonus_condition: None,
                             });
                         }
                     }
@@ -688,6 +722,28 @@ fn emit_table(
                 let max_count = e.max_count;
                 let cond_tokens = condition_to_tokens(e.condition);
                 let bonus_tokens = bonus_to_tokens(e.bonus_formula);
+                let state_count_tokens = |count: &LootStateCount| {
+                    let (block, add) = (count.block.as_ref(), count.add);
+                    let (min, max) = (count.min_count, count.max_count);
+                    let binomial = count
+                        .binomial
+                        .map_or(quote! { None }, |p| quote! { Some(#p) });
+                    let properties = count.properties.iter().map(|(name, value)| {
+                        let (name, value) = (name.as_ref(), value.as_ref());
+                        quote! { (Cow::Borrowed(#name), Cow::Borrowed(#value)) }
+                    });
+                    quote! {
+                        LootStateCount {
+                            block: Cow::Borrowed(#block),
+                            properties: Cow::Borrowed(&[#(#properties),*]),
+                            add: #add, min_count: #min, max_count: #max, binomial: #binomial,
+                        }
+                    }
+                };
+                let state_counts = e.state_counts.iter().map(state_count_tokens);
+                let bonus_condition = e.bonus_condition.as_ref().map(state_count_tokens);
+                let bonus_condition =
+                    bonus_condition.map_or(quote! { None }, |c| quote! { Some(&#c) });
 
                 quote! {
                     LootEntry {
@@ -695,8 +751,10 @@ fn emit_table(
                         weight: #weight,
                         min_count: #min_count,
                         max_count: #max_count,
+                        state_counts: &[#(#state_counts),*],
                         condition: #cond_tokens,
                         bonus_formula: #bonus_tokens,
+                        bonus_condition: #bonus_condition,
                     }
                 }
             })
@@ -816,6 +874,7 @@ pub fn build() -> TokenStream {
     });
 
     quote! {
+        use std::borrow::Cow;
         pub use pumpkin_util::loot_table::*;
         #all_tokens
     }
