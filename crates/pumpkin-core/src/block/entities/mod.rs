@@ -355,6 +355,12 @@ pub fn block_entity_name(block: &Block) -> Option<&'static str> {
         .copied()
 }
 
+/// Whether `block` owns a block entity with `id`, which may omit the `minecraft:` namespace.
+#[must_use]
+pub fn block_owns_block_entity(block: &Block, id: &str) -> bool {
+    block_entity_name(block) == Some(id.strip_prefix("minecraft:").unwrap_or(id))
+}
+
 #[must_use]
 pub fn has_block_block_entity(block: &Block) -> bool {
     BLOCK_ENTITY_TYPES.contains(&block.name)
@@ -476,8 +482,11 @@ pub fn create_block_entity(
 
 #[cfg(test)]
 mod test {
-    use super::{BlockEntity, block_entity_from_nbt, furnace::FurnaceBlockEntity};
-    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use super::{
+        BlockEntity, block_entity_from_nbt, block_owns_block_entity,
+        daylight_detector::DaylightDetectorBlockEntity, furnace::FurnaceBlockEntity,
+    };
+    use pumpkin_data::{Block, item::Item, item_stack::ItemStack};
     use pumpkin_inventory::Inventory;
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
@@ -493,6 +502,23 @@ mod test {
 
         let entity = block_entity_from_nbt(&nbt).map(|entity| entity.resource_location());
         assert_eq!(entity, Some("minecraft:chest"));
+    }
+
+    #[test]
+    fn a_block_entity_is_only_ticked_against_its_own_block() {
+        let detector = DaylightDetectorBlockEntity::new(BlockPos::new(0, 0, 0));
+        let id = detector.resource_location();
+
+        assert!(block_owns_block_entity(&Block::DAYLIGHT_DETECTOR, id));
+        // Air is what a `fill` over the detector leaves behind, and ticking against it
+        // used to read air as daylight detector properties and panic.
+        for block in [&Block::AIR, &Block::STONE, &Block::CHEST] {
+            assert!(
+                !block_owns_block_entity(block, id),
+                "{} should not tick a daylight detector",
+                block.name
+            );
+        }
     }
 
     /// A loaded block entity is serialized back into its chunk with
