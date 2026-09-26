@@ -13,6 +13,7 @@ use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::CSoundEffect;
 use pumpkin_util::GameMode;
 
+use pumpkin_util::Hand;
 pub struct BowItem;
 
 impl ItemMetadata for BowItem {
@@ -22,7 +23,7 @@ impl ItemMetadata for BowItem {
 }
 
 impl ItemBehaviour for BowItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         // Check if player has arrows (or is in creative mode)
         let has_arrows = Self::has_arrows(player);
         let gamemode = player.gamemode.load();

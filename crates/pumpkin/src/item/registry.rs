@@ -57,7 +57,7 @@ impl ItemRegistry {
 
         let pumpkin_item = self.get_pumpkin_item(item.id);
         if let Some(pumpkin_item) = pumpkin_item {
-            pumpkin_item.normal_use_with_hand(item, player, yaw, pitch, hand);
+            pumpkin_item.normal_use_with_rotation(item, player, yaw, pitch, hand);
         }
 
         if let Some(cooldown) = cooldown {
