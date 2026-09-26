@@ -15,12 +15,9 @@ use pumpkin_inventory::{
 };
 use pumpkin_macros::pumpkin_block;
 
-use crate::{
-    block::{
-        BlockBehaviour, BrokenArgs, GetComparatorOutputArgs, GetScreenHandlerFactoryArgs,
-        NormalUseArgs, OnPlaceArgs, PlacedArgs, registry::BlockActionResult,
-    },
-    entity::experience_orb::ExperienceOrbEntity,
+use crate::block::{
+    BlockBehaviour, GetComparatorOutputArgs, GetScreenHandlerFactoryArgs, NormalUseArgs,
+    OnPlaceArgs, PlacedArgs, registry::BlockActionResult,
 };
 
 struct SmokerScreenFactory {
@@ -124,20 +121,6 @@ impl BlockBehaviour for SmokerBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
         let smoker_block_entity = SmokerBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(smoker_block_entity));
-    }
-
-    fn broken(&self, args: BrokenArgs<'_>) {
-        // Extract and drop accumulated XP as orbs before removing the block entity
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(experience_container) = block_entity.to_experience_container()
-        {
-            let xp = experience_container.extract_experience();
-            if xp > 0 {
-                let pos = args.position.to_f64();
-                ExperienceOrbEntity::spawn(args.world, pos, xp as u32);
-            }
-        }
-        args.world.remove_block_entity(args.position);
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {

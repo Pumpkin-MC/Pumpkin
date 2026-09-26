@@ -1,4 +1,6 @@
-use crate::block::entities::{BlockEntity, block_entity_from_nbt};
+use crate::block::entities::{
+    BlockEntity, block_entity_from_nbt, block_entity_name, block_owns_block_entity,
+};
 use dashmap::DashMap;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
@@ -218,6 +220,51 @@ fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Opti
     }
 
     Some(nbt)
+}
+
+fn remove_pending_block_entity(chunk: &ChunkData, position: &BlockPos) -> bool {
+    let removed = chunk
+        .pending_block_entities
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(position)
+        .is_some();
+    if removed {
+        chunk.mark_dirty(true);
+    }
+    removed
+}
+
+fn remove_invalid_pending_block_entities(chunk: &ChunkData) -> Vec<BlockPos> {
+    let mut pending = chunk
+        .pending_block_entities
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let original_len = pending.len();
+    pending.retain(|position, nbt| {
+        let relative = position.chunk_relative_position();
+        let block = chunk
+            .section
+            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
+            .map(Block::from_state_id);
+        let valid = matches!((block, nbt.get_string("id")), (Some(block), Some(id)) if block_owns_block_entity(block, id));
+        if !valid {
+            debug!(
+                ?position,
+                block = ?block.map(|block| block.name),
+                block_entity_id = ?nbt.get_string("id"),
+                "Dropping pending block entity that does not match its block"
+            );
+        }
+        valid
+    });
+    let removed = original_len != pending.len();
+    let positions = pending.keys().copied().collect();
+    drop(pending);
+    if removed {
+        chunk.mark_dirty(true);
+    }
+    positions
 }
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -1649,6 +1696,15 @@ impl World {
         block_entities.par_chunks(16).for_each(|batch| {
             let _guard = be_handle.enter();
             for be in batch {
+                // Vanilla's ticking wrapper skips a block entity whose block no longer owns
+                // it. Without this, a leftover (say, a daylight detector under a `fill` of
+                // air) reads the new block through its own property type and panics.
+                if !block_owns_block_entity(
+                    self.get_block(&be.get_position()),
+                    be.resource_location(),
+                ) {
+                    continue;
+                }
                 be.tick(self);
             }
         });
@@ -5014,11 +5070,10 @@ impl World {
         let is_new_block = old_block != new_block;
         let block_moved = flags.contains(BlockFlags::MOVED);
 
-        if is_new_block
-            && old_block.default_state.block_entity_type != u16::MAX
-            && let Some(entity) = self.get_block_entity(position)
-        {
-            if !flags.contains(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
+        if is_new_block && block_entity_name(old_block).is_some() {
+            if let Some(entity) = self.get_block_entity(position)
+                && !flags.contains(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK)
+            {
                 entity.on_block_replaced(self, position);
             }
             self.remove_block_entity(position);
@@ -6178,20 +6233,27 @@ impl World {
 
     pub fn remove_block_entity(&self, block_pos: &BlockPos) {
         let chunk_pos = block_pos.chunk_position();
-        let removed =
+        let removed_live =
             self.block_entities
                 .get_mut(&chunk_pos)
                 .is_some_and(|mut chunk_block_entities| {
                     chunk_block_entities.remove(block_pos).is_some()
                 });
-        if removed {
-            self.custom_block_entity_data.remove(block_pos);
+        let removed_pending = self
+            .level
+            .read_chunk_sync(&chunk_pos, |chunk| {
+                let removed_pending = remove_pending_block_entity(chunk, block_pos);
+                if removed_live {
+                    chunk.mark_dirty(true);
+                }
+                removed_pending
+            })
+            .unwrap_or(false);
+        self.custom_block_entity_data.remove(block_pos);
+        if removed_live || removed_pending {
             // Drop the chunk's map once its last block entity is gone.
             self.block_entities
                 .remove_if(&chunk_pos, |_, entities| entities.is_empty());
-            self.level.read_chunk_sync(&chunk_pos, |chunk| {
-                chunk.mark_dirty(true);
-            });
         }
     }
 
@@ -6199,13 +6261,7 @@ impl World {
         let positions: Vec<BlockPos> = self
             .level
             .read_chunk_sync(&chunk_pos, |chunk| {
-                chunk
-                    .pending_block_entities
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .keys()
-                    .copied()
-                    .collect()
+                remove_invalid_pending_block_entities(chunk)
             })
             .unwrap_or_default();
         for pos in positions {
@@ -7338,10 +7394,12 @@ mod tests {
     };
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
+    use pumpkin_world::chunk::{ChunkData, io::Dirtiable};
     use uuid::Uuid;
 
     use super::{
         World, bedrock_block_breaking_rate, bedrock_chest_block_actor, merge_entity_records,
+        remove_invalid_pending_block_entities, remove_pending_block_entity,
     };
 
     fn record(uuid: Option<Uuid>, id: &str) -> NbtCompound {
@@ -7447,6 +7505,81 @@ mod tests {
         }
 
         assert_eq!(ids(&data), ["minecraft:piglin"]);
+    }
+
+    fn block_entity_nbt(id: &str, position: BlockPos) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", id.to_string());
+        nbt.put_int("x", position.0.x);
+        nbt.put_int("y", position.0.y);
+        nbt.put_int("z", position.0.z);
+        nbt
+    }
+
+    #[test]
+    fn removing_block_entity_removes_pending_chunk_nbt() {
+        let chunk = ChunkData::empty(0, 0);
+        let position = BlockPos::new(1, 64, 1);
+        chunk
+            .section
+            .set_block_absolute_y(1, 64, 1, Block::CHEST.default_state.id);
+        chunk
+            .pending_block_entities
+            .lock()
+            .unwrap()
+            .insert(position, block_entity_nbt("minecraft:chest", position));
+
+        chunk
+            .section
+            .set_block_absolute_y(1, 64, 1, Block::STONE.default_state.id);
+        assert!(remove_pending_block_entity(&chunk, &position));
+        assert!(chunk.pending_block_entities.lock().unwrap().is_empty());
+        assert!(chunk.is_dirty());
+    }
+
+    #[test]
+    fn migration_drops_pending_block_entities_that_do_not_match_the_block() {
+        let chunk = ChunkData::empty(0, 0);
+        let cases = [
+            (1, &Block::CHEST, "minecraft:chest", true),
+            (2, &Block::CHEST, "chest", true),
+            // Pumpkin keeps bed block entities for Bedrock and older Java clients.
+            (3, &Block::RED_BED, "minecraft:bed", true),
+            (4, &Block::STRAW_BED, "minecraft:bed", true),
+            (5, &Block::STONE, "minecraft:bed", false),
+            (6, &Block::CHEST, "minecraft:beacon", false),
+            (7, &Block::IRON_BLOCK, "minecraft:beacon", false),
+        ];
+        let mut pending = chunk.pending_block_entities.lock().unwrap();
+        for &(x, block, id, _) in &cases {
+            let position = BlockPos::new(x, 64, x);
+            chunk
+                .section
+                .set_block_absolute_y(x as usize, 64, x as usize, block.default_state.id);
+            pending.insert(position, block_entity_nbt(id, position));
+        }
+        drop(pending);
+
+        let positions = remove_invalid_pending_block_entities(&chunk);
+
+        let pending = chunk.pending_block_entities.lock().unwrap();
+        for &(x, block, id, kept) in &cases {
+            let position = BlockPos::new(x, 64, x);
+            assert_eq!(
+                pending.contains_key(&position),
+                kept,
+                "{id} on {}",
+                block.name
+            );
+            assert_eq!(
+                positions.contains(&position),
+                kept,
+                "{id} on {}",
+                block.name
+            );
+        }
+        assert_eq!(positions.len(), pending.len());
+        assert!(chunk.is_dirty());
     }
 
     #[test]
