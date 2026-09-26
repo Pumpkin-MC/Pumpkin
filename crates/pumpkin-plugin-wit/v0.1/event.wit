@@ -4,7 +4,7 @@ interface event {
     use enchantments.{enchantment};
     use damage-types.{damage-type};
     use screens.{screen};
-    use player.{player, java-minecraft-version};
+    use player.{player};
     use text.{text-component};
     use %world.{%world};
     use java-packets.{serverbound-packet as java-serverbound-packet, clientbound-packet as java-clientbound-packet};
@@ -366,38 +366,6 @@ interface event {
     record packet-sent-event-data {
         player: player,
         packet: clientbound-packet,
-        packet-id: s32,
-        raw-payload: list<u8>,
-        cancelled: bool
-    }
-
-    /// Protocol state of a Java connection.
-    enum connection-state {
-        handshake,
-        status,
-        login,
-        transfer,
-        config,
-        play,
-    }
-
-    /// A Java packet before play (no player exists yet). Fired only for clients below the
-    /// server's protocol; ids and payload are the client's.
-    record connection-packet-received-event-data {
-        connection-id: u64,
-        version: java-minecraft-version,
-        state: connection-state,
-        packet-id: s32,
-        raw-payload: list<u8>,
-        cancelled: bool
-    }
-
-    /// A Java packet before play (no player exists yet). Fired only for clients below the
-    /// server's protocol; ids and payload are the server's, rewrite them for the client.
-    record connection-packet-sent-event-data {
-        connection-id: u64,
-        version: java-minecraft-version,
-        state: connection-state,
         packet-id: s32,
         raw-payload: list<u8>,
         cancelled: bool
@@ -2187,8 +2155,6 @@ interface event {
         raid-stop-event,
         raid-trigger-event,
         lightning-strike-event,
-        connection-packet-received-event,
-        connection-packet-sent-event,
     }
 
     variant event {
@@ -2465,7 +2431,5 @@ interface event {
         raid-stop-event(raid-stop-event-data),
         raid-trigger-event(raid-trigger-event-data),
         lightning-strike-event(lightning-strike-event-data),
-        connection-packet-received-event(connection-packet-received-event-data),
-        connection-packet-sent-event(connection-packet-sent-event-data),
     }
 }
