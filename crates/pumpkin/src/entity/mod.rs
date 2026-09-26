@@ -4304,18 +4304,25 @@ impl Entity {
             self.head_yaw.store(yaw);
             self.last_sent_head_yaw.store(yaw_byte, Relaxed);
         }
-        self.fire_ticks
-            .store(i32::from(nbt.get_short("Fire").unwrap_or(0)), Relaxed);
-        self.on_ground
-            .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
-        self.invulnerable
-            .store(nbt.get_bool("Invulnerable").unwrap_or(false), Relaxed);
-        self.portal_cooldown
-            .store(nbt.get_int("PortalCooldown").unwrap_or(0) as u32, Relaxed);
-        self.has_visual_fire
-            .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
-        self.frozen_ticks
-            .store(nbt.get_int("TicksFrozen").unwrap_or(0), Relaxed);
+        // Only keys present are applied, so partial NBT leaves the rest untouched.
+        if let Some(fire) = nbt.get_short("Fire") {
+            self.fire_ticks.store(i32::from(fire), Relaxed);
+        }
+        if let Some(on_ground) = nbt.get_bool("OnGround") {
+            self.on_ground.store(on_ground, Relaxed);
+        }
+        if let Some(invulnerable) = nbt.get_bool("Invulnerable") {
+            self.invulnerable.store(invulnerable, Relaxed);
+        }
+        if let Some(cooldown) = nbt.get_int("PortalCooldown") {
+            self.portal_cooldown.store(cooldown as u32, Relaxed);
+        }
+        if let Some(visual_fire) = nbt.get_bool("HasVisualFire") {
+            self.has_visual_fire.store(visual_fire, Relaxed);
+        }
+        if let Some(frozen) = nbt.get_int("TicksFrozen") {
+            self.frozen_ticks.store(frozen, Relaxed);
+        }
         if let Some(name) = nbt.get("CustomName") {
             // Vanilla stores a text component tag; a string is literal text. Older
             // Pumpkin saves hold a JSON string, so accept a JSON object there too.
@@ -4328,8 +4335,9 @@ impl Entity {
             };
             self.custom_name.store(Arc::new(Some(component)));
         }
-        self.custom_name_visible
-            .store(nbt.get_bool("CustomNameVisible").unwrap_or(false), Relaxed);
+        if let Some(visible) = nbt.get_bool("CustomNameVisible") {
+            self.custom_name_visible.store(visible, Relaxed);
+        }
 
         if let Some(tag_list) = nbt.get_list("Tags") {
             let mut tags = self
