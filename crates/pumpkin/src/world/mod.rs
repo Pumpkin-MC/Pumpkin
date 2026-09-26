@@ -4976,7 +4976,6 @@ impl World {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -4986,25 +4985,66 @@ impl World {
         if !self.is_in_build_limit(*position) {
             return Block::AIR.default_state.id;
         }
-
-        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let replaced_block_state_id = self
-            .level
+            .write_block_state_if(position, block_state_id, |_| true)
+            .unwrap_or(Block::AIR.default_state.id);
+        self.on_block_state_set(position, replaced_block_state_id, block_state_id, flags)
+    }
+
+    /// `set_block_state`, but only when `condition` accepts the current state. The check and
+    /// the write are atomic, so a block another task placed in between is never overwritten.
+    /// Returns the replaced state, or `None` when nothing was written.
+    pub fn set_block_state_if(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        block_state_id: BlockStateId,
+        flags: BlockFlags,
+        condition: impl Fn(BlockStateId) -> bool,
+    ) -> Option<BlockStateId> {
+        if !self.is_in_build_limit(*position) {
+            return None;
+        }
+        let replaced_block_state_id =
+            self.write_block_state_if(position, block_state_id, condition)?;
+        Some(self.on_block_state_set(position, replaced_block_state_id, block_state_id, flags))
+    }
+
+    /// Writes the state into the loaded chunk
+    fn write_block_state_if(
+        &self,
+        position: &BlockPos,
+        block_state_id: BlockStateId,
+        condition: impl Fn(BlockStateId) -> bool,
+    ) -> Option<BlockStateId> {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        self.level
             .read_chunk_sync(&chunk_coordinate, |chunk| {
-                let replaced_block_state_id = chunk.set_block_absolute_y(
+                let replaced_block_state_id = chunk.set_block_absolute_y_if(
                     relative.x as usize,
                     relative.y,
                     relative.z as usize,
                     block_state_id,
-                );
+                    &condition,
+                )?;
                 // Mark chunk dirty if it isn't already
                 if replaced_block_state_id != block_state_id && !chunk.is_dirty() {
                     chunk.mark_dirty(true);
                 }
-                replaced_block_state_id
+                Some(replaced_block_state_id)
             })
-            .unwrap_or(Block::AIR.default_state.id);
+            .flatten()
+    }
 
+    /// Everything `set_block_state` does after the chunk write: callbacks, neighbour updates,
+    /// client sync, POI and lighting.
+    #[expect(clippy::too_many_lines)]
+    fn on_block_state_set(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        replaced_block_state_id: BlockStateId,
+        block_state_id: BlockStateId,
+        flags: BlockFlags,
+    ) -> BlockStateId {
         if !flags.contains(BlockFlags::FORCE_STATE) && replaced_block_state_id == block_state_id {
             return block_state_id;
         }

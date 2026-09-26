@@ -470,6 +470,27 @@ impl ChunkSections {
         relative_z: usize,
         block_state_id: BlockStateId,
     ) -> BlockStateId {
+        self.set_block_if_no_heightmap_update(
+            relative_x,
+            relative_y,
+            relative_z,
+            block_state_id,
+            |_| true,
+        )
+        .unwrap_or(BlockStateId::AIR)
+    }
+
+    /// Like `set_block_no_heightmap_update`, but only sets the block when `condition` accepts
+    /// the current state. The check and the write share one lock, so no other write can land
+    /// in between. Returns the replaced state, or `None` when nothing was written.
+    pub fn set_block_if_no_heightmap_update(
+        &self,
+        relative_x: usize,
+        relative_y: usize,
+        relative_z: usize,
+        block_state_id: BlockStateId,
+        condition: impl FnOnce(BlockStateId) -> bool,
+    ) -> Option<BlockStateId> {
         debug_assert!(relative_x < BlockPalette::SIZE);
         debug_assert!(relative_z < BlockPalette::SIZE);
 
@@ -487,10 +508,13 @@ impl ChunkSections {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         if let Some(section) = sections.get_mut(section_index) {
+            if !condition(section.get(relative_x, relative_y, relative_z)) {
+                return None;
+            }
             let replaced_block_state_id =
                 section.set(relative_x, relative_y, relative_z, block_state_id);
             if replaced_block_state_id == block_state_id {
-                return replaced_block_state_id;
+                return Some(replaced_block_state_id);
             }
 
             if (has_random_ticks(block_state_id) || has_random_ticking_fluid(block_state_id))
@@ -538,9 +562,9 @@ impl ChunkSections {
                     .store(mask, std::sync::atomic::Ordering::Relaxed);
             }
 
-            return replaced_block_state_id;
+            return Some(replaced_block_state_id);
         }
-        BlockStateId::AIR
+        None
     }
 
     pub fn set_relative_biome(
@@ -634,24 +658,39 @@ impl ChunkData {
         relative_z: usize,
         block_state_id: BlockStateId,
     ) -> BlockStateId {
+        self.set_block_absolute_y_if(relative_x, y, relative_z, block_state_id, |_| true)
+            .unwrap_or(Block::AIR.default_state.id)
+    }
+
+    /// Sets the block only when `condition` accepts the current state, atomically.
+    /// Returns the replaced block state ID, or `None` when nothing was written.
+    pub fn set_block_absolute_y_if(
+        &self,
+        relative_x: usize,
+        y: i32,
+        relative_z: usize,
+        block_state_id: BlockStateId,
+        condition: impl FnOnce(BlockStateId) -> bool,
+    ) -> Option<BlockStateId> {
         let min_y = self.section.min_y;
         let y_rel = y - min_y;
         if y_rel < 0 {
-            return Block::AIR.default_state.id;
+            return None;
         }
         let relative_y = y_rel as usize;
 
-        let old = self.section.set_block_no_heightmap_update(
+        let old = self.section.set_block_if_no_heightmap_update(
             relative_x,
             relative_y,
             relative_z,
             block_state_id,
-        );
+            condition,
+        )?;
         if old != block_state_id {
             let state = BlockState::from_id(block_state_id);
             self.update_heightmap(relative_x, relative_y, relative_z, state);
         }
-        old
+        Some(old)
     }
 
     /// Sets multiple blocks in the chunk at absolute Y coordinates in a single batch.
