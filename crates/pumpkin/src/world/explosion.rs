@@ -422,11 +422,8 @@ impl Explosion {
                 entity.get_eye_pos()
             };
             let direction = (dir_pos - self.pos).normalize();
-            // TODO: entity explosion knockback resistance attribute
-            let knockback_resistance = 0.0;
 
-            let knockback_power =
-                (1.0 - distance) * exposure * knockback_multiplier * (1.0 - knockback_resistance);
+            let knockback_power = (1.0 - distance) * exposure * knockback_multiplier;
             let knockback = direction * knockback_power;
             // Vanilla `ServerExplosion.hurtEntities`: creative flyers get no knockback.
             if entity_base
@@ -504,7 +501,6 @@ impl Explosion {
         match self.block_interaction {
             BlockInteraction::Keep => 0,
             BlockInteraction::TriggerBlock => {
-                // TODO: vanilla never calls `wasExploded` here; wind charges prime TNT but keep the block.
                 let blocks = self.get_blocks_to_destroy(world);
                 for (pos, (block, _state)) in &blocks {
                     let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);

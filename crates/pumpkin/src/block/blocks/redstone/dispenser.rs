@@ -579,7 +579,6 @@ impl DispenserBlock {
             return;
         }
 
-        // TODO: 26.3 `SulfurCubeBlockDispenseItemBehavior.dispenseBlock` runs first.
         let _ = item.split(1);
         let target = Self::target_position(ctx);
 

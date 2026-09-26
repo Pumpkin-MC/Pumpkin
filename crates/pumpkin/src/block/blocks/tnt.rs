@@ -72,8 +72,6 @@ impl TNTBlock {
         if !world.level_info.load().game_rules.tnt_explodes {
             return None;
         }
-        // TODO: adventure mode may only prime when the item's `can_break` allows this block.
-
         let mut event = crate::plugin::api::events::block::tnt_prime::TNTPrimeEvent::new(
             *location,
             "REDSTONE".to_string(),
@@ -162,13 +160,11 @@ impl BlockBehaviour for TNTBlock {
             let props = TntLikeProperties::from_state_id(args.state.id);
             if props.r#unstable {
                 // `break_block` already swapped the TNT away, so `prime` would find no TNT here.
-                // TODO: loot ignores `unstable=false`, so this also drops a TNT item.
                 Self::spawn_primed(args.world, args.position);
             }
         }
     }
 
-    // TODO: vanilla also requires `projectile.mayInteract`.
     fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
         if args.projectile.get_entity().is_on_fire() {
             Self::prime(args.world, args.position);
