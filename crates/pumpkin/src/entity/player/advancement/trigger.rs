@@ -273,23 +273,6 @@ impl Player {
                     }
                 }
 
-                if !self.has_advancement(Advancement::NETHER_CREATE_BEACON) {
-                    if self.has_item_in_inventory(&Item::BEACON) {
-                        self.trigger_advancement_criterion(
-                            Advancement::NETHER_CREATE_BEACON,
-                            "beacon",
-                        );
-                    }
-                }
-                if !self.has_advancement(Advancement::NETHER_CREATE_FULL_BEACON) {
-                    if self.has_item_in_inventory(&Item::BEACON) {
-                        self.trigger_advancement_criterion(
-                            Advancement::NETHER_CREATE_FULL_BEACON,
-                            "beacon",
-                        );
-                    }
-                }
-
                 if !self.has_advancement(Advancement::END_ELYTRA) {
                     if self.has_item_in_inventory(&Item::ELYTRA) {
                         self.trigger_advancement_criterion(Advancement::END_ELYTRA, "elytra");
