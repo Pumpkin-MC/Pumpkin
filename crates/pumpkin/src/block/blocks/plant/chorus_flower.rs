@@ -54,7 +54,7 @@ impl BlockBehaviour for ChorusFlowerBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         if !can_survive(args.world.as_ref(), args.position) {
             args.world
-                .break_block(args.position, None, BlockFlags::empty());
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
         }
     }
 

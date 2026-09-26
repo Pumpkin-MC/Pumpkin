@@ -17,6 +17,9 @@ pub struct Enchantment {
     pub anvil_cost: u32,
     /// Tag path (prefixed with `#`) of items that support this enchantment.
     pub supported_items: String,
+    /// Optional tag path (prefixed with `#`) of primary items for enchanting table.
+    #[serde(default)]
+    pub primary_items: Option<String>,
     /// Display name component for this enchantment (typically a translation key).
     pub description: TextComponent,
     /// Optional exclusive-set tag; enchantments in the same set are mutually incompatible.
@@ -1147,6 +1150,20 @@ pub fn build() -> TokenStream {
             }
         };
 
+        let primary_items = if let Some(primary) = &enchantment.primary_items {
+            let ident = format_ident!(
+                "{}",
+                primary
+                    .strip_prefix("#")
+                    .unwrap()
+                    .replace([':', '/'], "_")
+                    .to_uppercase()
+            );
+            quote! { Some(&ItemTag::#ident) }
+        } else {
+            quote! { None }
+        };
+
         if let Some(exclusive_set) = &enchantment.exclusive_set {
             let exclusive_set = format_ident!(
                 "{}",
@@ -1164,6 +1181,7 @@ pub fn build() -> TokenStream {
                     description: #translate,
                     anvil_cost: #anvil_cost,
                     supported_items: &ItemTag::#supported_items,
+                    primary_items: #primary_items,
                     exclusive_set: Some(&EnchantmentTag::#exclusive_set),
                     max_level: #max_level,
                     slots: &[#(#slots),*],
@@ -1188,6 +1206,7 @@ pub fn build() -> TokenStream {
                     registry_key: #raw_name,
                     anvil_cost: #anvil_cost,
                     supported_items: &ItemTag::#supported_items,
+                    primary_items: #primary_items,
                     exclusive_set: None,
                     max_level: #max_level,
                     slots: &[#(#slots),*],
@@ -1213,6 +1232,8 @@ pub fn build() -> TokenStream {
         use crate::item::Item;
         use crate::tag::Enchantment as EnchantmentTag;
         use crate::tag::Item as ItemTag;
+        use crate::tag::DamageType as DamageTypeTag;
+        use crate::tag::EntityType as EntityTypeTag;
         use crate::tag::{RegistryKey, Tag, Taggable};
         use crate::data_component_impl::EnchantmentsImpl;
         use pumpkin_util::text::TextComponent;
@@ -1591,6 +1612,7 @@ pub fn build() -> TokenStream {
             pub description: &'static str, // TODO use TextComponent
             pub anvil_cost: u32,
             pub supported_items: &'static Tag,
+            pub primary_items: Option<&'static Tag>,
             pub exclusive_set: Option<&'static Tag>,
             pub max_level: i32,
             pub slots: &'static [AttributeModifierSlot],
@@ -1675,6 +1697,13 @@ pub fn build() -> TokenStream {
 
             pub fn can_enchant(&self, item: &'static Item) -> bool {
                 self.supported_items.1.contains(&item.id)
+            }
+            pub fn is_primary_item(&self, item: &'static Item) -> bool {
+                if let Some(primary) = self.primary_items {
+                    primary.1.contains(&item.id)
+                } else {
+                    self.can_enchant(item)
+                }
             }
             pub fn are_compatible(&self, other: &'static Enchantment) -> bool {
                 if self == other {
@@ -1826,6 +1855,134 @@ pub fn build() -> TokenStream {
 
             pub fn get_location_changed_effects(&self) -> &'static [ConditionalEffect<EnchantmentEntityEffect>] {
                 self.effects.location_changed
+            }
+
+            pub fn get_post_attack_effects(
+                &self,
+            ) -> &'static [TargetedConditionalEffect<EnchantmentEntityEffect>] {
+                self.effects.post_attack
+            }
+
+            pub fn modify_damage_against(
+                &self,
+                level: i32,
+                damage: &mut f64,
+                victim_type: Option<&crate::entity::EntityType>,
+            ) {
+                let is_applicable = if self == &Self::SHARPNESS {
+                    true
+                } else if self == &Self::SMITE {
+                    victim_type.is_some_and(|t| t.has_tag(&EntityTypeTag::MINECRAFT_SENSITIVE_TO_SMITE))
+                } else if self == &Self::BANE_OF_ARTHROPODS {
+                    victim_type.is_some_and(|t| t.has_tag(&EntityTypeTag::MINECRAFT_SENSITIVE_TO_BANE_OF_ARTHROPODS))
+                } else if self == &Self::IMPALING {
+                    victim_type.is_some_and(|t| t.has_tag(&EntityTypeTag::MINECRAFT_SENSITIVE_TO_IMPALING))
+                } else {
+                    false
+                };
+
+                if is_applicable {
+                    self.modify_damage(level, damage);
+                }
+            }
+
+            pub fn modify_damage_protection_against(
+                &self,
+                level: i32,
+                damage_type: &crate::damage::DamageType,
+                protection: &mut f32,
+            ) {
+                let is_applicable = if self == &Self::PROTECTION {
+                    !damage_type.has_tag(&DamageTypeTag::MINECRAFT_BYPASSES_INVULNERABILITY)
+                        && damage_type != &crate::damage::DamageType::STARVE
+                        && damage_type != &crate::damage::DamageType::GENERIC_KILL
+                        && damage_type != &crate::damage::DamageType::OUT_OF_WORLD
+                } else if self == &Self::FIRE_PROTECTION {
+                    damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_FIRE)
+                } else if self == &Self::BLAST_PROTECTION {
+                    damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_EXPLOSION)
+                } else if self == &Self::PROJECTILE_PROTECTION {
+                    damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_PROJECTILE)
+                } else if self == &Self::FEATHER_FALLING {
+                    damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_FALL)
+                } else {
+                    false
+                };
+
+                if is_applicable {
+                    self.modify_damage_protection(level, protection);
+                }
+            }
+
+            pub fn modify_durability_damage(&self, level: i32, is_armor: bool, damage: &mut f32) {
+                if self == &Self::UNBREAKING {
+                    let effect = if is_armor {
+                        self.effects.item_damage.first()
+                    } else {
+                        self.effects.item_damage.get(1).or_else(|| self.effects.item_damage.first())
+                    };
+                    if let Some(effect) = effect {
+                        *damage = effect.effect.process(level, *damage);
+                    }
+                } else {
+                    self.modify_durability_change(level, damage);
+                }
+            }
+        }
+
+        #[cfg(test)]
+        mod tests {
+            use super::*;
+
+            #[test]
+            fn sharpness_damage() {
+                let mut dmg = 0.0;
+                Enchantment::SHARPNESS.modify_damage_against(1, &mut dmg, None);
+                assert_eq!(dmg, 1.0);
+                let mut dmg5 = 0.0;
+                Enchantment::SHARPNESS.modify_damage_against(5, &mut dmg5, None);
+                assert_eq!(dmg5, 3.0);
+            }
+
+            #[test]
+            fn smite_damage() {
+                let mut dmg = 0.0;
+                Enchantment::SMITE.modify_damage_against(1, &mut dmg, Some(&crate::entity::EntityType::ZOMBIE));
+                assert_eq!(dmg, 2.5);
+                let mut dmg_pig = 0.0;
+                Enchantment::SMITE.modify_damage_against(1, &mut dmg_pig, Some(&crate::entity::EntityType::PIG));
+                assert_eq!(dmg_pig, 0.0);
+            }
+
+            #[test]
+            fn protection_absorb() {
+                let mut prot = 0.0;
+                Enchantment::PROTECTION.modify_damage_protection_against(4, &crate::damage::DamageType::GENERIC, &mut prot);
+                assert_eq!(prot, 4.0);
+                let mut fire_prot = 0.0;
+                Enchantment::FIRE_PROTECTION.modify_damage_protection_against(4, &crate::damage::DamageType::IN_FIRE, &mut fire_prot);
+                assert_eq!(fire_prot, 8.0);
+            }
+
+            #[test]
+            fn primary_items() {
+                assert!(Enchantment::SHARPNESS.primary_items.is_some());
+                assert!(Enchantment::SHARPNESS.is_primary_item(&crate::item::Item::DIAMOND_SWORD));
+                assert!(!Enchantment::SHARPNESS.is_primary_item(&crate::item::Item::BOOK));
+            }
+
+            #[test]
+            fn knockback() {
+                let mut kb = 0.0;
+                Enchantment::KNOCKBACK.modify_knockback(2, &mut kb);
+                assert_eq!(kb, 2.0);
+            }
+
+            #[test]
+            fn breach_armor_effectiveness() {
+                let mut eff = 1.0;
+                Enchantment::BREACH.modify_armor_effectiveness(4, &mut eff);
+                assert!((eff - 0.4).abs() < 1e-5);
             }
         }
     }

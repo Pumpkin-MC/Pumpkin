@@ -23,50 +23,9 @@ use crate::entity::{
     player::Player,
 };
 
+use pumpkin_data::frog_variant::FrogVariant;
+
 pub const FROG_FOOD: &[&Item] = &[&Item::SLIME_BALL];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[repr(i32)]
-pub enum FrogVariant {
-    Cold = 0,
-    #[default]
-    Temperate = 1,
-    Warm = 2,
-}
-
-impl FrogVariant {
-    #[must_use]
-    pub const fn from_id(id: i32) -> Self {
-        match id {
-            0 => Self::Cold,
-            2 => Self::Warm,
-            _ => Self::Temperate,
-        }
-    }
-
-    #[must_use]
-    pub const fn id(self) -> i32 {
-        self as i32
-    }
-
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Cold => "minecraft:cold",
-            Self::Temperate => "minecraft:temperate",
-            Self::Warm => "minecraft:warm",
-        }
-    }
-
-    #[must_use]
-    pub fn from_name(s: &str) -> Self {
-        match s {
-            "minecraft:cold" | "cold" => Self::Cold,
-            "minecraft:warm" | "warm" => Self::Warm,
-            _ => Self::Temperate,
-        }
-    }
-}
 
 /// Represents a Frog, an amphibious mob that can eat small slimes and magma cubes.
 ///
@@ -84,7 +43,7 @@ impl FrogEntity {
         let frog = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
-            variant: AtomicI32::new(FrogVariant::Temperate.id()),
+            variant: AtomicI32::new(FrogVariant::Temperate.id() as i32),
             tongue_target_id: AtomicI32::new(-1),
         };
         let mob_arc = Arc::new(frog);
@@ -115,15 +74,15 @@ impl FrogEntity {
 
     #[must_use]
     pub fn get_variant(&self) -> FrogVariant {
-        FrogVariant::from_id(self.variant.load(Ordering::Relaxed))
+        FrogVariant::from_id(self.variant.load(Ordering::Relaxed) as u32)
     }
 
     pub fn set_variant(&self, variant: FrogVariant) {
-        self.variant.store(variant.id(), Ordering::Relaxed);
+        self.variant.store(variant.id() as i32, Ordering::Relaxed);
         let entity = self.get_entity();
         entity.set_synced_data(
             pumpkin_data::tracked_data::frog::VARIANT,
-            VarInt(variant.id()),
+            VarInt(variant.id() as i32),
         );
     }
 }
@@ -151,12 +110,12 @@ impl Mob for FrogEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        nbt.put_string("variant", self.get_variant().as_str().to_string());
+        nbt.put_string("variant", self.get_variant().asset_id().to_string());
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         if let Some(variant_str) = nbt.get_string("variant") {
-            self.set_variant(FrogVariant::from_name(variant_str));
+            self.set_variant(FrogVariant::from_name(variant_str).unwrap_or_default());
         }
     }
 
@@ -165,7 +124,7 @@ impl Mob for FrogEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        self.set_variant(FrogVariant::from_name(name));
+        self.set_variant(FrogVariant::from_name(name).unwrap_or_default());
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
@@ -180,7 +139,7 @@ impl Mob for FrogEntity {
         }
         entity.set_synced_data(
             pumpkin_data::tracked_data::frog::VARIANT,
-            VarInt(self.get_variant().id()),
+            VarInt(self.get_variant().id() as i32),
         );
     }
 

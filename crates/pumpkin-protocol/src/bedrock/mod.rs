@@ -13,5 +13,5 @@ pub enum SubClient {
     Main = 0,
     SubClient0 = 1,
     SubClient1 = 2,
-    SubClietn2 = 3,
+    SubClient2 = 3,
 }
