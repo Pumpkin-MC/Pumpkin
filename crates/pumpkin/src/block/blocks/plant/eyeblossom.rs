@@ -53,7 +53,7 @@ impl BlockBehaviour for EyeblossomBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         if !<Self as PlantBlockBase>::can_place_at(self, args.world.as_ref(), args.position) {
             args.world
-                .break_block(args.position, None, BlockFlags::empty());
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
             return;
         }
 
