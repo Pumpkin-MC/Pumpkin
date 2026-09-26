@@ -323,6 +323,10 @@ impl MapDecorationsImpl {
     }
 }
 impl DataComponentImpl for MapDecorationsImpl {
+    // TAG_End would close the surrounding components compound and corrupt the chunk.
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(NbtCompound::new())
+    }
     default_impl!(MapDecorations);
 }
 
