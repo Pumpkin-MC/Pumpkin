@@ -2560,14 +2560,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
 
     async fn set_flying(&mut self, player: Resource<Player>, flying: bool) -> wasmtime::Result<()> {
         let player = self.get(&player)?;
-        {
-            let mut abilities = player
-                .abilities
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            abilities.flying = flying;
-        };
-        player.send_abilities_update();
+        player.set_flying(flying);
         Ok(())
     }
 
@@ -3963,6 +3956,11 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
                 }
                 pumpkin_protocol::bedrock::client::update_abilities::Ability::Flying => {
                     abilities.flying = value;
+                    // Creative/spectator flight and elytra gliding are mutually exclusive in
+                    // vanilla; see `Player::set_flying`.
+                    if value && player.get_entity().is_fall_flying() {
+                        player.get_entity().set_fall_flying(false);
+                    }
                 }
                 pumpkin_protocol::bedrock::client::update_abilities::Ability::MayFly => {
                     abilities.allow_flying = value;
