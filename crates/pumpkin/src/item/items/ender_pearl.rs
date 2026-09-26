@@ -11,6 +11,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 
+use pumpkin_util::Hand;
 pub struct EnderPearlItem;
 
 impl ItemMetadata for EnderPearlItem {
@@ -25,7 +26,7 @@ const DIVERGENCE: f32 = 1.0;
 const THROW_SOUND_VOLUME: f32 = 0.5;
 
 impl ItemBehaviour for EnderPearlItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let position = player.position();
         let world = player.world();
         world.play_sound_fine(

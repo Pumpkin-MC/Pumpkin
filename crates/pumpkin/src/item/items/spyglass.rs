@@ -5,6 +5,7 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 
+use pumpkin_util::Hand;
 pub struct SpyglassItem;
 
 impl ItemMetadata for SpyglassItem {
@@ -14,7 +15,7 @@ impl ItemMetadata for SpyglassItem {
 }
 
 impl ItemBehaviour for SpyglassItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         player.world().play_sound(
             Sound::ItemSpyglassUse,
             SoundCategory::Players,

@@ -7,6 +7,7 @@ use pumpkin_data::instrument::Instrument;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::SoundCategory;
 
+use pumpkin_util::Hand;
 pub struct GoatHornItem;
 
 impl ItemMetadata for GoatHornItem {
@@ -16,7 +17,7 @@ impl ItemMetadata for GoatHornItem {
 }
 
 impl ItemBehaviour for GoatHornItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let stack = player.inventory().held_item();
         let instrument = stack
             .get_data_component::<CustomDataImpl>()

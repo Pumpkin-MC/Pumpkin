@@ -5,6 +5,7 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::data_component_impl::RecipesImpl;
 use pumpkin_data::item::Item;
 
+use pumpkin_util::Hand;
 pub struct KnowledgeBookItem;
 pub struct DiscFragmentItem;
 
@@ -15,7 +16,7 @@ impl ItemMetadata for KnowledgeBookItem {
 }
 
 impl ItemBehaviour for KnowledgeBookItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let mut held = player.inventory().held_item();
         let mut matched_main = true;
         if held.is_empty() || held.item.id != Item::KNOWLEDGE_BOOK.id {

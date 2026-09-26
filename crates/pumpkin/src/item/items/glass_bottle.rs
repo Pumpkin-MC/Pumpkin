@@ -14,6 +14,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Potion;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockId};
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
@@ -46,7 +47,7 @@ impl ItemMetadata for GlassBottleItem {
 }
 
 impl ItemBehaviour for GlassBottleItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let world = player.world();
         let (start_pos, end_pos) = self.get_start_and_end_pos(player);
         let checker = |pos: &BlockPos, world_inner: &Arc<World>| {

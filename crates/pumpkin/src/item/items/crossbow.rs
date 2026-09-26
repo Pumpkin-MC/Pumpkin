@@ -12,6 +12,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::GameMode;
 
+use pumpkin_util::Hand;
 pub struct CrossbowItem;
 
 impl ItemMetadata for CrossbowItem {
@@ -21,7 +22,7 @@ impl ItemMetadata for CrossbowItem {
 }
 
 impl ItemBehaviour for CrossbowItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let inventory = player.inventory();
         let stack = inventory.held_item();
 

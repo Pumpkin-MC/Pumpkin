@@ -14,6 +14,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
+use pumpkin_util::Hand;
 pub struct FireworkRocketItem;
 
 impl ItemMetadata for FireworkRocketItem {
@@ -49,7 +50,7 @@ impl ItemBehaviour for FireworkRocketItem {
         BlockActionResult::Success
     }
 
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         if player.get_entity().is_fall_flying() {
             let world = player.world();
             let entity = Entity::new(

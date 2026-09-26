@@ -12,6 +12,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 
+use pumpkin_util::Hand;
 pub struct PotionItem;
 pub struct SplashPotionItem;
 pub struct LingeringPotionItem;
@@ -37,7 +38,7 @@ impl ItemMetadata for LingeringPotionItem {
 const POWER: f32 = 0.5;
 
 impl ItemBehaviour for PotionItem {
-    fn normal_use(&self, _item: &Item, _player: &Player) {
+    fn normal_use(&self, _item: &Item, _player: &Player, _hand: Hand) {
         // Drinking is handled by the consumable flow in the server (active hand + consumption tick).
     }
 
@@ -47,7 +48,7 @@ impl ItemBehaviour for PotionItem {
 }
 
 impl ItemBehaviour for SplashPotionItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let position = player.position();
         let world = player.world();
         world.play_sound(
@@ -99,7 +100,7 @@ impl ItemBehaviour for SplashPotionItem {
 }
 
 impl ItemBehaviour for LingeringPotionItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let position = player.position();
         let world = player.world();
         world.play_sound(

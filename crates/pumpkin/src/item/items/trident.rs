@@ -13,6 +13,7 @@ use pumpkin_data::sound::Sound;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::vector3::Vector3;
 
+use pumpkin_util::Hand;
 pub struct TridentItem;
 
 impl ItemMetadata for TridentItem {
@@ -22,7 +23,7 @@ impl ItemMetadata for TridentItem {
 }
 
 impl ItemBehaviour for TridentItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let inventory = player.inventory();
         let stack = inventory.held_item();
 
