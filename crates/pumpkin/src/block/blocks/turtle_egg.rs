@@ -66,7 +66,8 @@ impl TurtleEggBlock {
 
         let props = TurtleEggProperties::from_state_id(state_id);
         if props.eggs <= 1 {
-            world.break_block(pos, None, BlockFlags::empty());
+            // Vanilla destroys the last egg without drops.
+            world.break_block(pos, None, BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS);
         } else {
             let mut new_props = props;
             new_props.eggs -= 1;
@@ -131,7 +132,7 @@ impl BlockBehaviour for TurtleEggBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         if !can_place_at(args.world.as_ref(), args.position) {
             args.world
-                .break_block(args.position, None, BlockFlags::empty());
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
         }
     }
 

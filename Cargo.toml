@@ -8,6 +8,7 @@ members = [
     "crates/pumpkin-command",
     "crates/pumpkin-config",
     "crates/pumpkin-data",
+    "crates/pumpkin-scheduler",
     "crates/pumpkin-gametest",
     "crates/pumpkin-inventory",
     "crates/pumpkin-macros",
@@ -16,7 +17,7 @@ members = [
     "crates/pumpkin-plugin-runtime",
     "crates/pumpkin-plugin-utils",
     "crates/pumpkin-protocol",
-    "crates/pumpkin-util", 
+    "crates/pumpkin-util",
     "crates/pumpkin-host-bindings",
     "crates/pumpkin-world",
     "tools/pumpkin-codegen",
@@ -150,7 +151,7 @@ serde_json = { version = "1.0", default-features = false, features = ["std"] }
 tempfile = { version = "3.27.0", default-features = false }
 proc-macro-error2 = { version = "2", default-features = false }
 aes = { version = "0.9", default-features = false }
-async-compression = { version = "0.4.47", default-features = false }
+async-compression = { version = "0.4.48", default-features = false }
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
 cesu8 = { version = "1.1", default-features = false }
@@ -169,7 +170,7 @@ indexmap = { version = "2.14", default-features = false, features = ["std"] }
 itertools = { version = "0.15.0", default-features = false, features = ["use_std"] }
 libc = { version = "0.2", default-features = false }
 libloading = { version = "0.9", default-features = false, features = ["std"] }
-lru = { version = "0.18.4", default-features = false }
+lru = { version = "0.18.5", default-features = false }
 lz4-java-wrc = { version = "0.2.0", default-features = false, features = ["lz4_flex"] }
 md5 = { version = "0.8", default-features = false }
 num-bigint = { version = "0.5", default-features = false, features = ["std"] }
@@ -195,7 +196,7 @@ pumpkin-util = { path = "crates/pumpkin-util", default-features = false }
 pumpkin-host-bindings = { path = "crates/pumpkin-host-bindings", default-features = false }
 pumpkin-world = { path = "crates/pumpkin-world", default-features = false }
 quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
-rand = { version = "0.10.2", default-features = false, features = ["std", "std_rng", "thread_rng"] }
+rand = { version = "0.10.3", default-features = false, features = ["std", "std_rng", "thread_rng"] }
 rsa = { version = "=0.10.0-rc.18", default-features = false, features = ["std", "encoding"] }
 ed25519-dalek = { version = "3.0", default-features = false, features = ["fast"] }
 hex = { version = "0.4", default-features = false, features = ["std"] }
@@ -230,6 +231,7 @@ xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] 
 wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", rev = "f6b3140dbb1d9b436ef523d14740292c956b0364", default-features = false, features = ["runtime", "component-model", "component-model-async", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
 wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", rev = "f6b3140dbb1d9b436ef523d14740292c956b0364", default-features = false, features = ["p2", "p3"] }
 wasmtime-wasi-http = { git = "https://github.com/bytecodealliance/wasmtime", rev = "f6b3140dbb1d9b436ef523d14740292c956b0364", default-features = false, features = ["p2", "p3", "default-send-request"] }
+
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.11", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }

@@ -1,9 +1,6 @@
 // Last verified for v2169
 
-use std::{
-    io::{Error, Read, Write},
-    str::FromStr,
-};
+use std::{io::Error, str::FromStr};
 
 use pumpkin_macros::packet;
 
@@ -13,7 +10,7 @@ use crate::{
     serial::{PacketRead, PacketWrite},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PacketRead, PacketWrite)]
 #[repr(u8)]
 pub enum AnimateAction {
     NoAction = 0,
@@ -21,26 +18,6 @@ pub enum AnimateAction {
     WakeUp = 3,
     CriticalHit = 4,
     MagicCriticalHit = 5,
-}
-
-impl PacketRead for AnimateAction {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let action = u8::read(reader)?;
-        match action {
-            0 => Ok(Self::NoAction),
-            1 => Ok(Self::SwingArm),
-            3 => Ok(Self::WakeUp),
-            4 => Ok(Self::CriticalHit),
-            5 => Ok(Self::MagicCriticalHit),
-            _ => Err(Error::other(format!("Invalid animate action ID: {action}"))),
-        }
-    }
-}
-
-impl PacketWrite for AnimateAction {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as u8).write(writer)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
