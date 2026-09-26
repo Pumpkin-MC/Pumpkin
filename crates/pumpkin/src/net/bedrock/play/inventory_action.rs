@@ -1,6 +1,7 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use crate::item::registry::should_try_block_placement;
+use pumpkin_protocol::bedrock::server::inventory_transaction::HandSlot;
 
 impl BedrockClient {
     fn correct_rejected_food_use(&self, player: &Player) {
@@ -307,12 +308,16 @@ impl BedrockClient {
                     // Click air / Use item
                     let client_stack = descriptor_to_stack(&data.item_in_hand);
 
-                    let mut held = player.inventory.held_item();
+                    let hand = match data.hand {
+                        HandSlot::Mainhand => Hand::Right,
+                        HandSlot::Offhand => Hand::Left,
+                    };
+                    let mut held = player.inventory().get_stack_in_hand(hand);
                     if !client_stack.is_empty()
                         && (held.is_empty() || held.item.id != client_stack.item.id)
                     {
                         held = client_stack;
-                        player.inventory().set_held_item(held.clone());
+                        player.inventory().set_stack_in_hand(hand, held.clone());
                     }
                     if !held.is_empty() {
                         player.increment_stat(
@@ -366,7 +371,7 @@ impl BedrockClient {
                                     .is_none_or(|food| player.can_eat(food.can_always_eat))
                                 {
                                     player.living_entity.set_active_hand(
-                                        Hand::Right,
+                                        hand,
                                         held.clone(),
                                         held.get_max_use_time(),
                                     );
@@ -407,7 +412,7 @@ impl BedrockClient {
                                         *equip_item = old_held;
                                     }
                                     drop(equipment_guard);
-                                    player.inventory().set_held_item(held.clone());
+                                    player.inventory().set_stack_in_hand(hand, held.clone());
                                 }
                             }
                         }
@@ -417,7 +422,7 @@ impl BedrockClient {
                         &server;
                         event;
                         'after: {
-                            server.item_registry.on_use(&stack_for_use, player);
+                            server.item_registry.on_use(&stack_for_use, player, hand);
                         }
                     }}
                 }

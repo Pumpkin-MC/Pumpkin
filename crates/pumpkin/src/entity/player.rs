@@ -31,7 +31,11 @@ use pumpkin_protocol::bedrock::client::{
 };
 use pumpkin_protocol::bedrock::client::{
     SerializedAbilitiesDataSerializedLayer,
+    add_player::CAddPlayer,
+    common::BuildPlatform,
     move_player::CMovePlayer as CBedrockMovePlayer,
+    player_list::{CPlayerList, PlayerListEntry},
+    set_actor_data::PropertySyncData,
     update_attributes::{
         AttributeData as BedrockAttribute, CUpdateAttributes as CBedrockAttributes,
     },
@@ -1080,6 +1084,73 @@ impl Player {
         }
     }
 
+    /// Bedrock tab-list entry -> carries the skin, so it must precede `AddPlayer`.
+    #[must_use]
+    pub fn bedrock_player_list(&self) -> CPlayerList {
+        CPlayerList {
+            action: CPlayerList::ACTION_ADD,
+            entries: vec![PlayerListEntry {
+                uuid: self.gameprofile.id,
+                entity_unique_id: VarLong(i64::from(self.entity_id())),
+                username: self.gameprofile.name.clone(),
+                xuid: String::new(),
+                platform_chat_id: String::new(),
+                build_platform: BuildPlatform::Unknown,
+                skin: (**self.bedrock_skin.load()).clone(),
+                is_teacher: false,
+                is_host: false,
+                is_sub_client: false,
+                player_color: [0; 4],
+            }],
+        }
+    }
+
+    /// Bedrock remote-player spawn -> the `PlayerList` entry must precede `AddPlayer`.
+    #[must_use]
+    pub fn bedrock_spawn_packets(&self) -> (CPlayerList, CAddPlayer) {
+        let entity = self.get_entity();
+        let entity_id = i64::from(self.entity_id());
+        let profile = &self.gameprofile;
+        let mut entity_data = entity.bedrock_metadata();
+        // name tag only shows on the crosshair without this.
+        entity_data.set(
+            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::ALWAYS_SHOW_NAME_TAG,
+            pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Byte(1),
+        );
+        let add_player = CAddPlayer {
+            uuid: profile.id,
+            player_name: profile.name.clone(),
+            target_runtime_id: VarULong(entity_id as u64),
+            platform_chat_id: String::new(),
+            position: entity.pos.load().to_f32_lossy(),
+            velocity: entity.velocity.load().to_f32_lossy(),
+            rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
+            y_head_rotation: entity.head_yaw.load(),
+            carried_item:
+                pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor::default(),
+            player_game_type: self.gamemode.load().into(),
+            entity_data,
+            synced_properties: PropertySyncData::default(),
+            abilities_data: SerializedAbilitiesData {
+                target_player_raw_id: entity_id,
+                player_permissions: PlayerPermissionLevel::Visitor,
+                command_permissions: CommandPermissionLevel::Any,
+                layers: vec![SerializedAbilitiesDataSerializedLayer {
+                    serialized_layer: 0,
+                    abilities_set: 0,
+                    ability_value: 0,
+                    fly_speed: 0.05,
+                    vertical_fly_speed: 0.05,
+                    walk_speed: 0.1,
+                }],
+            },
+            actor_links: Vec::new(),
+            device_id: String::new(),
+            build_platform: BuildPlatform::Unknown,
+        };
+        (self.bedrock_player_list(), add_player)
+    }
+
     pub const fn inventory(&self) -> &Arc<PlayerInventory> {
         &self.inventory
     }
@@ -1291,40 +1362,14 @@ impl Player {
             }
             if let Some(enchantments) = stack.get_data_component::<EnchantmentsImpl>() {
                 for (enchantment, level) in enchantments.enchantment.iter() {
-                    if **enchantment == Enchantment::SHARPNESS {
-                        extra_ench_damage += 0.5 * f64::from(*level) + 0.5;
-                    } else if **enchantment == Enchantment::SMITE {
-                        let target_type = victim_entity.entity_type.id;
-                        let is_undead = target_type == EntityType::ZOMBIE.id
-                            || target_type == EntityType::DROWNED.id
-                            || target_type == EntityType::HUSK.id
-                            || target_type == EntityType::ZOMBIE_VILLAGER.id
-                            || target_type == EntityType::ZOMBIFIED_PIGLIN.id
-                            || target_type == EntityType::SKELETON.id
-                            || target_type == EntityType::BOGGED.id
-                            || target_type == EntityType::PARCHED.id
-                            || target_type == EntityType::WITHER_SKELETON.id
-                            || target_type == EntityType::STRAY.id
-                            || target_type == EntityType::PHANTOM.id
-                            || target_type == EntityType::WITHER.id
-                            || target_type == EntityType::ZOMBIE_HORSE.id
-                            || target_type == EntityType::SKELETON_HORSE.id;
-                        if is_undead {
-                            extra_ench_damage += 2.5 * f64::from(*level);
-                        }
-                    } else if **enchantment == Enchantment::BANE_OF_ARTHROPODS {
-                        let target_type = victim_entity.entity_type.id;
-                        let is_arthropod = target_type == EntityType::SPIDER.id
-                            || target_type == EntityType::CAVE_SPIDER.id
-                            || target_type == EntityType::SILVERFISH.id
-                            || target_type == EntityType::ENDERMITE.id
-                            || target_type == EntityType::BEE.id;
-                        if is_arthropod {
-                            extra_ench_damage += 2.5 * f64::from(*level);
-                        }
-                    } else if **enchantment == Enchantment::KNOCKBACK {
-                        knockback_level = *level as u32;
-                    }
+                    enchantment.modify_damage_against(
+                        *level,
+                        &mut extra_ench_damage,
+                        Some(victim_entity.entity_type),
+                    );
+                    let mut kb = 0.0f32;
+                    enchantment.modify_knockback(*level, &mut kb);
+                    knockback_level += kb as u32;
                 }
             }
         }
@@ -1373,7 +1418,13 @@ impl Player {
         let is_mace_smash = matches!(attack_type, AttackType::MaceSmash);
         if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
-            damage += 1.5 * f64::from(fall_distance);
+            let mut smash_bonus_per_block = 0.0f64;
+            if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
+                for (enchantment, level) in enchantments.enchantment.iter() {
+                    enchantment.modify_fall_based_damage(*level, &mut smash_bonus_per_block);
+                }
+            }
+            damage += (1.5 + smash_bonus_per_block) * f64::from(fall_distance);
         }
 
         if !victim.damage_with_context(
@@ -1402,8 +1453,16 @@ impl Player {
 
         if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
             for (enchantment, level) in enchantments.enchantment.iter() {
-                if **enchantment == Enchantment::FIRE_ASPECT {
-                    victim_entity.set_on_fire_for_ticks(*level as u32 * 80);
+                for post_effect in enchantment.get_post_attack_effects() {
+                    if post_effect.affected
+                        == Some(pumpkin_data::enchantment::EnchantmentTarget::Victim)
+                        && let pumpkin_data::enchantment::EnchantmentEntityEffect::Ignite {
+                            duration,
+                        } = &post_effect.effect
+                    {
+                        let duration_seconds = duration.calculate(*level);
+                        victim_entity.set_on_fire_for_ticks((duration_seconds * 20.0) as u32);
+                    }
                 }
             }
         }
@@ -1411,6 +1470,18 @@ impl Player {
         if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
             self.living_entity.fall_distance.store(0.0);
+            if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
+                for (enchantment, level) in enchantments.enchantment.iter() {
+                    if **enchantment == Enchantment::WIND_BURST {
+                        let boost_y = 0.5 + 0.25 * (*level as f64);
+                        let vel = self.living_entity.entity.velocity.load();
+                        self.living_entity
+                            .entity
+                            .velocity
+                            .store(Vector3::new(vel.x, boost_y, vel.z));
+                    }
+                }
+            }
             world.play_sound(
                 if fall_distance > 5.0 {
                     Sound::ItemMaceSmashGroundHeavy
@@ -2781,23 +2852,19 @@ impl Player {
                         let world = world.clone();
                         let uuid = self.gameprofile.id;
                         self.spawn_task(async move {
-                            let (positions, chunks): (Vec<_>, Vec<_>) =
-                                chunks.into_iter().map(|c| (c.position, c.chunk)).unzip();
+                            let (deliveries, chunks): (Vec<_>, Vec<_>) = chunks
+                                .into_iter()
+                                .map(|c| ((c.position, c.delivery_token), c.chunk))
+                                .unzip();
                             client.send_chunks(&chunks).await;
                             if let Some(player) = world.get_player_by_uuid(uuid) {
-                                // Hold chunk_sender across check so a concurrent
-                                // change_world_chunks reset can't land between the check and
-                                // mark_delivered.
-                                let mut sender = player
+                                // dispatcher sets a reset or a re-enqueue since then holds a newer token.
+                                let delivered = player
                                     .chunk_sender
                                     .lock()
-                                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                                if player.chunk_send_epoch.load(Ordering::Relaxed) == current_epoch
-                                {
-                                    sender.mark_delivered(&positions);
-                                    drop(sender);
-                                    player.pair_entities_in_chunks(&world, &positions);
-                                }
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                    .mark_delivered(&deliveries);
+                                player.pair_entities_in_chunks(&world, &delivered);
                             }
                         });
                     }
@@ -4040,6 +4107,9 @@ impl Player {
                 player.get_entity().set_rotation(yaw, pitch);
                 player.get_entity().last_pos.store(position);
 
+                // Registered after positioning, so spawns carry the new position.
+                new_world.add_arriving_player(&player);
+
                 self.send_abilities_update();
 
                 self.enqueue_set_held_item_packet(&CSetSelectedSlot::new(
@@ -4050,16 +4120,8 @@ impl Player {
 
                 self.send_health();
 
-                new_world.send_world_info(&player, position, yaw, pitch);
-
-                if let ClientPlatform::Java(java_client) = player.client.as_ref() {
-                    let center_chunk = player.get_entity().chunk_pos.load();
-                    let chunk = new_world
-                        .level
-                        .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
-                        .await;
-                    java_client.send_chunks(&[chunk]).await;
-                }
+                new_world.send_world_info(&player);
+                new_world.send_center_chunk(&player).await;
 
                 player.request_teleport(position, yaw, pitch);
 
@@ -6783,6 +6845,28 @@ impl EntityBase for Player {
 
     fn get_player(&self) -> Option<&Player> {
         Some(self)
+    }
+
+    /// Bedrock renders remote players only from `AddPlayer`, never `AddActor`.
+    fn send_bedrock_spawn_packet(&self, client: &crate::net::bedrock::BedrockClient) {
+        let (player_list, add_player) = self.bedrock_spawn_packets();
+        let equipment = pumpkin_protocol::bedrock::client::CMobEquipment {
+            target_runtime_id: (self.entity_id() as u64).into(),
+            item: (&self.inventory.held_item()).into(),
+            slot: 0,
+            selected_slot: 0,
+            container_id: 0,
+        };
+        for data in [
+            client.serialize_packet(&player_list),
+            client.serialize_packet(&add_player),
+            client.serialize_packet(&equipment),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            client.try_enqueue_packet(data);
+        }
     }
 
     fn is_spectator(&self) -> bool {
