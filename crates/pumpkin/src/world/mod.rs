@@ -3740,34 +3740,41 @@ impl World {
                 )
                 .await;
 
-            let config = existing_player.config.load();
-            let mut buf = Vec::new();
-            {
-                let meta = Metadata::new(
-                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
-                    config.skin_parts,
-                );
-                if let Err(err) = meta.write(&mut buf, &client.version.load()) {
-                    tracing::warn!("Failed to write PLAYER_MODE_CUSTOMISATION metadata: {err}");
-                }
-            };
-            {
-                let meta = Metadata::new(
-                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
-                    config.skin_parts,
-                );
-                if let Err(err) = meta.write(&mut buf, &client.version.load()) {
-                    tracing::warn!("Failed to write PLAYER_MODE_CUSTOMIZATION_ID metadata: {err}");
-                }
-            };
-            drop(config);
-            buf.put_u8(255);
-            client
-                .enqueue_client_packet(&CSetEntityMetadata::new(
-                    existing_player.get_entity().entity_id.into(),
-                    buf.into(),
-                ))
-                .await;
+            // Pre-1.21 clients resolve these tracked-data indices through the v26_2 fallback,
+            // which means something else on those versions; broadcast_skin_parts skips them for
+            // the same reason.
+            if client.version.load() >= JavaMinecraftVersion::V_1_21 {
+                let config = existing_player.config.load();
+                let mut buf = Vec::new();
+                {
+                    let meta = Metadata::new(
+                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
+                        config.skin_parts,
+                    );
+                    if let Err(err) = meta.write(&mut buf, &client.version.load()) {
+                        tracing::warn!("Failed to write PLAYER_MODE_CUSTOMISATION metadata: {err}");
+                    }
+                };
+                {
+                    let meta = Metadata::new(
+                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
+                        config.skin_parts,
+                    );
+                    if let Err(err) = meta.write(&mut buf, &client.version.load()) {
+                        tracing::warn!(
+                            "Failed to write PLAYER_MODE_CUSTOMIZATION_ID metadata: {err}"
+                        );
+                    }
+                };
+                drop(config);
+                buf.put_u8(255);
+                client
+                    .enqueue_client_packet(&CSetEntityMetadata::new(
+                        existing_player.get_entity().entity_id.into(),
+                        buf.into(),
+                    ))
+                    .await;
+            }
 
             {
                 let held_item = existing_player.inventory.held_item();

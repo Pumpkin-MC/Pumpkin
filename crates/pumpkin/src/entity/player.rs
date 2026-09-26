@@ -4518,6 +4518,12 @@ impl Player {
     pub fn set_flying(&self, flying: bool) {
         if flying {
             self.living_entity.fall_distance.store(0.0);
+            // Creative/spectator flight and elytra gliding are mutually exclusive in vanilla; a
+            // player that's mid-glide when flight is enabled shouldn't stay stuck in the glide
+            // pose/motion.
+            if self.get_entity().is_fall_flying() {
+                self.get_entity().set_fall_flying(false);
+            }
         }
         self.abilities
             .lock()
