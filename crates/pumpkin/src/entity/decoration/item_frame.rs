@@ -323,6 +323,10 @@ impl EntityBase for ItemFrameEntity {
         None
     }
 
+    fn can_hit(&self) -> bool {
+        !self.entity.is_removed()
+    }
+
     fn init_data_tracker(&self) {
         let item_serializer = ItemStackSerializer::from(
             self.item_stack
