@@ -129,6 +129,15 @@ impl NeutralMob for IronGolemEntity {
 }
 
 impl Mob for IronGolemEntity {
+    fn can_attack(&self, target: &crate::entity::living::LivingEntity) -> bool {
+        let target_type = target.entity.entity_type;
+        if self.is_player_created() && target_type == &EntityType::PLAYER {
+            return false;
+        }
+        target_type != &EntityType::CREEPER
+            && self.get_mob_entity().living_entity.can_attack(target)
+    }
+
     fn as_neutral(&self) -> Option<&dyn NeutralMob> {
         Some(self)
     }
