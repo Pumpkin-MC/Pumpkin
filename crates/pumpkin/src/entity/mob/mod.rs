@@ -618,13 +618,13 @@ impl MobEntity {
         base_box.expand(attack_range, 0.0, attack_range)
     }
 
-    /// Sunlight at the mob's eye reaches daylight.
+    /// Brightness at the mob's eye (sky and block light) reaches daylight.
     pub fn is_in_daylight(&self) -> bool {
         let entity = &self.living_entity.entity;
         entity
             .world
             .load()
-            .get_sunlight_brightness(&entity.get_eye_pos().to_block_pos())
+            .get_light_level_dependent_magic_value(&entity.get_eye_pos().to_block_pos())
             >= DAYLIGHT_BRIGHTNESS
     }
 

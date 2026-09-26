@@ -27,7 +27,7 @@ pub enum TargetCondition {
 }
 
 impl TargetCondition {
-    /// Checked once per search attempt and every tick the goal continues.
+    /// Checked once per search attempt.
     fn allows_search(self, mob: &dyn Mob) -> bool {
         match self {
             Self::NoDaylight => !mob.get_mob_entity().is_in_daylight(),
@@ -235,8 +235,8 @@ impl Goal for ActiveTargetGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        // Condition holding at start must keep holding. daylight, grudge.
-        if !self.condition.allows_search(mob) {
+        // Grudge must keep holding. Daylight is only checked at start, like vanilla canUse.
+        if self.condition == TargetCondition::AngryAt && !self.condition.allows_search(mob) {
             return false;
         }
         if let Some(target) = mob.get_mob_entity().get_target() {
