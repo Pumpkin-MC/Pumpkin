@@ -2183,3 +2183,24 @@ mod test {
         assert!(click.get_string("value").is_none());
     }
 }
+
+#[cfg(test)]
+mod custom_name_nbt_tests {
+    use super::TextComponent;
+    use pumpkin_nbt::tag::NbtTag;
+
+    #[test]
+    fn plain_string_tag_is_literal_text() {
+        let tag = NbtTag::String("Bob".into());
+        let component = TextComponent::from_nbt(&tag);
+        assert_eq!(component.get_text(), "Bob");
+    }
+
+    #[test]
+    fn plain_text_round_trips_as_string_tag() {
+        let tag = TextComponent::text("Bob")
+            .0
+            .to_nbt_tag_for_version(&crate::version::JavaMinecraftVersion::V_26_3);
+        assert!(matches!(tag, NbtTag::String(ref s) if &**s == "Bob"));
+    }
+}

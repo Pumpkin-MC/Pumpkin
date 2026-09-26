@@ -4236,10 +4236,13 @@ impl Entity {
             nbt.put_bool("HasVisualFire", true);
         }
         nbt.put_int("TicksFrozen", self.frozen_ticks.load(Relaxed));
-        if let Some(custom_name) = &**self.custom_name.load()
-            && let Ok(name_json) = pumpkin_util::serde_json::to_string(custom_name)
-        {
-            nbt.put_string("CustomName", name_json);
+        if let Some(custom_name) = &**self.custom_name.load() {
+            nbt.put(
+                "CustomName",
+                custom_name
+                    .0
+                    .to_nbt_tag_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_3),
+            );
         }
         nbt.put_bool("CustomNameVisible", self.custom_name_visible.load(Relaxed));
 
@@ -4313,9 +4316,16 @@ impl Entity {
             .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
         self.frozen_ticks
             .store(nbt.get_int("TicksFrozen").unwrap_or(0), Relaxed);
-        if let Some(name_json) = nbt.get_string("CustomName")
-            && let Ok(component) = pumpkin_util::serde_json::from_str(name_json)
-        {
+        if let Some(name) = nbt.get("CustomName") {
+            // Vanilla stores a text component tag; a string is literal text. Older
+            // Pumpkin saves hold a JSON string, so accept a JSON object there too.
+            let component = match name {
+                NbtTag::String(json) if json.starts_with('{') => {
+                    pumpkin_util::serde_json::from_str(json)
+                        .unwrap_or_else(|_| TextComponent::from_nbt(name))
+                }
+                _ => TextComponent::from_nbt(name),
+            };
             self.custom_name.store(Arc::new(Some(component)));
         }
         self.custom_name_visible
