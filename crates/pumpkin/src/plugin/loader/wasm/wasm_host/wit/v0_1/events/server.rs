@@ -39,14 +39,11 @@ impl ToFromWasmEvent for PacketReceivedEvent {
             .expect("failed to add player resource");
 
         let packet = match self.player.client.as_ref() {
-            // Typed view is 26.3
-            // for older clients only valid after the multiversion plugin ran.
-            ClientPlatform::Java(_) => generated_packets::deserialize_java_serverbound_packet(
-                self.packet_id,
-                &self.payload,
-                pumpkin_data::packet::CURRENT_MC_VERSION,
-            )
-            .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java),
+            // Packet ids are per connection state. Config `client_information` and play
+            // `accept_teleportation` are both 0, and this event still carries the client's
+            // bytes (the multiversion plugin rewrites id + payload). Typed decode here
+            // panics on `try_into` when the wrong struct is chosen.
+            ClientPlatform::Java(_) => ServerboundPacket::Unknown,
             ClientPlatform::Bedrock(_) => {
                 generated_packets::deserialize_bedrock_serverbound_packet(
                     self.packet_id,

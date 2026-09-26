@@ -23,7 +23,9 @@ pub fn build_java_mapping() -> String {
     output.push_str("    match packet {\n");
 
     let client_states = &["config", "login", "play", "status"];
-    let server_states = &["config", "handshake", "login", "play", "status"];
+    // Play first: packet ids are per state, and `PacketReceivedEvent` is play-only.
+    // Config `client_information` and play `accept_teleportation` both use id 0.
+    let server_states = &["play", "config", "handshake", "login", "status"];
 
     for state in client_states {
         process_packets(
@@ -517,7 +519,20 @@ fn convert_value(
                     }
                 }
             }
-            MappingMode::Deserialize | MappingMode::ToWit => {
+            MappingMode::Deserialize => {
+                if is_slice {
+                    if type_ident == "VarInt" {
+                        format!("{}.iter().map(|v| v.0 as _).collect()", src)
+                    } else {
+                        format!("{}.iter().map(|v| *v as _).collect()", src)
+                    }
+                } else if type_ident == "VarInt" {
+                    format!("{}.0.try_into().ok()?", src)
+                } else {
+                    format!("{}.try_into().ok()?", src)
+                }
+            }
+            MappingMode::ToWit => {
                 if is_slice {
                     if type_ident == "VarInt" {
                         format!("{}.iter().map(|v| v.0 as _).collect()", src)

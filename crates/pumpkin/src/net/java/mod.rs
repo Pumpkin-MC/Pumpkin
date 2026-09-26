@@ -722,21 +722,34 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
-        // The multiversion plugin has converted older clients' packets to 26.3 by now.
+        // Older clients are rewritten in
+        // `PacketReceivedEvent`; CURRENT_MC_VERSION is already in that format.
         let version = CURRENT_MC_VERSION;
 
-        let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
-            player.clone(),
-            packet.id,
-            packet.payload.clone(),
-        );
-        server.plugin_manager.fire_blocking(server, &mut event);
-        if event.cancelled {
-            return Ok(());
+        let mut packet_id = packet.id;
+        let payload_storage;
+        if self.version.load() == CURRENT_MC_VERSION
+            || !server
+                .plugin_manager
+                .has_handlers::<crate::plugin::server::packet::PacketReceivedEvent>()
+        {
+            payload_storage = packet.payload.clone();
+        } else {
+            let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
+                player.clone(),
+                packet.id,
+                packet.payload.clone(),
+            );
+            server.plugin_manager.fire_blocking(server, &mut event);
+            if event.cancelled {
+                return Ok(());
+            }
+            packet_id = event.packet_id;
+            payload_storage = event.payload;
         }
 
-        let mut payload = &event.payload[..];
-        match event.packet_id {
+        let mut payload = &payload_storage[..];
+        match packet_id {
             id if id == SConfirmTeleport::to_id(version) => {
                 self.handle_confirm_teleport(
                     player,
@@ -1206,7 +1219,7 @@ impl JavaClient {
                 self.handle_configuration_acknowledged(player);
             }
             _ => {
-                warn!("Failed to handle player packet id {}", event.packet_id);
+                warn!("Failed to handle player packet id {packet_id}");
             }
         }
         Ok(())
