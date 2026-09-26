@@ -69,7 +69,7 @@ impl BlockBehaviour for LayeredSnowBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         if !can_place_at(args.world.as_ref(), args.position) {
             args.world
-                .break_block(args.position, None, BlockFlags::empty());
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
         }
     }
 
@@ -78,7 +78,7 @@ impl BlockBehaviour for LayeredSnowBlock {
         // e.g. from a nearby torch.
         if args.world.get_block_light_level(args.position).unwrap_or(0) > 11 {
             args.world
-                .break_block(args.position, None, BlockFlags::empty());
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
         }
     }
 
