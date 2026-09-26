@@ -2489,7 +2489,7 @@ impl DataComponentCodec<Self> for LodestoneTrackerImpl {
 
 impl DataComponentCodec<Self> for ProfileImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(1))?;
+        seq.write_bool(false)?;
         if let Some(name) = &self.name {
             seq.write_bool(true)?;
             seq.write_string(name)?;
@@ -2547,11 +2547,11 @@ impl DataComponentCodec<Self> for ProfileImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let either = seq.get_var_int()?.0;
+        let full_profile = seq.get_bool()?;
         let mut name = None;
         let mut id = None;
         let mut properties = Vec::new();
-        if either == 0 {
+        if full_profile {
             let uuid = seq.get_uuid()?;
             let u = uuid.as_u128();
             id = Some([
@@ -2802,5 +2802,67 @@ impl DataComponentCodec<Self> for BreakSoundImpl {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let _ = seq.get_var_int()?;
         Ok(Self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn textured_profile() -> ProfileImpl {
+        ProfileImpl {
+            name: Some("Notch".to_string()),
+            properties: vec![ProfileProperty {
+                name: "textures".to_string(),
+                value: "eyJ0ZXh0dXJlcyI6e319".to_string(),
+                signature: None,
+            }],
+            ..Default::default()
+        }
+    }
+
+    /// The wire form vanilla expects for `textured_profile`.
+    fn textured_profile_bytes() -> Vec<u8> {
+        let mut bytes = vec![
+            0, // partial profile tag
+            1, 5, // name present, 5 bytes
+        ];
+        bytes.extend_from_slice(b"Notch");
+        bytes.push(0); // no id
+        bytes.push(1); // one property
+        bytes.push(8); // property name, 8 bytes
+        bytes.extend_from_slice(b"textures");
+        bytes.push(20); // property value, 20 bytes
+        bytes.extend_from_slice(b"eyJ0ZXh0dXJlcyI6e319");
+        bytes.push(0); // no signature
+        bytes.extend_from_slice(&[0, 0, 0, 0]); // no texture, cape, elytra, model
+        bytes
+    }
+
+    #[test]
+    fn partial_profile_is_written_with_a_false_tag() {
+        let mut encoded = Vec::new();
+        textured_profile().serialize(&mut encoded).unwrap();
+        assert_eq!(encoded, textured_profile_bytes());
+    }
+
+    #[test]
+    fn partial_profile_is_read_as_name_then_id() {
+        let decoded = ProfileImpl::deserialize(&mut textured_profile_bytes().as_slice()).unwrap();
+        assert_eq!(decoded, textured_profile());
+    }
+
+    #[test]
+    fn full_profile_is_read_as_id_then_name() {
+        let id = uuid::Uuid::from_u128(0x0000_0001_0000_0002_0000_0003_0000_0004);
+        let mut encoded = vec![1];
+        encoded.extend_from_slice(id.as_bytes());
+        encoded.push(5);
+        encoded.extend_from_slice(b"Notch");
+        encoded.extend_from_slice(&[0, 0, 0, 0, 0]);
+
+        let decoded = ProfileImpl::deserialize(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded.name.as_deref(), Some("Notch"));
+        assert_eq!(decoded.id, Some([1, 2, 3, 4]));
     }
 }
