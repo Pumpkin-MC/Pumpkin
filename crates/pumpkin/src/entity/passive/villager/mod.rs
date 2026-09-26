@@ -606,7 +606,7 @@ impl VillagerEntity {
 
         let world = self.get_entity().world.load().clone();
         let generator = world.level.world_gen();
-        let target = find_nearest_structure_start(
+        let (target, _) = find_nearest_structure_start(
             self.get_entity().block_pos.load(),
             StructureSet::get(structure_set)?,
             &[structure],
