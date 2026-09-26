@@ -23,8 +23,8 @@ fn main() {
         _ => "unknown".to_string(),
     };
 
-    println!("cargo::rerun-if-changed=../.git/HEAD");
-    println!("cargo::rerun-if-changed=../.git/refs/heads/");
+    println!("cargo::rerun-if-changed=../../.git/HEAD");
+    println!("cargo::rerun-if-changed=../../.git/refs/heads/");
     println!("cargo::rustc-env=GIT_HASH={git_hash_short}");
     println!("cargo::rustc-env=GIT_HASH_FULL={git_hash_full}");
 }
