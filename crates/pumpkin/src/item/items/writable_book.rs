@@ -4,8 +4,7 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::COpenBook;
+use pumpkin_util::Hand;
 
 pub struct WritableBookItem;
 
@@ -16,8 +15,22 @@ impl ItemMetadata for WritableBookItem {
 }
 
 impl ItemBehaviour for WritableBookItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
-        player.try_send_client_packet(&COpenBook::new(VarInt(0)));
+    fn normal_use_with_hand(
+        &self,
+        item: &Item,
+        player: &Player,
+        _yaw: f32,
+        _pitch: f32,
+        hand: Hand,
+    ) {
+        // The client opens a book and quill by itself when the player uses it.
+        // Sending the open-book packet for it makes the client open the book
+        // again and it lands in the read-only view, where nothing can be
+        // written. A signed book is not opened by the client, so the server has
+        // to send the packet for that one.
+        if item.id == Item::WRITTEN_BOOK.id {
+            player.open_book(hand);
+        }
         player.world().play_sound(
             Sound::ItemBookPageTurn,
             SoundCategory::Players,
