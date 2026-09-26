@@ -29,6 +29,13 @@ pub struct FireworkRocketEntity {
 
 impl FireworkRocketEntity {
     pub fn new(entity: Entity) -> Self {
+        Self::new_with_item(entity, ItemStack::new(1, &Item::FIREWORK_ROCKET))
+    }
+
+    /// Same as [`Self::new`], but rendering the specific item stack the rocket was created from
+    /// (so a rocket with custom fireworks data shows the right explosion trail) and without an
+    /// owning shooter entity, for a rocket that wasn't thrown by anyone (e.g. dispensed).
+    pub fn new_with_item(entity: Entity, item_stack: ItemStack) -> Self {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
 
         entity.set_velocity(Vector3::new(
@@ -47,7 +54,7 @@ impl FireworkRocketEntity {
             life: 0.into(),
             life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32)
                 .into(),
-            item_stack: RwLock::new(ItemStack::new(1, &Item::FIREWORK_ROCKET)),
+            item_stack: RwLock::new(item_stack),
         }
     }
 

@@ -33,18 +33,22 @@ impl ItemBehaviour for FireworkRocketItem {
         &self,
         item: &mut ItemStack,
         player: &Player,
-        _location: BlockPos,
-        _face: BlockDirection,
-        _cursor_pos: Vector3<f32>,
+        location: BlockPos,
+        face: BlockDirection,
+        cursor_pos: Vector3<f32>,
         _block: &Block,
         _server: &Server,
     ) -> BlockActionResult {
         let world = player.world();
-        let entity = Entity::new(
-            world.clone(),
-            player.get_entity().pos.load(),
-            &EntityType::FIREWORK_ROCKET,
+        // The exact click point, nudged just outside the clicked face so the rocket doesn't
+        // spawn embedded in the block.
+        let face_offset = face.to_offset();
+        let hit_pos = Vector3::new(
+            f64::from(location.0.x) + f64::from(cursor_pos.x) + f64::from(face_offset.x) * 0.001,
+            f64::from(location.0.y) + f64::from(cursor_pos.y) + f64::from(face_offset.y) * 0.001,
+            f64::from(location.0.z) + f64::from(cursor_pos.z) + f64::from(face_offset.z) * 0.001,
         );
+        let entity = Entity::new(world.clone(), hit_pos, &EntityType::FIREWORK_ROCKET);
         let entity =
             FireworkRocketEntity::new_shot_with_item(entity, player.get_entity(), item.clone());
         world.spawn_entity(Arc::new(entity));
