@@ -9,6 +9,15 @@ use tracing::debug;
 use crate::{net::java::pending::PendingConnection, server::Server};
 use std::sync::Arc;
 
+/// Older known versions are let in while the multiversion plugin is loaded (it hooks
+/// `PacketReceivedEvent`).
+pub(super) fn multiversion_admits(server: &Server, version: JavaMinecraftVersion) -> bool {
+    version != JavaMinecraftVersion::Unknown
+        && server
+            .plugin_manager
+            .has_handlers::<crate::plugin::server::packet::PacketReceivedEvent>()
+}
+
 impl PendingConnection {
     pub async fn handle_handshake(&mut self, server: &Arc<Server>, handshake: SHandShake) {
         let version = handshake.protocol_version.0 as u32;
@@ -31,12 +40,8 @@ impl PendingConnection {
         }
         if self.connection_state.load() != ConnectionState::Status {
             let protocol = version;
-            let has_packet_plugin = server
-                .plugin_manager
-                .has_handlers::<crate::plugin::server::packet::PacketReceivedEvent>(
-            );
-            let allows_client = has_packet_plugin
-                && JavaMinecraftVersion::from_protocol(version) != JavaMinecraftVersion::Unknown;
+            let allows_client =
+                multiversion_admits(server, JavaMinecraftVersion::from_protocol(version));
 
             if !allows_client && protocol < LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32 {
                 self.kick(TextComponent::translate_cross(

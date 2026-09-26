@@ -1,14 +1,13 @@
-use pumpkin_protocol::java::client::play::{
-    CChunkBatchEnd, CChunkBatchStart, CLightUpdate, CPlayDisconnect,
-};
+use pumpkin_protocol::java::client::play::{CChunkBatchEnd, CChunkBatchStart, CPlayDisconnect};
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use std::{collections::VecDeque, io::Write, sync::Arc};
+use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::server::play::{
     SAttack, SBlockEntityTagQuery, SBundleItemSelected, SChangeDifficulty, SChangeGameMode,
@@ -28,15 +27,14 @@ use pumpkin_protocol::java::server::play::{
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
-    ClientPacket, ConnectionState, MAX_PACKET_SIZE, PacketDecodeError, PacketEncodeError,
-    RawPacket, ServerPacket,
+    ClientPacket, ConnectionState, PacketDecodeError, RawPacket, ServerPacket,
     codec::var_int::VarInt,
     java::{
         client::{config::CConfigDisconnect, login::CLoginDisconnect},
         packet_decoder::TCPNetworkDecoder,
         packet_encoder::TCPNetworkEncoder,
     },
-    ser::{NetworkWriteExt, WritingError},
+    ser::{NetworkReadExt, NetworkWriteExt, WritingError},
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -46,7 +44,7 @@ use tokio::{
     sync::oneshot,
 };
 use tokio::{
-    sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError},
+    sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
@@ -56,12 +54,17 @@ use tracing::{debug, error, warn};
 pub mod chunk_data;
 pub mod handshake;
 pub mod login;
+mod outgoing;
 pub mod pending;
 pub mod play;
 pub mod recipe_helper;
 pub mod status;
 
 pub use chunk_data::{CChunkData, ChunkLightExt};
+use outgoing::{
+    BarrierPlacement, DISCONNECT_FLUSH_TIMEOUT, OUTGOING_QUEUE_CAPACITY, OutgoingPacket, TickFlush,
+    run_outgoing_packet_writer,
+};
 
 use arc_swap::ArcSwap;
 use pending::PendingConnection;
@@ -73,10 +76,14 @@ use crate::net::{
 };
 use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
+use crate::plugin::server::packet::PacketSentEvent;
 use crate::{error::PumpkinError, server::Server};
 
 pub struct JavaClient {
     pub id: u64,
+    /// The protocol the client speaks. Play packets are always encoded/decoded as
+    /// `CURRENT_MC_VERSION`; older clients only get in with the `pumpkin-java-multiversion`
+    /// plugin, which converts at `PacketReceivedEvent` / `PacketSentEvent`.
     pub version: AtomicCell<JavaMinecraftVersion>,
     /// The client's game profile information. Direct field (lock-free).
     pub gameprofile: GameProfile,
@@ -97,15 +104,10 @@ pub struct JavaClient {
     rt_handle: tokio::runtime::Handle,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
-    /// A normal-priority queue of serialized packets to send to the network.
-    outgoing_packet_queue_send: UnboundedSender<OutgoingPacket>,
-    /// A normal-priority queue of serialized packets to send to the network.
-    outgoing_packet_queue_recv: Option<UnboundedReceiver<OutgoingPacket>>,
-    /// A high-priority queue of serialized packets to send to the network.
-    outgoing_packet_priority_send: UnboundedSender<OutgoingPacket>,
-    /// A high-priority queue of serialized packets to send to the network.
-    outgoing_packet_priority_recv: Option<UnboundedReceiver<OutgoingPacket>>,
-    /// Tracks total buffered payload bytes in the outgoing queues.
+    /// Per-connection FIFO of serialized packets (vanilla Netty eventLoop).
+    outgoing_packet_queue_send: Sender<OutgoingPacket>,
+    outgoing_packet_queue_recv: Option<Receiver<OutgoingPacket>>,
+    /// Tracks total buffered payload bytes in the outgoing queue.
     pub pending_bytes: Arc<AtomicUsize>,
     /// The packet encoder for outgoing packets.
     network_writer: std::sync::Mutex<Option<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
@@ -131,99 +133,10 @@ pub struct JavaClient {
     pub packet_sequence: AtomicI32,
     /// Packet rate limiter for incoming client packets.
     pub packet_limiter: PacketRateLimiter,
-}
-
-pub enum OutgoingPacketType {
-    Normal,
-    HighPriority,
-}
-
-struct OutgoingPacket {
-    data: Bytes,
-    completion: Option<oneshot::Sender<()>>,
-}
-
-const MAX_FRAME_BATCH_DATA_SIZE: usize = MAX_PACKET_SIZE as usize;
-
-fn take_frame_batch(packets: &mut VecDeque<OutgoingPacket>) -> Vec<OutgoingPacket> {
-    let mut batch = Vec::new();
-    let mut data_len = 0usize;
-
-    while let Some(packet) = packets.pop_front() {
-        let next_len = data_len.saturating_add(packet.data.len());
-        if !batch.is_empty() && next_len > MAX_FRAME_BATCH_DATA_SIZE {
-            packets.push_front(packet);
-            break;
-        }
-
-        data_len = next_len;
-        batch.push(packet);
-    }
-
-    batch
-}
-
-fn frame_packet_batch(
-    mut writer: TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
-    batch: &[OutgoingPacket],
-) -> (
-    TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
-    Vec<u8>,
-    Option<PacketEncodeError>,
-) {
-    let mut frame = Vec::new();
-    let mut frame_err = None;
-    for packet in batch {
-        if let Err(err) = writer.frame_packet(&packet.data, &mut frame) {
-            frame_err = Some(err);
-            break;
-        }
-    }
-    (writer, frame, frame_err)
-}
-
-async fn frame_batch_maybe_offload(
-    writer: TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
-    packet_batch: Vec<OutgoingPacket>,
-) -> Result<
-    (
-        TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
-        Vec<OutgoingPacket>,
-        Vec<u8>,
-        Option<PacketEncodeError>,
-    ),
-    tokio::task::JoinError,
-> {
-    let needs_offload = packet_batch
-        .iter()
-        .any(|packet| writer.is_compressing_packet(&packet.data));
-
-    if needs_offload {
-        tokio::task::spawn_blocking(move || {
-            let (writer, frame, frame_err) = frame_packet_batch(writer, &packet_batch);
-            (writer, packet_batch, frame, frame_err)
-        })
-        .await
-    } else {
-        let (writer, frame, frame_err) = frame_packet_batch(writer, &packet_batch);
-        Ok((writer, packet_batch, frame, frame_err))
-    }
-}
-
-impl OutgoingPacket {
-    const fn normal(data: Bytes) -> Self {
-        Self {
-            data,
-            completion: None,
-        }
-    }
-
-    const fn high_priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
-        Self {
-            data,
-            completion: Some(completion),
-        }
-    }
+    /// Vanilla `suspendFlushingOnServerThread`.
+    suspend_flushing: Arc<AtomicBool>,
+    /// Tick-end `flushChannel` if `try_send(Flush)` hits a full FIFO.
+    tick_flush: TickFlush,
 }
 
 impl JavaClient {
@@ -233,8 +146,7 @@ impl JavaClient {
         gameprofile: GameProfile,
         config: PlayerConfig,
     ) -> Self {
-        let (send, recv) = tokio::sync::mpsc::unbounded_channel();
-        let (priority_send, priority_recv) = tokio::sync::mpsc::unbounded_channel();
+        let (send, recv) = tokio::sync::mpsc::channel(OUTGOING_QUEUE_CAPACITY);
 
         Self {
             id: pending.id,
@@ -248,8 +160,6 @@ impl JavaClient {
             rt_handle: tokio::runtime::Handle::current(),
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Some(recv),
-            outgoing_packet_priority_send: priority_send,
-            outgoing_packet_priority_recv: Some(priority_recv),
             pending_bytes: Arc::new(AtomicUsize::new(0)),
             version: pending.version,
             network_writer: std::sync::Mutex::new(Some(pending.network_writer)),
@@ -264,6 +174,30 @@ impl JavaClient {
             pending_keep_alives: std::sync::Mutex::new(Vec::new()),
             packet_sequence: AtomicI32::new(-1),
             packet_limiter: pending.packet_limiter,
+            suspend_flushing: Arc::new(AtomicBool::new(false)),
+            tick_flush: TickFlush::new(),
+        }
+    }
+
+    /// Vanilla `ServerCommonPacketListenerImpl.suspendFlushing`.
+    pub fn suspend_flushing(&self) {
+        self.suspend_flushing.store(true, Ordering::Release);
+    }
+
+    /// Vanilla `resumeFlushing`: queue `flushChannel` then lift the hold.
+    pub fn resume_flushing(&self) {
+        let placement = self
+            .tick_flush
+            .place_barrier(&self.outgoing_packet_queue_send);
+        self.suspend_flushing.store(false, Ordering::Release);
+
+        // Outside the admission lock: `close` must not run under it.
+        if placement == BarrierPlacement::Closed && !self.close_token.is_cancelled() {
+            warn!(
+                "Failed to queue tick flush for client {}: channel closed",
+                self.id
+            );
+            self.close();
         }
     }
 
@@ -421,45 +355,18 @@ impl JavaClient {
             let mut serialized = Vec::with_capacity(valid_chunks.len());
             for chunk in valid_chunks {
                 let mut buf = Vec::with_capacity(32 * 1024);
-                if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(version))) {
+                if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(CURRENT_MC_VERSION)))
+                {
                     error!("Failed to write chunk data id: {err:?}");
                     continue;
                 }
-                if let Err(err) = CChunkData(&chunk).write_packet_data(&mut buf, &version) {
+                if let Err(err) =
+                    CChunkData(&chunk).write_packet_data(&mut buf, &CURRENT_MC_VERSION)
+                {
                     error!("Failed to write chunk data: {err:?}");
                     continue;
                 }
-
-                let light_buf = if version >= JavaMinecraftVersion::V_1_14
-                    && version < JavaMinecraftVersion::V_1_18
-                {
-                    match CLightUpdate::from_chunk(&chunk, version) {
-                        Ok(light_packet) => {
-                            let mut light_buf = Vec::new();
-                            if let Err(err) =
-                                light_buf.write_var_int(&VarInt(CLightUpdate::to_id(version)))
-                            {
-                                error!("Failed to write light update id: {err:?}");
-                                None
-                            } else if let Err(err) =
-                                light_packet.write_packet_data(&mut light_buf, &version)
-                            {
-                                error!("Failed to write light update data: {err:?}");
-                                None
-                            } else {
-                                Some(Bytes::from(light_buf))
-                            }
-                        }
-                        Err(err) => {
-                            error!("Failed to create light update packet: {err:?}");
-                            None
-                        }
-                    }
-                } else {
-                    None
-                };
-
-                serialized.push((Bytes::from(buf), light_buf));
+                serialized.push(Bytes::from(buf));
             }
             let _ = tx.send(serialized);
         });
@@ -476,13 +383,9 @@ impl JavaClient {
             self.send_packet(&CChunkBatchStart).await;
         }
 
-        // Keep the whole batch on the priority queue. Otherwise the batch end can overtake chunk
-        // data queued on the normal channel, leaving the client unable to render those chunks.
-        for (chunk_data, light_data) in serialized {
+        // One FIFO per connection: batch start/data/end stay in enqueue order.
+        for chunk_data in serialized {
             self.send_packet_now_data(chunk_data).await;
-            if let Some(light_data) = light_data {
-                self.send_packet_now_data(light_data).await;
-            }
         }
 
         if version >= JavaMinecraftVersion::V_1_20_2 {
@@ -491,28 +394,44 @@ impl JavaClient {
         }
     }
 
-    #[allow(clippy::unused_async)]
     pub async fn enqueue_packet(&self, packet_data: Bytes) {
-        self.try_enqueue_packet_data(packet_data);
+        self.enqueue_packet_data(packet_data).await;
     }
 
-    #[allow(clippy::unused_async)]
+    /// Awaits a full FIFO instead of dropping the packet.
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
-        self.try_enqueue_packet_data(packet_data);
-    }
-
-    pub fn try_enqueue_packet(&self, packet_data: Bytes) {
-        self.try_enqueue_packet_data(packet_data);
-    }
-
-    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
-        if self.close_token.is_cancelled() {
+        let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data) else {
             return;
+        };
+
+        // Reserve first: capacity wait must not hold the admission lock.
+        match self.outgoing_packet_queue_send.reserve().await {
+            Ok(permit) => self
+                .tick_flush
+                .admit(permit, OutgoingPacket::normal(packet_data)),
+            Err(err) => {
+                decrement_pending_bytes(&self.pending_bytes, packet_len);
+                // This is expected to fail if we are closed
+                if !self.close_token.is_cancelled() {
+                    warn!(
+                        "Failed to add packet to the outgoing packet queue for client {}: {}",
+                        self.id, err
+                    );
+                    // Connection to the client closed since the stream is in an unknown state
+                    self.close();
+                }
+            }
         }
+    }
 
-        // TODO: `PacketSentEvent` hook (outbound choke point): gate `has_handlers` + non-current
-        // version, split id VarInt, `fire_blocking`, re-frame id + payload, drop if cancelled.
+    /// Outbound choke point of all enqueue/send paths. `None` when the packet must be dropped.
+    fn reserve_pending_bytes(&self, packet_data: Bytes) -> Option<(Bytes, usize)> {
+        if self.close_token.is_cancelled() {
+            return None;
+        }
+        let packet_data = self.translate_outgoing(packet_data)?;
 
+        // Reserve first, release again if it does not fit.
         let packet_len = packet_data.len();
         let prev_bytes = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
         let new_bytes = prev_bytes.saturating_add(packet_len);
@@ -526,23 +445,77 @@ impl JavaClient {
                 );
                 self.close();
             }
-            return;
+            return None;
         }
 
-        if let Err(err) = self
-            .outgoing_packet_queue_send
-            .send(OutgoingPacket::normal(packet_data))
-        {
-            decrement_pending_bytes(&self.pending_bytes, packet_len);
-            // This is expected to fail if we are closed
-            if !self.close_token.is_cancelled() {
-                warn!(
-                    "Failed to add packet to the outgoing packet queue for client {}: {}",
-                    self.id, err
-                );
-                // We now need to close the connection to the client since the stream is in an
-                // unknown state
-                self.close();
+        Some((packet_data, packet_len))
+    }
+
+    /// `PacketSentEvent` for clients the multiversion plugin admitted below
+    /// `CURRENT_MC_VERSION`: it gets the 26.3 id + payload and rewrites both.
+    /// `None` when cancelled.
+    fn translate_outgoing(&self, packet_data: Bytes) -> Option<Bytes> {
+        if self.version.load() == CURRENT_MC_VERSION {
+            return Some(packet_data);
+        }
+        // TODO: packets sent before `set_player` (e.g. an `add_player` kick) go out untranslated.
+        let player = self.player.load_full();
+        let Some(player) = player.as_ref() else {
+            return Some(packet_data);
+        };
+        let Some(server) = player.world().server.upgrade() else {
+            return Some(packet_data);
+        };
+        if !server.plugin_manager.has_handlers::<PacketSentEvent>() {
+            return Some(packet_data);
+        }
+
+        let mut reader = &packet_data[..];
+        let Ok(packet_id) = reader.get_var_int() else {
+            return Some(packet_data);
+        };
+        let payload = packet_data.slice(packet_data.len() - reader.len()..);
+        let mut event = PacketSentEvent::new_raw(player.clone(), packet_id.0, payload);
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        if event.cancelled {
+            return None;
+        }
+
+        let mut framed = Vec::with_capacity(5 + event.payload.len());
+        framed.write_var_int(&VarInt(event.packet_id)).ok()?;
+        framed.extend_from_slice(&event.payload);
+        Some(framed.into())
+    }
+
+    pub fn try_enqueue_packet(&self, packet_data: Bytes) {
+        self.try_enqueue_packet_data(packet_data);
+    }
+
+    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data) else {
+            return;
+        };
+
+        match self.outgoing_packet_queue_send.try_reserve() {
+            Ok(permit) => self
+                .tick_flush
+                .admit(permit, OutgoingPacket::normal(packet_data)),
+            Err(err) => {
+                decrement_pending_bytes(&self.pending_bytes, packet_len);
+                let reason = match err {
+                    // Vanilla queues without a limit, so a backlog disconnects instead of desyncing.
+                    tokio::sync::mpsc::error::TrySendError::Full(()) => "channel full",
+                    tokio::sync::mpsc::error::TrySendError::Closed(()) => "channel closed",
+                };
+                // Both are expected to fail if we are closed
+                if !self.close_token.is_cancelled() {
+                    warn!(
+                        "Failed to add packet to the outgoing packet queue for client {}: {}",
+                        self.id, reason
+                    );
+                    // Connection to the client closed since the stream is in an unknown state
+                    self.close();
+                }
             }
         }
     }
@@ -576,9 +549,11 @@ impl JavaClient {
         }
     }
 
-    pub fn try_kick(&self, reason: &TextComponent) {
-        let serialized = match self.connection_state.load() {
+    /// Disconnect packet for the current state. `None` in handshake/status.
+    fn serialize_disconnect(&self, reason: &TextComponent) -> Option<Bytes> {
+        match self.connection_state.load() {
             ConnectionState::Login => {
+                // TextComponent implements Serialize and writes in bytes instead of String, that's the reason we only use content
                 let packet = CLoginDisconnect::new(
                     serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
                 );
@@ -594,14 +569,38 @@ impl JavaClient {
                 self.serialize_packet(&packet).ok()
             }
             _ => None,
-        };
+        }
+    }
 
-        if let Some(data) = serialized {
+    pub fn try_kick(&self, reason: &TextComponent) {
+        if let Some(data) = self
+            .serialize_disconnect(reason)
+            .and_then(|data| self.translate_outgoing(data))
+        {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
-            let _ = self
-                .outgoing_packet_priority_send
-                .send(OutgoingPacket::normal(data));
+            match self.outgoing_packet_queue_send.try_reserve() {
+                // The writer drains and flushes it after `close()`
+                Ok(permit) => self.tick_flush.admit(permit, OutgoingPacket::normal(data)),
+                Err(err) => {
+                    decrement_pending_bytes(&self.pending_bytes, packet_len);
+                    match err {
+                        tokio::sync::mpsc::error::TrySendError::Full(()) => {
+                            warn!(
+                                "Disconnect packet for client {} dropped: outgoing packet queue full",
+                                self.id
+                            );
+                        }
+                        // Expected: the writer task is already gone.
+                        tokio::sync::mpsc::error::TrySendError::Closed(()) => {
+                            debug!(
+                                "Disconnect packet for client {} dropped: outgoing packet queue closed",
+                                self.id
+                            );
+                        }
+                    }
+                }
+            }
         }
         let reason_text = reason.clone().get_text();
         warn!("Closing connection for {}: {reason_text}", self.id);
@@ -613,22 +612,13 @@ impl JavaClient {
     }
 
     pub async fn kick_explicit(&self, reason: &TextComponent, send_packet: bool) {
-        if send_packet {
-            match self.connection_state.load() {
-                ConnectionState::Login => {
-                    // TextComponent implements Serialize and writes in bytes instead of String, that's the reason we only use content
-                    self.send_packet(&CLoginDisconnect::new(
-                        serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
-                    ))
-                    .await;
-                }
-                ConnectionState::Config => {
-                    self.send_packet(&CConfigDisconnect::new(&reason.clone().get_text()))
-                        .await;
-                }
-                ConnectionState::Play => self.send_packet(&CPlayDisconnect::new(reason)).await,
-                _ => {}
-            }
+        if send_packet && let Some(data) = self.serialize_disconnect(reason) {
+            // Stalled peer: never flushes -> Close anyway.
+            let _ = tokio::time::timeout(
+                DISCONNECT_FLUSH_TIMEOUT,
+                self.send_and_wait(data, OutgoingPacket::flushed),
+            )
+            .await;
         }
         let reason_text = reason.clone().get_text();
         warn!("Closing connection for {}: {reason_text}", self.id);
@@ -639,47 +629,41 @@ impl JavaClient {
         self.send_packet_now_data(packet).await;
     }
 
+    /// Enqueue on the per-connection FIFO and wait until the writer has
+    /// `write_frame`d into the `BufWriter`. Never waits for a TCP flush.
     pub async fn send_packet_now_data(&self, packet: Bytes) {
-        if self.close_token.is_cancelled() {
+        self.send_and_wait(packet, OutgoingPacket::high_priority)
+            .await;
+    }
+
+    /// Enqueue and wait for the writer's completion, `Framed` or `Flushed` per `make`.
+    async fn send_and_wait(
+        &self,
+        packet: Bytes,
+        make: fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket,
+    ) {
+        let Some((packet, packet_len)) = self.reserve_pending_bytes(packet) else {
             return;
-        }
-
-        // TODO: `PacketSentEvent` hook, as in `try_enqueue_packet_data` (async `fire`).
-
-        let packet_len = packet.len();
-        let prev_bytes = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
-        let new_bytes = prev_bytes.saturating_add(packet_len);
-
-        if new_bytes > MAX_PENDING_BYTES {
-            decrement_pending_bytes(&self.pending_bytes, packet_len);
-            if !self.close_token.is_cancelled() {
-                warn!(
-                    "Client {} outbound packet buffer overflow ({} bytes > {} bytes). Closing connection.",
-                    self.id, new_bytes, MAX_PENDING_BYTES
-                );
-                self.close();
-            }
-            return;
-        }
+        };
 
         let (completion_tx, completion_rx) = oneshot::channel();
 
-        if let Err(err) = self
-            .outgoing_packet_priority_send
-            .send(OutgoingPacket::high_priority(packet, completion_tx))
-        {
-            decrement_pending_bytes(&self.pending_bytes, packet_len);
-            // It is expected that the packet will fail if we are closed
-            if !self.close_token.is_cancelled() {
-                warn!(
-                    "Failed to add high-priority packet to the outgoing packet queue for client {}: {}",
-                    self.id, err
-                );
-                // We now need to close the connection to the client since the stream is in an
-                // unknown state
-                self.close();
+        // Reserve first: capacity wait must not hold the admission lock.
+        match self.outgoing_packet_queue_send.reserve().await {
+            Ok(permit) => self.tick_flush.admit(permit, make(packet, completion_tx)),
+            Err(err) => {
+                decrement_pending_bytes(&self.pending_bytes, packet_len);
+                // It is expected that the packet will fail if closed
+                if !self.close_token.is_cancelled() {
+                    warn!(
+                        "Failed to add packet to the outgoing packet queue for client {}: {}",
+                        self.id, err
+                    );
+                    // Connection to the client closed since the stream is in an unknown state
+                    self.close();
+                }
+                return;
             }
-            return;
         }
 
         if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
@@ -696,7 +680,6 @@ impl JavaClient {
         pumpkin_protocol::java::packet_encoder::write_packet(packet, &version, write)
     }
 
-    // TODO: translator active -> `CURRENT_MC_VERSION` (multiversion plugin parses 26.3).
     pub fn serialize_packet_for_version<P: ClientPacket>(
         packet: &P,
         version: JavaMinecraftVersion,
@@ -705,7 +688,7 @@ impl JavaClient {
     }
 
     pub fn serialize_packet<P: ClientPacket>(&self, packet: &P) -> Result<Bytes, WritingError> {
-        Self::serialize_packet_for_version(packet, self.version.load())
+        Self::serialize_packet_for_version(packet, CURRENT_MC_VERSION)
     }
 
     pub fn try_send_packet<P: ClientPacket>(&self, packet: &P) {
@@ -731,7 +714,7 @@ impl JavaClient {
         packet: &P,
         write: impl Write,
     ) -> Result<(), WritingError> {
-        Self::write_packet_for_version(packet, self.version.load(), write)
+        Self::write_packet_for_version(packet, CURRENT_MC_VERSION, write)
     }
 
     /// Handles an incoming packet, routing it to the appropriate handler based on the current connection state.
@@ -743,19 +726,13 @@ impl JavaClient {
     /// - **Status:** Handles status request and ping packets.
     /// - **Login/Transfer:** Handles login and transfer packets.
     /// - **Config:** Handles configuration packets.
-    #[expect(clippy::too_many_lines)]
     pub fn start_outgoing_packet_task(&mut self) {
-        const MAX_BATCH_SIZE: usize = 64;
-
-        let Some(mut packet_receiver) = self.outgoing_packet_queue_recv.take() else {
-            return;
-        };
-        let Some(mut priority_packet_receiver) = self.outgoing_packet_priority_recv.take() else {
+        let Some(packet_receiver) = self.outgoing_packet_queue_recv.take() else {
             return;
         };
         let close_token = self.close_token.clone();
         let pending_bytes = self.pending_bytes.clone();
-        let Some(mut writer) = self
+        let Some(writer) = self
             .network_writer
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -764,102 +741,19 @@ impl JavaClient {
             return;
         };
         let id = self.id;
+        let suspend_flushing = self.suspend_flushing.clone();
+        let tick_flush = self.tick_flush.clone();
         self.spawn_task(async move {
-            loop {
-                let recv_result = tokio::select! {
-                    biased;
-                    res = priority_packet_receiver.recv() => res,
-                    res = packet_receiver.recv() => res,
-                    () = close_token.cancelled() => {
-                        priority_packet_receiver
-                            .try_recv()
-                            .ok()
-                            .or_else(|| packet_receiver.try_recv().ok())
-                    }
-                };
-
-                let Some(packet_data) = recv_result else {
-                    break;
-                };
-
-                let mut packet_batch = Vec::with_capacity(MAX_BATCH_SIZE);
-                packet_batch.push(packet_data);
-
-                while packet_batch.len() < MAX_BATCH_SIZE {
-                    match priority_packet_receiver.try_recv() {
-                        Ok(packet_data) => {
-                            packet_batch.push(packet_data);
-                            continue;
-                        }
-                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => {}
-                    }
-
-                    match packet_receiver.try_recv() {
-                        Ok(packet_data) => packet_batch.push(packet_data),
-                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => break,
-                    }
-                }
-
-                let mut packets_to_frame = VecDeque::from(packet_batch);
-                let mut written_packets = Vec::with_capacity(packets_to_frame.len());
-                let mut send_failed = false;
-
-                while !packets_to_frame.is_empty() {
-                    let frame_batch = take_frame_batch(&mut packets_to_frame);
-                    let (returned_writer, returned_batch, frame, frame_err) =
-                        match frame_batch_maybe_offload(writer, frame_batch).await {
-                            Ok(result) => result,
-                            Err(err) => {
-                                if !close_token.is_cancelled() {
-                                    warn!("Packet framing task failed for client {id}: {err}");
-                                }
-                                close_token.cancel();
-                                return;
-                            }
-                        };
-                    writer = returned_writer;
-
-                    if let Some(err) = frame_err {
-                        if !close_token.is_cancelled() {
-                            warn!("Failed to frame packet for client {id}: {err}");
-                        }
-                        send_failed = true;
-                        break;
-                    }
-
-                    if let Err(err) = writer.write_frame(&frame).await {
-                        if !close_token.is_cancelled() {
-                            warn!("Failed to send packet batch to client {id}: {err}");
-                        }
-                        send_failed = true;
-                        break;
-                    }
-
-                    written_packets.extend(returned_batch);
-                }
-
-                if !send_failed && let Err(err) = writer.flush().await {
-                    if !close_token.is_cancelled() {
-                        warn!("Failed to flush packet batch for client {id}: {err}");
-                    }
-                    send_failed = true;
-                }
-
-                let flushed_bytes: usize = written_packets.iter().map(|p| p.data.len()).sum();
-                decrement_pending_bytes(&pending_bytes, flushed_bytes);
-
-                if send_failed {
-                    // We now need to close the connection to the client since the stream is in an unknown state.
-                    close_token.cancel();
-                    break;
-                }
-
-                for packet in written_packets {
-                    if let Some(completion) = packet.completion {
-                        let _ = completion.send(());
-                    }
-                }
-            }
+            run_outgoing_packet_writer(
+                packet_receiver,
+                writer,
+                close_token,
+                suspend_flushing,
+                tick_flush,
+                pending_bytes,
+                id,
+            )
+            .await;
         });
     }
 
@@ -872,6 +766,7 @@ impl JavaClient {
     /// # Notes
     ///
     /// This function does not attempt to send any disconnect packets to the client.
+    /// Packets already queued are still written and flushed, bounded by `DISCONNECT_FLUSH_TIMEOUT`.
     pub fn close(&self) {
         self.close_token.cancel();
     }
@@ -887,7 +782,8 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
-        let version = self.version.load();
+        // The multiversion plugin has converted older clients' packets to 26.3 by now.
+        let version = CURRENT_MC_VERSION;
 
         let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
             player.clone(),

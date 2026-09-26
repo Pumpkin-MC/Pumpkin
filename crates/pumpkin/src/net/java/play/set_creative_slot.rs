@@ -14,7 +14,7 @@ impl JavaClient {
         let valid_slot = packet.slot >= 1 && packet.slot as usize <= 45;
         let item_stack = packet
             .clicked_item
-            .to_stack_for_version(&self.version.load());
+            .to_stack_for_version(&pumpkin_data::packet::CURRENT_MC_VERSION);
         let mut creative_event =
             crate::plugin::api::events::inventory::inventory_creative::InventoryCreativeEvent::new(
                 player.clone(),

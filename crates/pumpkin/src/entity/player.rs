@@ -3166,11 +3166,7 @@ impl Player {
         packet_id: i32,
         payload: Bytes,
     ) -> PacketSentEvent {
-        // This is a dummy object to satisfy the non-optional requirement in WIT
-        // In the future we should make all packets 'static or have a way to represent raw packets in WIT
-        struct RawPacket;
-
-        let mut event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(RawPacket));
+        let mut event = PacketSentEvent::new_raw(self.clone(), packet_id, payload);
         if let Some(server) = self.world().server.upgrade() {
             server.plugin_manager.fire(&server, &mut event).await;
         }
@@ -3644,6 +3640,17 @@ impl Player {
 
         self.client
             .try_enqueue_packet_editioned(&clock_packet, &time_packet);
+    }
+
+    /// Day time for this client, from its own world's `time_of_day`. Bedrock has
+    /// no game-time clock packet, so `CSetTime` carries this instead.
+    #[must_use]
+    pub fn client_time_of_day(&self, world_time_of_day: i64) -> i64 {
+        match self.per_player_time.load() {
+            Some((custom_time, true)) => (world_time_of_day as u64 + custom_time) as i64,
+            Some((custom_time, false)) => custom_time as i64,
+            None => world_time_of_day % 24000,
+        }
     }
 
     pub fn set_player_time(&self, time: u64, relative: bool) {

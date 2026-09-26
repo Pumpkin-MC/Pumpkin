@@ -218,26 +218,27 @@ impl EntityBase for EyeOfEnder {
             client.try_enqueue_packet(data);
         }
 
-        if client.version.load() >= pumpkin_util::version::JavaMinecraftVersion::V_1_21 {
-            let metadata = Metadata::new(
-                pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
-                ItemStackSerializer::from(
-                    self.item_stack
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clone(),
-                ),
+        let metadata = Metadata::new(
+            pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
+            ItemStackSerializer::from(
+                self.item_stack
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone(),
+            ),
+        );
+        let mut data = Vec::new();
+        if metadata
+            .write(&mut data, &pumpkin_data::packet::CURRENT_MC_VERSION)
+            .is_ok()
+        {
+            data.push(255);
+            let meta_packet = pumpkin_protocol::java::client::play::CSetEntityMetadata::new(
+                self.entity.entity_id.into(),
+                data.into(),
             );
-            let mut data = Vec::new();
-            if metadata.write(&mut data, &client.version.load()).is_ok() {
-                data.push(255);
-                let meta_packet = pumpkin_protocol::java::client::play::CSetEntityMetadata::new(
-                    self.entity.entity_id.into(),
-                    data.into(),
-                );
-                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                    client.try_enqueue_packet(meta_data);
-                }
+            if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                client.try_enqueue_packet(meta_data);
             }
         }
     }
