@@ -746,7 +746,7 @@ impl DispenserBlock {
     }
 
     fn dispense_firework_rocket(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
-        let _ = item.split(1);
+        let dispensed_stack = item.split(1);
         let facing = to_normal(ctx.facing);
         // Vanilla spawns fireworks closer to the dispenser face and slightly above center.
         let position = ctx
@@ -755,7 +755,7 @@ impl DispenserBlock {
             .add(&(facing * (0.7 * 0.5125)))
             .add(&Vector3::new(0.0, 0.08, 0.0));
         let entity = Entity::new(ctx.world.clone(), position, &EntityType::FIREWORK_ROCKET);
-        let rocket = FireworkRocketEntity::new(entity);
+        let rocket = FireworkRocketEntity::new_with_item(entity, dispensed_stack);
 
         // `FireworkRocketEntity` does not expose its inner projectile, so replicate
         // `ThrownItemEntity::set_velocity` here.
