@@ -7,7 +7,7 @@ use pumpkin_protocol::{
     Players, Sample, StatusResponse, Version,
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
-use pumpkin_util::text::TextComponent;
+use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 use std::{fs, path::Path};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -91,24 +91,43 @@ impl CachedStatus {
         }
     }
 
-    pub fn get_status_response(&self, client_protocol: i32) -> StatusResponse {
+    /// `admit_known_java` is the same gate as handshake. multiversion plugin
+    /// registered `ConnectionPacketReceivedEvent` handlers, so known Java
+    /// versions can join. The list then shows that range and the client's
+    /// protocol so the entry is not marked incompatible.
+    pub fn get_status_response(
+        &self,
+        client_protocol: i32,
+        admit_known_java: bool,
+    ) -> StatusResponse {
         let mut response = self.status_response.clone();
 
-        let supported_min = LOWEST_SUPPORTED_MC_VERSION.protocol_version();
-        let supported_max = CURRENT_MC_VERSION.protocol_version();
-
-        if client_protocol >= supported_min
-            && client_protocol <= supported_max
-            && let Some(version) = &mut response.version
-        {
-            version.protocol = client_protocol as u32;
+        if let Some(version) = &mut response.version {
+            if admit_known_java {
+                version.name = format!("{}-{CURRENT_MC_VERSION}", JavaMinecraftVersion::V_1_7_2);
+                if JavaMinecraftVersion::from_protocol(client_protocol as u32)
+                    != JavaMinecraftVersion::Unknown
+                {
+                    version.protocol = client_protocol as u32;
+                }
+            } else {
+                let supported_min = LOWEST_SUPPORTED_MC_VERSION.protocol_version();
+                let supported_max = CURRENT_MC_VERSION.protocol_version();
+                if client_protocol >= supported_min && client_protocol <= supported_max {
+                    version.protocol = client_protocol as u32;
+                }
+            }
         }
 
         response
     }
 
-    pub fn get_status_packet(&self, client_protocol: i32) -> CStatusResponse {
-        let response = self.get_status_response(client_protocol);
+    pub fn get_status_packet(
+        &self,
+        client_protocol: i32,
+        admit_known_java: bool,
+    ) -> CStatusResponse {
+        let response = self.get_status_response(client_protocol, admit_known_java);
         let json = serde_json::to_string(&response).unwrap_or_default();
         CStatusResponse::new(json)
     }
