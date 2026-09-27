@@ -78,39 +78,34 @@ fn apply_entity_data(item: &ItemStack, mob: &dyn EntityBase, user: Option<&Playe
 
 pub(crate) fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase, user: Option<&Player>) {
     apply_entity_data(item, mob, user);
-    if let Some(comp) = item.get_data_component::<ChickenVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<FrogVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<WolfVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<CatVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<VillagerVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<FoxVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<MooshroomVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<RabbitVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<PigVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<CowVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<HorseVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<LlamaVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<AxolotlVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<SheepColorImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<ShulkerColorImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<ZombieNautilusVariantImpl>() {
-        mob.set_variant_name(&comp.value);
+    macro_rules! apply_variant {
+        ($($ty:ty),+ $(,)?) => {
+            $(
+                if let Some(comp) = item.get_data_component::<$ty>() {
+                    mob.set_variant_name(&comp.value);
+                    return;
+                }
+            )+
+        };
     }
+    apply_variant!(
+        ChickenVariantImpl,
+        FrogVariantImpl,
+        WolfVariantImpl,
+        CatVariantImpl,
+        VillagerVariantImpl,
+        FoxVariantImpl,
+        MooshroomVariantImpl,
+        RabbitVariantImpl,
+        PigVariantImpl,
+        CowVariantImpl,
+        HorseVariantImpl,
+        LlamaVariantImpl,
+        AxolotlVariantImpl,
+        SheepColorImpl,
+        ShulkerColorImpl,
+        ZombieNautilusVariantImpl,
+    );
 }
 
 /// Finalizes a mob spawned by a spawn egg, then applies the egg's components (vanilla order).
