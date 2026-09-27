@@ -125,24 +125,11 @@ pub struct NormalTransactionData;
 #[derive(Debug, PacketRead)]
 pub struct MismatchTransactionData;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PacketRead)]
 #[repr(u8)]
 pub enum HandSlot {
     Mainhand,
     Offhand,
-}
-
-impl PacketRead for HandSlot {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        match u8::read(reader)? {
-            0 => Ok(Self::Mainhand),
-            1 => Ok(Self::Offhand),
-            value => Err(Error::new(
-                ErrorKind::InvalidData,
-                format!("Invalid hand slot: {value}"),
-            )),
-        }
-    }
 }
 
 #[derive(Debug, PacketRead)]

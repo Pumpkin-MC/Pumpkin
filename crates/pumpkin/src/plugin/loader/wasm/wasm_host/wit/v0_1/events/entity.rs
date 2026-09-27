@@ -153,10 +153,10 @@ impl ToFromWasmEvent for EntityDeathEvent {
 impl ToFromWasmEvent for PlayerDeathEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let death_message = state
-            .add_text_component(self.death_message.clone())
+            .add(self.death_message.clone())
             .expect("failed to add text component resource");
 
         Event::PlayerDeathEvent(PlayerDeathEventData {
@@ -185,7 +185,7 @@ impl ToFromWasmEvent for PlayerDeathEvent {
 impl ToFromWasmEvent for EntitySpawnEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
 
         Event::EntitySpawnEvent(EntitySpawnEventData {
@@ -329,10 +329,7 @@ impl ToFromWasmEvent for crate::plugin::api::events::entity::entity_dismount::En
 
 impl ToFromWasmEvent for crate::plugin::api::events::entity::entity_dye::EntityDyeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = self
-            .player
-            .as_ref()
-            .and_then(|p| state.add_player(p.clone()).ok());
+        let player = self.player.as_ref().and_then(|p| state.add(p.clone()).ok());
         Event::EntityDyeEvent(EntityDyeEventData {
             entity_id: self.entity_id,
             color: format!("{:?}", self.color),
@@ -520,7 +517,7 @@ impl ToFromWasmEvent for crate::plugin::api::events::entity::entity_shoot_bow::E
 impl ToFromWasmEvent for crate::plugin::api::events::entity::entity_tame::EntityTameEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let owner = state
-            .add_player(self.owner.clone())
+            .add(self.owner.clone())
             .expect("failed to add player resource");
         Event::EntityTameEvent(EntityTameEventData {
             entity_id: self.entity_id,
@@ -644,7 +641,7 @@ impl ToFromWasmEvent
 impl ToFromWasmEvent for CreatureSpawnEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::CreatureSpawnEvent(CreatureSpawnEventData {
             entity_id: self.entity_id,
@@ -1336,14 +1333,14 @@ impl ToFromWasmEvent for ItemSpawnEvent {
 impl ToFromWasmEvent for PiglinBarterEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let input_item = state
-            .add_item_stack(Arc::new(Mutex::new(self.input_item.clone())))
+            .add(Arc::new(Mutex::new(self.input_item.clone())))
             .expect("failed to add item stack resource");
         let outcome = self
             .outcome
             .iter()
             .map(|i| {
                 state
-                    .add_item_stack(Arc::new(Mutex::new(i.clone())))
+                    .add(Arc::new(Mutex::new(i.clone())))
                     .expect("failed to add item stack resource")
             })
             .collect();

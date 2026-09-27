@@ -19,7 +19,10 @@ impl PendingConnection {
                         .await;
                     continue;
                 }
-                self.send_packet_now(&CRegistryData::new(&reg.registry_id, &reg.registry_entries))
+                let merged = server
+                    .datapack_manager
+                    .merge_registry_entries(&reg.registry_id, &reg.registry_entries);
+                self.send_packet_now(&CRegistryData::new(&reg.registry_id, &merged))
                     .await;
             }
         }

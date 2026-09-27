@@ -1,7 +1,5 @@
 // Last verified for v2169
 
-use std::io::{Error, Write};
-
 use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
 
@@ -16,15 +14,10 @@ pub struct CSetSpawnPosition {
     pub spawn_block_pos: BlockPos,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
 #[repr(i32)]
+#[serial(varint)]
 pub enum SpawnPositionType {
     PlayerRespawn,
     WorldRespawn,
-}
-
-impl PacketWrite for SpawnPositionType {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        VarInt(*self as i32).write(writer)
-    }
 }
