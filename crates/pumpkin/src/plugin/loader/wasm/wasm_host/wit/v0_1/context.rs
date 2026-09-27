@@ -1722,7 +1722,21 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         name: String,
     ) -> wasmtime::Result<()> {
         let context = self.get(&context)?.clone();
-        context.unregister_command(&name);
+
+        let should_remove = {
+            let dispatcher = context.server.command_dispatcher.load();
+            let primary_name = dispatcher.primary_command_name(&name);
+            if let Some(node_id) = dispatcher.tree.get(&primary_name) {
+                let node = &dispatcher.tree[node_id];
+                self.name.is_some() && node.meta.source.as_deref() == self.name.as_deref()
+            } else {
+                false
+            }
+        };
+
+        if should_remove {
+            context.unregister_command(&name);
+        }
         Ok(())
     }
 
