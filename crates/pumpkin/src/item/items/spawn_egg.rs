@@ -15,6 +15,7 @@ use pumpkin_data::data_component_impl::{
     PigVariantImpl, RabbitVariantImpl, SheepColorImpl, ShulkerColorImpl, VillagerVariantImpl,
     WolfVariantImpl, ZombieNautilusVariantImpl,
 };
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity::entity_from_egg;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
@@ -23,6 +24,7 @@ use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
+use pumpkin_util::permission::PermissionLvl;
 use uuid::Uuid;
 
 pub struct SpawnEggItem;
@@ -33,17 +35,35 @@ impl ItemMetadata for SpawnEggItem {
     }
 }
 
+/// Vanilla's `EntityTypes.OP_ONLY_CUSTOM_DATA`: types whose `entity_data` only a server
+/// operator may set. None of them has a spawn egg today, but a datapack-authored loot table
+/// can still hand out an item with this component, so the gate is checked here too.
+fn only_op_can_set_nbt(entity_type: &EntityType) -> bool {
+    std::ptr::eq(entity_type, &EntityType::FALLING_BLOCK)
+        || std::ptr::eq(entity_type, &EntityType::COMMAND_BLOCK_MINECART)
+        || std::ptr::eq(entity_type, &EntityType::SPAWNER_MINECART)
+}
+
 /// Loads the stack's `entity_data` NBT into the mob. Identity and placement stay as spawned.
-fn apply_entity_data(item: &ItemStack, mob: &dyn EntityBase) {
+///
+/// `user` is the player who caused the spawn, matching vanilla's `updateCustomEntityTag` user
+/// argument; it is `None` for non-player sources such as a dispenser.
+fn apply_entity_data(item: &ItemStack, mob: &dyn EntityBase, user: Option<&Player>) {
     let Some(nbt) = item
         .get_data_component::<EntityDataImpl>()
         .and_then(|comp| comp.nbt.as_ref())
     else {
         return;
     };
+    let entity_type = mob.get_entity().entity_type;
     // Vanilla EntityType.updateCustomEntityTag loads the data only into the type it names.
     if let Some(id) = nbt.get_string("id")
-        && id.strip_prefix("minecraft:").unwrap_or(id) != mob.get_entity().entity_type.resource_name
+        && id.strip_prefix("minecraft:").unwrap_or(id) != entity_type.resource_name
+    {
+        return;
+    }
+    if only_op_can_set_nbt(entity_type)
+        && user.is_none_or(|player| player.permission_lvl.load() != PermissionLvl::Four)
     {
         return;
     }
@@ -56,8 +76,8 @@ fn apply_entity_data(item: &ItemStack, mob: &dyn EntityBase) {
     }
 }
 
-pub(crate) fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase) {
-    apply_entity_data(item, mob);
+pub(crate) fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase, user: Option<&Player>) {
+    apply_entity_data(item, mob, user);
     if let Some(comp) = item.get_data_component::<ChickenVariantImpl>() {
         mob.set_variant_name(&comp.value);
     } else if let Some(comp) = item.get_data_component::<FrogVariantImpl>() {
@@ -94,9 +114,14 @@ pub(crate) fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase) {
 }
 
 /// Finalizes a mob spawned by a spawn egg, then applies the egg's components (vanilla order).
-pub(crate) fn prepare_egg_mob(item: &ItemStack, mob: &Arc<dyn EntityBase>, world: &Arc<World>) {
+pub(crate) fn prepare_egg_mob(
+    item: &ItemStack,
+    mob: &Arc<dyn EntityBase>,
+    world: &Arc<World>,
+    user: Option<&Player>,
+) {
     finalize_spawn(mob, world, None);
-    apply_entity_variant(item, mob.as_ref());
+    apply_entity_variant(item, mob.as_ref(), user);
 }
 
 impl ItemBehaviour for SpawnEggItem {
@@ -131,7 +156,7 @@ impl ItemBehaviour for SpawnEggItem {
             } else {
                 player.inventory.off_hand_item()
             };
-            prepare_egg_mob(&stack, &mob, &world);
+            prepare_egg_mob(&stack, &mob, &world, Some(player));
             world.spawn_entity(mob);
 
             let mut main_hand = player.inventory.held_item();
@@ -210,7 +235,7 @@ impl ItemBehaviour for SpawnEggItem {
 
             mob.get_entity().set_rotation(yaw, 0.0);
 
-            prepare_egg_mob(item, &mob, &world);
+            prepare_egg_mob(item, &mob, &world, Some(player));
 
             world.spawn_entity(mob);
             item.decrement_unless_creative(player.gamemode.load(), 1);
@@ -236,7 +261,7 @@ impl ItemBehaviour for SpawnEggItem {
             }
             mob.get_entity()
                 .set_rotation(rand::random::<f32>() * 360.0, 0.0);
-            apply_entity_variant(item, mob.as_ref());
+            apply_entity_variant(item, mob.as_ref(), Some(player));
             world.spawn_entity(mob);
             item.decrement_unless_creative(player.gamemode.load(), 1);
         }

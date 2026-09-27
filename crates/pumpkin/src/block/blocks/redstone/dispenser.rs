@@ -604,7 +604,8 @@ impl DispenserBlock {
         let mob = from_type(entity_type, spawn_pos, ctx.world, Uuid::new_v4());
         let yaw = wrap_degrees(rng().random::<f32>() * 360.0) % 360.0;
         mob.get_entity().set_rotation(yaw, 0.0);
-        prepare_egg_mob(item, &mob, ctx.world);
+        // A dispenser has no acting player, matching vanilla's null `user` for this source.
+        prepare_egg_mob(item, &mob, ctx.world, None);
 
         ctx.world.spawn_entity(mob);
 
