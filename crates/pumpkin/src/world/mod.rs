@@ -5057,6 +5057,19 @@ impl World {
             new_entities.push(entity.clone());
             new_entities
         });
+        self.add_pending_riders(&entity);
+    }
+
+    /// Adds the riders a mob queued while being finalized (vanilla `addFreshEntityWithPassengers`).
+    fn add_pending_riders(&self, vehicle: &Arc<dyn EntityBase>) {
+        let Some(mob) = vehicle.get_mob() else {
+            return;
+        };
+        for rider in mob.get_mob_entity().take_pending_riders() {
+            rider.init_data_tracker();
+            self.add_entity_silent(rider.clone());
+            vehicle.get_entity().add_passenger(vehicle.clone(), rider);
+        }
     }
 
     pub fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) {
@@ -5104,6 +5117,7 @@ impl World {
             new_entities.push(entity.clone());
             new_entities
         });
+        self.add_pending_riders(&entity);
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase) {

@@ -66,6 +66,7 @@ pub mod shulker;
 pub mod silverfish;
 pub mod skeleton;
 pub mod slime;
+pub mod spawn;
 pub mod spider;
 pub mod sun_burn;
 pub mod vex;
@@ -92,6 +93,7 @@ pub struct MobEntity {
     pub breeding_cooldown: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
     pub persistence_required: AtomicBool,
+    pending_riders: std::sync::Mutex<Vec<Arc<dyn EntityBase>>>,
     mob_flags: AtomicU8,
     last_sent_yaw: AtomicU8,
     last_sent_pitch: AtomicU8,
@@ -181,6 +183,7 @@ impl MobEntity {
             breeding_cooldown: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
             persistence_required: AtomicBool::new(false),
+            pending_riders: std::sync::Mutex::new(Vec::new()),
             mob_flags: AtomicU8::new(0),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -933,9 +936,17 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
-    /// Runs once the mob is in the world, for spawns that vanilla finalizes
-    /// (natural spawns, `/summon` without NBT). Can add riders, effects, etc.
-    fn finalize_spawn(&self, _this: &Arc<dyn EntityBase>, _world: &Arc<World>) {}
+    /// Vanilla `Mob.finalizeSpawn`, run before the mob enters the world on spawns that
+    /// vanilla finalizes. Overrides call `finalize_spawn_base` first. Riders queued with
+    /// `add_pending_rider` are added by the world together with the mob.
+    fn finalize_spawn(
+        &self,
+        _world: &Arc<World>,
+        group_data: Option<spawn::SpawnGroupData>,
+    ) -> Option<spawn::SpawnGroupData> {
+        self.get_mob_entity().finalize_spawn_base();
+        group_data
+    }
 
     fn populate_default_equipment_slots(
         &self,

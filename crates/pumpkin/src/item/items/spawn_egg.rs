@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use crate::entity::EntityBase;
+use crate::entity::mob::spawn::finalize_spawn;
 use crate::entity::player::Player;
 use crate::entity::r#type::from_type;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -84,6 +85,12 @@ pub(crate) fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase) {
     }
 }
 
+/// Finalizes a mob spawned by a spawn egg, then applies the egg's components (vanilla order).
+pub(crate) fn prepare_egg_mob(item: &ItemStack, mob: &Arc<dyn EntityBase>, world: &Arc<World>) {
+    finalize_spawn(mob, world, None);
+    apply_entity_variant(item, mob.as_ref());
+}
+
 impl ItemBehaviour for SpawnEggItem {
     fn normal_use(&self, item: &Item, player: &Player) {
         if let Some(entity_type) = entity_from_egg(item.id) {
@@ -116,7 +123,7 @@ impl ItemBehaviour for SpawnEggItem {
             } else {
                 player.inventory.off_hand_item()
             };
-            apply_entity_variant(&stack, mob.as_ref());
+            prepare_egg_mob(&stack, &mob, &world);
             world.spawn_entity(mob);
 
             let mut main_hand = player.inventory.held_item();
@@ -195,7 +202,7 @@ impl ItemBehaviour for SpawnEggItem {
 
             mob.get_entity().set_rotation(yaw, 0.0);
 
-            apply_entity_variant(item, mob.as_ref());
+            prepare_egg_mob(item, &mob, &world);
 
             world.spawn_entity(mob);
             item.decrement_unless_creative(player.gamemode.load(), 1);

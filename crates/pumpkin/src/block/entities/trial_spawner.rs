@@ -1088,6 +1088,11 @@ impl TrialSpawner {
             return None;
         }
 
+        // TODO: store the spawn data entity NBT and load it into the mob instead of the
+        // baby/slime-size special cases. Vanilla finalizes only when that NBT is just the id.
+        if !is_baby && slime_size.is_none() {
+            crate::entity::mob::spawn::finalize_spawn(&entity, world, None);
+        }
         world.spawn_entity(entity);
 
         let flame_data = i32::from(self.is_ominous);

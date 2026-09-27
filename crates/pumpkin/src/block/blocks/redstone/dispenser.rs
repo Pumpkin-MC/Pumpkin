@@ -40,7 +40,7 @@ use crate::item::items::bucket::{
 use crate::item::items::honeycomb::try_wax_block;
 use crate::item::items::ignite::ignition::Ignition;
 use crate::item::items::minecart::MinecartItem;
-use crate::item::items::spawn_egg::apply_entity_variant;
+use crate::item::items::spawn_egg::prepare_egg_mob;
 use crate::world::World;
 
 use crate::block::entities::dispenser::DispenserBlockEntity;
@@ -599,7 +599,7 @@ impl DispenserBlock {
         let mob = from_type(entity_type, spawn_pos, ctx.world, Uuid::new_v4());
         let yaw = wrap_degrees(rng().random::<f32>() * 360.0) % 360.0;
         mob.get_entity().set_rotation(yaw, 0.0);
-        apply_entity_variant(item, mob.as_ref());
+        prepare_egg_mob(item, &mob, ctx.world);
 
         ctx.world.spawn_entity(mob);
 

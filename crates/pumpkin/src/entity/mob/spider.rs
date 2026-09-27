@@ -19,7 +19,11 @@ use crate::entity::{
         swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity, equipment::RegionalDifficulty},
+    mob::{
+        Mob, MobEntity,
+        equipment::RegionalDifficulty,
+        spawn::{SpawnGroupData, finalize_spawn},
+    },
     r#type::from_type,
 };
 use crate::world::World;
@@ -94,31 +98,41 @@ impl SpiderEntity {
     }
 }
 
-/// Vanilla `Spider.finalizeSpawn`: a skeleton jockey, and on hard difficulty a random effect.
-pub fn finalize_spider_spawn(this: &Arc<dyn EntityBase>, world: &Arc<World>) {
+/// Vanilla `Spider.finalizeSpawn` (also used by the cave spider): a skeleton jockey,
+/// and on hard difficulty a random effect shared by the whole spawn group.
+pub fn finalize_spider_spawn(
+    mob: &MobEntity,
+    world: &Arc<World>,
+    group_data: Option<SpawnGroupData>,
+) -> Option<SpawnGroupData> {
+    mob.finalize_spawn_base();
     let mut rng = rand::rng();
-    let entity = this.get_entity();
+    let entity = &mob.living_entity.entity;
     let pos = entity.pos.load();
 
     if rng.random_range(0..100) == 0 {
         let skeleton = from_type(&EntityType::SKELETON, pos, world, Uuid::new_v4());
         skeleton.get_entity().set_rotation(entity.yaw.load(), 0.0);
-        world.spawn_entity(skeleton.clone());
-        entity.add_passenger(this.clone(), skeleton);
+        finalize_spawn(&skeleton, world, None);
+        mob.add_pending_rider(skeleton);
     }
 
-    let difficulty = RegionalDifficulty::at(world, pos);
-    if difficulty.base_difficulty == Difficulty::Hard
-        && rng.random::<f32>() < 0.1 * difficulty.special_multiplier
-        && let Some(living) = this.get_living_entity()
-    {
-        let effect_type = match rng.random_range(0..5) {
-            0 | 1 => &StatusEffect::SPEED,
-            2 => &StatusEffect::STRENGTH,
-            3 => &StatusEffect::REGENERATION,
-            _ => &StatusEffect::INVISIBILITY,
-        };
-        living.add_effect(Effect {
+    let group_data = group_data.unwrap_or_else(|| {
+        let difficulty = RegionalDifficulty::at(world, pos);
+        let effect = (difficulty.base_difficulty == Difficulty::Hard
+            && rng.random::<f32>() < 0.1 * difficulty.special_multiplier)
+            .then(|| match rng.random_range(0..5) {
+                0 | 1 => &StatusEffect::SPEED,
+                2 => &StatusEffect::STRENGTH,
+                3 => &StatusEffect::REGENERATION,
+                _ => &StatusEffect::INVISIBILITY,
+            });
+        SpawnGroupData::SpiderEffects(effect)
+    });
+
+    let SpawnGroupData::SpiderEffects(effect) = &group_data;
+    if let Some(effect_type) = effect {
+        mob.living_entity.add_effect(Effect {
             effect_type,
             duration: -1,
             amplifier: 0,
@@ -128,11 +142,16 @@ pub fn finalize_spider_spawn(this: &Arc<dyn EntityBase>, world: &Arc<World>) {
             blend: false,
         });
     }
+    Some(group_data)
 }
 
 impl Mob for SpiderEntity {
-    fn finalize_spawn(&self, this: &Arc<dyn EntityBase>, world: &Arc<World>) {
-        finalize_spider_spawn(this, world);
+    fn finalize_spawn(
+        &self,
+        world: &Arc<World>,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        finalize_spider_spawn(&self.mob_entity, world, group_data)
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
