@@ -41,6 +41,12 @@ fn apply_entity_data(item: &ItemStack, mob: &dyn EntityBase) {
     else {
         return;
     };
+    // Vanilla EntityType.updateCustomEntityTag loads the data only into the type it names.
+    if let Some(id) = nbt.get_string("id")
+        && id.strip_prefix("minecraft:").unwrap_or(id) != mob.get_entity().entity_type.resource_name
+    {
+        return;
+    }
     let mut nbt = nbt.clone();
     for key in ["id", "UUID", "Pos"] {
         nbt.child_tags.remove(key);
