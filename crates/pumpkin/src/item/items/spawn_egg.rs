@@ -25,7 +25,6 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
-use pumpkin_util::permission::PermissionLvl;
 use uuid::Uuid;
 
 pub struct SpawnEggItem;
@@ -63,8 +62,19 @@ fn apply_entity_data(item: &ItemStack, mob: &dyn EntityBase, user: Option<&Playe
     {
         return;
     }
+    // Vanilla PlayerList.isOp: any ops list entry, whatever its level.
     if only_op_can_set_nbt(entity_type)
-        && user.is_none_or(|player| player.permission_lvl.load() != PermissionLvl::Four)
+        && !user.is_some_and(|player| {
+            player.world().server.upgrade().is_some_and(|server| {
+                server
+                    .data
+                    .operator_config
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get_entry(&player.gameprofile.id)
+                    .is_some()
+            })
+        })
     {
         return;
     }
@@ -81,8 +91,13 @@ fn apply_entity_data(item: &ItemStack, mob: &dyn EntityBase, user: Option<&Playe
     }
 }
 
+/// Vanilla `EntityType.appendDefaultStackConfig`: item components first, `entity_data` last.
 pub(crate) fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase, user: Option<&Player>) {
+    apply_variant(item, mob);
     apply_entity_data(item, mob, user);
+}
+
+fn apply_variant(item: &ItemStack, mob: &dyn EntityBase) {
     macro_rules! apply_variant {
         ($($ty:ty),+ $(,)?) => {
             $(
