@@ -1,13 +1,19 @@
 use crate::data_component_impl::DataComponentImpl;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
+use pumpkin_util::text::TextComponent;
 
 /// Reads a filterable text, which vanilla stores either as a plain string or as
-/// a compound with a `raw` field, e.g. `{raw: "A Partner"}`.
+/// a compound with a `raw` field, e.g. `{raw: "A Partner"}`. The raw value is a
+/// text component of its own, so it may also be a styled compound such as
+/// `{raw: {text: "A Partner", color: "red"}}`.
 fn read_text(tag: &NbtTag) -> Option<String> {
     match tag {
         NbtTag::String(value) => Some(value.to_string()),
-        NbtTag::Compound(compound) => compound.get_string("raw").map(ToString::to_string),
+        NbtTag::Compound(compound) => {
+            let component = compound.get("raw").unwrap_or(tag);
+            Some(TextComponent::from_nbt(component).get_text())
+        }
         _ => None,
     }
 }
@@ -117,6 +123,21 @@ mod tests {
 
     fn raw_list(values: &[&str]) -> NbtTag {
         NbtTag::List(values.iter().map(|v| text_tag(v)).collect())
+    }
+
+    #[test]
+    fn written_book_reads_styled_raw_components() {
+        let mut styled = NbtCompound::new();
+        styled.put_string("text", "hi".to_string());
+        styled.put_string("color", "red".to_string());
+        let mut wrapper = NbtCompound::new();
+        wrapper.put("raw", NbtTag::Compound(styled));
+        let tag = compound(&[
+            ("title", text_tag("Styled")),
+            ("pages", NbtTag::List(vec![NbtTag::Compound(wrapper)])),
+        ]);
+        let content = WrittenBookContentImpl::read_data(&tag).unwrap();
+        assert_eq!(content.pages, ["hi"]);
     }
 
     #[test]

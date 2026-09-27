@@ -2071,7 +2071,11 @@ pub enum TextContent {
 #[cfg(test)]
 mod test {
     use crate::text::click::ClickEvent;
-    use crate::text::{TextComponent, color::NamedColor, hover::HoverEvent};
+    use crate::text::{
+        TextComponent,
+        color::{Color, NamedColor},
+        hover::HoverEvent,
+    };
     use crate::version::JavaMinecraftVersion;
     use std::borrow::Cow;
 
@@ -2181,5 +2185,15 @@ mod test {
         let click = compound.get_compound("click_event").unwrap();
         assert_eq!(click.get_string("url"), Some("https://example.com"));
         assert!(click.get_string("value").is_none());
+    }
+
+    #[test]
+    fn styled_components_parse_from_nbt() {
+        let mut styled = pumpkin_nbt::compound::NbtCompound::new();
+        styled.put_string("text", "hi".to_string());
+        styled.put_string("color", "red".to_string());
+        let component = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(styled));
+        assert_eq!(component.0.style.color, Some(Color::Named(NamedColor::Red)));
+        assert_eq!(component.get_text(), "hi");
     }
 }
