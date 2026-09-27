@@ -71,12 +71,15 @@ impl GlobalStructureCache {
             .name("Stronghold-Rings".to_string())
             .spawn(move || {
                 let compute = || Self::calculate_strongholds(seed, placement, &router);
-                // A private pool: global Rayon workers may block on this result, so the
-                // search must never be scheduled on (or steal work from) that pool.
+                // Global Rayon workers may block on this result, so the search must never
+                // run on that pool: use a private pool, or this thread alone if none can be built.
                 let chunks = rayon::ThreadPoolBuilder::new()
                     .thread_name(|i| format!("Stronghold-Rings-{i}"))
                     .build()
-                    .map_or_else(|_| compute(), |pool| pool.install(compute));
+                    .map_or_else(
+                        |_| Self::calculate_strongholds_sequential(seed, placement, &router),
+                        |pool| pool.install(compute),
+                    );
                 let _ = target.set(chunks);
             });
         if let Err(err) = spawned {
@@ -131,6 +134,30 @@ impl GlobalStructureCache {
         placement: &ConcentricRingsStructurePlacement,
         multi_noise: &ProtoMultiNoiseRouter,
     ) -> Vec<(i32, i32)> {
+        let (tasks, preferred_biomes) = Self::ring_tasks(seed, placement);
+        tasks
+            .into_par_iter()
+            .map(|task| Self::search_ring(task, multi_noise, preferred_biomes))
+            .collect()
+    }
+
+    /// Same as [`Self::calculate_strongholds`], but on the calling thread only.
+    fn calculate_strongholds_sequential(
+        seed: i64,
+        placement: &ConcentricRingsStructurePlacement,
+        multi_noise: &ProtoMultiNoiseRouter,
+    ) -> Vec<(i32, i32)> {
+        let (tasks, preferred_biomes) = Self::ring_tasks(seed, placement);
+        tasks
+            .into_iter()
+            .map(|task| Self::search_ring(task, multi_noise, preferred_biomes))
+            .collect()
+    }
+
+    fn ring_tasks(
+        seed: i64,
+        placement: &ConcentricRingsStructurePlacement,
+    ) -> (Vec<RingTask>, &'static [u16]) {
         let distance_param = f64::from(placement.distance);
         let mut spread = placement.spread;
         let count = placement.count;
@@ -181,39 +208,37 @@ impl GlobalStructureCache {
             }
         }
 
-        tasks
-            .into_par_iter()
-            .map(|mut task| {
-                let mut sampler = MultiNoiseSampler::generate(multi_noise);
-                let noise_center_x = (task.initial_x << 2) + 2;
-                let noise_center_z = (task.initial_z << 2) + 2;
+        (tasks, preferred_biomes)
+    }
 
-                let mut result = None;
-                let mut found = 0;
+    fn search_ring(
+        mut task: RingTask,
+        multi_noise: &ProtoMultiNoiseRouter,
+        preferred_biomes: &[u16],
+    ) -> (i32, i32) {
+        let mut sampler = MultiNoiseSampler::generate(multi_noise);
+        let noise_center_x = (task.initial_x << 2) + 2;
+        let noise_center_z = (task.initial_z << 2) + 2;
 
-                for z in -28..=28 {
-                    for x in -28..=28 {
-                        let noise_x = noise_center_x + x;
-                        let noise_z = noise_center_z + z;
-                        let biome = MultiNoiseBiomeSupplier::OVERWORLD.biome(
-                            noise_x,
-                            0,
-                            noise_z,
-                            &mut sampler,
-                        );
-                        if preferred_biomes.contains(&(biome.id as u16)) {
-                            if result.is_none() || task.search_rng.next_bounded_i32(found + 1) == 0
-                            {
-                                result = Some((noise_x >> 2, noise_z >> 2));
-                            }
-                            found += 1;
-                        }
+        let mut result = None;
+        let mut found = 0;
+
+        for z in -28..=28 {
+            for x in -28..=28 {
+                let noise_x = noise_center_x + x;
+                let noise_z = noise_center_z + z;
+                let biome =
+                    MultiNoiseBiomeSupplier::OVERWORLD.biome(noise_x, 0, noise_z, &mut sampler);
+                if preferred_biomes.contains(&(biome.id as u16)) {
+                    if result.is_none() || task.search_rng.next_bounded_i32(found + 1) == 0 {
+                        result = Some((noise_x >> 2, noise_z >> 2));
                     }
+                    found += 1;
                 }
+            }
+        }
 
-                result.unwrap_or((task.initial_x, task.initial_z))
-            })
-            .collect()
+        result.unwrap_or((task.initial_x, task.initial_z))
     }
 
     #[must_use]
