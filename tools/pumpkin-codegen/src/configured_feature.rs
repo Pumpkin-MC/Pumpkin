@@ -1077,14 +1077,34 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
 fn value_to_block_state_provider(v: &Value) -> TokenStream {
     if let Some(s) = v.as_str() {
         let name = s.strip_prefix("minecraft:").unwrap_or(s);
+
+        thread_local! {
+            static VISITED: std::cell::RefCell<std::collections::HashSet<String>> =
+                std::cell::RefCell::new(std::collections::HashSet::new());
+        }
+
+        VISITED.with(|visited| {
+            if !visited.borrow_mut().insert(name.to_string()) {
+                panic!("Cycle detected in block_state_provider reference: {}", name);
+            }
+        });
+
         let path = format!(
             "../../assets/datapack/data/minecraft/worldgen/block_state_provider/{name}.json"
         );
-        if let Ok(content) = fs::read_to_string(&path) {
-            if let Ok(json) = serde_json::from_str::<Value>(&content) {
-                return value_to_block_state_provider(&json);
-            }
-        }
+        
+        let content = fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("Failed to read block_state_provider {path}: {e}"));
+        let json = serde_json::from_str::<Value>(&content)
+            .unwrap_or_else(|e| panic!("Failed to parse JSON for {path}: {e}"));
+            
+        let result = value_to_block_state_provider(&json);
+
+        VISITED.with(|visited| {
+            visited.borrow_mut().remove(name);
+        });
+
+        return result;
     }
     if v.get("type").is_none() && (v.get("id").is_some() || v.get("Name").is_some()) {
         let state = value_to_block_state(v);
