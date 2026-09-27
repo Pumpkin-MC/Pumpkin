@@ -3987,11 +3987,17 @@ impl Entity {
         }
         nbt.put_int("TicksFrozen", self.frozen_ticks.load(Relaxed));
         if let Some(custom_name) = &**self.custom_name.load() {
-            nbt.put(
-                "CustomName",
-                custom_name
-                    .to_nbt_tag_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_3),
-            );
+            let mut tag = custom_name
+                .to_nbt_tag_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_3);
+            // A literal string starting with '{' would read back as legacy JSON, so keep it a compound.
+            if let NbtTag::String(text) = &tag
+                && text.starts_with('{')
+            {
+                let mut literal = NbtCompound::new();
+                literal.put_string("text", text.to_string());
+                tag = NbtTag::Compound(literal);
+            }
+            nbt.put("CustomName", tag);
         }
         nbt.put_bool("CustomNameVisible", self.custom_name_visible.load(Relaxed));
 
@@ -4075,7 +4081,8 @@ impl Entity {
         }
         if let Some(name) = nbt.get("CustomName") {
             // Vanilla stores a text component tag; a string is literal text. Older
-            // Pumpkin saves hold a JSON string, so accept a JSON object there too.
+            // Pumpkin saves hold a JSON string (same data version, so it can't be told
+            // apart by version); the writer never emits a literal starting with '{'.
             let component = match name {
                 NbtTag::String(json) if json.starts_with('{') => {
                     pumpkin_util::serde_json::from_str(json)
