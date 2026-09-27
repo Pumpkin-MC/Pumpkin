@@ -3986,10 +3986,8 @@ impl Player {
             world.remove_entities_in_chunks(&chunks_to_clean).await;
             level.clean_entity_chunks(&chunks_to_clean);
         }
-        for chunk in &chunks_to_clean {
-            self.send_client_packet(&CUnloadChunk::new(chunk.x, chunk.y))
-                .await;
-        }
+        // No `CUnloadChunk`: the client drops the old level on `CRespawn` (vanilla sends none).
+        // Sent before the respawn, they removed the ground under the player still in the old world.
 
         self.watched_section.store(Cylindrical::new(
             Vector2::new(0, 0),
