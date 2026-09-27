@@ -881,9 +881,17 @@ interface bedrock-packets {
     on-ground: bool,
     tick: s64,
   }
-  record item-descriptor-count {
-    item-identifier: string,
+  record recipe-item-descriptor-item {
+    identifier: string,
     metadata-value: s32,
+  }
+  variant recipe-item-descriptor {
+    empty,
+    item(recipe-item-descriptor-item),
+    tag(string),
+  }
+  record item-descriptor-count {
+    descriptor: recipe-item-descriptor,
     count: s32,
   }
   record recipe-unlock-requirement {

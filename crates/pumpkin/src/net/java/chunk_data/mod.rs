@@ -1,9 +1,6 @@
 pub mod light;
 pub mod util;
 pub mod v1_18;
-pub mod v1_7;
-pub mod v1_8;
-pub mod v1_9;
 
 pub use light::ChunkLightExt;
 
@@ -41,19 +38,7 @@ impl ClientPacket for CChunkData<'_> {
         write: impl Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if version >= &JavaMinecraftVersion::V_1_18 {
-            v1_18::write_chunk_data(self.0, write, version)
-        } else if version >= &JavaMinecraftVersion::V_1_9 {
-            v1_9::write_chunk_data(self.0, write, version)
-        } else if version == &JavaMinecraftVersion::V_1_8 {
-            v1_8::write_chunk_data(self.0, write, version)
-        } else if version == &JavaMinecraftVersion::V_1_7_2
-            || version == &JavaMinecraftVersion::V_1_7_6
-        {
-            v1_7::write_chunk_data(self.0, write, version)
-        } else {
-            v1_18::write_chunk_data(self.0, write, version)
-        }
+        v1_18::write_chunk_data(self.0, write, version)
     }
 }
 
@@ -67,27 +52,7 @@ mod tests {
         let chunk = ChunkData::empty(0, 0);
         let packet = CChunkData(&chunk);
 
-        let versions = [
-            JavaMinecraftVersion::V_1_7_2,
-            JavaMinecraftVersion::V_1_7_6,
-            JavaMinecraftVersion::V_1_8,
-            JavaMinecraftVersion::V_1_9,
-            JavaMinecraftVersion::V_1_12_2,
-            JavaMinecraftVersion::V_1_13_2,
-            JavaMinecraftVersion::V_1_14_4,
-            JavaMinecraftVersion::V_1_15_2,
-            JavaMinecraftVersion::V_1_16_1,
-            JavaMinecraftVersion::V_1_16_4,
-            JavaMinecraftVersion::V_1_17_1,
-            JavaMinecraftVersion::V_1_18_2,
-            JavaMinecraftVersion::V_1_19_4,
-            JavaMinecraftVersion::V_1_20_2,
-            JavaMinecraftVersion::V_1_21_4,
-            JavaMinecraftVersion::V_1_21_5,
-            JavaMinecraftVersion::V_26_1,
-            JavaMinecraftVersion::V_26_2,
-            JavaMinecraftVersion::V_26_3,
-        ];
+        let versions = [JavaMinecraftVersion::V_26_3];
 
         for version in versions {
             let mut buf = Vec::new();
@@ -125,27 +90,7 @@ mod tests {
 
         let packet = CChunkData(&chunk);
 
-        let versions = [
-            JavaMinecraftVersion::V_1_7_2,
-            JavaMinecraftVersion::V_1_7_6,
-            JavaMinecraftVersion::V_1_8,
-            JavaMinecraftVersion::V_1_9,
-            JavaMinecraftVersion::V_1_12_2,
-            JavaMinecraftVersion::V_1_13_2,
-            JavaMinecraftVersion::V_1_14_4,
-            JavaMinecraftVersion::V_1_15_2,
-            JavaMinecraftVersion::V_1_16_1,
-            JavaMinecraftVersion::V_1_16_4,
-            JavaMinecraftVersion::V_1_17_1,
-            JavaMinecraftVersion::V_1_18_2,
-            JavaMinecraftVersion::V_1_19_4,
-            JavaMinecraftVersion::V_1_20_2,
-            JavaMinecraftVersion::V_1_21_4,
-            JavaMinecraftVersion::V_1_21_5,
-            JavaMinecraftVersion::V_26_1,
-            JavaMinecraftVersion::V_26_2,
-            JavaMinecraftVersion::V_26_3,
-        ];
+        let versions = [JavaMinecraftVersion::V_26_3];
 
         for version in versions {
             let mut buf = Vec::new();

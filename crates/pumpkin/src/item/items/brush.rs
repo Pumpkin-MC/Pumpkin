@@ -43,8 +43,8 @@ fn get_archaeology_loot(is_sand: bool, location: BlockPos, world: &World) -> Ite
         "minecraft:archaeology/trail_ruins_common"
     };
 
-    if let Some(table) = pumpkin_data::loot_table::get_loot_table(loot_key) {
-        let items = crate::world::loot::generate_loot(table, rand::random());
+    if let Some(table) = world.get_loot_table(loot_key) {
+        let items = table.generate_loot(rand::random());
         if let Some(first) = items.into_iter().next() {
             return first;
         }

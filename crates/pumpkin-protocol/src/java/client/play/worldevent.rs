@@ -4,9 +4,7 @@ use crate::{
     ClientPacket,
     ser::{NetworkWriteExt, WritingError},
 };
-use pumpkin_data::block_state_remap::remap_block_state_for_version;
 use pumpkin_data::packet::clientbound::play::LEVEL_EVENT;
-use pumpkin_data::world::WorldEvent;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -59,15 +57,7 @@ impl ClientPacket for CWorldEvent {
         let mut write = write;
         write.write_i32_be(self.event)?;
         write.write_block_pos(&self.location, version)?;
-
-        let data = if self.event == WorldEvent::ParticlesDestroyBlock as i32 {
-            u16::try_from(self.data).map_or(self.data, |state_id| {
-                i32::from(remap_block_state_for_version(state_id, *version))
-            })
-        } else {
-            self.data
-        };
-        write.write_i32_be(data)?;
+        write.write_i32_be(self.data)?;
         write.write_bool(self.disable_relative_volume)?;
 
         Ok(())

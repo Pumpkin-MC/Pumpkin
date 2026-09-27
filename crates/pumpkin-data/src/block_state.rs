@@ -376,8 +376,8 @@ const UP_CENTER_SOLID: u8 = 1 << 7;
 
 #[cfg(test)]
 mod tests {
-    use crate::{Block, BlockStateId, block_state_remap::remap_block_state_for_version};
-    use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+    use crate::Block;
+    use pumpkin_util::math::position::BlockPos;
 
     fn assert_close(actual: f64, expected: f64) {
         assert!((actual - expected).abs() < 1.0e-6, "{actual} != {expected}");
@@ -401,34 +401,5 @@ mod tests {
         assert_close(shifted_shape.max.x, 0.84375);
         assert_close(shifted_shape.min.z, 0.65625);
         assert_close(shifted_shape.max.z, 0.84375);
-    }
-
-    #[test]
-    fn supported_client_versions_keep_offset_collisions_mapped() {
-        let versions = [
-            JavaMinecraftVersion::V_1_20_5,
-            JavaMinecraftVersion::V_1_21,
-            JavaMinecraftVersion::V_1_21_2,
-            JavaMinecraftVersion::V_1_21_4,
-            JavaMinecraftVersion::V_1_21_5,
-            JavaMinecraftVersion::V_1_21_6,
-            JavaMinecraftVersion::V_1_21_7,
-            JavaMinecraftVersion::V_1_21_9,
-            JavaMinecraftVersion::V_1_21_11,
-            JavaMinecraftVersion::V_26_1,
-            JavaMinecraftVersion::V_26_2,
-            JavaMinecraftVersion::V_26_3,
-        ];
-
-        for version in versions {
-            for block in [Block::BAMBOO, Block::POINTED_DRIPSTONE] {
-                assert_ne!(
-                    remap_block_state_for_version(block.default_state.id.as_u16(), version),
-                    BlockStateId::AIR.as_u16(),
-                    "{} mapped to air for {version}",
-                    block.name
-                );
-            }
-        }
     }
 }

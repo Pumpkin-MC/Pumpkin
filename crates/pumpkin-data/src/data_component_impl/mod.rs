@@ -687,6 +687,9 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
             Some(AttributeModifiersImpl::read_data(data)?.to_dyn())
         }
         DataComponent::BrewingFuel => Some(BrewingFuelImpl::read_data(data)?.to_dyn()),
+        DataComponent::CookingFuel => Some(CookingFuelImpl::read_data(data)?.to_dyn()),
+        DataComponent::Compostable => Some(CompostableImpl::read_data(data)?.to_dyn()),
+        DataComponent::Waxed => Some(WaxedImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -862,6 +865,23 @@ mod tests {
             IntangibleProjectileImpl::read_data,
         );
         assert_round_trip(BrewingFuelImpl, BrewingFuelImpl::read_data);
+        assert_round_trip(WaxedImpl, WaxedImpl::read_data);
+        assert_round_trip(
+            CookingFuelImpl {
+                burn_time: IntProvider::Id(Cow::Borrowed("minecraft:cooking/time_coal")),
+                speed_multiplier: FloatProvider::Id(Cow::Borrowed(
+                    "minecraft:cooking/speed_default",
+                )),
+            },
+            CookingFuelImpl::read_data,
+        );
+        assert_round_trip(
+            CookingFuelImpl {
+                burn_time: IntProvider::Inline(1600),
+                speed_multiplier: FloatProvider::Inline(1.5),
+            },
+            CookingFuelImpl::read_data,
+        );
     }
 
     #[test]

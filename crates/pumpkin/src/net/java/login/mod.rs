@@ -1,5 +1,5 @@
 use arc_swap::ArcSwap;
-use pumpkin_data::translation;
+use pumpkin_data::{packet::CURRENT_MC_VERSION, translation};
 use pumpkin_protocol::{
     ConnectionState, Label, Link, LinkType,
     java::client::{
@@ -13,7 +13,7 @@ use pumpkin_protocol::{
         SEncryptionResponse, SLoginCookieResponse, SLoginPluginResponse, SLoginStart,
     },
 };
-use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
+use pumpkin_util::text::TextComponent;
 use std::sync::Arc;
 use tracing::debug;
 use uuid::Uuid;
@@ -22,7 +22,7 @@ use crate::{
     net::{
         EncryptionError, GameProfile, PacketHandlerResult,
         authentication::{self, AuthError},
-        can_not_join, is_valid_player_name,
+        is_valid_player_name,
         java::pending::PendingConnection,
         offline_uuid,
         proxy::{bungeecord, velocity, vine},

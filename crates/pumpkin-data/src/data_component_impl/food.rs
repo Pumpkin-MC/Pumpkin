@@ -394,10 +394,12 @@ impl DataComponentImpl for UseEffectsImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct UseRemainderImpl;
+pub struct UseRemainderImpl {
+    pub remainder: Option<Cow<'static, str>>,
+}
 impl UseRemainderImpl {
     pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+        Some(Self { remainder: None })
     }
 }
 impl DataComponentImpl for UseRemainderImpl {
