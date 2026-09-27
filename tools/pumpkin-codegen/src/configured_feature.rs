@@ -1075,6 +1075,17 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
 /// # Returns
 /// A `TokenStream` for the appropriate `BlockStateProvider` variant; defaults to `BlockStateProvider::Simple` with air if the type is unrecognised.
 fn value_to_block_state_provider(v: &Value) -> TokenStream {
+    if let Some(s) = v.as_str() {
+        let name = s.strip_prefix("minecraft:").unwrap_or(s);
+        let path = format!(
+            "../../assets/datapack/data/minecraft/worldgen/block_state_provider/{name}.json"
+        );
+        if let Ok(content) = fs::read_to_string(&path) {
+            if let Ok(json) = serde_json::from_str::<Value>(&content) {
+                return value_to_block_state_provider(&json);
+            }
+        }
+    }
     if v.get("type").is_none() && (v.get("id").is_some() || v.get("Name").is_some()) {
         let state = value_to_block_state(v);
         return quote! { BlockStateProvider::Simple(SimpleStateProvider { state: #state }) };
