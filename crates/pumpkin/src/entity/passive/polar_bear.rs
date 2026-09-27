@@ -13,10 +13,15 @@ use crate::entity::{
     ageable::{AgeableData, AgeableMob},
     ai::behavior::neutral::apply_targets,
     ai::goal::{
-        active_target::ActiveTargetGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        active_target::{ActiveTargetGoal, TargetCondition},
+        escape_danger::EscapeDangerGoal,
+        follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal,
+        revenge::RevengeGoal,
+        swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{
         Mob, MobEntity,
@@ -90,7 +95,8 @@ impl PolarBearEntity {
             apply_targets(&mut target_selector, &mob_arc.mob_entity, 3, 5, false);
             target_selector.add_goal(
                 4,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true)
+                    .when(TargetCondition::Adult),
             );
         };
 

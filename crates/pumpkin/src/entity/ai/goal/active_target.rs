@@ -1,5 +1,6 @@
 use super::{Controls, Goal, to_goal_ticks};
 
+use crate::entity::ageable::AgeableMob;
 use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
@@ -24,6 +25,8 @@ pub enum TargetCondition {
     AngryAt,
     /// Nothing at all in daylight. Spiders.
     NoDaylight,
+    /// Nothing at all while the mob is a baby. (Polar bears hunting foxes)
+    Adult,
 }
 
 impl TargetCondition {
@@ -35,6 +38,7 @@ impl TargetCondition {
             Self::AngryAt => mob.as_neutral().is_some_and(|neutral| {
                 neutral.get_persistent_anger_target().is_some() || neutral.is_angry()
             }),
+            Self::Adult => !mob.as_ageable().is_some_and(AgeableMob::is_baby),
             Self::Always => true,
         }
     }
@@ -46,7 +50,7 @@ impl TargetCondition {
             Self::AngryAt => mob
                 .as_neutral()
                 .and_then(NeutralMob::get_persistent_anger_target),
-            Self::Always | Self::NoDaylight => None,
+            Self::Always | Self::NoDaylight | Self::Adult => None,
         }
     }
 
@@ -56,7 +60,7 @@ impl TargetCondition {
             Self::AngryAt => mob
                 .as_neutral()
                 .is_some_and(|neutral| neutral.is_angry_at(target, world)),
-            Self::Always | Self::NoDaylight => true,
+            Self::Always | Self::NoDaylight | Self::Adult => true,
         }
     }
 }
