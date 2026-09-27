@@ -1125,6 +1125,7 @@ impl Server {
             self.tick_worlds();
             // Always run player and network ticking, even when game is frozen
         } else {
+            self.sync_game_time();
             self.tick_players_and_network();
         }
         self.flush_pending_block_updates();
@@ -1171,18 +1172,10 @@ impl Server {
             self.tick_count.load(std::sync::atomic::Ordering::Relaxed) as u64,
         );
 
+        self.sync_game_time();
+
         let worlds = self.worlds.load();
         let handle = self.runtime.clone();
-
-        // Sync before `tickTime()`. `tick_count + 1` is this vanilla tick.
-        if self.tick_count.load(Ordering::Relaxed).wrapping_add(1) % 20 == 0
-            && let Some(overworld) = worlds
-                .iter()
-                .find(|world| world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name)
-        {
-            overworld.force_game_time_synchronization(self);
-        }
-
         worlds.par_iter().for_each(|world| {
             let _guard = handle.enter();
             world.tick(self);
@@ -1190,6 +1183,19 @@ impl Server {
 
         // Global tasks
         self.player_data_storage.tick(self);
+    }
+
+    /// Vanilla `tickChildren` "timeSync": every 20 ticks, also while frozen.
+    /// Sync before `tickTime()`. `tick_count + 1` is this vanilla tick.
+    fn sync_game_time(&self) {
+        if self.tick_count.load(Ordering::Relaxed).wrapping_add(1) % 20 == 0
+            && let Some(overworld) =
+                self.worlds.load().iter().find(|world| {
+                    world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name
+                })
+        {
+            overworld.force_game_time_synchronization(self);
+        }
     }
 
     /// Updates the tick time statistics with the duration of the last tick.
