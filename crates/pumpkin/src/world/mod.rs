@@ -4851,6 +4851,7 @@ impl World {
         self: &Arc<Self>,
         entity: Arc<dyn EntityBase>,
         reason: crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason,
+        player: Option<Arc<Player>>,
     ) -> bool {
         let base = entity.get_entity();
         let mut event = crate::plugin::api::events::entity::creature_spawn::CreatureSpawnEvent::new(
@@ -4859,6 +4860,7 @@ impl World {
             base.pos.load(),
             self.clone(),
             reason,
+            player,
         );
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);

@@ -610,7 +610,7 @@ impl DispenserBlock {
         // Vanilla SpawnEggItemBehavior keeps the egg when nothing spawned.
         if ctx
             .world
-            .spawn_creature(mob, CreatureSpawnReason::DispenseEgg)
+            .spawn_creature(mob, CreatureSpawnReason::DispenseEgg, None)
         {
             item.decrement(1);
         }

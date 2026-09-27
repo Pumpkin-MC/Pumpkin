@@ -189,7 +189,11 @@ impl ItemBehaviour for SpawnEggItem {
                 player.inventory.off_hand_item()
             };
             prepare_egg_mob(&stack, &mob, &world, Some(player));
-            if !world.spawn_creature(mob, CreatureSpawnReason::SpawnerEgg) {
+            if !world.spawn_creature(
+                mob,
+                CreatureSpawnReason::SpawnerEgg,
+                world.get_player_by_uuid(player.gameprofile.id),
+            ) {
                 return;
             }
 
@@ -271,7 +275,11 @@ impl ItemBehaviour for SpawnEggItem {
 
             prepare_egg_mob(item, &mob, &world, Some(player));
 
-            if world.spawn_creature(mob, CreatureSpawnReason::SpawnerEgg) {
+            if world.spawn_creature(
+                mob,
+                CreatureSpawnReason::SpawnerEgg,
+                world.get_player_by_uuid(player.gameprofile.id),
+            ) {
                 item.decrement_unless_creative(player.gamemode.load(), 1);
             }
             BlockActionResult::Success
@@ -297,7 +305,11 @@ impl ItemBehaviour for SpawnEggItem {
             mob.get_entity()
                 .set_rotation(rand::random::<f32>() * 360.0, 0.0);
             apply_entity_variant(item, mob.as_ref(), Some(player));
-            if world.spawn_creature(mob, CreatureSpawnReason::SpawnerEgg) {
+            if world.spawn_creature(
+                mob,
+                CreatureSpawnReason::SpawnerEgg,
+                world.get_player_by_uuid(player.gameprofile.id),
+            ) {
                 item.decrement_unless_creative(player.gamemode.load(), 1);
             }
         }

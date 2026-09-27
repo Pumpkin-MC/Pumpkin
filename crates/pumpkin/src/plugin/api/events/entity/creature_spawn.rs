@@ -1,3 +1,4 @@
+use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::vector3::Vector3;
@@ -21,6 +22,9 @@ pub struct CreatureSpawnEvent {
 
     /// The reason why the creature spawned, see [`CreatureSpawnReason`].
     pub spawn_reason: String,
+
+    /// The player who caused the spawn, `None` for other sources such as a dispenser.
+    pub player: Option<Arc<Player>>,
 }
 
 /// Why a creature spawned, sent to plugins as [`CreatureSpawnReason::as_str`].
@@ -50,6 +54,7 @@ impl CreatureSpawnEvent {
         position: Vector3<f64>,
         world: Arc<World>,
         spawn_reason: CreatureSpawnReason,
+        player: Option<Arc<Player>>,
     ) -> Self {
         Self {
             entity_id,
@@ -57,6 +62,7 @@ impl CreatureSpawnEvent {
             position,
             world,
             spawn_reason: spawn_reason.as_str().to_string(),
+            player,
             cancelled: false,
         }
     }
