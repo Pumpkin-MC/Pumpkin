@@ -229,11 +229,21 @@ fn state_provider_to_tokens(provider: &StateProviderJson) -> TokenStream {
     }
 }
 
+#[derive(Deserialize)]
+struct BlockAssetFile {
+    blocks: Vec<BlockEntryJson>,
+}
+
+#[derive(Deserialize)]
+struct BlockEntryJson {
+    name: String,
+}
+
 pub fn build() -> TokenStream {
-    let blocks_file: BTreeMap<String, serde_json::Value> =
+    let blocks_file: BlockAssetFile =
         serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
-    let valid_blocks: HashSet<String> = blocks_file.into_keys().collect();
+    let valid_blocks: HashSet<String> = blocks_file.blocks.into_iter().map(|b| b.name).collect();
 
     let dir = Path::new("../../assets/datapack/data/minecraft/block_transformer");
     let mut files: Vec<(String, Vec<TransformerEntryJson>)> = Vec::new();
@@ -498,6 +508,71 @@ pub fn build() -> TokenStream {
             match key {
                 #(#lookup_arms)*
                 _ => None,
+            }
+        }
+
+        #[cfg(test)]
+        mod tests {
+            use super::*;
+
+            #[test]
+            fn hoe_transforms_dirt_to_farmland() {
+                let dirt = BlockId::DIRT.to_block();
+                let air = BlockId::AIR.to_block();
+                let get_block = |dx: i8, dy: i8, dz: i8| {
+                    if (dx, dy, dz) == (0, 1, 0) {
+                        air
+                    } else {
+                        dirt
+                    }
+                };
+                let result =
+                    HOE.transform(dirt, dirt.default_state.id, BlockDirection::Up, &get_block);
+                assert!(result.is_some());
+                assert_eq!(result.unwrap().target_block.id, BlockId::FARMLAND);
+            }
+
+            #[test]
+            fn hoe_cannot_transform_from_bottom_face() {
+                let dirt = BlockId::DIRT.to_block();
+                let air = BlockId::AIR.to_block();
+                let get_block = |_dx: i8, dy: i8, _dz: i8| {
+                    if dy == 1 {
+                        air
+                    } else {
+                        dirt
+                    }
+                };
+                let result =
+                    HOE.transform(dirt, dirt.default_state.id, BlockDirection::Down, &get_block);
+                assert!(result.is_none());
+            }
+
+            #[test]
+            fn shovel_transforms_grass_to_dirt_path() {
+                let grass = BlockId::GRASS_BLOCK.to_block();
+                let air = BlockId::AIR.to_block();
+                let get_block = |_dx: i8, dy: i8, _dz: i8| {
+                    if dy == 1 {
+                        air
+                    } else {
+                        grass
+                    }
+                };
+                let result =
+                    SHOVEL.transform(grass, grass.default_state.id, BlockDirection::Up, &get_block);
+                assert!(result.is_some());
+                assert_eq!(result.unwrap().target_block.id, BlockId::DIRT_PATH);
+            }
+
+            #[test]
+            fn axe_strips_oak_log() {
+                let oak_log = BlockId::OAK_LOG.to_block();
+                let get_block = |_dx: i8, _dy: i8, _dz: i8| oak_log;
+                let result =
+                    AXE.transform(oak_log, oak_log.default_state.id, BlockDirection::North, &get_block);
+                assert!(result.is_some());
+                assert_eq!(result.unwrap().target_block.id, BlockId::STRIPPED_OAK_LOG);
             }
         }
     }
