@@ -222,7 +222,10 @@ impl ItemBehaviour for SpawnEggItem {
             let pos = entity.get_entity().pos.load();
             let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
             // no baby form, no offspring.
-            if !mob.get_mob().is_some_and(|m| m.spawn_as_baby()) {
+            if !mob
+                .get_mob()
+                .is_some_and(crate::entity::mob::Mob::spawn_as_baby)
+            {
                 return;
             }
             mob.get_entity()
