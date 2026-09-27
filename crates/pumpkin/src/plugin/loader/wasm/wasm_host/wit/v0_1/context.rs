@@ -27,7 +27,12 @@ fn register_typed_event<E: crate::plugin::Payload + ToFromWasmEvent + Clone + 's
     priority: crate::plugin::EventPriority,
     blocking: bool,
 ) {
-    ctx.register_event::<E, _>(Arc::clone(handler), priority, blocking);
+    ctx.register_event_with_id::<E, _>(
+        Arc::clone(handler),
+        priority,
+        blocking,
+        handler.registration_id,
+    );
 }
 
 #[expect(clippy::too_many_lines)]
@@ -1414,17 +1419,29 @@ fn register_hanging_event(
     }
 }
 
-impl pumpkin::plugin::context::Host for PluginHostState {}
+static NEXT_EVENT_REGISTRATION_ID: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(1);
 
-impl pumpkin::plugin::context::HostContext for PluginHostState {
+fn next_event_registration_id() -> wasmtime::Result<u64> {
+    NEXT_EVENT_REGISTRATION_ID
+        .fetch_update(
+            std::sync::atomic::Ordering::Relaxed,
+            std::sync::atomic::Ordering::Relaxed,
+            |id| id.checked_add(1),
+        )
+        .map_err(|_| wasmtime::Error::msg("Event registration IDs exhausted"))
+}
+
+impl PluginHostState {
     #[allow(clippy::too_many_lines)]
-    async fn register_event(
+    fn register_wasm_event(
         &mut self,
         context: Resource<WitContext>,
         handler_id: u32,
         event_type: EventType,
         event_priority: EventPriority,
         blocking: bool,
+        registration_id: Option<u64>,
     ) -> wasmtime::Result<()> {
         // Updated return type
         let priority = match event_priority {
@@ -1444,7 +1461,11 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .ok_or_else(|| wasmtime::Error::msg("Plugin has been dropped"))?;
 
         let ctx = self.get(&context)?.as_ref();
-        let handler = Arc::new(WasmPluginEventHandler { handler_id, plugin });
+        let handler = Arc::new(WasmPluginEventHandler {
+            handler_id,
+            plugin,
+            registration_id,
+        });
 
         match event_type {
             event_type @ (EventType::PacketReceivedEvent
@@ -1668,6 +1689,56 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         }
 
         Ok(())
+    }
+}
+
+impl pumpkin::plugin::context::Host for PluginHostState {}
+
+impl pumpkin::plugin::context::HostContext for PluginHostState {
+    async fn register_event(
+        &mut self,
+        context: Resource<WitContext>,
+        handler_id: u32,
+        event_type: EventType,
+        event_priority: EventPriority,
+        blocking: bool,
+    ) -> wasmtime::Result<()> {
+        self.register_wasm_event(
+            context,
+            handler_id,
+            event_type,
+            event_priority,
+            blocking,
+            None,
+        )
+    }
+
+    async fn register_event_with_handle(
+        &mut self,
+        context: Resource<WitContext>,
+        handler_id: u32,
+        event_type: EventType,
+        event_priority: EventPriority,
+        blocking: bool,
+    ) -> wasmtime::Result<u64> {
+        let registration_id = next_event_registration_id()?;
+        self.register_wasm_event(
+            context,
+            handler_id,
+            event_type,
+            event_priority,
+            blocking,
+            Some(registration_id),
+        )?;
+        Ok(registration_id)
+    }
+
+    async fn unregister_event(
+        &mut self,
+        context: Resource<WitContext>,
+        registration_id: u64,
+    ) -> wasmtime::Result<bool> {
+        Ok(self.get(&context)?.unregister_event(registration_id))
     }
 
     async fn register_command(

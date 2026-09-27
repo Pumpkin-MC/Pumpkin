@@ -43,6 +43,7 @@ impl pumpkin::plugin::event::Host for PluginHostState {}
 pub struct WasmPluginEventHandler {
     pub handler_id: u32,
     pub plugin: Arc<WasmPlugin>,
+    pub registration_id: Option<u64>,
 }
 
 pub trait ToFromWasmEvent {
