@@ -978,7 +978,7 @@ impl TrialSpawner {
 
     #[allow(clippy::too_many_lines)]
     pub fn spawn_mob(&mut self, world: &Arc<World>, spawner_pos: BlockPos) -> Option<Uuid> {
-        let (entity_type, spawn_range, equipment_loot_table, is_baby, slime_size) = {
+        let (entity_type, spawn_range, equipment_loot_table, is_baby, slime_size, only_id) = {
             let active_cfg = if self.is_ominous {
                 &self.config.ominous
             } else {
@@ -1004,7 +1004,9 @@ impl TrialSpawner {
                 r.get_byte("Size")
                     .or_else(|| r.get_int("Size").map(|i| i as i8))
             });
-            (ent_type, active_cfg.spawn_range, equip, baby, size)
+            // finalizes only when the entity compound is just the id.
+            let only_id = raw.is_none_or(|r| r.child_tags.len() <= 1);
+            (ent_type, active_cfg.spawn_range, equip, baby, size, only_id)
         };
 
         let mut rng = rand::rng();
@@ -1088,9 +1090,8 @@ impl TrialSpawner {
             return None;
         }
 
-        // TODO: store the spawn data entity NBT and load it into the mob instead of the
-        // baby/slime-size special cases. Vanilla finalizes only when that NBT is just the id.
-        if !is_baby && slime_size.is_none() {
+        // TODO: load the spawn data entity NBT into the mob instead of the baby/slime-size special cases.
+        if only_id {
             crate::entity::mob::spawn::finalize_spawn(&entity, world, None);
         }
         world.spawn_entity(entity);
