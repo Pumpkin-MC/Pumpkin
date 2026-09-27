@@ -6326,11 +6326,20 @@ impl Player {
     }
 
     pub fn has_permission(self: &Arc<Self>, server: &Server, node: &str) -> bool {
-        let result = server.permission_manager.has_permission(
-            &self.gameprofile.id,
-            node,
-            self.permission_lvl.load(),
-        );
+        self.has_permission_at_level(server, node, self.permission_lvl.load())
+    }
+
+    /// Like [`Self::has_permission`], but node defaults compare against `level`
+    /// instead of the player's own permission level.
+    pub fn has_permission_at_level(
+        self: &Arc<Self>,
+        server: &Server,
+        node: &str,
+        level: PermissionLvl,
+    ) -> bool {
+        let result = server
+            .permission_manager
+            .has_permission(&self.gameprofile.id, node, level);
 
         let mut event = PlayerPermissionCheckEvent::new(self.clone(), node.to_string(), result);
         let server_arc = self.world().server.upgrade();

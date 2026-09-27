@@ -26,6 +26,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
+use pumpkin_util::permission::PermissionLvl;
 use uuid::Uuid;
 
 pub struct SpawnEggItem;
@@ -43,6 +44,34 @@ fn only_op_can_set_nbt(entity_type: &EntityType) -> bool {
     std::ptr::eq(entity_type, &EntityType::FALLING_BLOCK)
         || std::ptr::eq(entity_type, &EntityType::COMMAND_BLOCK_MINECART)
         || std::ptr::eq(entity_type, &EntityType::SPAWNER_MINECART)
+}
+
+/// Permission node for op-only `entity_data`, so permission plugins can grant or deny it.
+pub const NBT_PLACE_PERMISSION: &str = "minecraft:nbt.place";
+
+/// Vanilla `PlayerList.isOp`: any ops list entry, whatever its level, passes the node's
+/// `Op(One)` default, so without plugins or attachments the result matches vanilla.
+fn can_place_op_nbt(player: &Player) -> bool {
+    let world = player.world();
+    let Some(server) = world.server.upgrade() else {
+        return false;
+    };
+    let Some(player) = world.get_player_by_uuid(player.gameprofile.id) else {
+        return false;
+    };
+    let is_op = server
+        .data
+        .operator_config
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_entry(&player.gameprofile.id)
+        .is_some();
+    let level = if is_op {
+        PermissionLvl::Four
+    } else {
+        PermissionLvl::Zero
+    };
+    player.has_permission_at_level(&server, NBT_PLACE_PERMISSION, level)
 }
 
 /// Loads the stack's `entity_data` NBT into the mob. Identity and placement stay as spawned.
@@ -63,20 +92,7 @@ fn apply_entity_data(item: &ItemStack, mob: &dyn EntityBase, user: Option<&Playe
     {
         return;
     }
-    // Vanilla PlayerList.isOp: any ops list entry, whatever its level.
-    if only_op_can_set_nbt(entity_type)
-        && !user.is_some_and(|player| {
-            player.world().server.upgrade().is_some_and(|server| {
-                server
-                    .data
-                    .operator_config
-                    .read()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .get_entry(&player.gameprofile.id)
-                    .is_some()
-            })
-        })
-    {
+    if only_op_can_set_nbt(entity_type) && !user.is_some_and(can_place_op_nbt) {
         return;
     }
     let mut nbt = nbt.clone();
