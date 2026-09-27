@@ -61,7 +61,7 @@ impl MerchantOffer {
                 write.write_bool(false)?;
             }
         }
-        write.write_bool(self.reward_exp)?;
+        write.write_bool(self.is_out_of_stock())?;
         write.write_i32_be(self.uses)?;
         write.write_i32_be(self.max_uses)?;
         write.write_i32_be(self.xp)?;
