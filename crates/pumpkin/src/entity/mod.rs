@@ -3990,7 +3990,6 @@ impl Entity {
             nbt.put(
                 "CustomName",
                 custom_name
-                    .0
                     .to_nbt_tag_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_3),
             );
         }
