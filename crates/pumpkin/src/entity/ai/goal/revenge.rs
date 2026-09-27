@@ -26,6 +26,8 @@ pub struct RevengeGoal {
     ignore_alert: Option<EntityTypeFilter>,
     alert_only: Option<MobFilter>,
     alarm_when: Option<MobFilter>,
+    continue_while: Option<MobFilter>,
+    alert_in_sight: bool,
 }
 
 impl RevengeGoal {
@@ -44,6 +46,8 @@ impl RevengeGoal {
             ignore_alert: None,
             alert_only: None,
             alarm_when: None,
+            continue_while: None,
+            alert_in_sight: false,
         }
     }
 
@@ -81,8 +85,25 @@ impl RevengeGoal {
         self
     }
 
+    /// Extra condition for keeping the target, e.g. a bee that is still angry.
+    #[must_use]
+    pub const fn continuing_while(mut self, filter: MobFilter) -> Self {
+        self.continue_while = Some(filter);
+        self
+    }
+
+    /// Others are only alerted while the mob can see the attacker.
+    #[must_use]
+    pub const fn alerting_in_sight(mut self) -> Self {
+        self.alert_in_sight = true;
+        self
+    }
+
     /// Wake up nearby mobs of the same kind.
     fn alert_others(&self, mob: &dyn Mob, attacker: &Arc<dyn EntityBase>) {
+        if self.alert_in_sight && !mob.has_line_of_sight(attacker.get_entity()) {
+            return;
+        }
         for other in goal_utils::nearby_same_type(mob) {
             let other_entity = other.get_entity();
             let Some(other_mob) = other.get_mob() else {
@@ -157,7 +178,8 @@ impl Goal for RevengeGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        self.track_target_goal.should_continue(mob)
+        self.continue_while.is_none_or(|filter| filter(mob))
+            && self.track_target_goal.should_continue(mob)
     }
 
     fn start(&mut self, mob: &dyn Mob) {

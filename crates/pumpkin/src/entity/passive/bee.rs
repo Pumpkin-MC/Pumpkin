@@ -37,9 +37,13 @@ pub const FLAG_ROLL: u8 = 2;
 pub const FLAG_HAS_STUNG: u8 = 4;
 pub const FLAG_HAS_NECTAR: u8 = 8;
 
+fn is_angry(mob: &dyn Mob) -> bool {
+    mob.as_neutral().is_some_and(NeutralMob::is_angry)
+}
+
 /// Angry and still holding its stinger.
 fn can_sting(mob: &dyn Mob) -> bool {
-    mob.as_neutral().is_some_and(NeutralMob::is_angry)
+    is_angry(mob)
         && !mob
             .cast_any()
             .downcast_ref::<BeeEntity>()
@@ -106,7 +110,16 @@ impl BeeEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true).alerting_others()));
+            // Vanilla BeeHurtByOtherGoal.
+            target_selector.add_goal(
+                1,
+                Box::new(
+                    RevengeGoal::new(true)
+                        .alerting_others()
+                        .alerting_in_sight()
+                        .continuing_while(is_angry),
+                ),
+            );
             target_selector.add_goal(
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true)
