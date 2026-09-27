@@ -1700,7 +1700,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
 
         let context_ref = self.get(&context)?.clone();
         let mut built_commands = Vec::new();
-        
+
         for (cmd_res, permission) in commands {
             let command = self.take(cmd_res)?;
             let aliases = if command.names.len() > 1 {
@@ -1711,7 +1711,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             let node = command.builder.build();
             built_commands.push((node, aliases, permission.clone()));
         }
-        
+
         context_ref.register_commands_with_aliases(built_commands);
         Ok(())
     }
