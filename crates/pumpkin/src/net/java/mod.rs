@@ -44,7 +44,7 @@ use tokio::{
     sync::oneshot,
 };
 use tokio::{
-    sync::mpsc::{Receiver, Sender},
+    sync::mpsc::{UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
@@ -61,10 +61,7 @@ pub mod recipe_helper;
 pub mod status;
 
 pub use chunk_data::{CChunkData, ChunkLightExt};
-use outgoing::{
-    BarrierPlacement, DISCONNECT_FLUSH_TIMEOUT, OUTGOING_QUEUE_CAPACITY, OutgoingPacket, TickFlush,
-    run_outgoing_packet_writer,
-};
+use outgoing::{DISCONNECT_FLUSH_TIMEOUT, OutgoingPacket, run_outgoing_packet_writer};
 
 use arc_swap::ArcSwap;
 use pending::PendingConnection;
@@ -105,8 +102,9 @@ pub struct JavaClient {
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
     /// Per-connection FIFO of serialized packets (vanilla Netty eventLoop).
-    outgoing_packet_queue_send: Sender<OutgoingPacket>,
-    outgoing_packet_queue_recv: Option<Receiver<OutgoingPacket>>,
+    /// Unbounded like vanilla; `MAX_PENDING_BYTES` is the limit.
+    outgoing_packet_queue_send: UnboundedSender<OutgoingPacket>,
+    outgoing_packet_queue_recv: Option<UnboundedReceiver<OutgoingPacket>>,
     /// Tracks total buffered payload bytes in the outgoing queue.
     pub pending_bytes: Arc<AtomicUsize>,
     /// The packet encoder for outgoing packets.
@@ -135,8 +133,6 @@ pub struct JavaClient {
     pub packet_limiter: PacketRateLimiter,
     /// Vanilla `suspendFlushingOnServerThread`.
     suspend_flushing: Arc<AtomicBool>,
-    /// Tick-end `flushChannel` if `try_send(Flush)` hits a full FIFO.
-    tick_flush: TickFlush,
 }
 
 impl JavaClient {
@@ -146,7 +142,7 @@ impl JavaClient {
         gameprofile: GameProfile,
         config: PlayerConfig,
     ) -> Self {
-        let (send, recv) = tokio::sync::mpsc::channel(OUTGOING_QUEUE_CAPACITY);
+        let (send, recv) = tokio::sync::mpsc::unbounded_channel();
 
         Self {
             id: pending.id,
@@ -175,7 +171,6 @@ impl JavaClient {
             packet_sequence: AtomicI32::new(-1),
             packet_limiter: pending.packet_limiter,
             suspend_flushing: Arc::new(AtomicBool::new(false)),
-            tick_flush: TickFlush::new(),
         }
     }
 
@@ -186,13 +181,10 @@ impl JavaClient {
 
     /// Vanilla `resumeFlushing`: queue `flushChannel` then lift the hold.
     pub fn resume_flushing(&self) {
-        let placement = self
-            .tick_flush
-            .place_barrier(&self.outgoing_packet_queue_send);
+        let queued = self.outgoing_packet_queue_send.send(OutgoingPacket::Flush);
         self.suspend_flushing.store(false, Ordering::Release);
 
-        // Outside the admission lock: `close` must not run under it.
-        if placement == BarrierPlacement::Closed && !self.close_token.is_cancelled() {
+        if queued.is_err() && !self.close_token.is_cancelled() {
             warn!(
                 "Failed to queue tick flush for client {}: channel closed",
                 self.id
@@ -393,30 +385,9 @@ impl JavaClient {
         self.enqueue_packet_data(packet_data).await;
     }
 
-    /// Awaits a full FIFO instead of dropping the packet.
+    #[allow(clippy::unused_async)]
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
-        let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data) else {
-            return;
-        };
-
-        // Reserve first: capacity wait must not hold the admission lock.
-        match self.outgoing_packet_queue_send.reserve().await {
-            Ok(permit) => self
-                .tick_flush
-                .admit(permit, OutgoingPacket::normal(packet_data)),
-            Err(err) => {
-                decrement_pending_bytes(&self.pending_bytes, packet_len);
-                // This is expected to fail if we are closed
-                if !self.close_token.is_cancelled() {
-                    warn!(
-                        "Failed to add packet to the outgoing packet queue for client {}: {}",
-                        self.id, err
-                    );
-                    // Connection to the client closed since the stream is in an unknown state
-                    self.close();
-                }
-            }
-        }
+        self.try_enqueue_packet_data(packet_data);
     }
 
     /// Outbound choke point of all enqueue/send paths. `None` when the packet must be dropped.
@@ -490,29 +461,25 @@ impl JavaClient {
         let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data) else {
             return;
         };
+        self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len);
+    }
 
-        match self.outgoing_packet_queue_send.try_reserve() {
-            Ok(permit) => self
-                .tick_flush
-                .admit(permit, OutgoingPacket::normal(packet_data)),
-            Err(err) => {
-                decrement_pending_bytes(&self.pending_bytes, packet_len);
-                let reason = match err {
-                    // Vanilla queues without a limit, so a backlog disconnects instead of desyncing.
-                    tokio::sync::mpsc::error::TrySendError::Full(()) => "channel full",
-                    tokio::sync::mpsc::error::TrySendError::Closed(()) => "channel closed",
-                };
-                // Both are expected to fail if we are closed
-                if !self.close_token.is_cancelled() {
-                    warn!(
-                        "Failed to add packet to the outgoing packet queue for client {}: {}",
-                        self.id, reason
-                    );
-                    // Connection to the client closed since the stream is in an unknown state
-                    self.close();
-                }
-            }
+    /// `false` once the writer is gone. Then the connection is closed.
+    fn queue_outgoing(&self, packet: OutgoingPacket, packet_len: usize) -> bool {
+        if self.outgoing_packet_queue_send.send(packet).is_ok() {
+            return true;
         }
+        decrement_pending_bytes(&self.pending_bytes, packet_len);
+        // It is expected that the packet will fail if closed
+        if !self.close_token.is_cancelled() {
+            warn!(
+                "Failed to add packet to the outgoing packet queue for client {}: channel closed",
+                self.id
+            );
+            // Connection to the client closed since the stream is in an unknown state
+            self.close();
+        }
+        false
     }
 
     pub async fn await_close_interrupt(&self) {
@@ -574,27 +541,18 @@ impl JavaClient {
         {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
-            match self.outgoing_packet_queue_send.try_reserve() {
-                // The writer drains and flushes it after `close()`
-                Ok(permit) => self.tick_flush.admit(permit, OutgoingPacket::normal(data)),
-                Err(err) => {
-                    decrement_pending_bytes(&self.pending_bytes, packet_len);
-                    match err {
-                        tokio::sync::mpsc::error::TrySendError::Full(()) => {
-                            warn!(
-                                "Disconnect packet for client {} dropped: outgoing packet queue full",
-                                self.id
-                            );
-                        }
-                        // Expected: the writer task is already gone.
-                        tokio::sync::mpsc::error::TrySendError::Closed(()) => {
-                            debug!(
-                                "Disconnect packet for client {} dropped: outgoing packet queue closed",
-                                self.id
-                            );
-                        }
-                    }
-                }
+            // The writer drains and flushes it after `close()`
+            if self
+                .outgoing_packet_queue_send
+                .send(OutgoingPacket::normal(data))
+                .is_err()
+            {
+                decrement_pending_bytes(&self.pending_bytes, packet_len);
+                // Expected: the writer task is already gone.
+                debug!(
+                    "Disconnect packet for client {} dropped: outgoing packet queue closed",
+                    self.id
+                );
             }
         }
         let reason_text = reason.clone().get_text();
@@ -642,23 +600,8 @@ impl JavaClient {
         };
 
         let (completion_tx, completion_rx) = oneshot::channel();
-
-        // Reserve first: capacity wait must not hold the admission lock.
-        match self.outgoing_packet_queue_send.reserve().await {
-            Ok(permit) => self.tick_flush.admit(permit, make(packet, completion_tx)),
-            Err(err) => {
-                decrement_pending_bytes(&self.pending_bytes, packet_len);
-                // It is expected that the packet will fail if closed
-                if !self.close_token.is_cancelled() {
-                    warn!(
-                        "Failed to add packet to the outgoing packet queue for client {}: {}",
-                        self.id, err
-                    );
-                    // Connection to the client closed since the stream is in an unknown state
-                    self.close();
-                }
-                return;
-            }
+        if !self.queue_outgoing(make(packet, completion_tx), packet_len) {
+            return;
         }
 
         if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
@@ -737,14 +680,12 @@ impl JavaClient {
         };
         let id = self.id;
         let suspend_flushing = self.suspend_flushing.clone();
-        let tick_flush = self.tick_flush.clone();
         self.spawn_task(async move {
             run_outgoing_packet_writer(
                 packet_receiver,
                 writer,
                 close_token,
                 suspend_flushing,
-                tick_flush,
                 pending_bytes,
                 id,
             )

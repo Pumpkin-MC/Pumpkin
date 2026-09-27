@@ -5,7 +5,7 @@
 use std::collections::VecDeque;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 use std::time::{Duration, Instant};
 
@@ -15,11 +15,7 @@ use pumpkin_protocol::{
 };
 use tokio::io::AsyncWrite;
 use tokio::sync::{
-    Notify,
-    mpsc::{
-        Permit, Receiver, Sender,
-        error::{TryRecvError, TrySendError},
-    },
+    mpsc::{UnboundedReceiver, error::TryRecvError},
     oneshot,
 };
 use tokio::time::MissedTickBehavior;
@@ -28,116 +24,8 @@ use tracing::warn;
 
 use crate::net::decrement_pending_bytes;
 
-/// No barrier pending.
-const NO_BARRIER: u64 = u64::MAX;
-
-/// Outgoing FIFO slots per connection. Allocated lazily in blocks of 32
-/// Full FIFO kicks on `try_enqueue`
-/// Memory bound: `MAX_PENDING_BYTES`.
-pub const OUTGOING_QUEUE_CAPACITY: usize = 65536;
-
 /// Max wait for the disconnect flush (`kick_explicit`, writer drain on close).
 pub const DISCONNECT_FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// Where `resumeFlushing` got the tick barrier.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum BarrierPlacement {
-    /// `OutgoingPacket::Flush` took a FIFO slot. Ordered by the FIFO itself.
-    InBand,
-    /// FIFO full. Barrier pending behind the packets admitted so far.
-    Deferred,
-    Closed,
-}
-
-/// `resumeFlushing` when the FIFO is full: cannot drop the tick barrier.
-///
-/// Deferred barrier has no FIFO slot to order it, so it carries the packet count
-/// it sits behind. Writer flushes after draining that many. Admission and count
-/// move together: a packet in the FIFO but not yet counted lets a barrier snapshot
-/// land in front of it, flushing it into the next tick. `admission` makes it one step.
-#[derive(Clone)]
-pub struct TickFlush {
-    /// Serializes FIFO admission and count against a barrier snapshot. Holds the
-    /// deferred barriers after `barrier_at`, ascending.
-    /// Held across non-blocking work only, never across an await.
-    admission: Arc<std::sync::Mutex<VecDeque<u64>>>,
-    /// Packets admitted to the FIFO so far.
-    enqueued: Arc<AtomicU64>,
-    /// `enqueued` count the next deferred barrier sits behind, or `NO_BARRIER`.
-    /// Written under `admission` only.
-    barrier_at: Arc<AtomicU64>,
-    notify: Arc<Notify>,
-}
-
-impl TickFlush {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            admission: Arc::new(std::sync::Mutex::new(VecDeque::new())),
-            enqueued: Arc::new(AtomicU64::new(0)),
-            barrier_at: Arc::new(AtomicU64::new(NO_BARRIER)),
-            notify: Arc::new(Notify::new()),
-        }
-    }
-
-    /// Count and FIFO hand-off in one step. Caller reserves the slot first: the
-    /// capacity wait stays outside the lock, and `Permit::send` cannot fail once counted.
-    pub fn admit(&self, permit: Permit<'_, OutgoingPacket>, packet: OutgoingPacket) {
-        let _admission = self
-            .admission
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let _ = self.enqueued.fetch_add(1, Ordering::AcqRel);
-        permit.send(packet);
-    }
-
-    /// Vanilla `Connection.flushChannel`. In band while the FIFO has room. Same lock
-    /// as [`Self::admit`]: the fallback snapshot cannot miss an already queued packet.
-    pub fn place_barrier(&self, sender: &Sender<OutgoingPacket>) -> BarrierPlacement {
-        let mut deferred = self
-            .admission
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        match sender.try_send(OutgoingPacket::Flush) {
-            Ok(()) => BarrierPlacement::InBand,
-            Err(TrySendError::Full(_)) => {
-                let barrier_at = self.enqueued.load(Ordering::Acquire);
-                let head = self.barrier_at.load(Ordering::Acquire);
-                if head == NO_BARRIER {
-                    self.barrier_at.store(barrier_at, Ordering::Release);
-                } else if barrier_at > deferred.back().copied().unwrap_or(head) {
-                    // Same position again: no packets between, one flush covers both.
-                    deferred.push_back(barrier_at);
-                }
-                self.notify.notify_one();
-                BarrierPlacement::Deferred
-            }
-            Err(TrySendError::Closed(_)) => BarrierPlacement::Closed,
-        }
-    }
-
-    /// `true` once `received` covers the packets the barrier sits behind.
-    /// Promotes the next deferred barrier. Writer loop only.
-    fn take(&self, received: u64) -> bool {
-        let barrier_at = self.barrier_at.load(Ordering::Acquire);
-        if barrier_at == NO_BARRIER || received < barrier_at {
-            return false;
-        }
-        let mut deferred = self
-            .admission
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let next = deferred.pop_front().unwrap_or(NO_BARRIER);
-        self.barrier_at.store(next, Ordering::Release);
-        true
-    }
-}
-
-impl Default for TickFlush {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 /// Off-tick fallback. Play ticks flush from `OutgoingPacket::Flush`.
 const TICK_FLUSH_INTERVAL: Duration = Duration::from_millis(50);
@@ -297,7 +185,6 @@ async fn frame_batch_maybe_offload<W: AsyncWrite + Unpin + Send + 'static>(
 struct WriterCtx {
     close_token: CancellationToken,
     suspend_flushing: Arc<AtomicBool>,
-    tick_flush: TickFlush,
     pending_bytes: Arc<AtomicUsize>,
     id: u64,
 }
@@ -400,24 +287,21 @@ impl FlushState {
 /// What woke the writer loop.
 enum WriterStep {
     Packet(OutgoingPacket),
-    /// `resumeFlushing` fired.
-    Retry,
     /// 50ms elapsed with unflushed bytes.
     Flush,
     Stop,
 }
 
 async fn next_step(
-    packet_receiver: &mut Receiver<OutgoingPacket>,
+    packet_receiver: &mut UnboundedReceiver<OutgoingPacket>,
     flush_interval: &mut tokio::time::Interval,
     state: &FlushState,
     ctx: &WriterCtx,
 ) -> WriterStep {
-    // Order: close, tick barrier, packets, 50ms fallback.
+    // Order: close, packets, 50ms fallback.
     tokio::select! {
         biased;
         () = ctx.close_token.cancelled() => WriterStep::Stop,
-        () = ctx.tick_flush.notify.notified() => WriterStep::Retry,
         res = packet_receiver.recv() => res.map_or(WriterStep::Stop, WriterStep::Packet),
         _ = flush_interval.tick(), if state.unflushed
             && !ctx.suspend_flushing.load(Ordering::Acquire) => WriterStep::Flush,
@@ -426,9 +310,7 @@ async fn next_step(
 
 fn drain_until_barrier(
     first: OutgoingPacket,
-    packet_receiver: &mut Receiver<OutgoingPacket>,
-    tick_flush: &TickFlush,
-    received: u64,
+    packet_receiver: &mut UnboundedReceiver<OutgoingPacket>,
 ) -> (FlushRequest, VecDeque<FramePacket>, bool) {
     let mut flush_request = FlushRequest::None;
     let mut packets = VecDeque::new();
@@ -438,23 +320,13 @@ fn drain_until_barrier(
         data @ OutgoingPacket::Data { .. } => {
             data.ingest(&mut flush_request, &mut packets);
             loop {
-                let drained = received + packets.len() as u64;
-                if tick_flush.take(drained) {
-                    flush_request = flush_request.merge(FlushRequest::Always);
-                    break;
-                }
                 match packet_receiver.try_recv() {
                     Ok(OutgoingPacket::Flush) => {
                         flush_request = flush_request.merge(FlushRequest::Always);
                         break;
                     }
                     Ok(packet) => packet.ingest(&mut flush_request, &mut packets),
-                    Err(TryRecvError::Empty) => {
-                        if tick_flush.take(received + packets.len() as u64) {
-                            flush_request = flush_request.merge(FlushRequest::Always);
-                        }
-                        break;
-                    }
+                    Err(TryRecvError::Empty) => break,
                     Err(TryRecvError::Disconnected) => {
                         disconnected = true;
                         break;
@@ -553,24 +425,20 @@ async fn write_or_close<W: AsyncWrite + Unpin + Send + 'static>(
 }
 
 pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
-    mut packet_receiver: Receiver<OutgoingPacket>,
+    mut packet_receiver: UnboundedReceiver<OutgoingPacket>,
     mut writer: TCPNetworkEncoder<W>,
     close_token: CancellationToken,
     suspend_flushing: Arc<AtomicBool>,
-    tick_flush: TickFlush,
     pending_bytes: Arc<AtomicUsize>,
     id: u64,
 ) {
     let ctx = WriterCtx {
         close_token,
         suspend_flushing,
-        tick_flush,
         pending_bytes,
         id,
     };
     let mut state = FlushState::new();
-    // Packets taken off the FIFO. Matched against a deferred barrier's position.
-    let mut received = 0u64;
 
     let mut flush_interval = tokio::time::interval(TICK_FLUSH_INTERVAL);
     flush_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -582,16 +450,8 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
             break;
         }
 
-        // Deferred barrier. Only after this tick's packets are drained, else they
-        // land behind the flush.
-        if ctx.tick_flush.take(received) {
-            flush_or_exit!(state, writer, &ctx);
-            continue;
-        }
-
         let first = match next_step(&mut packet_receiver, &mut flush_interval, &state, &ctx).await {
             WriterStep::Packet(packet) => packet,
-            WriterStep::Retry => continue,
             WriterStep::Flush => {
                 flush_or_exit!(state, writer, &ctx);
                 continue;
@@ -600,8 +460,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         };
 
         let (flush_request, packets_to_frame, disconnected) =
-            drain_until_barrier(first, &mut packet_receiver, &ctx.tick_flush, received);
-        received += packets_to_frame.len() as u64;
+            drain_until_barrier(first, &mut packet_receiver);
 
         if !packets_to_frame.is_empty() {
             match write_or_close(writer, packets_to_frame, &mut state.on_flush, &ctx).await {
@@ -637,7 +496,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
 /// closes at once, so frame and flush what was admitted before `close()`.
 /// A write or flush stalled at close time resumes here. Socket errors return before this.
 async fn drain_on_close<W: AsyncWrite + Unpin + Send + 'static>(
-    mut packet_receiver: Receiver<OutgoingPacket>,
+    mut packet_receiver: UnboundedReceiver<OutgoingPacket>,
     mut writer: TCPNetworkEncoder<W>,
     mut state: FlushState,
     ctx: &WriterCtx,
@@ -801,42 +660,12 @@ mod tests {
         }
     }
 
-    /// Records the byte count written at each flush.
-    struct FlushOrderWriter {
-        written: Arc<AtomicUsize>,
-        flush_marks: Arc<std::sync::Mutex<Vec<usize>>>,
-    }
-
-    impl AsyncWrite for FlushOrderWriter {
-        fn poll_write(
-            self: Pin<&mut Self>,
-            _cx: &mut Context<'_>,
-            buf: &[u8],
-        ) -> Poll<std::io::Result<usize>> {
-            self.written.fetch_add(buf.len(), Ordering::SeqCst);
-            Poll::Ready(Ok(buf.len()))
-        }
-
-        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-            let written = self.written.load(Ordering::SeqCst);
-            self.flush_marks
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .push(written);
-            Poll::Ready(Ok(()))
-        }
-
-        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-            Poll::Ready(Ok(()))
-        }
-    }
-
     fn packet(n: u8) -> OutgoingPacket {
         OutgoingPacket::normal(Bytes::from(vec![n]))
     }
 
     async fn run_writer(
-        rx: Receiver<OutgoingPacket>,
+        rx: UnboundedReceiver<OutgoingPacket>,
         writes: Arc<std::sync::Mutex<Vec<u8>>>,
         flushes: Arc<AtomicUsize>,
         suspend: Arc<AtomicBool>,
@@ -847,27 +676,6 @@ mod tests {
             TCPNetworkEncoder::new(RecordingWriter { writes, flushes }),
             close,
             suspend,
-            TickFlush::new(),
-            Arc::new(AtomicUsize::new(0)),
-            0,
-        )
-        .await;
-    }
-
-    async fn run_writer_with_tick_flush(
-        rx: Receiver<OutgoingPacket>,
-        writes: Arc<std::sync::Mutex<Vec<u8>>>,
-        flushes: Arc<AtomicUsize>,
-        suspend: Arc<AtomicBool>,
-        tick_flush: TickFlush,
-        close: CancellationToken,
-    ) {
-        run_outgoing_packet_writer(
-            rx,
-            TCPNetworkEncoder::new(RecordingWriter { writes, flushes }),
-            close,
-            suspend,
-            tick_flush,
             Arc::new(AtomicUsize::new(0)),
             0,
         )
@@ -875,7 +683,7 @@ mod tests {
     }
 
     fn spawn_gated_writer(
-        rx: Receiver<OutgoingPacket>,
+        rx: UnboundedReceiver<OutgoingPacket>,
         writes: Arc<std::sync::Mutex<Vec<u8>>>,
         gate: Arc<SocketGate>,
         close: CancellationToken,
@@ -885,14 +693,13 @@ mod tests {
             TCPNetworkEncoder::new(GatedWriter { writes, gate }),
             close,
             Arc::new(AtomicBool::new(false)),
-            TickFlush::new(),
             Arc::new(AtomicUsize::new(0)),
             0,
         ))
     }
 
     fn spawn_writer(
-        rx: Receiver<OutgoingPacket>,
+        rx: UnboundedReceiver<OutgoingPacket>,
         writes: Arc<std::sync::Mutex<Vec<u8>>>,
         flushes: Arc<AtomicUsize>,
         suspend: Arc<AtomicBool>,
@@ -903,7 +710,7 @@ mod tests {
 
     #[tokio::test]
     async fn tick_barrier_flushes_once_not_every_sixty_four() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let flushes = Arc::new(AtomicUsize::new(0));
         let suspend = Arc::new(AtomicBool::new(false));
@@ -912,9 +719,9 @@ mod tests {
         let writer = spawn_writer(rx, writes, flushes.clone(), suspend, close.clone());
 
         for i in 0..200u8 {
-            tx.try_send(packet(i)).unwrap();
+            tx.send(packet(i)).unwrap();
         }
-        tx.try_send(OutgoingPacket::Flush).unwrap();
+        tx.send(OutgoingPacket::Flush).unwrap();
 
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert_eq!(
@@ -930,7 +737,7 @@ mod tests {
 
     #[tokio::test]
     async fn fifty_ms_interval_flushes_when_no_tick_barrier() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let flushes = Arc::new(AtomicUsize::new(0));
         let suspend = Arc::new(AtomicBool::new(false));
@@ -938,7 +745,7 @@ mod tests {
 
         let writer = spawn_writer(rx, writes, flushes.clone(), suspend, close.clone());
 
-        tx.try_send(packet(1)).unwrap();
+        tx.send(packet(1)).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert_eq!(flushes.load(Ordering::SeqCst), 0);
 
@@ -955,7 +762,7 @@ mod tests {
 
     #[tokio::test]
     async fn suspend_flushing_holds_the_fifty_ms_flush_until_resume() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let flushes = Arc::new(AtomicUsize::new(0));
         let suspend = Arc::new(AtomicBool::new(true));
@@ -963,7 +770,7 @@ mod tests {
 
         let writer = spawn_writer(rx, writes, flushes.clone(), suspend.clone(), close.clone());
 
-        tx.try_send(packet(1)).unwrap();
+        tx.send(packet(1)).unwrap();
         tokio::time::sleep(Duration::from_millis(80)).await;
         assert_eq!(
             flushes.load(Ordering::SeqCst),
@@ -972,7 +779,7 @@ mod tests {
         );
 
         suspend.store(false, Ordering::Release);
-        tx.try_send(OutgoingPacket::Flush).unwrap();
+        tx.send(OutgoingPacket::Flush).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert_eq!(flushes.load(Ordering::SeqCst), 1);
 
@@ -983,7 +790,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_packet_now_does_not_flush_while_suspended() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let flushes = Arc::new(AtomicUsize::new(0));
         let suspend = Arc::new(AtomicBool::new(true));
@@ -991,9 +798,9 @@ mod tests {
 
         let writer = spawn_writer(rx, writes, flushes.clone(), suspend, close.clone());
 
-        tx.try_send(packet(1)).unwrap();
+        tx.send(packet(1)).unwrap();
         let (done_tx, done_rx) = oneshot::channel();
-        tx.try_send(OutgoingPacket::high_priority(
+        tx.send(OutgoingPacket::high_priority(
             Bytes::from_static(&[2]),
             done_tx,
         ))
@@ -1009,7 +816,7 @@ mod tests {
             "send_packet_now must not flush CBlockEvent / entity motion mid-tick"
         );
 
-        tx.try_send(OutgoingPacket::Flush).unwrap();
+        tx.send(OutgoingPacket::Flush).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert_eq!(flushes.load(Ordering::SeqCst), 1);
 
@@ -1022,7 +829,7 @@ mod tests {
     /// `write_frame`, so a stalled TCP flush must not hold it back.
     #[tokio::test]
     async fn send_packet_now_completes_before_the_tcp_flush() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let flush_polls = Arc::new(AtomicUsize::new(0));
         let close = CancellationToken::new();
 
@@ -1033,13 +840,12 @@ mod tests {
             }),
             close.clone(),
             Arc::new(AtomicBool::new(false)),
-            TickFlush::new(),
             Arc::new(AtomicUsize::new(0)),
             0,
         ));
 
         let (done_tx, done_rx) = oneshot::channel();
-        tx.try_send(OutgoingPacket::high_priority(
+        tx.send(OutgoingPacket::high_priority(
             Bytes::from_static(&[1]),
             done_tx,
         ))
@@ -1064,7 +870,7 @@ mod tests {
     /// `kick_explicit` closes on completion: must not fire while the frame sits in the buffer.
     #[tokio::test]
     async fn disconnect_completes_only_after_the_tcp_flush() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let flush_polls = Arc::new(AtomicUsize::new(0));
         let close = CancellationToken::new();
 
@@ -1075,13 +881,12 @@ mod tests {
             }),
             close.clone(),
             Arc::new(AtomicBool::new(false)),
-            TickFlush::new(),
             Arc::new(AtomicUsize::new(0)),
             0,
         ));
 
         let (done_tx, mut done_rx) = oneshot::channel();
-        tx.try_send(OutgoingPacket::flushed(Bytes::from_static(&[1]), done_tx))
+        tx.send(OutgoingPacket::flushed(Bytes::from_static(&[1]), done_tx))
             .unwrap();
 
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1102,17 +907,17 @@ mod tests {
     /// Disconnect must still go out once the socket drains.
     #[tokio::test]
     async fn close_during_stalled_flush_still_sends_the_disconnect() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let gate = SocketGate::stalled_flush();
         let close = CancellationToken::new();
         let writer = spawn_gated_writer(rx, writes.clone(), gate.clone(), close.clone());
 
-        tx.try_send(packet(1)).unwrap();
-        tx.try_send(OutgoingPacket::Flush).unwrap();
+        tx.send(packet(1)).unwrap();
+        tx.send(OutgoingPacket::Flush).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
 
-        tx.try_send(packet(0xDC)).unwrap();
+        tx.send(packet(0xDC)).unwrap();
         close.cancel();
         tokio::time::sleep(Duration::from_millis(20)).await;
         gate.open();
@@ -1135,16 +940,16 @@ mod tests {
     /// Full socket buffer: `try_kick` lands mid-write. Frame finishes whole, then the disconnect.
     #[tokio::test]
     async fn close_during_stalled_write_finishes_the_frame() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let gate = SocketGate::stalled_write();
         let close = CancellationToken::new();
         let writer = spawn_gated_writer(rx, writes.clone(), gate.clone(), close.clone());
 
-        tx.try_send(packet(1)).unwrap();
+        tx.send(packet(1)).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
 
-        tx.try_send(packet(0xDC)).unwrap();
+        tx.send(packet(0xDC)).unwrap();
         close.cancel();
         tokio::time::sleep(Duration::from_millis(20)).await;
         gate.open();
@@ -1166,12 +971,12 @@ mod tests {
     /// If Peer never reads `close()`, must still end the writer within the disconnect budget
     #[tokio::test(start_paused = true)]
     async fn close_bounds_a_stalled_write() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let close = CancellationToken::new();
         let writer = spawn_gated_writer(rx, writes, SocketGate::stalled_write(), close.clone());
 
-        tx.try_send(packet(1)).unwrap();
+        tx.send(packet(1)).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         close.cancel();
 
@@ -1184,7 +989,7 @@ mod tests {
     /// `try_kick`: enqueue mid-tick, `close()` at once. The disconnect must still go out.
     #[tokio::test]
     async fn close_writes_and_flushes_the_queued_disconnect() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let flushes = Arc::new(AtomicUsize::new(0));
         let suspend = Arc::new(AtomicBool::new(true));
@@ -1193,7 +998,7 @@ mod tests {
         let writer = spawn_writer(rx, writes.clone(), flushes.clone(), suspend, close.clone());
         tokio::time::sleep(Duration::from_millis(10)).await;
 
-        tx.try_send(packet(0xDC)).unwrap();
+        tx.send(packet(0xDC)).unwrap();
         close.cancel();
         tokio::time::timeout(Duration::from_millis(50), writer)
             .await
@@ -1214,13 +1019,13 @@ mod tests {
     /// `close()` before the writer ever ran: the queue is still drained.
     #[tokio::test]
     async fn close_before_start_still_drains_the_queue() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let flushes = Arc::new(AtomicUsize::new(0));
         let close = CancellationToken::new();
 
         for i in 1..=3 {
-            tx.try_send(packet(i)).unwrap();
+            tx.send(packet(i)).unwrap();
         }
         close.cancel();
         run_writer(
@@ -1246,7 +1051,7 @@ mod tests {
         const TICK: u8 = 0xAA;
         const NOW: u8 = 0xBB;
 
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let flushes = Arc::new(AtomicUsize::new(0));
         let suspend = Arc::new(AtomicBool::new(true));
@@ -1254,9 +1059,9 @@ mod tests {
 
         let writer = spawn_writer(rx, writes.clone(), flushes, suspend, close.clone());
 
-        tx.try_send(packet(TICK)).unwrap();
+        tx.send(packet(TICK)).unwrap();
         let (done_tx, done_rx) = oneshot::channel();
-        tx.try_send(OutgoingPacket::high_priority(
+        tx.send(OutgoingPacket::high_priority(
             Bytes::from_static(&[NOW]),
             done_tx,
         ))
@@ -1284,7 +1089,7 @@ mod tests {
 
     #[tokio::test]
     async fn flush_stops_drain_so_later_packets_are_the_next_tick() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let flushes = Arc::new(AtomicUsize::new(0));
         let suspend = Arc::new(AtomicBool::new(true));
@@ -1292,9 +1097,9 @@ mod tests {
 
         let writer = spawn_writer(rx, writes, flushes.clone(), suspend, close.clone());
 
-        tx.try_send(packet(1)).unwrap();
-        tx.try_send(OutgoingPacket::Flush).unwrap();
-        tx.try_send(packet(2)).unwrap();
+        tx.send(packet(1)).unwrap();
+        tx.send(OutgoingPacket::Flush).unwrap();
+        tx.send(packet(2)).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert_eq!(
             flushes.load(Ordering::SeqCst),
@@ -1302,7 +1107,7 @@ mod tests {
             "Flush must not pull the next tick's packets into this TCP flush"
         );
 
-        tx.try_send(OutgoingPacket::Flush).unwrap();
+        tx.send(OutgoingPacket::Flush).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert_eq!(flushes.load(Ordering::SeqCst), 2);
 
@@ -1311,195 +1116,9 @@ mod tests {
         writer.await.unwrap();
     }
 
-    /// Tick thread calls `resume_flushing` while other tasks still admit packets, so
-    /// admission and the barrier snapshot share a lock. Never held across the wait for
-    /// FIFO capacity: a backed-up connection would deadlock the tick thread.
-    /// Small FIFO, so `reserve()` really waits.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-    async fn concurrent_admits_and_barriers_lose_no_packets() {
-        const MARKER: u8 = 0xEF;
-        const TASKS: u8 = 4;
-        const PER_TASK: u8 = 100;
-
-        let (tx, rx) = tokio::sync::mpsc::channel(16);
-        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let tick_flush = TickFlush::new();
-        let close = CancellationToken::new();
-
-        let writer = tokio::spawn(run_writer_with_tick_flush(
-            rx,
-            writes.clone(),
-            Arc::new(AtomicUsize::new(0)),
-            Arc::new(AtomicBool::new(false)),
-            tick_flush.clone(),
-            close.clone(),
-        ));
-
-        let producers: Vec<_> = (0..TASKS)
-            .map(|_| {
-                let tx = tx.clone();
-                let tick_flush = tick_flush.clone();
-                tokio::spawn(async move {
-                    for seq in 0..PER_TASK {
-                        let permit = tx.reserve().await.unwrap();
-                        tick_flush.admit(
-                            permit,
-                            OutgoingPacket::normal(Bytes::from(vec![MARKER, seq])),
-                        );
-                        tokio::task::yield_now().await;
-                    }
-                })
-            })
-            .collect();
-
-        // Race `resumeFlushing` against them. In band or deferred, as capacity allows.
-        for _ in 0..PER_TASK {
-            let _ = tick_flush.place_barrier(&tx);
-            tokio::task::yield_now().await;
-        }
-
-        for producer in producers {
-            producer.await.unwrap();
-        }
-        drop(tx);
-        writer.await.unwrap();
-
-        let written = writes
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        // Frames are `[len, MARKER, seq]`. Neither `len` nor `seq` reaches MARKER.
-        let delivered = written
-            .windows(2)
-            .filter(|payload| payload[0] == MARKER && payload[1] < PER_TASK)
-            .count();
-        assert_eq!(
-            delivered,
-            usize::from(TASKS) * usize::from(PER_TASK),
-            "every admitted packet must reach the socket"
-        );
-    }
-
-    /// Full FIFO has no room for the barrier. Tick boundary still belongs behind
-    /// that tick's packets, not in front of them.
-    #[tokio::test]
-    async fn full_fifo_barrier_flushes_after_that_ticks_packets() {
-        const PACKETS: usize = 8;
-
-        let (tx, rx) = tokio::sync::mpsc::channel(PACKETS);
-        let tick_flush = TickFlush::new();
-        let close = CancellationToken::new();
-        let written = Arc::new(AtomicUsize::new(0));
-        let flush_marks = Arc::new(std::sync::Mutex::new(Vec::new()));
-
-        for i in 0..PACKETS {
-            let permit = tx.try_reserve().unwrap();
-            tick_flush.admit(permit, packet(i as u8));
-        }
-        // `resumeFlushing` with the tick's packets still queued.
-        assert_eq!(
-            tick_flush.place_barrier(&tx),
-            BarrierPlacement::Deferred,
-            "a full FIFO has no slot for the in-band barrier"
-        );
-
-        let writer = tokio::spawn(run_outgoing_packet_writer(
-            rx,
-            TCPNetworkEncoder::new(FlushOrderWriter {
-                written: written.clone(),
-                flush_marks: flush_marks.clone(),
-            }),
-            close.clone(),
-            // Suspended, so only the barrier can flush.
-            Arc::new(AtomicBool::new(true)),
-            tick_flush,
-            Arc::new(AtomicUsize::new(0)),
-            0,
-        ));
-
-        tokio::time::sleep(Duration::from_millis(20)).await;
-
-        let marks = flush_marks
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        let total = written.load(Ordering::SeqCst);
-        assert!(total > 0, "the queued tick packets must be written");
-        assert_eq!(
-            marks,
-            vec![total],
-            "the barrier must flush once, after all {PACKETS} of this tick's packets"
-        );
-
-        drop(tx);
-        close.cancel();
-        writer.await.unwrap();
-    }
-
-    /// FIFO full at two tick ends: barrier @4, writer took 2, barrier @6, then a
-    /// duplicate @6. Returns `received`
-    fn two_deferred_barriers(
-        tx: &Sender<OutgoingPacket>,
-        rx: &mut Receiver<OutgoingPacket>,
-        tick_flush: &TickFlush,
-    ) -> u64 {
-        for i in 0..4 {
-            tick_flush.admit(tx.try_reserve().unwrap(), packet(i));
-        }
-        assert_eq!(tick_flush.place_barrier(tx), BarrierPlacement::Deferred);
-        for _ in 0..2 {
-            rx.try_recv().unwrap();
-        }
-        for i in 4..6 {
-            tick_flush.admit(tx.try_reserve().unwrap(), packet(i));
-        }
-        assert_eq!(tick_flush.place_barrier(tx), BarrierPlacement::Deferred);
-        assert_eq!(tick_flush.place_barrier(tx), BarrierPlacement::Deferred);
-        2
-    }
-
-    #[test]
-    fn take_yields_deferred_barriers_in_order() {
-        let (tx, mut rx) = tokio::sync::mpsc::channel(4);
-        let tick_flush = TickFlush::new();
-        two_deferred_barriers(&tx, &mut rx, &tick_flush);
-
-        assert!(!tick_flush.take(3));
-        assert!(tick_flush.take(4), "first tick barrier");
-        assert!(!tick_flush.take(5));
-        assert!(
-            tick_flush.take(6),
-            "second tick barrier must survive the first"
-        );
-        assert!(
-            !tick_flush.take(6),
-            "duplicate position collapses into one flush"
-        );
-    }
-
-    #[test]
-    fn second_deferred_barrier_flushes_its_own_tick() {
-        let (tx, mut rx) = tokio::sync::mpsc::channel(4);
-        let tick_flush = TickFlush::new();
-        let mut received = two_deferred_barriers(&tx, &mut rx, &tick_flush);
-
-        for expected in [[2u8, 3], [4, 5]] {
-            let first = rx.try_recv().unwrap();
-            let (flush_request, packets, _) =
-                drain_until_barrier(first, &mut rx, &tick_flush, received);
-            received += packets.len() as u64;
-            let drained: Vec<u8> = packets.iter().map(|packet| packet.data[0]).collect();
-            assert_eq!(drained, expected, "one tick per drain");
-            assert!(
-                flush_request == FlushRequest::Always,
-                "tick {expected:?} must end in a flush"
-            );
-        }
-    }
-
     #[tokio::test]
     async fn fifty_ms_flushes_while_packets_keep_arriving() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let flushes = Arc::new(AtomicUsize::new(0));
         let suspend = Arc::new(AtomicBool::new(false));
@@ -1508,7 +1127,7 @@ mod tests {
         let writer = spawn_writer(rx, writes, flushes.clone(), suspend, close.clone());
 
         for i in 0..16u8 {
-            tx.try_send(packet(i)).unwrap();
+            tx.send(packet(i)).unwrap();
             tokio::time::sleep(Duration::from_millis(8)).await;
         }
         assert!(
