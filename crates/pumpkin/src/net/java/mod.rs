@@ -181,12 +181,20 @@ impl JavaClient {
 
     /// Vanilla `resumeFlushing`: queue `flushChannel` then lift the hold.
     pub fn resume_flushing(&self) {
-        let queued = self.outgoing_packet_queue_send.send(OutgoingPacket::Flush);
+        self.flush_channel();
         self.suspend_flushing.store(false, Ordering::Release);
+    }
 
-        if queued.is_err() && !self.close_token.is_cancelled() {
+    /// Flushes Channel even while suspended.
+    pub fn flush_channel(&self) {
+        if self
+            .outgoing_packet_queue_send
+            .send(OutgoingPacket::Flush)
+            .is_err()
+            && !self.close_token.is_cancelled()
+        {
             warn!(
-                "Failed to queue tick flush for client {}: channel closed",
+                "Failed to queue flush for client {}: channel closed",
                 self.id
             );
             self.close();

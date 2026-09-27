@@ -7,7 +7,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bytes::Bytes;
 use pumpkin_protocol::{
@@ -18,7 +18,7 @@ use tokio::sync::{
     mpsc::{UnboundedReceiver, error::TryRecvError},
     oneshot,
 };
-use tokio::time::MissedTickBehavior;
+use tokio::time::{Instant, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
@@ -27,14 +27,14 @@ use crate::net::decrement_pending_bytes;
 /// Max wait for the disconnect flush (`kick_explicit`, writer drain on close).
 pub const DISCONNECT_FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Off-tick fallback. Play ticks flush from `OutgoingPacket::Flush`.
+/// Fallback for bytes written while suspended when the hold ends without a `Flush`
 const TICK_FLUSH_INTERVAL: Duration = Duration::from_millis(50);
 const MAX_FRAME_BATCH_DATA_SIZE: usize = MAX_PACKET_SIZE as usize;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FlushRequest {
     None,
-    /// `send_packet_now`. Vanilla `send(..., flush)` is false while suspended.
+    /// `send_packet_now` / `try_enqueue`. Vanilla `send(..., flush)` is false while suspended.
     IfNotSuspended,
     /// `Connection.flushChannel`. Always, including while still suspended.
     Always,
@@ -108,9 +108,8 @@ impl OutgoingPacket {
             Self::Data { data, completion } => {
                 *flush_request = flush_request.merge(match completion {
                     Some(Completion::Flushed(_)) => FlushRequest::Always,
-                    Some(Completion::Framed(_)) => FlushRequest::IfNotSuspended,
-                    // TODO off-tick try_enqueue: IfNotSuspended so we flush when the hold is down.
-                    None => FlushRequest::None,
+                    // off-tick sends flush at once -> mid-tick ones wait for `Flush`.
+                    Some(Completion::Framed(_)) | None => FlushRequest::IfNotSuspended,
                 });
                 packets.push_back(FramePacket { data, completion });
             }
@@ -216,6 +215,7 @@ macro_rules! flush_or_exit {
 struct FlushState {
     /// Written to the `BufWriter`, not flushed yet.
     unflushed: bool,
+    /// Tokio clock so paused-time tests drive the 50ms fallback.
     last_tcp_flush: Instant,
     /// `Completion::Flushed` of written frames. Sent after the next successful flush.
     on_flush: Vec<oneshot::Sender<()>>,
@@ -396,7 +396,7 @@ async fn write_queued_frames<W: AsyncWrite + Unpin + Send + 'static>(
 enum WriteOutcome<W: AsyncWrite + Unpin> {
     Open(TCPNetworkEncoder<W>),
     /// `close()` mid-write. Batch finished, drain gets the rest of the budget.
-    Closing(TCPNetworkEncoder<W>, tokio::time::Instant),
+    Closing(TCPNetworkEncoder<W>, Instant),
     Failed,
 }
 
@@ -414,7 +414,7 @@ async fn write_or_close<W: AsyncWrite + Unpin + Send + 'static>(
         biased;
         res = &mut write => res.map_or(WriteOutcome::Failed, WriteOutcome::Open),
         () = ctx.close_token.cancelled() => {
-            let deadline = tokio::time::Instant::now() + DISCONNECT_FLUSH_TIMEOUT;
+            let deadline = Instant::now() + DISCONNECT_FLUSH_TIMEOUT;
             match tokio::time::timeout_at(deadline, write).await {
                 Ok(Some(writer)) => WriteOutcome::Closing(writer, deadline),
                 // Stalled past the budget, or socket error.
@@ -488,7 +488,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         }
     }
 
-    let deadline = tokio::time::Instant::now() + DISCONNECT_FLUSH_TIMEOUT;
+    let deadline = Instant::now() + DISCONNECT_FLUSH_TIMEOUT;
     drain_on_close(packet_receiver, writer, state, &ctx, deadline).await;
 }
 
@@ -500,7 +500,7 @@ async fn drain_on_close<W: AsyncWrite + Unpin + Send + 'static>(
     mut writer: TCPNetworkEncoder<W>,
     mut state: FlushState,
     ctx: &WriterCtx,
-    deadline: tokio::time::Instant,
+    deadline: Instant,
 ) {
     packet_receiver.close();
     let mut packets = VecDeque::new();
@@ -708,7 +708,7 @@ mod tests {
         tokio::spawn(run_writer(rx, writes, flushes, suspend, close))
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn tick_barrier_flushes_once_not_every_sixty_four() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -735,8 +735,8 @@ mod tests {
         writer.await.unwrap();
     }
 
-    #[tokio::test]
-    async fn fifty_ms_interval_flushes_when_no_tick_barrier() {
+    #[tokio::test(start_paused = true)]
+    async fn off_tick_enqueue_flushes_immediately() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let flushes = Arc::new(AtomicUsize::new(0));
@@ -747,12 +747,10 @@ mod tests {
 
         tx.send(packet(1)).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
-        assert_eq!(flushes.load(Ordering::SeqCst), 0);
-
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        assert!(
-            flushes.load(Ordering::SeqCst) >= 1,
-            "unflushed packets must flush on the 50ms tick cadence"
+        assert_eq!(
+            flushes.load(Ordering::SeqCst),
+            1,
+            "keep-alive / pong outside the tick must not wait for the 50ms fallback"
         );
 
         drop(tx);
@@ -760,7 +758,7 @@ mod tests {
         writer.await.unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn suspend_flushing_holds_the_fifty_ms_flush_until_resume() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -788,7 +786,7 @@ mod tests {
         writer.await.unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn send_packet_now_does_not_flush_while_suspended() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -827,7 +825,7 @@ mod tests {
 
     /// Unsuspended, `high_priority` requests a flush -> the completion is tied to
     /// `write_frame`, so a stalled TCP flush must not hold it back.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn send_packet_now_completes_before_the_tcp_flush() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let flush_polls = Arc::new(AtomicUsize::new(0));
@@ -868,7 +866,7 @@ mod tests {
     }
 
     /// `kick_explicit` closes on completion: must not fire while the frame sits in the buffer.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn disconnect_completes_only_after_the_tcp_flush() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let flush_polls = Arc::new(AtomicUsize::new(0));
@@ -905,7 +903,7 @@ mod tests {
 
     /// Busy connection: `try_kick` lands while an earlier flush is stalled.
     /// Disconnect must still go out once the socket drains.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn close_during_stalled_flush_still_sends_the_disconnect() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -938,7 +936,7 @@ mod tests {
     }
 
     /// Full socket buffer: `try_kick` lands mid-write. Frame finishes whole, then the disconnect.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn close_during_stalled_write_finishes_the_frame() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -987,7 +985,7 @@ mod tests {
     }
 
     /// `try_kick`: enqueue mid-tick, `close()` at once. The disconnect must still go out.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn close_writes_and_flushes_the_queued_disconnect() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -1017,7 +1015,7 @@ mod tests {
     }
 
     /// `close()` before the writer ever ran: the queue is still drained.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn close_before_start_still_drains_the_queue() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -1046,7 +1044,7 @@ mod tests {
         assert_eq!(flushes.load(Ordering::SeqCst), 1);
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn send_packet_now_does_not_overtake_queued_tick_packets() {
         const TICK: u8 = 0xAA;
         const NOW: u8 = 0xBB;
@@ -1087,7 +1085,7 @@ mod tests {
         writer.await.unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn flush_stops_drain_so_later_packets_are_the_next_tick() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -1110,30 +1108,6 @@ mod tests {
         tx.send(OutgoingPacket::Flush).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert_eq!(flushes.load(Ordering::SeqCst), 2);
-
-        drop(tx);
-        close.cancel();
-        writer.await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn fifty_ms_flushes_while_packets_keep_arriving() {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let flushes = Arc::new(AtomicUsize::new(0));
-        let suspend = Arc::new(AtomicBool::new(false));
-        let close = CancellationToken::new();
-
-        let writer = spawn_writer(rx, writes, flushes.clone(), suspend, close.clone());
-
-        for i in 0..16u8 {
-            tx.send(packet(i)).unwrap();
-            tokio::time::sleep(Duration::from_millis(8)).await;
-        }
-        assert!(
-            flushes.load(Ordering::SeqCst) >= 1,
-            "busy recv must not starve the 50ms fallback flush"
-        );
 
         drop(tx);
         close.cancel();
