@@ -1,7 +1,7 @@
 use pumpkin_util::Difficulty;
 
 use crate::entity::EntityBase;
-use crate::entity::living::LivingEntity;
+use crate::entity::living::{LivingEntity, can_be_seen_as_enemy};
 use crate::world::World;
 use std::sync::Arc;
 
@@ -104,7 +104,7 @@ impl TargetPredicate {
         let Some(tester) = tester else {
             // Without a tester only the plain "can be seen as enemy" rule applies.
             return !(self.attackable
-                && (!target_living.can_take_damage()
+                && (!can_be_seen_as_enemy(target)
                     || world.level_info.load().difficulty == Difficulty::Peaceful));
         };
         let Some(tester_living) = tester.get_living_entity() else {
@@ -113,8 +113,8 @@ impl TargetPredicate {
 
         if self.attackable
             && (!tester.get_mob().map_or_else(
-                || tester_living.can_attack(target_living),
-                |mob| mob.can_attack(target_living),
+                || tester_living.can_attack(target),
+                |mob| mob.can_attack(target),
             ) || tester.is_allied_to(target))
         {
             return false;

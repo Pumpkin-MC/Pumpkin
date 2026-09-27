@@ -162,10 +162,7 @@ pub trait NeutralMob: Mob {
     }
 
     fn is_angry_at(&self, target: &dyn EntityBase, world: &World) -> bool {
-        let Some(living) = target.get_living_entity() else {
-            return false;
-        };
-        if !self.can_attack(living) {
+        if !self.can_attack(target) {
             return false;
         }
         if is_valid_player_target(target) && self.is_angry_at_all_players(world) {
@@ -206,9 +203,7 @@ pub trait NeutralMob: Mob {
         };
         if let Some(target) = find_by_uuid(world, uuid)
             && target.get_entity().is_alive()
-            && target
-                .get_living_entity()
-                .is_some_and(|living| self.can_attack(living))
+            && self.can_attack(target.as_ref())
         {
             self.set_mob_target(Some(target));
         }

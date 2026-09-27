@@ -6355,11 +6355,19 @@ impl Player {
         self.gamemode.load() == GameMode::Creative
     }
 
-    /// Whether mobs may target this player at all: not creative or spectator, and the world
-    /// is not Peaceful. Alive state is left out on purpose, a grudge may outlives the death.
-    // TODO: vanilla `Player.canBeSeenAsEnemy` also excludes `abilities.invulnerable`. The plugin
-    // `set_invulnerable` sets only that, so such a survival player is still targeted. Check it
-    // here and route `TargetPredicate` through this for players.
+    /// Vanilla `Player.canBeSeenAsEnemy`: not `abilities.invulnerable`, and alive and not a spectator.
+    #[must_use]
+    pub fn can_be_seen_as_enemy(&self) -> bool {
+        !self
+            .abilities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .invulnerable
+            && self.living_entity.can_take_damage()
+    }
+
+    /// Vanilla `NeutralMob.isValidPlayerTarget`: not creative or spectator, and the world is
+    /// not Peaceful. `abilities.invulnerable` is left out like vanilla, `can_attack` checks it.
     #[must_use]
     pub fn is_valid_mob_target(&self) -> bool {
         !self.is_creative()

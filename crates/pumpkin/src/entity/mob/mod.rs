@@ -801,12 +801,13 @@ pub trait Mob: EntityBase + Send + Sync {
         rand::rng()
     }
 
-    fn can_attack(&self, target: &crate::entity::living::LivingEntity) -> bool {
-        if target.entity.entity_type == &EntityType::GHAST {
+    fn can_attack(&self, target: &dyn EntityBase) -> bool {
+        let target_entity = target.get_entity();
+        if target_entity.entity_type == &EntityType::GHAST {
             return false;
         }
         if let Some(tamable) = self.as_tamable()
-            && tamable.is_owned_by(&target.entity.entity_uuid)
+            && tamable.is_owned_by(&target_entity.entity_uuid)
         {
             return false;
         }
@@ -1153,8 +1154,7 @@ pub trait Mob: EntityBase + Send + Sync {
         if !EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity()) {
             return None;
         }
-        let living = target.get_living_entity()?;
-        self.can_attack(living).then_some(target)
+        self.can_attack(target.as_ref()).then_some(target)
     }
 
     /// Set or clear the mob's target. Override to add side effects when targeting changes.
