@@ -21,6 +21,7 @@ use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
@@ -72,7 +73,11 @@ fn apply_entity_data(item: &ItemStack, mob: &dyn EntityBase, user: Option<&Playe
         nbt.child_tags.remove(key);
     }
     if !nbt.is_empty() {
-        mob.read_nbt_non_mut(&nbt);
+        // Vanilla TypedEntityData.loadInto merges into the mob's own save so unset keys keep their state.
+        let mut merged = NbtCompound::new();
+        mob.write_nbt(&mut merged);
+        merged.merge(&nbt);
+        mob.read_nbt_non_mut(&merged);
     }
 }
 

@@ -86,4 +86,22 @@ impl MobEntity {
             .store(-24000, std::sync::atomic::Ordering::Relaxed);
         entity.set_synced_data(pumpkin_data::tracked_data::ageable_mob::DATA_BABY_ID, true);
     }
+
+    /// Baby state kept as a mob's own flag and synced key (vanilla zombies and piglins), so it
+    /// never ages up.
+    pub fn set_baby_flag(
+        &self,
+        flag: &std::sync::atomic::AtomicBool,
+        tracked: pumpkin_data::tracked_data::TrackedData,
+        baby: bool,
+    ) {
+        flag.store(baby, std::sync::atomic::Ordering::Relaxed);
+        let entity = &self.living_entity.entity;
+        entity.set_synced_data(tracked, baby);
+        // Pumpkin's negative age is what reports the Bedrock baby flag.
+        entity.age.store(
+            if baby { -24000 } else { 0 },
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
 }

@@ -226,14 +226,9 @@ impl PiglinEntity {
     }
 
     pub fn set_baby(&self, baby: bool) {
-        self.is_baby.store(baby, Ordering::Relaxed);
+        self.mob_entity
+            .set_baby_flag(&self.is_baby, tracked_data::piglin::DATA_BABY_ID, baby);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.set_synced_data(tracked_data::piglin::DATA_BABY_ID, baby);
-        // Vanilla piglins have no age.
-        // Pumpkin's negative age is what reports the Bedrock baby flag.
-        entity
-            .age
-            .store(if baby { -24000 } else { 0 }, Ordering::Relaxed);
         if baby {
             entity.entity_dimension.store(Self::BABY_DIMENSIONS);
         } else {

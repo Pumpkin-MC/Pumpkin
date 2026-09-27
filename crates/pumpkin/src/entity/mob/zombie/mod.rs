@@ -30,6 +30,7 @@ pub mod zombie_villager;
 pub struct ZombieEntityBase {
     pub mob_entity: MobEntity,
     pub can_break_doors: AtomicBool,
+    pub is_baby: AtomicBool,
 }
 
 impl ZombieEntityBase {
@@ -42,6 +43,7 @@ impl ZombieEntityBase {
         let zombie = Self {
             mob_entity,
             can_break_doors: AtomicBool::new(can_break_doors),
+            is_baby: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(zombie);
         let mob_weak: Weak<dyn Mob> = {
@@ -135,24 +137,20 @@ impl ZombieEntityBase {
 }
 
 impl ZombieEntityBase {
-    /// Age and the zombie baby flag.
+    /// Vanilla `Zombie.setBaby`: the baby state is only the synced flag, it never ages up.
+    // TODO: vanilla baby zombies get the +50% SPEED_MODIFIER_BABY and 2.5x XP
+    // (`Zombie.getBaseExperienceReward`), unlike passive babies which drop none.
     pub fn set_baby(&self, baby: bool) {
-        let entity = &self.mob_entity.living_entity.entity;
-        entity.age.store(
-            if baby { -24000 } else { 0 },
-            std::sync::atomic::Ordering::Relaxed,
+        self.mob_entity.set_baby_flag(
+            &self.is_baby,
+            pumpkin_data::tracked_data::zombie::BABY,
+            baby,
         );
-        entity.set_synced_data(pumpkin_data::tracked_data::zombie::BABY, baby);
     }
 
     #[must_use]
     pub fn is_baby(&self) -> bool {
-        self.mob_entity
-            .living_entity
-            .entity
-            .age
-            .load(Ordering::Relaxed)
-            < 0
+        self.is_baby.load(Ordering::Relaxed)
     }
 }
 

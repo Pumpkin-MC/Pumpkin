@@ -101,7 +101,7 @@ impl ZombieVillagerEntity {
 
     #[must_use]
     pub fn is_baby(&self) -> bool {
-        self.get_entity().age.load(Ordering::Relaxed) < 0
+        self.mob_entity.is_baby()
     }
 
     /// Vanilla `startConverting`: begin the cure, swapping Weakness for Strength

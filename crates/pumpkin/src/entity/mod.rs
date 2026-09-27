@@ -1013,11 +1013,7 @@ impl Entity {
         let floor_y = position.y.floor() as i32;
         let floor_z = position.z.floor() as i32;
 
-        let bounding_box_size = EntityDimensions {
-            width: entity_type.dimension[0],
-            height: entity_type.dimension[1],
-            eye_height: entity_type.eye_height,
-        };
+        let bounding_box_size = Self::type_dimensions(entity_type);
 
         let current_biome = world
             .level
@@ -1173,6 +1169,16 @@ impl Entity {
         }
 
         metadata
+    }
+
+    /// The type's default size, vanilla `EntityType.getDimensions`.
+    #[must_use]
+    pub const fn type_dimensions(entity_type: &EntityType) -> EntityDimensions {
+        EntityDimensions {
+            width: entity_type.dimension[0],
+            height: entity_type.dimension[1],
+            eye_height: entity_type.eye_height,
+        }
     }
 
     /// Sets the entity's age in ticks.
