@@ -12,7 +12,7 @@ use pumpkin_util::{
 };
 use rayon::prelude::*;
 use std::f64::consts::PI;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use crate::biome::{BiomeSupplier, MultiNoiseBiomeSupplier};
 use crate::generation::noise::router::{
@@ -29,7 +29,9 @@ use super::structures::StructurePosition;
 /// mathematical layout in `O(1)` time instead of triggering cascading chunk loads.
 pub struct GlobalStructureCache {
     /// A cached list of mathematically predicted (`chunk_x`, `chunk_z`) coordinates.
-    stronghold_chunks: OnceLock<Vec<(i32, i32)>>,
+    stronghold_chunks: Arc<OnceLock<Vec<(i32, i32)>>>,
+    /// Set when a background job fills `stronghold_chunks`
+    strongholds_in_background: bool,
     /// Memoized structure starts, keyed by (structure, start chunk x, start chunk z).
     ///
     /// A jigsaw structure's placement is fully determined by its start chunk and the
@@ -47,21 +49,56 @@ struct RingTask {
 impl GlobalStructureCache {
     /// Creates a new, empty global structure cache.
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            stronghold_chunks: OnceLock::new(),
+            stronghold_chunks: Arc::new(OnceLock::new()),
+            strongholds_in_background: false,
             structure_starts: OnceLock::new(),
         }
     }
 
+    /// Creates a cache whose stronghold ring positions are computed on a background thread
+    #[must_use]
+    pub fn with_background_strongholds(
+        seed: i64,
+        placement: &'static ConcentricRingsStructurePlacement,
+        multi_noise: &Arc<ProtoMultiNoiseRouter>,
+    ) -> Self {
+        let stronghold_chunks = Arc::new(OnceLock::new());
+        let target = stronghold_chunks.clone();
+        let router = multi_noise.clone();
+        let spawned = std::thread::Builder::new()
+            .name("Stronghold-Rings".to_string())
+            .spawn(move || {
+                let compute = || Self::calculate_strongholds(seed, placement, &router);
+                // A private pool: global Rayon workers may block on this result, so the
+                // search must never be scheduled on (or steal work from) that pool.
+                let chunks = rayon::ThreadPoolBuilder::new()
+                    .thread_name(|i| format!("Stronghold-Rings-{i}"))
+                    .build()
+                    .map_or_else(|_| compute(), |pool| pool.install(compute));
+                let _ = target.set(chunks);
+            });
+        if let Err(err) = spawned {
+            tracing::warn!("Failed to spawn stronghold ring thread, computing inline: {err}");
+            let _ =
+                stronghold_chunks.set(Self::calculate_strongholds(seed, placement, multi_noise));
+        }
+        Self {
+            stronghold_chunks,
+            strongholds_in_background: true,
+            structure_starts: OnceLock::new(),
+        }
+    }
+
+    /// Returns the stronghold ring positions, waiting for the background job if one is running.
     pub fn get_stronghold_chunks(&self) -> &[(i32, i32)] {
+        if self.strongholds_in_background {
+            return self.stronghold_chunks.wait();
+        }
         self.stronghold_chunks
             .get()
             .map_or(&[], std::vec::Vec::as_slice)
-    }
-
-    pub fn init_strongholds(&self, chunks: Vec<(i32, i32)>) {
-        let _ = self.stronghold_chunks.set(chunks);
     }
 
     /// Returns the memoized structure start for the given structure and start chunk,
@@ -229,6 +266,9 @@ impl GlobalStructureCache {
         placement: &ConcentricRingsStructurePlacement,
         multi_noise: Option<&ProtoMultiNoiseRouter>,
     ) -> &[(i32, i32)] {
+        if self.strongholds_in_background {
+            return self.stronghold_chunks.wait();
+        }
         self.stronghold_chunks.get_or_init(|| {
             multi_noise.map_or_else(
                 || Self::calculate_strongholds_without_biomes(seed, placement),

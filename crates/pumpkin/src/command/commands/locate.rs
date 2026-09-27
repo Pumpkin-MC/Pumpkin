@@ -147,6 +147,8 @@ fn send_success(
     );
 }
 
+// TODO(parity): resolve structure ids (`stronghold`), not set ids (`strongholds`);
+// report chunk corner (x*16), not centre (x*16+8); `[x, ~, z]` brackets.
 struct LocateStructureExecutor;
 
 impl CommandExecutor for LocateStructureExecutor {

@@ -210,23 +210,20 @@ impl VanillaGenerator {
                     .collect()
             });
 
-        let global_structure_cache =
-            crate::generation::structure::placement::GlobalStructureCache::new();
-
-        if dimension == Dimension::OVERWORLD {
+        let global_structure_cache = if dimension == Dimension::OVERWORLD {
             let pumpkin_data::structures::StructurePlacementType::ConcentricRings(rings) =
                 &StructureSet::STRONGHOLDS.placement.placement_type
             else {
                 unreachable!()
             };
-            let strongholds =
-                crate::generation::structure::placement::GlobalStructureCache::calculate_strongholds(
-                    seed.0 as i64,
-                    rings,
-                    &base_router.multi_noise,
-                );
-            global_structure_cache.init_strongholds(strongholds);
-        }
+            crate::generation::structure::placement::GlobalStructureCache::with_background_strongholds(
+                seed.0 as i64,
+                rings,
+                &base_router.multi_noise,
+            )
+        } else {
+            crate::generation::structure::placement::GlobalStructureCache::new()
+        };
 
         Self {
             random_config,
