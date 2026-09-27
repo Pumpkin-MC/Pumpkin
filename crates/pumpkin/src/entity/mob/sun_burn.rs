@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering::Relaxed;
 
-use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::item_stack::DamageResult;
 
 use crate::entity::mob::Mob;
 use crate::entity::{Entity, EntityBase, equipment_break_status};
@@ -68,21 +68,23 @@ fn burn(mob: &dyn Mob) {
         entity.set_on_fire_for(BURN_SECONDS);
         return;
     }
-    if !stack.is_damageable() || stack.is_unbreakable() {
+    if !stack.is_damageable() {
         return;
     }
 
-    // Vanilla wears mob gear by 0 or 1, unaffected by Unbreaking.
-    let worn = stack.get_damage() + rand::random_range(0..2);
-    if worn >= stack.get_max_damage().unwrap_or(i32::MAX) {
-        mob_entity.set_item_slot(&slot, ItemStack::EMPTY.clone());
-        entity
-            .world
-            .load()
-            .send_entity_status(entity, equipment_break_status(&slot), None);
-    } else if worn != stack.get_damage() {
-        stack.set_damage(worn);
-        mob_entity.set_item_slot(&slot, stack);
+    // 0 or 1 wear, thinned out by Unbreaking.
+    match stack.damage_item(rand::random_range(0..2)) {
+        DamageResult::Untouched => {}
+        DamageResult::Damaged => {
+            mob_entity.set_item_slot(&slot, stack);
+        }
+        DamageResult::Broken => {
+            mob_entity.set_item_slot(&slot, stack);
+            entity
+                .world
+                .load()
+                .send_entity_status(entity, equipment_break_status(&slot), None);
+        }
     }
 }
 
