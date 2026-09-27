@@ -1,6 +1,7 @@
 use super::{Controls, Goal, to_goal_ticks};
 
 use crate::entity::ageable::AgeableMob;
+use crate::entity::ai::goal::revenge::MobFilter;
 use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
@@ -72,6 +73,7 @@ pub struct ActiveTargetGoal {
     target_type: Option<&'static EntityType>,
     target_predicate: TargetPredicate,
     condition: TargetCondition,
+    gate: Option<MobFilter>,
 }
 
 impl ActiveTargetGoal {
@@ -103,6 +105,7 @@ impl ActiveTargetGoal {
             target_type: Some(target_type),
             target_predicate,
             condition: TargetCondition::Always,
+            gate: None,
         }
     }
 
@@ -110,6 +113,13 @@ impl ActiveTargetGoal {
     #[must_use]
     pub fn when(mut self: Box<Self>, condition: TargetCondition) -> Box<Self> {
         self.condition = condition;
+        self
+    }
+
+    /// Extra condition for starting and for continuing, e.g. an angry, unspent bee.
+    #[must_use]
+    pub fn gated_by(mut self: Box<Self>, gate: MobFilter) -> Box<Self> {
+        self.gate = Some(gate);
         self
     }
 
@@ -132,6 +142,7 @@ impl ActiveTargetGoal {
             target_type: Some(target_type),
             target_predicate,
             condition: TargetCondition::Always,
+            gate: None,
         })
     }
 
@@ -159,6 +170,7 @@ impl ActiveTargetGoal {
             target_type: None,
             target_predicate,
             condition: TargetCondition::Always,
+            gate: None,
         })
     }
 
@@ -226,6 +238,9 @@ impl ActiveTargetGoal {
 
 impl Goal for ActiveTargetGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if self.gate.is_some_and(|gate| !gate(mob)) {
+            return false;
+        }
         if self.reciprocal_chance > 0
             && mob.get_random().random_range(0..self.reciprocal_chance) != 0
         {
@@ -239,6 +254,10 @@ impl Goal for ActiveTargetGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        if self.gate.is_some_and(|gate| !gate(mob)) {
+            self.target = None;
+            return false;
+        }
         // Grudge must keep holding. Daylight is only checked at start, like vanilla canUse.
         if self.condition == TargetCondition::AngryAt && !self.condition.allows_search(mob) {
             return false;

@@ -12,11 +12,18 @@ use pumpkin_nbt::compound::NbtCompound;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
-    ai::behavior::neutral::apply_targets,
     ai::goal::{
-        breed::BreedGoal, follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
+        active_target::{ActiveTargetGoal, TargetCondition},
+        breed::BreedGoal,
+        follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal,
+        reset_universal_anger::ResetUniversalAngerGoal,
+        revenge::RevengeGoal,
+        swim::SwimGoal,
+        tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{
         Mob, MobEntity,
@@ -29,6 +36,15 @@ use crate::entity::{
 pub const FLAG_ROLL: u8 = 2;
 pub const FLAG_HAS_STUNG: u8 = 4;
 pub const FLAG_HAS_NECTAR: u8 = 8;
+
+/// Angry and still holding its stinger.
+fn can_sting(mob: &dyn Mob) -> bool {
+    mob.as_neutral().is_some_and(NeutralMob::is_angry)
+        && !mob
+            .cast_any()
+            .downcast_ref::<BeeEntity>()
+            .is_some_and(BeeEntity::has_stung)
+}
 
 pub struct BeeEntity {
     pub mob_entity: MobEntity,
@@ -67,7 +83,10 @@ impl BeeEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            goal_selector.add_goal(0, Box::new(MeleeAttackGoal::new(1.4, true)));
+            goal_selector.add_goal(
+                0,
+                Box::new(MeleeAttackGoal::new(1.4, true).gated_by(can_sting)),
+            );
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, &[], false)));
             goal_selector.add_goal(5, Box::new(FollowParentGoal::new(1.25)));
@@ -88,7 +107,13 @@ impl BeeEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true).alerting_others()));
-            apply_targets(&mut target_selector, &mob_arc.mob_entity, 2, 3, true);
+            target_selector.add_goal(
+                2,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true)
+                    .when(TargetCondition::AngryAt)
+                    .gated_by(can_sting),
+            );
+            target_selector.add_goal(3, ResetUniversalAngerGoal::new(true));
         };
 
         mob_arc
