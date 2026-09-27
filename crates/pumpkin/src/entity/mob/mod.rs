@@ -235,6 +235,91 @@ impl MobEntity {
         (self.mob_flags.load(Relaxed) & Self::AI_DISABLED_FLAG) != 0
     }
 
+    /// Vanilla `Mob.serverAiStep`: sensing, goals, navigation and controls.
+    pub fn server_ai_step(&self, mob: &dyn Mob, caller: &dyn EntityBase) {
+        let age = self.living_entity.entity.age.load(Relaxed);
+        let entity_id = self.living_entity.entity.entity_id;
+
+        self.sensing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick();
+
+        // 1. "Take" selectors out of the mutexes
+        let mut target_selector = {
+            let mut guard = self
+                .target_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::mem::take(&mut *guard)
+        };
+        let mut goals_selector = {
+            let mut guard = self
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::mem::take(&mut *guard)
+        };
+
+        // 2. Perform AI logic
+        if (age + entity_id) % 2 != 0 && age > 1 {
+            target_selector.tick_goals(mob, false);
+            goals_selector.tick_goals(mob, false);
+        } else {
+            target_selector.tick(mob);
+            goals_selector.tick(mob);
+        }
+
+        // 3. "Put back" selectors
+        {
+            *self
+                .target_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = target_selector;
+            *self
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = goals_selector;
+        };
+
+        // 4. Repeat for Navigator
+        let mut navigator = {
+            let mut guard = self
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::mem::take(&mut *guard)
+        };
+
+        navigator.tick(&self.living_entity);
+
+        {
+            *self
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = navigator;
+        };
+
+        mob.custom_server_ai_step(caller);
+
+        // Controllers are synchronous, so we can just use normal blocks
+        {
+            let mut look_control = self
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            look_control.tick(mob);
+        };
+
+        {
+            let mut move_control = self
+                .move_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            move_control.tick(mob);
+        };
+    }
+
     pub fn clear_ai_goals(&self, mob: &dyn Mob) {
         let running_goals = self
             .goals_selector
@@ -375,9 +460,8 @@ impl MobEntity {
 
     pub fn read_mob_nbt(&self, nbt: &NbtCompound) {
         self.read_drop_chances(nbt);
-        if let Some(no_ai) = nbt.get_bool("NoAI") {
-            self.set_no_ai(no_ai);
-        }
+        // Vanilla getBooleanOr: `/data remove ... NoAI` turns the AI back on.
+        self.set_no_ai(nbt.get_bool("NoAI").unwrap_or(false));
         if let Some(left_handed) = nbt.get_bool("LeftHanded") {
             self.set_left_handed(left_handed);
         }
@@ -1330,88 +1414,25 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
         self.mob_tick(caller);
 
-        let age = mob_entity.living_entity.entity.age.load(Relaxed);
-        let entity_id = mob_entity.living_entity.entity.entity_id;
-
-        mob_entity
-            .sensing
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .tick();
-
-        // 1. "Take" selectors out of the mutexes
-        let mut target_selector = {
-            let mut guard = mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            std::mem::take(&mut *guard)
-        };
-        let mut goals_selector = {
-            let mut guard = mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            std::mem::take(&mut *guard)
-        };
-
-        // 2. Perform AI logic
-        if (age + entity_id) % 2 != 0 && age > 1 {
-            target_selector.tick_goals(self, false);
-            goals_selector.tick_goals(self, false);
-        } else {
-            target_selector.tick(self);
-            goals_selector.tick(self);
+        // Vanilla Mob.isEffectiveAi: NoAI skips the whole serverAiStep.
+        //
+        // TODO NoAI: move these vanilla `customServerAiStep` parts of `mob_tick`
+        // into `custom_server_ai_step`:
+        // Bat `tick_flying`/`tick_roosting` (not `tick_ambient_sound`)
+        // Bee sting death (`time_since_sting`)
+        // Armadillo scute drop, state switching, `danger_detected_recently_ticks`
+        // (not `in_state_ticks`, that is vanilla `tick`)
+        // ElderGuardian fatigue
+        // Wither `tick_wither` invulnerable countdown, healing, boss bar, head attacks
+        // (not the movement towards the target, that is vanilla `aiStep`)
+        // ZombifiedPiglin `maybe_alert_others`
+        // Axolotl `play_dead_ticks`
+        // Piglin timers, `tick_sensors`, admiring, dancing (conversion already checks NoAI)
+        // Bee and ZombifiedPiglin `update_persistent_anger` (Enderman, Wolf, IronGolem and
+        // PolarBear run it outside the AI step, so the shared call stays for them).
+        if !mob_entity.is_no_ai() {
+            mob_entity.server_ai_step(self, caller);
         }
-
-        // 3. "Put back" selectors
-        {
-            *mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = target_selector;
-            *mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = goals_selector;
-        };
-
-        // 4. Repeat for Navigator
-        let mut navigator = {
-            let mut guard = mob_entity
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            std::mem::take(&mut *guard)
-        };
-
-        navigator.tick(&mob_entity.living_entity);
-
-        {
-            *mob_entity
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = navigator;
-        };
-
-        self.custom_server_ai_step(caller);
-
-        // Controllers are synchronous, so we can just use normal blocks
-        {
-            let mut look_control = mob_entity
-                .look_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            look_control.tick(self);
-        };
-
-        {
-            let mut move_control = mob_entity
-                .move_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            move_control.tick(self);
-        };
 
         mob_entity.living_entity.tick(caller, server);
         self.post_tick();

@@ -1392,9 +1392,16 @@ impl LivingEntity {
 
         let touching_water = self.entity.touching_water.load(SeqCst);
 
+        // Vanilla Mob.isEffectiveAi: NoAI mobs don't travel, so they neither move nor fall.
+        let effective_ai = caller
+            .get_mob()
+            .is_none_or(|mob| !mob.get_mob_entity().is_no_ai());
+
         // Strider is the only entity that has canWalkOnFluid = false
 
-        if (touching_water || self.entity.touching_lava.load(SeqCst))
+        if !effective_ai {
+            // No travel.
+        } else if (touching_water || self.entity.touching_lava.load(SeqCst))
             && should_swim_in_fluids
             && self.entity.entity_type != &EntityType::STRIDER
         {
