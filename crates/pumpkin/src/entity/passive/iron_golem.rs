@@ -134,7 +134,9 @@ impl Mob for IronGolemEntity {
         if self.is_player_created() && target_type == &EntityType::PLAYER {
             return false;
         }
+        // Vanilla's `super.canAttack` goes through `Mob` crepper and ghast
         target_type != &EntityType::CREEPER
+            && target_type != &EntityType::GHAST
             && self.get_mob_entity().living_entity.can_attack(target)
     }
 
