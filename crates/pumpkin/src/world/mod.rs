@@ -4844,6 +4844,32 @@ impl World {
         self.add_entity_silent(entity);
     }
 
+    /// Fires [`CreatureSpawnEvent`] and spawns the entity unless a plugin cancels it.
+    ///
+    /// [`CreatureSpawnEvent`]: crate::plugin::api::events::entity::creature_spawn::CreatureSpawnEvent
+    pub fn spawn_creature(
+        self: &Arc<Self>,
+        entity: Arc<dyn EntityBase>,
+        reason: crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason,
+    ) -> bool {
+        let base = entity.get_entity();
+        let mut event = crate::plugin::api::events::entity::creature_spawn::CreatureSpawnEvent::new(
+            base.entity_id,
+            base.entity_type.resource_name.to_string(),
+            base.pos.load(),
+            self.clone(),
+            reason,
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled {
+            return false;
+        }
+        self.spawn_entity(entity);
+        true
+    }
+
     #[expect(clippy::needless_pass_by_value)]
     pub fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();

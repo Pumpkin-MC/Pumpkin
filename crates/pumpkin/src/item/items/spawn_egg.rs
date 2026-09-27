@@ -7,6 +7,7 @@ use crate::entity::mob::spawn::finalize_spawn;
 use crate::entity::player::Player;
 use crate::entity::r#type::from_type;
 use crate::item::{ItemBehaviour, ItemMetadata};
+use crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason;
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::data_component_impl::{
@@ -172,7 +173,9 @@ impl ItemBehaviour for SpawnEggItem {
                 player.inventory.off_hand_item()
             };
             prepare_egg_mob(&stack, &mob, &world, Some(player));
-            world.spawn_entity(mob);
+            if !world.spawn_creature(mob, CreatureSpawnReason::SpawnerEgg) {
+                return;
+            }
 
             let mut main_hand = player.inventory.held_item();
             let consumed = if !main_hand.is_empty() && main_hand.item.id == item.id {
@@ -252,8 +255,9 @@ impl ItemBehaviour for SpawnEggItem {
 
             prepare_egg_mob(item, &mob, &world, Some(player));
 
-            world.spawn_entity(mob);
-            item.decrement_unless_creative(player.gamemode.load(), 1);
+            if world.spawn_creature(mob, CreatureSpawnReason::SpawnerEgg) {
+                item.decrement_unless_creative(player.gamemode.load(), 1);
+            }
             BlockActionResult::Success
         } else {
             BlockActionResult::Pass
@@ -277,8 +281,9 @@ impl ItemBehaviour for SpawnEggItem {
             mob.get_entity()
                 .set_rotation(rand::random::<f32>() * 360.0, 0.0);
             apply_entity_variant(item, mob.as_ref(), Some(player));
-            world.spawn_entity(mob);
-            item.decrement_unless_creative(player.gamemode.load(), 1);
+            if world.spawn_creature(mob, CreatureSpawnReason::SpawnerEgg) {
+                item.decrement_unless_creative(player.gamemode.load(), 1);
+            }
         }
     }
 
