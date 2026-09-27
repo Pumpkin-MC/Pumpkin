@@ -39,17 +39,22 @@ impl DragonEggBlock {
 
             if state.is_air() {
                 let current_state = world.get_block_state(pos);
-                world.set_block_state(
-                    &test_pos,
-                    current_state.id,
-                    pumpkin_world::world::BlockFlags::NOTIFY_ALL,
-                );
-                world.set_block_state(
-                    pos,
-                    pumpkin_data::Block::AIR.default_state.id,
-                    pumpkin_world::world::BlockFlags::NOTIFY_ALL,
-                );
-                return;
+                if world
+                    .set_block_state_if(
+                        &test_pos,
+                        current_state.id,
+                        pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                        |_| true,
+                    )
+                    .is_some()
+                {
+                    world.set_block_state(
+                        pos,
+                        pumpkin_data::Block::AIR.default_state.id,
+                        pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                    );
+                    return;
+                }
             }
         }
     }
