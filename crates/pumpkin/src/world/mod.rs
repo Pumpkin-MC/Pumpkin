@@ -5349,20 +5349,6 @@ impl World {
         )
     }
 
-    /// Sunlight only: no block light, so torches cannot shift it. Same curve as
-    /// [`Self::get_light_level_dependent_magic_value`].
-    #[must_use]
-    pub fn get_sunlight_brightness(&self, pos: &BlockPos) -> f32 {
-        self.sunlight_from_sky_light(self.get_sky_light_level(pos))
-    }
-
-    /// [`Self::get_sunlight_brightness`] for a sky light the caller already read.
-    #[must_use]
-    pub fn sunlight_from_sky_light(&self, sky_light: u8) -> f32 {
-        let effective = self.effective_sky_brightness_from(sky_light).clamp(0, 15);
-        brightness::light_level_curve(effective as u8, self.dimension.ambient_light)
-    }
-
     #[must_use]
     pub fn get_effective_sky_brightness(&self, pos: &BlockPos) -> i32 {
         self.effective_sky_brightness_from(self.get_sky_light_level(pos))
@@ -5421,10 +5407,15 @@ impl World {
     /// local brightness through the dimension curve.
     #[must_use]
     pub fn get_light_level_dependent_magic_value(&self, pos: &BlockPos) -> f32 {
-        brightness::light_level_curve(
-            self.get_max_local_raw_brightness(pos),
-            self.dimension.ambient_light,
-        )
+        self.light_level_dependent_magic_value_with_sky(pos, self.get_sky_light_level(pos))
+    }
+
+    /// [`Self::get_light_level_dependent_magic_value`] for a sky light the caller already read.
+    #[must_use]
+    pub fn light_level_dependent_magic_value_with_sky(&self, pos: &BlockPos, sky_light: u8) -> f32 {
+        let sky_light = sky_light.saturating_sub(self.get_sky_darken() as u8);
+        let block_light = self.get_block_light_level(pos).unwrap_or(0);
+        brightness::light_level_curve(sky_light.max(block_light), self.dimension.ambient_light)
     }
 
     pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {

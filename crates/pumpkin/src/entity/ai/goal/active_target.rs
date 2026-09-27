@@ -55,7 +55,8 @@ impl TargetCondition {
         }
     }
 
-    /// Checked per candidate and against the held target while the goal continues.
+    /// Checked per candidate during the search.
+    /// The grudge target is already filtered by the search.
     fn allows_target(self, mob: &dyn Mob, target: &dyn EntityBase, world: &World) -> bool {
         match self {
             Self::AngryAt => mob
@@ -258,16 +259,7 @@ impl Goal for ActiveTargetGoal {
             self.target = None;
             return false;
         }
-        // Grudge must keep holding. Daylight is only checked at start, like vanilla canUse.
-        if self.condition == TargetCondition::AngryAt && !self.condition.allows_search(mob) {
-            return false;
-        }
-        if let Some(target) = mob.get_mob_entity().get_target() {
-            let world = mob.get_mob_entity().living_entity.entity.world.load();
-            if !self.condition.allows_target(mob, target.as_ref(), &world) {
-                return false;
-            }
-        }
+        // Like vanilla TargetGoal.canContinueToUse, the condition only gates the search.
         self.track_target_goal.should_continue(mob)
     }
 

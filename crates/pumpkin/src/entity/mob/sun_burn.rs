@@ -25,8 +25,10 @@ fn is_sun_burn_tick(entity: &Entity) -> bool {
     }
     // One sky light read serves the brightness and the open-sky check.
     let sky_light = world.get_sky_light_level(&eye);
+    // Vanilla getLightLevelDependentMagicValue: block light counts too.
+    let brightness = world.light_level_dependent_magic_value_with_sky(&eye, sky_light);
     // Nearly every tick ends at the roll: the sky and wet checks stay behind it.
-    if !passes_burn_roll(world.sunlight_from_sky_light(sky_light), rand::random()) {
+    if !passes_burn_roll(brightness, rand::random()) {
         return false;
     }
     if !world.can_see_sky_with_light(&eye, sky_light) {
