@@ -7,20 +7,30 @@ use pumpkin_util::text::TextComponent;
 /// a compound with a `raw` field, e.g. `{raw: "A Partner"}`. The raw value is a
 /// text component of its own, so it may also be a styled compound such as
 /// `{raw: {text: "A Partner", color: "red"}}`.
-fn read_text(tag: &NbtTag) -> Option<String> {
+fn read_component(tag: &NbtTag) -> Option<TextComponent> {
     match tag {
-        NbtTag::String(value) => Some(value.to_string()),
+        NbtTag::String(value) => Some(TextComponent::text(value.to_string())),
         NbtTag::Compound(compound) => {
             let component = compound.get("raw").unwrap_or(tag);
-            Some(TextComponent::from_nbt(component).get_text())
+            Some(TextComponent::from_nbt(component))
         }
         _ => None,
     }
 }
 
+/// Reads a filterable text whose content is a plain string, like writable book
+/// pages and written book titles in vanilla.
+fn read_text(tag: &NbtTag) -> Option<String> {
+    read_component(tag).map(TextComponent::get_text)
+}
+
 fn text_tag(value: &str) -> NbtTag {
+    text_component_tag(&TextComponent::text(value.to_string()))
+}
+
+fn text_component_tag(component: &TextComponent) -> NbtTag {
     let mut compound = NbtCompound::new();
-    compound.put_string("raw", value.to_string());
+    compound.put("raw", NbtTag::Compound(component.0.to_nbt_compound()));
     NbtTag::Compound(compound)
 }
 
@@ -53,11 +63,13 @@ impl DataComponentImpl for WritableBookContentImpl {
     default_impl!(WritableBookContent);
 }
 
+/// Vanilla `WrittenBookContent` stores pages as filterable components, so the
+/// parsed component is kept instead of being flattened to plain text.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct WrittenBookContentImpl {
     pub title: String,
     pub author: String,
-    pub pages: Vec<String>,
+    pub pages: Vec<TextComponent>,
 }
 impl WrittenBookContentImpl {
     pub fn read_data(tag: &NbtTag) -> Option<Self> {
@@ -73,7 +85,7 @@ impl WrittenBookContentImpl {
             }
             if let Some(NbtTag::List(l)) = c.get("pages") {
                 for item in l {
-                    if let Some(page) = read_text(item) {
+                    if let Some(page) = read_component(item) {
                         pages.push(page);
                     }
                 }
@@ -91,7 +103,7 @@ impl DataComponentImpl for WrittenBookContentImpl {
         let mut compound = NbtCompound::new();
         compound.put("title", text_tag(&self.title));
         compound.put_string("author", self.author.clone());
-        let pages_tags: Vec<NbtTag> = self.pages.iter().map(|p| text_tag(p)).collect();
+        let pages_tags: Vec<NbtTag> = self.pages.iter().map(text_component_tag).collect();
         compound.put("pages", NbtTag::List(pages_tags));
         NbtTag::Compound(compound)
     }
@@ -112,6 +124,11 @@ impl DataComponentImpl for DebugStickStateImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pumpkin_util::text::color::{Color, NamedColor};
+
+    fn page_texts(pages: &[TextComponent]) -> Vec<String> {
+        pages.iter().map(|page| page.clone().get_text()).collect()
+    }
 
     fn compound(values: &[(&str, NbtTag)]) -> NbtTag {
         let mut compound = NbtCompound::new();
@@ -126,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn written_book_reads_styled_raw_components() {
+    fn written_book_preserves_styled_raw_components() {
         let mut styled = NbtCompound::new();
         styled.put_string("text", "hi".to_string());
         styled.put_string("color", "red".to_string());
@@ -137,7 +154,18 @@ mod tests {
             ("pages", NbtTag::List(vec![NbtTag::Compound(wrapper)])),
         ]);
         let content = WrittenBookContentImpl::read_data(&tag).unwrap();
-        assert_eq!(content.pages, ["hi"]);
+        assert_eq!(page_texts(&content.pages), ["hi"]);
+        assert_eq!(
+            content.pages[0].0.style.color,
+            Some(Color::Named(NamedColor::Red))
+        );
+
+        let read_back = WrittenBookContentImpl::read_data(&content.write_data()).unwrap();
+        assert_eq!(page_texts(&read_back.pages), ["hi"]);
+        assert_eq!(
+            read_back.pages[0].0.style.color,
+            Some(Color::Named(NamedColor::Red))
+        );
     }
 
     #[test]
@@ -150,7 +178,7 @@ mod tests {
         let content = WrittenBookContentImpl::read_data(&tag).unwrap();
         assert_eq!(content.title, "A Partner");
         assert_eq!(content.author, "Dylan Collins");
-        assert_eq!(content.pages, ["first page", "second page"]);
+        assert_eq!(page_texts(&content.pages), ["first page", "second page"]);
     }
 
     #[test]
@@ -164,7 +192,7 @@ mod tests {
         ]);
         let content = WrittenBookContentImpl::read_data(&tag).unwrap();
         assert_eq!(content.title, "Plain");
-        assert_eq!(content.pages, ["plain page"]);
+        assert_eq!(page_texts(&content.pages), ["plain page"]);
     }
 
     #[test]
@@ -179,7 +207,7 @@ mod tests {
         let content = WrittenBookContentImpl {
             title: "Title".to_string(),
             author: "Author".to_string(),
-            pages: vec!["one".to_string(), "two".to_string()],
+            pages: vec![TextComponent::text("one"), TextComponent::text("two")],
         };
         let tag = content.write_data();
         let written_compound = match &tag {

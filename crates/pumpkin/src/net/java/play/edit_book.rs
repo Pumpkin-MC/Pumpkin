@@ -38,7 +38,7 @@ impl JavaClient {
             let content = WrittenBookContentImpl {
                 title,
                 author: player.gameprofile.name.clone(),
-                pages,
+                pages: pages.into_iter().map(TextComponent::text).collect(),
             };
             written_book
                 .patch

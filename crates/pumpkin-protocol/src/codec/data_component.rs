@@ -2279,8 +2279,7 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
         seq.write_var_int(&VarInt(0))?;
         seq.write_var_int(&VarInt::from(self.pages.len() as i32))?;
         for page in &self.pages {
-            let comp = pumpkin_util::text::TextComponent::text(page.clone());
-            seq.write_slice(&comp.encode_for_version(&JavaMinecraftVersion::V_26_2))?;
+            seq.write_slice(&page.encode_for_version(&JavaMinecraftVersion::V_26_2))?;
             seq.write_bool(false)?;
         }
         seq.write_bool(true)
@@ -2304,7 +2303,7 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
             if seq.get_bool()? {
                 let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
             }
-            pages.push(comp.get_text());
+            pages.push(comp);
         }
         let _resolved = seq.get_bool()?;
         Ok(Self {
