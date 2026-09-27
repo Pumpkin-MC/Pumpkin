@@ -1044,12 +1044,10 @@ impl TrialSpawner {
         let yaw = rng.random::<f32>() * 360.0;
         entity.get_entity().set_rotation(yaw, 0.0);
 
-        if is_baby {
-            // Each mob type syncs its own baby flag (zombie, piglin, ageable...)
+        if is_baby && let Some(mob) = entity.get_mob() {
+            // Each mob type syncs its own baby flag (zombie, piglin, ageable...); poking a
             // single tracked-data key here would send the wrong field type to some mobs.
-            entity
-                .get_mob()
-                .is_some_and(crate::entity::mob::Mob::spawn_as_baby);
+            mob.spawn_as_baby();
         }
 
         if let Some(size) = slime_size {
