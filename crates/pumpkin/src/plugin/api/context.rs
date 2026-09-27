@@ -190,6 +190,46 @@ impl Context {
         self.reload_commands_for_everyone();
     }
 
+    /// Registers multiple new commands and their aliases at once.
+    pub fn register_commands_with_aliases<P: Into<String>>(
+        &self,
+        commands: impl IntoIterator<
+            Item = (
+                crate::command::node::detached::CommandDetachedNode,
+                Vec<String>,
+                P,
+            ),
+        >,
+    ) {
+        let mut new_nodes = Vec::new();
+        for (mut node, aliases, permission) in commands {
+            let permission = permission.into();
+            let full_permission_node = if permission.contains(':') {
+                permission
+            } else {
+                format!("{}:{permission}", self.metadata.name)
+            };
+            node.meta.source = Some(self.metadata.name.clone());
+            node.owned
+                .requirements
+                .0
+                .push(crate::command::node::Requirement(Arc::new(move |source| {
+                    source.has_permission(&full_permission_node)
+                })));
+            new_nodes.push((node, aliases));
+        }
+
+        self.server.command_dispatcher.rcu(|dispatcher| {
+            let mut new_dispatcher = (**dispatcher).clone();
+            for (node, aliases) in &new_nodes {
+                new_dispatcher.register_with_aliases(node.clone(), aliases);
+            }
+            Arc::new(new_dispatcher)
+        });
+
+        self.reload_commands_for_everyone();
+    }
+
     /// Registers a new command with aliases to the server with a specified permission level.
     pub fn register_command_with_aliases<P: Into<String>>(
         &self,
@@ -248,13 +288,28 @@ impl Context {
         self.reload_commands_for_everyone();
     }
 
-    /// Reloads (resends) all commands for all currently online players.
     pub fn reload_commands_for_everyone(&self) {
-        for world in self.server.worlds.load().iter() {
-            for player in world.players.load().iter() {
-                self.reload_commands_for(player);
+        let server = self.server.clone();
+        self.server.spawn_task(async move {
+            for world in server.worlds.load().iter() {
+                for player in world.players.load().iter() {
+                    let command_dispatcher = server.command_dispatcher.load();
+                    if let crate::net::ClientPlatform::Bedrock(_) = player.client.as_ref() {
+                        crate::command::client_suggestions::send_bedrock_commands_packet(
+                            player,
+                            &server,
+                            &command_dispatcher,
+                        );
+                    } else {
+                        crate::command::client_suggestions::send_c_commands_packet(
+                            player,
+                            &server,
+                            &command_dispatcher,
+                        );
+                    }
+                }
             }
-        }
+        });
     }
 
     /// Reloads (resends) all commands for a particular player on the server.

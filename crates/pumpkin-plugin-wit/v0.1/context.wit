@@ -45,6 +45,9 @@ interface context {
         /// * `permission`: The required permission node to execute this command.
         register-command: func(command: command, permission: string);
 
+        /// Registers multiple new commands at once.
+        register-commands: func(commands: list<tuple<command, string>>);
+
         /// Registers a permission node with the server.
         register-permission: func(permission: permission) -> result<_, string>;
 
