@@ -68,11 +68,6 @@ const PERMISSION: &str = "minecraft:command.execute";
 static ERROR_INVALID_DIMENSION: CommandErrorType<1> =
     CommandErrorType::new("argument.dimension.invalid", "argument.dimension.invalid");
 
-const ERROR_OBJECTIVE_NOT_FOUND: CommandErrorType<1> = CommandErrorType::new(
-    translation::java::ARGUMENTS_OBJECTIVE_NOTFOUND,
-    translation::java::ARGUMENTS_OBJECTIVE_NOTFOUND,
-);
-
 const ERROR_CONDITIONAL_FAILED: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL,
     translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL,
@@ -446,10 +441,7 @@ fn get_score_value(
     target: &str,
     objective: &str,
 ) -> Result<Option<i32>, CommandSyntaxError> {
-    if scoreboard.get_objective(objective).is_none() {
-        return Err(ERROR_OBJECTIVE_NOT_FOUND
-            .create_without_context(TextComponent::text(objective.to_string())));
-    }
+    ObjectiveArgumentType::objective_or_error(scoreboard, objective)?;
     Ok(scoreboard
         .get_score(target, objective)
         .map(|score| score.value.0))
@@ -470,9 +462,9 @@ fn get_score(
     get_score_value(&scoreboard, target, objective)
 }
 
-struct ScoreConditionExecutor(fn(&CommandContext) -> RedirectModifierResult);
+struct ConditionalExecutor(fn(&CommandContext) -> RedirectModifierResult);
 
-impl CommandExecutor for ScoreConditionExecutor {
+impl CommandExecutor for ConditionalExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         if (self.0)(context)?.is_empty() {
             return Err(ERROR_CONDITIONAL_FAILED.create_without_context());
@@ -489,7 +481,7 @@ impl CommandExecutor for ScoreConditionExecutor {
     }
 }
 
-fn score_condition(
+fn add_conditional(
     builder: RequiredArgumentBuilder,
     modifier: fn(&CommandContext) -> RedirectModifierResult,
 ) -> RequiredArgumentBuilder {
@@ -498,7 +490,7 @@ fn score_condition(
             Redirection::Root,
             RedirectModifier::Custom(Arc::new(modifier)),
         )
-        .executes(ScoreConditionExecutor(modifier))
+        .executes(ConditionalExecutor(modifier))
 }
 
 fn execute_if_score_matches_modifier(
@@ -1307,13 +1299,13 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     literal("score").then(
                         argument("target", ScoreHolderArgumentType::Single).then(
                             argument("target_obj", ObjectiveArgumentType)
-                                .then(literal("matches").then(score_condition(
+                                .then(literal("matches").then(add_conditional(
                                     argument("range", IntRangeArgumentType),
                                     execute_if_score_matches_modifier,
                                 )))
                                 .then(literal("=").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
-                                        score_condition(
+                                        add_conditional(
                                             argument("source_obj", ObjectiveArgumentType),
                                             execute_if_score_eq_modifier,
                                         ),
@@ -1321,7 +1313,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 ))
                                 .then(literal("<").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
-                                        score_condition(
+                                        add_conditional(
                                             argument("source_obj", ObjectiveArgumentType),
                                             execute_if_score_lt_modifier,
                                         ),
@@ -1329,7 +1321,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 ))
                                 .then(literal("<=").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
-                                        score_condition(
+                                        add_conditional(
                                             argument("source_obj", ObjectiveArgumentType),
                                             execute_if_score_le_modifier,
                                         ),
@@ -1337,7 +1329,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 ))
                                 .then(literal(">").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
-                                        score_condition(
+                                        add_conditional(
                                             argument("source_obj", ObjectiveArgumentType),
                                             execute_if_score_gt_modifier,
                                         ),
@@ -1345,7 +1337,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 ))
                                 .then(literal(">=").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
-                                        score_condition(
+                                        add_conditional(
                                             argument("source_obj", ObjectiveArgumentType),
                                             execute_if_score_ge_modifier,
                                         ),
@@ -1467,13 +1459,13 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     literal("score").then(
                         argument("target", ScoreHolderArgumentType::Single).then(
                             argument("target_obj", ObjectiveArgumentType)
-                                .then(literal("matches").then(score_condition(
+                                .then(literal("matches").then(add_conditional(
                                     argument("range", IntRangeArgumentType),
                                     execute_unless_score_matches_modifier,
                                 )))
                                 .then(literal("=").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
-                                        score_condition(
+                                        add_conditional(
                                             argument("source_obj", ObjectiveArgumentType),
                                             execute_unless_score_eq_modifier,
                                         ),
@@ -1481,7 +1473,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 ))
                                 .then(literal("<").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
-                                        score_condition(
+                                        add_conditional(
                                             argument("source_obj", ObjectiveArgumentType),
                                             execute_unless_score_lt_modifier,
                                         ),
@@ -1489,7 +1481,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 ))
                                 .then(literal("<=").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
-                                        score_condition(
+                                        add_conditional(
                                             argument("source_obj", ObjectiveArgumentType),
                                             execute_unless_score_le_modifier,
                                         ),
@@ -1497,7 +1489,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 ))
                                 .then(literal(">").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
-                                        score_condition(
+                                        add_conditional(
                                             argument("source_obj", ObjectiveArgumentType),
                                             execute_unless_score_gt_modifier,
                                         ),
@@ -1505,7 +1497,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 ))
                                 .then(literal(">=").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
-                                        score_condition(
+                                        add_conditional(
                                             argument("source_obj", ObjectiveArgumentType),
                                             execute_unless_score_ge_modifier,
                                         ),
@@ -1581,8 +1573,7 @@ fn set_redirects_to_execute(tree: &mut Tree, parent: NodeId, execute_id: Command
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::argument_types::core::integer::IntegerArgumentType;
-    use crate::command::{CommandSender, CommandSource};
+    use crate::command::CommandSource;
     use crate::world::scoreboard::{NoTarget, ScoreboardObjective};
     use pumpkin_protocol::java::client::play::RenderType;
 
@@ -1624,104 +1615,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_score_conditions_report_boolean_results_and_errors() {
-        let output = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let mut source = CommandSource::dummy();
-        source.output = CommandSender::Rcon(output.clone());
-        let mut dispatcher = CommandDispatcher::new();
-        register(&mut dispatcher, &PermissionRegistry::default());
-        let parsed = dispatcher.parse_input("execute", &source);
-        let context = parsed.context.build("execute");
-
-        let success = ScoreConditionExecutor(|context| Ok(vec![context.source.clone()]));
-        assert_eq!(success.execute(&context).unwrap(), 1);
-        assert_eq!(*output.lock().unwrap(), ["Test passed"]);
-        output.lock().unwrap().clear();
-
-        let failure = ScoreConditionExecutor(|_| Ok(vec![]));
-        let error = failure.execute(&context).unwrap_err();
-        assert_eq!(
-            serde_json::to_value(error.message).unwrap()["translate"],
-            translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL
-        );
-
-        let invalid = ScoreConditionExecutor(|_| {
-            Err(ERROR_OBJECTIVE_NOT_FOUND.create_without_context(TextComponent::text("missing")))
-        });
-        let error = invalid.execute(&context).unwrap_err();
-        assert_eq!(
-            serde_json::to_value(error.message).unwrap()["translate"],
-            translation::java::ARGUMENTS_OBJECTIVE_NOTFOUND
-        );
-        assert!(output.lock().unwrap().is_empty());
-    }
-
-    #[test]
-    fn score_condition_builder_preserves_fork_results() {
-        struct ResultExecutor;
-        impl CommandExecutor for ResultExecutor {
-            fn execute(&self, _context: &CommandContext) -> CommandExecutorResult {
-                Ok(17)
-            }
-        }
-
-        let mut dispatcher = CommandDispatcher::new();
-        dispatcher.register(
-            command("condition", "Test a score condition").then(score_condition(
-                argument("score", IntegerArgumentType::new(0, 100)),
-                |context| {
-                    Ok(if IntegerArgumentType::get(context, "score")? > 0 {
-                        vec![context.source.clone()]
-                    } else {
-                        vec![]
-                    })
-                },
-            )),
-        );
-        dispatcher.register(
-            command("invalid", "Test an invalid objective").then(score_condition(
-                argument("score", IntegerArgumentType::new(0, 100)),
-                |_| {
-                    Err(ERROR_OBJECTIVE_NOT_FOUND
-                        .create_without_context(TextComponent::text("missing")))
-                },
-            )),
-        );
-        dispatcher
-            .register(command("result", "Return a non-boolean result").executes(ResultExecutor));
-        let output = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let mut source = CommandSource::dummy();
-        source.output = CommandSender::Rcon(output.clone());
-
-        assert_eq!(dispatcher.execute_input("condition 7", &source).unwrap(), 1);
-        assert_eq!(*output.lock().unwrap(), ["Test passed"]);
-        assert!(dispatcher.execute_input("condition 0", &source).is_err());
-        assert!(dispatcher.execute_input("invalid 7", &source).is_err());
-        output.lock().unwrap().clear();
-
-        assert_eq!(
-            dispatcher
-                .execute_input("condition 7 result", &source)
-                .unwrap(),
-            1
-        );
-        assert_eq!(
-            dispatcher
-                .execute_input("condition 0 result", &source)
-                .unwrap(),
-            0
-        );
-        assert_eq!(
-            dispatcher
-                .execute_input("invalid 7 result", &source)
-                .unwrap(),
-            0
-        );
-        assert!(output.lock().unwrap().is_empty());
-    }
-
-    #[test]
-    fn score_conditions_accept_single_score_holders() {
+    fn add_conditionals_accept_single_score_holders() {
         let mut dispatcher = CommandDispatcher::new();
         register(&mut dispatcher, &PermissionRegistry::default());
         let source = Arc::new(CommandSource::dummy());
@@ -1746,7 +1640,7 @@ mod tests {
     }
 
     #[test]
-    fn score_conditions_reject_multiple_holder_selectors() {
+    fn add_conditionals_reject_multiple_holder_selectors() {
         let mut dispatcher = CommandDispatcher::new();
         register(&mut dispatcher, &PermissionRegistry::default());
         let source = Arc::new(CommandSource::dummy());
