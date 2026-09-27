@@ -286,14 +286,8 @@ mod tests {
                 let mut offer = offer();
                 offer.uses = uses;
                 offer.reward_exp = reward_exp;
-                let packet = CMerchantOffers::new(
-                    VarInt(1),
-                    vec![offer],
-                    VarInt(1),
-                    VarInt(0),
-                    true,
-                    true,
-                );
+                let packet =
+                    CMerchantOffers::new(VarInt(1), vec![offer], VarInt(1), VarInt(0), true, true);
                 let mut bytes = Vec::new();
                 packet.write_packet_data(&mut bytes, &version).unwrap();
 
