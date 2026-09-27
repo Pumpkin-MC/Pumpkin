@@ -27,14 +27,14 @@ use crate::net::decrement_pending_bytes;
 /// Max wait for the disconnect flush (`kick_explicit`, writer drain on close).
 pub const DISCONNECT_FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Off-tick fallback. Play ticks flush from `OutgoingPacket::Flush`.
+/// Fallback for bytes written while suspended when the hold ends without a `Flush`
 const TICK_FLUSH_INTERVAL: Duration = Duration::from_millis(50);
 const MAX_FRAME_BATCH_DATA_SIZE: usize = MAX_PACKET_SIZE as usize;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FlushRequest {
     None,
-    /// `send_packet_now`. Vanilla `send(..., flush)` is false while suspended.
+    /// `send_packet_now` / `try_enqueue`. Vanilla `send(..., flush)` is false while suspended.
     IfNotSuspended,
     /// `Connection.flushChannel`. Always, including while still suspended.
     Always,
@@ -108,9 +108,8 @@ impl OutgoingPacket {
             Self::Data { data, completion } => {
                 *flush_request = flush_request.merge(match completion {
                     Some(Completion::Flushed(_)) => FlushRequest::Always,
-                    Some(Completion::Framed(_)) => FlushRequest::IfNotSuspended,
-                    // TODO off-tick try_enqueue: IfNotSuspended so we flush when the hold is down.
-                    None => FlushRequest::None,
+                    // off-tick sends flush at once -> mid-tick ones wait for `Flush`.
+                    Some(Completion::Framed(_)) | None => FlushRequest::IfNotSuspended,
                 });
                 packets.push_back(FramePacket { data, completion });
             }
@@ -736,7 +735,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fifty_ms_interval_flushes_when_no_tick_barrier() {
+    async fn off_tick_enqueue_flushes_immediately() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
         let flushes = Arc::new(AtomicUsize::new(0));
@@ -747,12 +746,10 @@ mod tests {
 
         tx.send(packet(1)).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
-        assert_eq!(flushes.load(Ordering::SeqCst), 0);
-
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        assert!(
-            flushes.load(Ordering::SeqCst) >= 1,
-            "unflushed packets must flush on the 50ms tick cadence"
+        assert_eq!(
+            flushes.load(Ordering::SeqCst),
+            1,
+            "keep-alive / pong outside the tick must not wait for the 50ms fallback"
         );
 
         drop(tx);
@@ -1110,30 +1107,6 @@ mod tests {
         tx.send(OutgoingPacket::Flush).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert_eq!(flushes.load(Ordering::SeqCst), 2);
-
-        drop(tx);
-        close.cancel();
-        writer.await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn fifty_ms_flushes_while_packets_keep_arriving() {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let flushes = Arc::new(AtomicUsize::new(0));
-        let suspend = Arc::new(AtomicBool::new(false));
-        let close = CancellationToken::new();
-
-        let writer = spawn_writer(rx, writes, flushes.clone(), suspend, close.clone());
-
-        for i in 0..16u8 {
-            tx.send(packet(i)).unwrap();
-            tokio::time::sleep(Duration::from_millis(8)).await;
-        }
-        assert!(
-            flushes.load(Ordering::SeqCst) >= 1,
-            "busy recv must not starve the 50ms fallback flush"
-        );
 
         drop(tx);
         close.cancel();
