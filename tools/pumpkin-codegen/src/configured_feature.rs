@@ -1092,12 +1092,12 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
         let path = format!(
             "../../assets/datapack/data/minecraft/worldgen/block_state_provider/{name}.json"
         );
-        
+
         let content = fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("Failed to read block_state_provider {path}: {e}"));
         let json = serde_json::from_str::<Value>(&content)
             .unwrap_or_else(|e| panic!("Failed to parse JSON for {path}: {e}"));
-            
+
         let result = value_to_block_state_provider(&json);
 
         VISITED.with(|visited| {
