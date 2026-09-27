@@ -1142,6 +1142,31 @@ impl TrimImpl {
             pattern: compound.get("pattern")?.clone(),
         })
     }
+
+    #[must_use]
+    pub fn new(
+        material: crate::trim_material::TrimMaterial,
+        pattern: crate::trim_pattern::TrimPattern,
+    ) -> Self {
+        Self {
+            material: NbtTag::String(material.asset_id().into()),
+            pattern: NbtTag::String(pattern.asset_id().into()),
+        }
+    }
+
+    #[must_use]
+    pub fn material_enum(&self) -> Option<crate::trim_material::TrimMaterial> {
+        self.material
+            .extract_string()
+            .and_then(crate::trim_material::TrimMaterial::from_name)
+    }
+
+    #[must_use]
+    pub fn pattern_enum(&self) -> Option<crate::trim_pattern::TrimPattern> {
+        self.pattern
+            .extract_string()
+            .and_then(crate::trim_pattern::TrimPattern::from_name)
+    }
 }
 impl DataComponentImpl for TrimImpl {
     fn write_data(&self) -> NbtTag {

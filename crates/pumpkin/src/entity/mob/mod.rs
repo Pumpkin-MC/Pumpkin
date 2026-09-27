@@ -1246,6 +1246,7 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn mob_set_variant_name(&self, _name: &str) {}
+    fn mob_set_sound_variant_name(&self, _name: &str) {}
 
     fn mob_on_lightning_strike(
         &self,
@@ -1299,6 +1300,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn set_variant_name(&self, name: &str) {
         self.mob_set_variant_name(name);
+    }
+
+    fn set_sound_variant_name(&self, name: &str) {
+        self.mob_set_sound_variant_name(name);
     }
 
     #[allow(clippy::too_many_lines)]
