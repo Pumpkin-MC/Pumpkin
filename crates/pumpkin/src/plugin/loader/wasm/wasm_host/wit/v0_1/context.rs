@@ -1435,8 +1435,8 @@ fn next_event_registration_id() -> wasmtime::Result<u64> {
 impl PluginHostState {
     #[allow(clippy::too_many_lines)]
     fn register_wasm_event(
-        &mut self,
-        context: Resource<WitContext>,
+        &self,
+        context: &Resource<WitContext>,
         handler_id: u32,
         event_type: EventType,
         event_priority: EventPriority,
@@ -1460,7 +1460,7 @@ impl PluginHostState {
             .upgrade()
             .ok_or_else(|| wasmtime::Error::msg("Plugin has been dropped"))?;
 
-        let ctx = self.get(&context)?.as_ref();
+        let ctx = self.get(context)?.as_ref();
         let handler = Arc::new(WasmPluginEventHandler {
             handler_id,
             plugin,
@@ -1704,7 +1704,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         blocking: bool,
     ) -> wasmtime::Result<()> {
         self.register_wasm_event(
-            context,
+            &context,
             handler_id,
             event_type,
             event_priority,
@@ -1723,7 +1723,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
     ) -> wasmtime::Result<u64> {
         let registration_id = next_event_registration_id()?;
         self.register_wasm_event(
-            context,
+            &context,
             handler_id,
             event_type,
             event_priority,
