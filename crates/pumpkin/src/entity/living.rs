@@ -2684,7 +2684,13 @@ impl LivingEntity {
     }
 
     pub fn read_living_nbt_non_mut(&self, nbt: &NbtCompound) {
-        self.health.store(nbt.get_float("Health").unwrap_or(20.0));
+        // Vanilla LivingEntity.readAdditionalSaveData defaults to the mob's own max health,
+        // not a flat 20; a hoglin (40 max) or iron golem (100 max) with no saved Health would
+        // otherwise be silently reset to 20 here.
+        self.health.store(
+            nbt.get_float("Health")
+                .unwrap_or_else(|| self.get_max_health()),
+        );
 
         if let Some(equipment) = nbt.get_compound("equipment") {
             let mut guard = self

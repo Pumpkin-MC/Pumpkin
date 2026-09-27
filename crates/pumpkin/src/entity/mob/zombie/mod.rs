@@ -144,6 +144,16 @@ impl ZombieEntityBase {
         );
         entity.set_synced_data(pumpkin_data::tracked_data::zombie::BABY, baby);
     }
+
+    #[must_use]
+    pub fn is_baby(&self) -> bool {
+        self.mob_entity
+            .living_entity
+            .entity
+            .age
+            .load(Ordering::Relaxed)
+            < 0
+    }
 }
 
 impl Mob for ZombieEntityBase {
@@ -221,12 +231,15 @@ impl Mob for ZombieEntityBase {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        // Vanilla Zombie.addAdditionalSaveData; shared by every zombie-family mob.
+        nbt.put_bool("IsBaby", self.is_baby());
         if self.can_break_doors() {
             nbt.put_bool("CanBreakDoors", true);
         }
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        self.set_baby(nbt.get_bool("IsBaby").unwrap_or(false));
         if let Some(can_break_doors) = nbt.get_bool("CanBreakDoors") {
             self.set_can_break_doors(can_break_doors, self);
         }
