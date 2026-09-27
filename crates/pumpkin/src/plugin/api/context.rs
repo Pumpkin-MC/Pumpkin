@@ -219,6 +219,10 @@ impl Context {
             new_nodes.push((node, aliases));
         }
 
+        if new_nodes.is_empty() {
+            return;
+        }
+
         self.server.command_dispatcher.rcu(|dispatcher| {
             let mut new_dispatcher = (**dispatcher).clone();
             for (node, aliases) in &new_nodes {
