@@ -9,9 +9,10 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::data_component_impl::{
-    AxolotlVariantImpl, CatVariantImpl, ChickenVariantImpl, CowVariantImpl, FoxVariantImpl,
-    FrogVariantImpl, HorseVariantImpl, LlamaVariantImpl, MooshroomVariantImpl, PigVariantImpl,
-    RabbitVariantImpl, SheepColorImpl, ShulkerColorImpl, VillagerVariantImpl, WolfVariantImpl,
+    AxolotlVariantImpl, CatVariantImpl, ChickenVariantImpl, CowVariantImpl, EntityDataImpl,
+    FoxVariantImpl, FrogVariantImpl, HorseVariantImpl, LlamaVariantImpl, MooshroomVariantImpl,
+    PigVariantImpl, RabbitVariantImpl, SheepColorImpl, ShulkerColorImpl, VillagerVariantImpl,
+    WolfVariantImpl,
 };
 use pumpkin_data::entity::entity_from_egg;
 use pumpkin_data::fluid::Fluid;
@@ -31,7 +32,25 @@ impl ItemMetadata for SpawnEggItem {
     }
 }
 
+/// Loads the stack's `entity_data` NBT into the mob. Identity and placement stay as spawned.
+fn apply_entity_data(item: &ItemStack, mob: &dyn EntityBase) {
+    let Some(nbt) = item
+        .get_data_component::<EntityDataImpl>()
+        .and_then(|comp| comp.nbt.as_ref())
+    else {
+        return;
+    };
+    let mut nbt = nbt.clone();
+    for key in ["id", "UUID", "Pos"] {
+        nbt.child_tags.remove(key);
+    }
+    if !nbt.is_empty() {
+        mob.read_nbt_non_mut(&nbt);
+    }
+}
+
 pub(crate) fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase) {
+    apply_entity_data(item, mob);
     if let Some(comp) = item.get_data_component::<ChickenVariantImpl>() {
         mob.set_variant_name(&comp.value);
     } else if let Some(comp) = item.get_data_component::<FrogVariantImpl>() {

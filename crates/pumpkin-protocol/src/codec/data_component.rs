@@ -2343,14 +2343,25 @@ impl DataComponentCodec<Self> for DebugStickStateImpl {
 
 impl DataComponentCodec<Self> for EntityDataImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))?;
-        seq.write_nbt(NbtTag::Compound(pumpkin_nbt::compound::NbtCompound::new()))
+        let mut nbt = self.nbt.clone().unwrap_or_default();
+        let type_id = nbt
+            .get_string("id")
+            .and_then(|id| EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id)))
+            .map_or(0, |entity_type| i32::from(entity_type.id));
+        nbt.child_tags.remove("id");
+        seq.write_var_int(&VarInt(type_id))?;
+        seq.write_nbt(NbtTag::Compound(nbt))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let _type_id = seq.get_var_int()?;
-        let _nbt = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
-        Ok(Self)
+        let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+        Ok(Self {
+            nbt: match tag {
+                Some(NbtTag::Compound(c)) if !c.is_empty() => Some(c),
+                _ => None,
+            },
+        })
     }
 }
 
