@@ -4826,7 +4826,10 @@ impl World {
         }
     }
 
-    pub fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) {
+    /// Returns `false` when a plugin cancels the [`EntitySpawnEvent`].
+    ///
+    /// [`EntitySpawnEvent`]: crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent
+    pub fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) -> bool {
         let mut event = crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent::new(
             entity.get_entity().entity_id,
             entity.get_entity().entity_type.id.to_string(),
@@ -4837,14 +4840,15 @@ impl World {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
         if event.cancelled {
-            return;
+            return false;
         }
 
         entity.init_data_tracker();
         self.add_entity_silent(entity);
+        true
     }
 
-    /// Fires [`CreatureSpawnEvent`] and spawns the entity unless a plugin cancels it.
+    /// Fires [`CreatureSpawnEvent`], then spawns the entity; `false` if either event is cancelled.
     ///
     /// [`CreatureSpawnEvent`]: crate::plugin::api::events::entity::creature_spawn::CreatureSpawnEvent
     pub fn spawn_creature(
@@ -4868,8 +4872,7 @@ impl World {
         if event.cancelled {
             return false;
         }
-        self.spawn_entity(entity);
-        true
+        self.spawn_entity(entity)
     }
 
     #[expect(clippy::needless_pass_by_value)]
