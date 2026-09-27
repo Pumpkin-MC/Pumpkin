@@ -48,6 +48,12 @@ interface context {
         /// Registers multiple new commands at once.
         register-commands: func(commands: list<tuple<command, string>>);
 
+        /// Unregisters a command by name.
+        unregister-command: func(name: string);
+
+        /// Unregisters all commands registered by this plugin.
+        unregister-commands: func();
+
         /// Registers a permission node with the server.
         register-permission: func(permission: permission) -> result<_, string>;
 

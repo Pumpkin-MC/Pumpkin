@@ -1716,6 +1716,21 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         Ok(())
     }
 
+    async fn unregister_command(
+        &mut self,
+        context: Resource<WitContext>,
+        name: String,
+    ) -> wasmtime::Result<()> {
+        let context = self.get(&context)?.clone();
+        context.unregister_command(&name);
+        Ok(())
+    }
+
+    async fn unregister_commands(&mut self, context: Resource<WitContext>) -> wasmtime::Result<()> {
+        let context = self.get(&context)?.clone();
+        context.unregister_commands();
+        Ok(())
+    }
     async fn register_permission(
         &mut self,
         context: Resource<WitContext>,
