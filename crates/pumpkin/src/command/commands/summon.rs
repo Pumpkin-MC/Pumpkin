@@ -84,7 +84,13 @@ impl CommandExecutor for SummonExecutor {
         }
 
         let name = entity.get_display_name();
-        world.spawn_entity(entity);
+        world.spawn_entity(entity.clone());
+        // Vanilla only finalizes the spawn when no NBT argument was given.
+        if !self.has_nbt
+            && let Some(mob) = entity.get_mob()
+        {
+            mob.finalize_spawn(&entity, world);
+        }
 
         context.source.send_feedback(
             TextComponent::translate_cross(

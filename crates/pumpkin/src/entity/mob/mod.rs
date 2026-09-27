@@ -933,6 +933,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    /// Runs once the mob is in the world, for spawns that vanilla finalizes
+    /// (natural spawns, `/summon` without NBT). Can add riders, effects, etc.
+    fn finalize_spawn(&self, _this: &Arc<dyn EntityBase>, _world: &Arc<World>) {}
+
     fn populate_default_equipment_slots(
         &self,
         _world: &Arc<World>,

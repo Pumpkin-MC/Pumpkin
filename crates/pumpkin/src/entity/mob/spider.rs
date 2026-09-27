@@ -1,7 +1,12 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::potion::Effect;
+use pumpkin_util::difficulty::Difficulty;
+use rand::RngExt;
+use uuid::Uuid;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -14,8 +19,10 @@ use crate::entity::{
         swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, equipment::RegionalDifficulty},
+    r#type::from_type,
 };
+use crate::world::World;
 
 pub struct SpiderEntity {
     pub mob_entity: MobEntity,
@@ -87,7 +94,47 @@ impl SpiderEntity {
     }
 }
 
+/// Vanilla `Spider.finalizeSpawn`: a skeleton jockey, and on hard difficulty a random effect.
+pub fn finalize_spider_spawn(this: &Arc<dyn EntityBase>, world: &Arc<World>) {
+    let mut rng = rand::rng();
+    let entity = this.get_entity();
+    let pos = entity.pos.load();
+
+    if rng.random_range(0..100) == 0 {
+        let skeleton = from_type(&EntityType::SKELETON, pos, world, Uuid::new_v4());
+        skeleton.get_entity().set_rotation(entity.yaw.load(), 0.0);
+        world.spawn_entity(skeleton.clone());
+        entity.add_passenger(this.clone(), skeleton);
+    }
+
+    let difficulty = RegionalDifficulty::at(world, pos);
+    if difficulty.base_difficulty == Difficulty::Hard
+        && rng.random::<f32>() < 0.1 * difficulty.special_multiplier
+        && let Some(living) = this.get_living_entity()
+    {
+        let effect_type = match rng.random_range(0..5) {
+            0 | 1 => &StatusEffect::SPEED,
+            2 => &StatusEffect::STRENGTH,
+            3 => &StatusEffect::REGENERATION,
+            _ => &StatusEffect::INVISIBILITY,
+        };
+        living.add_effect(Effect {
+            effect_type,
+            duration: -1,
+            amplifier: 0,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: false,
+        });
+    }
+}
+
 impl Mob for SpiderEntity {
+    fn finalize_spawn(&self, this: &Arc<dyn EntityBase>, world: &Arc<World>) {
+        finalize_spider_spawn(this, world);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

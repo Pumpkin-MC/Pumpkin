@@ -71,6 +71,10 @@ impl CaveSpiderEntity {
 }
 
 impl Mob for CaveSpiderEntity {
+    fn finalize_spawn(&self, this: &Arc<dyn EntityBase>, world: &Arc<crate::world::World>) {
+        super::spider::finalize_spider_spawn(this, world);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
