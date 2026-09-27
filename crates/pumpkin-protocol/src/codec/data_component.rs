@@ -2344,10 +2344,13 @@ impl DataComponentCodec<Self> for DebugStickStateImpl {
 impl DataComponentCodec<Self> for EntityDataImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         let mut nbt = self.nbt.clone().unwrap_or_default();
-        let type_id = nbt
+        // Vanilla TypedEntityData always carries its type, there is no fallback.
+        let id = nbt
             .get_string("id")
-            .and_then(|id| EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id)))
-            .map_or(0, |entity_type| i32::from(entity_type.id));
+            .ok_or_else(|| WritingError::Message("entity_data has no 'id'".into()))?;
+        let type_id = EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
+            .map(|entity_type| i32::from(entity_type.id))
+            .ok_or_else(|| WritingError::Message(format!("Unknown entity type {id}")))?;
         nbt.child_tags.remove("id");
         seq.write_var_int(&VarInt(type_id))?;
         seq.write_nbt(NbtTag::Compound(nbt))
