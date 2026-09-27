@@ -2354,14 +2354,20 @@ impl DataComponentCodec<Self> for EntityDataImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _type_id = seq.get_var_int()?;
+        let type_id = seq.get_var_int()?.0;
         let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
-        Ok(Self {
-            nbt: match tag {
-                Some(NbtTag::Compound(c)) if !c.is_empty() => Some(c),
-                _ => None,
-            },
-        })
+        // Vanilla's TypedEntityData keeps the type apart from the tag.
+        //Pumpkin keeps it as "id" in the NBT.
+        let entity_type = u16::try_from(type_id)
+            .ok()
+            .and_then(EntityType::from_raw)
+            .ok_or_else(|| ReadingError::Message(format!("Unknown entity type id {type_id}")))?;
+        let mut nbt = match tag {
+            Some(NbtTag::Compound(c)) => c,
+            _ => pumpkin_nbt::compound::NbtCompound::new(),
+        };
+        nbt.put_string("id", format!("minecraft:{}", entity_type.resource_name));
+        Ok(Self { nbt: Some(nbt) })
     }
 }
 
