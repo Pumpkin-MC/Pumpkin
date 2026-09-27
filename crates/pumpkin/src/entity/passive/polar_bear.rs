@@ -26,6 +26,10 @@ use crate::entity::{
     player::Player,
 };
 
+fn is_baby(mob: &dyn Mob) -> bool {
+    mob.as_ageable().is_some_and(AgeableMob::is_baby)
+}
+
 pub struct PolarBearEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
@@ -74,7 +78,14 @@ impl PolarBearEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true).alerting_others()));
+            target_selector.add_goal(
+                1,
+                Box::new(
+                    RevengeGoal::new(true)
+                        .raising_alarm_when(is_baby)
+                        .alerting_only(|other| !is_baby(other)),
+                ),
+            );
             // TODO: PolarBearAttackPlayersGoal at 2 -> adults charge when a cub is near.
             apply_targets(&mut target_selector, &mob_arc.mob_entity, 3, 5, false);
             target_selector.add_goal(

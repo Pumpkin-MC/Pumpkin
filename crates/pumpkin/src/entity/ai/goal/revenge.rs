@@ -13,6 +13,9 @@ use pumpkin_data::entity::EntityType;
 /// A function pointer also covers whole hierarchies, like every raider.
 pub type EntityTypeFilter = fn(&'static EntityType) -> bool;
 
+/// A check on a single mob.
+pub type MobFilter = fn(&dyn Mob) -> bool;
+
 pub struct RevengeGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
@@ -21,6 +24,8 @@ pub struct RevengeGoal {
     ignore_damage_from: Option<EntityTypeFilter>,
     alert_others: bool,
     ignore_alert: Option<EntityTypeFilter>,
+    alert_only: Option<MobFilter>,
+    alarm_when: Option<MobFilter>,
 }
 
 impl RevengeGoal {
@@ -37,6 +42,8 @@ impl RevengeGoal {
             ignore_damage_from: None,
             alert_others: false,
             ignore_alert: None,
+            alert_only: None,
+            alarm_when: None,
         }
     }
 
@@ -59,6 +66,21 @@ impl RevengeGoal {
         self
     }
 
+    /// Only mobs passing `filter` can be alerted.
+    #[must_use]
+    pub const fn alerting_only(mut self, filter: MobFilter) -> Self {
+        self.alert_only = Some(filter);
+        self
+    }
+
+    /// While `filter` holds for the mob, being hurt only raises the alarm: the mob alerts
+    /// others, then drops the grudge itself.
+    #[must_use]
+    pub const fn raising_alarm_when(mut self, filter: MobFilter) -> Self {
+        self.alarm_when = Some(filter);
+        self
+    }
+
     /// Wake up nearby mobs of the same kind.
     fn alert_others(&self, mob: &dyn Mob, attacker: &Arc<dyn EntityBase>) {
         for other in goal_utils::nearby_same_type(mob) {
@@ -73,6 +95,9 @@ impl RevengeGoal {
                 continue;
             }
             if other.is_allied_to(attacker.as_ref()) {
+                continue;
+            }
+            if self.alert_only.is_some_and(|filter| !filter(other_mob)) {
                 continue;
             }
             if self
@@ -143,13 +168,17 @@ impl Goal for RevengeGoal {
         self.last_attacked_time = mob_entity.living_entity.last_attacked_time.load(Relaxed);
         self.track_target_goal.max_time_without_visibility = 300;
 
-        if self.alert_others
+        let alarm = self.alarm_when.is_some_and(|filter| filter(mob));
+        if (self.alert_others || alarm)
             && let Some(attacker) = self.target.clone()
         {
             self.alert_others(mob, &attacker);
         }
 
         self.track_target_goal.start(mob);
+        if alarm {
+            self.track_target_goal.stop(mob);
+        }
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
