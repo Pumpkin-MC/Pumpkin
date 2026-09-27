@@ -493,6 +493,16 @@ impl World {
         for change in self.level.loaded_chunk_changes() {
             match change {
                 pumpkin_world::level::LoadedChunkChange::Loaded(pos) => {
+                    // Ticks saved with the chunk only run once the chunk is registered here.
+                    if self
+                        .level
+                        .read_chunk_sync(&pos, |chunk| {
+                            chunk.block_ticks.has_ticks() || chunk.fluid_ticks.has_ticks()
+                        })
+                        .unwrap_or(false)
+                    {
+                        self.level.chunks_with_scheduled_ticks.insert(pos);
+                    }
                     if active_chunks.contains(&pos)
                         && self.level.is_chunk_loaded(&pos)
                         && tracker.loaded_active_chunks.insert(pos)

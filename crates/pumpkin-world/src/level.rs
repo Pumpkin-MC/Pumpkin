@@ -587,6 +587,10 @@ impl Level {
             .collect();
         for pos in scheduled_chunk_pos {
             if let Some(chunk) = self.loaded_chunks.get(&pos) {
+                // Vanilla keeps ticks pending until the chunk is simulated (`LevelTicks.tickCheck`).
+                if !active_chunks.contains(&pos) {
+                    continue;
+                }
                 let chunk = chunk.value();
                 ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
                 ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
@@ -1076,5 +1080,44 @@ mod tests {
 
         let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END);
         assert_eq!(end_level.level_folder.dim_folder, root.join("DIM1"));
+    }
+
+    #[tokio::test]
+    async fn scheduled_ticks_wait_for_active_chunk() {
+        let temp_dir = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            temp_dir.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let pos = Vector2::new(0, 0);
+        level
+            .loaded_chunks
+            .insert(pos, ChunkData::empty_sync(pos.x, pos.y));
+        level.schedule_block_tick(
+            &Block::STONE,
+            BlockPos::new(0, 64, 0),
+            1,
+            TickPriority::Normal,
+        );
+
+        let inactive = FxHashSet::default();
+        assert!(level.get_tick_data(&inactive, 0).block_ticks.is_empty());
+        assert!(level.chunks_with_scheduled_ticks.contains(&pos));
+
+        let active = FxHashSet::from_iter([pos]);
+        assert_eq!(level.get_tick_data(&active, 0).block_ticks.len(), 1);
+
+        // An unloaded chunk is dropped even when inactive; it re-registers when it loads.
+        level.schedule_block_tick(
+            &Block::STONE,
+            BlockPos::new(0, 64, 0),
+            1,
+            TickPriority::Normal,
+        );
+        level.loaded_chunks.remove(&pos);
+        level.get_tick_data(&inactive, 0);
+        assert!(!level.chunks_with_scheduled_ticks.contains(&pos));
     }
 }
