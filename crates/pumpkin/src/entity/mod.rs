@@ -4090,10 +4090,11 @@ impl Entity {
                 }
                 _ => TextComponent::from_nbt(name),
             };
-            self.custom_name.store(Arc::new(Some(component)));
+            // set_custom_name also updates the synced tracked data
+            self.set_custom_name(component);
         }
         if let Some(visible) = nbt.get_bool("CustomNameVisible") {
-            self.custom_name_visible.store(visible, Relaxed);
+            self.set_custom_name_visible(visible);
         }
 
         if let Some(tag_list) = nbt.get_list("Tags") {
