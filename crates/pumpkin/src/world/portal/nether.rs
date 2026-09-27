@@ -6,7 +6,10 @@ use pumpkin_data::{
     tag::Taggable,
 };
 use pumpkin_util::math::{
-    boundingbox::EntityDimensions, position::BlockPos, vector2::Vector2, vector3::Vector3,
+    boundingbox::{BoundingBox, EntityDimensions},
+    position::BlockPos,
+    vector2::Vector2,
+    vector3::Vector3,
 };
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
 use std::sync::Arc;
@@ -37,28 +40,13 @@ impl PortalSearchResult {
         }
     }
 
-    /// Calculates the yaw adjustment when teleporting between portals with different axes.
-    /// Returns the new yaw value for the entity.
+    /// Vanilla turns the entity by a relative 90 degrees when the portal axes differ.
     #[must_use]
-    pub fn calculate_teleport_yaw(
-        &self,
-        current_yaw: f32,
-        source_axis: Option<HorizontalAxis>,
-    ) -> f32 {
-        let Some(src_axis) = source_axis else {
-            return current_yaw;
-        };
-
-        if src_axis == self.axis {
-            return current_yaw;
-        }
-
-        // Axis changed, rotate yaw by 90 degrees
-        // X axis portal faces East/West, Z axis portal faces North/South
-        match (src_axis, self.axis) {
-            (HorizontalAxis::X, HorizontalAxis::Z) => current_yaw + 90.0,
-            (HorizontalAxis::Z, HorizontalAxis::X) => current_yaw - 90.0,
-            _ => current_yaw,
+    pub fn calculate_teleport_yaw(&self, current_yaw: f32, source_axis: HorizontalAxis) -> f32 {
+        if source_axis == self.axis {
+            current_yaw
+        } else {
+            current_yaw + 90.0
         }
     }
 
@@ -143,78 +131,120 @@ impl PortalSearchResult {
         }
     }
 
-    pub fn find_open_position(
-        &self,
-        world: &Arc<World>,
-        fallback: Vector3<f64>,
+    /// Vanilla `PortalShape.findCollisionFreePosition`: the centre may move within the entity's
+    /// width sideways and up to one block up.
+    pub fn find_collision_free_position(
+        world: &World,
+        bottom_center: Vector3<f64>,
         dimensions: &EntityDimensions,
     ) -> Vector3<f64> {
-        if dimensions.width > 4.0 || dimensions.height > 4.0 {
-            return fallback;
+        let width = f64::from(dimensions.width);
+        let height = f64::from(dimensions.height);
+        if width > 4.0 || height > 4.0 {
+            return bottom_center;
         }
-
-        let half_height = f64::from(dimensions.height) / 2.0;
-        let check_pos = Vector3::new(fallback.x, fallback.y + half_height, fallback.z);
-
-        if Self::is_position_clear(world, check_pos, dimensions) {
-            return fallback;
-        }
-
-        let search_radius = 1.0;
-        let step = 0.5;
-
-        let mut best_pos = fallback;
-        let mut best_dist = f64::MAX;
-
-        let mut dx = -search_radius;
-        while dx <= search_radius {
-            let mut dz = -search_radius;
-            while dz <= search_radius {
-                let test_pos = Vector3::new(check_pos.x + dx, check_pos.y, check_pos.z + dz);
-                if Self::is_position_clear(world, test_pos, dimensions) {
-                    let dist = dx * dx + dz * dz;
-                    if dist < best_dist {
-                        best_dist = dist;
-                        best_pos = Vector3::new(test_pos.x, fallback.y, test_pos.z);
-                    }
-                }
-                dz += step;
-            }
-            dx += step;
-        }
-
-        best_pos
+        let half_height = height / 2.0;
+        let center = Vector3::new(
+            bottom_center.x,
+            bottom_center.y + half_height,
+            bottom_center.z,
+        );
+        let allowed = BoundingBox::new(
+            Vector3::new(center.x - width / 2.0, center.y, center.z - width / 2.0),
+            Vector3::new(
+                center.x + width / 2.0,
+                center.y + 1.0,
+                center.z + width / 2.0,
+            ),
+        )
+        .expand_all(1.0E-6);
+        Self::find_free_position(world, allowed, center, width, height)
+            .map_or(bottom_center, |free| {
+                Vector3::new(free.x, free.y - half_height, free.z)
+            })
     }
 
-    fn is_position_clear(
-        world: &Arc<World>,
-        center: Vector3<f64>,
-        dimensions: &EntityDimensions,
-    ) -> bool {
-        let half_width = f64::from(dimensions.width) / 2.0;
-        let height = f64::from(dimensions.height);
+    /// Vanilla `CollisionGetter.findFreePosition`: the point of `allowed` closest to
+    /// `preferred` where a box of the given size touches no block collision.
+    fn find_free_position(
+        world: &World,
+        allowed: BoundingBox,
+        preferred: Vector3<f64>,
+        width: f64,
+        height: f64,
+    ) -> Option<Vector3<f64>> {
+        let search = allowed.expand(width, height, width);
+        let mut blocked = Vec::new();
+        for pos in BlockPos::iterate(search.min_block_pos(), search.max_block_pos()) {
+            let state = world.get_block_state(&pos);
+            for shape in state.get_block_collision_shapes_at(&pos) {
+                let shape = shape.at_pos(pos);
+                if shape.intersects(&search) {
+                    blocked.push(shape.expand(width / 2.0, height / 2.0, width / 2.0));
+                }
+            }
+        }
+        Self::closest_free_point(&blocked, allowed, preferred)
+    }
 
-        // Calculate the bounding box in block coordinates
-        let min_x = (center.x - half_width).floor() as i32;
-        let max_x = (center.x + half_width).floor() as i32;
-        let min_y = (center.y - height / 2.0).floor() as i32;
-        let max_y = (center.y + height / 2.0).floor() as i32;
-        let min_z = (center.z - half_width).floor() as i32;
-        let max_z = (center.z + half_width).floor() as i32;
+    /// The point of `allowed` closest to `preferred` outside every `blocked` box.
+    fn closest_free_point(
+        blocked: &[BoundingBox],
+        allowed: BoundingBox,
+        preferred: Vector3<f64>,
+    ) -> Option<Vector3<f64>> {
+        // Free space splits into cells at the blocked boxes' faces; take each free cell's
+        // point closest to `preferred`, like `VoxelShape.closestPointTo`
+        let cuts = |min: f64, max: f64, of: fn(&BoundingBox) -> (f64, f64)| {
+            let mut cuts = vec![min, max];
+            for bounds in blocked.iter().map(of) {
+                cuts.extend(
+                    [bounds.0, bounds.1]
+                        .into_iter()
+                        .filter(|c| *c > min && *c < max),
+                );
+            }
+            cuts.sort_by(f64::total_cmp);
+            cuts.dedup();
+            cuts
+        };
+        let xs = cuts(allowed.min.x, allowed.max.x, |b| (b.min.x, b.max.x));
+        let ys = cuts(allowed.min.y, allowed.max.y, |b| (b.min.y, b.max.y));
+        let zs = cuts(allowed.min.z, allowed.max.z, |b| (b.min.z, b.max.z));
 
-        // Check ALL blocks that overlap with the entity bounding box
-        for x in min_x..=max_x {
-            for y in min_y..=max_y {
-                for z in min_z..=max_z {
-                    let block_pos = BlockPos(Vector3::new(x, y, z));
-                    let state = world.get_block_state(&block_pos);
-                    if state.is_solid_block() {
-                        return false;
+        let mut best: Option<(f64, Vector3<f64>)> = None;
+        for x in xs.windows(2) {
+            for y in ys.windows(2) {
+                for z in zs.windows(2) {
+                    let mid = Vector3::new(
+                        f64::midpoint(x[0], x[1]),
+                        f64::midpoint(y[0], y[1]),
+                        f64::midpoint(z[0], z[1]),
+                    );
+                    let inside = |b: &BoundingBox| {
+                        mid.x > b.min.x
+                            && mid.x < b.max.x
+                            && mid.y > b.min.y
+                            && mid.y < b.max.y
+                            && mid.z > b.min.z
+                            && mid.z < b.max.z
+                    };
+                    if blocked.iter().any(inside) {
+                        continue;
+                    }
+                    let point = Vector3::new(
+                        preferred.x.clamp(x[0], x[1]),
+                        preferred.y.clamp(y[0], y[1]),
+                        preferred.z.clamp(z[0], z[1]),
+                    );
+                    let distance = point.squared_distance_to_vec(&preferred);
+                    if best.is_none_or(|(d, _)| distance < d) {
+                        best = Some((distance, point));
                     }
                 }
             }
         }
-        true
+        best.map(|(_, point)| point)
     }
 }
 
@@ -966,22 +996,22 @@ mod tests {
 
         // Same axis -> no rotation
         assert_eq!(
-            x_portal.calculate_teleport_yaw(45.0, Some(HorizontalAxis::X)),
+            x_portal.calculate_teleport_yaw(45.0, HorizontalAxis::X),
             45.0
         );
         assert_eq!(
-            z_portal.calculate_teleport_yaw(45.0, Some(HorizontalAxis::Z)),
+            z_portal.calculate_teleport_yaw(45.0, HorizontalAxis::Z),
             45.0
         );
 
-        // Cross axis -> 90 degree rotation
+        // Cross axis -> +90 either way
         assert_eq!(
-            z_portal.calculate_teleport_yaw(45.0, Some(HorizontalAxis::X)),
+            z_portal.calculate_teleport_yaw(45.0, HorizontalAxis::X),
             135.0
         );
         assert_eq!(
-            x_portal.calculate_teleport_yaw(45.0, Some(HorizontalAxis::Z)),
-            -45.0
+            x_portal.calculate_teleport_yaw(45.0, HorizontalAxis::Z),
+            135.0
         );
     }
 }

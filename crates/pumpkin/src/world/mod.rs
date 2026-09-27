@@ -4693,22 +4693,31 @@ impl World {
             .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
     }
 
-    /// Sends the centre chunk ahead of the teleport and records it as held.
+    /// Sends the centre chunk and its neighbours ahead of the teleport and records them as held.
+    /// The client leaves the loading screen once the player's section is built, which needs
+    /// all eight neighbours.
     pub async fn send_center_chunk(&self, player: &Player) {
         let ClientPlatform::Java(java_client) = player.client.as_ref() else {
             return;
         };
-        let center_chunk = player.get_entity().chunk_pos.load();
-        let chunk = self
-            .level
-            .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
-            .await;
-        java_client.send_chunks(&[chunk]).await;
-        player
+        let center = player.get_entity().chunk_pos.load();
+        let positions: Vec<_> = (-1..=1)
+            .flat_map(|dx| (-1..=1).map(move |dz| Vector2::new(center.x + dx, center.y + dz)))
+            .collect();
+        let chunks = futures::future::join_all(
+            positions
+                .iter()
+                .map(|&pos| self.level.get_or_fetch_chunk(pos, std::clone::Clone::clone)),
+        )
+        .await;
+        java_client.send_chunks(&chunks).await;
+        let mut sender = player
             .chunk_sender
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .mark_sent_out_of_band(center_chunk);
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for pos in positions {
+            sender.mark_sent_out_of_band(pos);
+        }
     }
 
     /// Must only be called after the player's own `CLogin` packet has been sent.
