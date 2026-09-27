@@ -1093,29 +1093,34 @@ impl Server {
         )
     }
 
-    /// Vanilla `ServerCommonPacketListenerImpl.suspendFlushing`.
-    fn suspend_player_flushes(&self) {
+    /// Vanilla `ServerCommonPacketListenerImpl.suspendFlushing`. Returns the suspended players.
+    fn suspend_player_flushes(&self) -> Vec<Arc<Player>> {
+        let mut suspended = Vec::new();
         self.for_each_player(|player| {
             if let Some(java) = player.client.java() {
                 java.suspend_flushing();
+                suspended.push(player.clone());
             }
         });
+        suspended
     }
 
     /// Vanilla `resumeFlushing` / `Connection.flushChannel` at tick end (~50ms).
-    fn resume_player_flushes(&self) {
-        self.for_each_player(|player| {
+    /// Resumes the suspended set, not a fresh world scan
+    /// off-tick respawn or world change can leave a player in no world's list at tick end.
+    fn resume_player_flushes(suspended: &[Arc<Player>]) {
+        for player in suspended {
             if let Some(java) = player.client.java() {
                 java.resume_flushing();
             }
-        });
+        }
     }
 
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub fn tick(self: &Arc<Self>) {
         // Do not flush mid-tick; `Flush` is `flushChannel`.
-        self.suspend_player_flushes();
+        let suspended = self.suspend_player_flushes();
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
             self.tick_worlds();
             // Always run player and network ticking, even when game is frozen
@@ -1123,7 +1128,7 @@ impl Server {
             self.tick_players_and_network();
         }
         self.flush_pending_block_updates();
-        self.resume_player_flushes();
+        Self::resume_player_flushes(&suspended);
     }
 
     fn flush_pending_block_updates(&self) {
