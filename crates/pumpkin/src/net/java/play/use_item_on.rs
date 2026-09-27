@@ -121,12 +121,12 @@ impl JavaClient {
             if !before.is_empty() && after.is_empty() {
                 if before.is_damageable() {
                     player.increment_stat(StatisticCategory::Broken, before.item.id as i32, 1);
+                    player.world().send_entity_status(
+                        player.get_entity(),
+                        equipment_break_status(&equipment_slot),
+                        None,
+                    );
                 }
-                player.world().send_entity_status(
-                    player.get_entity(),
-                    equipment_break_status(&equipment_slot),
-                    None,
-                );
             }
 
             if !after.are_equal(before) {
