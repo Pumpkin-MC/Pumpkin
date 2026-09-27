@@ -3580,13 +3580,11 @@ impl World {
             player.get_inventory().get_selected_slot() as i8,
         ));
 
-        if client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-            // Start waiting for level chunks. Sets the "Loading Terrain" screen (Added in 1.20.2)
-            debug!("Sending waiting chunks to {}", player.gameprofile.name);
-            client
-                .send_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
-                .await;
-        }
+        // Start waiting for level chunks. Sets the "Loading Terrain" screen
+        debug!("Sending waiting chunks to {}", player.gameprofile.name);
+        client
+            .send_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
+            .await;
 
         self.worldborder
             .lock()
@@ -3673,7 +3671,6 @@ impl World {
 
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
             && server.advanced_config.recipe.send_recipes
-            && java_client.version.load() >= JavaMinecraftVersion::V_1_21_2
         {
             let settings_packet = CRecipeBookSettings::default_closed();
             if let Ok(data) = java_client.serialize_packet(&settings_packet) {
@@ -3743,9 +3740,7 @@ impl World {
 
         // TODO: World spawn (compass stuff)
 
-        if let ClientPlatform::Java(client) = player.client.as_ref()
-            && client.version.load() >= JavaMinecraftVersion::V_1_20_2
-        {
+        if let ClientPlatform::Java(_) = player.client.as_ref() {
             player.try_send_client_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0));
         }
 

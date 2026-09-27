@@ -257,11 +257,12 @@ impl VehicleEntity {
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_data::packet::CURRENT_MC_VERSION;
     use pumpkin_protocol::codec::var_int::VarInt;
     use pumpkin_protocol::java::client::play::Metadata;
-    use pumpkin_util::version::JavaMinecraftVersion;
 
-    fn wobble_metadata(version: JavaMinecraftVersion) -> Vec<u8> {
+    fn wobble_metadata() -> Vec<u8> {
+        let version = CURRENT_MC_VERSION;
         let mut bytes = Vec::new();
         Metadata::new(pumpkin_data::tracked_data::boat::ID_HURT, VarInt(10))
             .write(&mut bytes, &version)
@@ -280,7 +281,6 @@ mod tests {
         let mut expected = vec![8, 1, 10, 9, 1, 0xff, 0xff, 0xff, 0xff, 0x0f, 10, 3];
         expected.extend(10.0f32.to_be_bytes());
 
-        assert_eq!(wobble_metadata(JavaMinecraftVersion::V_1_21_11), expected);
-        assert_eq!(wobble_metadata(JavaMinecraftVersion::V_26_2), expected);
+        assert_eq!(wobble_metadata(), expected);
     }
 }

@@ -57,7 +57,6 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::version::JavaMinecraftVersion;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::{
     Arc,
@@ -375,15 +374,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
-    fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
-        if version < JavaMinecraftVersion::V_1_9 {
-            let entity = self.get_entity();
-            let shared_flags = entity.flags.load(Ordering::Relaxed);
-            return (shared_flags != 0).then(|| {
-                // (0 << 5) | 0 = 0 (type: byte, index: 0 flags), value, 127 (terminator)
-                Box::<[u8]>::from([0x00u8, shared_flags as u8, 127u8])
-            });
-        }
+    fn java_spawn_metadata(&self) -> Option<Box<[u8]>> {
         self.get_mob().map_or_else(
             || {
                 let entity = self.get_entity();
@@ -394,12 +385,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                         pumpkin_data::tracked_data::entity::DATA_SHARED_FLAGS_ID,
                         shared_flags,
                     )
-                    .write(&mut buf, &version);
+                    .write(&mut buf, &CURRENT_MC_VERSION);
                     buf.put_u8(255);
                     buf.into_boxed_slice()
                 })
             },
-            |mob| mob.mob_java_spawn_metadata(version),
+            mob::Mob::mob_java_spawn_metadata,
         )
     }
 
@@ -443,7 +434,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn send_java_spawn_packet(&self, client: &JavaClient) {
         let entity = self.get_entity();
-        let metadata = self.java_spawn_metadata(CURRENT_MC_VERSION);
+        let metadata = self.java_spawn_metadata();
         let spawn_packet = entity.create_spawn_packet();
         if let Ok(data) = client.serialize_packet(&spawn_packet) {
             client.try_enqueue_packet(data);

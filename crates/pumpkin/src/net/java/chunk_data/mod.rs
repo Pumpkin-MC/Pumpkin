@@ -36,9 +36,9 @@ impl ClientPacket for CChunkData<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        v1_18::write_chunk_data(self.0, write, version)
+        v1_18::write_chunk_data(self.0, write)
     }
 }
 

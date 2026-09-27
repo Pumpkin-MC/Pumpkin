@@ -6,12 +6,12 @@ use std::sync::{
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, living::LivingEntity};
@@ -121,13 +121,13 @@ impl EntityBase for CushionEntity {
 
     /// The colour has to ride along with the spawn packet; a client seeing the
     /// cushion for the first time never got the tracked data update.
-    fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+    fn java_spawn_metadata(&self) -> Option<Box<[u8]>> {
         let mut metadata = Vec::new();
         Metadata::new(
             pumpkin_data::tracked_data::cushion::COLOR,
             VarInt(i32::from(self.color())),
         )
-        .write(&mut metadata, &version)
+        .write(&mut metadata, &CURRENT_MC_VERSION)
         .ok()?;
         metadata.push(255);
         Some(metadata.into_boxed_slice())

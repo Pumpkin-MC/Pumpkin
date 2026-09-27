@@ -7,6 +7,7 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
@@ -15,7 +16,6 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::version::JavaMinecraftVersion;
 use uuid::Uuid;
 
 use crate::entity::mob::zombie::ZombieEntityBase;
@@ -265,22 +265,19 @@ impl Mob for ZombieVillagerEntity {
         !self.is_converting() && self.villager_xp.load(Ordering::Relaxed) == 0
     }
 
-    fn mob_java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
-        if version < JavaMinecraftVersion::V_1_9 {
-            return None;
-        }
+    fn mob_java_spawn_metadata(&self) -> Option<Box<[u8]>> {
         let mut metadata = Vec::new();
         Metadata::new(
             tracked_data::zombie_villager::VILLAGER_DATA,
             self.get_villager_data(),
         )
-        .write(&mut metadata, &version)
+        .write(&mut metadata, &CURRENT_MC_VERSION)
         .ok()?;
         Metadata::new(
             tracked_data::zombie_villager::DATA_CONVERTING_ID,
             self.is_converting(),
         )
-        .write(&mut metadata, &version)
+        .write(&mut metadata, &CURRENT_MC_VERSION)
         .ok()?;
         metadata.push(255);
         Some(metadata.into_boxed_slice())
