@@ -90,8 +90,7 @@ pub fn build() -> TokenStream {
             .expect("Failed to parse villager_data.json");
 
     // Load trade sets from datapack
-    let trade_set_dir =
-        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/trade_set");
+    let trade_set_dir = std::path::Path::new("../../assets/datapack/data/minecraft/trade_set");
     let mut trade_sets: IndexMap<String, TradeSetJson> = IndexMap::new();
     walk_json_files(trade_set_dir, trade_set_dir, &mut |key, content| {
         if let Ok(trade_set) = serde_json::from_str::<TradeSetJson>(&content) {
@@ -102,7 +101,7 @@ pub fn build() -> TokenStream {
 
     // Load trade tags from datapack
     let trade_tags_dir =
-        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/tags/villager_trade");
+        std::path::Path::new("../../assets/datapack/data/minecraft/tags/villager_trade");
     let mut raw_trade_tags: IndexMap<String, Vec<String>> = IndexMap::new();
     walk_json_files(trade_tags_dir, trade_tags_dir, &mut |key, content| {
         #[derive(Deserialize)]
@@ -163,8 +162,7 @@ pub fn build() -> TokenStream {
     }
 
     // Load individual villager trades from datapack
-    let trades_dir =
-        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/villager_trade");
+    let trades_dir = std::path::Path::new("../../assets/datapack/data/minecraft/villager_trade");
     let mut villager_trades: IndexMap<String, TradeJson> = IndexMap::new();
     walk_json_files(trades_dir, trades_dir, &mut |key, content| {
         if let Ok(trade) = serde_json::from_str::<TradeJson>(&content) {
@@ -333,10 +331,14 @@ pub fn build() -> TokenStream {
     }
 
     let mut profession_trade_sets = Vec::new();
+    let mut profession_to_name = Vec::new();
+    let mut profession_from_name = Vec::new();
 
     for (i, (name, prof_data)) in data.professions.iter().enumerate() {
         let ident = format_ident!("{}", name.to_pascal_case());
         profession_variants.push(quote! { #ident });
+        profession_to_name.push(quote! { Self::#ident => #name });
+        profession_from_name.push(quote! { #name => Some(Self::#ident) });
 
         let sound = if let Some(sound) = &prof_data.work_sound {
             let sound_ident = format_ident!(
@@ -400,9 +402,13 @@ pub fn build() -> TokenStream {
         profession_trade_sets.push(profession_trade_set);
     }
 
+    let mut type_to_name = Vec::new();
+    let mut type_from_name = Vec::new();
     for (i, name) in data.types.keys().enumerate() {
         let ident = format_ident!("{}", name.to_pascal_case());
         type_variants.push(quote! { #ident });
+        type_to_name.push(quote! { Self::#ident => #name });
+        type_from_name.push(quote! { #name => Some(Self::#ident) });
 
         let i = i as i32;
         type_from_i32.push(quote! { #i => Some(Self::#ident) });
@@ -488,6 +494,25 @@ pub fn build() -> TokenStream {
             }
 
             #[must_use]
+            pub const fn to_name(&self) -> &'static str {
+                match self {
+                    #(#profession_to_name,)*
+                }
+            }
+
+            #[must_use]
+            pub fn from_name(name: &str) -> Option<Self> {
+                let clean = match name.strip_prefix("minecraft:") {
+                    Some(stripped) => stripped,
+                    None => name,
+                };
+                match clean {
+                    #(#profession_from_name,)*
+                    _ => None,
+                }
+            }
+
+            #[must_use]
             #[allow(clippy::too_many_lines, clippy::match_same_arms)]
             pub const fn trade_set(&self, level: i32) -> Option<VillagerTradeSet> {
                 match self {
@@ -515,6 +540,25 @@ pub fn build() -> TokenStream {
             pub const fn from_i32(id: i32) -> Option<Self> {
                 match id {
                     #(#type_from_i32,)*
+                    _ => None,
+                }
+            }
+
+            #[must_use]
+            pub const fn to_name(&self) -> &'static str {
+                match self {
+                    #(#type_to_name,)*
+                }
+            }
+
+            #[must_use]
+            pub fn from_name(name: &str) -> Option<Self> {
+                let clean = match name.strip_prefix("minecraft:") {
+                    Some(stripped) => stripped,
+                    None => name,
+                };
+                match clean {
+                    #(#type_from_name,)*
                     _ => None,
                 }
             }

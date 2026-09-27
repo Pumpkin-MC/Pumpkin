@@ -23,11 +23,11 @@ impl JavaClient {
             wrap_degrees(rotation.yaw) % 360.0,
             wrap_degrees(rotation.pitch),
         );
-        // Send the new position to all other players.
+        // Send the new position to tracking players only.
         let entity_id = entity.entity_id;
+        // TODO: use `pumpkin_util::math::pack_degrees`.
         let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
         let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
-        // let head_yaw = modulus(entity.head_yaw * 256.0 / 360.0, 256.0);
 
         let world = entity.world.load_full();
         let je_packet =
@@ -35,27 +35,14 @@ impl JavaClient {
 
         let pos = entity.pos.load();
 
-        let be_packet = CMovePlayer::new(
-            VarULong(entity_id as u64),
-            Vector3::new(
-                pos.x as f32,
-                pos.y as f32 + player.get_entity().entity_type.eye_height,
-                pos.z as f32,
-            ),
-            entity.pitch.load(),
-            entity.yaw.load(),
-            entity.yaw.load(),
-            CMovePlayer::MODE_ROTATION,
-            rotation.ground,
-            VarULong(0),
-            0,
-            0,
-            VarULong(0),
-        );
+        // MODE_ROTATION not used for other players -> AvatarEntity always sends
+        // MODE_NORMAL (client already lerps). MODE_ROTATION drops live head yaw on Bedrock.
+        let be_packet =
+            bedrock_move_player_packet(entity, pos, CMovePlayer::MODE_NORMAL, rotation.ground);
 
-        world.broadcast_packet_except_editioned(&[player.gameprofile.id], &je_packet, &be_packet);
+        world.send_to_tracking_players_editioned(entity, &je_packet, &be_packet);
 
         let je_packet = CHeadRot::new(entity_id.into(), yaw as u8);
-        world.broadcast_packet_except(&[player.gameprofile.id], &je_packet);
+        world.send_to_tracking_players(entity, &je_packet);
     }
 }

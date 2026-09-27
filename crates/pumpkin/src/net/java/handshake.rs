@@ -31,7 +31,14 @@ impl PendingConnection {
         }
         if self.connection_state.load() != ConnectionState::Status {
             let protocol = version;
-            if protocol < LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32 {
+            let has_packet_plugin = server
+                .plugin_manager
+                .has_handlers::<crate::plugin::server::packet::PacketReceivedEvent>(
+            );
+            let allows_client = has_packet_plugin
+                && JavaMinecraftVersion::from_protocol(version) != JavaMinecraftVersion::Unknown;
+
+            if !allows_client && protocol < LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32 {
                 self.kick(TextComponent::translate_cross(
                     translation::java::MULTIPLAYER_DISCONNECT_OUTDATED_CLIENT,
                     translation::bedrock::DISCONNECTIONSCREEN_OUTDATEDCLIENT,

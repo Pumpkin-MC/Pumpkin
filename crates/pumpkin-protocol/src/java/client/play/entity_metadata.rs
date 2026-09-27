@@ -1,7 +1,6 @@
 use std::io::{Cursor, Write};
 
 use pumpkin_data::{
-    block_state_remap::remap_block_state_for_version,
     meta_data_type::MetaDataType,
     packet::clientbound::play::SET_ENTITY_DATA,
     tracked_data::{TrackedData, TrackedId},
@@ -14,8 +13,6 @@ use crate::{
     codec::var_long::VarLong,
     ser::{NetworkWriteExt, WritingError},
 };
-
-use super::particle::particle_id_for_version;
 
 pub trait MetadataSerializer {
     fn write_metadata(
@@ -143,20 +140,17 @@ impl<T> Metadata<T> {
         if self.r#type == MetaDataType::BLOCK_STATE
             || self.r#type == MetaDataType::OPTIONAL_BLOCK_STATE
         {
-            let mut serialized_value = Vec::new();
-            self.value.write_metadata(&mut serialized_value, version)?;
-
-            let mut cursor = Cursor::new(serialized_value);
-            let decoded_state = VarInt::decode(&mut cursor).map_err(|e| {
-                WritingError::Message(format!("Failed to decode block state metadata: {e}"))
-            })?;
-            let remapped_state = u16::try_from(decoded_state.0).map_or(decoded_state, |state_id| {
-                VarInt(i32::from(remap_block_state_for_version(state_id, *version)))
-            });
             if *version >= JavaMinecraftVersion::V_1_9 {
-                writer.write_var_int(&remapped_state)?;
+                self.value.write_metadata(&mut writer, version)?;
             } else {
-                writer.write_i32(remapped_state.0)?;
+                let mut serialized_value = Vec::new();
+                self.value.write_metadata(&mut serialized_value, version)?;
+
+                let mut cursor = Cursor::new(serialized_value);
+                let decoded_state = VarInt::decode(&mut cursor).map_err(|e| {
+                    WritingError::Message(format!("Failed to decode block state metadata: {e}"))
+                })?;
+                writer.write_i32(decoded_state.0)?;
             }
             return Ok(());
         }
@@ -174,7 +168,7 @@ impl<T> Metadata<T> {
             let particle_id = VarInt::decode(&mut cursor).map_err(|e| {
                 WritingError::Message(format!("Failed to decode particle metadata: {e}"))
             })?;
-            writer.write_var_int(&particle_id_for_version(particle_id, *version))?;
+            writer.write_var_int(&particle_id)?;
 
             let remainder_start = cursor.position() as usize;
             let inner = cursor.into_inner();
@@ -195,7 +189,7 @@ impl<T> Metadata<T> {
                 let particle_id = VarInt::decode(&mut cursor).map_err(|e| {
                     WritingError::Message(format!("Failed to decode effect particle id: {e}"))
                 })?;
-                writer.write_var_int(&particle_id_for_version(particle_id, *version))?;
+                writer.write_var_int(&particle_id)?;
                 let remainder_start = cursor.position() as usize;
                 let inner = cursor.get_ref();
                 if remainder_start + 4 > inner.len() {
@@ -576,112 +570,11 @@ mod tests {
     }
 
     #[test]
-    fn particle_metadata_id_remaps_for_1_21_11() {
-        let (particle_id, data) = encoded_particle(JavaMinecraftVersion::V_1_21_11);
-
-        assert_eq!(particle_id, VarInt(22));
-        assert_eq!(data, [0x12, 0x34, 0x56, 0x78]);
-    }
-
-    #[test]
-    fn particle_metadata_id_stays_latest_for_26_2() {
-        let (particle_id, data) = encoded_particle(JavaMinecraftVersion::V_26_2);
+    fn particle_metadata_id_stays_latest_for_26_3() {
+        let (particle_id, data) = encoded_particle(JavaMinecraftVersion::V_26_3);
 
         assert_eq!(particle_id, VarInt(29));
         assert_eq!(data, [0x12, 0x34, 0x56, 0x78]);
-    }
-
-    fn encoded_item_stack_id(version: JavaMinecraftVersion) -> i32 {
-        use crate::codec::item_stack_seralizer::ItemStackSerializer;
-        use pumpkin_data::{
-            item::Item, item_id_remap::remap_item_id_for_version, item_stack::ItemStack,
-        };
-
-        let stack = ItemStackSerializer::from(ItemStack::new(1, &Item::WHEAT_SEEDS));
-        let mut bytes = Vec::new();
-        Metadata::new(pumpkin_data::tracked_data::item::DATA_ITEM, stack)
-            .write(&mut bytes, &version)
-            .unwrap();
-
-        assert_eq!(
-            bytes[0],
-            pumpkin_data::tracked_data::item::DATA_ITEM.get(&version)
-        );
-        assert_eq!(bytes[1], MetaDataType::ITEM_STACK.id(version) as u8);
-
-        let mut cursor = Cursor::new(&bytes[2..]);
-        let count = VarInt::decode(&mut cursor).unwrap();
-        assert_eq!(count, VarInt(1));
-        let item_id = VarInt::decode(&mut cursor).unwrap();
-
-        let expected = i32::from(remap_item_id_for_version(Item::WHEAT_SEEDS.id, version));
-        assert_eq!(item_id, VarInt(expected));
-        item_id.0
-    }
-
-    #[test]
-    fn item_stack_metadata_does_not_double_remap_for_1_21() {
-        use pumpkin_data::{item::Item, item_id_remap::remap_item_id_for_version};
-
-        let version = JavaMinecraftVersion::V_1_21;
-        let once = remap_item_id_for_version(Item::WHEAT_SEEDS.id, version);
-        let twice = remap_item_id_for_version(once, version);
-        assert_ne!(
-            once, twice,
-            "wheat seeds must change IDs so this catches double remapping"
-        );
-        assert_eq!(encoded_item_stack_id(version), i32::from(once));
-    }
-
-    #[test]
-    fn item_stack_metadata_keeps_latest_id_for_26_2() {
-        encoded_item_stack_id(JavaMinecraftVersion::V_26_2);
-    }
-
-    #[test]
-    fn existing_items_keep_identity_through_1_21_6_remap() {
-        use pumpkin_data::{item::Item, item_id_remap::remap_item_id_for_version};
-
-        let version = JavaMinecraftVersion::V_1_21_6;
-        for item in [
-            &Item::AIR,
-            &Item::STONE,
-            &Item::DIAMOND_SWORD,
-            &Item::WHEAT_SEEDS,
-            &Item::TRIDENT,
-        ] {
-            let remapped = remap_item_id_for_version(item.id, version);
-            let round_trip =
-                pumpkin_data::item_id_remap::remap_item_id_from_version(remapped, version);
-            assert_eq!(
-                round_trip, item.id,
-                "{} id {} remapped to {remapped} and back to {round_trip}",
-                item.registry_key, item.id
-            );
-        }
-    }
-
-    #[test]
-    fn spears_do_not_leak_latest_ids_to_1_21_6() {
-        use pumpkin_data::{item::Item, item_id_remap::remap_item_id_for_version};
-
-        let version = JavaMinecraftVersion::V_1_21_6;
-        for item in [
-            &Item::WOODEN_SPEAR,
-            &Item::STONE_SPEAR,
-            &Item::COPPER_SPEAR,
-            &Item::IRON_SPEAR,
-            &Item::GOLDEN_SPEAR,
-            &Item::DIAMOND_SPEAR,
-            &Item::NETHERITE_SPEAR,
-        ] {
-            let remapped = remap_item_id_for_version(item.id, version);
-            assert_ne!(
-                remapped, item.id,
-                "{} leaked latest id {} to 1.21.6 (client would show whatever item has that id)",
-                item.registry_key, item.id
-            );
-        }
     }
 
     #[test]

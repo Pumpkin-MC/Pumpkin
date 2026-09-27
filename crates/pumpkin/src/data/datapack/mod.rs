@@ -1,6 +1,12 @@
+pub mod context_provider_loader;
+pub mod damage_type_loader;
+pub mod dynamic_registry_loader;
 pub mod function_loader;
+pub mod loot_table_loader;
 pub mod recipe_loader;
+pub mod structure_loader;
 pub mod test_loader;
+pub mod trade_loader;
 
 use std::collections::HashMap;
 use std::fs;
@@ -8,17 +14,24 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tracing::{info, warn};
 
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::registry::RegistryEntryData;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_nbt::{NbtCompound, nbt_compress::read_gzip_compound_tag};
 use pumpkin_protocol::codec::recipe::DynamicRecipe;
+use pumpkin_util::loot_table::DynamicLootTable;
 
 use crate::command::context::command_source::CommandSource;
 use crate::server::Server;
 use crate::server::recipe::RecipeManager;
+use crate::world::loot::LootTableHandle;
 
+use self::context_provider_loader::ContextProviderRegistry;
+use self::damage_type_loader::{DamageTypeDefinition, DamageTypeEntry, DamageTypeRegistry};
 use self::test_loader::{
     TestInstance, TestInstanceRegistry, load_test_instances_from_dir, to_registry_entry,
 };
+use self::trade_loader::{DynamicVillagerTradeSet, TradeRegistry};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KnownPackData {
@@ -63,6 +76,12 @@ pub struct DatapackManager {
     functions: RwLock<HashMap<String, Arc<[String]>>>,
     function_tags: RwLock<HashMap<String, Vec<String>>>,
     test_instances: RwLock<TestInstanceRegistry>,
+    context_int_providers: RwLock<ContextProviderRegistry>,
+    context_float_providers: RwLock<ContextProviderRegistry>,
+    damage_types: RwLock<DamageTypeRegistry>,
+    loot_tables: RwLock<HashMap<String, Arc<DynamicLootTable>>>,
+    dynamic_registries: RwLock<HashMap<String, HashMap<String, RegistryEntryData>>>,
+    trade_registry: RwLock<TradeRegistry>,
 }
 
 fn share_function_bodies(
@@ -88,6 +107,12 @@ impl DatapackManager {
             functions: RwLock::new(HashMap::new()),
             function_tags: RwLock::new(HashMap::new()),
             test_instances: RwLock::new(HashMap::new()),
+            context_int_providers: RwLock::new(HashMap::new()),
+            context_float_providers: RwLock::new(HashMap::new()),
+            damage_types: RwLock::new(HashMap::new()),
+            loot_tables: RwLock::new(HashMap::new()),
+            dynamic_registries: RwLock::new(HashMap::new()),
+            trade_registry: RwLock::new(TradeRegistry::new()),
         }
     }
 
@@ -98,11 +123,16 @@ impl DatapackManager {
         recipe_manager: &RecipeManager,
     ) {
         let datapacks_dir = world_path.join("datapacks");
+        structure_loader::clear_dynamic_worldgen_data();
         let mut loaded_packs_vec = Vec::new();
         let mut all_recipes: Vec<DynamicRecipe> = Vec::new();
         let mut all_functions: HashMap<String, Vec<String>> = HashMap::new();
         let mut all_function_tags: HashMap<String, Vec<String>> = HashMap::new();
         let mut all_test_instances: TestInstanceRegistry = HashMap::new();
+        let mut all_context_int_providers: ContextProviderRegistry = HashMap::new();
+        let mut all_context_float_providers: ContextProviderRegistry = HashMap::new();
+        let mut all_damage_type_defs: HashMap<String, DamageTypeDefinition> = HashMap::new();
+        let mut all_loot_tables: HashMap<String, Arc<DynamicLootTable>> = HashMap::new();
 
         // Embedded test instances are compile-time constants and always load,
         // so on-disk packs can override them by id.
@@ -110,60 +140,41 @@ impl DatapackManager {
         if embedded_count > 0 {
             info!("Loaded {embedded_count} embedded test instance(s)");
         }
-        if datapacks_dir.is_dir() {
-            match fs::read_dir(&datapacks_dir) {
-                Ok(entries) => {
-                    for entry in entries.flatten() {
-                        let pack_path = entry.path();
-                        let file_name = entry.file_name().to_string_lossy().to_string();
-
-                        if file_name.starts_with('.') || !pack_path.is_dir() {
-                            continue;
-                        }
-
-                        let pack_id = format!("file/{file_name}");
-                        let is_enabled = enabled_packs
-                            .iter()
-                            .any(|p| p == &pack_id || p == &file_name);
-                        if !is_enabled {
-                            continue;
-                        }
-
-                        let (description, pack_format, known_packs) = read_pack_mcmeta(&pack_path);
-
-                        let (pack_recipe_count, pack_function_count, pack_test_instance_count) =
-                            load_pack_contents(
-                                &pack_path,
-                                &mut all_recipes,
-                                &mut all_functions,
-                                &mut all_function_tags,
-                                &mut all_test_instances,
-                            );
-
-                        info!(
-                            "Loaded datapack '{file_name}': {pack_recipe_count} recipe(s), {pack_function_count} function(s), {pack_test_instance_count} test instance(s)"
-                        );
-
-                        loaded_packs_vec.push(LoadedDatapack {
-                            id: pack_id,
-                            name: file_name,
-                            description,
-                            pack_format,
-                            root_path: pack_path,
-                            recipe_count: pack_recipe_count,
-                            function_count: pack_function_count,
-                            known_packs,
-                        });
-                    }
-                }
-                Err(error) => {
-                    warn!(
-                        "Failed to read datapacks directory '{}': {error}",
-                        datapacks_dir.display()
-                    );
-                }
-            }
+        let (embedded_ints, embedded_floats) =
+            context_provider_loader::load_embedded_context_providers(
+                &mut all_context_int_providers,
+                &mut all_context_float_providers,
+            );
+        if embedded_ints > 0 || embedded_floats > 0 {
+            info!(
+                "Loaded {embedded_ints} int and {embedded_floats} float embedded context provider(s)"
+            );
         }
+        let mut all_dynamic_registries: HashMap<String, HashMap<String, RegistryEntryData>> =
+            HashMap::new();
+        let mut all_trade_registry = TradeRegistry::new();
+
+        let mut acc = PackContentAccumulators {
+            recipes: &mut all_recipes,
+            functions: &mut all_functions,
+            function_tags: &mut all_function_tags,
+            test_instances: &mut all_test_instances,
+            damage_types: &mut all_damage_type_defs,
+            context_int_providers: &mut all_context_int_providers,
+            context_float_providers: &mut all_context_float_providers,
+            loot_tables: &mut all_loot_tables,
+            dynamic_registries: &mut all_dynamic_registries,
+            trade_registry: &mut all_trade_registry,
+        };
+
+        scan_datapacks_dir(
+            &datapacks_dir,
+            enabled_packs,
+            &mut acc,
+            &mut loaded_packs_vec,
+        );
+
+        let damage_type_registry = build_damage_type_registry(all_damage_type_defs);
 
         recipe_manager.set_recipes(all_recipes);
         *self
@@ -183,6 +194,30 @@ impl DatapackManager {
             .test_instances
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = all_test_instances;
+        *self
+            .context_int_providers
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_context_int_providers;
+        *self
+            .context_float_providers
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_context_float_providers;
+        *self
+            .damage_types
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = damage_type_registry;
+        *self
+            .loot_tables
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_loot_tables;
+        *self
+            .dynamic_registries
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_dynamic_registries;
+        *self
+            .trade_registry
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_trade_registry;
     }
 
     pub fn get_loaded_packs(&self) -> Vec<LoadedDatapack> {
@@ -217,6 +252,272 @@ impl DatapackManager {
         let mut names: Vec<_> = test_instances.keys().cloned().collect();
         names.sort_unstable();
         names
+    }
+
+    #[must_use]
+    pub fn get_context_int_provider(&self, id: &str) -> Option<NbtTag> {
+        self.context_int_providers
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(id)
+            .cloned()
+    }
+
+    #[must_use]
+    pub fn get_context_float_provider(&self, id: &str) -> Option<NbtTag> {
+        self.context_float_providers
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(id)
+            .cloned()
+    }
+
+    #[must_use]
+    pub fn get_context_int_provider_names(&self) -> Vec<String> {
+        let providers = self
+            .context_int_providers
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut names: Vec<_> = providers.keys().cloned().collect();
+        names.sort_unstable();
+        names
+    }
+
+    #[must_use]
+    pub fn get_context_float_provider_names(&self) -> Vec<String> {
+        let providers = self
+            .context_float_providers
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut names: Vec<_> = providers.keys().cloned().collect();
+        names.sort_unstable();
+        names
+    }
+
+    pub fn insert_context_int_provider(&self, id: String, tag: NbtTag) {
+        self.context_int_providers
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(id, tag);
+    }
+
+    pub fn insert_context_float_provider(&self, id: String, tag: NbtTag) {
+        self.context_float_providers
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(id, tag);
+    }
+
+    #[must_use]
+    pub fn get_loot_table(&self, key: &str) -> Option<LootTableHandle> {
+        let full_key = if key.contains(':') {
+            key.to_string()
+        } else {
+            format!("minecraft:{key}")
+        };
+
+        let guard = self
+            .loot_tables
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        if let Some(table) = guard.get(&full_key).or_else(|| guard.get(key)) {
+            return Some(LootTableHandle::Dynamic(table.clone()));
+        }
+
+        pumpkin_data::loot_table::get_loot_table(key)
+            .or_else(|| pumpkin_data::loot_table::get_loot_table(&full_key))
+            .map(LootTableHandle::Static)
+    }
+
+    #[must_use]
+    pub fn get_loot_table_names(&self) -> Vec<String> {
+        let guard = self
+            .loot_tables
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut names: Vec<_> = guard.keys().cloned().collect();
+        names.sort_unstable();
+        names
+    }
+
+    pub fn insert_loot_table(&self, key: String, table: Arc<DynamicLootTable>) {
+        self.loot_tables
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(key, table);
+    }
+
+    #[must_use]
+    pub fn get_damage_type(&self, id: &str) -> Option<DamageType> {
+        let guard = self
+            .damage_types
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let full_id = if id.contains(':') {
+            id.to_string()
+        } else {
+            format!("minecraft:{id}")
+        };
+        guard
+            .get(&full_id)
+            .or_else(|| guard.get(id))
+            .map(|e| e.damage_type)
+    }
+
+    #[must_use]
+    pub fn get_damage_type_names(&self) -> Vec<String> {
+        let guard = self
+            .damage_types
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut names: Vec<_> = guard.keys().cloned().collect();
+        names.sort_unstable();
+        names
+    }
+
+    #[must_use]
+    pub fn get_damage_type_registry_map(&self) -> HashMap<String, DamageTypeEntry> {
+        self.damage_types
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    #[must_use]
+    pub fn get_all_damage_type_registry_entries(&self) -> Vec<RegistryEntryData> {
+        let guard = self
+            .damage_types
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut entries: Vec<RegistryEntryData> = guard
+            .values()
+            .map(DamageTypeEntry::to_registry_entry)
+            .collect();
+        entries.sort_by(|a, b| a.entry_id.cmp(&b.entry_id));
+        entries
+    }
+
+    #[must_use]
+    pub fn merge_damage_type_entries(
+        &self,
+        vanilla_entries: &[RegistryEntryData],
+    ) -> Vec<RegistryEntryData> {
+        let guard = self
+            .damage_types
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        merge_damage_type_entries(vanilla_entries, &guard)
+    }
+
+    #[must_use]
+    pub fn merge_registry_entries(
+        &self,
+        registry_id: &str,
+        vanilla_entries: &[RegistryEntryData],
+    ) -> Vec<RegistryEntryData> {
+        let guard = self
+            .dynamic_registries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let custom = guard
+            .get(registry_id)
+            .or_else(|| guard.get(&format!("minecraft:{registry_id}")))
+            .or_else(|| {
+                registry_id
+                    .strip_prefix("minecraft:")
+                    .and_then(|r| guard.get(r))
+            });
+        custom.map_or_else(
+            || vanilla_entries.iter().map(clone_registry_entry).collect(),
+            |custom| {
+                dynamic_registry_loader::merge_dynamic_registry_entries(vanilla_entries, custom)
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn get_custom_registry_entry(
+        &self,
+        registry_id: &str,
+        entry_id: &str,
+    ) -> Option<RegistryEntryData> {
+        let guard = self
+            .dynamic_registries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let custom_map = guard
+            .get(registry_id)
+            .or_else(|| guard.get(&format!("minecraft:{registry_id}")))
+            .or_else(|| {
+                registry_id
+                    .strip_prefix("minecraft:")
+                    .and_then(|r| guard.get(r))
+            })?;
+        custom_map.get(entry_id).map(clone_registry_entry)
+    }
+
+    #[must_use]
+    pub fn get_custom_registry_entries(&self, registry_id: &str) -> Vec<RegistryEntryData> {
+        let guard = self
+            .dynamic_registries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let custom_map = guard
+            .get(registry_id)
+            .or_else(|| guard.get(&format!("minecraft:{registry_id}")))
+            .or_else(|| {
+                registry_id
+                    .strip_prefix("minecraft:")
+                    .and_then(|r| guard.get(r))
+            });
+        custom_map.map_or_else(Vec::new, |entries| {
+            let mut list: Vec<_> = entries.values().map(clone_registry_entry).collect();
+            list.sort_by(|a, b| a.entry_id.cmp(&b.entry_id));
+            list
+        })
+    }
+
+    #[must_use]
+    pub fn get_dynamic_registry_ids(&self) -> Vec<String> {
+        let guard = self
+            .dynamic_registries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut ids: Vec<_> = guard.keys().cloned().collect();
+        ids.sort();
+        ids
+    }
+
+    #[must_use]
+    pub fn get_villager_trade_set(
+        &self,
+        profession: &str,
+        level: i32,
+    ) -> Option<DynamicVillagerTradeSet> {
+        let registry = self
+            .trade_registry
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        registry.get_villager_trade_set(profession, level)
+    }
+
+    #[must_use]
+    pub fn get_wandering_trader_trade_set(&self, tier: &str) -> Option<DynamicVillagerTradeSet> {
+        let registry = self
+            .trade_registry
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        registry.get_wandering_trader_trade_set(tier)
+    }
+
+    #[must_use]
+    pub fn get_trade_set(&self, key: &str) -> Option<DynamicVillagerTradeSet> {
+        let registry = self
+            .trade_registry
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        registry.resolve_trade_set(key)
     }
 
     /// Returns datapack test instances in the protocol's synced-registry entry format.
@@ -868,19 +1169,169 @@ fn parse_structure_resource_location(resource_location: &str) -> Result<(&str, &
     Ok((namespace, path))
 }
 
-/// Loads recipes, functions, function tags, and test instances from a single
-/// datapack directory, returning per-pack counts as `(recipes, functions, test_instances)`.
+fn build_damage_type_registry(
+    mut all_damage_type_defs: HashMap<String, DamageTypeDefinition>,
+) -> DamageTypeRegistry {
+    let mut damage_type_registry: DamageTypeRegistry = HashMap::new();
+    let mut next_custom_id = 51u8;
+    let mut static_map: HashMap<String, &'static DamageType> = HashMap::new();
+    let mut names = Vec::new();
+
+    let mut sorted_ids: Vec<String> = all_damage_type_defs.keys().cloned().collect();
+    sorted_ids.sort();
+
+    for id in sorted_ids {
+        let Some(def) = all_damage_type_defs.remove(&id) else {
+            continue;
+        };
+        let path = id.split_once(':').map_or(id.as_str(), |(_, p)| p);
+        let numeric_id = pumpkin_data::damage::DamageType::from_name(path)
+            .or_else(|| pumpkin_data::damage::DamageType::from_name(&id))
+            .map_or_else(
+                || {
+                    let nid = next_custom_id;
+                    next_custom_id = next_custom_id.saturating_add(1);
+                    nid
+                },
+                |vanilla_dt| vanilla_dt.id,
+            );
+
+        let dt = damage_type_loader::to_damage_type(numeric_id, &def);
+        let nbt_data = damage_type_loader::to_registry_nbt_bytes(&def);
+        let leaked_dt = Box::leak(Box::new(dt));
+        static_map.insert(id.clone(), leaked_dt);
+        static_map.insert(path.to_string(), leaked_dt);
+        names.push(id.clone());
+
+        damage_type_registry.insert(
+            id.clone(),
+            DamageTypeEntry {
+                id,
+                numeric_id,
+                definition: def,
+                damage_type: dt,
+                nbt_data,
+            },
+        );
+    }
+
+    pumpkin_command::argument_types::resource::register_dynamic_damage_types(
+        Box::new(move |req_id: &str| static_map.get(req_id).copied()),
+        names,
+    );
+
+    damage_type_registry
+}
+
+struct PackContentAccumulators<'a> {
+    recipes: &'a mut Vec<DynamicRecipe>,
+    functions: &'a mut HashMap<String, Vec<String>>,
+    function_tags: &'a mut HashMap<String, Vec<String>>,
+    test_instances: &'a mut TestInstanceRegistry,
+    damage_types: &'a mut HashMap<String, DamageTypeDefinition>,
+    context_int_providers: &'a mut ContextProviderRegistry,
+    context_float_providers: &'a mut ContextProviderRegistry,
+    loot_tables: &'a mut HashMap<String, Arc<DynamicLootTable>>,
+    dynamic_registries: &'a mut HashMap<String, HashMap<String, RegistryEntryData>>,
+    trade_registry: &'a mut TradeRegistry,
+}
+
+#[derive(Default, Clone, Copy)]
+struct PackContentCounts {
+    recipes: usize,
+    functions: usize,
+    test_instances: usize,
+    damage_types: usize,
+    int_providers: usize,
+    float_providers: usize,
+    loot_tables: usize,
+    structures: usize,
+    template_pools: usize,
+    processor_lists: usize,
+    dynamic_registries: usize,
+    trade_sets: usize,
+    trades: usize,
+    trade_tags: usize,
+}
+
+fn scan_datapacks_dir(
+    datapacks_dir: &Path,
+    enabled_packs: &[String],
+    acc: &mut PackContentAccumulators<'_>,
+    loaded_packs_vec: &mut Vec<LoadedDatapack>,
+) {
+    if !datapacks_dir.is_dir() {
+        return;
+    }
+    let entries = match fs::read_dir(datapacks_dir) {
+        Ok(entries) => entries,
+        Err(error) => {
+            warn!(
+                "Failed to read datapacks directory '{}': {error}",
+                datapacks_dir.display()
+            );
+            return;
+        }
+    };
+
+    for entry in entries.flatten() {
+        let pack_path = entry.path();
+        let file_name = entry.file_name().to_string_lossy().to_string();
+
+        if file_name.starts_with('.') || !pack_path.is_dir() {
+            continue;
+        }
+
+        let pack_id = format!("file/{file_name}");
+        let is_enabled = enabled_packs
+            .iter()
+            .any(|p| p == &pack_id || p == &file_name);
+        if !is_enabled {
+            continue;
+        }
+
+        let (description, pack_format, known_packs) = read_pack_mcmeta(&pack_path);
+        let counts = load_pack_contents(&pack_path, acc);
+
+        info!(
+            "Loaded datapack '{file_name}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s), {} structure(s), {} template pool(s), {} processor list(s), {} dynamic registry entry/entries, {} trade set(s), {} trade(s)",
+            counts.recipes,
+            counts.functions,
+            counts.test_instances,
+            counts.damage_types,
+            counts.int_providers,
+            counts.float_providers,
+            counts.loot_tables,
+            counts.structures,
+            counts.template_pools,
+            counts.processor_lists,
+            counts.dynamic_registries,
+            counts.trade_sets,
+            counts.trades,
+        );
+
+        loaded_packs_vec.push(LoadedDatapack {
+            id: pack_id,
+            name: file_name,
+            description,
+            pack_format,
+            root_path: pack_path,
+            recipe_count: counts.recipes,
+            function_count: counts.functions,
+            known_packs,
+        });
+    }
+}
+
+/// Loads recipes, functions, function tags, test instances, damage types, context number providers,
+/// and loot tables from a single datapack directory, returning per-pack counts as [`PackContentCounts`].
+#[allow(clippy::too_many_lines)]
 fn load_pack_contents(
     pack_path: &Path,
-    all_recipes: &mut Vec<DynamicRecipe>,
-    all_functions: &mut HashMap<String, Vec<String>>,
-    all_function_tags: &mut HashMap<String, Vec<String>>,
-    all_test_instances: &mut TestInstanceRegistry,
-) -> (usize, usize, usize) {
+    acc: &mut PackContentAccumulators<'_>,
+) -> PackContentCounts {
     let data_dir = pack_path.join("data");
-    let mut pack_recipe_count = 0;
-    let mut pack_function_count = 0;
-    let mut pack_test_instance_count = 0;
+    let mut counts = PackContentCounts::default();
 
     if data_dir.is_dir()
         && let Ok(ns_entries) = fs::read_dir(&data_dir)
@@ -899,8 +1350,8 @@ fn load_pack_contents(
                     load_recipes_from_dir(
                         &namespace,
                         &recipe_dir,
-                        all_recipes,
-                        &mut pack_recipe_count,
+                        acc.recipes,
+                        &mut counts.recipes,
                     );
                 }
             }
@@ -909,9 +1360,9 @@ fn load_pack_contents(
             for fn_sub in ["function", "functions"] {
                 let fn_dir = ns_path.join(fn_sub);
                 if fn_dir.is_dir() {
-                    let before = all_functions.len();
-                    function_loader::load_functions_from_dir(&namespace, &fn_dir, all_functions);
-                    pack_function_count += all_functions.len() - before;
+                    let before = acc.functions.len();
+                    function_loader::load_functions_from_dir(&namespace, &fn_dir, acc.functions);
+                    counts.functions += acc.functions.len() - before;
                 }
             }
 
@@ -921,26 +1372,197 @@ fn load_pack_contents(
                 function_loader::load_function_tags_from_dir(
                     &namespace,
                     &tags_dir,
-                    all_function_tags,
+                    acc.function_tags,
                 );
             }
             // Load game test instances
             let test_instance_dir = ns_path.join("test_instance");
             if test_instance_dir.is_dir() {
-                pack_test_instance_count += load_test_instances_from_dir(
+                counts.test_instances += load_test_instances_from_dir(
                     &namespace,
                     &test_instance_dir,
-                    all_test_instances,
+                    acc.test_instances,
                 );
+            }
+
+            // Load damage types
+            for dt_sub in ["damage_type", "damage_types"] {
+                let dt_dir = ns_path.join(dt_sub);
+                if dt_dir.is_dir() {
+                    counts.damage_types += damage_type_loader::load_damage_types_from_dir(
+                        &namespace,
+                        &dt_dir,
+                        acc.damage_types,
+                    );
+                }
+            }
+
+            // Load context int providers
+            for int_sub in ["context_int_provider", "context_int_providers"] {
+                let provider_dir = ns_path.join(int_sub);
+                if provider_dir.is_dir() {
+                    counts.int_providers +=
+                        context_provider_loader::load_context_providers_from_dir(
+                            &namespace,
+                            &provider_dir,
+                            acc.context_int_providers,
+                        );
+                }
+            }
+
+            // Load context float providers
+            for float_sub in ["context_float_provider", "context_float_providers"] {
+                let provider_dir = ns_path.join(float_sub);
+                if provider_dir.is_dir() {
+                    counts.float_providers +=
+                        context_provider_loader::load_context_providers_from_dir(
+                            &namespace,
+                            &provider_dir,
+                            acc.context_float_providers,
+                        );
+                }
+            }
+
+            // Load loot tables
+            for lt_sub in ["loot_table", "loot_tables"] {
+                let lt_dir = ns_path.join(lt_sub);
+                if lt_dir.is_dir() {
+                    counts.loot_tables += loot_table_loader::load_loot_tables_from_dir(
+                        &namespace,
+                        &lt_dir,
+                        acc.loot_tables,
+                    );
+                }
+            }
+
+            // Load structure templates
+            for st_sub in ["structure", "structures"] {
+                let st_dir = ns_path.join(st_sub);
+                if st_dir.is_dir() {
+                    counts.structures +=
+                        structure_loader::load_structures_from_dir(&namespace, &st_dir);
+                }
+            }
+
+            // Load worldgen template pools and processor lists
+            let worldgen_dir = ns_path.join("worldgen");
+            if worldgen_dir.is_dir() {
+                let pool_dir = worldgen_dir.join("template_pool");
+                if pool_dir.is_dir() {
+                    counts.template_pools +=
+                        structure_loader::load_template_pools_from_dir(&namespace, &pool_dir);
+                }
+                let proc_dir = worldgen_dir.join("processor_list");
+                if proc_dir.is_dir() {
+                    counts.processor_lists +=
+                        structure_loader::load_processor_lists_from_dir(&namespace, &proc_dir);
+                }
+            }
+
+            // Load dynamic registry entries (wolf_variant, cat_variant, frog_variant, instrument,
+            // trim_material, trim_pattern, banner_pattern, decorated_pot_pattern, chat_type, etc.)
+            counts.dynamic_registries += dynamic_registry_loader::load_dynamic_registries_from_ns(
+                &namespace,
+                &ns_path,
+                acc.dynamic_registries,
+            );
+
+            // Load trade sets
+            for ts_sub in ["trade_set", "trade_sets"] {
+                let ts_dir = ns_path.join(ts_sub);
+                if ts_dir.is_dir() {
+                    counts.trade_sets += trade_loader::load_trade_sets_from_dir(
+                        &namespace,
+                        &ts_dir,
+                        &mut acc.trade_registry.trade_sets,
+                    );
+                }
+            }
+
+            // Load villager trades
+            for vt_sub in ["villager_trade", "villager_trades"] {
+                let vt_dir = ns_path.join(vt_sub);
+                if vt_dir.is_dir() {
+                    counts.trades += trade_loader::load_trades_from_dir(
+                        &namespace,
+                        &vt_dir,
+                        &mut acc.trade_registry.trades,
+                    );
+                }
+            }
+
+            // Load villager trade tags
+            let tags_dir = ns_path.join("tags");
+            if tags_dir.is_dir() {
+                for vt_tag_sub in ["villager_trade", "villager_trades"] {
+                    let vt_tag_dir = tags_dir.join(vt_tag_sub);
+                    if vt_tag_dir.is_dir() {
+                        counts.trade_tags += trade_loader::load_trade_tags_from_dir(
+                            &namespace,
+                            &vt_tag_dir,
+                            &mut acc.trade_registry.trade_tags,
+                        );
+                    }
+                }
             }
         }
     }
 
-    (
-        pack_recipe_count,
-        pack_function_count,
-        pack_test_instance_count,
-    )
+    counts
+}
+
+#[must_use]
+pub fn clone_registry_entry(entry: &RegistryEntryData) -> RegistryEntryData {
+    RegistryEntryData {
+        entry_id: entry.entry_id.clone(),
+        data: entry.data.clone(),
+    }
+}
+
+#[must_use]
+pub fn merge_damage_type_entries<S: std::hash::BuildHasher>(
+    vanilla_entries: &[RegistryEntryData],
+    custom_entries: &HashMap<String, DamageTypeEntry, S>,
+) -> Vec<RegistryEntryData> {
+    if custom_entries.is_empty() {
+        return vanilla_entries.iter().map(clone_registry_entry).collect();
+    }
+
+    let mut merged = Vec::with_capacity(vanilla_entries.len() + custom_entries.len());
+    let mut overridden = std::collections::HashSet::new();
+
+    for entry in vanilla_entries {
+        let full_id = if entry.entry_id.contains(':') {
+            entry.entry_id.clone()
+        } else {
+            format!("minecraft:{}", entry.entry_id)
+        };
+
+        if let Some(custom) = custom_entries
+            .get(&full_id)
+            .or_else(|| custom_entries.get(&entry.entry_id))
+        {
+            let mut reg_entry = custom.to_registry_entry();
+            reg_entry.entry_id.clone_from(&entry.entry_id);
+            merged.push(reg_entry);
+            overridden.insert(full_id);
+            overridden.insert(entry.entry_id.clone());
+        } else {
+            merged.push(clone_registry_entry(entry));
+        }
+    }
+
+    let mut sorted_custom: Vec<&DamageTypeEntry> = custom_entries
+        .values()
+        .filter(|e| !overridden.contains(&e.id))
+        .collect();
+    sorted_custom.sort_by_key(|e| e.numeric_id);
+
+    for custom in sorted_custom {
+        merged.push(custom.to_registry_entry());
+    }
+
+    merged
 }
 
 fn read_pack_mcmeta(pack_path: &Path) -> (String, u32, Vec<KnownPackData>) {

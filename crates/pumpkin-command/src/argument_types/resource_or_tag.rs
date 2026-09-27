@@ -59,11 +59,7 @@ impl ResourceOrTag {
 /// Registry-aware suggestions shared by both argument types: the known entry
 /// ids plus, when tag data exists for the registry, its `#`-prefixed tags.
 fn suggest_for_registry(registry: &Identifier, builder: SuggestionsBuilder) -> Suggestions {
-    let tag_names = |key: RegistryKey| {
-        tag::get_latest_map(key)
-            .into_iter()
-            .flat_map(|map| map.keys().map(|tag| format!("#{tag}")))
-    };
+    let tag_names = |key: RegistryKey| tag::get_latest_map(key).keys().map(|tag| format!("#{tag}"));
 
     if *registry == STRUCTURE_REGISTRY {
         // The generator models vanilla's structure sets, so those are the

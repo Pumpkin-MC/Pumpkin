@@ -231,6 +231,13 @@ impl NbtCompound {
         self.get(name).and_then(super::tag::NbtTag::extract_short)
     }
 
+    /// Returns any named numeric value as a short
+    #[must_use]
+    pub fn get_numeric_short(&self, name: &str) -> Option<i16> {
+        self.get(name)
+            .and_then(super::tag::NbtTag::as_numeric_short)
+    }
+
     /// Returns the named integer value, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_int(&self, name: &str) -> Option<i32> {
@@ -247,6 +254,13 @@ impl NbtCompound {
     #[must_use]
     pub fn get_float(&self, name: &str) -> Option<f32> {
         self.get(name).and_then(super::tag::NbtTag::extract_float)
+    }
+
+    /// Returns any named numeric value as a float
+    #[must_use]
+    pub fn get_numeric_float(&self, name: &str) -> Option<f32> {
+        self.get(name)
+            .and_then(super::tag::NbtTag::as_numeric_float)
     }
 
     /// Returns the named double value, or `None` if the tag is absent or has another type.

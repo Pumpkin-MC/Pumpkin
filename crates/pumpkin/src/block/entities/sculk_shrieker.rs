@@ -1,11 +1,15 @@
 use super::BlockEntity;
+use crate::block::blocks::sculk::sculk_shrieker::SculkShriekerBlock;
+use crate::world::World;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 pub struct SculkShriekerBlockEntity {
     pub position: BlockPos,
     pub warning_level: Mutex<i32>,
+    pub shrieking_can_summon: AtomicBool,
 }
 
 impl BlockEntity for SculkShriekerBlockEntity {
@@ -25,6 +29,7 @@ impl BlockEntity for SculkShriekerBlockEntity {
         Self {
             position,
             warning_level: Mutex::new(warning_level),
+            shrieking_can_summon: AtomicBool::new(false),
         }
     }
 
@@ -40,6 +45,16 @@ impl BlockEntity for SculkShriekerBlockEntity {
         Some(nbt)
     }
 
+    fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
+        if self.shrieking_can_summon.swap(false, Ordering::Relaxed) {
+            let warning_level = *self
+                .warning_level
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            SculkShriekerBlock::respond(world, position, warning_level);
+        }
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -52,6 +67,7 @@ impl SculkShriekerBlockEntity {
         Self {
             position,
             warning_level: Mutex::new(0),
+            shrieking_can_summon: AtomicBool::new(false),
         }
     }
 }

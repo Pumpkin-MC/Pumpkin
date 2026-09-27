@@ -20,7 +20,6 @@ pub mod click;
 pub mod color;
 pub mod hover;
 pub mod legacy;
-pub mod sign;
 pub mod style;
 
 /// Represents a Minecraft chat component.
@@ -987,13 +986,8 @@ impl TextComponentBase {
         let mut text = match *self.content {
             TextContent::Text { text } => text.into_owned(),
             TextContent::Translate {
-                translate,
-                bedrock_translate,
-                with,
-            } => {
-                let key = bedrock_translate.as_ref().unwrap_or(&translate);
-                translation_to_pretty(format!("minecraft:{key}"), Locale::EnUs, with)
-            }
+                translate, with, ..
+            } => translation_to_pretty(format!("minecraft:{translate}"), Locale::EnUs, with),
             TextContent::EntityNames {
                 selector,
                 separator: _,

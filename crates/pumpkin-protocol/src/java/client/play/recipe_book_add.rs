@@ -1,5 +1,4 @@
 use pumpkin_data::item::Item;
-use pumpkin_data::item_id_remap::remap_item_id_for_version;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::packet::clientbound::play::RECIPE_BOOK_ADD;
 use pumpkin_data::recipes::{
@@ -13,8 +12,6 @@ use std::{collections::HashMap, io::Write};
 
 use crate::codec::item_stack_seralizer::ItemStackTemplateSerializer;
 use crate::{ClientPacket, VarInt, WritingError, ser::NetworkWriteExt};
-
-use pumpkin_data::slot_display_id_remap::remap_slot_display_id_for_version;
 
 // Recipe Display type IDs
 const RECIPE_DISPLAY_SHAPELESS: i32 = 0;
@@ -64,29 +61,13 @@ impl<'a> CRecipeBookAdd<'a> {
     }
 }
 
-fn item_id_versioned(item: &Item, version: JavaMinecraftVersion) -> i32 {
-    remap_item_id_for_version(item.id, version) as i32
-}
-
-fn slot_display_item_type(version: JavaMinecraftVersion) -> i32 {
-    remap_slot_display_id_for_version(SLOT_DISPLAY_ITEM, version) as i32
-}
-
-fn slot_display_composite_type(version: JavaMinecraftVersion) -> i32 {
-    remap_slot_display_id_for_version(SLOT_DISPLAY_COMPOSITE, version) as i32
-}
-
-fn slot_display_item_stack_type(version: JavaMinecraftVersion) -> i32 {
-    remap_slot_display_id_for_version(SLOT_DISPLAY_ITEM_STACK, version) as i32
-}
-
 fn write_item_slot_display(
     write: &mut impl Write,
     item: &Item,
-    version: JavaMinecraftVersion,
+    _version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(slot_display_item_type(version)))?;
-    write.write_var_int(&VarInt(item_id_versioned(item, version)))?;
+    write.write_var_int(&VarInt(SLOT_DISPLAY_ITEM as i32))?;
+    write.write_var_int(&VarInt(item.id as i32))?;
     Ok(())
 }
 
@@ -103,27 +84,23 @@ fn write_item_stack_slot_display(
     if stack.is_empty() {
         return write_empty_slot_display(write, version);
     }
-    write.write_var_int(&VarInt(slot_display_item_stack_type(version)))?;
+    write.write_var_int(&VarInt(SLOT_DISPLAY_ITEM_STACK as i32))?;
     ItemStackTemplateSerializer::from(stack).write_with_version(write, &version)
 }
 
 fn write_empty_slot_display(
     write: &mut impl Write,
-    version: JavaMinecraftVersion,
+    _version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(
-        remap_slot_display_id_for_version(SLOT_DISPLAY_EMPTY, version) as i32,
-    ))?;
+    write.write_var_int(&VarInt(SLOT_DISPLAY_EMPTY as i32))?;
     Ok(())
 }
 
 fn write_any_fuel_slot_display(
     write: &mut impl Write,
-    version: JavaMinecraftVersion,
+    _version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(
-        remap_slot_display_id_for_version(SLOT_DISPLAY_ANY_FUEL, version) as i32,
-    ))?;
+    write.write_var_int(&VarInt(SLOT_DISPLAY_ANY_FUEL as i32))?;
     Ok(())
 }
 
@@ -175,7 +152,7 @@ fn write_ingredient_slot_display(
                 if items.len() == 1 {
                     write_item_slot_display(write, items[0], version)?;
                 } else {
-                    write.write_var_int(&VarInt(slot_display_composite_type(version)))?;
+                    write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
                     write.write_var_int(&VarInt(items.len() as i32))?;
                     for item in &items {
                         write_item_slot_display(write, item, version)?;
@@ -198,7 +175,7 @@ fn write_ingredient_slot_display(
             } else if items.len() == 1 {
                 write_item_slot_display(write, items[0], version)?;
             } else {
-                write.write_var_int(&VarInt(slot_display_composite_type(version)))?;
+                write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
                 write.write_var_int(&VarInt(items.len() as i32))?;
                 for item in &items {
                     write_item_slot_display(write, item, version)?;
@@ -225,7 +202,7 @@ fn write_ingredient_holderset(
             // 1 item -> VarInt(1 + 1) = VarInt(2)
             write.write_var_int(&VarInt(2))?;
             if let Some(item) = Item::from_registry_key(key) {
-                write.write_var_int(&VarInt(item_id_versioned(item, version)))?;
+                write.write_var_int(&VarInt(item.id as i32))?;
             } else {
                 // Non-empty fallback item to prevent client UnsupportedOperationException
                 write.write_var_int(&VarInt(0))?;
@@ -235,7 +212,7 @@ fn write_ingredient_holderset(
             if let Some(items) = resolve_item_tag(tag, version) {
                 write.write_var_int(&VarInt(items.len() as i32 + 1))?;
                 for item in &items {
-                    write.write_var_int(&VarInt(item_id_versioned(item, version)))?;
+                    write.write_var_int(&VarInt(item.id as i32))?;
                 }
             } else {
                 let tag = tag.strip_prefix('#').unwrap_or(tag);
@@ -253,7 +230,7 @@ fn write_ingredient_holderset(
                 .iter()
                 .filter_map(|id| {
                     let key = id.strip_prefix("minecraft:").unwrap_or(id);
-                    Item::from_registry_key(key).map(|item| item_id_versioned(item, version))
+                    Item::from_registry_key(key).map(|item| item.id as i32)
                 })
                 .collect();
             if items.is_empty() {
@@ -749,7 +726,7 @@ fn write_dynamic_ingredient_slot_display(
                 if items.len() == 1 {
                     write_item_slot_display(write, items[0], version)?;
                 } else {
-                    write.write_var_int(&VarInt(slot_display_composite_type(version)))?;
+                    write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
                     write.write_var_int(&VarInt(items.len() as i32))?;
                     for item in &items {
                         write_item_slot_display(write, item, version)?;
@@ -773,7 +750,7 @@ fn write_dynamic_ingredient_slot_display(
             } else if items.len() == 1 {
                 write_item_slot_display(write, items[0], version)?;
             } else {
-                write.write_var_int(&VarInt(slot_display_composite_type(version)))?;
+                write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
                 write.write_var_int(&VarInt(items.len() as i32))?;
                 for item in &items {
                     write_item_slot_display(write, item, version)?;
@@ -794,7 +771,7 @@ fn write_dynamic_ingredient_holderset(
             let key = id.strip_prefix("minecraft:").unwrap_or(id);
             write.write_var_int(&VarInt(2))?;
             if let Some(item) = Item::from_registry_key(key) {
-                write.write_var_int(&VarInt(item_id_versioned(item, version)))?;
+                write.write_var_int(&VarInt(item.id as i32))?;
             } else {
                 write.write_var_int(&VarInt(0))?;
             }
@@ -803,7 +780,7 @@ fn write_dynamic_ingredient_holderset(
             if let Some(items) = resolve_item_tag(tag, version) {
                 write.write_var_int(&VarInt(items.len() as i32 + 1))?;
                 for item in &items {
-                    write.write_var_int(&VarInt(item_id_versioned(item, version)))?;
+                    write.write_var_int(&VarInt(item.id as i32))?;
                 }
             } else {
                 let tag = tag.strip_prefix('#').unwrap_or(tag);
@@ -821,7 +798,7 @@ fn write_dynamic_ingredient_holderset(
                 .iter()
                 .filter_map(|id| {
                     let key = id.strip_prefix("minecraft:").unwrap_or(id);
-                    Item::from_registry_key(key).map(|item| item_id_versioned(item, version))
+                    Item::from_registry_key(key).map(|item| item.id as i32)
                 })
                 .collect();
             if items.is_empty() {
@@ -982,10 +959,7 @@ mod tests {
         for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
             let mut bytes = Vec::new();
             write_result_slot_display(&mut bytes, &result, version).unwrap();
-            assert_eq!(
-                bytes,
-                [remap_slot_display_id_for_version(SLOT_DISPLAY_EMPTY, version) as u8]
-            );
+            assert_eq!(bytes, [SLOT_DISPLAY_EMPTY as u8]);
         }
     }
 
