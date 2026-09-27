@@ -134,9 +134,26 @@ impl ZombieEntityBase {
     }
 }
 
+impl ZombieEntityBase {
+    /// Age and the zombie baby flag.
+    pub fn set_baby(&self, baby: bool) {
+        let entity = &self.mob_entity.living_entity.entity;
+        entity.age.store(
+            if baby { -24000 } else { 0 },
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        entity.set_synced_data(pumpkin_data::tracked_data::zombie::BABY, baby);
+    }
+}
+
 impl Mob for ZombieEntityBase {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn spawn_as_baby(&self) -> bool {
+        self.set_baby(true);
+        true
     }
 
     fn populate_default_equipment_slots(

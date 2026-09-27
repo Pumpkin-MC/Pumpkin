@@ -219,13 +219,12 @@ impl ItemBehaviour for SpawnEggItem {
             let world = player.world();
             let pos = entity.get_entity().pos.load();
             let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
+            // no baby form, no offspring.
+            if !mob.get_mob().is_some_and(|m| m.spawn_as_baby()) {
+                return;
+            }
             mob.get_entity()
                 .set_rotation(rand::random::<f32>() * 360.0, 0.0);
-            mob.get_entity()
-                .age
-                .store(-24000, std::sync::atomic::Ordering::Relaxed);
-            mob.get_entity()
-                .set_synced_data(pumpkin_data::tracked_data::ageable_mob::DATA_BABY_ID, true);
             apply_entity_variant(item, mob.as_ref());
             world.spawn_entity(mob);
             item.decrement_unless_creative(player.gamemode.load(), 1);

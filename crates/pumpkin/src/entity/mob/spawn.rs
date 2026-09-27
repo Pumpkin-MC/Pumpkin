@@ -75,3 +75,15 @@ pub fn finalize_spawn(
         None => group_data,
     }
 }
+
+impl MobEntity {
+    /// Baby state kept only as a negative age and the shared baby flag (hoglins, zoglins and
+    /// zombified piglins, which are not `AgeableMob`s here).
+    pub fn set_baby_by_age(&self) {
+        let entity = &self.living_entity.entity;
+        entity
+            .age
+            .store(-24000, std::sync::atomic::Ordering::Relaxed);
+        entity.set_synced_data(pumpkin_data::tracked_data::ageable_mob::DATA_BABY_ID, true);
+    }
+}

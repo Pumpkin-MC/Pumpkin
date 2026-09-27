@@ -30,6 +30,10 @@ impl Mob for ZombieEntity {
         &self.entity.mob_entity
     }
 
+    fn spawn_as_baby(&self) -> bool {
+        self.entity.spawn_as_baby()
+    }
+
     fn populate_default_equipment_slots(
         &self,
         world: &Arc<World>,

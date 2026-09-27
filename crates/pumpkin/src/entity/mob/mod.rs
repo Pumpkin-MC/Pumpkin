@@ -897,6 +897,14 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    /// turns the mob into a baby. False when it has no baby form.
+    fn spawn_as_baby(&self) -> bool {
+        self.as_ageable().is_some_and(|ageable| {
+            ageable.set_baby(true);
+            true
+        })
+    }
+
     fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
         None
     }

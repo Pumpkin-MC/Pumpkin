@@ -114,6 +114,12 @@ impl Mob for ZoglinEntity {
         &self.mob_entity
     }
 
+    fn spawn_as_baby(&self) -> bool {
+        self.is_baby.store(true, Ordering::Relaxed);
+        self.mob_entity.set_baby_by_age();
+        true
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         if self.is_baby.load(Ordering::Relaxed) {
             nbt.put_bool("IsBaby", true);

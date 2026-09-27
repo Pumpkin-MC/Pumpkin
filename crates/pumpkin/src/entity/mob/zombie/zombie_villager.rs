@@ -261,6 +261,10 @@ impl Mob for ZombieVillagerEntity {
         &self.mob_entity.mob_entity
     }
 
+    fn spawn_as_baby(&self) -> bool {
+        self.mob_entity.spawn_as_baby()
+    }
+
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
         !self.is_converting() && self.villager_xp.load(Ordering::Relaxed) == 0
     }

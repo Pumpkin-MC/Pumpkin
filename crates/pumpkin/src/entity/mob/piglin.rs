@@ -989,6 +989,11 @@ impl PiglinEntity {
 }
 
 impl Mob for PiglinEntity {
+    fn spawn_as_baby(&self) -> bool {
+        self.set_baby(true);
+        true
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
