@@ -1339,7 +1339,6 @@ impl Player {
         let base_attack_speed = 4.0;
 
         let mut damage_multiplier = 1.0;
-        let mut add_damage = 0.0;
         let mut add_speed = 0.0;
         let mut extra_ench_damage = 0.0;
         let mut knockback_level = 0u32;
@@ -1350,13 +1349,14 @@ impl Player {
                 // Vanilla fist: base_attack_speed = -2.4
                 add_speed = -2.4;
             } else if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
+                // Only attack speed is read from the item here.
+                // Attack damage is already  part of `base_damage` via the held item's live
+                // ATTACK_DAMAGE modifier, re-adding it here would double it.
                 for item_mod in modifiers.attribute_modifiers.iter() {
-                    if item_mod.operation == Operation::AddValue {
-                        if item_mod.id == "minecraft:base_attack_damage" {
-                            add_damage = item_mod.amount;
-                        } else if item_mod.id == "minecraft:base_attack_speed" {
-                            add_speed = item_mod.amount;
-                        }
+                    if item_mod.operation == Operation::AddValue
+                        && item_mod.id == "minecraft:base_attack_speed"
+                    {
+                        add_speed = item_mod.amount;
                     }
                 }
             }
@@ -1391,7 +1391,7 @@ impl Player {
         }
 
         // Modify the added damage based on the multiplier.
-        let mut damage = (base_damage + add_damage) * damage_multiplier;
+        let mut damage = base_damage * damage_multiplier;
         damage += extra_ench_damage * attack_cooldown_progress;
 
         if let Some(strength) = self
