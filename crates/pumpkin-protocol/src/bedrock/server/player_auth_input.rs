@@ -3,6 +3,7 @@ use std::io::{Error, ErrorKind, Read};
 use pumpkin_macros::packet;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2, vector3::Vector3};
 
+use super::player_action::PlayerActionType;
 use crate::{
     codec::{
         bitset::Bitset, var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
@@ -231,7 +232,7 @@ impl PacketRead for PlayerUseItemTransactionData {
 
 #[derive(Debug, PacketRead)]
 pub struct PlayerBlockAction {
-    pub action: VarInt,
+    pub action: PlayerActionType,
     pub block_pos: BlockPos,
     pub face: VarInt,
 }

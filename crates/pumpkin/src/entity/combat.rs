@@ -153,8 +153,10 @@ impl CombatRules {
         let mut armor_fraction = real_armor / Self::ARMOR_PROTECTION_DIVIDER;
 
         if breach_level > 0 {
-            let reduction = (breach_level as f32 * 0.15).min(1.0);
-            armor_fraction = (armor_fraction * (1.0 - reduction)).clamp(0.0, 1.0);
+            let mut effectiveness = 1.0f32;
+            pumpkin_data::Enchantment::BREACH
+                .modify_armor_effectiveness(breach_level as i32, &mut effectiveness);
+            armor_fraction = (armor_fraction * effectiveness.clamp(0.0, 1.0)).clamp(0.0, 1.0);
         }
 
         let damage_multiplier = 1.0 - armor_fraction;

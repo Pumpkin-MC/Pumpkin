@@ -10,6 +10,7 @@ use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
 use crate::server::Server;
 use crate::world::World;
+use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
@@ -24,12 +25,10 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
 use pumpkin_util::version::JavaMinecraftVersion;
-use rand::RngExt;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
@@ -53,6 +52,7 @@ pub mod guardian;
 pub mod hoglin;
 pub mod illusioner;
 pub mod magma_cube;
+pub mod neutral;
 pub mod patrol;
 pub mod phantom;
 pub mod piglin;
@@ -65,7 +65,9 @@ pub mod shulker;
 pub mod silverfish;
 pub mod skeleton;
 pub mod slime;
+pub mod spawn;
 pub mod spider;
+pub mod sun_burn;
 pub mod vex;
 pub mod vindicator;
 pub mod warden;
@@ -91,6 +93,7 @@ pub struct MobEntity {
     pub breeding_cooldown: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
     pub persistence_required: AtomicBool,
+    pending_riders: std::sync::Mutex<Vec<Arc<dyn EntityBase>>>,
     mob_flags: AtomicU8,
 }
 impl MobEntity {
@@ -177,6 +180,7 @@ impl MobEntity {
             breeding_cooldown: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
             persistence_required: AtomicBool::new(false),
+            pending_riders: std::sync::Mutex::new(Vec::new()),
             mob_flags: AtomicU8::new(0),
         }
     }
@@ -229,6 +233,91 @@ impl MobEntity {
 
     pub fn is_no_ai(&self) -> bool {
         (self.mob_flags.load(Relaxed) & Self::AI_DISABLED_FLAG) != 0
+    }
+
+    /// Vanilla `Mob.serverAiStep`: sensing, goals, navigation and controls.
+    pub fn server_ai_step(&self, mob: &dyn Mob, caller: &dyn EntityBase) {
+        let age = self.living_entity.entity.age.load(Relaxed);
+        let entity_id = self.living_entity.entity.entity_id;
+
+        self.sensing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick();
+
+        // 1. "Take" selectors out of the mutexes
+        let mut target_selector = {
+            let mut guard = self
+                .target_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::mem::take(&mut *guard)
+        };
+        let mut goals_selector = {
+            let mut guard = self
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::mem::take(&mut *guard)
+        };
+
+        // 2. Perform AI logic
+        if (age + entity_id) % 2 != 0 && age > 1 {
+            target_selector.tick_goals(mob, false);
+            goals_selector.tick_goals(mob, false);
+        } else {
+            target_selector.tick(mob);
+            goals_selector.tick(mob);
+        }
+
+        // 3. "Put back" selectors
+        {
+            *self
+                .target_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = target_selector;
+            *self
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = goals_selector;
+        };
+
+        // 4. Repeat for Navigator
+        let mut navigator = {
+            let mut guard = self
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::mem::take(&mut *guard)
+        };
+
+        navigator.tick(&self.living_entity);
+
+        {
+            *self
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = navigator;
+        };
+
+        mob.custom_server_ai_step(caller);
+
+        // Controllers are synchronous, so we can just use normal blocks
+        {
+            let mut look_control = self
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            look_control.tick(mob);
+        };
+
+        {
+            let mut move_control = self
+                .move_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            move_control.tick(mob);
+        };
     }
 
     pub fn clear_ai_goals(&self, mob: &dyn Mob) {
@@ -371,9 +460,8 @@ impl MobEntity {
 
     pub fn read_mob_nbt(&self, nbt: &NbtCompound) {
         self.read_drop_chances(nbt);
-        if let Some(no_ai) = nbt.get_bool("NoAI") {
-            self.set_no_ai(no_ai);
-        }
+        // Vanilla getBooleanOr: `/data remove ... NoAI` turns the AI back on.
+        self.set_no_ai(nbt.get_bool("NoAI").unwrap_or(false));
         if let Some(left_handed) = nbt.get_bool("LeftHanded") {
             self.set_left_handed(left_handed);
         }
@@ -611,65 +699,14 @@ impl MobEntity {
         base_box.expand(attack_range, 0.0, attack_range)
     }
 
-    pub fn tick_sun_burn(&self) {
-        if !self
-            .living_entity
-            .entity
-            .entity_type
-            .has_tag(&tag::EntityType::MINECRAFT_BURN_IN_DAYLIGHT)
-        {
-            return;
-        }
-        if !self.is_sun_burn_tick() {
-            return;
-        }
-        self.apply_sun_burn();
-    }
-
-    fn is_sun_burn_tick(&self) -> bool {
+    /// Brightness at the mob's eye (sky and block light) reaches daylight.
+    pub fn is_in_daylight(&self) -> bool {
         let entity = &self.living_entity.entity;
-
-        let world_arc = entity.world.load();
-        let world = world_arc.as_ref();
-
-        let eye_block_pos = entity.get_eye_pos().to_block_pos();
-        if !world.monsters_burn(&eye_block_pos) {
-            return false;
-        }
-
-        // Vanilla: getLightLevelDependentMagicValue() — sky light at eye pos, scaled 0–1.
-        let brightness = world
-            .level
-            .light_engine
-            .get_sky_light_level(&world.level, &eye_block_pos) as f32
-            / 15.0;
-
-        if brightness <= 0.5 {
-            return false;
-        }
-
-        let is_in_non_burnable = entity.touching_water.load(Relaxed)
-            || world.is_raining()
-            || entity.is_in_powder_snow()
-            || entity.was_in_powder_snow.load(Relaxed);
-
-        if is_in_non_burnable {
-            return false;
-        }
-
-        let pos = entity.pos.load();
-        let top_y = world.get_top_block(Vector2::new(pos.x as i32, pos.z as i32));
-        if (entity.get_eye_y() as i32) < top_y {
-            return false;
-        }
-
-        let mut rng = rand::rng();
-        rng.random::<f32>() * 30.0 < (brightness - 0.4) * 2.0
-    }
-
-    fn apply_sun_burn(&self) {
-        let entity = &self.living_entity.entity;
-        entity.set_on_fire_for(8.0);
+        entity
+            .world
+            .load()
+            .get_light_level_dependent_magic_value(&entity.get_eye_pos().to_block_pos())
+            >= DAYLIGHT_BRIGHTNESS
     }
 
     pub fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
@@ -764,12 +801,13 @@ pub trait Mob: EntityBase + Send + Sync {
         rand::rng()
     }
 
-    fn can_attack(&self, target: &crate::entity::living::LivingEntity) -> bool {
-        if target.entity.entity_type == &EntityType::GHAST {
+    fn can_attack(&self, target: &dyn EntityBase) -> bool {
+        let target_entity = target.get_entity();
+        if target_entity.entity_type == &EntityType::GHAST {
             return false;
         }
         if let Some(tamable) = self.as_tamable()
-            && tamable.is_owned_by(&target.entity.entity_uuid)
+            && tamable.is_owned_by(&target_entity.entity_uuid)
         {
             return false;
         }
@@ -796,6 +834,18 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn requires_custom_persistence(&self) -> bool {
         false
+    }
+
+    /// Whether daylight burns this mob. Default: entity tag `burn_in_daylight`.
+    fn burns_in_daylight(&self) -> bool {
+        self.get_entity()
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_BURN_IN_DAYLIGHT)
+    }
+
+    /// Slot whose item shields the mob from the sun and takes the wear instead.
+    fn sun_protection_slot(&self) -> EquipmentSlot {
+        EquipmentSlot::HEAD
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
@@ -932,6 +982,14 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    /// turns the mob into a baby. False when it has no baby form.
+    fn spawn_as_baby(&self) -> bool {
+        self.as_ageable().is_some_and(|ageable| {
+            ageable.set_baby(true);
+            true
+        })
+    }
+
     fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
         None
     }
@@ -958,12 +1016,29 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    /// Must return `Some(self)` for every `NeutralMob` implementor. Not compiler-enforced.
+    fn as_neutral(&self) -> Option<&dyn neutral::NeutralMob> {
+        None
+    }
+
     fn as_iron_golem(&self) -> Option<&crate::entity::passive::iron_golem::IronGolemEntity> {
         None
     }
 
     fn as_crossbow_attack_mob(&self) -> Option<&dyn crossbow_attack_mob::CrossbowAttackMob> {
         None
+    }
+
+    /// Vanilla `Mob.finalizeSpawn`, run before the mob enters the world on spawns that
+    /// vanilla finalizes. Overrides call `finalize_spawn_base` first. Riders queued with
+    /// `add_pending_rider` are added by the world together with the mob.
+    fn finalize_spawn(
+        &self,
+        _world: &Arc<World>,
+        group_data: Option<spawn::SpawnGroupData>,
+    ) -> Option<spawn::SpawnGroupData> {
+        self.get_mob_entity().finalize_spawn_base();
+        group_data
     }
 
     fn populate_default_equipment_slots(
@@ -1079,8 +1154,7 @@ pub trait Mob: EntityBase + Send + Sync {
         if !EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity()) {
             return None;
         }
-        let living = target.get_living_entity()?;
-        self.can_attack(living).then_some(target)
+        self.can_attack(target.as_ref()).then_some(target)
     }
 
     /// Set or clear the mob's target. Override to add side effects when targeting changes.
@@ -1246,6 +1320,7 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn mob_set_variant_name(&self, _name: &str) {}
+    fn mob_set_sound_variant_name(&self, _name: &str) {}
 
     fn mob_on_lightning_strike(
         &self,
@@ -1301,11 +1376,15 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_set_variant_name(name);
     }
 
+    fn set_sound_variant_name(&self, name: &str) {
+        self.mob_set_sound_variant_name(name);
+    }
+
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let mob_entity = self.get_mob_entity();
         mob_entity.living_entity.entity.tick_leash();
-        mob_entity.tick_sun_burn();
+        sun_burn::tick(self);
 
         if mob_entity.breeding_cooldown.load(Relaxed) > 0 {
             mob_entity.breeding_cooldown.fetch_sub(1, Relaxed);
@@ -1329,90 +1408,31 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
         mob_entity.check_despawn(self);
 
-        self.mob_tick(caller);
-
-        let age = mob_entity.living_entity.entity.age.load(Relaxed);
-        let entity_id = mob_entity.living_entity.entity.entity_id;
-
-        mob_entity
-            .sensing
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .tick();
-
-        // 1. "Take" selectors out of the mutexes
-        let mut target_selector = {
-            let mut guard = mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            std::mem::take(&mut *guard)
-        };
-        let mut goals_selector = {
-            let mut guard = mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            std::mem::take(&mut *guard)
-        };
-
-        // 2. Perform AI logic
-        if (age + entity_id) % 2 != 0 && age > 1 {
-            target_selector.tick_goals(self, false);
-            goals_selector.tick_goals(self, false);
-        } else {
-            target_selector.tick(self);
-            goals_selector.tick(self);
+        if let Some(neutral) = self.as_neutral() {
+            neutral.update_persistent_anger();
         }
 
-        // 3. "Put back" selectors
-        {
-            *mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = target_selector;
-            *mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = goals_selector;
-        };
+        self.mob_tick(caller);
 
-        // 4. Repeat for Navigator
-        let mut navigator = {
-            let mut guard = mob_entity
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            std::mem::take(&mut *guard)
-        };
-
-        navigator.tick(&mob_entity.living_entity);
-
-        {
-            *mob_entity
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = navigator;
-        };
-
-        self.custom_server_ai_step(caller);
-
-        // Controllers are synchronous, so we can just use normal blocks
-        {
-            let mut look_control = mob_entity
-                .look_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            look_control.tick(self);
-        };
-
-        {
-            let mut move_control = mob_entity
-                .move_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            move_control.tick(self);
-        };
+        // Vanilla Mob.isEffectiveAi: NoAI skips the whole serverAiStep.
+        //
+        // TODO NoAI: move these vanilla `customServerAiStep` parts of `mob_tick`
+        // into `custom_server_ai_step`:
+        // Bat `tick_flying`/`tick_roosting` (not `tick_ambient_sound`)
+        // Bee sting death (`time_since_sting`)
+        // Armadillo scute drop, state switching, `danger_detected_recently_ticks`
+        // (not `in_state_ticks`, that is vanilla `tick`)
+        // ElderGuardian fatigue
+        // Wither `tick_wither` invulnerable countdown, healing, boss bar, head attacks
+        // (not the movement towards the target, that is vanilla `aiStep`)
+        // ZombifiedPiglin `maybe_alert_others`
+        // Axolotl `play_dead_ticks`
+        // Piglin timers, `tick_sensors`, admiring, dancing (conversion already checks NoAI)
+        // Bee and ZombifiedPiglin `update_persistent_anger` (Enderman, Wolf, IronGolem and
+        // PolarBear run it outside the AI step, so the shared call stays for them).
+        if !mob_entity.is_no_ai() {
+            mob_entity.server_ai_step(self, caller);
+        }
 
         mob_entity.living_entity.tick(caller, server);
         self.post_tick();
@@ -1517,6 +1537,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         if let Some(tamable) = self.as_tamable() {
             tamable.write_tamable_nbt(nbt);
         }
+        if let Some(neutral) = self.as_neutral() {
+            neutral.write_anger_nbt(nbt);
+        }
         self.mob_write_nbt(nbt);
     }
 
@@ -1538,6 +1561,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         }
         if let Some(tamable) = self.as_tamable() {
             tamable.read_tamable_nbt(nbt);
+        }
+        if let Some(neutral) = self.as_neutral() {
+            neutral.read_anger_nbt(nbt);
         }
         self.mob_read_nbt(nbt);
     }

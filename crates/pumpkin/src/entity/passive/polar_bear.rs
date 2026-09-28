@@ -11,20 +11,34 @@ use pumpkin_nbt::compound::NbtCompound;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
+    ai::behavior::neutral::apply_targets,
     ai::goal::{
-        active_target::ActiveTargetGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        active_target::{ActiveTargetGoal, TargetCondition},
+        escape_danger::EscapeDangerGoal,
+        follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal,
+        revenge::RevengeGoal,
+        swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{
+        Mob, MobEntity,
+        neutral::{NeutralData, NeutralMob},
+    },
     passive::animal::Animal,
     player::Player,
 };
 
+fn is_baby(mob: &dyn Mob) -> bool {
+    mob.as_ageable().is_some_and(AgeableMob::is_baby)
+}
+
 pub struct PolarBearEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
+    pub neutral_data: NeutralData,
     pub standing: AtomicBool,
 }
 
@@ -34,6 +48,7 @@ impl PolarBearEntity {
         let polar_bear = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
+            neutral_data: NeutralData::default(),
             standing: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(polar_bear);
@@ -68,14 +83,20 @@ impl PolarBearEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, false),
+                1,
+                Box::new(
+                    RevengeGoal::new(true)
+                        .raising_alarm_when(is_baby)
+                        .alerting_only(|other| !is_baby(other)),
+                ),
             );
+            // TODO: PolarBearAttackPlayersGoal at 2 -> adults charge when a cub is near.
+            apply_targets(&mut target_selector, &mob_arc.mob_entity, 3, 5, false);
             target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true),
+                4,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true)
+                    .when(TargetCondition::Adult),
             );
         };
 
@@ -109,12 +130,22 @@ impl Animal for PolarBearEntity {
     }
 }
 
+impl NeutralMob for PolarBearEntity {
+    fn get_neutral_data(&self) -> &NeutralData {
+        &self.neutral_data
+    }
+}
+
 impl Mob for PolarBearEntity {
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
 
     fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn as_neutral(&self) -> Option<&dyn NeutralMob> {
         Some(self)
     }
 
