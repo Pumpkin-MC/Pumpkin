@@ -156,13 +156,12 @@ pub struct Server {
 
 impl Server {
     #[expect(clippy::too_many_lines)]
-    #[must_use]
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
         telemetry_config: TelemetryConfig,
         vanilla_data: VanillaData,
-    ) -> Arc<Self> {
+    ) -> Result<Arc<Self>, WorldInfoError> {
         let permission_manager = Arc::new(PermissionManager::new());
         // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher = ArcSwap::from_pointee(default_dispatcher(
@@ -201,9 +200,7 @@ impl Server {
                 );
                 let default_data =
                     LevelData::from_world_generator(basic_config.seed, &overworld_gen);
-                if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
-                    error!("Failed to save level.dat: {err}");
-                }
+                AnvilLevelInfo.write_world_info(&default_data, &world_path)?;
                 default_data
             }
             Err(
@@ -436,7 +433,7 @@ impl Server {
             .datapack_manager
             .execute_function(&server, &source, "#minecraft:load");
 
-        server
+        Ok(server)
     }
 
     /// Spawns a task associated with this server. All tasks spawned with this method are awaited
@@ -878,11 +875,11 @@ impl Server {
         self.level_info.store(Arc::new(new_info));
 
         for world in self.worlds.load().iter() {
-            world.set_difficulty(difficulty);
+            world.set_difficulty(new_difficulty);
             world.broadcast_editioned(
-                &CChangeDifficulty::new(difficulty as u8, locked),
+                &CChangeDifficulty::new(new_difficulty as u8, locked),
                 &pumpkin_protocol::bedrock::client::CSetDifficulty {
-                    difficulty: (difficulty as u32).into(),
+                    difficulty: (new_difficulty as u32).into(),
                 },
             );
         }
@@ -1096,14 +1093,48 @@ impl Server {
         )
     }
 
+    /// Vanilla `ServerCommonPacketListenerImpl.suspendFlushing`. Returns the suspended players.
+    fn suspend_player_flushes(&self) -> Vec<Arc<Player>> {
+        let mut suspended = Vec::new();
+        self.for_each_player(|player| {
+            if let Some(java) = player.client.java() {
+                java.suspend_flushing();
+                suspended.push(player.clone());
+            }
+        });
+        suspended
+    }
+
+    /// Vanilla `resumeFlushing` / `Connection.flushChannel` at tick end (~50ms).
+    /// Resumes the suspended set, not a fresh world scan
+    /// off-tick respawn or world change can leave a player in no world's list at tick end.
+    fn resume_player_flushes(suspended: &[Arc<Player>]) {
+        for player in suspended {
+            if let Some(java) = player.client.java() {
+                java.resume_flushing();
+            }
+        }
+    }
+
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub fn tick(self: &Arc<Self>) {
+        // Do not flush mid-tick; `Flush` is `flushChannel`.
+        let suspended = self.suspend_player_flushes();
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
             self.tick_worlds();
             // Always run player and network ticking, even when game is frozen
         } else {
+            self.sync_game_time();
             self.tick_players_and_network();
+        }
+        self.flush_pending_block_updates();
+        Self::resume_player_flushes(&suspended);
+    }
+
+    fn flush_pending_block_updates(&self) {
+        for world in self.worlds.load().iter() {
+            world.flush_block_updates();
         }
     }
 
@@ -1141,9 +1172,10 @@ impl Server {
             self.tick_count.load(std::sync::atomic::Ordering::Relaxed) as u64,
         );
 
+        self.sync_game_time();
+
         let worlds = self.worlds.load();
         let handle = self.runtime.clone();
-
         worlds.par_iter().for_each(|world| {
             let _guard = handle.enter();
             world.tick(self);
@@ -1151,6 +1183,19 @@ impl Server {
 
         // Global tasks
         self.player_data_storage.tick(self);
+    }
+
+    /// Vanilla `tickChildren` "timeSync": every 20 ticks, also while frozen.
+    /// Sync before `tickTime()`. `tick_count + 1` is this vanilla tick.
+    fn sync_game_time(&self) {
+        if self.tick_count.load(Ordering::Relaxed).wrapping_add(1) % 20 == 0
+            && let Some(overworld) =
+                self.worlds.load().iter().find(|world| {
+                    world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name
+                })
+        {
+            overworld.force_game_time_synchronization(self);
+        }
     }
 
     /// Updates the tick time statistics with the duration of the last tick.

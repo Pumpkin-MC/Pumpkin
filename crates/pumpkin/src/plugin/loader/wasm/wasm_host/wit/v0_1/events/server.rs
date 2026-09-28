@@ -29,19 +29,18 @@ use crate::plugin::{
 impl ToFromWasmEvent for PacketReceivedEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player_res = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         let packet = match self.player.client.as_ref() {
-            ClientPlatform::Java(client) => {
-                let version = client.version.load();
-                generated_packets::deserialize_java_serverbound_packet(
-                    self.packet_id,
-                    &self.payload,
-                    version,
-                )
-                .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java)
-            }
+            // Typed view is 26.3
+            // for older clients only valid after the multiversion plugin ran.
+            ClientPlatform::Java(_) => generated_packets::deserialize_java_serverbound_packet(
+                self.packet_id,
+                &self.payload,
+                pumpkin_data::packet::CURRENT_MC_VERSION,
+            )
+            .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java),
             ClientPlatform::Bedrock(_) => {
                 generated_packets::deserialize_bedrock_serverbound_packet(
                     self.packet_id,
@@ -85,7 +84,7 @@ impl ToFromWasmEvent for PacketReceivedEvent {
 impl ToFromWasmEvent for PacketSentEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player_res = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         let packet = match self.player.client.as_ref() {
@@ -111,6 +110,7 @@ impl ToFromWasmEvent for PacketSentEvent {
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
         cleanup_event(&event, state);
         if let Event::PacketSentEvent(data) = event {
+            self.packet_id = data.packet_id;
             self.payload = data.raw_payload.into();
             self.cancelled = data.cancelled;
         }
@@ -147,10 +147,10 @@ impl ToFromWasmEvent for ServerCommandEvent {
 impl ToFromWasmEvent for ServerBroadcastEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let message = state
-            .add_text_component(self.message.clone())
+            .add(self.message.clone())
             .expect("failed to add text-component resource");
         let sender = state
-            .add_text_component(self.sender.clone())
+            .add(self.sender.clone())
             .expect("failed to add text-component resource");
 
         Event::ServerBroadcastEvent(ServerBroadcastEventData {
@@ -175,7 +175,7 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
 impl ToFromWasmEvent for ServerListPingEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let motd = state
-            .add_text_component(self.motd.clone())
+            .add(self.motd.clone())
             .expect("failed to add text-component resource");
 
         Event::ServerListPingEvent(ServerListPingEventData {
@@ -297,7 +297,6 @@ impl ToFromWasmEvent for MapInitializeEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugin::loader::wasm::wasm_host::state::TextComponentResource;
     use pumpkin_util::text::TextComponent;
     use wasmtime::component::Resource;
 
@@ -317,7 +316,7 @@ mod tests {
             None,
         );
         let motd = state
-            .add_text_component(returned_motd.clone())
+            .add(returned_motd.clone())
             .expect("text component resource should be inserted");
         let motd_rep = motd.rep();
         let returned = Event::ServerListPingEvent(ServerListPingEventData {
@@ -344,7 +343,7 @@ mod tests {
         assert!(
             state
                 .resource_table
-                .get::<TextComponentResource>(&Resource::new_own(motd_rep))
+                .get::<TextComponent>(&Resource::new_own(motd_rep))
                 .is_err()
         );
     }

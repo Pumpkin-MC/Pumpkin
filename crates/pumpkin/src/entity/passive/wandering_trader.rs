@@ -13,7 +13,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::statistic::{CustomStatistic, StatisticCategory};
 use pumpkin_data::villager::{
     TRADES_WANDERING_TRADER_BUYING, TRADES_WANDERING_TRADER_COMMON,
-    TRADES_WANDERING_TRADER_UNCOMMON, VillagerTrade, VillagerTradeModifier,
+    TRADES_WANDERING_TRADER_UNCOMMON, VillagerTrade,
 };
 use pumpkin_inventory::SimpleInventory;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
@@ -56,9 +56,11 @@ fn create_invisibility_potion() -> ItemStack {
     stack
 }
 
-fn add_offers_from_trade_set(
+use crate::data::datapack::trade_loader::{DynamicTradeModifier, DynamicVillagerTrade};
+
+fn add_offers_from_dynamic_trades(
     offers: &mut Vec<pumpkin_protocol::java::client::play::MerchantOffer>,
-    trade_pool: &'static [VillagerTrade],
+    trade_pool: &[DynamicVillagerTrade],
     amount: usize,
     rng: &mut impl rand::Rng,
 ) {
@@ -75,19 +77,19 @@ fn add_offers_from_trade_set(
             .as_ref()
             .map(|b| ItemStack::new(b.count as u8, b.item));
 
-        match trade.modifier {
-            VillagerTradeModifier::RandomDyes => apply_random_dye(rng, &mut output),
-            VillagerTradeModifier::RandomPotion => {
+        match &trade.modifier {
+            DynamicTradeModifier::RandomDyes => apply_random_dye(rng, &mut output),
+            DynamicTradeModifier::RandomPotion => {
                 if let Some(potion_name) =
                     pumpkin_data::tag::Potion::MINECRAFT_TRADEABLE.0.choose(rng)
                 {
                     apply_potion(&mut output, potion_name);
                 }
             }
-            VillagerTradeModifier::SuspiciousStew => {
+            DynamicTradeModifier::SuspiciousStew => {
                 apply_random_stew_effect(rng, &mut output);
             }
-            VillagerTradeModifier::Potion(potion) => apply_potion(&mut output, potion),
+            DynamicTradeModifier::Potion(potion) => apply_potion(&mut output, potion),
             _ => {}
         }
 
@@ -105,6 +107,17 @@ fn add_offers_from_trade_set(
         });
         added += 1;
     }
+}
+
+fn add_offers_from_trade_set(
+    offers: &mut Vec<pumpkin_protocol::java::client::play::MerchantOffer>,
+    trade_pool: &'static [VillagerTrade],
+    amount: usize,
+    rng: &mut impl rand::Rng,
+) {
+    let dynamic_trades: Vec<DynamicVillagerTrade> =
+        trade_pool.iter().map(DynamicVillagerTrade::from).collect();
+    add_offers_from_dynamic_trades(offers, &dynamic_trades, amount, rng);
 }
 
 pub struct WanderingTraderEntity {
@@ -292,9 +305,56 @@ impl WanderingTraderEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         offers.clear();
         let mut rng = rand::rng();
-        add_offers_from_trade_set(&mut offers, TRADES_WANDERING_TRADER_BUYING, 2, &mut rng);
-        add_offers_from_trade_set(&mut offers, TRADES_WANDERING_TRADER_UNCOMMON, 2, &mut rng);
-        add_offers_from_trade_set(&mut offers, TRADES_WANDERING_TRADER_COMMON, 5, &mut rng);
+
+        let datapack_manager = self
+            .get_entity()
+            .world
+            .load()
+            .server
+            .upgrade()
+            .map(|server| server.datapack_manager.clone());
+
+        if let Some(buying) = datapack_manager
+            .as_ref()
+            .and_then(|dm| dm.get_wandering_trader_trade_set("buying"))
+        {
+            add_offers_from_dynamic_trades(
+                &mut offers,
+                &buying.trades,
+                buying.amount as usize,
+                &mut rng,
+            );
+        } else {
+            add_offers_from_trade_set(&mut offers, TRADES_WANDERING_TRADER_BUYING, 2, &mut rng);
+        }
+
+        if let Some(uncommon) = datapack_manager
+            .as_ref()
+            .and_then(|dm| dm.get_wandering_trader_trade_set("uncommon"))
+        {
+            add_offers_from_dynamic_trades(
+                &mut offers,
+                &uncommon.trades,
+                uncommon.amount as usize,
+                &mut rng,
+            );
+        } else {
+            add_offers_from_trade_set(&mut offers, TRADES_WANDERING_TRADER_UNCOMMON, 2, &mut rng);
+        }
+
+        if let Some(common) = datapack_manager
+            .as_ref()
+            .and_then(|dm| dm.get_wandering_trader_trade_set("common"))
+        {
+            add_offers_from_dynamic_trades(
+                &mut offers,
+                &common.trades,
+                common.amount as usize,
+                &mut rng,
+            );
+        } else {
+            add_offers_from_trade_set(&mut offers, TRADES_WANDERING_TRADER_COMMON, 5, &mut rng);
+        }
     }
 
     pub fn open_trading_screen(&self, player: &Arc<Player>) {

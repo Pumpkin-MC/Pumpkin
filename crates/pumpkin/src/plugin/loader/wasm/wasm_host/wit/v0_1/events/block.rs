@@ -81,7 +81,7 @@ use crate::plugin::{
 impl ToFromWasmEvent for BlockRedstoneEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
 
         Event::BlockRedstoneEvent(BlockRedstoneEventData {
@@ -113,7 +113,7 @@ impl ToFromWasmEvent for BlockBreakEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = self.player.as_ref().map(|player| {
             state
-                .add_player(player.clone())
+                .add(player.clone())
                 .expect("failed to add player resource")
         });
 
@@ -166,7 +166,7 @@ impl ToFromWasmEvent for BlockBurnEvent {
 impl ToFromWasmEvent for BlockCanBuildEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::BlockCanBuildEvent(BlockCanBuildEventData {
@@ -195,7 +195,7 @@ impl ToFromWasmEvent for BlockCanBuildEvent {
 impl ToFromWasmEvent for BlockGrowEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
 
         Event::BlockGrowEvent(BlockGrowEventData {
@@ -228,7 +228,7 @@ impl ToFromWasmEvent for BlockGrowEvent {
 impl ToFromWasmEvent for BlockPlaceEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::BlockPlaceEvent(BlockPlaceEventData {
@@ -259,7 +259,7 @@ impl ToFromWasmEvent for BlockPlaceEvent {
 impl ToFromWasmEvent for BlockDamageEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::BlockDamageEvent(BlockDamageEventData {
@@ -498,7 +498,7 @@ impl ToFromWasmEvent for NotePlayEvent {
 impl ToFromWasmEvent for SignChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::SignChangeEvent(SignChangeEventData {
             player,
@@ -564,7 +564,7 @@ impl ToFromWasmEvent for TNTPrimeEvent {
 impl ToFromWasmEvent for BellResonateEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::BellResonateEvent(BellResonateEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -595,7 +595,7 @@ impl ToFromWasmEvent for BellResonateEvent {
 impl ToFromWasmEvent for BellRingEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::BellRingEvent(BellRingEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -624,13 +624,13 @@ impl ToFromWasmEvent for BellRingEvent {
 impl ToFromWasmEvent for BlockBrushEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let item = state
-            .add_item_stack(Arc::new(Mutex::new(self.item.clone())))
+            .add(Arc::new(Mutex::new(self.item.clone())))
             .expect("failed to add item stack resource");
         Event::BlockBrushEvent(BlockBrushEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -659,13 +659,13 @@ impl ToFromWasmEvent for BlockBrushEvent {
 impl ToFromWasmEvent for BlockCookEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         let source = state
-            .add_item_stack(Arc::new(Mutex::new(self.source.clone())))
+            .add(Arc::new(Mutex::new(self.source.clone())))
             .expect("failed to add item stack resource");
         let result = state
-            .add_item_stack(Arc::new(Mutex::new(self.result.clone())))
+            .add(Arc::new(Mutex::new(self.result.clone())))
             .expect("failed to add item stack resource");
         Event::BlockCookEvent(BlockCookEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -694,13 +694,13 @@ impl ToFromWasmEvent for BlockCookEvent {
 impl ToFromWasmEvent for BlockDamageAbortEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         let item_in_hand = state
-            .add_item_stack(Arc::new(Mutex::new(self.item_in_hand.clone())))
+            .add(Arc::new(Mutex::new(self.item_in_hand.clone())))
             .expect("failed to add item stack resource");
         Event::BlockDamageAbortEvent(BlockDamageAbortEventData {
             player,
@@ -723,10 +723,10 @@ impl ToFromWasmEvent for BlockDamageAbortEvent {
 impl ToFromWasmEvent for BlockDispenseArmorEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         let item = state
-            .add_item_stack(Arc::new(Mutex::new(self.item.clone())))
+            .add(Arc::new(Mutex::new(self.item.clone())))
             .expect("failed to add item stack resource");
         Event::BlockDispenseArmorEvent(BlockDispenseArmorEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -757,14 +757,14 @@ impl ToFromWasmEvent for BlockDispenseArmorEvent {
 impl ToFromWasmEvent for BlockDispenseLootEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         let items = self
             .items
             .iter()
             .map(|i| {
                 state
-                    .add_item_stack(Arc::new(Mutex::new(i.clone())))
+                    .add(Arc::new(Mutex::new(i.clone())))
                     .expect("failed to add item stack resource")
             })
             .collect();
@@ -796,19 +796,18 @@ impl ToFromWasmEvent for BlockDispenseLootEvent {
 impl ToFromWasmEvent for BlockDropItemEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
-        let player = self.player.as_ref().map(|p| {
-            state
-                .add_player(p.clone())
-                .expect("failed to add player resource")
-        });
+        let player = self
+            .player
+            .as_ref()
+            .map(|p| state.add(p.clone()).expect("failed to add player resource"));
         let items = self
             .items
             .iter()
             .map(|i| {
                 state
-                    .add_item_stack(Arc::new(Mutex::new(i.clone())))
+                    .add(Arc::new(Mutex::new(i.clone())))
                     .expect("failed to add item stack resource")
             })
             .collect();
@@ -839,7 +838,7 @@ impl ToFromWasmEvent for BlockDropItemEvent {
 impl ToFromWasmEvent for BlockExpEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::BlockExpEvent(BlockExpEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -870,13 +869,12 @@ impl ToFromWasmEvent for BlockExpEvent {
 impl ToFromWasmEvent for BlockFertilizeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
-        let player = self.player.as_ref().map(|p| {
-            state
-                .add_player(p.clone())
-                .expect("failed to add player resource")
-        });
+        let player = self
+            .player
+            .as_ref()
+            .map(|p| state.add(p.clone()).expect("failed to add player resource"));
         let changed_blocks = self
             .changed_blocks
             .iter()
@@ -911,10 +909,10 @@ impl ToFromWasmEvent for BlockFertilizeEvent {
 impl ToFromWasmEvent for BlockMultiPlaceEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         let placed_blocks = self
             .placed_blocks
@@ -949,7 +947,7 @@ impl ToFromWasmEvent for BlockMultiPlaceEvent {
 impl ToFromWasmEvent for BlockReceiveGameEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::BlockReceiveGameEvent(BlockReceiveGameEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -983,10 +981,10 @@ impl ToFromWasmEvent for BlockReceiveGameEvent {
 impl ToFromWasmEvent for BlockShearEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         let item = state
-            .add_item_stack(Arc::new(Mutex::new(self.item.clone())))
+            .add(Arc::new(Mutex::new(self.item.clone())))
             .expect("failed to add item stack resource");
         Event::BlockShearEntityEvent(BlockShearEntityEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -1017,7 +1015,7 @@ impl ToFromWasmEvent for BlockShearEntityEvent {
 impl ToFromWasmEvent for BlockSpreadEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::BlockSpreadEvent(BlockSpreadEventData {
             source_pos: to_wasm_block_position(self.source_pos),
@@ -1053,7 +1051,7 @@ impl ToFromWasmEvent for BlockSpreadEvent {
 impl ToFromWasmEvent for BrewingStartEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::BrewingStartEvent(BrewingStartEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -1087,10 +1085,10 @@ impl ToFromWasmEvent for BrewingStartEvent {
 impl ToFromWasmEvent for CampfireStartEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         let item = state
-            .add_item_stack(Arc::new(Mutex::new(self.item.clone())))
+            .add(Arc::new(Mutex::new(self.item.clone())))
             .expect("failed to add item stack resource");
         Event::CampfireStartEvent(CampfireStartEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -1121,7 +1119,7 @@ impl ToFromWasmEvent for CampfireStartEvent {
 impl ToFromWasmEvent for CauldronLevelChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::CauldronLevelChangeEvent(CauldronLevelChangeEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -1155,10 +1153,10 @@ impl ToFromWasmEvent for CauldronLevelChangeEvent {
 impl ToFromWasmEvent for CrafterCraftEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         let result = state
-            .add_item_stack(Arc::new(Mutex::new(self.result.clone())))
+            .add(Arc::new(Mutex::new(self.result.clone())))
             .expect("failed to add item stack resource");
         Event::CrafterCraftEvent(CrafterCraftEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -1186,7 +1184,7 @@ impl ToFromWasmEvent for CrafterCraftEvent {
 impl ToFromWasmEvent for EntityBlockFormEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::EntityBlockFormEvent(EntityBlockFormEventData {
             entity_id: self.entity.get_entity().entity_id,
@@ -1218,7 +1216,7 @@ impl ToFromWasmEvent for EntityBlockFormEvent {
 impl ToFromWasmEvent for FluidLevelChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::FluidLevelChangeEvent(FluidLevelChangeEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -1252,7 +1250,7 @@ impl ToFromWasmEvent for FluidLevelChangeEvent {
 impl ToFromWasmEvent for InventoryBlockStartEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::InventoryBlockStartEvent(InventoryBlockStartEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -1274,7 +1272,7 @@ impl ToFromWasmEvent for InventoryBlockStartEvent {
 impl ToFromWasmEvent for LeavesDecayEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::LeavesDecayEvent(LeavesDecayEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -1305,7 +1303,7 @@ impl ToFromWasmEvent for LeavesDecayEvent {
 impl ToFromWasmEvent for MoistureChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::MoistureChangeEvent(MoistureChangeEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -1339,7 +1337,7 @@ impl ToFromWasmEvent for MoistureChangeEvent {
 impl ToFromWasmEvent for SculkBloomEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         Event::SculkBloomEvent(SculkBloomEventData {
             block_pos: to_wasm_block_position(self.block_pos),
@@ -1373,10 +1371,10 @@ impl ToFromWasmEvent for SculkBloomEvent {
 impl ToFromWasmEvent for VaultDisplayItemEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
         let item = state
-            .add_item_stack(Arc::new(Mutex::new(self.item.clone())))
+            .add(Arc::new(Mutex::new(self.item.clone())))
             .expect("failed to add item stack resource");
         Event::VaultDisplayItemEvent(VaultDisplayItemEventData {
             block_pos: to_wasm_block_position(self.block_pos),

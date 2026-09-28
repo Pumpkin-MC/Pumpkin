@@ -31,6 +31,7 @@ fn canonicalize(name: &str) -> String {
 /// The cache is thread-safe and can be accessed from multiple threads.
 pub struct TemplateCache {
     cache: DashMap<String, Arc<StructureTemplate>>,
+    dynamic_templates: DashMap<String, Arc<[u8]>>,
 }
 
 impl Default for TemplateCache {
@@ -45,7 +46,21 @@ impl TemplateCache {
     pub fn new() -> Self {
         Self {
             cache: DashMap::new(),
+            dynamic_templates: DashMap::new(),
         }
+    }
+
+    /// Registers raw template NBT bytes from a dynamic datapack.
+    pub fn register_template(&self, name: &str, bytes: Arc<[u8]>) {
+        let key = canonicalize(name);
+        self.dynamic_templates.insert(key.clone(), bytes);
+        self.cache.remove(&key);
+    }
+
+    /// Clears all dynamically registered templates (e.g. during datapack reload).
+    pub fn clear_dynamic(&self) {
+        self.dynamic_templates.clear();
+        self.cache.clear();
     }
 
     /// Gets a template by `name`, loading it from embedded resources if not cached.
@@ -78,11 +93,15 @@ impl TemplateCache {
             return Ok(Arc::clone(&template));
         }
 
-        // Try to load the template
-        let bytes = Self::load_template_bytes(&key)
-            .ok_or(TemplateError::MissingField("template file not found"))?;
+        let mut template = if let Some(bytes) = self.dynamic_templates.get(&key) {
+            StructureTemplate::from_nbt_bytes(&bytes)?
+        } else if let Some(bytes) = Self::load_template_bytes(&key) {
+            StructureTemplate::from_nbt_bytes(bytes)?
+        } else {
+            return Err(TemplateError::MissingField("template file not found"));
+        };
+        template.name = Some(key.clone());
 
-        let template = StructureTemplate::from_nbt_bytes(bytes)?;
         let arc = Arc::new(template);
         self.cache.insert(key, Arc::clone(&arc));
         Ok(arc)
@@ -119,11 +138,9 @@ impl TemplateCache {
 
     /// Loads raw template bytes from embedded resources.
     fn load_template_bytes(path: &str) -> Option<&'static [u8]> {
-        get_template_bytes(path)
+        pumpkin_data::template_bytes::get_template_bytes(path)
     }
 }
-
-include!(concat!(env!("OUT_DIR"), "/template_embeddings.rs"));
 
 /// Global template cache instance.
 ///
@@ -146,35 +163,14 @@ pub fn get_template(name: &str) -> Option<Arc<StructureTemplate>> {
     global_cache().get(name)
 }
 
-/// Returns the raw JSON for a template pool, or `None` if not found.
-#[must_use]
-pub fn template_pool_json(pool_id: &str) -> Option<&'static str> {
-    get_template_pool_json(&canonicalize(pool_id))
-}
-
-/// Returns the raw JSON for a processor list, or `None` if not found.
-#[must_use]
-pub fn processor_list_json(id: &str) -> Option<&'static str> {
-    get_processor_list_json(&canonicalize(id))
-}
-
-/// Returns the element template ids for a pool, or `None` if not found.
-///
-/// Element ids are fully qualified and can be passed directly to [`get_template`].
-#[must_use]
-pub fn pool_elements(pool_id: &str) -> Option<&'static [&'static str]> {
-    get_pool_elements(&canonicalize(pool_id))
-}
-
 /// Returns a list of all available template names that can be loaded.
 ///
 /// These are derived from the embedded structure files at compile time.
 /// Names are fully qualified (e.g. `minecraft:village/plains/houses/...`).
 /// Useful for tab-completion in commands.
 #[must_use]
-#[allow(clippy::used_underscore_items)]
 pub const fn all_template_names() -> &'static [&'static str] {
-    _generated_all_template_names()
+    pumpkin_data::template_bytes::all_template_names()
 }
 
 /// Returns a list of all available structure names for `/place structure` tab-completion.
@@ -185,19 +181,17 @@ pub const fn all_structure_names() -> &'static [&'static str] {
 
 /// Returns a list of all available pool names for `/place jigsaw` tab-completion.
 #[must_use]
-#[allow(clippy::used_underscore_items)]
 pub const fn all_pool_names() -> &'static [&'static str] {
-    _generated_all_pool_names()
+    pumpkin_data::template_pool::StaticTemplatePool::all_names()
 }
 
 /// Returns raw NBT bytes for an embedded structure template.
 #[must_use]
 pub fn template_bytes(name: &str) -> Option<&'static [u8]> {
-    get_template_bytes(&canonicalize(name))
+    pumpkin_data::template_bytes::get_template_bytes(&canonicalize(name))
 }
 
 #[must_use]
-#[allow(clippy::used_underscore_items)]
 pub const fn all_embedded_datapack_names() -> &'static [&'static str] {
-    _generated_all_embedded_datapack_names()
+    pumpkin_data::template_bytes::all_embedded_datapack_names()
 }
