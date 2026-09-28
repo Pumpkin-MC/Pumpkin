@@ -875,11 +875,11 @@ impl Server {
         self.level_info.store(Arc::new(new_info));
 
         for world in self.worlds.load().iter() {
-            world.set_difficulty(difficulty);
+            world.set_difficulty(new_difficulty);
             world.broadcast_editioned(
-                &CChangeDifficulty::new(difficulty as u8, locked),
+                &CChangeDifficulty::new(new_difficulty as u8, locked),
                 &pumpkin_protocol::bedrock::client::CSetDifficulty {
-                    difficulty: (difficulty as u32).into(),
+                    difficulty: (new_difficulty as u32).into(),
                 },
             );
         }
