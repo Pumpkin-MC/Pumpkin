@@ -495,6 +495,15 @@ impl WorldGenSettings {
         })
     }
 
+    /// Vanilla `PrimaryLevelData.isFlatWorld`: whether the overworld is a flat world. Clients
+    /// put the horizon at the bottom of such a world instead of at sea level.
+    #[must_use]
+    pub fn is_flat_world(&self) -> bool {
+        self.dimensions
+            .get("minecraft:overworld")
+            .is_some_and(|overworld| overworld.generator.generator_type == "minecraft:flat")
+    }
+
     #[must_use]
     pub fn from_preset(preset: &WorldPreset, seed: Seed) -> Self {
         Self {
