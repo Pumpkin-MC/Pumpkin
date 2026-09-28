@@ -1,4 +1,5 @@
 use crate::{
+    block::stop_vertical_movement_after_fall,
     entity::item::ItemEntity,
     net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
     server::Server,
@@ -2019,11 +2020,17 @@ impl Entity {
         }
 
         if motion.y != final_move.y {
-            let world = self.world.load();
-            let block = self.get_block_with_y_offset(0.2).1;
-            world
-                .block_registry
-                .update_entity_movement_after_fall_on(block, caller);
+            if motion.y < 0.0 {
+                let world = self.world.load();
+                let block = self.get_block_with_y_offset(0.2).1;
+                world
+                    .block_registry
+                    .update_entity_movement_after_fall_on(block, caller);
+            } else {
+                // Vanilla `Entity.restituteMovementAfterCollisions`: block bounciness only
+                // applies to `verticalCollisionBelow` (landing)
+                stop_vertical_movement_after_fall(caller);
+            }
         }
     }
 
