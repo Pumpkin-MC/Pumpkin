@@ -17,9 +17,8 @@
 /// invokes the matching exported function with that ID.
 ///
 /// Async/future feature gate:
-/// The requested feature name is `wit-0.2`. WIT feature identifiers are kebab-case IDs and
-/// cannot contain '.', so the valid WIT spelling used below is `wit-0-2`.
-/// Map this to the Cargo/SDK feature named `wit-0.2` in generated bindings if desired.
+/// Future-returning methods and asynchronous registration use the `future` feature.
+/// Async callback exports use the `async` feature.
 ///
 /// Peer @minecraft/server types:
 /// Existing Pumpkin v0.2 resources are reused where they already exist (`player`, `entity`,
@@ -466,7 +465,7 @@ interface gametest {
         get-test-direction: func() -> direction;
 
         /// TypeScript: idle(tickDelay: number): Promise<void>
-        @unstable(feature = wit-0-2)
+        @unstable(feature = %future)
         idle: func(tick-delay: f64) -> future;
 
         is-cleaning-up: func() -> bool;
@@ -536,7 +535,7 @@ interface gametest {
         );
 
         /// TypeScript: until(callback: () => void): Promise<void>
-        @unstable(feature = wit-0-2)
+        @unstable(feature = %future)
         until: func(callback: void-callback-id) -> future;
 
         walk-to: func(mob: borrow<entity>, block-location: vector3, speed-modifier: option<f64>);
@@ -561,10 +560,9 @@ interface gametest {
 
     /// registerAsync(testClassName, testName, async (test) => void): RegistrationBuilder
     ///
-    /// The JS function itself returns RegistrationBuilder synchronously, but it requires the
-    /// native async callback export below. Gate it with the same feature so the API cannot be
-    /// enabled without its callback ABI.
-    @unstable(feature = wit-0-2)
+    /// The JS function returns RegistrationBuilder synchronously. Guests using it must also
+    /// enable the `async` feature for its callback export.
+    @unstable(feature = %future)
     register-async: func(
         test-class-name: string,
         test-name: string,
@@ -608,7 +606,7 @@ interface gametest-callbacks {
     invoke-test: func(callback: test-callback-id, test: test);
 
     /// Dispatches `registerAsync(..., async (test) => Promise<void>)` callbacks.
-    @unstable(feature = wit-0-2)
+    @unstable(feature = %async)
     invoke-async-test: async func(callback: async-test-callback-id, test: test);
 
     /// Dispatches `assertBlockState(..., (block) => boolean)` callbacks.

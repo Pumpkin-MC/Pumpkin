@@ -393,7 +393,7 @@ impl pumpkin::plugin::entity_statuses::Host for PluginHostState {}
 
 pub fn add_to_linker(linker: &mut Linker<PluginHostState>) -> wasmtime::Result<()> {
     let mut options = LinkOptions::default();
-    options.wit_0_2(true);
+    options.r#future(true);
     Plugin::add_to_linker::<_, HasSelf<_>>(linker, &options, |state: &mut PluginHostState| state)?;
     Ok(())
 }
