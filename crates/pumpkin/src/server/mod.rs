@@ -48,6 +48,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
 use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 mod connection_cache;
@@ -148,6 +149,10 @@ pub struct Server {
     pub scheduled_functions: Arc<crate::server::scheduler::ScheduledFunctionQueue>,
     tasks: TaskTracker,
     pub runtime: tokio::runtime::Handle,
+    /// Cancelled when this server should stop. A child of [`crate::STOP_INTERRUPT`], so a
+    /// process-wide stop reaches it, while an integrated server can stop without ending the
+    /// process.
+    pub stop_token: CancellationToken,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
@@ -210,7 +215,7 @@ impl Server {
                 error!("Failed to load world info!");
                 error!("{error}");
                 error!("Unsupported world version! See the logs for more info.");
-                std::process::exit(1);
+                return Err(error);
             }
             Err(error) => {
                 error!("Failed to load the world data in {}!", world_path.display());
@@ -219,7 +224,7 @@ impl Server {
                     "Refusing to continue: a default world would generate different terrain on top of the existing region files. Restore {LEVEL_DAT_FILE_NAME} from {LEVEL_DAT_BACKUP_FILE_NAME}, which also holds a copy of the world seed, or move the world folder aside to start a new world."
                 );
                 error!("Failed to load the world data! See the logs for more info.");
-                std::process::exit(1);
+                return Err(error);
             }
         };
 
@@ -311,6 +316,7 @@ impl Server {
             tick_count: AtomicI32::new(0),
             debug_profiler: debug_profiler::DebugProfiler::new(),
             tasks: TaskTracker::new(),
+            stop_token: crate::STOP_INTERRUPT.child_token(),
             runtime: tokio::runtime::Handle::current(),
             task_scheduler: Arc::new(TaskScheduler::new()),
             scheduled_functions: Arc::new(crate::server::scheduler::ScheduledFunctionQueue::new()),
@@ -739,6 +745,12 @@ impl Server {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove_player(player);
+    }
+
+    /// Asks this server to stop: the ticker ends and a standalone server stops accepting
+    /// connections and shuts down.
+    pub fn stop(&self) {
+        self.stop_token.cancel();
     }
 
     pub async fn shutdown(&self) {

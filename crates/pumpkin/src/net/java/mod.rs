@@ -39,8 +39,7 @@ use pumpkin_protocol::{
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::{
-    io::{BufReader, BufWriter},
-    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
+    io::{AsyncRead, AsyncWrite, BufReader, BufWriter},
     sync::oneshot,
 };
 use tokio::{
@@ -50,6 +49,12 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, warn};
+
+/// The client-to-server half of a Java connection: a TCP socket, or an in-memory pipe when the
+/// server is embedded in a client.
+pub type JavaReadHalf = Box<dyn AsyncRead + Send + Unpin>;
+/// The server-to-client half of a Java connection.
+pub type JavaWriteHalf = Box<dyn AsyncWrite + Send + Unpin>;
 
 pub mod chunk_data;
 pub mod handshake;
@@ -108,9 +113,9 @@ pub struct JavaClient {
     /// Tracks total buffered payload bytes in the outgoing queue.
     pub pending_bytes: Arc<AtomicUsize>,
     /// The packet encoder for outgoing packets.
-    network_writer: std::sync::Mutex<Option<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
+    network_writer: std::sync::Mutex<Option<TCPNetworkEncoder<BufWriter<JavaWriteHalf>>>>,
     /// The packet decoder for incoming packets.
-    network_reader: std::sync::Mutex<Option<TCPNetworkDecoder<BufReader<OwnedReadHalf>>>>,
+    network_reader: std::sync::Mutex<Option<TCPNetworkDecoder<BufReader<JavaReadHalf>>>>,
     /// Keep Alive:
     ///
     /// Whether we are waiting for a response after sending a keep alive packet.
@@ -496,7 +501,7 @@ impl JavaClient {
 
     pub async fn get_packet_with_reader(
         &self,
-        network_reader: &mut TCPNetworkDecoder<BufReader<OwnedReadHalf>>,
+        network_reader: &mut TCPNetworkDecoder<BufReader<JavaReadHalf>>,
     ) -> Option<RawPacket> {
         tokio::select! {
             () = self.await_close_interrupt() => {
