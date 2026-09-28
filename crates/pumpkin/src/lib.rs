@@ -287,6 +287,10 @@ pub struct PumpkinServer {
     pub tcp_listener: Option<TcpListener>,
     pub bedrock_status: Option<StatusResponder>,
     pub nethernet_listener: Option<NetherNetListener>,
+    /// Whether this instance owns the process: on shutdown, a standalone server also ends the
+    /// process-wide tasks (RCON, query, LAN broadcast, telemetry), while an embedded server
+    /// only ends its own world.
+    pub standalone: bool,
 }
 
 impl PumpkinServer {
@@ -401,6 +405,7 @@ impl PumpkinServer {
             tcp_listener,
             bedrock_status,
             nethernet_listener,
+            standalone: true,
         })
     }
 
@@ -550,9 +555,12 @@ impl PumpkinServer {
         }
 
         info!("Stopped accepting incoming connections");
-        // Ends the process-wide tasks (RCON, query, LAN broadcast, telemetry) too, when the stop
-        // came from this server alone.
-        stop_server();
+        if self.standalone {
+            // `stop.rs` only cancels this server's own `stop_token`; escalate here so RCON,
+            // query, LAN broadcast and telemetry end too. An embedded server skips this and
+            // only ends its own world.
+            stop_server();
+        }
 
         self.shutdown(&tasks).await;
 
