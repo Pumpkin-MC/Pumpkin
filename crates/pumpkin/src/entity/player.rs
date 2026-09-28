@@ -1339,7 +1339,6 @@ impl Player {
         let base_attack_speed = 4.0;
 
         let mut damage_multiplier = 1.0;
-        let mut add_damage = 0.0;
         let mut add_speed = 0.0;
         let mut extra_ench_damage = 0.0;
         let mut knockback_level = 0u32;
@@ -1350,52 +1349,27 @@ impl Player {
                 // Vanilla fist: base_attack_speed = -2.4
                 add_speed = -2.4;
             } else if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
+                // Only attack speed is read from the item here.
+                // Attack damage is already  part of `base_damage` via the held item's live
+                // ATTACK_DAMAGE modifier, re-adding it here would double it.
                 for item_mod in modifiers.attribute_modifiers.iter() {
-                    if item_mod.operation == Operation::AddValue {
-                        if item_mod.id == "minecraft:base_attack_damage" {
-                            add_damage = item_mod.amount;
-                        } else if item_mod.id == "minecraft:base_attack_speed" {
-                            add_speed = item_mod.amount;
-                        }
+                    if item_mod.operation == Operation::AddValue
+                        && item_mod.id == "minecraft:base_attack_speed"
+                    {
+                        add_speed = item_mod.amount;
                     }
                 }
             }
             if let Some(enchantments) = stack.get_data_component::<EnchantmentsImpl>() {
                 for (enchantment, level) in enchantments.enchantment.iter() {
-                    if **enchantment == Enchantment::SHARPNESS {
-                        extra_ench_damage += 0.5 * f64::from(*level) + 0.5;
-                    } else if **enchantment == Enchantment::SMITE {
-                        let target_type = victim_entity.entity_type.id;
-                        let is_undead = target_type == EntityType::ZOMBIE.id
-                            || target_type == EntityType::DROWNED.id
-                            || target_type == EntityType::HUSK.id
-                            || target_type == EntityType::ZOMBIE_VILLAGER.id
-                            || target_type == EntityType::ZOMBIFIED_PIGLIN.id
-                            || target_type == EntityType::SKELETON.id
-                            || target_type == EntityType::BOGGED.id
-                            || target_type == EntityType::PARCHED.id
-                            || target_type == EntityType::WITHER_SKELETON.id
-                            || target_type == EntityType::STRAY.id
-                            || target_type == EntityType::PHANTOM.id
-                            || target_type == EntityType::WITHER.id
-                            || target_type == EntityType::ZOMBIE_HORSE.id
-                            || target_type == EntityType::SKELETON_HORSE.id;
-                        if is_undead {
-                            extra_ench_damage += 2.5 * f64::from(*level);
-                        }
-                    } else if **enchantment == Enchantment::BANE_OF_ARTHROPODS {
-                        let target_type = victim_entity.entity_type.id;
-                        let is_arthropod = target_type == EntityType::SPIDER.id
-                            || target_type == EntityType::CAVE_SPIDER.id
-                            || target_type == EntityType::SILVERFISH.id
-                            || target_type == EntityType::ENDERMITE.id
-                            || target_type == EntityType::BEE.id;
-                        if is_arthropod {
-                            extra_ench_damage += 2.5 * f64::from(*level);
-                        }
-                    } else if **enchantment == Enchantment::KNOCKBACK {
-                        knockback_level = *level as u32;
-                    }
+                    enchantment.modify_damage_against(
+                        *level,
+                        &mut extra_ench_damage,
+                        Some(victim_entity.entity_type),
+                    );
+                    let mut kb = 0.0f32;
+                    enchantment.modify_knockback(*level, &mut kb);
+                    knockback_level += kb as u32;
                 }
             }
         }
@@ -1417,7 +1391,7 @@ impl Player {
         }
 
         // Modify the added damage based on the multiplier.
-        let mut damage = (base_damage + add_damage) * damage_multiplier;
+        let mut damage = base_damage * damage_multiplier;
         damage += extra_ench_damage * attack_cooldown_progress;
 
         if let Some(strength) = self
@@ -1444,7 +1418,13 @@ impl Player {
         let is_mace_smash = matches!(attack_type, AttackType::MaceSmash);
         if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
-            damage += 1.5 * f64::from(fall_distance);
+            let mut smash_bonus_per_block = 0.0f64;
+            if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
+                for (enchantment, level) in enchantments.enchantment.iter() {
+                    enchantment.modify_fall_based_damage(*level, &mut smash_bonus_per_block);
+                }
+            }
+            damage += (1.5 + smash_bonus_per_block) * f64::from(fall_distance);
         }
 
         if !victim.damage_with_context(
@@ -1473,8 +1453,16 @@ impl Player {
 
         if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
             for (enchantment, level) in enchantments.enchantment.iter() {
-                if **enchantment == Enchantment::FIRE_ASPECT {
-                    victim_entity.set_on_fire_for_ticks(*level as u32 * 80);
+                for post_effect in enchantment.get_post_attack_effects() {
+                    if post_effect.affected
+                        == Some(pumpkin_data::enchantment::EnchantmentTarget::Victim)
+                        && let pumpkin_data::enchantment::EnchantmentEntityEffect::Ignite {
+                            duration,
+                        } = &post_effect.effect
+                    {
+                        let duration_seconds = duration.calculate(*level);
+                        victim_entity.set_on_fire_for_ticks((duration_seconds * 20.0) as u32);
+                    }
                 }
             }
         }
@@ -1482,6 +1470,18 @@ impl Player {
         if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
             self.living_entity.fall_distance.store(0.0);
+            if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
+                for (enchantment, level) in enchantments.enchantment.iter() {
+                    if **enchantment == Enchantment::WIND_BURST {
+                        let boost_y = 0.5 + 0.25 * (*level as f64);
+                        let vel = self.living_entity.entity.velocity.load();
+                        self.living_entity
+                            .entity
+                            .velocity
+                            .store(Vector3::new(vel.x, boost_y, vel.z));
+                    }
+                }
+            }
             world.play_sound(
                 if fall_distance > 5.0 {
                     Sound::ItemMaceSmashGroundHeavy
@@ -3168,11 +3168,7 @@ impl Player {
         packet_id: i32,
         payload: Bytes,
     ) -> PacketSentEvent {
-        // This is a dummy object to satisfy the non-optional requirement in WIT
-        // In the future we should make all packets 'static or have a way to represent raw packets in WIT
-        struct RawPacket;
-
-        let mut event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(RawPacket));
+        let mut event = PacketSentEvent::new_raw(self.clone(), packet_id, payload);
         if let Some(server) = self.world().server.upgrade() {
             server.plugin_manager.fire(&server, &mut event).await;
         }
@@ -3646,6 +3642,17 @@ impl Player {
 
         self.client
             .try_enqueue_packet_editioned(&clock_packet, &time_packet);
+    }
+
+    /// Day time for this client, from its own world's `time_of_day`. Bedrock has
+    /// no game-time clock packet, so `CSetTime` carries this instead.
+    #[must_use]
+    pub fn client_time_of_day(&self, world_time_of_day: i64) -> i64 {
+        match self.per_player_time.load() {
+            Some((custom_time, true)) => (world_time_of_day as u64 + custom_time) as i64,
+            Some((custom_time, false)) => custom_time as i64,
+            None => world_time_of_day % 24000,
+        }
     }
 
     pub fn set_player_time(&self, time: u64, relative: bool) {
@@ -4801,6 +4808,7 @@ impl Player {
         self.trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilled,
         );
+        crate::entity::mob::neutral::tell_neutral_mobs_player_died(self, &self.world());
         let block_pos = self.position().to_block_pos();
 
         let keep_inventory = { self.world().level_info.load().game_rules.keep_inventory };
@@ -6327,11 +6335,20 @@ impl Player {
     }
 
     pub fn has_permission(self: &Arc<Self>, server: &Server, node: &str) -> bool {
-        let result = server.permission_manager.has_permission(
-            &self.gameprofile.id,
-            node,
-            self.permission_lvl.load(),
-        );
+        self.has_permission_at_level(server, node, self.permission_lvl.load())
+    }
+
+    /// Like [`Self::has_permission`], but node defaults compare against `level`
+    /// instead of the player's own permission level.
+    pub fn has_permission_at_level(
+        self: &Arc<Self>,
+        server: &Server,
+        node: &str,
+        level: PermissionLvl,
+    ) -> bool {
+        let result = server
+            .permission_manager
+            .has_permission(&self.gameprofile.id, node, level);
 
         let mut event = PlayerPermissionCheckEvent::new(self.clone(), node.to_string(), result);
         let server_arc = self.world().server.upgrade();
@@ -6345,6 +6362,26 @@ impl Player {
 
     pub fn is_creative(&self) -> bool {
         self.gamemode.load() == GameMode::Creative
+    }
+
+    /// Vanilla `Player.canBeSeenAsEnemy`: not `abilities.invulnerable`, and alive and not a spectator.
+    #[must_use]
+    pub fn can_be_seen_as_enemy(&self) -> bool {
+        !self
+            .abilities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .invulnerable
+            && self.living_entity.can_take_damage()
+    }
+
+    /// Vanilla `NeutralMob.isValidPlayerTarget`: not creative or spectator, and the world is
+    /// not Peaceful. `abilities.invulnerable` is left out like vanilla, `can_attack` checks it.
+    #[must_use]
+    pub fn is_valid_mob_target(&self) -> bool {
+        !self.is_creative()
+            && !self.is_spectator()
+            && self.world().level_info.load().difficulty != Difficulty::Peaceful
     }
 
     /// Swing the hand of the player

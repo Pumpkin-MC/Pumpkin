@@ -978,7 +978,7 @@ impl TrialSpawner {
 
     #[allow(clippy::too_many_lines)]
     pub fn spawn_mob(&mut self, world: &Arc<World>, spawner_pos: BlockPos) -> Option<Uuid> {
-        let (entity_type, spawn_range, equipment_loot_table, is_baby, slime_size) = {
+        let (entity_type, spawn_range, equipment_loot_table, is_baby, slime_size, only_id) = {
             let active_cfg = if self.is_ominous {
                 &self.config.ominous
             } else {
@@ -1004,7 +1004,9 @@ impl TrialSpawner {
                 r.get_byte("Size")
                     .or_else(|| r.get_int("Size").map(|i| i as i8))
             });
-            (ent_type, active_cfg.spawn_range, equip, baby, size)
+            // finalizes only when the entity compound is just the id.
+            let only_id = raw.is_none_or(|r| r.child_tags.len() <= 1);
+            (ent_type, active_cfg.spawn_range, equip, baby, size, only_id)
         };
 
         let mut rng = rand::rng();
@@ -1042,10 +1044,10 @@ impl TrialSpawner {
         let yaw = rng.random::<f32>() * 360.0;
         entity.get_entity().set_rotation(yaw, 0.0);
 
-        if is_baby {
-            let ent = entity.get_entity();
-            ent.age.store(-24000, std::sync::atomic::Ordering::Relaxed);
-            ent.set_synced_data(pumpkin_data::tracked_data::ageable_mob::DATA_BABY_ID, true);
+        if is_baby && let Some(mob) = entity.get_mob() {
+            // Each mob type syncs its own baby flag (zombie, piglin, ageable...); poking a
+            // single tracked-data key here would send the wrong field type to some mobs.
+            mob.spawn_as_baby();
         }
 
         if let Some(size) = slime_size {
@@ -1088,6 +1090,10 @@ impl TrialSpawner {
             return None;
         }
 
+        // TODO: load the spawn data entity NBT into the mob instead of the baby/slime-size special cases.
+        if only_id {
+            crate::entity::mob::spawn::finalize_spawn(&entity, world, None);
+        }
         world.spawn_entity(entity);
 
         let flame_data = i32::from(self.is_ominous);
