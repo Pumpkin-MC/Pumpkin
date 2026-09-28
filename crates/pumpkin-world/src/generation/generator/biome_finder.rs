@@ -264,6 +264,7 @@ mod test {
             Dimension::OVERWORLD,
             Vec::new(),
             "minecraft:plains".to_string(),
+            crate::generation::generator::FlatDecoration::default(),
         )));
 
         let origin = BlockPos::new(17, 64, -3);

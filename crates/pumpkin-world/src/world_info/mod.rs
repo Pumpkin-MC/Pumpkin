@@ -160,8 +160,15 @@ fn default_world_version_series() -> String {
 pub struct WorldGenSettings {
     // the numerical seed of the world
     pub seed: i64,
+    /// Vanilla `generate-structures`; `false` turns every structure off.
+    #[serde(default = "default_true")]
+    pub generate_structures: bool,
     #[serde(default)]
     pub dimensions: Dimensions,
+}
+
+const fn default_true() -> bool {
+    true
 }
 
 impl Default for WorldGenSettings {
@@ -477,6 +484,7 @@ impl WorldGenSettings {
             Self {
                 dimensions,
                 seed: seed.0 as i64,
+                generate_structures: true,
             }
         })
     }
@@ -486,6 +494,7 @@ impl WorldGenSettings {
         Self {
             dimensions: preset.dimensions.clone(),
             seed: seed.0 as i64,
+            generate_structures: true,
         }
     }
 
