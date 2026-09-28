@@ -1,7 +1,5 @@
 // Last verified for v2169
 
-use std::io::{Error, ErrorKind, Read, Write};
-
 use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -18,32 +16,12 @@ pub struct SRespawn {
     pub player_runtime_id: VarULong,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketRead, PacketWrite)]
 #[repr(u8)]
 pub enum RespawnState {
     SearchingForSpawn,
     ReadyToSpawn,
     ClientReadyToSpawn,
-}
-
-impl PacketRead for RespawnState {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        match u8::read(reader)? {
-            0 => Ok(Self::SearchingForSpawn),
-            1 => Ok(Self::ReadyToSpawn),
-            2 => Ok(Self::ClientReadyToSpawn),
-            state => Err(Error::new(
-                ErrorKind::InvalidData,
-                format!("invalid Bedrock respawn state {state}"),
-            )),
-        }
-    }
-}
-
-impl PacketWrite for RespawnState {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as u8).write(writer)
-    }
 }
 
 #[cfg(test)]

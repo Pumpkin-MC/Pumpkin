@@ -47,6 +47,10 @@ impl Mob for DrownedEntity {
         &self.entity.mob_entity
     }
 
+    fn spawn_as_baby(&self) -> bool {
+        self.entity.spawn_as_baby()
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         self.entity.mob_write_nbt(nbt);
     }

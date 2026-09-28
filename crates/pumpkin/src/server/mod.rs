@@ -1093,14 +1093,48 @@ impl Server {
         )
     }
 
+    /// Vanilla `ServerCommonPacketListenerImpl.suspendFlushing`. Returns the suspended players.
+    fn suspend_player_flushes(&self) -> Vec<Arc<Player>> {
+        let mut suspended = Vec::new();
+        self.for_each_player(|player| {
+            if let Some(java) = player.client.java() {
+                java.suspend_flushing();
+                suspended.push(player.clone());
+            }
+        });
+        suspended
+    }
+
+    /// Vanilla `resumeFlushing` / `Connection.flushChannel` at tick end (~50ms).
+    /// Resumes the suspended set, not a fresh world scan
+    /// off-tick respawn or world change can leave a player in no world's list at tick end.
+    fn resume_player_flushes(suspended: &[Arc<Player>]) {
+        for player in suspended {
+            if let Some(java) = player.client.java() {
+                java.resume_flushing();
+            }
+        }
+    }
+
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub fn tick(self: &Arc<Self>) {
+        // Do not flush mid-tick; `Flush` is `flushChannel`.
+        let suspended = self.suspend_player_flushes();
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
             self.tick_worlds();
             // Always run player and network ticking, even when game is frozen
         } else {
+            self.sync_game_time();
             self.tick_players_and_network();
+        }
+        self.flush_pending_block_updates();
+        Self::resume_player_flushes(&suspended);
+    }
+
+    fn flush_pending_block_updates(&self) {
+        for world in self.worlds.load().iter() {
+            world.flush_block_updates();
         }
     }
 
@@ -1138,9 +1172,10 @@ impl Server {
             self.tick_count.load(std::sync::atomic::Ordering::Relaxed) as u64,
         );
 
+        self.sync_game_time();
+
         let worlds = self.worlds.load();
         let handle = self.runtime.clone();
-
         worlds.par_iter().for_each(|world| {
             let _guard = handle.enter();
             world.tick(self);
@@ -1148,6 +1183,19 @@ impl Server {
 
         // Global tasks
         self.player_data_storage.tick(self);
+    }
+
+    /// Vanilla `tickChildren` "timeSync": every 20 ticks, also while frozen.
+    /// Sync before `tickTime()`. `tick_count + 1` is this vanilla tick.
+    fn sync_game_time(&self) {
+        if self.tick_count.load(Ordering::Relaxed).wrapping_add(1) % 20 == 0
+            && let Some(overworld) =
+                self.worlds.load().iter().find(|world| {
+                    world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name
+                })
+        {
+            overworld.force_game_time_synchronization(self);
+        }
     }
 
     /// Updates the tick time statistics with the duration of the last tick.

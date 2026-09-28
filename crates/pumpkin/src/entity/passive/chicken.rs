@@ -3,12 +3,16 @@ use std::sync::{
     atomic::{AtomicI32, AtomicU8, Ordering, Ordering::Relaxed},
 };
 
+use pumpkin_data::chicken_sound_variant::ChickenSoundVariant;
+use pumpkin_data::chicken_variant::ChickenVariant;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use rand::RngExt;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ageable::AgeableMob,
@@ -21,7 +25,6 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
-use pumpkin_nbt::compound::NbtCompound;
 
 const TEMPT_ITEMS: &[&Item] = &[
     &Item::WHEAT_SEEDS,
@@ -38,17 +41,22 @@ const TEMPT_ITEMS: &[&Item] = &[
 pub struct ChickenEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
+    pub sound_variant: AtomicU8,
     egg_lay_time: AtomicI32,
     pub ageable_data: crate::entity::ageable::AgeableData,
 }
 
 impl ChickenEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
+        let world = entity.world.load();
+        let biome = world.get_biome(&entity.block_pos.load());
+        let variant = ChickenVariant::select_for_biome(biome.registry_id);
         let mob_entity = MobEntity::new(entity);
         let egg_lay_time = rand::rng().random_range(6000..12000);
         let chicken = Self {
             mob_entity,
-            variant: AtomicU8::new(1), // Default to temperate
+            variant: AtomicU8::new(variant.id()),
+            sound_variant: AtomicU8::new(ChickenSoundVariant::Classic as u8),
             egg_lay_time: AtomicI32::new(egg_lay_time),
             ageable_data: crate::entity::ageable::AgeableData::default(),
         };
@@ -80,6 +88,43 @@ impl ChickenEntity {
 
         mob_arc
     }
+
+    pub fn set_variant(&self, variant: ChickenVariant) {
+        self.variant.store(variant.id(), Ordering::Relaxed);
+        let entity = self.get_entity();
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::chicken::DATA_VARIANT_ID,
+            VarInt(variant.id() as i32),
+        );
+    }
+
+    pub fn set_sound_variant(&self, sound_variant: ChickenSoundVariant) {
+        self.sound_variant
+            .store(sound_variant as u8, Ordering::Relaxed);
+        let entity = self.get_entity();
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::chicken::DATA_SOUND_VARIANT_ID,
+            VarInt(sound_variant as u8 as i32),
+        );
+    }
+}
+
+impl CustomSound for ChickenEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        let is_baby = self.is_baby();
+        let sound_variant =
+            ChickenSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+                .unwrap_or_default();
+        Some(sound_variant.death_sound(is_baby))
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        let is_baby = self.is_baby();
+        let sound_variant =
+            ChickenSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+                .unwrap_or_default();
+        Some(sound_variant.hurt_sound(is_baby))
+    }
 }
 
 impl AgeableMob for ChickenEntity {
@@ -103,33 +148,41 @@ impl Mob for ChickenEntity {
         Some(self)
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_int("EggLayTime", self.egg_lay_time.load(Ordering::Relaxed));
-        let variant_str = match self.variant.load(Ordering::Relaxed) {
-            0 => "minecraft:cold",
-            2 => "minecraft:warm",
-            _ => "minecraft:temperate",
-        };
-        nbt.put_string("variant", variant_str.to_string());
+        let variant =
+            ChickenVariant::from_id(self.variant.load(Ordering::Relaxed)).unwrap_or_default();
+        nbt.put_string("variant", format!("minecraft:{}", variant.to_name()));
+        let sound_variant =
+            ChickenSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+                .unwrap_or_default();
+        nbt.put_string(
+            "sound_variant",
+            format!("minecraft:{}", sound_variant.to_name()),
+        );
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         self.egg_lay_time
             .store(nbt.get_int("EggLayTime").unwrap_or(6000), Ordering::Relaxed);
-        if let Some(variant_str) = nbt.get_string("variant") {
-            let variant = match variant_str
-                .strip_prefix("minecraft:")
-                .unwrap_or(variant_str)
-            {
-                "cold" => 0,
-                "warm" => 2,
-                _ => 1,
-            };
-            self.variant.store(variant, Ordering::Relaxed);
+        if let Some(variant_str) = nbt.get_string("variant")
+            && let Some(variant) = ChickenVariant::from_name(variant_str)
+        {
+            self.variant.store(variant.id(), Ordering::Relaxed);
+        }
+        if let Some(sound_str) = nbt.get_string("sound_variant")
+            && let Some(sound_variant) = ChickenSoundVariant::from_name(sound_str)
+        {
+            self.sound_variant
+                .store(sound_variant as u8, Ordering::Relaxed);
         }
     }
 
@@ -138,12 +191,15 @@ impl Mob for ChickenEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        let variant = match name.strip_prefix("minecraft:").unwrap_or(name) {
-            "cold" => 0,
-            "warm" => 2,
-            _ => 1,
-        };
-        self.variant.store(variant, Ordering::Relaxed);
+        if let Some(v) = ChickenVariant::from_name(name) {
+            self.set_variant(v);
+        }
+    }
+
+    fn mob_set_sound_variant_name(&self, name: &str) {
+        if let Some(v) = ChickenSoundVariant::from_name(name) {
+            self.set_sound_variant(v);
+        }
     }
 
     fn mob_init_data_tracker(&self) {
@@ -153,8 +209,12 @@ impl Mob for ChickenEntity {
             entity.set_synced_data(pumpkin_data::tracked_data::chicken::BABY_ID, true);
         }
         entity.set_synced_data(
-            pumpkin_data::tracked_data::chicken::VARIANT,
+            pumpkin_data::tracked_data::chicken::DATA_VARIANT_ID,
             VarInt(self.variant.load(Ordering::Relaxed) as i32),
+        );
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::chicken::DATA_SOUND_VARIANT_ID,
+            VarInt(self.sound_variant.load(Ordering::Relaxed) as i32),
         );
     }
 
@@ -194,7 +254,13 @@ impl Mob for ChickenEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        use super::animal::Animal;
-        self.animal_interact(player, item_stack, Sound::EntityChickenAmbient)
+        let sound_variant =
+            ChickenSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+                .unwrap_or_default();
+        self.animal_interact(
+            player,
+            item_stack,
+            sound_variant.ambient_sound(self.is_baby()),
+        )
     }
 }

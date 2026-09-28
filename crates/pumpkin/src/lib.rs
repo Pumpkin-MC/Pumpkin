@@ -443,6 +443,7 @@ impl PumpkinServer {
     }
 
     pub async fn unload_plugins(&self) {
+        self.server.plugin_manager.stop_watcher().await;
         if let Err(err) = self.server.plugin_manager.unload_all_plugins().await {
             error!("Error unloading plugins: {err}");
         } else {
@@ -582,6 +583,7 @@ impl PumpkinServer {
                                 client_addr,
                                 client_id,
                                 packet_limiter,
+                                Arc::downgrade(&server_clone),
                             );
                             let login_result = pending.handle_login_sequence(&server_clone).await;
 
