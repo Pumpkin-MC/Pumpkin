@@ -377,8 +377,9 @@ impl JavaClient {
         // One FIFO per connection: batch start/data/end stay in enqueue order.
         let mut sent = Vec::with_capacity(sent_count);
         for (pos, chunk_data) in serialized {
-            self.send_packet_now_data(chunk_data).await;
-            sent.push(pos);
+            if self.send_packet_now_data(chunk_data).await {
+                sent.push(pos);
+            }
         }
 
         self.send_packet(&CChunkBatchEnd::new(sent_count as u16))
@@ -589,30 +590,33 @@ impl JavaClient {
 
     /// Enqueue on the per-connection FIFO and wait until the writer has
     /// `write_frame`d into the `BufWriter`. Never waits for a TCP flush.
-    pub async fn send_packet_now_data(&self, packet: Bytes) {
+    /// `false` when the packet was dropped instead (cancelled, closed, buffer full).
+    pub async fn send_packet_now_data(&self, packet: Bytes) -> bool {
         self.send_and_wait(packet, OutgoingPacket::high_priority)
-            .await;
+            .await
     }
 
     /// Enqueue and wait for the writer's completion, `Framed` or `Flushed` per `make`.
+    /// `false` when the packet was dropped instead of queued.
     async fn send_and_wait(
         &self,
         packet: Bytes,
         make: fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket,
-    ) {
+    ) -> bool {
         let Some((packet, packet_len)) = self.reserve_pending_bytes(packet) else {
-            return;
+            return false;
         };
 
         let (completion_tx, completion_rx) = oneshot::channel();
         if !self.queue_outgoing(make(packet, completion_tx), packet_len) {
-            return;
+            return false;
         }
 
         if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
             // The outgoing packet task dropped before confirming the write.
             self.close();
         }
+        true
     }
 
     pub fn write_packet_for_version<P: ClientPacket>(
