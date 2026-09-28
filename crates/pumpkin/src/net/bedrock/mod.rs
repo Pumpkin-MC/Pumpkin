@@ -421,8 +421,9 @@ impl BedrockClient {
         }
         let mut sent = Vec::with_capacity(packets_to_enqueue.len());
         for (pos, packet_buf) in packets_to_enqueue {
-            self.enqueue_packet_data(packet_buf.into()).await;
-            sent.push(pos);
+            if self.enqueue_packet_data(packet_buf.into()).await {
+                sent.push(pos);
+            }
         }
         sent
     }
@@ -447,13 +448,14 @@ impl BedrockClient {
     ///
     /// * `packet_data`: A `Bytes` payload representing the encoded packet.
     #[allow(clippy::unused_async)]
-    pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
-        self.try_enqueue_packet_data(packet_data);
+    pub async fn enqueue_packet_data(&self, packet_data: Bytes) -> bool {
+        self.try_enqueue_packet_data(packet_data)
     }
 
-    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+    /// `false` when the packet was dropped instead of queued.
+    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) -> bool {
         if self.is_closed() {
-            return;
+            return false;
         }
 
         let packet_len = packet_data.len();
@@ -469,7 +471,7 @@ impl BedrockClient {
                 );
                 self.close_token.cancel();
             }
-            return;
+            return false;
         }
 
         if let Err(err) = self
@@ -481,7 +483,9 @@ impl BedrockClient {
             if !self.is_closed() {
                 error!("Failed to add packet to the outgoing packet queue for client: {err}");
             }
+            return false;
         }
+        true
     }
 
     pub fn write_raw_packet<P: BClientPacket>(

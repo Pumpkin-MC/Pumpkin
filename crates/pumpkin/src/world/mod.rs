@@ -128,7 +128,7 @@ use pumpkin_protocol::{
         client::play::{
             CBlockEntityData, CDamageEvent, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
             CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSetSelectedSlot, CSoundEffect,
-            CSpawnEntity, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
+            GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
         },
         server::play::SChatMessage,
     },
@@ -3032,7 +3032,6 @@ impl World {
         // --- MULTIPLAYER BROADCASTING ---
 
         let gameprofile = &player.gameprofile;
-        let velocity = player.get_entity().velocity.load();
 
         // 1. Broadcast the new Bedrock player to everyone else (Java + Bedrock)
         let bedrock_player_list = CPlayerList {
@@ -3081,21 +3080,9 @@ impl World {
             &bedrock_player_list,
         );
 
-        // Bedrock gets `AddPlayer` from the tracker.
-        self.broadcast_packet_except(
-            &[gameprofile.id],
-            &CSpawnEntity::new(
-                (runtime_id as i32).into(),
-                gameprofile.id,
-                i32::from(EntityType::PLAYER.id).into(),
-                position,
-                pitch,
-                yaw,
-                yaw,
-                0.into(),
-                velocity,
-            ),
-        );
+        // Vanilla `level.addNewPlayer`: in-range viewers get the spawn from the tracker.
+        self.entity_tracker
+            .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
 
         self.send_player_equipment(&player);
         player
@@ -3439,26 +3426,12 @@ impl World {
         chunker::update_position(player);
         self.send_center_chunk(player).await;
 
-        let velocity = player.living_entity.entity.velocity.load();
-
         debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch);
 
-        // Spawn the player for every Java client
-        // Bedrock gets `AddPlayer` from the tracker.
-        let spawn_entity = CSpawnEntity::new(
-            entity_id.into(),
-            gameprofile.id,
-            i32::from(EntityType::PLAYER.id).into(),
-            position,
-            pitch,
-            yaw,
-            yaw,
-            0.into(),
-            velocity,
-        );
-
-        self.broadcast_packet_except(&[player.gameprofile.id], &spawn_entity);
+        // Vanilla `level.addNewPlayer`: in-range viewers get the spawn from the tracker.
+        self.entity_tracker
+            .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
 
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
@@ -4627,8 +4600,7 @@ impl World {
             new_list.push(player.clone());
             new_list
         });
-        self.entity_tracker
-            .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
+        // Entity tracking starts in the spawn path, after the tab list reached viewers.
         Ok(())
     }
 
