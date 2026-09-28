@@ -52,9 +52,9 @@ use tracing::{debug, error, warn};
 
 /// The client-to-server half of a Java connection: a TCP socket, or an in-memory pipe when the
 /// server is embedded in a client.
-pub type JavaReadHalf = Box<dyn AsyncRead + Send + Unpin>;
+pub type JavaReadHalf = Box<dyn AsyncRead + Send + Sync + Unpin>;
 /// The server-to-client half of a Java connection.
-pub type JavaWriteHalf = Box<dyn AsyncWrite + Send + Unpin>;
+pub type JavaWriteHalf = Box<dyn AsyncWrite + Send + Sync + Unpin>;
 
 pub mod chunk_data;
 pub mod handshake;
