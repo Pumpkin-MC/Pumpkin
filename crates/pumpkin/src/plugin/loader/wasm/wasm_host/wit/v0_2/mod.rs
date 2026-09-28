@@ -5,7 +5,7 @@ use crate::plugin::{
         state::PluginHostState,
     },
 };
-use pumpkin_host_bindings::v0_2::PluginPre;
+use pumpkin_host_bindings::v0_2::{LinkOptions, PluginPre};
 use wasmtime::component::{HasSelf, InstancePre, Linker};
 use wasmtime::{Engine, Store};
 
@@ -32,6 +32,8 @@ pub mod enchantment;
 pub mod entity;
 pub mod events;
 pub mod forms;
+#[allow(clippy::unused_async_trait_impl)]
+pub mod gametest;
 pub mod generated_packets;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod gui;
@@ -390,7 +392,9 @@ impl pumpkin::plugin::potions::Host for PluginHostState {}
 impl pumpkin::plugin::entity_statuses::Host for PluginHostState {}
 
 pub fn add_to_linker(linker: &mut Linker<PluginHostState>) -> wasmtime::Result<()> {
-    Plugin::add_to_linker::<_, HasSelf<_>>(linker, |state: &mut PluginHostState| state)?;
+    let mut options = LinkOptions::default();
+    options.wit_0_2(true);
+    Plugin::add_to_linker::<_, HasSelf<_>>(linker, &options, |state: &mut PluginHostState| state)?;
     Ok(())
 }
 
