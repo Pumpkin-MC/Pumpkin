@@ -999,6 +999,139 @@ pub fn serialize_java_packet(
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
             Some(buf.into())
         }
+        ClientboundPacket::CLoginSuccess(data) => {
+            let uuid = uuid::Uuid::from_u64_pair(data.uuid.high, data.uuid.low);
+            let session_id = uuid::Uuid::from_u64_pair(data.session_id.high, data.session_id.low);
+            let properties: Vec<pumpkin_protocol::Property> = data
+                .properties
+                .iter()
+                .map(|property| pumpkin_protocol::Property {
+                    name: property.name.clone().into_boxed_str(),
+                    value: property.value.clone().into_boxed_str(),
+                    signature: property.signature.clone().map(String::into_boxed_str),
+                })
+                .collect();
+            let p = pumpkin_protocol::java::client::login::CLoginSuccess {
+                uuid: &uuid,
+                username: &data.username,
+                properties: &properties,
+                strict_error_handling: data.strict_error_handling,
+                session_id,
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).ok()?;
+            Some(buf.into())
+        }
+        ClientboundPacket::CPlayerInfoUpdate(data) => {
+            struct WitPlayerInfoUpdate<'a>(
+                &'a crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CPlayerInfoUpdate,
+            );
+
+            impl pumpkin_protocol::packet::MultiVersionJavaPacket for WitPlayerInfoUpdate<'_> {
+                fn to_id(version: JavaMinecraftVersion) -> i32 {
+                    <pumpkin_protocol::java::client::play::CPlayerInfoUpdate<'_> as pumpkin_protocol::packet::MultiVersionJavaPacket>::to_id(version)
+                }
+            }
+
+            impl pumpkin_protocol::ClientPacket for WitPlayerInfoUpdate<'_> {
+                fn write_packet_data(
+                    &self,
+                    mut write: impl std::io::Write,
+                    version: &JavaMinecraftVersion,
+                ) -> Result<(), pumpkin_protocol::ser::WritingError> {
+                    use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::PlayerAction as WitPlayerAction;
+                    use pumpkin_protocol::ser::NetworkWriteExt;
+
+                    let mut effective_actions = self.0.actions;
+                    if *version < JavaMinecraftVersion::V_1_21_2 {
+                        effective_actions &=
+                            !pumpkin_protocol::java::client::play::PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits();
+                    }
+                    if *version < JavaMinecraftVersion::V_1_21_4 {
+                        effective_actions &=
+                            !pumpkin_protocol::java::client::play::PlayerInfoFlags::UPDATE_HAT
+                                .bits();
+                    }
+
+                    write.write_u8(effective_actions)?;
+                    write.write_var_int(&VarInt(self.0.players.len() as i32))?;
+
+                    for player in &self.0.players {
+                        let uuid = uuid::Uuid::from_u64_pair(player.uuid.high, player.uuid.low);
+                        write.write_uuid(&uuid)?;
+
+                        for action in &player.actions {
+                            match action {
+                                WitPlayerAction::AddPlayer(add) => {
+                                    write.write_string(&add.name)?;
+                                    write.write_var_int(&VarInt(add.properties.len() as i32))?;
+                                    for property in &add.properties {
+                                        write.write_string(&property.name)?;
+                                        write.write_string(&property.value)?;
+                                        write.write_option(&property.signature, |writer, signature| {
+                                            writer.write_string(signature)
+                                        })?;
+                                    }
+                                }
+                                WitPlayerAction::InitializeChat(init_chat) => {
+                                    write.write_option(init_chat, |writer, chat| {
+                                        let session_id = uuid::Uuid::from_u64_pair(
+                                            chat.session_id.high,
+                                            chat.session_id.low,
+                                        );
+                                        writer.write_uuid(&session_id)?;
+                                        writer.write_i64_be(chat.expires_at)?;
+                                        writer.write_var_int(&VarInt(chat.public_key.len() as i32))?;
+                                        writer.write_slice(&chat.public_key)?;
+                                        writer.write_var_int(&VarInt(chat.signature.len() as i32))?;
+                                        writer.write_slice(&chat.signature)
+                                    })?;
+                                }
+                                WitPlayerAction::UpdateGameMode(game_mode) => {
+                                    write.write_var_int(&VarInt(*game_mode))?;
+                                }
+                                WitPlayerAction::UpdateListed(listed) => {
+                                    write.write_bool(*listed)?;
+                                }
+                                WitPlayerAction::UpdateLatency(latency) => {
+                                    write.write_var_int(&VarInt(*latency))?;
+                                }
+                                WitPlayerAction::UpdateDisplayName(display_name) => {
+                                    write.write_option(display_name, |writer, display_name| {
+                                        let component =
+                                            pumpkin_util::text::TextComponent::text(display_name.clone());
+                                        writer.write_component(&component, version)
+                                    })?;
+                                }
+                                WitPlayerAction::UpdateListOrder(order) => {
+                                    if effective_actions
+                                        & pumpkin_protocol::java::client::play::PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits()
+                                        != 0
+                                    {
+                                        write.write_var_int(&VarInt(*order))?;
+                                    }
+                                }
+                                WitPlayerAction::UpdateHat(show_hat) => {
+                                    if effective_actions
+                                        & pumpkin_protocol::java::client::play::PlayerInfoFlags::UPDATE_HAT.bits()
+                                        != 0
+                                    {
+                                        write.write_bool(*show_hat)?;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Ok(())
+                }
+            }
+
+            let p = WitPlayerInfoUpdate(data);
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).ok()?;
+            Some(buf.into())
+        }
         _ => None,
     }
 }

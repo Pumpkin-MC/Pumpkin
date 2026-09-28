@@ -41,7 +41,18 @@ pub fn build() -> String {
         ));
     }
 
-    let defined_types = collect_defined_types(&dirs);
+    let mut defined_types = collect_defined_types(&dirs);
+    // Game profile properties live in pumpkin-protocol's crate root rather than
+    // a packet module, so register their WIT representation explicitly.
+    defined_types.insert("profile-property".to_string());
+    interface.type_def(TypeDef::new(
+        "profile-property",
+        TypeDefKind::Record(Record::new(vec![
+            Field::new("name", WitType::String),
+            Field::new("value", WitType::String),
+            Field::new("signature", WitType::option(WitType::String)),
+        ])),
+    ));
 
     // Process serverbound packets
     for state in server_states {
@@ -65,6 +76,13 @@ pub fn build() -> String {
             &defined_types,
         );
     }
+
+    // CLoginSuccess uses a version-dependent packet id and therefore cannot use the
+    // java_packet attribute, but it is still a clientbound packet exposed to plugins.
+    clientbound_variant.case(VariantCase::value(
+        "c-login-success",
+        WitType::named("c-login-success"),
+    ));
 
     // Add an 'unknown' fallback variant (no payload) — raw payload is carried on the event record
     serverbound_variant.case(VariantCase::empty("unknown"));

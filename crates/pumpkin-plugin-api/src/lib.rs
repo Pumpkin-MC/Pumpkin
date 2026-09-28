@@ -524,3 +524,20 @@ pub mod persistent_data;
 pub use persistent_data::PersistentDataHolder;
 /// Game rules definitions and values.
 pub use wit::pumpkin::plugin::game_rules::{GameRule, GameRuleValue};
+
+#[cfg(test)]
+mod java_packet_profile_property_tests {
+    use super::wit::pumpkin::plugin::java_packets::{PlayerActionAddPlayer, ProfileProperty};
+
+    #[test]
+    fn profile_properties_have_a_signature_and_are_used_by_java_packets() {
+        let _property = ProfileProperty {
+            name: "textures".to_string(),
+            value: "value".to_string(),
+            signature: Some("signature".to_string()),
+        };
+
+        let _: for<'a> fn(&'a PlayerActionAddPlayer) -> &'a [ProfileProperty] =
+            |packet| &packet.properties;
+    }
+}

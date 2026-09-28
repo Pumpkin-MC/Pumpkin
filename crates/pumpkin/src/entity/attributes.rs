@@ -99,8 +99,8 @@ pub fn send_attribute_updates_for_living(
     use pumpkin_protocol::codec::var_int::VarInt;
     use pumpkin_protocol::codec::var_ulong::VarULong;
     use pumpkin_protocol::java::client::play::AttributeModifier as JeAttrMod;
+    use pumpkin_protocol::java::client::play::AttributeProperty as JeProperty;
     use pumpkin_protocol::java::client::play::CUpdateAttributes as JePacket;
-    use pumpkin_protocol::java::client::play::Property as JeProperty;
 
     let mut je_properties: Vec<JeProperty> = Vec::with_capacity(attributes.len());
     let mut be_attributes: Vec<BeAttribute> = Vec::with_capacity(attributes.len());
