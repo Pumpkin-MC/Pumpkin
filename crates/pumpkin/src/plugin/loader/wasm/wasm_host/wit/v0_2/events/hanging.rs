@@ -68,11 +68,10 @@ impl ToFromWasmEvent for HangingBreakByEntityEvent {
 
 impl ToFromWasmEvent for HangingPlaceEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = self.player.as_ref().map(|p| {
-            state
-                .add_player(p.clone())
-                .expect("failed to add player resource")
-        });
+        let player = self
+            .player
+            .as_ref()
+            .map(|p| state.add(p.clone()).expect("failed to add player resource"));
 
         Event::HangingPlaceEvent(HangingPlaceEventData {
             entity_id: self.entity.get_entity().entity_id,

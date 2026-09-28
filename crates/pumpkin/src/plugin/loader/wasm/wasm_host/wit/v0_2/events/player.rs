@@ -153,7 +153,7 @@ const fn from_wasm_fish_state(state: WasmPlayerFishState) -> PlayerFishState {
 impl ToFromWasmEvent for InventoryCloseEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::InventoryCloseEvent(InventoryCloseEventData {
@@ -176,7 +176,7 @@ impl ToFromWasmEvent for InventoryCloseEvent {
 impl ToFromWasmEvent for InventoryClickEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::InventoryClickEvent(InventoryClickEventData {
@@ -187,12 +187,12 @@ impl ToFromWasmEvent for InventoryClickEvent {
             raw_slot: self.raw_slot,
             clicked_item: self.clicked_item.as_ref().map(|stack| {
                 state
-                    .add_item_stack(Arc::new(Mutex::new(stack.clone())))
+                    .add(Arc::new(Mutex::new(stack.clone())))
                     .expect("failed to add item stack resource")
             }),
             cursor: self.cursor.as_ref().map(|stack| {
                 state
-                    .add_item_stack(Arc::new(Mutex::new(stack.clone())))
+                    .add(Arc::new(Mutex::new(stack.clone())))
                     .expect("failed to add item stack resource")
             }),
             hotbar_button: self.hotbar_button,
@@ -221,10 +221,10 @@ impl ToFromWasmEvent for InventoryClickEvent {
 impl ToFromWasmEvent for PlayerJoinEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let join_message = state
-            .add_text_component(self.join_message.clone())
+            .add(self.join_message.clone())
             .expect("failed to add text-component resource");
 
         Event::PlayerJoinEvent(PlayerJoinEventData {
@@ -249,10 +249,10 @@ impl ToFromWasmEvent for PlayerJoinEvent {
 impl ToFromWasmEvent for PlayerLeaveEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let leave_message = state
-            .add_text_component(self.leave_message.clone())
+            .add(self.leave_message.clone())
             .expect("failed to add text-component resource");
 
         Event::PlayerLeaveEvent(PlayerLeaveEventData {
@@ -277,10 +277,10 @@ impl ToFromWasmEvent for PlayerLeaveEvent {
 impl ToFromWasmEvent for PlayerLoginEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let kick_message = state
-            .add_text_component(self.kick_message.clone())
+            .add(self.kick_message.clone())
             .expect("failed to add text-component resource");
 
         Event::PlayerLoginEvent(PlayerLoginEventData {
@@ -305,17 +305,13 @@ impl ToFromWasmEvent for PlayerLoginEvent {
 impl ToFromWasmEvent for PlayerChatEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let recipients = self
             .recipients
             .iter()
             .cloned()
-            .map(|recipient| {
-                state
-                    .add_player(recipient)
-                    .expect("failed to add player resource")
-            })
+            .map(|recipient| state.add(recipient).expect("failed to add player resource"))
             .collect();
 
         Event::PlayerChatEvent(PlayerChatEventData {
@@ -348,7 +344,7 @@ impl ToFromWasmEvent for PlayerChatEvent {
 impl ToFromWasmEvent for PlayerCommandSendEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerCommandSendEvent(PlayerCommandSendEventData {
@@ -373,7 +369,7 @@ impl ToFromWasmEvent for PlayerCommandSendEvent {
 impl ToFromWasmEvent for PlayerPermissionCheckEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerPermissionCheckEvent(PlayerPermissionCheckEventData {
@@ -398,7 +394,7 @@ impl ToFromWasmEvent for PlayerPermissionCheckEvent {
 impl ToFromWasmEvent for PlayerMoveEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerMoveEvent(PlayerMoveEventData {
@@ -425,7 +421,7 @@ impl ToFromWasmEvent for PlayerMoveEvent {
 impl ToFromWasmEvent for PlayerTeleportEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerTeleportEvent(PlayerTeleportEventData {
@@ -452,13 +448,13 @@ impl ToFromWasmEvent for PlayerTeleportEvent {
 impl ToFromWasmEvent for PlayerChangeWorldEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let previous_world = state
-            .add_world(self.previous_world.clone())
+            .add(self.previous_world.clone())
             .expect("failed to add world resource");
         let new_world = state
-            .add_world(self.new_world.clone())
+            .add(self.new_world.clone())
             .expect("failed to add world resource");
 
         Event::PlayerChangeWorldEvent(PlayerChangeWorldEventData {
@@ -491,13 +487,13 @@ impl ToFromWasmEvent for PlayerChangeWorldEvent {
 impl ToFromWasmEvent for PlayerRespawnEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let previous_world = state
-            .add_world(self.previous_world.clone())
+            .add(self.previous_world.clone())
             .expect("failed to add world resource");
         let respawned_world = state
-            .add_world(self.respawned_world.clone())
+            .add(self.respawned_world.clone())
             .expect("failed to add world resource");
 
         Event::PlayerRespawnEvent(PlayerRespawnEventData {
@@ -530,7 +526,7 @@ impl ToFromWasmEvent for PlayerRespawnEvent {
 impl ToFromWasmEvent for PlayerExpChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerExpChangeEvent(PlayerExpChangeEventData {
@@ -553,7 +549,7 @@ impl ToFromWasmEvent for PlayerExpChangeEvent {
 impl ToFromWasmEvent for PlayerItemHeldEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerItemHeldEvent(PlayerItemHeldEventData {
@@ -580,7 +576,7 @@ impl ToFromWasmEvent for PlayerItemHeldEvent {
 impl ToFromWasmEvent for PlayerChangedMainHandEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerChangedMainHandEvent(PlayerChangedMainHandEventData {
@@ -603,7 +599,7 @@ impl ToFromWasmEvent for PlayerChangedMainHandEvent {
 impl ToFromWasmEvent for PlayerGamemodeChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerGamemodeChangeEvent(PlayerGamemodeChangeEventData {
@@ -630,7 +626,7 @@ impl ToFromWasmEvent for PlayerGamemodeChangeEvent {
 impl ToFromWasmEvent for PlayerCustomPayloadEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerCustomPayloadEvent(PlayerCustomPayloadEventData {
@@ -655,7 +651,7 @@ impl ToFromWasmEvent for PlayerCustomPayloadEvent {
 impl ToFromWasmEvent for PlayerFishEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerFishEvent(PlayerFishEventData {
@@ -690,7 +686,7 @@ impl ToFromWasmEvent for PlayerFishEvent {
 impl ToFromWasmEvent for PlayerEggThrowEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerEggThrowEvent(PlayerEggThrowEventData {
@@ -721,7 +717,7 @@ impl ToFromWasmEvent for PlayerEggThrowEvent {
 impl ToFromWasmEvent for PlayerInteractUnknownEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerInteractUnknownEntityEvent(PlayerInteractUnknownEntityEventData {
@@ -766,7 +762,7 @@ const fn from_wasm_interact_action(action: WasmInteractAction) -> InteractAction
 impl ToFromWasmEvent for PlayerInteractEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerInteractEvent(PlayerInteractEventData {
@@ -795,7 +791,7 @@ impl ToFromWasmEvent for PlayerInteractEvent {
 impl ToFromWasmEvent for PlayerToggleSneakEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerToggleSneakEvent(PlayerToggleSneakEventData {
@@ -820,7 +816,7 @@ impl ToFromWasmEvent for PlayerToggleSneakEvent {
 impl ToFromWasmEvent for PlayerToggleFlightEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerToggleFlightEvent(PlayerToggleFlightEventData {
@@ -845,7 +841,7 @@ impl ToFromWasmEvent for PlayerToggleFlightEvent {
 impl ToFromWasmEvent for PlayerToggleSprintEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerToggleSprintEvent(PlayerToggleSprintEventData {
@@ -870,7 +866,7 @@ impl ToFromWasmEvent for PlayerToggleSprintEvent {
 impl ToFromWasmEvent for BedrockFormResponseEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::BedrockFormResponseEvent(BedrockFormResponseEventData {
@@ -895,7 +891,7 @@ impl ToFromWasmEvent for BedrockFormResponseEvent {
 impl ToFromWasmEvent for PlayerInteractEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerInteractEntityEvent(PlayerInteractEntityEventData {
@@ -934,7 +930,7 @@ impl ToFromWasmEvent
 {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerItemConsumeEvent(PlayerItemConsumeEventData {
@@ -961,7 +957,7 @@ impl ToFromWasmEvent
 {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerItemDamageEvent(PlayerItemDamageEventData {
@@ -988,7 +984,7 @@ impl ToFromWasmEvent
 impl ToFromWasmEvent for crate::plugin::api::events::player::player_drop_item::PlayerDropItemEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerDropItemEvent(PlayerDropItemEventData {
@@ -1015,7 +1011,7 @@ impl ToFromWasmEvent for crate::plugin::api::events::player::player_drop_item::P
 impl ToFromWasmEvent for crate::plugin::api::events::player::player_bed::PlayerBedEnterEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerBedEnterEvent(PlayerBedEnterEventData {
@@ -1040,7 +1036,7 @@ impl ToFromWasmEvent for crate::plugin::api::events::player::player_bed::PlayerB
 impl ToFromWasmEvent for crate::plugin::api::events::player::player_bed::PlayerBedLeaveEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerBedLeaveEvent(PlayerBedLeaveEventData {
@@ -1063,7 +1059,7 @@ impl ToFromWasmEvent for crate::plugin::api::events::player::player_bed::PlayerB
 impl ToFromWasmEvent for crate::plugin::api::events::player::player_bucket::PlayerBucketEmptyEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerBucketEmptyEvent(PlayerBucketEmptyEventData {
@@ -1090,7 +1086,7 @@ impl ToFromWasmEvent for crate::plugin::api::events::player::player_bucket::Play
 impl ToFromWasmEvent for crate::plugin::api::events::player::player_bucket::PlayerBucketFillEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerBucketFillEvent(PlayerBucketFillEventData {
@@ -1117,10 +1113,10 @@ impl ToFromWasmEvent for crate::plugin::api::events::player::player_bucket::Play
 impl ToFromWasmEvent for AsyncPlayerChatEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let format = state
-            .add_text_component(self.format.clone())
+            .add(self.format.clone())
             .expect("failed to add text-component resource");
         Event::AsyncPlayerChatEvent(AsyncPlayerChatEventData {
             player,
@@ -1158,7 +1154,7 @@ impl ToFromWasmEvent for AsyncPlayerChatEvent {
 impl ToFromWasmEvent for AsyncPlayerPreLoginEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let kick_message = state
-            .add_text_component(self.kick_message.clone())
+            .add(self.kick_message.clone())
             .expect("failed to add text-component resource");
         Event::AsyncPlayerPreLoginEvent(AsyncPlayerPreLoginEventData {
             player_name: self.player_name.clone(),
@@ -1202,7 +1198,7 @@ impl ToFromWasmEvent for AsyncPlayerPreLoginEvent {
 impl ToFromWasmEvent for PlayerAdvancementDoneEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerAdvancementDoneEvent(PlayerAdvancementDoneEventData {
             player,
@@ -1233,7 +1229,7 @@ impl ToFromWasmEvent for PlayerAdvancementDoneEvent {
 impl ToFromWasmEvent for PlayerAnimationEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let animation_type = match self.animation_type {
             PlayerAnimationType::ArmSwingOff => "ArmSwingOff".to_string(),
@@ -1273,7 +1269,7 @@ impl ToFromWasmEvent for PlayerAnimationEvent {
 impl ToFromWasmEvent for PlayerArmorStandManipulateEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerArmorStandManipulateEvent(PlayerArmorStandManipulateEventData {
             player,
@@ -1306,7 +1302,7 @@ impl ToFromWasmEvent for PlayerArmorStandManipulateEvent {
 impl ToFromWasmEvent for PlayerBucketEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerBucketEntityEvent(PlayerBucketEntityEventData {
             player,
@@ -1339,13 +1335,13 @@ impl ToFromWasmEvent for PlayerBucketEntityEvent {
 impl ToFromWasmEvent for PlayerChangedWorldEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let from_world = state
-            .add_world(self.from_world.clone())
+            .add(self.from_world.clone())
             .expect("failed to add world resource");
         let to_world = state
-            .add_world(self.to_world.clone())
+            .add(self.to_world.clone())
             .expect("failed to add world resource");
         Event::PlayerChangedWorldEvent(PlayerChangedWorldEventData {
             player,
@@ -1378,7 +1374,7 @@ impl ToFromWasmEvent for PlayerChangedWorldEvent {
 impl ToFromWasmEvent for PlayerChannelEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerChannelEvent(PlayerChannelEventData {
             player,
@@ -1409,7 +1405,7 @@ impl ToFromWasmEvent for PlayerChannelEvent {
 impl ToFromWasmEvent for PlayerCommandPreprocessEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerCommandPreprocessEvent(PlayerCommandPreprocessEventData {
             player,
@@ -1441,7 +1437,7 @@ impl ToFromWasmEvent for PlayerCommandPreprocessEvent {
 impl ToFromWasmEvent for PlayerEditBookEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerEditBookEvent(PlayerEditBookEventData {
             player,
@@ -1480,7 +1476,7 @@ impl ToFromWasmEvent for PlayerEditBookEvent {
 impl ToFromWasmEvent for PlayerElytraBoostEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerElytraBoostEvent(PlayerElytraBoostEventData {
             player,
@@ -1511,7 +1507,7 @@ impl ToFromWasmEvent for PlayerElytraBoostEvent {
 impl ToFromWasmEvent for PlayerExpCooldownChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerExpCooldownChangeEvent(PlayerExpCooldownChangeEventData {
             player,
@@ -1543,14 +1539,14 @@ impl ToFromWasmEvent for PlayerExpCooldownChangeEvent {
 impl ToFromWasmEvent for PlayerHarvestBlockEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let harvested_items = self
             .harvested_items
             .iter()
             .map(|i| {
                 state
-                    .add_item_stack(Arc::new(Mutex::new(i.clone())))
+                    .add(Arc::new(Mutex::new(i.clone())))
                     .expect("failed to add item stack resource")
             })
             .collect();
@@ -1582,7 +1578,7 @@ impl ToFromWasmEvent for PlayerHarvestBlockEvent {
 impl ToFromWasmEvent for PlayerHideEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerHideEntityEvent(PlayerHideEntityEventData {
             player,
@@ -1613,7 +1609,7 @@ impl ToFromWasmEvent for PlayerHideEntityEvent {
 impl ToFromWasmEvent for PlayerItemBreakEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerItemBreakEvent(PlayerItemBreakEventData {
             player,
@@ -1635,7 +1631,7 @@ impl ToFromWasmEvent for PlayerItemBreakEvent {
 impl ToFromWasmEvent for PlayerItemMendEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerItemMendEvent(PlayerItemMendEventData {
             player,
@@ -1672,7 +1668,7 @@ impl ToFromWasmEvent for PlayerItemMendEvent {
 impl ToFromWasmEvent for PlayerKickEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerKickEvent(PlayerKickEventData {
             player,
@@ -1704,7 +1700,7 @@ impl ToFromWasmEvent for PlayerKickEvent {
 impl ToFromWasmEvent for PlayerLeashEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerLeashEntityEvent(PlayerLeashEntityEventData {
             player,
@@ -1737,7 +1733,7 @@ impl ToFromWasmEvent for PlayerLeashEntityEvent {
 impl ToFromWasmEvent for PlayerLevelChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerLevelChangeEvent(PlayerLevelChangeEventData {
             player,
@@ -1761,7 +1757,7 @@ impl ToFromWasmEvent for PlayerLevelChangeEvent {
 impl ToFromWasmEvent for PlayerLocaleChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerLocaleChangeEvent(PlayerLocaleChangeEventData {
             player,
@@ -1792,10 +1788,10 @@ impl ToFromWasmEvent for PlayerLocaleChangeEvent {
 impl ToFromWasmEvent for PlayerNameEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let name = state
-            .add_text_component(self.name.clone())
+            .add(self.name.clone())
             .expect("failed to add text-component resource");
         Event::PlayerNameEntityEvent(PlayerNameEntityEventData {
             player,
@@ -1832,7 +1828,7 @@ impl ToFromWasmEvent for PlayerNameEntityEvent {
 impl ToFromWasmEvent for PlayerOpenSignEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerOpenSignEvent(PlayerOpenSignEventData {
             player,
@@ -1865,7 +1861,7 @@ impl ToFromWasmEvent for PlayerOpenSignEvent {
 impl ToFromWasmEvent for PlayerPortalEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerPortalEvent(PlayerPortalEventData {
             player,
@@ -1899,7 +1895,7 @@ impl ToFromWasmEvent for PlayerPortalEvent {
 impl ToFromWasmEvent for PlayerPreLoginEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let kick_message = state
-            .add_text_component(self.kick_message.clone())
+            .add(self.kick_message.clone())
             .expect("failed to add text-component resource");
         Event::PlayerPreLoginEvent(PlayerPreLoginEventData {
             player_name: self.player_name.clone(),
@@ -1943,7 +1939,7 @@ impl ToFromWasmEvent for PlayerPreLoginEvent {
 impl ToFromWasmEvent for PlayerRiptideEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerRiptideEvent(PlayerRiptideEventData {
             player,
@@ -1974,7 +1970,7 @@ impl ToFromWasmEvent for PlayerRiptideEvent {
 impl ToFromWasmEvent for PlayerShearEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerShearEntityEvent(PlayerShearEntityEventData {
             player,
@@ -2007,7 +2003,7 @@ impl ToFromWasmEvent for PlayerShearEntityEvent {
 impl ToFromWasmEvent for PlayerShowEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerShowEntityEvent(PlayerShowEntityEventData {
             player,
@@ -2038,7 +2034,7 @@ impl ToFromWasmEvent for PlayerShowEntityEvent {
 impl ToFromWasmEvent for PlayerSpawnChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerSpawnChangeEvent(PlayerSpawnChangeEventData {
             player,
@@ -2072,7 +2068,7 @@ impl ToFromWasmEvent for PlayerSpawnChangeEvent {
 impl ToFromWasmEvent for PlayerStatisticIncrementEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerStatisticIncrementEvent(PlayerStatisticIncrementEventData {
             player,
@@ -2106,7 +2102,7 @@ impl ToFromWasmEvent for PlayerStatisticIncrementEvent {
 impl ToFromWasmEvent for PlayerSwapHandItemsEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerSwapHandsEvent(PlayerSwapHandsEventData {
             player,
@@ -2135,10 +2131,10 @@ impl ToFromWasmEvent for PlayerSwapHandItemsEvent {
 impl ToFromWasmEvent for PlayerTakeLecternBookEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let book = state
-            .add_item_stack(Arc::new(Mutex::new(self.book.clone())))
+            .add(Arc::new(Mutex::new(self.book.clone())))
             .expect("failed to add item stack resource");
         Event::PlayerTakeLecternBookEvent(PlayerTakeLecternBookEventData {
             player,
@@ -2168,7 +2164,7 @@ impl ToFromWasmEvent for PlayerTakeLecternBookEvent {
 impl ToFromWasmEvent for PlayerUnleashEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerUnleashEntityEvent(PlayerUnleashEntityEventData {
             player,
@@ -2199,7 +2195,7 @@ impl ToFromWasmEvent for PlayerUnleashEntityEvent {
 impl ToFromWasmEvent for PlayerVelocityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerVelocityEvent(PlayerVelocityEventData {
             player,
@@ -2231,7 +2227,7 @@ impl ToFromWasmEvent for PlayerVelocityEvent {
 impl ToFromWasmEvent for PlayerInputEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerInputEvent(PlayerInputEventData {
             player,
@@ -2263,7 +2259,7 @@ impl ToFromWasmEvent for PlayerInputEvent {
 impl ToFromWasmEvent for PlayerInteractAtEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerInteractAtEntityEvent(PlayerInteractAtEntityEventData {
             player,
@@ -2302,7 +2298,7 @@ impl ToFromWasmEvent for PlayerInteractAtEntityEvent {
 impl ToFromWasmEvent for PlayerLinksSendEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerLinksSendEvent(PlayerLinksSendEventData {
             player,
@@ -2334,7 +2330,7 @@ impl ToFromWasmEvent for PlayerLinksSendEvent {
 impl ToFromWasmEvent for PlayerPickupArrowEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerPickupArrowEvent(PlayerPickupArrowEventData {
             player,
@@ -2365,7 +2361,7 @@ impl ToFromWasmEvent for PlayerPickupArrowEvent {
 impl ToFromWasmEvent for PlayerRecipeBookClickEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerRecipeBookClickEvent(PlayerRecipeBookClickEventData {
             player,
@@ -2400,7 +2396,7 @@ impl ToFromWasmEvent for PlayerRecipeBookClickEvent {
 impl ToFromWasmEvent for PlayerRecipeBookSettingsChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerRecipeBookSettingsChangeEvent(PlayerRecipeBookSettingsChangeEventData {
             player,
@@ -2438,7 +2434,7 @@ impl ToFromWasmEvent for PlayerRecipeBookSettingsChangeEvent {
 impl ToFromWasmEvent for PlayerRecipeDiscoverEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerRecipeDiscoverEvent(PlayerRecipeDiscoverEventData {
             player,
@@ -2470,7 +2466,7 @@ impl ToFromWasmEvent for PlayerRecipeDiscoverEvent {
 impl ToFromWasmEvent for PlayerRegisterChannelEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerRegisterChannelEvent(PlayerRegisterChannelEventData {
             player,
@@ -2502,7 +2498,7 @@ impl ToFromWasmEvent for PlayerRegisterChannelEvent {
 impl ToFromWasmEvent for PlayerResourcePackStatusEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerResourcePackStatusEvent(PlayerResourcePackStatusEventData {
             player,
@@ -2536,7 +2532,7 @@ impl ToFromWasmEvent for PlayerResourcePackStatusEvent {
 impl ToFromWasmEvent for PlayerSpawnLocationEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerSpawnLocationEvent(PlayerSpawnLocationEventData {
             player,
@@ -2568,7 +2564,7 @@ impl ToFromWasmEvent for PlayerSpawnLocationEvent {
 impl ToFromWasmEvent for PlayerUnregisterChannelEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         Event::PlayerUnregisterChannelEvent(PlayerUnregisterChannelEventData {
             player,
