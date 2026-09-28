@@ -13,7 +13,6 @@ use crate::{
         },
         palette::has_random_ticking_fluid,
     },
-    generation::get_world_gen_with_all_settings,
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::WorldPortalExt,
 };
@@ -199,53 +198,14 @@ impl Level {
 
         let main_folder = &level_folder.root_folder;
 
-        let mut is_flat = false;
-        let mut flat_layers = Vec::new();
-        let mut flat_biome = "minecraft:plains".to_string();
-        let mut generator_settings_name: Option<String> = None;
-        let mut biome_source: Option<crate::world_info::BiomeSource> = None;
-        let mut structure_overrides: Option<Vec<String>> = None;
-
-        if let Some(wgs) = crate::world_info::data_files::read_world_gen_settings(main_folder)
-            && let Some(dim_settings) = wgs.dimensions.get(dimension.minecraft_name)
-        {
-            biome_source.clone_from(&dim_settings.generator.biome_source);
-
-            if dim_settings.generator.generator_type == "minecraft:flat" {
-                is_flat = true;
-                let flat_settings = dim_settings
-                    .generator
-                    .settings
-                    .as_ref()
-                    .and_then(crate::world_info::GeneratorSettings::as_flat_settings)
-                    .or_else(|| {
-                        crate::world_info::FlatLevelGeneratorPreset::from_name("classic_flat")
-                            .map(|p| p.settings)
-                    });
-                if let Some(flat_settings) = flat_settings {
-                    flat_layers = flat_settings.to_flat_layers();
-                    structure_overrides = flat_settings.structure_overrides_vec();
-                    flat_biome = flat_settings.biome;
-                }
-            } else if let Some(crate::world_info::GeneratorSettings::Reference(s)) =
-                &dim_settings.generator.settings
-            {
-                generator_settings_name = Some(s.clone());
-            }
-        }
-
         let dim_min_y = dimension.min_y;
         let dim_height = dimension.height;
         let seed = Seed(seed as u64);
-        let world_gen: Arc<WorldGenerator> = Arc::from(get_world_gen_with_all_settings(
-            seed,
+        let world_settings = crate::world_info::data_files::read_world_gen_settings(main_folder);
+        let world_gen: Arc<WorldGenerator> = Arc::from(crate::generation::world_generator_for(
+            world_settings.as_ref(),
             dimension,
-            is_flat,
-            flat_layers,
-            flat_biome,
-            generator_settings_name.as_deref(),
-            biome_source.as_ref(),
-            structure_overrides.as_deref(),
+            seed,
         ));
 
         let chunk_saver = match &level_config.chunk {

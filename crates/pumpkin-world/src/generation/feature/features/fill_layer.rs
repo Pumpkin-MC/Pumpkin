@@ -18,6 +18,12 @@ impl FillLayerFeature {
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
+        self.fill(chunk, min_y, pos);
+        true
+    }
+
+    /// Fills the layer of the chunk at `pos`, whose bottom is at `min_y`.
+    pub fn fill<T: GenerationCache>(&self, chunk: &mut T, min_y: i8, pos: BlockPos) {
         let y = min_y as i32 + self.height;
         for dx in 0..16 {
             for dz in 0..16 {
@@ -27,6 +33,5 @@ impl FillLayerFeature {
                 }
             }
         }
-        true
     }
 }
