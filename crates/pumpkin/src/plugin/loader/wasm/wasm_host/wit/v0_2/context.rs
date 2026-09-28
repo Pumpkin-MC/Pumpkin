@@ -1742,7 +1742,21 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         &mut self,
         _context: Resource<WitContext>,
     ) -> wasmtime::Result<Option<MarketplaceMetadata>> {
-        Ok(self.marketplace_metadata.clone())
+        Ok(self
+            .marketplace_metadata
+            .clone()
+            .map(|metadata| MarketplaceMetadata {
+                marketplace_url: metadata.marketplace_url,
+                plugin_id: metadata.plugin_id,
+                plugin_name: metadata.plugin_name,
+                version: metadata.version,
+                dev_id: metadata.dev_id,
+                dev_name: metadata.dev_name,
+                is_paid: metadata.is_paid,
+                user_id: metadata.user_id,
+                license_key: metadata.license_key,
+                issued_at: metadata.issued_at,
+            }))
     }
 
     async fn drop(&mut self, rep: Resource<WitContext>) -> wasmtime::Result<()> {

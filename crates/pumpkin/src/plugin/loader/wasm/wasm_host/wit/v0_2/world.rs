@@ -311,7 +311,7 @@ pub(crate) fn to_wit_block_state(
 
 // --- Trapping Helpers ---
 impl PluginHostState {
-    fn get_wit_biome(
+    fn get_wit_biome_v0_2(
         biome: &pumpkin_data::biome::Biome,
     ) -> wasmtime::Result<pumpkin::plugin::biomes::Biome> {
         to_wit_biome(biome)
@@ -321,7 +321,7 @@ impl PluginHostState {
         unused_assignments,
         reason = "the tail of the macro output will put the Arc back into the `be` variable"
     )]
-    fn get_wit_block_entity(
+    fn get_wit_block_entity_v0_2(
         &mut self,
         block_entity: Arc<dyn crate::block::entities::BlockEntity>,
     ) -> wasmtime::Result<Option<BlockEntityType>> {
@@ -895,7 +895,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
         let biome = world_ref.get_biome(&internal_pos);
 
-        Self::get_wit_biome(biome)
+        Self::get_wit_biome_v0_2(biome)
     }
 
     async fn get_entities(
@@ -1019,7 +1019,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
         let block_entity = world_provider.get_block_entity(&internal_pos);
 
-        block_entity.map_or_else(|| Ok(None), |be| self.get_wit_block_entity(be))
+        block_entity.map_or_else(|| Ok(None), |be| self.get_wit_block_entity_v0_2(be))
     }
 
     async fn get_block_entity_nbt(
@@ -1473,7 +1473,7 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
         let biome = pumpkin_data::biome::Biome::from_id(id)
             .unwrap_or(&pumpkin_data::biome::Biome::THE_VOID);
 
-        Self::get_wit_biome(biome)
+        Self::get_wit_biome_v0_2(biome)
     }
 
     async fn get_block_entity(
@@ -1490,7 +1490,7 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
             BlockPos::new(chunk_data.x * 16 + pos.x, pos.y, chunk_data.z * 16 + pos.z);
         let block_entity = world.get_block_entity(&absolute_pos);
 
-        block_entity.map_or_else(|| Ok(None), |be| self.get_wit_block_entity(be))
+        block_entity.map_or_else(|| Ok(None), |be| self.get_wit_block_entity_v0_2(be))
     }
 
     async fn get_top_block_y(

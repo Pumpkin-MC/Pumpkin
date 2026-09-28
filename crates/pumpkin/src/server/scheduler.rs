@@ -198,27 +198,59 @@ impl TaskScheduler {
             let server_clone = server.clone();
 
             server.spawn_task(async move {
-                let function = match plugin.plugin_instance.as_ref() {
-                    crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(instance) => {
-                        instance.func_handle_task()
-                    }
-                };
+                let plugin_instance = plugin.plugin_instance.clone();
                 if let Err(error) = plugin
                     .store
                     .call_guest(move |mut guest| {
                         Box::pin(async move {
-                            let (server_resource, server_rep) = guest.with(|mut store| {
-                                let resource = store.data_mut().add(server_clone)?;
-                                let rep = resource.rep();
-                                Ok::<_, wasmtime::Error>((resource, rep))
-                            })?;
-                            let result = guest.call(function, (handler_id, server_resource)).await;
-                            guest.with(|mut store| {
-                                let _ = store.data_mut().resource_table.delete::<Arc<Server>>(
-                                    wasmtime::component::Resource::new_own(server_rep),
-                                );
-                            });
-                            result
+                            match plugin_instance.as_ref() {
+                                crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(
+                                    instance,
+                                ) => {
+                                    let (server_resource, server_rep) =
+                                        guest.with(|mut store| {
+                                            let resource = store.data_mut().add(server_clone)?;
+                                            let rep = resource.rep();
+                                            Ok::<_, wasmtime::Error>((resource, rep))
+                                        })?;
+                                    let result = guest
+                                        .call(
+                                            instance.func_handle_task(),
+                                            (handler_id, server_resource),
+                                        )
+                                        .await;
+                                    guest.with(|mut store| {
+                                        let _ =
+                                            store.data_mut().resource_table.delete::<Arc<Server>>(
+                                                wasmtime::component::Resource::new_own(server_rep),
+                                            );
+                                    });
+                                    result
+                                }
+                                crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_2(
+                                    instance,
+                                ) => {
+                                    let (server_resource, server_rep) =
+                                        guest.with(|mut store| {
+                                            let resource = store.data_mut().add(server_clone)?;
+                                            let rep = resource.rep();
+                                            Ok::<_, wasmtime::Error>((resource, rep))
+                                        })?;
+                                    let result = guest
+                                        .call(
+                                            instance.func_handle_task(),
+                                            (handler_id, server_resource),
+                                        )
+                                        .await;
+                                    guest.with(|mut store| {
+                                        let _ =
+                                            store.data_mut().resource_table.delete::<Arc<Server>>(
+                                                wasmtime::component::Resource::new_own(server_rep),
+                                            );
+                                    });
+                                    result
+                                }
+                            }
                         })
                     })
                     .await
