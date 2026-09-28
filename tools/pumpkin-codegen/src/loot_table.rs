@@ -2,7 +2,9 @@ use std::{fs, path::Path};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
-use pumpkin_util::loot_table::{LootBonusFormula, LootCondition};
+use pumpkin_util::loot_table::{
+    LootBlockCondition, LootBonusFormula, LootCondition, LootCountBuilder, LootStateCount,
+};
 use quote::{format_ident, quote};
 use serde::Deserialize;
 use syn::LitStr;
@@ -52,6 +54,10 @@ enum CountStruct {
         min: f32,
         #[serde(default)]
         max: f32,
+        #[serde(default)]
+        n: Option<f32>,
+        #[serde(default)]
+        p: Option<f32>,
     },
 }
 
@@ -298,6 +304,10 @@ struct EntryFunctionStruct {
     #[serde(default)]
     parameters: Option<BonusParameterStruct>,
     count: Option<CountStruct>,
+    #[serde(default)]
+    add: bool,
+    #[serde(default)]
+    condition: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -364,8 +374,44 @@ struct ParsedEntry {
     weight: i32,
     min_count: i32,
     max_count: i32,
+    state_counts: Vec<LootStateCount>,
     condition: LootCondition,
     bonus_formula: Option<LootBonusFormula>,
+    bonus_condition: Option<LootBlockCondition>,
+}
+
+fn bonus_formula_of(f: &EntryFunctionStruct) -> Option<LootBonusFormula> {
+    if f.function == "minecraft:apply_bonus" {
+        match f.formula.as_deref() {
+            Some("minecraft:ore_drops") => Some(LootBonusFormula::OreDrops),
+            Some("minecraft:uniform_bonus_count") => {
+                let mult = f
+                    .parameters
+                    .as_ref()
+                    .and_then(|p| p.bonus_multiplier)
+                    .unwrap_or(1);
+                Some(LootBonusFormula::UniformBonusCount(mult))
+            }
+            Some("minecraft:binomial_with_bonus_count") => {
+                let extra = f.parameters.as_ref().and_then(|p| p.extra).unwrap_or(0);
+                let prob = f
+                    .parameters
+                    .as_ref()
+                    .and_then(|p| p.probability)
+                    .unwrap_or(0.0);
+                Some(LootBonusFormula::BinomialWithBonusCount {
+                    extra,
+                    probability: prob,
+                })
+            }
+            _ => None,
+        }
+    } else if f.function == "minecraft:enchanted_count_increase" {
+        let mult = f.count.as_ref().map_or(1, |c| c.max());
+        Some(LootBonusFormula::UniformBonusCount(mult))
+    } else {
+        None
+    }
 }
 
 fn extract_entries(
@@ -400,56 +446,34 @@ fn extract_entries_with_depth(
         }
         "minecraft:item" => {
             if let Some(name) = &entry.name {
-                let (min_count, max_count) = entry
-                    .functions
-                    .iter()
-                    .find(|f| f.function == "minecraft:set_count")
-                    .and_then(|f| f.count.as_ref())
-                    .map(|c| (c.min(), c.max()))
-                    .unwrap_or((1, 1));
-
-                let bonus_formula = entry.functions.iter().find_map(|f| {
-                    if f.function == "minecraft:apply_bonus" {
-                        match f.formula.as_deref() {
-                            Some("minecraft:ore_drops") => Some(LootBonusFormula::OreDrops),
-                            Some("minecraft:uniform_bonus_count") => {
-                                let mult = f
-                                    .parameters
-                                    .as_ref()
-                                    .and_then(|p| p.bonus_multiplier)
-                                    .unwrap_or(1);
-                                Some(LootBonusFormula::UniformBonusCount(mult))
+                let mut counts = LootCountBuilder::default();
+                for f in &entry.functions {
+                    if f.function == "minecraft:set_count"
+                        && let Some(count) = &f.count
+                    {
+                        let (min, max, p) = match count {
+                            CountStruct::Provider { n: Some(n), p, .. } => {
+                                (0, n.round() as i32, *p)
                             }
-                            Some("minecraft:binomial_with_bonus_count") => {
-                                let extra =
-                                    f.parameters.as_ref().and_then(|p| p.extra).unwrap_or(0);
-                                let prob = f
-                                    .parameters
-                                    .as_ref()
-                                    .and_then(|p| p.probability)
-                                    .unwrap_or(0.0);
-                                Some(LootBonusFormula::BinomialWithBonusCount {
-                                    extra,
-                                    probability: prob,
-                                })
-                            }
-                            _ => None,
-                        }
-                    } else if f.function == "minecraft:enchanted_count_increase" {
-                        let mult = f.count.as_ref().map_or(1, |c| c.max());
-                        Some(LootBonusFormula::UniformBonusCount(mult))
-                    } else {
-                        None
+                            count => (count.min(), count.max(), None),
+                        };
+                        counts.set_count(f.condition.as_ref(), f.add, min, max, p);
+                    } else if let Some(formula) = bonus_formula_of(f) {
+                        counts.bonus(f.condition.as_ref(), formula);
                     }
-                });
+                }
+                let ((min_count, max_count), state_counts, bonus_formula, bonus_condition) =
+                    counts.build();
 
                 out.push(ParsedEntry {
                     item: name.clone(),
                     weight: entry.weight,
                     min_count,
                     max_count,
+                    state_counts,
                     condition: entry_cond,
                     bonus_formula,
+                    bonus_condition,
                 });
             }
         }
@@ -479,8 +503,10 @@ fn extract_entries_with_depth(
                                 weight: entry.weight,
                                 min_count: 1,
                                 max_count: 1,
+                                state_counts: Vec::new(),
                                 condition: entry_cond,
                                 bonus_formula: None,
+                                bonus_condition: None,
                             });
                         }
                     }
@@ -652,6 +678,20 @@ fn bonus_to_tokens(bonus: Option<LootBonusFormula>) -> TokenStream {
     }
 }
 
+fn block_condition_to_tokens(condition: &LootBlockCondition) -> TokenStream {
+    let block = condition.block.as_ref();
+    let properties = condition.properties.iter().map(|(name, value)| {
+        let (name, value) = (name.as_ref(), value.as_ref());
+        quote! { (Cow::Borrowed(#name), Cow::Borrowed(#value)) }
+    });
+    quote! {
+        LootBlockCondition {
+            block: Cow::Borrowed(#block),
+            properties: Cow::Borrowed(&[#(#properties),*]),
+        }
+    }
+}
+
 /// Emit static entry arrays and pool literals for one table.
 /// Returns the list of `LootPool` literals (one per pool).
 fn emit_table(
@@ -688,6 +728,26 @@ fn emit_table(
                 let max_count = e.max_count;
                 let cond_tokens = condition_to_tokens(e.condition);
                 let bonus_tokens = bonus_to_tokens(e.bonus_formula);
+                let state_count_tokens = |count: &LootStateCount| {
+                    let (add, after_bonus) = (count.add, count.after_bonus);
+                    let (min, max) = (count.min_count, count.max_count);
+                    let binomial = count
+                        .binomial
+                        .map_or(quote! { None }, |p| quote! { Some(#p) });
+                    let condition = count.condition.as_ref().map(block_condition_to_tokens);
+                    let condition = condition.map_or(quote! { None }, |c| quote! { Some(#c) });
+                    quote! {
+                        LootStateCount {
+                            condition: #condition,
+                            add: #add, min_count: #min, max_count: #max, binomial: #binomial,
+                            after_bonus: #after_bonus,
+                        }
+                    }
+                };
+                let state_counts = e.state_counts.iter().map(state_count_tokens);
+                let bonus_condition = e.bonus_condition.as_ref().map(block_condition_to_tokens);
+                let bonus_condition =
+                    bonus_condition.map_or(quote! { None }, |c| quote! { Some(&#c) });
 
                 quote! {
                     LootEntry {
@@ -695,8 +755,10 @@ fn emit_table(
                         weight: #weight,
                         min_count: #min_count,
                         max_count: #max_count,
+                        state_counts: &[#(#state_counts),*],
                         condition: #cond_tokens,
                         bonus_formula: #bonus_tokens,
+                        bonus_condition: #bonus_condition,
                     }
                 }
             })
@@ -816,6 +878,7 @@ pub fn build() -> TokenStream {
     });
 
     quote! {
+        use std::borrow::Cow;
         pub use pumpkin_util::loot_table::*;
         #all_tokens
     }

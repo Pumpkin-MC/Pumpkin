@@ -4,7 +4,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use pumpkin_util::loot_table::{
-    DynamicLootCondition, DynamicLootEntry, DynamicLootPool, DynamicLootTable, LootBonusFormula,
+    DynamicLootCondition, DynamicLootEntry, DynamicLootPool, DynamicLootTable, LootBlockCondition,
+    LootBonusFormula, LootCountBuilder, LootStateCount,
 };
 use serde_json::Value;
 
@@ -27,11 +28,12 @@ fn parse_pool(val: &Value) -> DynamicLootPool {
 
     if let Some(entries_val) = val.get("entries").and_then(Value::as_array) {
         for entry_val in entries_val {
-            parse_entry(entry_val, &mut entries, &mut empty_weight);
+            parse_entry(entry_val, &[], &mut entries, &mut empty_weight);
         }
     }
 
-    let pool_conditions = val.get("conditions").map_or(Vec::new(), parse_conditions);
+    let mut pool_conditions = val.get("conditions").map_or(Vec::new(), parse_conditions);
+    pool_conditions.extend(val.get("condition").map(parse_condition));
     let condition = combine_conditions(pool_conditions);
 
     DynamicLootPool {
@@ -71,20 +73,31 @@ fn parse_rolls(val: &Value) -> (i32, i32) {
                 .unwrap_or(1) as i32;
             return (r, r);
         }
-        if let Some(n) = obj.get("n").and_then(Value::as_i64) {
+        if let Some(n) = obj
+            .get("n")
+            .and_then(|n| n.as_i64().or_else(|| n.as_f64().map(|f| f as i64)))
+        {
             return (0, n as i32);
         }
     }
     (1, 1)
 }
 
-fn parse_entry(val: &Value, pool_entries: &mut Vec<DynamicLootEntry>, empty_weight: &mut i32) {
+fn parse_entry(
+    val: &Value,
+    inherited: &[DynamicLootCondition],
+    pool_entries: &mut Vec<DynamicLootEntry>,
+    empty_weight: &mut i32,
+) {
     let entry_type = val
         .get("type")
         .and_then(Value::as_str)
         .unwrap_or("minecraft:item");
     let entry_type = entry_type.strip_prefix("minecraft:").unwrap_or(entry_type);
     let weight = val.get("weight").and_then(Value::as_i64).unwrap_or(1) as i32;
+    let mut conditions = inherited.to_vec();
+    conditions.extend(val.get("conditions").map_or(Vec::new(), parse_conditions));
+    conditions.extend(val.get("condition").map(parse_condition));
 
     match entry_type {
         "empty" => {
@@ -92,9 +105,9 @@ fn parse_entry(val: &Value, pool_entries: &mut Vec<DynamicLootEntry>, empty_weig
         }
         "item" | "tag" => {
             if let Some(name) = val.get("name").and_then(Value::as_str) {
-                let (min_count, max_count, bonus_formula) =
-                    val.get("functions").map_or((1, 1, None), parse_functions);
-                let conditions = val.get("conditions").map_or(Vec::new(), parse_conditions);
+                let modifiers = val.get("functions").or_else(|| val.get("modifier"));
+                let (min_count, max_count, bonus_formula, bonus_condition, state_counts) =
+                    modifiers.map_or((1, 1, None, None, Vec::new()), parse_functions);
                 let condition = combine_conditions(conditions);
 
                 pool_entries.push(DynamicLootEntry {
@@ -102,15 +115,17 @@ fn parse_entry(val: &Value, pool_entries: &mut Vec<DynamicLootEntry>, empty_weig
                     weight,
                     min_count,
                     max_count,
+                    state_counts,
                     condition,
                     bonus_formula,
+                    bonus_condition,
                 });
             }
         }
         "alternatives" | "group" | "sequence" => {
             if let Some(children) = val.get("children").and_then(Value::as_array) {
                 for child in children {
-                    parse_entry(child, pool_entries, empty_weight);
+                    parse_entry(child, &conditions, pool_entries, empty_weight);
                 }
             }
         }
@@ -118,18 +133,25 @@ fn parse_entry(val: &Value, pool_entries: &mut Vec<DynamicLootEntry>, empty_weig
     }
 }
 
-fn parse_functions(val: &Value) -> (i32, i32, Option<LootBonusFormula>) {
-    let mut min_count = 1;
-    let mut max_count = 1;
-    let mut bonus_formula = None;
+fn parse_functions(
+    val: &Value,
+) -> (
+    i32,
+    i32,
+    Option<LootBonusFormula>,
+    Option<LootBlockCondition>,
+    Vec<LootStateCount>,
+) {
+    let mut counts = LootCountBuilder::default();
 
-    let Some(functions) = val.as_array() else {
-        return (min_count, max_count, bonus_formula);
-    };
+    let functions = val
+        .as_array()
+        .map_or(std::slice::from_ref(val), Vec::as_slice);
 
     for func in functions {
         let func_type = func
             .get("function")
+            .or_else(|| func.get("type"))
             .and_then(Value::as_str)
             .unwrap_or_default();
         let func_type = func_type.strip_prefix("minecraft:").unwrap_or(func_type);
@@ -138,59 +160,68 @@ fn parse_functions(val: &Value) -> (i32, i32, Option<LootBonusFormula>) {
             "set_count" => {
                 if let Some(count) = func.get("count") {
                     let (min_c, max_c) = parse_rolls(count);
-                    min_count = min_c;
-                    max_count = max_c;
+                    let add = func.get("add").and_then(Value::as_bool).unwrap_or(false);
+                    let p = count.get("n").and(count.get("p")).and_then(Value::as_f64);
+                    counts.set_count(
+                        func.get("condition"),
+                        add,
+                        min_c,
+                        max_c,
+                        p.map(|p| p as f32),
+                    );
                 }
             }
-            "apply_bonus" => {
-                if let Some(formula) = func.get("formula").and_then(Value::as_str) {
-                    let formula_clean = formula.strip_prefix("minecraft:").unwrap_or(formula);
-                    match formula_clean {
-                        "ore_drops" => {
-                            bonus_formula = Some(LootBonusFormula::OreDrops);
-                        }
-                        "uniform_bonus_count" => {
-                            let multiplier = func
-                                .get("parameters")
-                                .and_then(|p| p.get("bonusMultiplier"))
-                                .and_then(Value::as_i64)
-                                .unwrap_or(1) as i32;
-                            bonus_formula = Some(LootBonusFormula::UniformBonusCount(multiplier));
-                        }
-                        "binomial_with_bonus_count" => {
-                            let extra = func
-                                .get("parameters")
-                                .and_then(|p| p.get("extra"))
-                                .and_then(Value::as_i64)
-                                .unwrap_or(0) as i32;
-                            let probability =
-                                func.get("parameters")
-                                    .and_then(|p| p.get("probability"))
-                                    .and_then(Value::as_f64)
-                                    .unwrap_or(0.0) as f32;
-                            bonus_formula = Some(LootBonusFormula::BinomialWithBonusCount {
-                                extra,
-                                probability,
-                            });
-                        }
-                        _ => {}
-                    }
+            "apply_bonus" | "looting_enchant" | "enchanted_count_increase" => {
+                if let Some(formula) = parse_bonus_formula(func_type, func) {
+                    counts.bonus(func.get("condition"), formula);
                 }
-            }
-            "looting_enchant" => {
-                let max_bonus = func.get("count").map_or(1, |c| {
-                    c.get("max")
-                        .and_then(Value::as_i64)
-                        .or_else(|| c.as_i64())
-                        .unwrap_or(1) as i32
-                });
-                bonus_formula = Some(LootBonusFormula::UniformBonusCount(max_bonus.max(1)));
             }
             _ => {}
         }
     }
 
-    (min_count, max_count, bonus_formula)
+    let ((min_count, max_count), state_counts, bonus_formula, bonus_condition) = counts.build();
+    (
+        min_count,
+        max_count,
+        bonus_formula,
+        bonus_condition,
+        state_counts,
+    )
+}
+
+fn parse_bonus_formula(func_type: &str, func: &Value) -> Option<LootBonusFormula> {
+    let parameter = |name: &str| func.get("parameters").and_then(|p| p.get(name));
+    if func_type != "apply_bonus" {
+        let max_bonus = func.get("count").map_or(1, |c| {
+            c.get("max")
+                .and_then(Value::as_i64)
+                .or_else(|| c.as_i64())
+                .unwrap_or(1) as i32
+        });
+        return Some(LootBonusFormula::UniformBonusCount(max_bonus.max(1)));
+    }
+    let formula = func
+        .get("formula")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    match formula.strip_prefix("minecraft:").unwrap_or(formula) {
+        "ore_drops" => Some(LootBonusFormula::OreDrops),
+        "uniform_bonus_count" => {
+            let multiplier = parameter("bonusMultiplier")
+                .and_then(Value::as_i64)
+                .unwrap_or(1) as i32;
+            Some(LootBonusFormula::UniformBonusCount(multiplier))
+        }
+        "binomial_with_bonus_count" => {
+            let extra = parameter("extra").and_then(Value::as_i64).unwrap_or(0) as i32;
+            let probability = parameter("probability")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0) as f32;
+            Some(LootBonusFormula::BinomialWithBonusCount { extra, probability })
+        }
+        _ => None,
+    }
 }
 
 fn parse_conditions(val: &Value) -> Vec<DynamicLootCondition> {
@@ -200,9 +231,23 @@ fn parse_conditions(val: &Value) -> Vec<DynamicLootCondition> {
     arr.iter().map(parse_condition).collect()
 }
 
+/// Only the vanilla tool predicates are known here; other references are left unchecked.
+fn parse_predicate_ref(id: &str) -> DynamicLootCondition {
+    match id.strip_prefix("minecraft:").unwrap_or(id) {
+        "tool/can_shear" => DynamicLootCondition::Shears,
+        "tool/can_silk_touch" => DynamicLootCondition::SilkTouch,
+        _ => DynamicLootCondition::None,
+    }
+}
+
+#[expect(clippy::too_many_lines)]
 fn parse_condition(val: &Value) -> DynamicLootCondition {
+    if let Some(id) = val.as_str() {
+        return parse_predicate_ref(id);
+    }
     let cond_type = val
         .get("condition")
+        .or_else(|| val.get("type"))
         .and_then(Value::as_str)
         .unwrap_or_default();
     let cond_type = cond_type.strip_prefix("minecraft:").unwrap_or(cond_type);
@@ -248,9 +293,11 @@ fn parse_condition(val: &Value) -> DynamicLootCondition {
                 chances: chances.into_boxed_slice(),
             }
         }
-        "inverted" => val.get("term").map_or(DynamicLootCondition::None, |term| {
-            DynamicLootCondition::Inverted(Box::new(parse_condition(term)))
-        }),
+        // Unknown terms parse as `None`; inverting one would make the entry never drop.
+        "inverted" => match val.get("term").map(parse_condition) {
+            None | Some(DynamicLootCondition::None) => DynamicLootCondition::None,
+            Some(term) => DynamicLootCondition::Inverted(Box::new(term)),
+        },
         "any_of" => val
             .get("terms")
             .and_then(Value::as_array)
@@ -471,6 +518,194 @@ mod tests {
             pool.entries[1].condition,
             DynamicLootCondition::SurvivesExplosion
         );
+    }
+
+    #[test]
+    fn parse_modifier_and_singular_condition() {
+        let json = r##"{
+            "pools": [
+                {
+                    "rolls": 1,
+                    "entries": [
+                        {
+                            "type": "minecraft:item",
+                            "name": "minecraft:glow_lichen",
+                            "condition": "minecraft:tool/can_shear",
+                            "modifier": [
+                                {
+                                    "type": "minecraft:set_count",
+                                    "add": true,
+                                    "count": 1,
+                                    "condition": {
+                                        "type": "minecraft:match_block",
+                                        "blocks": "#logs",
+                                        "state": {"down": "true"}
+                                    }
+                                },
+                                {"type": "minecraft:set_count", "add": true, "count": -1},
+                                {
+                                    "type": "minecraft:set_count",
+                                    "count": 3,
+                                    "condition": {"type": "minecraft:random_chance", "chance": 0.5}
+                                },
+                                {
+                                    "type": "minecraft:apply_bonus",
+                                    "formula": "minecraft:ore_drops",
+                                    "condition": {
+                                        "type": "minecraft:match_block",
+                                        "blocks": ["minecraft:stone"]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "type": "minecraft:item",
+                            "name": "minecraft:melon_seeds",
+                            "condition": {
+                                "type": "minecraft:inverted",
+                                "term": {"type": "minecraft:damage_source_properties"}
+                            },
+                            "modifier": {
+                                "type": "minecraft:set_count",
+                                "count": {"type": "minecraft:binomial", "n": 3, "p": 0.5}
+                            }
+                        },
+                        {
+                            "type": "minecraft:alternatives",
+                            "condition": "minecraft:tool/can_silk_touch",
+                            "children": [{"type": "minecraft:item", "name": "minecraft:gravel"}]
+                        }
+                    ]
+                }
+            ]
+        }"##;
+
+        let table = parse_loot_table(json).expect("valid loot table");
+        let [lichen, seeds, gravel] = table.pools[0].entries.as_slice() else {
+            panic!("expected three entries");
+        };
+        assert_eq!(lichen.condition, DynamicLootCondition::Shears);
+        assert_eq!((lichen.min_count, lichen.max_count), (1, 1));
+        assert_eq!(lichen.state_counts.len(), 2);
+        let face = lichen.state_counts[0].condition.as_ref();
+        assert_eq!(
+            face.expect("match_block condition").block,
+            "#minecraft:logs"
+        );
+        assert!(lichen.state_counts[1].condition.is_none());
+        assert_eq!(lichen.bonus_formula, None);
+
+        assert_eq!(seeds.condition, DynamicLootCondition::None);
+        assert_eq!((seeds.min_count, seeds.max_count), (1, 1));
+        assert_eq!(seeds.state_counts[0].binomial, Some(0.5));
+
+        assert_eq!(gravel.condition, DynamicLootCondition::SilkTouch);
+    }
+
+    #[test]
+    fn parse_skips_unchecked_modifier_conditions() {
+        let json = r#"{
+            "pools": [{
+                "rolls": 1,
+                "entries": [{
+                    "type": "minecraft:item",
+                    "name": "minecraft:glow_lichen",
+                    "modifier": [
+                        {
+                            "type": "minecraft:set_count",
+                            "count": 5,
+                            "condition": {
+                                "type": "minecraft:match_block",
+                                "blocks": "minecraft:chest",
+                                "nbt": "{Lock:\"key\"}"
+                            }
+                        },
+                        {
+                            "type": "minecraft:enchanted_count_increase",
+                            "count": 2,
+                            "condition": {"type": "minecraft:random_chance", "chance": 0.5}
+                        },
+                        {
+                            "type": "minecraft:apply_bonus",
+                            "formula": "minecraft:ore_drops",
+                            "condition": {
+                                "type": "minecraft:match_block",
+                                "blocks": "minecraft:glow_lichen"
+                            }
+                        },
+                        {
+                            "type": "minecraft:apply_bonus",
+                            "formula": "minecraft:uniform_bonus_count",
+                            "parameters": {"bonusMultiplier": 1}
+                        }
+                    ]
+                }]
+            }]
+        }"#;
+
+        let table = parse_loot_table(json).expect("valid loot table");
+        let [lichen] = table.pools[0].entries.as_slice() else {
+            panic!("expected one entry");
+        };
+        assert!(lichen.state_counts.is_empty());
+        assert_eq!((lichen.min_count, lichen.max_count), (1, 1));
+        assert_eq!(lichen.bonus_formula, Some(LootBonusFormula::OreDrops));
+        let bonus = lichen.bonus_condition.as_ref();
+        assert_eq!(
+            bonus.expect("match_block bonus condition").block,
+            "minecraft:glow_lichen"
+        );
+    }
+
+    #[test]
+    fn parse_keeps_modifier_order() {
+        let json = r#"{
+            "pools": [{
+                "rolls": 1,
+                "entries": [
+                    {
+                        "type": "minecraft:item",
+                        "name": "minecraft:diamond",
+                        "modifier": [
+                            {"type": "minecraft:set_count", "count": 5},
+                            {"type": "minecraft:apply_bonus", "formula": "minecraft:ore_drops"},
+                            {"type": "minecraft:set_count", "count": 2}
+                        ]
+                    },
+                    {
+                        "type": "minecraft:item",
+                        "name": "minecraft:stone",
+                        "modifier": [
+                            {
+                                "type": "minecraft:set_count",
+                                "count": 3,
+                                "condition": {"type": "minecraft:match_block", "blocks": "minecraft:stone"}
+                            },
+                            {"type": "minecraft:set_count", "count": 1}
+                        ]
+                    }
+                ]
+            }]
+        }"#;
+
+        let table = parse_loot_table(json).expect("valid loot table");
+        let [diamond, stone] = table.pools[0].entries.as_slice() else {
+            panic!("expected two entries");
+        };
+        assert_eq!((diamond.min_count, diamond.max_count), (5, 5));
+        assert_eq!(diamond.bonus_formula, Some(LootBonusFormula::OreDrops));
+        let [after] = diamond.state_counts.as_slice() else {
+            panic!("expected the set_count after the bonus");
+        };
+        assert!(after.after_bonus && after.condition.is_none());
+        assert_eq!((after.min_count, after.max_count), (2, 2));
+
+        assert_eq!((stone.min_count, stone.max_count), (1, 1));
+        let [conditional, plain] = stone.state_counts.as_slice() else {
+            panic!("expected both set_counts in order");
+        };
+        assert!(conditional.condition.is_some() && plain.condition.is_none());
+        assert_eq!((plain.min_count, plain.after_bonus), (1, false));
     }
 
     #[test]
