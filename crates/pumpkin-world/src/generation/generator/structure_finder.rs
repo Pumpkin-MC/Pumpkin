@@ -239,7 +239,8 @@ fn find_nearest_concentric(
     _rings: &ConcentricRingsStructurePlacement,
     global_cache: &GlobalStructureCache,
 ) -> Option<FoundStructure> {
-    let strongholds = global_cache.get_stronghold_chunks();
+    // No block, callers run in server tasks and the tick, which shutdown waits on
+    let strongholds = global_cache.try_get_stronghold_chunks();
     if strongholds.is_empty() {
         return None;
     }
