@@ -31,7 +31,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
-use pumpkin_protocol::bedrock::client::{CAddActor, CSetActorMotion};
+use pumpkin_protocol::bedrock::client::CAddActor;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::{
     PositionFlag,
@@ -42,8 +42,8 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
     codec::var_ulong::VarULong,
     java::client::play::{
-        CEntityPositionSync, CEntityVelocity, CPlayerPosition, CSetEntityMetadata, CSetPassengers,
-        CSpawnEntity, Metadata, MetadataSerializer,
+        CEntityPositionSync, CPlayerPosition, CSetEntityMetadata, CSetPassengers, CSpawnEntity,
+        Metadata, MetadataSerializer,
     },
 };
 use pumpkin_util::math::vector3::Axis;
@@ -96,6 +96,7 @@ pub mod synched_entity_data;
 pub mod tnt;
 pub mod r#type;
 pub mod vehicle;
+pub mod velocity;
 
 pub use lightning::LightningBoltEntity;
 
@@ -539,54 +540,9 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    /// Vanilla `Entity.push(Entity)`.
     fn push(&self, entity: &dyn EntityBase) {
-        let self_entity = self.get_entity();
-        let other_entity = entity.get_entity();
-
-        if self_entity.no_physics.load(Ordering::Relaxed)
-            || other_entity.no_physics.load(Ordering::Relaxed)
-        {
-            return;
-        }
-
-        if self_entity.has_passenger(other_entity.entity_id)
-            || other_entity.has_passenger(self_entity.entity_id)
-        {
-            return;
-        }
-
-        let mut dx = other_entity.pos.load().x - self_entity.pos.load().x;
-        let mut dz = other_entity.pos.load().z - self_entity.pos.load().z;
-        let mut d = dx.abs().max(dz.abs());
-        if d >= 0.01 {
-            d = d.sqrt();
-            dx /= d;
-            dz /= d;
-            let mut d2 = 1.0 / d;
-            if d2 > 1.0 {
-                d2 = 1.0;
-            }
-            dx *= d2;
-            dz *= d2;
-            dx *= 0.05;
-            dz *= 0.05;
-
-            if !self_entity.has_passengers() && self.is_pushable() {
-                let mut vel = self_entity.velocity.load();
-                vel.x -= dx;
-                vel.z -= dz;
-                self_entity.velocity.store(vel);
-                self_entity.velocity_dirty.store(true, Ordering::SeqCst);
-            }
-
-            if !other_entity.has_passengers() && entity.is_pushable() {
-                let mut vel = other_entity.velocity.load();
-                vel.x += dx;
-                vel.z += dz;
-                other_entity.velocity.store(vel);
-                other_entity.velocity_dirty.store(true, Ordering::SeqCst);
-            }
-        }
+        velocity::push_apart(self, entity);
     }
 
     fn on_hit(&self, _hit: crate::entity::projectile::ProjectileHit) {}
@@ -844,6 +800,8 @@ pub struct Entity {
     pub velocity_dirty: AtomicBool,
     /// velocity goes to the own client
     pub sync_velocity: AtomicBool,
+    /// Pushed by a living entity. Java clients predict that push, Bedrock clients need it sent.
+    pub predicted_push: AtomicBool,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
     /// The last sent yaw value (encoded as u8) for change detection
@@ -977,6 +935,7 @@ impl Entity {
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
             sync_velocity: AtomicBool::new(false),
+            predicted_push: AtomicBool::new(false),
             removed: AtomicBool::new(false),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -985,22 +944,6 @@ impl Entity {
             last_sent_velocity: AtomicCell::new(Vector3::default()),
             custom_data: std::sync::Mutex::new(NbtCompound::new()),
         }
-    }
-
-    pub fn add_velocity(&self, velocity: Vector3<f64>) {
-        self.set_velocity(self.velocity.load() + velocity);
-    }
-
-    /// Vanilla `Entity.push(x, 0, z)`: sent with the next tick (`needsSync`).
-    pub fn push_velocity(&self, x: f64, z: f64) {
-        self.velocity
-            .store(self.velocity.load() + Vector3::new(x, 0.0, z));
-        self.velocity_dirty.store(true, Ordering::SeqCst);
-    }
-
-    pub fn set_velocity(&self, velocity: Vector3<f64>) {
-        self.velocity.store(velocity);
-        self.send_velocity();
     }
 
     /// Updates the world reference for this entity.
@@ -1165,36 +1108,6 @@ impl Entity {
     pub fn set_has_no_gravity(&self, no_gravity: bool) {
         self.has_no_gravity.store(no_gravity, Ordering::Relaxed);
         self.set_synced_data(tracked_data::entity::DATA_NO_GRAVITY, no_gravity);
-    }
-
-    /// Vanilla `hurtMarked` path: immediate, to watchers and self.
-    pub fn send_velocity(&self) {
-        self.send_velocity_to_watchers();
-        if self.entity_type == &EntityType::PLAYER
-            && let Some(player) = self.world.load().get_player_by_id(self.entity_id)
-        {
-            player.send_own_velocity(self.velocity.load());
-        }
-    }
-
-    /// watchers only: Own client predicts its pushes.
-    pub fn send_velocity_to_watchers(&self) {
-        let velocity = self.velocity.load();
-        self.last_sent_velocity.store(velocity);
-        self.world.load().send_to_tracking_players_editioned(
-            self,
-            &CEntityVelocity::new(self.entity_id.into(), velocity),
-            &CSetActorMotion {
-                target_runtime_id: VarULong(self.entity_id as u64),
-                motion: velocity.to_f32_lossy(),
-                tick: VarULong(0),
-            },
-        );
-    }
-
-    /// next fuse velocity send includes self
-    pub fn mark_hurt(&self) {
-        self.sync_velocity.store(true, Ordering::SeqCst);
     }
 
     #[must_use]
@@ -1402,83 +1315,6 @@ impl Entity {
             .store(horizontal_collision, Ordering::SeqCst);
 
         adjusted_movement
-    }
-
-    /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
-    /// `LivingEntity.takeKnockback()`
-    /// This function calculates the entity's new velocity based on the specified knockback strength and direction.
-    ///
-    /// Knockback resistance is not applied here, because it is a `LivingEntity`
-    /// attribute and this is an `Entity` method. Callers modelling vanilla's
-    /// `LivingEntity.knockback` scale `strength` with
-    /// `combat::knockback_after_resistance` first; callers modelling vanilla's raw
-    /// `Entity.push` (such as the ender dragon) pass `strength` unscaled.
-    ///
-    /// Fires `EntityKnockbackByEntityEvent` (with a `source`), then `EntityKnockbackEvent`.
-    pub fn apply_knockback(
-        &self,
-        mut strength: f64,
-        mut x: f64,
-        mut z: f64,
-        source: Option<&Self>,
-    ) {
-        use crate::plugin::api::events::entity::{
-            EntityKnockbackByEntityEvent, EntityKnockbackEvent,
-        };
-        let server = self.world.load().server.upgrade();
-
-        // Bukkit fires even at zero strength, so plugins can add knockback.
-        if let (Some(server), Some(source)) = (&server, source) {
-            let mut event =
-                EntityKnockbackByEntityEvent::new(self.entity_id, source.entity_id, strength, x, z);
-            server.plugin_manager.fire_blocking(server, &mut event);
-            if event.cancelled {
-                return;
-            }
-            (strength, x, z) = (event.force, event.x, event.z);
-        }
-        if strength <= 0.0 {
-            return;
-        }
-
-        // This has some vanilla magic
-
-        while x.mul_add(x, z * z) < 1.0E-5 {
-            x = (rand::random::<f64>() - rand::random::<f64>()) * 0.01;
-
-            z = (rand::random::<f64>() - rand::random::<f64>()) * 0.01;
-        }
-
-        let var8 = Vector3::new(x, 0.0, z).normalize() * strength;
-
-        let velocity = self.velocity.load();
-
-        let mut knockback = Vector3::new(
-            velocity.x / 2.0 - var8.x,
-            if self.on_ground.load(Relaxed) {
-                (velocity.y / 2.0 + strength).min(0.4)
-            } else {
-                velocity.y
-            },
-            velocity.z / 2.0 - var8.z,
-        );
-
-        if let Some(server) = &server {
-            let mut event = EntityKnockbackEvent {
-                entity_id: self.entity_id,
-                hit_by_id: source.map(|source| source.entity_id),
-                knockback,
-                cancelled: false,
-            };
-            server.plugin_manager.fire_blocking(server, &mut event);
-            if event.cancelled {
-                return;
-            }
-            knockback = event.knockback;
-        }
-
-        self.velocity.store(knockback);
-        self.velocity_dirty.store(true, Ordering::SeqCst);
     }
 
     // Part of LivingEntity.tickMovement() in yarn

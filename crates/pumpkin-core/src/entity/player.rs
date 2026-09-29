@@ -27,7 +27,7 @@ use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::client::update_abilities::{Ability, CUpdateAbilities};
 use pumpkin_protocol::bedrock::client::{
-    CSetActorMotion, CommandPermissionLevel, PlayerPermissionLevel, SerializedAbilitiesData,
+    CommandPermissionLevel, PlayerPermissionLevel, SerializedAbilitiesData,
 };
 use pumpkin_protocol::bedrock::client::{
     SerializedAbilitiesDataSerializedLayer,
@@ -267,14 +267,13 @@ use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CAwardStats, CBlockUpdate, CChangeDifficulty,
     CCloseContainer, CCombatDeath, CCustomPayload, CDisguisedChatMessage, CEntityAnimation,
-    CEntityPositionSync, CEntityVelocity, CGameEvent, CHurtAnimation, CItemCooldown, CMapItemData,
-    COpenBook, COpenScreen, COpenSignEditor, CParticle, CPlayServerLinks, CPlayerAbilities,
-    CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetCamera,
-    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
-    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
-    CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
-    CUpdateTime, GameEvent, MapIcon, MapPatch, PlayerAction, PlayerInfoFlags, PlayerSpawnData,
-    PreviousMessage, Statistic,
+    CEntityPositionSync, CGameEvent, CHurtAnimation, CItemCooldown, CMapItemData, COpenBook,
+    COpenScreen, COpenSignEditor, CParticle, CPlayServerLinks, CPlayerAbilities, CPlayerInfoUpdate,
+    CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetCamera, CSetContainerContent,
+    CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience, CSetHealth,
+    CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage,
+    CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
+    MapIcon, MapPatch, PlayerAction, PlayerInfoFlags, PlayerSpawnData, PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -2558,80 +2557,6 @@ impl Player {
         }
         let packet = COpenSignEditor::new(location, is_front_text);
         self.try_send_client_packet(&packet);
-    }
-
-    pub fn set_velocity(&self, velocity: Vector3<f64>) {
-        if let Some(velocity) = self.fire_velocity_event(velocity) {
-            self.living_entity.entity.set_velocity(velocity);
-        }
-    }
-
-    /// `PlayerVelocityEvent` -> the velocity to send, `None` if cancelled
-    fn fire_velocity_event(&self, velocity: Vector3<f64>) -> Option<Vector3<f64>> {
-        use crate::plugin::api::events::player::player_velocity::PlayerVelocityEvent;
-        let world = self.world();
-        let Some(server) = world.server.upgrade() else {
-            return Some(velocity);
-        };
-        if !server.plugin_manager.has_handlers::<PlayerVelocityEvent>() {
-            return Some(velocity);
-        }
-        let Some(player) = world.get_player_by_uuid(self.gameprofile.id) else {
-            return Some(velocity);
-        };
-        let mut event = PlayerVelocityEvent {
-            player,
-            velocity,
-            cancelled: false,
-        };
-        server.plugin_manager.fire_blocking(&server, &mut event);
-        (!event.cancelled).then_some(event.velocity)
-    }
-
-    /// Tick send of pushed or knocked back velocity. `hurt` is vanilla `hurtMarked`.
-    /// Cancelling the event sends nothing, like Bukkit.
-    pub fn sync_velocity(&self, hurt: bool) {
-        let entity = &self.living_entity.entity;
-        let velocity = entity.velocity.load();
-        let Some(new_velocity) = self.fire_velocity_event(velocity) else {
-            return;
-        };
-        let changed = new_velocity != velocity;
-        if changed {
-            entity.velocity.store(new_velocity);
-        }
-        entity.send_velocity_to_watchers();
-        // Java predicts pushes itself, Bedrock does not.
-        if hurt || changed || self.client.bedrock().is_some() {
-            self.send_own_velocity(new_velocity);
-        }
-    }
-
-    /// Velocity to the own client. For Bedrock -> tagged with the last processed input tick.
-    pub fn send_own_velocity(&self, velocity: Vector3<f64>) {
-        let tick = self
-            .client
-            .bedrock()
-            .map_or(0, |client| client.input_tick.load(Ordering::Relaxed));
-        self.try_enqueue_packet_editioned(
-            &CEntityVelocity::new(self.entity_id().into(), velocity),
-            &CSetActorMotion {
-                target_runtime_id: VarULong(self.entity_id() as u64),
-                motion: velocity.to_f32_lossy(),
-                tick: VarULong(tick),
-            },
-        );
-    }
-
-    pub fn apply_knockback(&self, strength: f64, x: f64, z: f64) {
-        let current_vel = self.living_entity.entity.velocity.load();
-        let norm = x.hypot(z);
-        if norm > 0.0 {
-            let vx = current_vel.x / 2.0 - (x / norm) * strength;
-            let vz = current_vel.z / 2.0 - (z / norm) * strength;
-            let vy = (current_vel.y / 2.0 + strength).min(0.4);
-            self.set_velocity(Vector3::new(vx, vy, vz));
-        }
     }
 
     pub fn set_movement_locked(&self, locked: bool) {

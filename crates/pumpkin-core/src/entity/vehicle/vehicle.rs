@@ -52,10 +52,7 @@ impl VehicleEntity {
                 .fire_blocking(&server, &mut update_event);
         }
 
-        // Coalesce pushed velocity to once per tick (boats use the default push()).
-        if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-            self.entity.send_velocity();
-        }
+        self.entity.flush_velocity(None);
     }
 
     pub async fn create(&self) {
