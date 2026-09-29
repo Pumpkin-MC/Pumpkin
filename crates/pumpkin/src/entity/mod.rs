@@ -347,6 +347,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    /// `other` is solid while this entity moves.
+    fn can_collide_with(&self, _other: &dyn EntityBase) -> bool {
+        false
+    }
+
+    /// Skips the entity scan for movers whose `can_collide_with` is always false.
+    fn has_entity_collisions(&self) -> bool {
+        false
+    }
+
     fn can_hit(&self) -> bool {
         false
     }
@@ -1232,12 +1242,11 @@ impl Entity {
 
         let bounding_box = self.bounding_box.load();
 
-        let (collisions, block_positions) = self
-            .world
-            .load()
-            .get_block_collisions(bounding_box.stretch(movement), caller);
+        let area = bounding_box.stretch(movement);
+        let (collisions, block_positions) = self.world.load().get_block_collisions(area, caller);
+        let entity_collisions = self.entity_collisions(caller, area);
 
-        if collisions.is_empty() {
+        if collisions.is_empty() && entity_collisions.is_empty() {
             return movement;
         }
 
@@ -1283,6 +1292,26 @@ impl Entity {
                     .store(supporting_block_pos.is_some(), Ordering::SeqCst);
                 self.supporting_block_pos.store(supporting_block_pos);
             }
+
+            // Landing on a solid entity.
+            let mut max_time = 1.0;
+            for inert_box in &entity_collisions {
+                if let Some(collision_time) = bounding_box.calculate_collision_time(
+                    inert_box,
+                    adjusted_movement,
+                    Axis::Y,
+                    max_time,
+                ) {
+                    max_time = collision_time;
+                }
+            }
+            if max_time != 1.0 {
+                let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
+                adjusted_movement.set_axis(Axis::Y, changed_component);
+                if movement.get_axis(Axis::Y) < 0.0 {
+                    self.on_ground.store(true, Ordering::SeqCst);
+                }
+            }
         }
 
         let mut horizontal_collision = false;
@@ -1294,7 +1323,7 @@ impl Entity {
 
             let mut max_time = 1.0;
 
-            for inert_box in &collisions {
+            for inert_box in collisions.iter().chain(&entity_collisions) {
                 if let Some(collision_time) = bounding_box.calculate_collision_time(
                     inert_box,
                     adjusted_movement,
@@ -3189,6 +3218,40 @@ impl Entity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .is_some()
+    }
+
+    /// Vanilla `getRootVehicle`, by id.
+    pub fn root_vehicle_id(&self) -> i32 {
+        let mut root = self.get_vehicle();
+        let mut id = self.entity_id;
+        while let Some(vehicle) = root {
+            id = vehicle.get_entity().entity_id;
+            root = vehicle.get_entity().get_vehicle();
+        }
+        id
+    }
+
+    /// Vanilla `isPassengerOfSameVehicle`.
+    pub fn is_passenger_of_same_vehicle(&self, other: &Self) -> bool {
+        self.root_vehicle_id() == other.root_vehicle_id()
+    }
+
+    /// boxes of entities `caller` can't move through
+    fn entity_collisions(&self, caller: &dyn EntityBase, area: BoundingBox) -> Vec<BoundingBox> {
+        if !caller.has_entity_collisions() {
+            return Vec::new();
+        }
+        self.world
+            .load()
+            .get_all_at_box(&area.expand_all(1.0E-7))
+            .into_iter()
+            .filter(|other| {
+                other.get_entity().entity_id != self.entity_id
+                    && !other.is_spectator()
+                    && caller.can_collide_with(other.as_ref())
+            })
+            .map(|other| other.get_entity().bounding_box.load())
+            .collect()
     }
 
     pub fn get_vehicle(&self) -> Option<Arc<dyn EntityBase>> {

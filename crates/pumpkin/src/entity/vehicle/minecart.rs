@@ -6,7 +6,7 @@ mod rideable;
 mod tnt;
 
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use pumpkin_protocol::java::server::play::SPlayerInput;
 use rand::RngExt;
@@ -28,6 +28,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::wrap_degrees;
 
 use crate::entity::vehicle::vehicle::VehicleEntity;
 use crate::entity::velocity;
@@ -38,27 +39,35 @@ use hopper::HopperMinecart;
 use rideable::RideableMinecart;
 use tnt::TntMinecart;
 
+/// Vanilla `AbstractMinecart.exits`: a slope's lower end sits one block down.
 const fn get_exits(
     shape: pumpkin_data::block_properties::RailShape,
 ) -> (Vector3<f64>, Vector3<f64>) {
     use pumpkin_data::block_properties::RailShape;
+    const WEST: Vector3<f64> = Vector3::new(-1.0, 0.0, 0.0);
+    const EAST: Vector3<f64> = Vector3::new(1.0, 0.0, 0.0);
+    const NORTH: Vector3<f64> = Vector3::new(0.0, 0.0, -1.0);
+    const SOUTH: Vector3<f64> = Vector3::new(0.0, 0.0, 1.0);
+    const fn below(exit: Vector3<f64>) -> Vector3<f64> {
+        Vector3::new(exit.x, -1.0, exit.z)
+    }
     match shape {
-        RailShape::NorthSouth => (Vector3::new(0.0, 0.0, -1.0), Vector3::new(0.0, 0.0, 1.0)),
-        RailShape::EastWest => (Vector3::new(-1.0, 0.0, 0.0), Vector3::new(1.0, 0.0, 0.0)),
-        RailShape::AscendingEast => (Vector3::new(-1.0, 0.0, 0.0), Vector3::new(1.0, 1.0, 0.0)),
-        RailShape::AscendingWest => (Vector3::new(1.0, 0.0, 0.0), Vector3::new(-1.0, 1.0, 0.0)),
-        RailShape::AscendingNorth => (Vector3::new(0.0, 0.0, 1.0), Vector3::new(0.0, 1.0, -1.0)),
-        RailShape::AscendingSouth => (Vector3::new(0.0, 0.0, -1.0), Vector3::new(0.0, 1.0, 1.0)),
-        RailShape::SouthEast => (Vector3::new(0.0, 0.0, 1.0), Vector3::new(1.0, 0.0, 0.0)),
-        RailShape::SouthWest => (Vector3::new(0.0, 0.0, 1.0), Vector3::new(-1.0, 0.0, 0.0)),
-        RailShape::NorthWest => (Vector3::new(0.0, 0.0, -1.0), Vector3::new(-1.0, 0.0, 0.0)),
-        RailShape::NorthEast => (Vector3::new(0.0, 0.0, -1.0), Vector3::new(1.0, 0.0, 0.0)),
+        RailShape::NorthSouth => (NORTH, SOUTH),
+        RailShape::EastWest => (WEST, EAST),
+        RailShape::AscendingEast => (below(WEST), EAST),
+        RailShape::AscendingWest => (WEST, below(EAST)),
+        RailShape::AscendingNorth => (NORTH, below(SOUTH)),
+        RailShape::AscendingSouth => (below(NORTH), SOUTH),
+        RailShape::SouthEast => (SOUTH, EAST),
+        RailShape::SouthWest => (SOUTH, WEST),
+        RailShape::NorthWest => (NORTH, WEST),
+        RailShape::NorthEast => (NORTH, EAST),
     }
 }
 
 /// Vanilla `getCurrentBlockPosOrRailBelow`.
 fn rail_block_pos(world: &World, pos: Vector3<f64>) -> BlockPos {
-    let block_pos = pos.to_block_pos();
+    let block_pos = BlockPos::floored_v(pos);
     let below = BlockPos(Vector3::new(
         block_pos.0.x,
         block_pos.0.y - 1,
@@ -183,6 +192,7 @@ const STOP_SPEED: f64 = 1.0E-4;
 pub struct MinecartEntity {
     pub vehicle: VehicleEntity,
     kind: MinecartKind,
+    flipped: AtomicBool,
 }
 
 enum MinecartKind {
@@ -211,6 +221,7 @@ impl MinecartEntity {
         Self {
             vehicle: VehicleEntity::new(entity),
             kind,
+            flipped: AtomicBool::new(false),
         }
     }
 
@@ -448,15 +459,31 @@ impl MinecartEntity {
     }
 
     fn store_movement(&self, mut movement: Vector3<f64>) {
-        let entity = &self.vehicle.entity;
         if movement.length() < STOP_SPEED {
             movement = Vector3::default();
         }
-        let was_moving = entity.velocity.load() != Vector3::default();
-        entity.velocity.store(movement);
-        if was_moving && movement == Vector3::default() {
-            entity.send_velocity();
+        self.vehicle.entity.velocity.store(movement);
+    }
+
+    /// face the movement, flip on reversal
+    fn update_rotation(&self, start: Vector3<f64>, start_yaw: f32) {
+        let entity = &self.vehicle.entity;
+        let pos = entity.pos.load();
+        let (x_diff, z_diff) = (start.x - pos.x, start.z - pos.z);
+        let mut yaw = entity.yaw.load();
+        if x_diff * x_diff + z_diff * z_diff > 0.001 {
+            yaw = z_diff.atan2(x_diff).to_degrees() as f32;
+            if self.flipped.load(Ordering::Relaxed) {
+                yaw += 180.0;
+            }
         }
+        let rot_diff = wrap_degrees(yaw - start_yaw);
+        if !(-170.0..170.0).contains(&rot_diff) {
+            yaw += 180.0;
+            self.flipped.fetch_xor(true, Ordering::Relaxed);
+        }
+        entity.pitch.store(0.0);
+        entity.yaw.store(yaw % 360.0);
     }
 
     /// Vanilla `OldMinecartBehavior.pushAndPickupEntities`.
@@ -524,7 +551,6 @@ impl MinecartEntity {
             entity
                 .velocity
                 .store(velocity.multiply(factor, 1.0, factor));
-            entity.velocity_dirty.store(true, Ordering::SeqCst);
         };
         match (
             matches!(self.kind, MinecartKind::Furnace(_)),
@@ -594,6 +620,8 @@ impl EntityBase for MinecartEntity {
         }
 
         let world = self.vehicle.entity.world.load();
+        let start = self.vehicle.entity.pos.load();
+        let start_yaw = self.vehicle.entity.yaw.load();
         let block_pos = rail_block_pos(&world, self.vehicle.entity.pos.load());
         let (block, state_id) = world.get_block_and_state_id(&block_pos);
         let is_powered_rail = block.id == Block::POWERED_RAIL.id;
@@ -689,6 +717,7 @@ impl EntityBase for MinecartEntity {
             }
         }
 
+        self.update_rotation(start, start_yaw);
         self.push_and_pickup_entities(caller);
 
         // Vanilla `MinecartTNT.tick`, after the pushes.
@@ -720,6 +749,11 @@ impl EntityBase for MinecartEntity {
 
     fn is_pushable(&self) -> bool {
         true
+    }
+
+    /// Bedrock minecart origin sits 0.35 above the Java one.
+    fn bedrock_y_offset(&self) -> f64 {
+        0.35
     }
 
     /// Vanilla `AbstractMinecart.push`.
@@ -758,6 +792,19 @@ impl EntityBase for MinecartEntity {
 
     fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
         true
+    }
+
+    fn has_entity_collisions(&self) -> bool {
+        true
+    }
+
+    /// Vanilla `AbstractBoat.canVehicleCollide`.
+    fn can_collide_with(&self, other: &dyn EntityBase) -> bool {
+        (other.is_collidable(None) || other.is_pushable())
+            && !self
+                .vehicle
+                .entity
+                .is_passenger_of_same_vehicle(other.get_entity())
     }
 
     fn init_data_tracker(&self) {

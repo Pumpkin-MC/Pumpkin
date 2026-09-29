@@ -245,7 +245,7 @@ impl VehicleEntity {
         let current_side = self.get_hurt_dir();
         self.set_hurt_dir(-current_side);
         self.set_hurt_time(10);
-        self.entity.velocity_dirty.store(true, Ordering::SeqCst);
+        self.entity.mark_hurt();
 
         let current_strength = self.get_damage();
         let new_strength = current_strength + amount * 10.0;
