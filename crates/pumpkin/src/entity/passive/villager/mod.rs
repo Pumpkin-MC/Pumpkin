@@ -1805,6 +1805,13 @@ impl VillagerEntity {
             );
         }
 
+        // AI-made: while a villager is sleeping, keep it motionless and skip the rest of this tick.
+        // This guard is intentionally minimal and has not been play-tested yet.
+        if self.get_entity().pose.load() == EntityPose::Sleeping {
+            self.get_entity().set_velocity(Vector3::default());
+            return;
+        }
+
         // 2. Iron Golem spawning logic (only for adults)
         let profession = self
             .villager_data
