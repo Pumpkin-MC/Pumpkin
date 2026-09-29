@@ -643,12 +643,18 @@ impl ToFromWasmEvent for CreatureSpawnEvent {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
+        let player = self.player.as_ref().map(|player| {
+            state
+                .add(player.clone())
+                .expect("failed to add player resource")
+        });
         Event::CreatureSpawnEvent(CreatureSpawnEventData {
             entity_id: self.entity_id,
             entity_type: self.entity_type.clone(),
             position: to_wasm_position(self.position),
             target_world,
             spawn_reason: self.spawn_reason.clone(),
+            player,
             cancelled: self.cancelled,
         })
     }
@@ -668,6 +674,7 @@ impl ToFromWasmEvent for CreatureSpawnEvent {
                 position: from_wasm_position(data.position),
                 world: consume_world(state, &data.target_world),
                 spawn_reason: data.spawn_reason,
+                player: data.player.map(|player| consume_player(state, &player)),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

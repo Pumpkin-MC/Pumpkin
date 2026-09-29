@@ -3,8 +3,9 @@ use std::sync::{Arc, Weak};
 
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::boundingbox::EntityDimensions;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -14,7 +15,7 @@ use crate::entity::{
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     living::LivingEntity,
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, hoglin::throw_target},
 };
 use crate::world::World;
 
@@ -25,6 +26,13 @@ pub struct ZoglinEntity {
 
 impl ZoglinEntity {
     pub const XP_REWARD: u32 = 5;
+    const BABY_ATTACK_DAMAGE: f64 = 0.5;
+
+    pub const BABY_DIMENSIONS: EntityDimensions = EntityDimensions {
+        width: 0.75,
+        height: 0.85,
+        eye_height: 0.625,
+    };
 
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
@@ -107,6 +115,26 @@ impl ZoglinEntity {
 
         mob_arc
     }
+
+    #[must_use]
+    pub fn is_baby(&self) -> bool {
+        self.is_baby.load(Ordering::Relaxed)
+    }
+
+    /// Vanilla `Zoglin.setBaby`; growing up keeps the lowered attack damage, as in vanilla.
+    pub fn set_baby(&self, baby: bool) {
+        self.mob_entity
+            .set_baby_flag(&self.is_baby, tracked_data::zoglin::DATA_BABY_ID, baby);
+        let living = &self.mob_entity.living_entity;
+        living.entity.entity_dimension.store(if baby {
+            Self::BABY_DIMENSIONS
+        } else {
+            Entity::type_dimensions(living.entity.entity_type)
+        });
+        if baby {
+            living.set_attribute_base(&Attributes::ATTACK_DAMAGE, Self::BABY_ATTACK_DAMAGE);
+        }
+    }
 }
 
 impl Mob for ZoglinEntity {
@@ -114,29 +142,36 @@ impl Mob for ZoglinEntity {
         &self.mob_entity
     }
 
-    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        if self.is_baby.load(Ordering::Relaxed) {
-            nbt.put_bool("IsBaby", true);
+    fn finalize_spawn(
+        &self,
+        _world: &Arc<World>,
+        group_data: Option<crate::entity::mob::spawn::SpawnGroupData>,
+    ) -> Option<crate::entity::mob::spawn::SpawnGroupData> {
+        if rand::random::<f32>() < 0.2 {
+            self.set_baby(true);
         }
+        self.mob_entity.finalize_spawn_base();
+        group_data
+    }
+
+    fn spawn_as_baby(&self) -> bool {
+        self.set_baby(true);
+        true
+    }
+
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_bool("IsBaby", self.is_baby());
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        if let Some(baby) = nbt.get_bool("IsBaby") {
-            self.is_baby.store(baby, Ordering::Relaxed);
-        }
+        self.set_baby(nbt.get_bool("IsBaby").unwrap_or(false));
     }
 
     fn on_attack(&self, target: &dyn EntityBase) {
-        let my_pos = self.mob_entity.living_entity.entity.pos.load();
-        let target_pos = target.get_entity().pos.load();
-        let dx = target_pos.x - my_pos.x;
-        let dz = target_pos.z - my_pos.z;
-        let dist = dx.hypot(dz).max(0.001);
-        let vel = target.get_entity().velocity.load();
-        target.get_entity().velocity.store(Vector3::new(
-            vel.x + (dx / dist) * 0.5,
-            0.5,
-            vel.z + (dz / dist) * 0.5,
-        ));
+        // Vanilla HoglinBase.hurtAndThrowTarget: babies don't throw.
+        if self.is_baby() {
+            return;
+        }
+        throw_target(&self.mob_entity.living_entity.entity, target);
     }
 }

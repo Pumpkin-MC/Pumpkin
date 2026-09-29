@@ -30,6 +30,7 @@ pub mod zombie_villager;
 pub struct ZombieEntityBase {
     pub mob_entity: MobEntity,
     pub can_break_doors: AtomicBool,
+    pub is_baby: AtomicBool,
 }
 
 impl ZombieEntityBase {
@@ -42,6 +43,7 @@ impl ZombieEntityBase {
         let zombie = Self {
             mob_entity,
             can_break_doors: AtomicBool::new(can_break_doors),
+            is_baby: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(zombie);
         let mob_weak: Weak<dyn Mob> = {
@@ -134,9 +136,32 @@ impl ZombieEntityBase {
     }
 }
 
+impl ZombieEntityBase {
+    /// Vanilla `Zombie.setBaby`: the baby state is only the synced flag, it never ages up.
+    // TODO: vanilla baby zombies get the +50% SPEED_MODIFIER_BABY and 2.5x XP
+    // (`Zombie.getBaseExperienceReward`), unlike passive babies which drop none.
+    pub fn set_baby(&self, baby: bool) {
+        self.mob_entity.set_baby_flag(
+            &self.is_baby,
+            pumpkin_data::tracked_data::zombie::BABY,
+            baby,
+        );
+    }
+
+    #[must_use]
+    pub fn is_baby(&self) -> bool {
+        self.is_baby.load(Ordering::Relaxed)
+    }
+}
+
 impl Mob for ZombieEntityBase {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn spawn_as_baby(&self) -> bool {
+        self.set_baby(true);
+        true
     }
 
     fn populate_default_equipment_slots(
@@ -204,12 +229,15 @@ impl Mob for ZombieEntityBase {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        // Vanilla Zombie.addAdditionalSaveData; shared by every zombie-family mob.
+        nbt.put_bool("IsBaby", self.is_baby());
         if self.can_break_doors() {
             nbt.put_bool("CanBreakDoors", true);
         }
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        self.set_baby(nbt.get_bool("IsBaby").unwrap_or(false));
         if let Some(can_break_doors) = nbt.get_bool("CanBreakDoors") {
             self.set_can_break_doors(can_break_doors, self);
         }

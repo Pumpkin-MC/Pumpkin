@@ -157,6 +157,13 @@ impl HoglinEntity {
             zoglin_base.set_custom_name(custom_name.clone());
         }
 
+        // Vanilla ConversionType.SINGLE keeps the baby state.
+        if self.is_baby.load(Ordering::Relaxed)
+            && let Some(mob) = zoglin.get_mob()
+        {
+            mob.spawn_as_baby();
+        }
+
         world.spawn_entity(zoglin);
         entity.remove();
     }
@@ -165,6 +172,12 @@ impl HoglinEntity {
 impl Mob for HoglinEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn spawn_as_baby(&self) -> bool {
+        self.is_baby.store(true, Ordering::Relaxed);
+        self.mob_entity.set_baby_by_age();
+        true
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
@@ -210,16 +223,21 @@ impl Mob for HoglinEntity {
     }
 
     fn on_attack(&self, target: &dyn EntityBase) {
-        let my_pos = self.mob_entity.living_entity.entity.pos.load();
-        let target_pos = target.get_entity().pos.load();
-        let dx = target_pos.x - my_pos.x;
-        let dz = target_pos.z - my_pos.z;
-        let dist = dx.hypot(dz).max(0.001);
-        let vel = target.get_entity().velocity.load();
-        target.get_entity().velocity.store(Vector3::new(
-            vel.x + (dx / dist) * 0.5,
-            0.5,
-            vel.z + (dz / dist) * 0.5,
-        ));
+        throw_target(&self.mob_entity.living_entity.entity, target);
     }
+}
+
+/// Vanilla `HoglinBase.throwTarget`, shared with zoglins.
+pub fn throw_target(attacker: &Entity, target: &dyn EntityBase) {
+    let my_pos = attacker.pos.load();
+    let target_pos = target.get_entity().pos.load();
+    let dx = target_pos.x - my_pos.x;
+    let dz = target_pos.z - my_pos.z;
+    let dist = dx.hypot(dz).max(0.001);
+    let vel = target.get_entity().velocity.load();
+    target.get_entity().velocity.store(Vector3::new(
+        vel.x + (dx / dist) * 0.5,
+        0.5,
+        vel.z + (dz / dist) * 0.5,
+    ));
 }

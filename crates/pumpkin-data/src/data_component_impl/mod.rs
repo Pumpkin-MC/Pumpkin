@@ -752,6 +752,14 @@ mod tests {
     }
 
     #[test]
+    fn entity_data_round_trip() {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:iron_golem".to_string());
+        nbt.put_bool("PlayerCreated", true);
+        assert_round_trip(EntityDataImpl { nbt: Some(nbt) }, EntityDataImpl::read_data);
+    }
+
+    #[test]
     fn tool_round_trip() {
         assert_round_trip(
             ToolImpl {

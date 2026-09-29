@@ -6,7 +6,9 @@ use crate::entity::EntityBase;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::{EndermanEntity, PLAYER_EYE_HEIGHT};
+use crate::entity::mob::neutral::NeutralMob;
 use crate::entity::player::Player;
+use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 
 const STARE_CLOSE_DISTANCE_SQ: f64 = 16.0;
@@ -41,6 +43,11 @@ impl TeleportTowardsPlayerGoal {
         }
     }
 
+    /// Vanilla `isAngerInducing`: stared at, or held against by the grudge.
+    fn is_anger_inducing(&self, player: &Player, world: &World) -> bool {
+        self.enderman.is_player_staring(player) || self.enderman.is_angry_at(player, world)
+    }
+
     fn find_staring_player(&self) -> Option<Arc<Player>> {
         let entity = &self.enderman.mob_entity.living_entity.entity;
         let world = entity.world.load();
@@ -56,7 +63,7 @@ impl TeleportTowardsPlayerGoal {
         world.get_nearest_player(pos, follow_range, |player| {
             self.target_predicate
                 .test(&world, Some(enderman), player.as_ref())
-                && (self.enderman.is_player_staring(player) || self.enderman.is_angry())
+                && self.is_anger_inducing(player, &world)
         })
     }
 }
@@ -74,7 +81,8 @@ impl Goal for TeleportTowardsPlayerGoal {
         if let Some(target) = &self.target_player
             && let Some(player) = target.get_player()
         {
-            if !self.enderman.is_player_staring(player) && !self.enderman.is_angry() {
+            let world = self.enderman.mob_entity.living_entity.entity.world.load();
+            if !self.is_anger_inducing(player, &world) {
                 return false;
             }
             let player_pos = player.get_entity().pos.load();

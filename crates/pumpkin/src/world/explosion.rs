@@ -422,12 +422,16 @@ impl Explosion {
                 entity.get_eye_pos()
             };
             let direction = (dir_pos - self.pos).normalize();
-            // TODO: entity explosion knockback resistance attribute
-            let knockback_resistance = 0.0;
 
-            let knockback_power =
-                (1.0 - distance) * exposure * knockback_multiplier * (1.0 - knockback_resistance);
+            let knockback_power = (1.0 - distance) * exposure * knockback_multiplier;
             let knockback = direction * knockback_power;
+            // Vanilla `ServerExplosion.hurtEntities`: creative flyers get no knockback.
+            if entity_base
+                .get_player()
+                .is_some_and(|player| player.is_creative() && player.is_flying())
+            {
+                continue;
+            }
             entity.add_velocity(knockback);
         }
     }
