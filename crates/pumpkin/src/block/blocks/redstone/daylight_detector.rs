@@ -82,7 +82,9 @@ impl DaylightDetectorBlock {
                 std::f32::consts::PI * 2.0
             };
             sun_angle += (offset - sun_angle) * 0.2;
-            target = ((target as f32 * sun_angle.cos()) + 0.5).floor() as i32;
+            // Mth.cos uses the sine lookup table, which rounds differently from f32::cos
+            // near power level boundaries.
+            target = ((target as f32 * pumpkin_util::math::cos(sun_angle)) + 0.5).floor() as i32;
         }
 
         target.clamp(0, 15) as u8
@@ -103,5 +105,19 @@ impl DaylightDetectorBlock {
             let new_state = props.to_state_id(block);
             world.set_block_state(block_pos, new_state, BlockFlags::NOTIFY_ALL);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DaylightDetectorBlock;
+
+    #[test]
+    fn signal_strength_uses_vanilla_cos_table() {
+        // f32::cos gives 14 here, Mth.cos gives 15.
+        assert_eq!(
+            DaylightDetectorBlock::calculate_signal_strength(15, 0.323_662_58, false),
+            15
+        );
     }
 }
