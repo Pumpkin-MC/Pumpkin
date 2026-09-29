@@ -4,26 +4,6 @@
 ///   @minecraft/server-gametest 1.0.0-beta.1.26.60-preview.28
 ///   (Minecraft Bedrock experimental docs, current as of 2026-09-28)
 ///
-/// Intended package:
-///   pumpkin:plugin@0.2.0
-///
-/// Integration into `plugin.wit`:
-///   import gametest;
-///   export gametest-callbacks;
-///
-/// Callback adaptation:
-/// WIT has no first-class function/closure values. Every JS callback parameter is therefore
-/// represented by a typed callback ID. The guest exports `gametest-callbacks`, and the host
-/// invokes the matching exported function with that ID.
-///
-/// Async/future feature gate:
-/// Future-returning methods and asynchronous registration use the `future` feature.
-/// Async callback exports use the `async` feature.
-///
-/// Peer @minecraft/server types:
-/// Existing Pumpkin v0.2 resources are reused where they already exist (`player`, `entity`,
-/// `%world`, `item-stack`, `game-mode`, and `block-direction`). A few peer types that Pumpkin
-/// v0.2 does not yet model nominally are represented locally with the closest lossless shape.
 interface gametest {
     use common.{game-mode as server-game-mode};
     use item-stack.{item-stack};
@@ -35,10 +15,6 @@ interface gametest {
         block as server-block-type,
         block-state as server-block-permutation,
     };
-
-    // -----------------------------------------------------------------------------------------
-    // Peer @minecraft/server value types used by GameTest
-    // -----------------------------------------------------------------------------------------
 
     /// One-to-one structural mapping of @minecraft/server.Vector2.
     record vector2 {
@@ -94,8 +70,7 @@ interface gametest {
     /// @minecraft/server.DimensionLocation.
     ///
     /// Note: the `dimension` field is an owned WIT resource handle because WIT cannot place a
-    /// borrowed handle inside a record. This preserves the public object shape exactly; an SDK
-    /// may wrap this to avoid surprising move semantics.
+    /// borrowed handle inside a record.
     record dimension-location {
         dimension: dimension,
         x: f64,
@@ -126,19 +101,12 @@ interface gametest {
         id(string),
     }
 
-    // -----------------------------------------------------------------------------------------
-    // Callback IDs (WIT adaptation of JS function values)
-    // -----------------------------------------------------------------------------------------
 
     type void-callback-id = u32;
     type test-callback-id = u32;
     type async-test-callback-id = u32;
     type block-predicate-callback-id = u32;
     type entity-predicate-callback-id = u32;
-
-    // -----------------------------------------------------------------------------------------
-    // Enumerations
-    // -----------------------------------------------------------------------------------------
 
     enum game-test-completed-error-reason {
         cleanup,
@@ -197,10 +165,6 @@ interface gametest {
         top,
     }
 
-    // -----------------------------------------------------------------------------------------
-    // Interfaces / structural data
-    // -----------------------------------------------------------------------------------------
-
     record game-test-error-context {
         absolute-position: vector3,
         relative-position: vector3,
@@ -226,12 +190,7 @@ interface gametest {
         skin-color: option<rgb>,
     }
 
-    // -----------------------------------------------------------------------------------------
-    // Errors
-    // -----------------------------------------------------------------------------------------
-
     /// @minecraft/server-gametest.GameTestCompletedError (extends JS Error).
-    /// WIT has no exception inheritance; thrown engine errors remain component traps.
     resource game-test-completed-error {
         get-message: func() -> string;
         get-reason: func() -> game-test-completed-error-reason;
@@ -244,10 +203,6 @@ interface gametest {
         get-message-parameters: func() -> list<string>;
         get-type: func() -> game-test-error-type;
     }
-
-    // -----------------------------------------------------------------------------------------
-    // Classes
-    // -----------------------------------------------------------------------------------------
 
     /// @minecraft/server-gametest.FenceConnectivity.
     resource fence-connectivity {
@@ -303,7 +258,6 @@ interface gametest {
     }
 
     /// @minecraft/server-gametest.Tags.
-    /// WIT has no constants, so static readonly JS constants are represented as static getters.
     resource tags {
         suite-all: static func() -> string;
         suite-debug: static func() -> string;
@@ -313,9 +267,6 @@ interface gametest {
     }
 
     /// @minecraft/server-gametest.SimulatedPlayer.
-    ///
-    /// JS inheritance (`extends Player`) is represented by `as-player`; all inherited Player API
-    /// is available through Pumpkin's existing `player` resource.
     resource simulated-player {
         as-player: func() -> player;
 
@@ -534,7 +485,6 @@ interface gametest {
             event-parameters: option<list<f64>>,
         );
 
-        /// TypeScript: until(callback: () => void): Promise<void>
         @unstable(feature = %future)
         until: func(callback: void-callback-id) -> future;
 
@@ -544,24 +494,16 @@ interface gametest {
         world-location: func(relative-location: vector3) -> vector3;
     }
 
-    // -----------------------------------------------------------------------------------------
-    // Module functions
-    // -----------------------------------------------------------------------------------------
 
-    /// getPlayerSkin(player: Player): PlayerSkinData
     get-player-skin: func(player: borrow<player>) -> player-skin-data;
 
-    /// register(testClassName, testName, (test) => void): RegistrationBuilder
+
     register: func(
         test-class-name: string,
         test-name: string,
         test-function: test-callback-id,
     ) -> registration-builder;
 
-    /// registerAsync(testClassName, testName, async (test) => void): RegistrationBuilder
-    ///
-    /// The JS function returns RegistrationBuilder synchronously. Guests using it must also
-    /// enable the `async` feature for its callback export.
     @unstable(feature = %future)
     register-async: func(
         test-class-name: string,
@@ -569,13 +511,10 @@ interface gametest {
         test-function: async-test-callback-id,
     ) -> registration-builder;
 
-    /// setAfterBatchCallback(batchName, () => void): void
     set-after-batch-callback: func(batch-name: string, batch-callback: void-callback-id);
 
-    /// setBeforeBatchCallback(batchName, () => void): void
     set-before-batch-callback: func(batch-name: string, batch-callback: void-callback-id);
 
-    /// spawnSimulatedPlayer(location, name, gameMode): SimulatedPlayer
     spawn-simulated-player: func(
         location: dimension-location,
         name: string,
@@ -583,9 +522,6 @@ interface gametest {
     ) -> simulated-player;
 }
 
-/// Guest-exported callback dispatcher used by the `gametest` host interface.
-///
-/// Add `export gametest-callbacks;` to the Pumpkin v0.2 `world plugin`.
 interface gametest-callbacks {
     use gametest.{
         test,
@@ -598,20 +534,15 @@ interface gametest-callbacks {
     };
     use %world.{entity};
 
-    /// Dispatches callbacks whose TypeScript shape is `() => void`.
     invoke-void: func(callback: void-callback-id);
 
-    /// Dispatches `register(..., (test) => void)` callbacks.
     /// The plugin can retain this handle for callbacks scheduled after invocation.
     invoke-test: func(callback: test-callback-id, test: test);
 
-    /// Dispatches `registerAsync(..., async (test) => Promise<void>)` callbacks.
     @unstable(feature = %async)
     invoke-async-test: async func(callback: async-test-callback-id, test: test);
 
-    /// Dispatches `assertBlockState(..., (block) => boolean)` callbacks.
     invoke-block-predicate: func(callback: block-predicate-callback-id, block: borrow<block>) -> bool;
 
-    /// Dispatches `assertEntityState(..., (entity) => boolean)` callbacks.
     invoke-entity-predicate: func(callback: entity-predicate-callback-id, entity: borrow<entity>) -> bool;
 }
