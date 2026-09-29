@@ -2345,25 +2345,27 @@ impl World {
 
             let block = Block::from_state_id(state.id);
             let mut collided = false;
+            let mut collide = |shape: BoundingBox| {
+                let shape = shape.at_pos(pos);
+                if shape.intersects(&bounding_box) {
+                    collided = true;
+                    collisions.push(shape);
+                }
+            };
 
             if block == &Block::POWDER_SNOW {
                 if let Some(shape) =
                     crate::block::blocks::powder_snow::collision_shape_for_entity(entity, &pos)
                 {
-                    let shape = shape.at_pos(pos);
-                    if shape.intersects(&bounding_box) {
-                        collided = true;
-                        collisions.push(shape);
-                    }
+                    collide(shape);
                 }
+            } else if block == &Block::SCAFFOLDING {
+                crate::block::blocks::scaffolding::collision_shapes_for_entity(entity, state, &pos)
+                    .for_each(&mut collide);
             } else {
-                for shape in state.get_block_collision_shapes_at(&pos) {
-                    let shape = shape.at_pos(pos);
-                    if shape.intersects(&bounding_box) {
-                        collided = true;
-                        collisions.push(shape);
-                    }
-                }
+                state
+                    .get_block_collision_shapes_at(&pos)
+                    .for_each(&mut collide);
             }
 
             if collided {
