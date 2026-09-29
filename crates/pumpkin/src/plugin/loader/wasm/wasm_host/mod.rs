@@ -313,9 +313,9 @@ fn plugin_api_version(
                 return Ok(PluginApiVersion::V0_1);
             } else if version.starts_with("0.2") {
                 return Ok(PluginApiVersion::V0_2);
-            } else {
-                return Err(PluginInitError::UnsupportedApiVersion(version.to_string()));
             }
+
+            return Err(PluginInitError::UnsupportedApiVersion(version.to_string()));
         }
     }
 

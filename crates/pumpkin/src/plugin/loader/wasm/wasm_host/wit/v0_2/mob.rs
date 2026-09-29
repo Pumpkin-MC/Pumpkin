@@ -225,7 +225,7 @@ impl CustomWasmGoal {
                     GoalCall::Tick => instance.func_handle_ai_goal_tick(),
                     GoalCall::Stop => instance.func_handle_ai_goal_stop(),
                 },
-                _ => panic!("Unexpected plugin version in v0.2 path."),
+                PluginInstance::V0_1(_) => panic!("Unexpected plugin version in v0.2 path."),
             };
             if let Err(error) = plugin
                 .store

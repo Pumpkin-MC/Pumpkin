@@ -235,7 +235,7 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
             let handler_id = self.handler_id;
             let function = match self.plugin.plugin_instance.as_ref() {
                 PluginInstance::V0_1(plugin) => plugin.func_handle_event(),
-                _ => panic!("Unexpected plugin version in v0.1 path."),
+                PluginInstance::V0_2(_) => panic!("Unexpected plugin version in v0.1 path."),
             };
             if let Err(error) = self
                 .plugin
@@ -284,7 +284,7 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
             let handler_id = self.handler_id;
             let function = match self.plugin.plugin_instance.as_ref() {
                 PluginInstance::V0_1(plugin) => plugin.func_handle_event(),
-                _ => panic!("Unexpected plugin version in v0.1 path."),
+                PluginInstance::V0_2(_) => panic!("Unexpected plugin version in v0.1 path."),
             };
             let result = self
                 .plugin

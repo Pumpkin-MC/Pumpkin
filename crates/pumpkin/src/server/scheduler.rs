@@ -152,6 +152,7 @@ impl TaskScheduler {
             .any(|entry| Weak::ptr_eq(entry, &plugin))
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn tick(&self, server: &Arc<Server>) {
         let current_tick = server.tick_count.load(AtomicOrdering::Relaxed) as u64;
         let mut tasks_to_run = Vec::new();
