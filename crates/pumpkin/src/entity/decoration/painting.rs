@@ -45,6 +45,11 @@ const fn facing_to_horizontal(direction: BlockDirection) -> u8 {
     }
 }
 
+/// The variant entity data is an `ID or X`: 0 means an inline definition, so a registry ID is sent as ID + 1.
+const fn variant_metadata_value(variant: PaintingVariant) -> VarInt {
+    VarInt(variant.id() as i32 + 1)
+}
+
 pub struct PaintingEntity {
     pub entity: Entity,
     variant_id: AtomicU32,
@@ -81,7 +86,7 @@ impl PaintingEntity {
     pub fn sync_variant(&self) {
         self.entity.set_synced_data(
             pumpkin_data::tracked_data::painting::DATA_PAINTING_VARIANT_ID,
-            VarInt(self.variant().id() as i32),
+            variant_metadata_value(self.variant()),
         );
     }
 
@@ -248,7 +253,7 @@ impl EntityBase for PaintingEntity {
         let mut metadata = Vec::new();
         Metadata::new(
             pumpkin_data::tracked_data::painting::DATA_PAINTING_VARIANT_ID,
-            VarInt(self.variant().id() as i32),
+            variant_metadata_value(self.variant()),
         )
         .write(&mut metadata, &version)
         .ok()?;
@@ -369,5 +374,11 @@ mod tests {
         );
         assert_eq!(PaintingVariant::from_name("invalid"), None);
         assert_eq!(PaintingVariant::Kebab.asset_id(), "minecraft:kebab");
+    }
+
+    #[test]
+    fn first_variant_is_not_sent_as_inline() {
+        // 0 tells the client that an inline variant definition follows.
+        assert_eq!(variant_metadata_value(PaintingVariant::Alban).0, 1);
     }
 }
