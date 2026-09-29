@@ -1,7 +1,8 @@
 use pumpkin_data::block_properties::ScaffoldingLikeProperties;
 use pumpkin_data::fluid::Fluid;
-use pumpkin_data::{Block, BlockDirection, BlockStateId};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
@@ -10,10 +11,37 @@ use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     OnScheduledTickArgs, PlacedArgs,
 };
+use crate::entity::EntityBase;
 use crate::entity::falling::FallingEntity;
 
 const TICK_DELAY: u8 = 1;
 pub const STABILITY_MAX_DISTANCE: u8 = 7;
+const SHAPE_UNSTABLE_BOTTOM: BoundingBox =
+    BoundingBox::new_array([0.0, 0.0, 0.0], [1.0, 0.125, 1.0]);
+/// `EntityCollisionContext.isAbove` tolerance, a Java float.
+const ABOVE_EPSILON: f64 = 1.0E-5f32 as f64;
+
+/// Vanilla `ScaffoldingBlock.getCollisionShape` for an entity: solid from above unless it is
+/// descending, otherwise only the bottom plate of a hanging bottom block. The extracted
+/// collision shape is `SHAPE_STABLE`.
+pub(crate) fn collision_shapes_for_entity<'a>(
+    entity: &dyn EntityBase,
+    state: &'a BlockState,
+    position: &'a BlockPos,
+) -> impl Iterator<Item = BoundingBox> + 'a {
+    let entity = entity.get_entity();
+    let entity_bottom = entity.pos.load().y;
+    let y = f64::from(position.0.y);
+    // `EntityCollisionContext.isAbove`, with the top of `Shapes.block()` and `SHAPE_BELOW_BLOCK`.
+    let is_above = |shape_max_y: f64| entity_bottom > y + shape_max_y - ABOVE_EPSILON;
+    let stable = is_above(1.0) && !entity.is_sneaking();
+    let props = ScaffoldingLikeProperties::from_state_id(state.id);
+    let unstable_bottom = !stable && props.distance != 0 && props.bottom && is_above(0.0);
+    state
+        .get_block_collision_shapes_at(position)
+        .filter(move |_| stable)
+        .chain(unstable_bottom.then_some(SHAPE_UNSTABLE_BOTTOM))
+}
 
 #[pumpkin_block("minecraft:scaffolding")]
 pub struct ScaffoldingBlock;
