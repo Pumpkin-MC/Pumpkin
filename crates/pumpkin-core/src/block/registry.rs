@@ -634,28 +634,20 @@ impl BlockRegistry {
             _ => {}
         }
 
-        let clicked_block_pos = BlockPos(location.0);
         let world = entity.world.load_full();
+        // Events report the block the player clicked, even when the item moves the placement.
+        let placed_against = world.get_block(&location);
+        let Some((location, face)) = server.item_registry.update_placement_context(
+            placed_block.item_id,
+            player,
+            location,
+            face,
+            use_item_on.inside_block,
+        ) else {
+            return Ok(None);
+        };
 
-        if location.0.y + face.to_offset().y < world.get_bottom_y() {
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
-        if location.0.y + face.to_offset().y > world.get_top_y() {
-            player.send_system_message_raw(
-                &pumpkin_util::text::TextComponent::translate_cross(
-                    pumpkin_data::translation::java::BUILD_TOOHIGH,
-                    pumpkin_data::translation::bedrock::BUILD_TOOHIGH,
-                    vec![pumpkin_util::text::TextComponent::text(
-                        (world.get_top_y()).to_string(),
-                    )],
-                )
-                .color_named(pumpkin_util::text::color::NamedColor::Red),
-                true,
-            );
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
+        let clicked_block_pos = BlockPos(location.0);
         let (clicked_block, clicked_block_state) = world.get_block_and_state(&clicked_block_pos);
 
         let replace_clicked_block = if clicked_block == placed_block {
@@ -720,6 +712,13 @@ impl BlockRegistry {
                 }
             };
 
+        if !world.is_in_height_limit(final_block_pos.0.y) {
+            if final_block_pos.0.y > world.get_top_y() {
+                player.send_build_too_high_message(world.get_top_y());
+            }
+            return Err(BlockPlacingError::BlockOutOfWorld);
+        }
+
         if world.is_in_spawn_protection(player, &final_block_pos) {
             player.send_system_message(&pumpkin_util::text::TextComponent::translate_cross(
                 pumpkin_data::translation::java::BUILD_SPAWN_PROTECTION,
@@ -731,17 +730,19 @@ impl BlockRegistry {
             return Ok(None);
         }
 
-        if !self.can_place_at(
-            Some(server),
-            Some(&*world),
-            &*world,
-            Some(player),
-            placed_block,
-            placed_block.default_state,
-            &final_block_pos,
-            Some(final_face),
-            Some(use_item_on),
-        ) {
+        if server.item_registry.must_survive(placed_block.item_id)
+            && !self.can_place_at(
+                Some(server),
+                Some(&*world),
+                &*world,
+                Some(player),
+                placed_block,
+                placed_block.default_state,
+                &final_block_pos,
+                Some(final_face),
+                Some(use_item_on),
+            )
+        {
             return Ok(None);
         }
 
@@ -760,7 +761,11 @@ impl BlockRegistry {
         // placement. (e.g. arrows/xp orbs/displays/markers should not)
         let state = BlockState::from_id(new_state);
         let mut buildable = true;
-        for shape in state.get_block_collision_shapes_at(&final_block_pos) {
+        // Vanilla `ScaffoldingBlock.getCollisionShape` is empty for placement.
+        let shapes = state
+            .get_block_collision_shapes_at(&final_block_pos)
+            .filter(|_| placed_block != &Block::SCAFFOLDING);
+        for shape in shapes {
             let placed_box = shape.at_pos(final_block_pos);
 
             if Self::has_blocking_entity_in_box(world.as_ref(), &placed_box) {
@@ -773,7 +778,7 @@ impl BlockRegistry {
             block_to_build: placed_block,
             buildable,
             player: player.clone(),
-            block: clicked_block,
+            block: placed_against,
             cancelled: false,
         };
         server
@@ -786,7 +791,7 @@ impl BlockRegistry {
         let mut event = crate::plugin::block::block_place::BlockPlaceEvent::new(
             player.clone(),
             placed_block,
-            clicked_block,
+            placed_against,
             final_block_pos,
             true,
         );

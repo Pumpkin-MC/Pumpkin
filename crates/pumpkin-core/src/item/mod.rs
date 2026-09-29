@@ -82,6 +82,23 @@ pub trait ItemBehaviour: Send + Sync {
         true
     }
 
+    /// Vanilla `BlockItem.updatePlacementContext`: the clicked block and face to place this
+    /// item's block against, or `None` to fail the placement.
+    fn update_placement_context(
+        &self,
+        _player: &Player,
+        location: BlockPos,
+        face: BlockDirection,
+        _inside_block: bool,
+    ) -> Option<(BlockPos, BlockDirection)> {
+        Some((location, face))
+    }
+
+    /// Vanilla `BlockItem.mustSurvive`: whether the placed block has to pass `can_place_at`.
+    fn must_survive(&self) -> bool {
+        true
+    }
+
     fn get_start_and_end_pos(&self, player: &Player) -> (Vector3<f64>, Vector3<f64>) {
         let start_pos = player.eye_position();
         let (yaw, pitch) = player.rotation();

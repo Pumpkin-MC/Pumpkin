@@ -159,6 +159,26 @@ impl ItemRegistry {
         true
     }
 
+    pub fn update_placement_context(
+        &self,
+        item_id: u16,
+        player: &Player,
+        location: BlockPos,
+        face: BlockDirection,
+        inside_block: bool,
+    ) -> Option<(BlockPos, BlockDirection)> {
+        self.get_pumpkin_item(item_id)
+            .map_or(Some((location, face)), |pumpkin_item| {
+                pumpkin_item.update_placement_context(player, location, face, inside_block)
+            })
+    }
+
+    #[must_use]
+    pub fn must_survive(&self, item_id: u16) -> bool {
+        self.get_pumpkin_item(item_id)
+            .is_none_or(|pumpkin_item| pumpkin_item.must_survive())
+    }
+
     #[must_use]
     pub fn get_pumpkin_item(&self, item: u16) -> Option<&Arc<dyn ItemBehaviour>> {
         self.items.get(&item)
