@@ -218,10 +218,12 @@ pub fn main() {
     let filters: Vec<String> = std::env::args().skip(1).collect();
     if filters.iter().any(|f| f == "wit") {
         wit::v0_1::main();
+        wit::v0_2::main();
         return;
     }
     let build_functions: Vec<_> = if filters.is_empty() {
         wit::v0_1::main();
+        wit::v0_2::main();
         sdk::main();
         build_functions
     } else {
