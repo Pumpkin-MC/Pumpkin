@@ -1,3 +1,4 @@
+use crate::entity::velocity;
 use pumpkin_data::item::Item;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::potion::Effect;
@@ -181,57 +182,6 @@ impl EffectParticle {
                 | effect.effect_type.color as u32) as i32,
         }
     }
-}
-
-/// Vanilla `EntitySelector.pushableBy` team part. Both teams come from one scoreboard:
-/// the custom Java one of the pushed (else pushing) player, as that client predicts it.
-pub fn is_push_allowed_by_teams(pusher: &dyn EntityBase, pushed: &dyn EntityBase) -> bool {
-    let allowed = |scoreboard: &crate::world::scoreboard::Scoreboard| {
-        scoreboard.get_teams().is_empty()
-            || is_allowed_by_team_rules(
-                scoreboard.get_entity_team(&pusher.get_scoreboard_name()),
-                scoreboard.get_entity_team(&pushed.get_scoreboard_name()),
-            )
-    };
-    [pushed, pusher]
-        .into_iter()
-        .filter_map(EntityBase::get_player)
-        .find_map(|player| player.with_java_scoreboard(allowed))
-        .unwrap_or_else(|| {
-            let world = pusher.get_entity().world.load();
-            let scoreboard = world
-                .scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            allowed(&scoreboard)
-        })
-}
-
-fn is_allowed_by_team_rules(
-    own_team: Option<&crate::world::scoreboard::Team>,
-    their_team: Option<&crate::world::scoreboard::Team>,
-) -> bool {
-    use crate::world::scoreboard::CollisionRule;
-
-    let own_rule = own_team.map_or(CollisionRule::Always, |team| team.collision_rule);
-    let their_rule = their_team.map_or(CollisionRule::Always, |team| team.collision_rule);
-
-    if own_rule == CollisionRule::Never || their_rule == CollisionRule::Never {
-        return false;
-    }
-
-    let same_team = own_team
-        .zip(their_team)
-        .is_some_and(|(own, their)| own.name == their.name);
-
-    if (own_rule == CollisionRule::PushOwnTeam || their_rule == CollisionRule::PushOwnTeam)
-        && same_team
-    {
-        return false;
-    }
-
-    (own_rule != CollisionRule::PushOtherTeams && their_rule != CollisionRule::PushOtherTeams)
-        || same_team
 }
 
 impl LivingEntity {
@@ -1442,24 +1392,8 @@ impl LivingEntity {
     }
 
     fn push_entities(&self, dyn_self: &dyn EntityBase) {
-        if !self.collides.load(Relaxed) {
-            return;
-        }
         let world = self.entity.world.load();
-        let entity_bb = self.entity.bounding_box.load();
-
-        let pushable: Vec<Arc<dyn EntityBase>> = world
-            .get_all_at_box(&entity_bb)
-            .into_iter()
-            .filter(|entity| {
-                let entity_ref = entity.get_entity();
-                entity_ref.entity_id != self.entity.entity_id
-                    && !entity.is_spectator()
-                    && entity.is_pushable()
-                    && is_push_allowed_by_teams(dyn_self, entity.as_ref())
-            })
-            .collect();
-
+        let pushable = velocity::pushable_entities(dyn_self, &self.entity.bounding_box.load());
         if pushable.is_empty() {
             return;
         }
@@ -3386,14 +3320,7 @@ impl EntityBase for LivingEntity {
             self.entity.tick_frozen(caller);
         }
 
-        // Coalesce velocity sends to once per tick.
-        let hurt = self.entity.sync_velocity.swap(false, Ordering::SeqCst);
-        if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) || hurt {
-            match caller.get_player() {
-                Some(player) => player.sync_velocity(hurt),
-                None => self.entity.send_velocity_to_watchers(),
-            }
-        }
+        self.entity.flush_velocity(caller.get_player());
 
         // Fetch supporting blocks for players or other entities
         let supporting_pos = caller.get_player().map_or_else(

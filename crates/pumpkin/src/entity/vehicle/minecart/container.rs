@@ -252,18 +252,19 @@ pub(super) fn velocity(
     } else {
         0
     };
-    let mut friction = if has_loot {
-        0.98
-    } else {
-        0.98 + f64::from(15 - signal) * 0.001
-    };
+    // Vanilla `AbstractMinecartContainer.applyNaturalSlowdown`, in `float`.
+    let mut keep = 0.98f32;
+    if !has_loot {
+        keep += f32::from(15 - signal) * 0.001;
+    }
     if entity
         .touching_water
         .load(std::sync::atomic::Ordering::Relaxed)
     {
-        friction *= 0.95;
+        keep *= 0.95;
     }
-    velocity.multiply(friction, 0.0, friction)
+    let keep = f64::from(keep);
+    velocity.multiply(keep, 0.0, keep)
 }
 
 #[cfg(test)]
