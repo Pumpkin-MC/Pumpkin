@@ -225,6 +225,7 @@ impl CustomWasmGoal {
                     GoalCall::Tick => instance.func_handle_ai_goal_tick(),
                     GoalCall::Stop => instance.func_handle_ai_goal_stop(),
                 },
+                PluginInstance::V0_2(_) => panic!("Unexpected plugin version in v0.1 path."),
             };
             if let Err(error) = plugin
                 .store
@@ -653,8 +654,8 @@ impl HostMob for PluginHostState {
                 carried_block_state: enderman
                     .get_carried_block()
                     .map(pumpkin_data::BlockStateId::as_u16),
-                is_screaming: enderman.is_angry(),
-                is_staring: enderman.is_angry(),
+                is_screaming: enderman.is_creepy(),
+                is_staring: enderman.is_creepy(),
             }));
         }
 
@@ -790,7 +791,7 @@ impl HostMob for PluginHostState {
                             .carried_block_state
                             .and_then(pumpkin_data::BlockStateId::new),
                     );
-                    enderman.set_angry(enderman_data.is_screaming || enderman_data.is_staring);
+                    enderman.set_creepy(enderman_data.is_screaming || enderman_data.is_staring);
                     return Ok(true);
                 }
             }

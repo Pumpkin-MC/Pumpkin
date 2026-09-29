@@ -13,12 +13,22 @@ use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
-        active_target::ActiveTargetGoal, breed::BreedGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal,
+        active_target::{ActiveTargetGoal, TargetCondition},
+        breed::BreedGoal,
+        follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal,
+        reset_universal_anger::ResetUniversalAngerGoal,
+        revenge::RevengeGoal,
+        swim::SwimGoal,
+        tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{
+        Mob, MobEntity,
+        neutral::{NeutralData, NeutralMob},
+    },
     passive::animal::Animal,
     player::Player,
 };
@@ -27,9 +37,23 @@ pub const FLAG_ROLL: u8 = 2;
 pub const FLAG_HAS_STUNG: u8 = 4;
 pub const FLAG_HAS_NECTAR: u8 = 8;
 
+fn is_angry(mob: &dyn Mob) -> bool {
+    mob.as_neutral().is_some_and(NeutralMob::is_angry)
+}
+
+/// Angry and still holding its stinger.
+fn can_sting(mob: &dyn Mob) -> bool {
+    is_angry(mob)
+        && !mob
+            .cast_any()
+            .downcast_ref::<BeeEntity>()
+            .is_some_and(BeeEntity::has_stung)
+}
+
 pub struct BeeEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
+    pub neutral_data: NeutralData,
     pub flags: AtomicU8,
     pub ticks_without_nectar: AtomicI32,
     pub cannot_enter_hive_ticks: AtomicI32,
@@ -43,6 +67,7 @@ impl BeeEntity {
         let bee = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
+            neutral_data: NeutralData::default(),
             flags: AtomicU8::new(0),
             ticks_without_nectar: AtomicI32::new(0),
             cannot_enter_hive_ticks: AtomicI32::new(0),
@@ -62,7 +87,10 @@ impl BeeEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            goal_selector.add_goal(0, Box::new(MeleeAttackGoal::new(1.4, true)));
+            goal_selector.add_goal(
+                0,
+                Box::new(MeleeAttackGoal::new(1.4, true).gated_by(can_sting)),
+            );
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, &[], false)));
             goal_selector.add_goal(5, Box::new(FollowParentGoal::new(1.25)));
@@ -82,11 +110,23 @@ impl BeeEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            // Vanilla BeeHurtByOtherGoal.
+            target_selector.add_goal(
+                1,
+                Box::new(
+                    RevengeGoal::new(true)
+                        .alerting_others()
+                        .alerting_in_sight()
+                        .continuing_while(is_angry),
+                ),
+            );
             target_selector.add_goal(
                 2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true)
+                    .when(TargetCondition::AngryAt)
+                    .gated_by(can_sting),
             );
+            target_selector.add_goal(3, ResetUniversalAngerGoal::new(true));
         };
 
         mob_arc
@@ -149,12 +189,27 @@ impl Animal for BeeEntity {
     }
 }
 
+impl NeutralMob for BeeEntity {
+    fn get_neutral_data(&self) -> &NeutralData {
+        &self.neutral_data
+    }
+
+    /// Bees calm down once the target is gone, unlike the other neutral mobs.
+    fn stays_angry_with_target(&self) -> bool {
+        false
+    }
+}
+
 impl Mob for BeeEntity {
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
 
     fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn as_neutral(&self) -> Option<&dyn NeutralMob> {
         Some(self)
     }
 

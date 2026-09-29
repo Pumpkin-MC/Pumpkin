@@ -33,15 +33,14 @@ impl ToFromWasmEvent for PacketReceivedEvent {
             .expect("failed to add player resource");
 
         let packet = match self.player.client.as_ref() {
-            ClientPlatform::Java(client) => {
-                let version = client.version.load();
-                generated_packets::deserialize_java_serverbound_packet(
-                    self.packet_id,
-                    &self.payload,
-                    version,
-                )
-                .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java)
-            }
+            // Typed view is 26.3
+            // for older clients only valid after the multiversion plugin ran.
+            ClientPlatform::Java(_) => generated_packets::deserialize_java_serverbound_packet(
+                self.packet_id,
+                &self.payload,
+                pumpkin_data::packet::CURRENT_MC_VERSION,
+            )
+            .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java),
             ClientPlatform::Bedrock(_) => {
                 generated_packets::deserialize_bedrock_serverbound_packet(
                     self.packet_id,
@@ -111,6 +110,7 @@ impl ToFromWasmEvent for PacketSentEvent {
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
         cleanup_event(&event, state);
         if let Event::PacketSentEvent(data) = event {
+            self.packet_id = data.packet_id;
             self.payload = data.raw_payload.into();
             self.cancelled = data.cancelled;
         }
