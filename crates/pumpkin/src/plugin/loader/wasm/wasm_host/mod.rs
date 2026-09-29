@@ -308,10 +308,12 @@ fn plugin_api_version(
     for (name, _) in ty.exports(engine) {
         if let Some(version) = name.strip_prefix("pumpkin:plugin/metadata@") {
             // `starts_with` to ignore "minor" version differences
+            // WIT enforces semver. Will always be major.minor.patch
+            // For early/unstable release: 0.major.minor
 
-            if version.starts_with("0.1") {
+            if version.starts_with("0.1.") {
                 return Ok(PluginApiVersion::V0_1);
-            } else if version.starts_with("0.2") {
+            } else if version.starts_with("0.2.") {
                 return Ok(PluginApiVersion::V0_2);
             }
 
