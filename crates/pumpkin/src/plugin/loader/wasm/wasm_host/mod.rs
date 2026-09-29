@@ -24,8 +24,12 @@ pub enum PluginInitError {
     EngineCreationFailed(wasmtime::Error),
     #[error("Failed to setup linker: {0}")]
     LinkerSetupFailed(wasmtime::Error),
-    #[error("Plugin is built against a different API version: {0}")]
-    ApiVersionMismatch(wasmtime::Error),
+    #[error("Could not identify the plugin API version (does not export pumpkin:plugin/metadata?)")]
+    UnknownApiVersion(),
+    #[error("Plugin is built against an unsupported version of the API: {0}")]
+    UnsupportedApiVersion(String),
+    #[error("Plugin was built against a different iteration of the API: {0}")]
+    ApiMismatch(wasmtime::Error),
     #[error("Failed to read plugin file: {0}")]
     FileReadFailed(std::io::Error),
     #[error("Failed to load plugin as component: {0}")]
@@ -116,6 +120,12 @@ pub struct PluginRuntime {
     linker_v0_2: wasmtime::component::Linker<PluginHostState>,
     legacy_sync_reentry: concurrent_store::LegacySyncReentry,
     store_spawner: Arc<dyn RuntimeSpawner>,
+}
+
+#[derive(Copy, Clone)]
+pub enum PluginApiVersion {
+    V0_1,
+    V0_2,
 }
 
 pub enum PluginInstance {
@@ -211,36 +221,30 @@ impl PluginRuntime {
 
         let component = load_component(&self.engine, &wasm_bytes, &self.cache_dir)?;
 
-        let ((plugin_instance, store, metadata), api_version) = {
-            match self
-                .linker_v0_1
-                .instantiate_pre(&component)
-                .map_err(PluginInitError::ApiVersionMismatch)
-            {
-                Ok(instance_pre) => {
-                    let plugin_pre = wit::v0_1::prepare_plugin(&instance_pre)
-                        .map_err(PluginInitError::ApiVersionMismatch)?;
-                    (
-                        wit::v0_1::init_plugin(&self.engine, plugin_pre, &self.legacy_sync_reentry)
-                            .await?,
-                        "0.1",
-                    )
-                }
-                Err(_) => {
-                    let instance_pre = self
-                        .linker_v0_2
-                        .instantiate_pre(&component)
-                        .map_err(PluginInitError::ApiVersionMismatch)?;
+        let api_version = plugin_api_version(&self.engine, &component)?;
 
-                    let plugin_pre = wit::v0_2::prepare_plugin(&instance_pre)
-                        .map_err(PluginInitError::ApiVersionMismatch)?;
+        let (plugin_instance, store, metadata) = match api_version {
+            PluginApiVersion::V0_1 => {
+                let instance_pre = self
+                    .linker_v0_1
+                    .instantiate_pre(&component)
+                    .map_err(PluginInitError::ApiMismatch)?;
 
-                    (
-                        wit::v0_2::init_plugin(&self.engine, plugin_pre, &self.legacy_sync_reentry)
-                            .await?,
-                        "0.2",
-                    )
-                }
+                let plugin_pre = wit::v0_1::prepare_plugin(&instance_pre)
+                    .map_err(PluginInitError::ApiMismatch)?;
+
+                wit::v0_1::init_plugin(&self.engine, plugin_pre, &self.legacy_sync_reentry).await?
+            }
+            PluginApiVersion::V0_2 => {
+                let instance_pre = self
+                    .linker_v0_2
+                    .instantiate_pre(&component)
+                    .map_err(PluginInitError::ApiMismatch)?;
+
+                let plugin_pre = wit::v0_2::prepare_plugin(&instance_pre)
+                    .map_err(PluginInitError::ApiMismatch)?;
+
+                wit::v0_2::init_plugin(&self.engine, plugin_pre, &self.legacy_sync_reentry).await?
             }
         };
 
@@ -271,7 +275,10 @@ impl PluginRuntime {
             .map_err(PluginInitError::InstantiationFailed)?;
 
         tracing::debug!(
-            wasm_plugin_api = api_version,
+            wasm_plugin_api = match api_version {
+                PluginApiVersion::V0_1 => "0.1",
+                PluginApiVersion::V0_2 => "0.2",
+            },
             wasm_plugin_policy = concurrent_store::LegacySyncReentry::NAME,
             "Loaded Wasm plugin with synchronous compatibility policy"
         );
@@ -290,6 +297,29 @@ where
     F: FnOnce(&[u8], &str) -> T,
 {
     verify_signatures.then(|| verify(wasm_bytes, path_str))
+}
+
+fn plugin_api_version(
+    engine: &Engine,
+    component: &Component,
+) -> Result<PluginApiVersion, PluginInitError> {
+    let ty = component.component_type();
+
+    for (name, _) in ty.exports(engine) {
+        if let Some(version) = name.strip_prefix("pumpkin:plugin/metadata@") {
+            // `starts_with` to ignore "minor" version differences
+
+            if version.starts_with("0.1") {
+                return Ok(PluginApiVersion::V0_1);
+            } else if version.starts_with("0.2") {
+                return Ok(PluginApiVersion::V0_2);
+            } else {
+                return Err(PluginInitError::UnsupportedApiVersion(version.to_string()));
+            }
+        }
+    }
+
+    Err(PluginInitError::UnknownApiVersion())
 }
 
 fn setup_linker_v0_1(engine: &Engine) -> wasmtime::Result<Linker<PluginHostState>> {
