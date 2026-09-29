@@ -3804,9 +3804,7 @@ impl BlockType {
             Self::WaxedWeatheredCopperChain => "minecraft:waxed_weathered_copper_chain",
             Self::WaxedWeatheredCopperChest => "minecraft:waxed_weathered_copper_chest",
             Self::WaxedWeatheredCopperDoor => "minecraft:waxed_weathered_copper_door",
-            Self::WaxedWeatheredCopperGolemStatue => {
-                "minecraft:waxed_weathered_copper_golem_statue"
-            }
+            Self::WaxedWeatheredCopperGolemStatue => "minecraft:waxed_weathered_copper_golem_statue",
             Self::WaxedWeatheredCopperGrate => "minecraft:waxed_weathered_copper_grate",
             Self::WaxedWeatheredCopperLantern => "minecraft:waxed_weathered_copper_lantern",
             Self::WaxedWeatheredCopperTrapdoor => "minecraft:waxed_weathered_copper_trapdoor",
