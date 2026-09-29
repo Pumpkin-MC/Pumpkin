@@ -1152,6 +1152,7 @@ impl Server {
             let player_handle = handle.clone();
             players.par_iter().for_each(|player| {
                 let _guard = player_handle.enter();
+                player.process_inbound_packets();
                 player.tick(self);
             });
         }
