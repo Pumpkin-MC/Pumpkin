@@ -226,9 +226,9 @@ impl PiglinEntity {
     }
 
     pub fn set_baby(&self, baby: bool) {
-        self.is_baby.store(baby, Ordering::Relaxed);
+        self.mob_entity
+            .set_baby_flag(&self.is_baby, tracked_data::piglin::DATA_BABY_ID, baby);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.set_synced_data(tracked_data::piglin::DATA_BABY_ID, baby);
         if baby {
             entity.entity_dimension.store(Self::BABY_DIMENSIONS);
         } else {
@@ -989,6 +989,11 @@ impl PiglinEntity {
 }
 
 impl Mob for PiglinEntity {
+    fn spawn_as_baby(&self) -> bool {
+        self.set_baby(true);
+        true
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

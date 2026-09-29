@@ -181,6 +181,19 @@ impl EffectParticle {
     }
 }
 
+/// Vanilla `LivingEntity.canBeSeenAsEnemy`, with `Player`'s `abilities.invulnerable` override.
+#[must_use]
+pub fn can_be_seen_as_enemy(target: &dyn EntityBase) -> bool {
+    target.get_player().map_or_else(
+        || {
+            target
+                .get_living_entity()
+                .is_some_and(LivingEntity::can_take_damage)
+        },
+        crate::entity::player::Player::can_be_seen_as_enemy,
+    )
+}
+
 fn is_allowed_by_team_rules(
     own_team: Option<&crate::world::scoreboard::Team>,
     their_team: Option<&crate::world::scoreboard::Team>,
@@ -1392,9 +1405,16 @@ impl LivingEntity {
 
         let touching_water = self.entity.touching_water.load(SeqCst);
 
+        // Vanilla Mob.isEffectiveAi: NoAI mobs don't travel, so they neither move nor fall.
+        let effective_ai = caller
+            .get_mob()
+            .is_none_or(|mob| !mob.get_mob_entity().is_no_ai());
+
         // Strider is the only entity that has canWalkOnFluid = false
 
-        if (touching_water || self.entity.touching_lava.load(SeqCst))
+        if !effective_ai {
+            // No travel.
+        } else if (touching_water || self.entity.touching_lava.load(SeqCst))
             && should_swim_in_fluids
             && self.entity.entity_type != &EntityType::STRIDER
         {
@@ -2544,13 +2564,13 @@ impl LivingEntity {
         !self.is_spectator() && self.entity.is_alive()
     }
 
-    pub fn can_attack(&self, target: &Self) -> bool {
-        if target.entity.entity_type == &EntityType::PLAYER
+    pub fn can_attack(&self, target: &dyn EntityBase) -> bool {
+        if target.get_player().is_some()
             && self.entity.world.load().level_info.load().difficulty == Difficulty::Peaceful
         {
             return false;
         }
-        target.can_take_damage()
+        can_be_seen_as_enemy(target)
     }
 
     pub fn reset_state(&self) {
@@ -2684,7 +2704,13 @@ impl LivingEntity {
     }
 
     pub fn read_living_nbt_non_mut(&self, nbt: &NbtCompound) {
-        self.health.store(nbt.get_float("Health").unwrap_or(20.0));
+        // Vanilla LivingEntity.readAdditionalSaveData defaults to the mob's own max health,
+        // not a flat 20; a hoglin (40 max) or iron golem (100 max) with no saved Health would
+        // otherwise be silently reset to 20 here.
+        self.health.store(
+            nbt.get_float("Health")
+                .unwrap_or_else(|| self.get_max_health()),
+        );
 
         if let Some(equipment) = nbt.get_compound("equipment") {
             let mut guard = self

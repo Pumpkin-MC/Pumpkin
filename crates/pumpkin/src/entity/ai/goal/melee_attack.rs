@@ -1,5 +1,6 @@
 use super::{Controls, Goal};
 
+use crate::entity::ai::goal::revenge::MobFilter;
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
@@ -21,6 +22,7 @@ pub struct MeleeAttackGoal {
     attack_interval_ticks: i32,
     last_update_time: i64,
     last_target_position: Option<Vector3<f64>>,
+    gate: Option<MobFilter>,
 }
 
 impl MeleeAttackGoal {
@@ -36,7 +38,15 @@ impl MeleeAttackGoal {
             attack_interval_ticks: 20,
             last_update_time: 0,
             last_target_position: None,
+            gate: None,
         }
+    }
+
+    /// Extra condition for starting and for continuing
+    #[must_use]
+    pub const fn gated_by(mut self, gate: MobFilter) -> Self {
+        self.gate = Some(gate);
+        self
     }
 
     #[must_use]
@@ -47,6 +57,9 @@ impl MeleeAttackGoal {
 
 impl Goal for MeleeAttackGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if self.gate.is_some_and(|gate| !gate(mob)) {
+            return false;
+        }
         let time = mob.get_entity().world.load().get_world_age();
 
         if time - self.last_update_time < MAX_ATTACK_TIME {
@@ -67,6 +80,9 @@ impl Goal for MeleeAttackGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        if self.gate.is_some_and(|gate| !gate(mob)) {
+            return false;
+        }
         let target = mob.get_mob_entity().get_target().clone();
 
         let Some(target) = target else {

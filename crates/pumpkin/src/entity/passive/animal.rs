@@ -17,10 +17,7 @@ pub trait Animal: Mob {
         if world.get_block(&pos.down()).id == pumpkin_data::Block::GRASS_BLOCK.id {
             return 10.0;
         }
-        let brightness = f32::from(world.get_max_local_raw_brightness(pos)) / 15.0;
-        let curved = brightness / 3.0f32.mul_add(-brightness, 4.0);
-        let ambient = world.dimension.ambient_light;
-        (1.0 - curved).mul_add(ambient, curved) - 0.5
+        world.get_light_level_dependent_magic_value(pos) - 0.5
     }
 
     fn play_eating_sound(&self, sound: Sound) {

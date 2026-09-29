@@ -17,6 +17,7 @@ use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ageable::AgeableMob,
+    ai::behavior::neutral::apply_targets,
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, beg::BegGoal,
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
@@ -25,7 +26,10 @@ use crate::entity::{
         owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
         revenge::RevengeGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{
+        Mob, MobEntity,
+        neutral::{NeutralData, NeutralMob},
+    },
     passive::{
         animal::Animal,
         tamable::{TamableAnimal, TamableData},
@@ -40,6 +44,7 @@ pub struct WolfEntity {
     pub collar_color: AtomicU8,
     pub tamable_data: TamableData,
     pub ageable_data: crate::entity::ageable::AgeableData,
+    pub neutral_data: NeutralData,
 }
 
 impl WolfEntity {
@@ -52,6 +57,7 @@ impl WolfEntity {
             collar_color: AtomicU8::new(14), // Default to red
             tamable_data: TamableData::default(),
             ageable_data: crate::entity::ageable::AgeableData::default(),
+            neutral_data: NeutralData::default(),
         };
         let mob_arc = Arc::new(wolf);
         let mob_weak: Weak<dyn Mob> = {
@@ -109,8 +115,8 @@ impl WolfEntity {
             target_selector.add_goal(2, OwnerHurtTargetGoal::new());
             // 3: HurtByTargetGoal (RevengeGoal)
             target_selector.add_goal(3, Box::new(RevengeGoal::new(true).alerting_others()));
-            // 4: NearestAttackableTargetGoal (Player) — omitted; vanilla gates it on the
-            // NeutralMob anger system, and retaliation goes through goal 3 (RevengeGoal).
+            // 4: NearestAttackableTarget (Player, angry only), 8: ResetUniversalAnger
+            apply_targets(&mut target_selector, &mob_arc.mob_entity, 4, 8, true);
             // 5: NonTameRandomTarget (Sheep, Rabbit, Fox)
             target_selector.add_goal(
                 5,
@@ -165,6 +171,12 @@ impl TamableAnimal for WolfEntity {
     }
 }
 
+impl NeutralMob for WolfEntity {
+    fn get_neutral_data(&self) -> &NeutralData {
+        &self.neutral_data
+    }
+}
+
 impl Mob for WolfEntity {
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
@@ -175,6 +187,10 @@ impl Mob for WolfEntity {
     }
 
     fn as_tamable(&self) -> Option<&dyn TamableAnimal> {
+        Some(self)
+    }
+
+    fn as_neutral(&self) -> Option<&dyn NeutralMob> {
         Some(self)
     }
 
