@@ -161,7 +161,7 @@ pub(crate) fn protocol_dialog_to_wasm(
     dialog: &ProtocolDialog,
 ) -> Dialog {
     let title = state
-        .add_text_component(dialog.title.clone())
+        .add(dialog.title.clone())
         .expect("failed to add text component");
 
     let type_ = match dialog.r#type.as_str() {
@@ -178,13 +178,13 @@ pub(crate) fn protocol_dialog_to_wasm(
         .map(|b| match b {
             ProtocolDialogBody::PlainMessage { contents } => {
                 let comp = state
-                    .add_text_component(contents.clone())
+                    .add(contents.clone())
                     .expect("failed to add text component");
                 DialogBody::PlainMessage(comp)
             }
             ProtocolDialogBody::Item { item: _ } => {
                 let item_res = state
-                    .add_item_stack(Arc::new(Mutex::new(
+                    .add(Arc::new(Mutex::new(
                         pumpkin_data::item_stack::ItemStack::new(0, &pumpkin_data::item::Item::AIR),
                     )))
                     .expect("failed to add item stack resource");
@@ -202,7 +202,7 @@ pub(crate) fn protocol_dialog_to_wasm(
                 default_value,
             } => {
                 let lbl = state
-                    .add_text_component(label.clone())
+                    .add(label.clone())
                     .expect("failed to add text component");
                 DialogInput::Bool(DialogInputBool {
                     label: lbl,
@@ -215,10 +215,10 @@ pub(crate) fn protocol_dialog_to_wasm(
                 default_value,
             } => {
                 let lbl = state
-                    .add_text_component(label.clone())
+                    .add(label.clone())
                     .expect("failed to add text component");
                 let ph = state
-                    .add_text_component(placeholder.clone())
+                    .add(placeholder.clone())
                     .expect("failed to add text component");
                 DialogInput::Text(DialogInputText {
                     label: lbl,
@@ -235,7 +235,7 @@ pub(crate) fn protocol_dialog_to_wasm(
                 label_format,
             } => {
                 let lbl = state
-                    .add_text_component(label.clone())
+                    .add(label.clone())
                     .expect("failed to add text component");
                 DialogInput::NumberRange(DialogInputNumberRange {
                     label: lbl,
@@ -252,15 +252,11 @@ pub(crate) fn protocol_dialog_to_wasm(
                 initial_index,
             } => {
                 let lbl = state
-                    .add_text_component(label.clone())
+                    .add(label.clone())
                     .expect("failed to add text component");
                 let opts = options
                     .iter()
-                    .map(|o| {
-                        state
-                            .add_text_component(o.clone())
-                            .expect("failed to add text component")
-                    })
+                    .map(|o| state.add(o.clone()).expect("failed to add text component"))
                     .collect();
                 DialogInput::SingleOption(DialogInputSingleOption {
                     label: lbl,
@@ -276,13 +272,12 @@ pub(crate) fn protocol_dialog_to_wasm(
         .iter()
         .map(|b| {
             let text = state
-                .add_text_component(b.text.clone())
+                .add(b.text.clone())
                 .expect("failed to add text component");
-            let tooltip = b.tooltip.as_ref().map(|t| {
-                state
-                    .add_text_component(t.clone())
-                    .expect("failed to add text component")
-            });
+            let tooltip = b
+                .tooltip
+                .as_ref()
+                .map(|t| state.add(t.clone()).expect("failed to add text component"));
             let action = match &b.action {
                 DialogAction::OpenUrl { url } => Action::OpenUrl(url.clone()),
                 DialogAction::Custom { id, payload } => Action::CustomClick(CustomClickAction {
@@ -320,7 +315,7 @@ pub(crate) fn protocol_dialog_to_wasm(
                 }),
                 pumpkin_protocol::Label::TextComponent(c) => {
                     let comp = state
-                        .add_text_component((**c).clone())
+                        .add((**c).clone())
                         .expect("failed to add text component");
                     LinkLabel::Custom(comp)
                 }
@@ -332,11 +327,10 @@ pub(crate) fn protocol_dialog_to_wasm(
         })
         .collect();
 
-    let external_title = dialog.external_title.as_ref().map(|t| {
-        state
-            .add_text_component(t.clone())
-            .expect("failed to add text component")
-    });
+    let external_title = dialog
+        .external_title
+        .as_ref()
+        .map(|t| state.add(t.clone()).expect("failed to add text component"));
 
     Dialog {
         title,
@@ -358,7 +352,7 @@ impl ToFromWasmEvent for DialogClickActionEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         Event::DialogClickActionEvent(DialogClickActionEventData {
             player: state
-                .add_player(self.player.clone())
+                .add(self.player.clone())
                 .expect("failed to add player resource"),
             id: self.id.clone(),
             payload: self.payload.as_ref().map(|p| p.to_vec()),
@@ -383,7 +377,7 @@ impl ToFromWasmEvent for DialogClearEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         Event::DialogClearEvent(DialogClearEventData {
             player: state
-                .add_player(self.player.clone())
+                .add(self.player.clone())
                 .expect("failed to add player resource"),
             cancelled: self.cancelled,
         })
@@ -405,7 +399,7 @@ impl ToFromWasmEvent for DialogShowEvent {
         let dialog = protocol_dialog_to_wasm(state, &self.dialog);
         Event::DialogShowEvent(DialogShowEventData {
             player: state
-                .add_player(self.player.clone())
+                .add(self.player.clone())
                 .expect("failed to add player resource"),
             dialog,
             cancelled: self.cancelled,

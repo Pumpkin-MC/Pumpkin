@@ -101,7 +101,7 @@ impl ZombieVillagerEntity {
 
     #[must_use]
     pub fn is_baby(&self) -> bool {
-        self.get_entity().age.load(Ordering::Relaxed) < 0
+        self.mob_entity.is_baby()
     }
 
     /// Vanilla `startConverting`: begin the cure, swapping Weakness for Strength
@@ -259,6 +259,10 @@ impl ZombieVillagerEntity {
 impl Mob for ZombieVillagerEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity.mob_entity
+    }
+
+    fn spawn_as_baby(&self) -> bool {
+        self.mob_entity.spawn_as_baby()
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {

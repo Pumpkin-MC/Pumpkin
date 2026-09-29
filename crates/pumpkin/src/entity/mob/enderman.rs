@@ -30,12 +30,16 @@ use crate::entity::{
             active_target::ActiveTargetGoal, chase_player::ChasePlayerGoal,
             look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
             melee_attack::MeleeAttackGoal, pick_up_block::PickUpBlockGoal,
-            place_block::PlaceBlockGoal, revenge::RevengeGoal, swim::SwimGoal,
+            place_block::PlaceBlockGoal, reset_universal_anger::ResetUniversalAngerGoal,
+            revenge::RevengeGoal, swim::SwimGoal,
             teleport_towards_player::TeleportTowardsPlayerGoal, wander_around::WanderAroundGoal,
         },
         pathfinder::node::PathType,
     },
-    mob::{Mob, MobEntity},
+    mob::{
+        Mob, MobEntity,
+        neutral::{NeutralData, NeutralMob},
+    },
     player::Player,
 };
 
@@ -53,8 +57,10 @@ fn is_projectile_damage(dt: DamageType) -> bool {
 
 pub struct EndermanEntity {
     pub mob_entity: MobEntity,
+    neutral_data: NeutralData,
     carried_block: AtomicCell<Option<BlockStateId>>,
-    angry: AtomicBool,
+    /// Synced CREEPY flag, the open-mouth pose. Anger lives in `NeutralMob`.
+    creepy: AtomicBool,
     provoked: AtomicBool,
     speed_boosted: AtomicBool,
 }
@@ -64,8 +70,9 @@ impl EndermanEntity {
         let mob_entity = MobEntity::new(entity);
         let entity = Self {
             mob_entity,
+            neutral_data: NeutralData::default(),
             carried_block: AtomicCell::new(None),
-            angry: AtomicBool::new(false),
+            creepy: AtomicBool::new(false),
             provoked: AtomicBool::new(false),
             speed_boosted: AtomicBool::new(false),
         };
@@ -114,6 +121,7 @@ impl EndermanEntity {
                 3,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::ENDERMITE, true),
             );
+            target_selector.add_goal(4, ResetUniversalAngerGoal::new(false));
         };
 
         mob_arc
@@ -251,7 +259,7 @@ impl EndermanEntity {
         drop(mob_target);
 
         if is_some {
-            self.set_angry(true);
+            self.set_creepy(true);
             // Use attribute modifier instead of direct speed arithmetic
             if !self.speed_boosted.swap(true, Ordering::Relaxed) {
                 let living = &self.mob_entity.living_entity;
@@ -271,7 +279,7 @@ impl EndermanEntity {
                 );
             }
         } else {
-            self.set_angry(false);
+            self.set_creepy(false);
             self.set_provoked(false);
             if self.speed_boosted.swap(false, Ordering::Relaxed) {
                 let living = &self.mob_entity.living_entity;
@@ -288,16 +296,16 @@ impl EndermanEntity {
         }
     }
 
-    pub fn set_angry(&self, angry: bool) {
-        self.angry.store(angry, Ordering::Relaxed);
+    pub fn set_creepy(&self, creepy: bool) {
+        self.creepy.store(creepy, Ordering::Relaxed);
         self.mob_entity
             .living_entity
             .entity
-            .set_synced_data(pumpkin_data::tracked_data::enderman::CREEPY, angry);
+            .set_synced_data(pumpkin_data::tracked_data::enderman::CREEPY, creepy);
     }
 
-    pub fn is_angry(&self) -> bool {
-        self.angry.load(Ordering::Relaxed)
+    pub fn is_creepy(&self) -> bool {
+        self.creepy.load(Ordering::Relaxed)
     }
 
     pub fn set_provoked(&self, provoked: bool) {
@@ -380,7 +388,17 @@ impl EndermanEntity {
     }
 }
 
+impl NeutralMob for EndermanEntity {
+    fn get_neutral_data(&self) -> &NeutralData {
+        &self.neutral_data
+    }
+}
+
 impl Mob for EndermanEntity {
+    fn as_neutral(&self) -> Option<&dyn NeutralMob> {
+        Some(self)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         if let Some(block_state) = self.carried_block.load() {
             nbt.put_int("carriedBlockState", block_state.as_u16() as i32);
