@@ -22,6 +22,7 @@ use crate::{
 };
 use pumpkin_core::entity::ai::goal::Goal;
 use pumpkin_core::entity::mob::Mob as InternalMob;
+use pumpkin_core::entity::mob::cube_mob::CubeMobHooks;
 use pumpkin_core::entity::passive::tamable::TamableAnimal;
 use pumpkin_core::server::Server;
 use pumpkin_wasm_host_common::{plugin::WasmPlugin, state::PluginHostState};
