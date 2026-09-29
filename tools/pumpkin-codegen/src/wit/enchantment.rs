@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 
 pub fn build() -> String {
-    let dir = std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/enchantment");
+    let dir = std::path::Path::new("../../assets/datapack/data/minecraft/enchantment");
     let mut enchantment_vec: Vec<String> = fs::read_dir(dir)
         .expect("Missing enchantment directory")
         .flatten()

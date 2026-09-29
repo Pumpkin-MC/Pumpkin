@@ -45,6 +45,10 @@ pub fn update_position(player: &Arc<Player>) {
     let new_chunk_center = entity.chunk_pos.load();
     let old_cylindrical = player.watched_section.load();
 
+    // Vanilla `ChunkMap.move` -> re-pair on every move, not only on a view change.
+    let world = player.world();
+    world.entity_tracker.update_player_position(player, &world);
+
     // This does break when a new player spawns
     // if old_cylindrical.center == new_chunk_center {
     //     return;
@@ -78,7 +82,6 @@ pub fn update_position(player: &Arc<Player>) {
     let loading_chunks: Vec<_> = loading_iter.collect();
     let unloading_chunks: Vec<_> = unloading_iter.collect();
 
-    let world = player.world();
     let level = &world.level;
     let mut held_tickets = player
         .held_chunk_tickets
@@ -174,5 +177,4 @@ pub fn update_position(player: &Arc<Player>) {
     if !loading_chunks.is_empty() {
         world.spawn_world_entity_chunks(player.clone(), loading_chunks);
     }
-    world.entity_tracker.update_player_position(player, &world);
 }

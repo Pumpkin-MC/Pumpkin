@@ -244,11 +244,15 @@ fn convert_value(
                 if is_slice {
                     let tmp = dst.unwrap_or("slice");
                     if is_ref {
-                        prep.push_str(&format!(
-                            "{}let vec_{}: Vec<&str> = {}.iter().map(|s| s.as_str()).collect();\n",
-                            prep_prefix, tmp, src
-                        ));
-                        format!("&vec_{}", tmp)
+                        if type_ident == "str" {
+                            prep.push_str(&format!(
+                                "{}let vec_{}: Vec<&str> = {}.iter().map(|s| s.as_str()).collect();\n",
+                                prep_prefix, tmp, src
+                            ));
+                            format!("&vec_{}", tmp)
+                        } else {
+                            format!("&{}", src)
+                        }
                     } else {
                         format!("{}.clone()", src)
                     }

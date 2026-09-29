@@ -5,7 +5,7 @@ use std::fs;
 use wit_encoder::{Enum, Interface, Package, PackageName, TypeDef, TypeDefKind};
 
 pub fn build() -> String {
-    let dir = std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/damage_type");
+    let dir = std::path::Path::new("../../assets/datapack/data/minecraft/damage_type");
     let mut names: Vec<String> = fs::read_dir(dir)
         .expect("Missing damage_type directory")
         .flatten()

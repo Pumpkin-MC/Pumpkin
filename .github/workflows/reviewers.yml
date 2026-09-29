@@ -48,6 +48,7 @@ jobs:
 
               { pattern: 'crates/pumpkin-world/src/generation/feature/', reviewers: ['Snowiiii', 'RoosterBooster007', 'MegalithOfficial'] },
               { pattern: 'crates/pumpkin-world/src/generation/noise/', reviewers: ['Snowiiii', 'RoosterBooster007', 'MegalithOfficial'] },
+              { pattern: '.github/workflows/', reviewers: ['Snowiiii'] },
             ];
 
             const matches = (path, pattern) => {

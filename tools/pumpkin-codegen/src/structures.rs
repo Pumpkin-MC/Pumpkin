@@ -706,7 +706,7 @@ fn generation_step_to_token(step: &str) -> TokenStream {
 /// Reads structure and structure_set files from 26.3 datapack and emits the complete structures `TokenStream`.
 pub fn build() -> TokenStream {
     let structures_dir =
-        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/structure");
+        std::path::Path::new("../../assets/datapack/data/minecraft/worldgen/structure");
     let mut structures_json: BTreeMap<String, StructureStruct> = BTreeMap::new();
     let mut s_entries: Vec<_> = fs::read_dir(structures_dir)
         .expect("Missing worldgen/structure directory")
@@ -724,7 +724,7 @@ pub fn build() -> TokenStream {
     }
 
     let structure_sets_dir =
-        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/structure_set");
+        std::path::Path::new("../../assets/datapack/data/minecraft/worldgen/structure_set");
     let mut structure_sets_json: BTreeMap<String, StructureSetStruct> = BTreeMap::new();
     let mut ss_entries: Vec<_> = fs::read_dir(structure_sets_dir)
         .expect("Missing worldgen/structure_set directory")
