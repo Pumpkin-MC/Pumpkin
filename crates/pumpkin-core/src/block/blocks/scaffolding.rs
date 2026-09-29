@@ -8,6 +8,8 @@ use pumpkin_world::world::BlockAccessor;
 
 use crate::block::{BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs};
 
+pub const STABILITY_MAX_DISTANCE: u8 = 7;
+
 #[pumpkin_block("minecraft:scaffolding")]
 pub struct ScaffoldingBlock;
 
@@ -16,13 +18,13 @@ impl ScaffoldingBlock {
     pub fn get_distance(world: &dyn BlockAccessor, pos: &BlockPos) -> u8 {
         let below_pos = pos.down();
         let (below_block, below_state) = world.get_block_and_state(&below_pos);
+        let mut min_dist = STABILITY_MAX_DISTANCE;
         if below_block == &Block::SCAFFOLDING {
-            return ScaffoldingLikeProperties::from_state_id(below_state.id).distance;
-        } else if below_state.is_side_solid(BlockDirection::Up) && below_block.is_solid() {
+            min_dist = ScaffoldingLikeProperties::from_state_id(below_state.id).distance;
+        } else if below_state.is_side_solid(BlockDirection::Up) {
             return 0;
         }
 
-        let mut min_dist = 7u8;
         for dir in BlockDirection::horizontal() {
             let neighbor_pos = pos.offset(dir.to_offset());
             let (neighbor_block, neighbor_state) = world.get_block_and_state(&neighbor_pos);
@@ -34,7 +36,7 @@ impl ScaffoldingBlock {
                 }
             }
         }
-        min_dist.min(7)
+        min_dist
     }
 
     #[must_use]
@@ -45,7 +47,7 @@ impl ScaffoldingBlock {
 
 impl BlockBehaviour for ScaffoldingBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        Self::get_distance(args.block_accessor, args.position) < 7
+        Self::get_distance(args.block_accessor, args.position) < STABILITY_MAX_DISTANCE
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
@@ -71,12 +73,65 @@ impl BlockBehaviour for ScaffoldingBlock {
             );
         }
         let distance = Self::get_distance(args.world, args.position);
-        if distance == 7 {
+        if distance == STABILITY_MAX_DISTANCE {
             return Block::AIR.default_state.id;
         }
         let mut new_props = props;
         new_props.distance = distance;
         new_props.bottom = Self::is_bottom(args.world, args.position, distance);
         new_props.to_state_id(args.block)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use pumpkin_data::BlockState;
+
+    use super::*;
+
+    struct TestWorld(HashMap<BlockPos, BlockStateId>);
+
+    impl BlockAccessor for TestWorld {
+        fn get_block(&self, position: &BlockPos) -> &'static Block {
+            Block::from_state_id(self.get_block_state_id(position))
+        }
+
+        fn get_block_state(&self, position: &BlockPos) -> &'static BlockState {
+            BlockState::from_id(self.get_block_state_id(position))
+        }
+
+        fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
+            self.0
+                .get(position)
+                .copied()
+                .unwrap_or(Block::AIR.default_state.id)
+        }
+
+        fn get_block_and_state(
+            &self,
+            position: &BlockPos,
+        ) -> (&'static Block, &'static BlockState) {
+            (self.get_block(position), self.get_block_state(position))
+        }
+    }
+
+    fn scaffolding(distance: u8) -> BlockStateId {
+        let mut props = ScaffoldingLikeProperties::default(&Block::SCAFFOLDING);
+        props.distance = distance;
+        props.to_state_id(&Block::SCAFFOLDING)
+    }
+
+    #[test]
+    fn distance_prefers_closer_horizontal_support_over_scaffolding_below() {
+        let world = TestWorld(HashMap::from([
+            (BlockPos::new(0, 0, 0), scaffolding(5)),
+            (BlockPos::new(1, 1, 0), scaffolding(0)),
+        ]));
+        assert_eq!(
+            ScaffoldingBlock::get_distance(&world, &BlockPos::new(0, 1, 0)),
+            1
+        );
     }
 }
