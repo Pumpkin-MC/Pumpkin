@@ -184,6 +184,19 @@ impl EffectParticle {
     }
 }
 
+/// Vanilla `LivingEntity.canBeSeenAsEnemy`, with `Player`'s `abilities.invulnerable` override.
+#[must_use]
+pub fn can_be_seen_as_enemy(target: &dyn EntityBase) -> bool {
+    target.get_player().map_or_else(
+        || {
+            target
+                .get_living_entity()
+                .is_some_and(LivingEntity::can_take_damage)
+        },
+        crate::entity::player::Player::can_be_seen_as_enemy,
+    )
+}
+
 impl LivingEntity {
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;

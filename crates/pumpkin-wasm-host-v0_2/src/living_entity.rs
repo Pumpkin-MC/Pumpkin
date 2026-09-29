@@ -197,14 +197,14 @@ impl HostLivingEntity for PluginHostState {
         ))
     }
 
-    async fn is_collidable(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<bool> {
+    fn is_collidable(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<bool> {
         let entity = self.get(&this)?;
         Ok(entity
             .get_living_entity()
             .is_some_and(|living| living.collides.load(std::sync::atomic::Ordering::Relaxed)))
     }
 
-    async fn set_collidable(
+    fn set_collidable(
         &mut self,
         this: Resource<WitLivingEntity>,
         collidable: bool,
@@ -218,7 +218,7 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_absorption(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<f32> {
+    fn get_absorption(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<f32> {
         let entity = self.get(&this)?;
         Ok(entity
             .get_living_entity()
