@@ -135,16 +135,18 @@ impl GlobalStructureCache {
             self.ensure_strongholds_generated();
             return self.stronghold_chunks.wait();
         }
-        self.try_get_stronghold_chunks()
+        self.try_get_stronghold_chunks().unwrap_or_default()
     }
 
-    /// Returns the stronghold ring positions without waiting
-    /// empty while the background job runs
-    pub fn try_get_stronghold_chunks(&self) -> &[(i32, i32)] {
+    /// Returns the stronghold ring positions without waiting, or `None` while the
+    /// background job is still running.
+    pub fn try_get_stronghold_chunks(&self) -> Option<&[(i32, i32)]> {
         self.ensure_strongholds_generated();
-        self.stronghold_chunks
-            .get()
-            .map_or(&[], std::vec::Vec::as_slice)
+        match self.stronghold_chunks.get() {
+            Some(chunks) => Some(chunks.as_slice()),
+            None if self.stronghold_job.is_some() => None,
+            None => Some(&[]),
+        }
     }
 
     /// Returns the memoized structure start for the given structure and start chunk,

@@ -30,28 +30,36 @@ pub struct FoundStructure {
 ///    at the first radius that produces any result.
 ///
 /// The best candidate from both passes is returned.
+///
+/// Returns [`StructureSearch::Pending`] while the stronghold positions are still
+/// being computed, so the caller can retry instead of reporting a wrong result.
 pub fn find_nearest_structure(
     origin: BlockPos,
     placements: &[&StructurePlacement],
     max_search_radius: i32,
     world_seed: i64,
     global_cache: &GlobalStructureCache,
-) -> Option<BlockPos> {
+) -> StructureSearch {
     if placements.is_empty() {
-        return None;
+        return StructureSearch::NotFound;
     }
 
     let mut nearest: Option<FoundStructure> = None;
 
     // ── Pass 1: Concentric-rings (strongholds) ──────────────────────────────
     for p in placements {
-        if let StructurePlacementType::ConcentricRings(rings) = &p.placement_type
-            && let Some(found) = find_nearest_concentric(origin, rings, global_cache)
-            && nearest
-                .as_ref()
-                .is_none_or(|n| found.distance_sq < n.distance_sq)
-        {
-            nearest = Some(found);
+        if let StructurePlacementType::ConcentricRings(rings) = &p.placement_type {
+            match find_nearest_concentric(origin, rings, global_cache) {
+                ConcentricSearch::Pending => return StructureSearch::Pending,
+                ConcentricSearch::Done(Some(found))
+                    if nearest
+                        .as_ref()
+                        .is_none_or(|n| found.distance_sq < n.distance_sq) =>
+                {
+                    nearest = Some(found);
+                }
+                ConcentricSearch::Done(_) => {}
+            }
         }
     }
 
@@ -93,7 +101,15 @@ pub fn find_nearest_structure(
         }
     }
 
-    nearest.map(|f| f.pos)
+    nearest.map_or(StructureSearch::NotFound, |f| StructureSearch::Found(f.pos))
+}
+
+/// Result of [`find_nearest_structure`].
+#[derive(Debug, Clone)]
+pub enum StructureSearch {
+    Found(BlockPos),
+    NotFound,
+    Pending,
 }
 
 /// Finds the nearest candidate that actually produces one of `target_structures`.
@@ -238,12 +254,11 @@ fn find_nearest_concentric(
     // Kept for potential future bounds / distance validation.
     _rings: &ConcentricRingsStructurePlacement,
     global_cache: &GlobalStructureCache,
-) -> Option<FoundStructure> {
+) -> ConcentricSearch {
     // No block, callers run in server tasks and the tick, which shutdown waits on
-    let strongholds = global_cache.try_get_stronghold_chunks();
-    if strongholds.is_empty() {
-        return None;
-    }
+    let Some(strongholds) = global_cache.try_get_stronghold_chunks() else {
+        return ConcentricSearch::Pending;
+    };
 
     let ox = origin.0.x as f64;
     let oz = origin.0.z as f64;
@@ -262,6 +277,15 @@ fn find_nearest_concentric(
             }
         })
         .min_by(|a, b| a.distance_sq.total_cmp(&b.distance_sq))
+        .map_or(ConcentricSearch::Done(None), |found| {
+            ConcentricSearch::Done(Some(found))
+        })
+}
+
+/// Outcome of a stronghold lookup: the ring positions may still be computing.
+enum ConcentricSearch {
+    Pending,
+    Done(Option<FoundStructure>),
 }
 
 fn find_nearest_random_spread_at_radius(
