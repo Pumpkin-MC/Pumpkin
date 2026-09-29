@@ -52,6 +52,7 @@ use crate::entity::mob::skeleton::{
 };
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::mob::spider::SpiderEntity;
+use crate::entity::mob::sulfur_cube::SulfurCubeEntity;
 use crate::entity::mob::vex::VexEntity;
 use crate::entity::mob::vindicator::VindicatorEntity;
 use crate::entity::mob::warden::WardenEntity;
@@ -162,6 +163,7 @@ pub fn from_type(
         id if id == EntityType::CAVE_SPIDER.id => CaveSpiderEntity::new(entity),
         id if id == EntityType::GHAST.id => GhastEntity::new(entity),
         id if id == EntityType::MAGMA_CUBE.id => MagmaCubeEntity::new(entity),
+        id if id == EntityType::SULFUR_CUBE.id => SulfurCubeEntity::new(entity),
         id if id == EntityType::PHANTOM.id => PhantomEntity::new(entity),
         id if id == EntityType::WITCH.id => WitchEntity::new(entity),
         id if id == EntityType::PIGLIN.id => PiglinEntity::new(entity),
@@ -447,6 +449,7 @@ pub fn check_spawn_rules(
 
     // Sulfur Cube
     if id == EntityType::SULFUR_CUBE.id {
+        // Vanilla SulfurCube.checkSulfurCubeSpawnRules always returns true.
         return true;
     }
 

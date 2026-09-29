@@ -68,6 +68,7 @@ pub mod skeleton;
 pub mod slime;
 pub mod spawn;
 pub mod spider;
+pub mod sulfur_cube;
 pub mod sun_burn;
 pub mod vex;
 pub mod vindicator;
