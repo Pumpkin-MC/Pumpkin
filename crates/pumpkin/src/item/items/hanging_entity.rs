@@ -90,6 +90,10 @@ impl ItemBehaviour for HangingEntityItem {
             );
             world.spawn_entity(painting);
         } else {
+            if !world.is_in_build_limit(target_pos) {
+                return BlockActionResult::Fail;
+            }
+
             let entity_type = if item.item.id == Item::GLOW_ITEM_FRAME.id {
                 &EntityType::GLOW_ITEM_FRAME
             } else {
@@ -99,6 +103,10 @@ impl ItemBehaviour for HangingEntityItem {
             let entity = Entity::new(world.clone(), pos, entity_type);
             let frame = ItemFrameEntity::new(entity);
             frame.set_facing(face);
+            if !frame.survives() {
+                return BlockActionResult::Fail;
+            }
+
             let sound = frame.get_place_sound();
             let frame_arc = Arc::new(frame);
             world.play_sound(sound, SoundCategory::Blocks, &pos);

@@ -263,6 +263,19 @@ impl BedrockClient {
                             &server,
                         );
 
+                        if matches!(item_result, BlockActionResult::Fail) {
+                            for position in [
+                                data.block_position,
+                                data.block_position.offset(face.to_offset()),
+                            ] {
+                                let state = world.get_block_state(&position);
+                                self.try_enqueue_client_packet(&CUpdateBlock::new(
+                                    position,
+                                    pumpkin_data::BlockState::to_be_network_id(state.id),
+                                ));
+                            }
+                        }
+
                         if should_try_block_placement(&item_result) {
                             let item_id = stack.item.id;
                             if let Some(placed_block) = pumpkin_data::Block::from_item_id(item_id) {

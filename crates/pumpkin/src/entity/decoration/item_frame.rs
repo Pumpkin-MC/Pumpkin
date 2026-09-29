@@ -1,8 +1,12 @@
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::block::blocks::redstone::is_diode;
+use crate::entity::decoration::hanging::{self, DEPTH, WALL_OFFSET};
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, living::LivingEntity};
+use crate::server::Server;
+use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::damage::DamageType;
@@ -13,6 +17,8 @@ use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
+use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 /// An item frame or glow item frame.
@@ -32,18 +38,26 @@ pub struct ItemFrameEntity {
     item_drop_chance: AtomicCell<f32>,
     invisible: AtomicBool,
     fixed: AtomicBool,
+    /// Vanilla `HangingEntity.checkInterval`.
+    survival_check_ticks: AtomicU32,
 }
 
 impl ItemFrameEntity {
     /// Facing used when a frame is created without NBT, matching vanilla.
     const DEFAULT_FACING: BlockDirection = BlockDirection::South;
 
+    /// Vanilla `HangingEntity` checks its support once every this many ticks.
+    const SURVIVAL_CHECK_INTERVAL: u32 = 100;
+
+    /// Horizontal and vertical extent of the frame's face.
+    const FACE_SIZE: f64 = 0.75;
+
     pub fn new(entity: Entity) -> Self {
         let facing = Self::DEFAULT_FACING.to_index();
         // The spawn packet reads the direction from the entity data field, so
         // it has to agree with `facing` or the frame spawns facing elsewhere.
         entity.data.store(i32::from(facing), Ordering::Relaxed);
-        Self {
+        let frame = Self {
             entity,
             item_stack: Mutex::new(ItemStack::EMPTY.clone()),
             rotation: AtomicU8::new(0),
@@ -51,7 +65,78 @@ impl ItemFrameEntity {
             item_drop_chance: AtomicCell::new(1.0),
             invisible: AtomicBool::new(false),
             fixed: AtomicBool::new(false),
+            survival_check_ticks: AtomicU32::new(0),
+        };
+        frame.recalculate_bounding_box();
+        frame
+    }
+
+    /// Vanilla `ItemFrame.calculateBoundingBox`.
+    fn calculate_bounding_box(pos: BlockPos, facing: BlockDirection) -> BoundingBox {
+        let step = facing.to_offset();
+        let center = Vector3::new(
+            f64::from(pos.0.x) + 0.5 - f64::from(step.x) * WALL_OFFSET,
+            f64::from(pos.0.y) + 0.5 - f64::from(step.y) * WALL_OFFSET,
+            f64::from(pos.0.z) + 0.5 - f64::from(step.z) * WALL_OFFSET,
+        );
+        let extent = |axis_step: i32| {
+            if axis_step == 0 {
+                Self::FACE_SIZE
+            } else {
+                DEPTH
+            }
+        };
+        hanging::box_of_size(
+            center,
+            Vector3::new(extent(step.x), extent(step.y), extent(step.z)),
+        )
+    }
+
+    fn recalculate_bounding_box(&self) {
+        self.entity.bounding_box.store(Self::calculate_bounding_box(
+            self.entity.block_pos.load(),
+            self.get_facing(),
+        ));
+    }
+
+    fn has_valid_support(&self, world: &World) -> bool {
+        let facing = self.get_facing();
+        let support_pos = self
+            .entity
+            .block_pos
+            .load()
+            .offset(facing.opposite().to_offset());
+        let (block, state) = world.get_block_and_state(&support_pos);
+        state.is_side_solid(facing) || (facing.is_horizontal() && is_diode(block))
+    }
+
+    /// Vanilla `ItemFrame.survives`: free space, a valid support block and no other hanging entity.
+    pub fn survives(&self) -> bool {
+        if self.is_fixed() {
+            return true;
         }
+
+        let world = self.entity.world.load();
+        let bounding_box = self.entity.bounding_box.load();
+        world.is_space_empty(bounding_box)
+            && self.has_valid_support(&world)
+            && !hanging::overlaps_hanging_entity(&world, &bounding_box, self.entity.entity_id)
+    }
+
+    /// Drops the frame and its item and removes it once the support block is no longer valid.
+    pub fn check_support(&self) {
+        if self.is_fixed() || self.entity.is_removed() {
+            return;
+        }
+
+        let world = self.entity.world.load();
+        if self.has_valid_support(&world) {
+            return;
+        }
+
+        self.drop_item(None, true);
+        self.entity.play_sound(self.get_break_sound());
+        self.entity.remove();
     }
 
     pub const fn is_glow(&self) -> bool {
@@ -107,6 +192,7 @@ impl ItemFrameEntity {
         let index = facing.to_index();
         self.facing.store(index, Ordering::Relaxed);
         self.entity.data.store(i32::from(index), Ordering::Relaxed);
+        self.recalculate_bounding_box();
     }
 
     pub fn get_item(&self) -> ItemStack {
@@ -304,6 +390,7 @@ impl EntityBase for ItemFrameEntity {
         self.facing.store(facing, Ordering::Relaxed);
         // The spawn packet's data field carries the frame's direction.
         self.entity.data.store(i32::from(facing), Ordering::Relaxed);
+        self.recalculate_bounding_box();
         self.item_drop_chance
             .store(nbt.get_float("ItemDropChance").unwrap_or(1.0));
         self.invisible.store(
@@ -320,6 +407,16 @@ impl EntityBase for ItemFrameEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.entity.tick(caller, server);
+
+        let ticks = self.survival_check_ticks.fetch_add(1, Ordering::Relaxed) + 1;
+        if ticks >= Self::SURVIVAL_CHECK_INTERVAL {
+            self.survival_check_ticks.store(0, Ordering::Relaxed);
+            self.check_support();
+        }
     }
 
     fn init_data_tracker(&self) {
