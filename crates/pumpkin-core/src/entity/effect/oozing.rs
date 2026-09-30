@@ -6,7 +6,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::effect::MobEffect;
 use crate::entity::living::LivingEntity;
-use crate::entity::mob::cube_mob::CubeMobHooks;
+use crate::entity::mob::cube_mob::CubeMob;
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::r#type::from_type;
 

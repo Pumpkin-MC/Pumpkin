@@ -10,14 +10,15 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomImpl;
 
 use crate::entity::ai::goal::active_target::ActiveTargetGoal;
-use crate::entity::mob::cube_mob::{AbstractCubeMob, CubeMobHooks};
+use crate::entity::mob::cube_mob::{CubeMob, CubeMobData};
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, custom_sound::CustomSound};
 use crate::world::World;
 
 pub struct SlimeEntity {
-    pub cube: AbstractCubeMob,
+    pub mob_entity: MobEntity,
+    pub cube_mob_data: CubeMobData,
 }
 
 impl SlimeEntity {
@@ -35,42 +36,31 @@ impl SlimeEntity {
 
     fn new_without_size(entity: Entity) -> Arc<Self> {
         let slime = Arc::new(Self {
-            cube: AbstractCubeMob::new(entity),
+            cube_mob_data: CubeMobData::new(&entity),
+            mob_entity: MobEntity::new(entity),
         });
-        let weak: Weak<dyn CubeMobHooks> = {
-            let mob: Arc<dyn CubeMobHooks> = slime.clone();
+        let weak: Weak<dyn CubeMob> = {
+            let mob: Arc<dyn CubeMob> = slime.clone();
             Arc::downgrade(&mob)
         };
-        slime.cube.register_common_goals(weak.clone());
-        slime.cube.add_attack_goal(weak);
+        slime.register_common_goals(weak.clone());
+        slime.add_attack_goal(weak);
         {
             let mut targets = slime
-                .cube
                 .mob_entity
                 .target_selector
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             targets.add_goal(
                 1,
-                ActiveTargetGoal::with_default(&slime.cube.mob_entity, &EntityType::PLAYER, true),
+                ActiveTargetGoal::with_default(&slime.mob_entity, &EntityType::PLAYER, true),
             );
             targets.add_goal(
                 3,
-                ActiveTargetGoal::with_default(
-                    &slime.cube.mob_entity,
-                    &EntityType::IRON_GOLEM,
-                    true,
-                ),
+                ActiveTargetGoal::with_default(&slime.mob_entity, &EntityType::IRON_GOLEM, true),
             );
         };
         slime
-    }
-
-    pub fn get_size(&self) -> i32 {
-        self.cube.get_size()
-    }
-    pub fn is_tiny(&self) -> bool {
-        self.cube.is_tiny()
     }
 
     pub fn randomize_size(&self) {
@@ -97,9 +87,9 @@ impl SlimeEntity {
     }
 }
 
-impl CubeMobHooks for SlimeEntity {
-    fn cube_mob(&self) -> &AbstractCubeMob {
-        &self.cube
+impl CubeMob for SlimeEntity {
+    fn get_cube_mob_data(&self) -> &CubeMobData {
+        &self.cube_mob_data
     }
     fn jump_sound(&self) -> Sound {
         if self.is_tiny() {
@@ -116,10 +106,9 @@ impl CubeMobHooks for SlimeEntity {
         }
     }
     fn set_size(&self, size: i32, update_health: bool) {
-        self.cube.set_size(self, size, update_health);
+        self.set_cube_mob_size(size, update_health);
         let actual_size = self.get_size();
         let mut attributes = self
-            .cube
             .mob_entity
             .living_entity
             .attributes
@@ -157,23 +146,23 @@ impl Mob for SlimeEntity {
         Some(self)
     }
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.cube.mob_write_nbt(nbt);
+        self.write_cube_mob_nbt(nbt);
     }
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.cube.mob_read_nbt(self, nbt);
+        self.read_cube_mob_nbt(nbt);
     }
     fn get_mob_entity(&self) -> &MobEntity {
-        &self.cube.mob_entity
+        &self.mob_entity
     }
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.cube.mob_tick(self);
+        self.cube_mob_tick();
     }
     fn post_tick(&self) {
-        self.cube.post_tick(self);
+        self.cube_mob_post_tick();
     }
     fn mob_player_collision(&self, player: &Arc<Player>) {
         if self.can_deal_damage() {
-            self.cube.mob_entity.try_attack(self, &**player);
+            self.mob_entity.try_attack(self, &**player);
         }
     }
 }
