@@ -318,10 +318,12 @@ impl DataComponentCodec<Self> for ItemModelImpl {
 }
 
 impl DataComponentCodec<Self> for CustomNameImpl {
+    /// Writes the complete custom-name component as Java network NBT, preserving its styles.
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         seq.write_slice(&self.name.encode_for_version(&JavaMinecraftVersion::V_26_2))
     }
 
+    /// Reads a custom-name component from Java network NBT; an absent tag yields an empty name.
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let tag = seq.get_nbt_with_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)?;
         let name = tag.as_ref().map_or_else(
@@ -2823,6 +2825,7 @@ impl DataComponentCodec<Self> for BreakSoundImpl {
 mod tests {
     use super::*;
 
+    /// Checks styled-name encoding against Minecraft 26.3's codec and preserves styles on decoding.
     #[test]
     fn custom_name_preserves_rgb_and_bold_on_wire() -> Result<(), Box<dyn std::error::Error>> {
         use pumpkin_util::text::{TextComponent, color::RGBColor};
@@ -2858,6 +2861,7 @@ mod tests {
         Ok(())
     }
 
+    /// Checks that preserving styled components also keeps literal custom names readable.
     #[test]
     fn plain_custom_name_round_trips() -> Result<(), Box<dyn std::error::Error>> {
         let component = CustomNameImpl {

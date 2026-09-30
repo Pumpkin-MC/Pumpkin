@@ -898,6 +898,8 @@ impl TextComponentBase {
     }
 }
 
+/// Converts text-component NBT to JSON, interpreting decoration bytes as booleans.
+/// Numeric fields outside those decorations retain their numeric values.
 fn nbt_compound_to_json(compound: &pumpkin_nbt::NbtCompound) -> serde_json::Value {
     let mut map = serde_json::Map::new();
     for (k, v) in &compound.child_tags {
@@ -2188,6 +2190,7 @@ mod test {
         assert!(click.get_string("value").is_none());
     }
 
+    /// Checks that true and false NBT decoration bytes preserve the component's text and colour.
     #[test]
     fn styled_components_parse_from_nbt() {
         let mut styled = pumpkin_nbt::compound::NbtCompound::new();
