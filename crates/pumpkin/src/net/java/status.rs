@@ -7,8 +7,7 @@ use pumpkin_protocol::{
 use std::sync::Arc;
 
 use crate::{
-    net::java::pending::PendingConnection,
-    plugin::server::{list_ping::ServerListPingEvent, packet::ConnectionPacketReceivedEvent},
+    net::java::pending::PendingConnection, plugin::server::list_ping::ServerListPingEvent,
     server::Server,
 };
 use tracing::debug;
@@ -17,15 +16,12 @@ impl PendingConnection {
     pub async fn handle_status_request(&mut self, server: &Arc<Server>) {
         debug!("Handling status request");
         let client_version = self.version.load();
-        let admit_known_java = server
-            .plugin_manager
-            .has_handlers::<ConnectionPacketReceivedEvent>();
         let mut status_response = {
             let status = server.get_status();
             status
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .get_status_response(client_version.protocol_version(), admit_known_java)
+                .get_status_response(client_version, &server.plugin_manager.java_versions)
         };
 
         let (max_players, num_players) = status_response

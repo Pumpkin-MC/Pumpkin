@@ -1706,6 +1706,19 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         Ok(())
     }
 
+    async fn register_java_versions(
+        &mut self,
+        context: Resource<WitContext>,
+        versions: Vec<pumpkin::plugin::player::JavaMinecraftVersion>,
+    ) -> wasmtime::Result<()> {
+        self.get(&context)?.register_java_versions(
+            versions
+                .into_iter()
+                .map(super::player::from_wasm_java_version),
+        );
+        Ok(())
+    }
+
     async fn register_permission(
         &mut self,
         context: Resource<WitContext>,

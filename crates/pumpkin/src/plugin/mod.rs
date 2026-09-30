@@ -1,3 +1,4 @@
+use crate::net::java::versions::JavaVersions;
 use arc_swap::ArcSwap;
 use futures::future::join_all;
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
@@ -197,6 +198,8 @@ pub struct PluginManager {
     // Thread ID of the thread that created the plugin manager.
     // Permission prompts use rustyline, which is only safe on this thread.
     main_thread_id: ThreadId,
+    /// Java versions plugins translate, next to the server's own.
+    pub java_versions: JavaVersions,
 }
 
 /// Represents a successfully loaded plugin
@@ -250,6 +253,7 @@ impl PluginManager {
             hot_reload_task: RwLock::new(None),
             hot_reload_enabled: AtomicBool::new(false),
             main_thread_id: std::thread::current().id(),
+            java_versions: JavaVersions::default(),
         }
     }
 
@@ -1097,6 +1101,7 @@ impl PluginManager {
         };
 
         self.unregister_handlers(name);
+        self.java_versions.unregister(name);
         plugin.context.unregister_commands();
 
         if let Some(instance) = plugin.instance.take() {
