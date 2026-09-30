@@ -1,7 +1,6 @@
 /// What a Java client's protocol has beyond the packet format.
 ///
-/// Clients on `CURRENT_MC_VERSION` have [`Self::CURRENT`]; the plugin that admits an older
-/// client sets its own in `ConnectionPacketReceivedEvent`.
+/// Clients on `CURRENT_MC_VERSION` have [`Self::CURRENT`]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct JavaConnectionFeatures {
     /// Login goes through the configuration state.
