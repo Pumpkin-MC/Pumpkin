@@ -23,12 +23,16 @@ fn load_functions_recursive<S: std::hash::BuildHasher>(
         return;
     };
     for entry in entries.flatten() {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
         let path = entry.path();
-        if path.is_dir() {
+        if file_type.is_dir() {
             load_functions_recursive(namespace, base_dir, &path, functions);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("mcfunction"))
+        } else if file_type.is_file()
+            && path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("mcfunction"))
             && let Ok(rel_path) = path.strip_prefix(base_dir)
         {
             let mut stem_path = rel_path.to_string_lossy().to_string();
@@ -75,12 +79,16 @@ fn load_tags_recursive<S: std::hash::BuildHasher>(
         return;
     };
     for entry in entries.flatten() {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
         let path = entry.path();
-        if path.is_dir() {
+        if file_type.is_dir() {
             load_tags_recursive(namespace, base_dir, &path, tags);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        } else if file_type.is_file()
+            && path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
             && let Ok(rel_path) = path.strip_prefix(base_dir)
         {
             let mut stem_path = rel_path.to_string_lossy().to_string();
@@ -105,6 +113,48 @@ fn load_tags_recursive<S: std::hash::BuildHasher>(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::fs;
+    use std::path::Path;
+
+    use super::*;
+
+    fn try_create_dir_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, link)
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_dir(target, link)
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "symlinks not supported",
+            ))
+        }
+    }
+
+    fn try_create_file_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, link)
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_file(target, link)
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "symlinks not supported",
+            ))
+        }
+    }
+
     #[test]
     fn parse_mcfunction_content() {
         let content = "# This is a comment\nsay Hello world\n/give @p diamond 1\n\n# Another comment\ngive @p stick 5\n";
@@ -123,5 +173,82 @@ mod tests {
                 "give @p stick 5".to_string()
             ]
         );
+    }
+
+    #[test]
+    fn load_functions_ignores_symlinks_and_loads_regular_files() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root = temp.path();
+        let function_dir = root.join("functions");
+        let nested_dir = function_dir.join("sub");
+        fs::create_dir_all(&nested_dir).expect("create nested");
+
+        fs::write(nested_dir.join("valid.mcfunction"), "say valid").expect("write valid");
+
+        // External directory with an external function
+        let external_dir = root.join("external");
+        fs::create_dir_all(&external_dir).expect("create external");
+        fs::write(external_dir.join("external.mcfunction"), "say external")
+            .expect("write external");
+
+        // Symlink directory inside functions pointing to external directory or parent
+        let symlink_dir = function_dir.join("sym_dir");
+        let sym_dir_created = try_create_dir_symlink(&external_dir, &symlink_dir).is_ok();
+
+        // Symlink file inside functions pointing to external file
+        let symlink_file = function_dir.join("sym_file.mcfunction");
+        let sym_file_created =
+            try_create_file_symlink(&external_dir.join("external.mcfunction"), &symlink_file)
+                .is_ok();
+
+        let mut functions = HashMap::new();
+        load_functions_from_dir("test", &function_dir, &mut functions);
+
+        assert!(functions.contains_key("test:sub/valid"));
+        assert_eq!(
+            functions.get("test:sub/valid").unwrap(),
+            &["say valid".to_string()]
+        );
+
+        if sym_dir_created {
+            assert!(!functions.contains_key("test:sym_dir/external"));
+        }
+        if sym_file_created {
+            assert!(!functions.contains_key("test:sym_file"));
+        }
+    }
+
+    #[test]
+    fn load_function_tags_ignores_symlink_directories() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root = temp.path();
+        let tags_dir = root.join("tags");
+        let func_tags_dir = tags_dir.join("function");
+        fs::create_dir_all(&func_tags_dir).expect("create func tags dir");
+
+        fs::write(
+            func_tags_dir.join("valid.json"),
+            r#"{"values": ["test:sub/valid"]}"#,
+        )
+        .expect("write tag json");
+
+        let external_dir = root.join("external_tags");
+        fs::create_dir_all(&external_dir).expect("create external tags");
+        fs::write(
+            external_dir.join("sym_tag.json"),
+            r#"{"values": ["test:external"]}"#,
+        )
+        .expect("write external tag json");
+
+        let symlink_dir = func_tags_dir.join("sym_dir");
+        let sym_created = try_create_dir_symlink(&external_dir, &symlink_dir).is_ok();
+
+        let mut tags = HashMap::new();
+        load_function_tags_from_dir("test", &tags_dir, &mut tags);
+
+        assert!(tags.contains_key("test:valid"));
+        if sym_created {
+            assert!(!tags.contains_key("test:sym_dir/sym_tag"));
+        }
     }
 }

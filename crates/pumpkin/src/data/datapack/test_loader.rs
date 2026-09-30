@@ -61,13 +61,17 @@ fn load_test_instances_recursive(
     };
 
     for entry in entries.flatten() {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
         let path = entry.path();
 
-        if path.is_dir() {
+        if file_type.is_dir() {
             load_test_instances_recursive(namespace, base_dir, &path, registry);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        } else if file_type.is_file()
+            && path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
             && let Ok(rel_path) = path.strip_prefix(base_dir)
         {
             let mut stem_path = rel_path.to_string_lossy().to_string();
@@ -261,5 +265,94 @@ mod tests {
             Some("minecraft:always_pass")
         );
         assert_eq!(always_pass.structure, "minecraft:empty");
+    }
+
+    fn try_create_dir_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, link)
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_dir(target, link)
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "symlinks not supported",
+            ))
+        }
+    }
+
+    fn try_create_file_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, link)
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_file(target, link)
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "symlinks not supported",
+            ))
+        }
+    }
+
+    #[test]
+    fn load_test_instances_ignores_symlinks_and_loads_regular_files() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let root = temp.path();
+        let test_dir = root.join("test_instance");
+        let sub_dir = test_dir.join("sub");
+        fs::create_dir_all(&sub_dir).expect("create sub dir");
+
+        fs::write(
+            sub_dir.join("valid.json"),
+            r#"{
+                "type": "minecraft:block_based",
+                "environment": "minecraft:default",
+                "structure": "pumpkin:valid",
+                "max_ticks": 100
+            }"#,
+        )
+        .expect("write valid test instance");
+
+        let external_dir = root.join("external");
+        fs::create_dir_all(&external_dir).expect("create external dir");
+        fs::write(
+            external_dir.join("sym.json"),
+            r#"{
+                "type": "minecraft:block_based",
+                "environment": "minecraft:default",
+                "structure": "pumpkin:sym",
+                "max_ticks": 100
+            }"#,
+        )
+        .expect("write sym test instance");
+
+        let sym_dir = test_dir.join("sym_dir");
+        let sym_dir_created = try_create_dir_symlink(&external_dir, &sym_dir).is_ok();
+
+        let sym_file = test_dir.join("sym_file.json");
+        let sym_file_created =
+            try_create_file_symlink(&external_dir.join("sym.json"), &sym_file).is_ok();
+
+        let mut registry = TestInstanceRegistry::new();
+        let count = load_test_instances_from_dir("pumpkin", &test_dir, &mut registry);
+
+        assert_eq!(count, 1);
+        assert!(registry.contains_key("pumpkin:sub/valid"));
+
+        if sym_dir_created {
+            assert!(!registry.contains_key("pumpkin:sym_dir/sym"));
+        }
+        if sym_file_created {
+            assert!(!registry.contains_key("pumpkin:sym_file"));
+        }
     }
 }
