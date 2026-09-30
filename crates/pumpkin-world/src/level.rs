@@ -247,6 +247,9 @@ impl Level {
             biome_source.as_ref(),
             structure_overrides.as_deref(),
         ));
+        if let Some(cache) = world_gen.global_structure_cache() {
+            cache.ensure_strongholds_generated();
+        }
 
         let chunk_saver = match &level_config.chunk {
             ChunkConfig::Linear => Arc::new(ChunkSaver::Linear(ChunkFileManager::new(()))),

@@ -12,7 +12,7 @@ use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::generation::generator::biome_finder::find_closest_biome_3d;
 use pumpkin_world::generation::generator::structure_finder::{
-    find_nearest_structure, find_nearest_structure_start,
+    StructureSearch, find_nearest_structure, find_nearest_structure_start,
 };
 use rustc_hash::FxHashSet;
 
@@ -23,7 +23,7 @@ use crate::command::argument_types::resource_or_tag::{
     STRUCTURE_REGISTRY,
 };
 use crate::command::context::command_context::CommandContext;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
@@ -56,6 +56,11 @@ static STRUCTURE_INVALID_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new
 static STRUCTURE_NOT_FOUND_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_LOCATE_STRUCTURE_NOT_FOUND,
     translation::bedrock::COMMANDS_LOCATE_STRUCTURE_FAIL_NOSTRUCTUREFOUND,
+);
+
+// The stronghold rings are computed in the background and a command can't wait for them.
+static STRUCTURE_PENDING_ERROR_TYPE: LiteralCommandErrorType = LiteralCommandErrorType::new(
+    "Stronghold positions are still being calculated, try again shortly",
 );
 
 static BIOME_NOT_FOUND_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
@@ -147,6 +152,8 @@ fn send_success(
     );
 }
 
+// TODO(parity): resolve structure ids (`stronghold`), not set ids (`strongholds`);
+// report chunk corner (x*16), not centre (x*16+8); `[x, ~, z]` brackets.
 struct LocateStructureExecutor;
 
 impl CommandExecutor for LocateStructureExecutor {
@@ -179,7 +186,7 @@ impl CommandExecutor for LocateStructureExecutor {
             // Strongholds come out of the pre-computed ring cache, which
             // already holds positions they really occupy.
             StructurePlacementType::ConcentricRings(_) => {
-                world_gen.global_structure_cache().and_then(|global_cache| {
+                let search = world_gen.global_structure_cache().map(|global_cache| {
                     find_nearest_structure(
                         origin,
                         &[&set.placement],
@@ -187,7 +194,14 @@ impl CommandExecutor for LocateStructureExecutor {
                         seed as i64,
                         global_cache,
                     )
-                })
+                });
+                match search {
+                    Some(StructureSearch::Found(pos)) => Some(pos),
+                    Some(StructureSearch::Pending) => {
+                        return Err(STRUCTURE_PENDING_ERROR_TYPE.create_without_context());
+                    }
+                    Some(StructureSearch::NotFound) | None => None,
+                }
             }
             // Everything else is spread over a grid whose candidate chunks
             // are only *possible* sites: the biome at a candidate can still

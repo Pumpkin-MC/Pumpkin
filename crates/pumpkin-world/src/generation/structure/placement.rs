@@ -12,7 +12,7 @@ use pumpkin_util::{
 };
 use rayon::prelude::*;
 use std::f64::consts::PI;
-use std::sync::OnceLock;
+use std::sync::{Arc, Once, OnceLock};
 
 use crate::biome::{BiomeSupplier, MultiNoiseBiomeSupplier};
 use crate::generation::noise::router::{
@@ -29,13 +29,23 @@ use super::structures::StructurePosition;
 /// mathematical layout in `O(1)` time instead of triggering cascading chunk loads.
 pub struct GlobalStructureCache {
     /// A cached list of mathematically predicted (`chunk_x`, `chunk_z`) coordinates.
-    stronghold_chunks: OnceLock<Vec<(i32, i32)>>,
+    stronghold_chunks: Arc<OnceLock<Vec<(i32, i32)>>>,
+    /// The ring search that fills `stronghold_chunks`, started once by
+    /// [`Self::ensure_strongholds_generated`]; readers then wait for it.
+    stronghold_job: Option<StrongholdJob>,
+    stronghold_job_started: Once,
     /// Memoized structure starts, keyed by (structure, start chunk x, start chunk z).
     ///
     /// A jigsaw structure's placement is fully determined by its start chunk and the
     /// world seed, so it is computed once here instead of being recomputed for every
     /// surrounding chunk whose structure references overlap it.
     structure_starts: OnceLock<DashMap<(StructureKeys, i32, i32), Option<StructurePosition>>>,
+}
+
+struct StrongholdJob {
+    seed: i64,
+    placement: &'static ConcentricRingsStructurePlacement,
+    multi_noise: Arc<ProtoMultiNoiseRouter>,
 }
 
 struct RingTask {
@@ -47,21 +57,96 @@ struct RingTask {
 impl GlobalStructureCache {
     /// Creates a new, empty global structure cache.
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            stronghold_chunks: OnceLock::new(),
+            stronghold_chunks: Arc::new(OnceLock::new()),
+            stronghold_job: None,
+            stronghold_job_started: Once::new(),
             structure_starts: OnceLock::new(),
         }
     }
 
-    pub fn get_stronghold_chunks(&self) -> &[(i32, i32)] {
-        self.stronghold_chunks
-            .get()
-            .map_or(&[], std::vec::Vec::as_slice)
+    /// Creates a cache whose stronghold ring positions are computed on a background thread
+    /// once [`Self::ensure_strongholds_generated`] is first called.
+    #[must_use]
+    pub fn with_background_strongholds(
+        seed: i64,
+        placement: &'static ConcentricRingsStructurePlacement,
+        multi_noise: &Arc<ProtoMultiNoiseRouter>,
+    ) -> Self {
+        Self {
+            stronghold_job: Some(StrongholdJob {
+                seed,
+                placement,
+                multi_noise: multi_noise.clone(),
+            }),
+            ..Self::new()
+        }
     }
 
-    pub fn init_strongholds(&self, chunks: Vec<(i32, i32)>) {
-        let _ = self.stronghold_chunks.set(chunks);
+    /// Starts the stronghold ring search if it has not started yet
+    pub fn ensure_strongholds_generated(&self) {
+        let Some(job) = &self.stronghold_job else {
+            return;
+        };
+        self.stronghold_job_started.call_once(|| {
+            let (seed, placement) = (job.seed, job.placement);
+            let target = self.stronghold_chunks.clone();
+            let router = job.multi_noise.clone();
+            let spawned = std::thread::Builder::new()
+                .name("Stronghold-Rings".to_string())
+                .spawn(move || {
+                    let compute = || Self::calculate_strongholds(seed, placement, &router);
+                    // Global Rayon workers may block on this result, so the search must never
+                    // run on that pool: use a private pool, or this thread alone if none can be built.
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        rayon::ThreadPoolBuilder::new()
+                            .thread_name(|i| format!("Stronghold-Rings-{i}"))
+                            .build()
+                            .map_or_else(
+                                |_| Self::calculate_strongholds_sequential(seed, placement, &router),
+                                |pool| pool.install(compute),
+                            )
+                    }));
+                    if let Ok(chunks) = result {
+                        let _ = target.set(chunks);
+                    } else {
+                        tracing::error!(
+                            "Stronghold ring calculation panicked, overworld chunk generation will wait until shutdown"
+                        );
+                    }
+                });
+            if let Err(err) = spawned {
+                tracing::warn!("Failed to spawn stronghold ring thread, computing inline: {err}");
+                // Sequential: the caller may be a pool worker that would otherwise steal a job
+                // re-entering this `call_once`.
+                let _ = self.stronghold_chunks.set(Self::calculate_strongholds_sequential(
+                    seed,
+                    placement,
+                    &job.multi_noise,
+                ));
+            }
+        });
+    }
+
+    /// Returns the stronghold ring positions, waiting for the background job if one is running.
+    pub fn get_stronghold_chunks(&self) -> &[(i32, i32)] {
+        if self.stronghold_job.is_some() {
+            self.ensure_strongholds_generated();
+            return self.stronghold_chunks.wait();
+        }
+        self.try_get_stronghold_chunks().unwrap_or_default()
+    }
+
+    /// Returns the stronghold ring positions without waiting, or `None` while the
+    /// background job is still running.
+    pub fn try_get_stronghold_chunks(&self) -> Option<&[(i32, i32)]> {
+        self.ensure_strongholds_generated();
+        match self.stronghold_chunks.get() {
+            Some(chunks) => Some(chunks.as_slice()),
+            None if self.stronghold_job.is_some() => None,
+            None => Some(&[]),
+        }
     }
 
     /// Returns the memoized structure start for the given structure and start chunk,
@@ -94,6 +179,31 @@ impl GlobalStructureCache {
         placement: &ConcentricRingsStructurePlacement,
         multi_noise: &ProtoMultiNoiseRouter,
     ) -> Vec<(i32, i32)> {
+        let (tasks, preferred_biomes) = Self::ring_tasks(seed, placement);
+        tasks
+            .into_par_iter()
+            .panic_fuse()
+            .map(|task| Self::search_ring(task, multi_noise, preferred_biomes))
+            .collect()
+    }
+
+    /// Same as [`Self::calculate_strongholds`], but on the calling thread only.
+    fn calculate_strongholds_sequential(
+        seed: i64,
+        placement: &ConcentricRingsStructurePlacement,
+        multi_noise: &ProtoMultiNoiseRouter,
+    ) -> Vec<(i32, i32)> {
+        let (tasks, preferred_biomes) = Self::ring_tasks(seed, placement);
+        tasks
+            .into_iter()
+            .map(|task| Self::search_ring(task, multi_noise, preferred_biomes))
+            .collect()
+    }
+
+    fn ring_tasks(
+        seed: i64,
+        placement: &ConcentricRingsStructurePlacement,
+    ) -> (Vec<RingTask>, &'static [u16]) {
         let distance_param = f64::from(placement.distance);
         let mut spread = placement.spread;
         let count = placement.count;
@@ -144,39 +254,37 @@ impl GlobalStructureCache {
             }
         }
 
-        tasks
-            .into_par_iter()
-            .map(|mut task| {
-                let mut sampler = MultiNoiseSampler::generate(multi_noise);
-                let noise_center_x = (task.initial_x << 2) + 2;
-                let noise_center_z = (task.initial_z << 2) + 2;
+        (tasks, preferred_biomes)
+    }
 
-                let mut result = None;
-                let mut found = 0;
+    fn search_ring(
+        mut task: RingTask,
+        multi_noise: &ProtoMultiNoiseRouter,
+        preferred_biomes: &[u16],
+    ) -> (i32, i32) {
+        let mut sampler = MultiNoiseSampler::generate(multi_noise);
+        let noise_center_x = (task.initial_x << 2) + 2;
+        let noise_center_z = (task.initial_z << 2) + 2;
 
-                for z in -28..=28 {
-                    for x in -28..=28 {
-                        let noise_x = noise_center_x + x;
-                        let noise_z = noise_center_z + z;
-                        let biome = MultiNoiseBiomeSupplier::OVERWORLD.biome(
-                            noise_x,
-                            0,
-                            noise_z,
-                            &mut sampler,
-                        );
-                        if preferred_biomes.contains(&(biome.id as u16)) {
-                            if result.is_none() || task.search_rng.next_bounded_i32(found + 1) == 0
-                            {
-                                result = Some((noise_x >> 2, noise_z >> 2));
-                            }
-                            found += 1;
-                        }
+        let mut result = None;
+        let mut found = 0;
+
+        for z in -28..=28 {
+            for x in -28..=28 {
+                let noise_x = noise_center_x + x;
+                let noise_z = noise_center_z + z;
+                let biome =
+                    MultiNoiseBiomeSupplier::OVERWORLD.biome(noise_x, 0, noise_z, &mut sampler);
+                if preferred_biomes.contains(&(biome.id as u16)) {
+                    if result.is_none() || task.search_rng.next_bounded_i32(found + 1) == 0 {
+                        result = Some((noise_x >> 2, noise_z >> 2));
                     }
+                    found += 1;
                 }
+            }
+        }
 
-                result.unwrap_or((task.initial_x, task.initial_z))
-            })
-            .collect()
+        result.unwrap_or((task.initial_x, task.initial_z))
     }
 
     #[must_use]
@@ -229,6 +337,9 @@ impl GlobalStructureCache {
         placement: &ConcentricRingsStructurePlacement,
         multi_noise: Option<&ProtoMultiNoiseRouter>,
     ) -> &[(i32, i32)] {
+        if self.stronghold_job.is_some() {
+            return self.get_stronghold_chunks();
+        }
         self.stronghold_chunks.get_or_init(|| {
             multi_noise.map_or_else(
                 || Self::calculate_strongholds_without_biomes(seed, placement),
