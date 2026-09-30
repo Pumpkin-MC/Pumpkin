@@ -71,6 +71,7 @@ pub mod sun_burn;
 pub mod vex;
 pub mod vindicator;
 pub mod warden;
+pub mod warden_anger;
 pub mod warden_spawn_tracker;
 pub mod witch;
 pub mod zoglin;
