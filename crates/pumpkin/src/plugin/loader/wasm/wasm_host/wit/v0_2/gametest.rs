@@ -1,11 +1,10 @@
 use crate::plugin::loader::wasm::wasm_host::state::PluginHostState;
 use pumpkin_host_bindings::v0_2::pumpkin::plugin::gametest::{
-    self, AsyncTestCallbackId, Block, BlockPermutation, BlockPredicateCallbackId, BlockTypeOrId,
+    self, AsyncTestCallbackId, BlockPermutation, BlockPredicateCallbackId, BlockTypeOrId,
     Dimension, DimensionLocation, DimensionTypeOrId, Direction, Entity, EntityPredicateCallbackId,
     FenceConnectivity, FluidType, GameMode, GameTestSequence, ItemStack, ItemTypeOrId,
-    LookDuration, MoveToOptions, NavigationResult, Player, PlayerSkinData,
-    RegistrationBuilder, SculkSpreader, SimulatedPlayer, Tags, Test, TestCallbackId, Vector2,
-    Vector3, VoidCallbackId,
+    LookDuration, MoveToOptions, NavigationResult, Player, PlayerSkinData, RegistrationBuilder,
+    SculkSpreader, SimulatedPlayer, Tags, Test, TestCallbackId, Vector2, Vector3, VoidCallbackId,
 };
 use wasmtime::component::Resource;
 
@@ -68,21 +67,6 @@ impl gametest::Host for PluginHostState {
         Err(wasmtime::Error::msg(
             "gametest.spawn-simulated-player not implemented",
         ))
-    }
-}
-
-impl gametest::HostBlock for PluginHostState {
-    async fn get_permutation(
-        &mut self,
-        _res: Resource<Block>,
-    ) -> wasmtime::Result<BlockPermutation> {
-        Err(wasmtime::Error::msg(
-            "gametest.block.get-permutation not implemented",
-        ))
-    }
-
-    async fn drop(&mut self, _res: Resource<Block>) -> wasmtime::Result<()> {
-        Err(wasmtime::Error::msg("gametest.block.drop not implemented"))
     }
 }
 
@@ -1053,16 +1037,6 @@ impl gametest::HostTest for PluginHostState {
     ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.test.fail-if not implemented",
-        ))
-    }
-
-    async fn get_block(
-        &mut self,
-        _res: Resource<Test>,
-        _block_location: Vector3,
-    ) -> wasmtime::Result<Resource<Block>> {
-        Err(wasmtime::Error::msg(
-            "gametest.test.get-block not implemented",
         ))
     }
 

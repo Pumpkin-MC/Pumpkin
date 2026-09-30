@@ -71,19 +71,11 @@ interface gametest {
     }
 
     /// @minecraft/server.DimensionLocation.
-    ///
-    /// Note: the `dimension` field is an owned WIT resource handle because WIT cannot place a
-    /// borrowed handle inside a record.
     record dimension-location {
         dimension: dimension,
         x: f64,
         y: f64,
         z: f64,
-    }
-
-    /// @minecraft/server.Block.
-    resource block {
-        get-permutation: func() -> block-permutation;
     }
 
     /// TypeScript union: `BlockType | string`.
@@ -302,7 +294,7 @@ interface gametest {
             block-location: vector3,
             is-present: option<bool>,
         );
-        /// Passes a block with an inspectable permutation to the predicate.
+        /// Passes the block's permutation to the predicate.
         assert-block-state: func(
             block-location: vector3,
             callback: block-predicate-callback-id,
@@ -374,7 +366,6 @@ interface gametest {
         destroy-block: func(block-location: vector3, drop-resources: option<bool>);
         fail: func(error-message: string);
         fail-if: func(callback: void-callback-id);
-        get-block: func(block-location: vector3) -> block;
         get-dimension: func() -> dimension;
         get-fence-connectivity: func(block-location: vector3) -> fence-connectivity;
         get-sculk-spreader: func(block-location: vector3) -> option<sculk-spreader>;
@@ -487,7 +478,7 @@ interface gametest {
 interface gametest-callbacks {
     use gametest.{
         test,
-        block,
+        block-permutation,
         void-callback-id,
         test-callback-id,
         async-test-callback-id,
@@ -503,7 +494,7 @@ interface gametest-callbacks {
 
     invoke-async-test: async func(callback: async-test-callback-id, test: test);
 
-    invoke-block-predicate: func(callback: block-predicate-callback-id, block: borrow<block>) -> bool;
+    invoke-block-predicate: func(callback: block-predicate-callback-id, permutation: block-permutation) -> bool;
 
     invoke-entity-predicate: func(callback: entity-predicate-callback-id, entity: borrow<entity>) -> bool;
 }
