@@ -163,7 +163,7 @@ impl AbstractCubeMob {
     }
 
     pub fn mob_read_nbt(&self, hooks: &dyn CubeMobHooks, nbt: &NbtCompound) {
-        hooks.set_size(nbt.get_int("Size").unwrap_or(0) + 1, false);
+        hooks.set_size(nbt.get_int("Size").unwrap_or(0).wrapping_add(1), false);
         self.was_on_ground.store(
             nbt.get_bool("wasOnGround").unwrap_or(false),
             Ordering::Relaxed,
@@ -171,6 +171,11 @@ impl AbstractCubeMob {
     }
 
     pub fn mob_tick(&self, hooks: &dyn CubeMobHooks) {
+        // Cleared before AI runs so the float goal's jump survives the move control.
+        self.mob_entity
+            .living_entity
+            .jumping
+            .store(false, Ordering::SeqCst);
         self.o_squish.store(self.squish.load());
         self.squish
             .store(self.squish.load() + (self.target_squish.load() - self.squish.load()) * 0.5);
@@ -231,7 +236,7 @@ impl AbstractCubeMob {
 
     fn get_sound_pitch(tiny: bool) -> f32 {
         let pitch_adjuster = if tiny { 1.4 } else { 0.8 };
-        (rand::random_range(0.0..1.0) - rand::random_range(0.0..1.0)) * 0.2 + 1.0 * pitch_adjuster
+        ((rand::random_range(0.0..1.0) - rand::random_range(0.0..1.0)) * 0.2 + 1.0) * pitch_adjuster
     }
 }
 
@@ -293,25 +298,10 @@ impl MoveControlTrait for CubeMobMoveControl {
                     movement_input.z = speed_modifier;
                 } else {
                     cube.jump_delay.store(current_delay - 1, Ordering::Relaxed);
-                    mob.get_mob_entity()
-                        .living_entity
-                        .jumping
-                        .store(false, Ordering::SeqCst);
                 }
-            } else {
-                mob.get_mob_entity()
-                    .living_entity
-                    .jumping
-                    .store(false, Ordering::SeqCst);
             }
-        } else {
-            if speed_modifier > 0.0 {
-                movement_input.z = speed_modifier;
-            }
-            mob.get_mob_entity()
-                .living_entity
-                .jumping
-                .store(false, Ordering::SeqCst);
+        } else if speed_modifier > 0.0 {
+            movement_input.z = speed_modifier;
         }
         mob.get_mob_entity()
             .living_entity
@@ -386,10 +376,12 @@ impl Goal for CubeMobAttackGoal {
             if let Some(target) = mob.get_mob_entity().get_target() {
                 let target_pos = target.get_entity().pos.load();
                 let pos = mob.get_entity().pos.load();
+                // Vanilla lookAt yaw.
                 mob.cube_mob().target_yaw.store(
-                    (target_pos.x - pos.x)
-                        .atan2(target_pos.z - pos.z)
-                        .to_degrees() as f32,
+                    ((target_pos.z - pos.z)
+                        .atan2(target_pos.x - pos.x)
+                        .to_degrees()
+                        - 90.0) as f32,
                 );
             }
             mob.cube_mob().is_aggressive.store(true, Ordering::Relaxed);
