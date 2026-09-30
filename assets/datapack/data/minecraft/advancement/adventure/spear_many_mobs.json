@@ -1,0 +1,29 @@
+{
+  "parent": "minecraft:adventure/kill_a_mob",
+  "criteria": {
+    "spear_many_mobs": {
+      "conditions": {
+        "count": 5
+      },
+      "trigger": "minecraft:spear_mobs"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.spear_many_mobs.description"
+    },
+    "frame": "goal",
+    "icon": {
+      "id": "minecraft:iron_spear"
+    },
+    "title": {
+      "translate": "advancements.adventure.spear_many_mobs.title"
+    }
+  },
+  "requirements": [
+    [
+      "spear_many_mobs"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

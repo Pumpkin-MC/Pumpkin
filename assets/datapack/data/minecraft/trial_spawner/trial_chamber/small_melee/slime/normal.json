@@ -1,0 +1,25 @@
+{
+  "simultaneous_mobs": 3.0,
+  "simultaneous_mobs_added_per_player": 0.5,
+  "spawn_potentials": [
+    {
+      "data": {
+        "entity": {
+          "Size": 1,
+          "id": "minecraft:slime"
+        }
+      },
+      "weight": 3
+    },
+    {
+      "data": {
+        "entity": {
+          "Size": 2,
+          "id": "minecraft:slime"
+        }
+      },
+      "weight": 1
+    }
+  ],
+  "ticks_between_spawn": 20
+}

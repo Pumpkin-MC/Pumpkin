@@ -1,0 +1,115 @@
+{
+  "type": "minecraft:sequence",
+  "features": [
+    {
+      "feature": {
+        "type": "minecraft:sculk_patch",
+        "amount_per_charge": 32,
+        "charge_count": 10,
+        "growth_rounds": 0,
+        "spread_attempts": 64,
+        "spread_rounds": 1
+      },
+      "placement": []
+    },
+    {
+      "feature": {
+        "type": "minecraft:overlay",
+        "features": [
+          {
+            "feature": {
+              "type": "minecraft:simple_block",
+              "to_place": {
+                "id": "minecraft:sculk_catalyst",
+                "properties": {
+                  "bloom": "false"
+                }
+              }
+            },
+            "placement": [
+              {
+                "type": "minecraft:random_chance",
+                "chance": 0.5
+              },
+              {
+                "type": "minecraft:block_predicate_filter",
+                "predicate": {
+                  "type": "minecraft:has_sturdy_face",
+                  "direction": "up",
+                  "offset": [
+                    0,
+                    -1,
+                    0
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "feature": {
+              "type": "minecraft:simple_block",
+              "to_place": {
+                "id": "minecraft:sculk_shrieker",
+                "properties": {
+                  "can_summon": "true",
+                  "shrieking": "false",
+                  "waterlogged": "false"
+                }
+              }
+            },
+            "placement": [
+              {
+                "type": "minecraft:count",
+                "count": {
+                  "type": "minecraft:uniform",
+                  "max_inclusive": 3,
+                  "min_inclusive": 1
+                }
+              },
+              {
+                "type": "minecraft:offset",
+                "x": {
+                  "type": "minecraft:uniform",
+                  "max_inclusive": 2,
+                  "min_inclusive": -2
+                },
+                "y": {
+                  "type": "minecraft:uniform",
+                  "max_inclusive": 2,
+                  "min_inclusive": -2
+                },
+                "z": {
+                  "type": "minecraft:uniform",
+                  "max_inclusive": 2,
+                  "min_inclusive": -2
+                }
+              },
+              {
+                "type": "minecraft:block_predicate_filter",
+                "predicate": {
+                  "type": "minecraft:all_of",
+                  "predicates": [
+                    {
+                      "type": "minecraft:matching_block_tag",
+                      "tag": "minecraft:air"
+                    },
+                    {
+                      "type": "minecraft:has_sturdy_face",
+                      "direction": "up",
+                      "offset": [
+                        0,
+                        -1,
+                        0
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "placement": []
+    }
+  ]
+}

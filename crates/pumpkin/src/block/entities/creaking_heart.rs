@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crossbeam::atomic::AtomicCell;
@@ -30,23 +29,33 @@ impl BlockEntity for CreakingHeartBlockEntity {
         Self: Sized,
     {
         let creaking_uuid = nbt
-            .get_string("creaking_uuid")
-            .and_then(|uuid_str| Uuid::parse_str(uuid_str).ok());
+            .get_uuid("creaking")
+            .or_else(|| {
+                nbt.get_string("creaking")
+                    .and_then(|uuid_str| Uuid::parse_str(uuid_str).ok())
+            })
+            .or_else(|| {
+                nbt.get_string("creaking_uuid")
+                    .and_then(|uuid_str| Uuid::parse_str(uuid_str).ok())
+            });
         Self {
             position,
             creaking_uuid: AtomicCell::new(creaking_uuid),
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if let Some(uuid) = self.creaking_uuid.load() {
-                nbt.put_string("creaking_uuid", uuid.to_string());
-            }
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Some(uuid) = self.creaking_uuid.load() {
+            nbt.put_uuid("creaking", uuid);
+        }
+    }
+
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        if let Some(uuid) = self.creaking_uuid.load() {
+            nbt.put_uuid("creaking", uuid);
+        }
+        Some(nbt)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -1,0 +1,14 @@
+{
+  "replace": true,
+  "values": [
+    "minecraft:librarian/2/book_emerald",
+    "minecraft:librarian/2/emerald_lantern",
+    "minecraft:librarian/2/emerald_and_book_desert_enchanted_book",
+    "minecraft:librarian/2/emerald_and_book_jungle_enchanted_book",
+    "minecraft:librarian/2/emerald_and_book_plains_enchanted_book",
+    "minecraft:librarian/2/emerald_and_book_savanna_enchanted_book",
+    "minecraft:librarian/2/emerald_and_book_snow_enchanted_book",
+    "minecraft:librarian/2/emerald_and_book_swamp_enchanted_book",
+    "minecraft:librarian/2/emerald_and_book_taiga_enchanted_book"
+  ]
+}

@@ -6,7 +6,6 @@
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
-pub use p384;
 pub use serde_json;
 
 pub use difficulty::Difficulty;
@@ -16,7 +15,6 @@ pub use permission::PermissionLvl;
 use crate::{math::vector3::Axis, random::RandomImpl};
 
 pub mod biome;
-pub mod chest_loot_table;
 pub mod difficulty;
 pub mod gamemode;
 pub mod loot_table;
@@ -34,7 +32,6 @@ pub mod world_seed;
 pub mod y_offset;
 
 pub mod identifier;
-pub mod jwt;
 pub mod resource;
 pub mod uuid;
 
@@ -116,7 +113,7 @@ pub enum ProfileAction {
 }
 
 /// Represents the six possible block-facing directions in a 3D world.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BlockDirection {
     /// Points downward along the Y axis; often used for blocks attached to the ceiling.
     Down = 0,
@@ -239,8 +236,6 @@ pub struct DoublePerlinNoiseParametersCodec {
     pub first_octave: i32,
     /// Amplitude values for each octave, determining the weight of each frequency layer.
     pub amplitudes: Vec<f64>,
-    #[serde(skip)]
-    pub amplitude: f64,
 }
 
 impl<T> IndexMut<usize> for MutableSplitSlice<'_, T> {

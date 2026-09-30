@@ -6,13 +6,46 @@ use pumpkin_util::text::{
 };
 
 use crate::{
-    command::{CommandExecutor, dispatcher::CommandError},
+    command::{
+        context::command_context::CommandContext,
+        errors::error_types::DISPATCHER_PARSE_EXCEPTION,
+        node::{CommandExecutor, CommandExecutorResult},
+        suggestion::{
+            provider::SuggestionProvider,
+            suggestions::{Suggestions, SuggestionsBuilder},
+        },
+    },
     plugin::loader::wasm::wasm_host::{
-        DowncastResourceExt, PluginInstance, WasmPlugin,
-        wit::v0_1::pumpkin::plugin::command::CommandError as CommandErrorWit,
+        PluginInstance, WasmPlugin,
+        args::build_consumed_args_from_context,
+        state::PluginHostState,
+        wit::v0_1::pumpkin::plugin::command::{CommandError as CommandErrorWit, SuggestionRequest},
     },
     server::Server,
 };
+
+fn map_command_result(
+    state: &mut PluginHostState,
+    result: Result<i32, CommandErrorWit>,
+) -> CommandExecutorResult {
+    match result {
+        Ok(value) => Ok(value),
+        Err(CommandErrorWit::InvalidConsumption(value)) => Err(DISPATCHER_PARSE_EXCEPTION
+            .create_without_context(TextComponent::text(format!(
+                "Invalid consumption: {value:?}"
+            )))),
+        Err(CommandErrorWit::InvalidRequirement) => Err(DISPATCHER_PARSE_EXCEPTION
+            .create_without_context(TextComponent::text("Invalid requirement"))),
+        Err(CommandErrorWit::PermissionDenied) => Err(DISPATCHER_PARSE_EXCEPTION
+            .create_without_context(TextComponent::text("Permission denied"))),
+        Err(CommandErrorWit::CommandFailed(resource)) => Err(DISPATCHER_PARSE_EXCEPTION
+            .create_without_context(
+                state
+                    .take(resource)
+                    .expect("todo: make this method return a result"),
+            )),
+    }
+}
 
 pub struct WasmCommandExecutor {
     pub handler_id: u32,
@@ -21,93 +54,150 @@ pub struct WasmCommandExecutor {
 }
 
 impl CommandExecutor for WasmCommandExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a crate::command::CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a crate::command::args::ConsumedArgs<'a>,
-    ) -> crate::command::CommandResult<'a> {
-        Box::pin(async move {
-            let mut store = self.plugin.store.lock().await;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let sender = context.source.output.clone();
+        let server = self.server.clone();
+        let consumed_args = build_consumed_args_from_context(context);
+        let handler_id = self.handler_id;
+        let function = match self.plugin.plugin_instance.as_ref() {
+            PluginInstance::V0_1(plugin) => plugin.func_handle_command(),
+            PluginInstance::V0_2(_) => panic!("Unexpected plugin version in v0.1 path."),
+        };
 
-            let sender_resource = store
-                .data_mut()
-                .add_command_sender(sender.clone())
-                .expect("valid command sender");
-            let server_resource = store
-                .data_mut()
-                .add_server(self.server.clone())
-                .expect("valid server");
-            let args_resource = store
-                .data_mut()
-                .add_consumed_args(args)
-                .expect("valid consumed args");
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                self.plugin
+                    .store
+                    .call_guest(move |mut guest| {
+                        Box::pin(async move {
+                            let (sender_resource, server_resource, args_resource) =
+                                guest.with(|mut store| {
+                                    let sender_resource = store.data_mut().add(sender)?;
+                                    let server_resource = match store.data_mut().add(server) {
+                                        Ok(resource) => resource,
+                                        Err(error) => {
+                                            store.data_mut().discard(sender_resource);
+                                            return Err(error);
+                                        }
+                                    };
+                                    let args_resource = match store.data_mut().add(consumed_args) {
+                                        Ok(resource) => resource,
+                                        Err(error) => {
+                                            store.data_mut().discard(sender_resource);
+                                            store.data_mut().discard(server_resource);
+                                            return Err(error);
+                                        }
+                                    };
+                                    Ok::<_, wasmtime::Error>((
+                                        sender_resource,
+                                        server_resource,
+                                        args_resource,
+                                    ))
+                                })?;
 
-            let sender_rep = sender_resource.rep();
-            let server_rep = server_resource.rep();
-            let args_rep = args_resource.rep();
+                            let result = guest
+                                .call(
+                                    function,
+                                    (handler_id, sender_resource, server_resource, args_resource),
+                                )
+                                .await;
 
-            match self.plugin.plugin_instance {
-                PluginInstance::V0_1(ref plugin) => {
-                    let result = plugin
-                        .call_handle_command(
-                            &mut *store,
-                            self.handler_id,
-                            sender_resource,
-                            server_resource,
-                            args_resource,
-                        )
-                        .await;
-
-                    let _ = store
-                        .data_mut()
-                        .resource_table
-                        .delete::<crate::plugin::loader::wasm::wasm_host::state::CommandSenderResource>(
-                            wasmtime::component::Resource::new_own(sender_rep),
-                        );
-                    let _ = store
-                        .data_mut()
-                        .resource_table
-                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                        wasmtime::component::Resource::new_own(server_rep),
-                    );
-                    let _ = store
-                        .data_mut()
-                        .resource_table
-                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ConsumedArgsResource>(
-                            wasmtime::component::Resource::new_own(args_rep),
-                        );
-
-                    let result = result.map_err(|e| {
-                        CommandError::CommandFailed(
+                            guest.with(|mut store| {
+                                result.map(|(result,)| map_command_result(store.data_mut(), result))
+                            })
+                        })
+                    })
+                    .await
+                    .map_err(|error| {
+                        DISPATCHER_PARSE_EXCEPTION.create_without_context(
                             TextComponent::text(format!(
-                                "Wasm command failed with following error: {e}"
+                                "Wasm command failed with following error: {error}"
                             ))
                             .color(Color::Named(NamedColor::Red)),
                         )
-                    })?;
+                    })?
+            })
+        })
+    }
+}
 
-                    match result {
-                        Ok(value) => Ok(value),
-                        Err(err) => match err {
-                            CommandErrorWit::InvalidConsumption(value) => {
-                                Err(CommandError::InvalidConsumption(value))
-                            }
-                            CommandErrorWit::InvalidRequirement => {
-                                Err(CommandError::InvalidRequirement)
-                            }
-                            CommandErrorWit::PermissionDenied => {
-                                Err(CommandError::PermissionDenied)
-                            }
-                            CommandErrorWit::CommandFailed(resource) => {
-                                Err(CommandError::CommandFailed(
-                                    resource.consume(store.data_mut()).provider,
-                                ))
-                            }
-                        },
+pub struct WasmCommandSuggestionProvider {
+    pub handler_id: u32,
+    pub plugin: Arc<WasmPlugin>,
+    pub server: Arc<Server>,
+}
+
+impl SuggestionProvider for WasmCommandSuggestionProvider {
+    fn suggest(&self, context: &CommandContext, builder: SuggestionsBuilder) -> Suggestions {
+        let sender = context.source.output.clone();
+        let server = self.server.clone();
+        let input = context.input.clone();
+        let request = SuggestionRequest {
+            input: input.clone(),
+            cursor: input.len().try_into().unwrap_or(u32::MAX),
+            start: builder.start.try_into().unwrap_or(u32::MAX),
+            remaining: builder.remaining().to_string(),
+        };
+        let handler_id = self.handler_id;
+        let function = match self.plugin.plugin_instance.as_ref() {
+            PluginInstance::V0_1(plugin) => plugin.func_handle_command_suggestion(),
+            PluginInstance::V0_2(_) => panic!("Unexpected plugin version in v0.1 path."),
+        };
+
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                match self
+                    .plugin
+                    .store
+                    .call_guest(move |mut guest| {
+                        Box::pin(async move {
+                            let (sender_resource, server_resource) = guest.with(|mut store| {
+                                let sender_resource = store.data_mut().add(sender)?;
+                                let server_resource = match store.data_mut().add(server) {
+                                    Ok(resource) => resource,
+                                    Err(error) => {
+                                        store.data_mut().discard(sender_resource);
+                                        return Err(error);
+                                    }
+                                };
+                                Ok::<_, wasmtime::Error>((sender_resource, server_resource))
+                            })?;
+                            let response = guest
+                                .call(
+                                    function,
+                                    (handler_id, sender_resource, server_resource, request),
+                                )
+                                .await
+                                .map(|(response,)| response);
+                            guest.with(|mut store| {
+                                response.map(|response| {
+                                    let mut builder = builder;
+                                    for suggestion in response.values {
+                                        if let Some(tooltip) = suggestion.tooltip {
+                                            let text = store
+                                                .data_mut()
+                                                .take(tooltip)
+                                                .expect("Invalid text component");
+                                            builder = builder
+                                                .suggest_with_tooltip(suggestion.value, text);
+                                        } else {
+                                            builder = builder.suggest(suggestion.value);
+                                        }
+                                    }
+                                    builder.build()
+                                })
+                            })
+                        })
+                    })
+                    .await
+                {
+                    Ok(suggestions) => suggestions,
+                    Err(error) => {
+                        tracing::error!("Wasm command suggestion failed: {error}");
+                        Suggestions::empty()
                     }
                 }
-            }
+            })
         })
     }
 }

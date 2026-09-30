@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_REMOVE_ENTITIES;
+use pumpkin_data::packet::clientbound::play::REMOVE_ENTITIES;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -10,7 +10,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 ///
 /// This is typically sent when an entity leaves the player's tracking range,
 /// is killed, or is otherwise removed from the world.
-#[java_packet(PLAY_REMOVE_ENTITIES)]
+#[java_packet(REMOVE_ENTITIES)]
 pub struct CRemoveEntities<'a> {
     /// A list of entity IDs to be removed.
     pub entity_ids: &'a [VarInt],
@@ -27,11 +27,20 @@ impl ClientPacket for CRemoveEntities<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_var_int(&VarInt(self.entity_ids.len() as i32))?;
-        for id in self.entity_ids {
-            write.write_var_int(id)?;
+        if *version == JavaMinecraftVersion::V_1_17 {
+            write.write_var_int(self.entity_ids.first().unwrap_or(&VarInt(0)))?;
+        } else if *version <= JavaMinecraftVersion::V_1_7_6 {
+            write.write_u8(self.entity_ids.len() as u8)?;
+            for id in self.entity_ids {
+                write.write_i32_be(id.0)?;
+            }
+        } else {
+            write.write_var_int(&VarInt(self.entity_ids.len() as i32))?;
+            for id in self.entity_ids {
+                write.write_var_int(id)?;
+            }
         }
         Ok(())
     }

@@ -1,0 +1,6 @@
+{
+  "values": [
+    "minecraft:player_explosion",
+    "#minecraft:is_player_attack"
+  ]
+}

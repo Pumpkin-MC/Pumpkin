@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:skeleton",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.skeleton.author"
+  },
+  "height": 3,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.skeleton.title"
+  },
+  "width": 4
+}

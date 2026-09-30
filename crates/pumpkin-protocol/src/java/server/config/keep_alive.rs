@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::CONFIG_KEEP_ALIVE;
+use pumpkin_data::packet::serverbound::config::KEEP_ALIVE;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_KEEP_ALIVE)]
+#[java_packet(KEEP_ALIVE)]
 pub struct SKeepAlive {
     pub keep_alive_id: i64,
 }

@@ -14,31 +14,28 @@ use pumpkin_inventory::{
     player::player_inventory::PlayerInventory,
     screen_handler::{InventoryPlayer, ScreenHandler},
 };
-use pumpkin_protocol::bedrock::{
-    client::{inventory_content::CInventoryContent, respawn::CRespawn},
-    network_item::{
-        ContainerName, FullContainerName, NetworkItemDescriptor, NetworkItemStackDescriptor,
-    },
-    respawn::RespawnState,
-};
 use pumpkin_protocol::{
     bedrock::{
         client::{
-            chunk_radius_update::CChunkRadiusUpdate, container_open::CContainerOpen,
-            player_hotbar::CPlayerHotbar, update_block::CUpdateBlock,
+            chunk_radius_updated::CChunkRadiusUpdated, container_open::CContainerOpen,
+            inventory_content::CInventoryContent, player_hotbar::CPlayerHotbar,
+            update_block::CUpdateBlock,
+        },
+        network_item::{
+            ContainerName, FullContainerName, NetworkItemDescriptor, NetworkItemStackDescriptor,
         },
         server::{
-            actor_event::{ActorEventType, SActorEvent},
+            actor_event::{ActorEventID, SActorEvent},
             animate::{AnimateAction, SAnimate},
             block_pick_request::SBlockPickRequest,
             command_request::SCommandRequest,
             container_close::SContainerClose,
             emote::SEmote,
             emote_list::SEmoteList,
-            interaction::{Action, SInteraction},
+            interact::{Action, SInteract},
             inventory_transaction::{SInventoryTransaction, TransactionData},
             mob_equipment::SMobEquipment,
-            player_action::{Action as PlayerAction, SPlayerAction},
+            player_action::{PlayerActionType as PlayerAction, SPlayerAction},
             player_auth_input::{InputData, SPlayerAuthInput},
             request_chunk_radius::SRequestChunkRadius,
             respawn::SRespawn,
@@ -47,11 +44,16 @@ use pumpkin_protocol::{
         },
     },
     codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
-    java::client::play::{Animation, CEntityAnimation, CSetSelectedSlot, CSystemChatMessage},
+    java::{
+        client::play::{
+            Animation, CEntityAnimation, CSetSelectedSlot, CSwingArm, CSystemChatMessage,
+        },
+        server::play::ActionType,
+    },
 };
 use pumpkin_util::{GameMode, Hand, math::position::BlockPos, text::TextComponent};
 
-use pumpkin_world::inventory::Inventory;
+use pumpkin_inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 
 use crate::{
@@ -65,6 +67,7 @@ use crate::{
         item_held::PlayerItemHeldEvent,
         player_chat::PlayerChatEvent,
         player_command_send::PlayerCommandSendEvent,
+        player_interact_entity_event::PlayerInteractEntityEvent,
         player_interact_event::{InteractAction, PlayerInteractEvent},
         player_toggle_flight_event::PlayerToggleFlightEvent,
     },

@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "group": "waxed_oxidized_copper_grate",
+  "key": {
+    "M": "minecraft:waxed_oxidized_copper"
+  },
+  "pattern": [
+    " M ",
+    "M M",
+    " M "
+  ],
+  "result": {
+    "count": 4,
+    "id": "minecraft:waxed_oxidized_copper_grate"
+  }
+}

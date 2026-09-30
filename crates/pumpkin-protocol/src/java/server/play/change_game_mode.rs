@@ -2,12 +2,12 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_CHANGE_GAME_MODE;
+use pumpkin_data::packet::serverbound::play::CHANGE_GAME_MODE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::GameMode;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_CHANGE_GAME_MODE)]
+#[java_packet(CHANGE_GAME_MODE)]
 pub struct SChangeGameMode {
     pub game_mode: GameMode,
 }

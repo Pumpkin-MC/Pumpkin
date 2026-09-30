@@ -5,11 +5,30 @@ use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use serde::Deserialize;
+use serde_json::Value;
 use syn::LitInt;
 
 #[derive(Deserialize)]
 struct GeyserBiomeMapping {
     bedrock_id: u8,
+}
+
+fn deserialize_carvers<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrVec {
+        String(String),
+        Vec(Vec<String>),
+    }
+
+    match Option::<StringOrVec>::deserialize(deserializer)? {
+        Some(StringOrVec::String(s)) => Ok(vec![s]),
+        Some(StringOrVec::Vec(v)) => Ok(v),
+        None => Ok(Vec::new()),
+    }
 }
 
 /// Raw deserialization shape for a single biome entry from `biome.json`.
@@ -23,43 +42,78 @@ pub struct Biome {
     downfall: f32,
     /// Optional modifier that changes how temperature is applied.
     temperature_modifier: Option<TemperatureModifier>,
-    //carvers: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_carvers")]
+    pub carvers: Vec<String>,
     /// Nested lists of feature resource-location strings applied during world generation.
     features: Vec<Vec<String>>,
     /// Probability per chunk tick that a creature spawns, if not overridden per-biome.
     creature_spawn_probability: Option<f32>,
     /// Spawn group data for each entity category in this biome.
+    #[serde(default)]
     spawners: SpawnGroups,
     /// Per-entity spawn cost budget entries, keyed by namespaced entity ID.
+    #[serde(default)]
     spawn_costs: BTreeMap<String, SpawnCosts>,
+    /// Environment attributes; 26.3 stores natural mob spawns here.
+    #[serde(default)]
+    attributes: BTreeMap<String, Value>,
     /// Numeric registry ID assigned to this biome.
+    #[serde(default)]
     pub id: u8,
 }
 
+impl Biome {
+    fn apply_natural_mob_spawns(&mut self) {
+        let Some(attr) = self.attributes.get("minecraft:gameplay/natural_mob_spawns") else {
+            return;
+        };
+        let Some(argument) = attr.get("argument") else {
+            return;
+        };
+        if let Some(spawns) = argument.get("spawns_by_category")
+            && let Ok(groups) = serde_json::from_value::<SpawnGroups>(spawns.clone())
+        {
+            self.spawners = groups;
+        }
+        if let Some(costs) = argument.get("spawn_costs")
+            && let Ok(spawn_costs) = serde_json::from_value(costs.clone())
+        {
+            self.spawn_costs = spawn_costs;
+        }
+    }
+}
+
 /// Spawn group data for all entity categories within a biome.
-#[derive(Deserialize, PartialEq, Eq, Hash)]
+#[derive(Deserialize, Default, PartialEq, Eq, Hash)]
 struct SpawnGroups {
     /// Hostile mob spawners for this biome.
+    #[serde(default)]
     monster: Vec<Spawner>,
     /// Ambient creature spawners (e.g. bats) for this biome.
+    #[serde(default)]
     ambient: Vec<Spawner>,
     /// Axolotl spawners for this biome.
+    #[serde(default)]
     axolotls: Vec<Spawner>,
     /// Passive creature spawners (e.g. cows, sheep) for this biome.
+    #[serde(default)]
     creature: Vec<Spawner>,
     /// Miscellaneous entity spawners for this biome.
+    #[serde(default)]
     misc: Vec<Spawner>,
     /// Underground water creature spawners (e.g. glow squid) for this biome.
+    #[serde(default)]
     underground_water_creature: Vec<Spawner>,
     /// Water ambient spawners (e.g. fish) for this biome.
+    #[serde(default)]
     water_ambient: Vec<Spawner>,
     /// Water creature spawners (e.g. dolphins) for this biome.
+    #[serde(default)]
     water_creature: Vec<Spawner>,
 }
 
 /// A single entity spawner entry within a spawn group, as defined in `biome.json`.
-#[derive(Deserialize, Hash, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Hash, PartialEq, Eq)]
 struct Spawner {
     /// Namespaced entity type ID (e.g. `"minecraft:zombie"`).
     r#type: String,
@@ -67,6 +121,46 @@ struct Spawner {
     min_count: i32,
     /// Maximum number of entities in a spawn group.
     max_count: i32,
+}
+
+impl<'de> Deserialize<'de> for Spawner {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Raw {
+            r#type: String,
+            #[serde(default, alias = "minCount")]
+            min_count: Option<i32>,
+            #[serde(default, alias = "maxCount")]
+            max_count: Option<i32>,
+            #[serde(default)]
+            count: Option<Value>,
+        }
+
+        let raw = Raw::deserialize(deserializer)?;
+        let (min_count, max_count) = match raw.count {
+            Some(Value::Number(n)) => {
+                let value = n.as_i64().unwrap_or(1) as i32;
+                (value, value)
+            }
+            Some(Value::Object(object)) => {
+                let min = object
+                    .get("min_inclusive")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(1) as i32;
+                let max = object
+                    .get("max_inclusive")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(min as i64) as i32;
+                (min, max)
+            }
+            _ => (raw.min_count.unwrap_or(1), raw.max_count.unwrap_or(1)),
+        };
+        Ok(Self {
+            r#type: raw.r#type,
+            min_count,
+            max_count,
+        })
+    }
 }
 
 impl Spawner {
@@ -213,9 +307,29 @@ struct MultiNoiseBiomeSuppliers {
 /// Generates the `TokenStream` for the `Biome` struct, its constants, lookup methods,
 /// the multi-noise biome source trees, and the `BiomeTree` search implementation.
 pub fn build() -> TokenStream {
-    let biomes: BTreeMap<String, Biome> =
-        serde_json::from_str(&fs::read_to_string("../../assets/biome.json").unwrap())
-            .expect("Failed to parse biome.json");
+    let dir = std::path::Path::new("../../assets/datapack/data/minecraft/worldgen/biome");
+    let mut biomes: BTreeMap<String, Biome> = BTreeMap::new();
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("Missing worldgen/biome directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.path());
+
+    for (i, entry) in entries.iter().enumerate() {
+        let stem = entry
+            .path()
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        let content = fs::read_to_string(entry.path()).expect("Failed to read biome file");
+        let mut biome: Biome = serde_json::from_str(&content).expect("Failed to parse biome JSON");
+        biome.apply_natural_mob_spawns();
+        biome.id = i as u8;
+        biomes.insert(stem, biome);
+    }
+
     let biome_trees: MultiNoiseBiomeSuppliers = serde_json::from_str(
         &fs::read_to_string("../../assets/multi_noise_biome_tree.json").unwrap(),
     )
@@ -241,7 +355,15 @@ pub fn build() -> TokenStream {
         let has_precipitation = biome.has_precipitation;
         let temperature = biome.temperature;
         let downfall = biome.downfall;
-        //  let carvers = &biome.carvers;
+        let carvers: Vec<TokenStream> = biome
+            .carvers
+            .iter()
+            .map(|c| {
+                let name = c.strip_prefix("minecraft:").unwrap_or(c);
+                let variant_name = format_ident!("{}", name.to_uppercase());
+                quote! { &crate::carver::#variant_name }
+            })
+            .collect();
         let features: Vec<TokenStream> = biome
             .features
             .iter()
@@ -351,6 +473,7 @@ pub fn build() -> TokenStream {
                      #downfall
                 ),
                 features: &[#(#features),*],
+                carvers: &[#(#carvers),*],
                 creature_spawn_probability: #creature_spawn_probability,
                 spawners: #spawners,
                 spawn_costs: phf::phf_map! {
@@ -381,7 +504,7 @@ pub fn build() -> TokenStream {
             pub registry_id: &'static str,
             pub be_network_id: u8,
             pub weather: Weather,
-            // carvers: &'static [&str],
+            pub carvers: &'static [&'static crate::carver::CarverConfig],
             pub features: &'static [&'static [crate::placed_feature::PlacedFeature]],
             pub creature_spawn_probability: f32,
             pub spawners: SpawnGroups,
@@ -499,22 +622,264 @@ pub fn build() -> TokenStream {
             }
         }
 
-        #[derive(PartialEq)]
-        pub struct ParameterRange {
-            min: i64,
-            max: i64,
+        pub const QUANTIZATION_FACTOR: f32 = 10000.0;
+
+        #[inline]
+        #[must_use]
+        pub const fn quantize_coord(coord: f32) -> i64 {
+            (coord * QUANTIZATION_FACTOR) as i64
         }
 
-        impl ParameterRange {
-            pub fn calc_distance(&self, noise: i64) -> i64 {
-                if noise > self.max {
-                    noise - self.max
-                } else if noise < self.min {
-                    self.min - noise
+        #[inline]
+        #[must_use]
+        pub const fn unquantize_coord(coord: i64) -> f32 {
+            coord as f32 / QUANTIZATION_FACTOR
+        }
+
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        pub struct Parameter {
+            pub min: i64,
+            pub max: i64,
+        }
+
+        pub type ParameterRange = Parameter;
+
+        impl Parameter {
+            #[must_use]
+            pub const fn new(min: i64, max: i64) -> Self {
+                Self { min, max }
+            }
+
+            #[must_use]
+            pub const fn point(min: f32) -> Self {
+                Self::span(min, min)
+            }
+
+            #[must_use]
+            pub const fn span(min: f32, max: f32) -> Self {
+                assert!(min <= max, "min > max");
+                Self {
+                    min: quantize_coord(min),
+                    max: quantize_coord(max),
+                }
+            }
+
+            #[must_use]
+            pub const fn span_quantized(min: i64, max: i64) -> Self {
+                assert!(min <= max, "min > max");
+                Self { min, max }
+            }
+
+            #[inline]
+            #[must_use]
+            pub const fn calc_distance(&self, noise: i64) -> i64 {
+                self.distance(noise)
+            }
+
+            #[inline]
+            #[must_use]
+            pub const fn distance(&self, target: i64) -> i64 {
+                let above = target - self.max;
+                let below = self.min - target;
+                if above > 0 {
+                    above
+                } else if below > 0 {
+                    below
                 } else {
                     0
                 }
             }
+
+            #[inline]
+            #[must_use]
+            pub const fn distance_parameter(&self, target: &Self) -> i64 {
+                let above = target.min - self.max;
+                let below = self.min - target.max;
+                if above > 0 {
+                    above
+                } else if below > 0 {
+                    below
+                } else {
+                    0
+                }
+            }
+
+            #[inline]
+            #[must_use]
+            pub const fn span_with(&self, other: Option<&Self>) -> Self {
+                match other {
+                    None => *self,
+                    Some(other) => Self {
+                        min: if self.min < other.min { self.min } else { other.min },
+                        max: if self.max > other.max { self.max } else { other.max },
+                    },
+                }
+            }
+        }
+
+        impl fmt::Display for Parameter {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                if self.min == self.max {
+                    write!(f, "{}", self.min)
+                } else {
+                    write!(f, "[{}-{}]", self.min, self.max)
+                }
+            }
+        }
+
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        pub struct TargetPoint {
+            pub temperature: i64,
+            pub humidity: i64,
+            pub continentalness: i64,
+            pub erosion: i64,
+            pub depth: i64,
+            pub weirdness: i64,
+        }
+
+        impl TargetPoint {
+            #[must_use]
+            pub const fn new(
+                temperature: i64,
+                humidity: i64,
+                continentalness: i64,
+                erosion: i64,
+                depth: i64,
+                weirdness: i64,
+            ) -> Self {
+                Self {
+                    temperature,
+                    humidity,
+                    continentalness,
+                    erosion,
+                    depth,
+                    weirdness,
+                }
+            }
+
+            #[must_use]
+            pub const fn to_parameter_array(&self) -> [i64; 7] {
+                [
+                    self.temperature,
+                    self.humidity,
+                    self.continentalness,
+                    self.erosion,
+                    self.depth,
+                    self.weirdness,
+                    0,
+                ]
+            }
+
+            #[must_use]
+            pub const fn convert_to_list(&self) -> [i64; 7] {
+                self.to_parameter_array()
+            }
+        }
+
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        pub struct ParameterPoint {
+            pub temperature: Parameter,
+            pub humidity: Parameter,
+            pub continentalness: Parameter,
+            pub erosion: Parameter,
+            pub depth: Parameter,
+            pub weirdness: Parameter,
+            pub offset: i64,
+        }
+
+        impl ParameterPoint {
+            #[must_use]
+            pub const fn new(
+                temperature: Parameter,
+                humidity: Parameter,
+                continentalness: Parameter,
+                erosion: Parameter,
+                depth: Parameter,
+                weirdness: Parameter,
+                offset: i64,
+            ) -> Self {
+                Self {
+                    temperature,
+                    humidity,
+                    continentalness,
+                    erosion,
+                    depth,
+                    weirdness,
+                    offset,
+                }
+            }
+
+            #[inline]
+            #[must_use]
+            pub const fn fitness(&self, target: &TargetPoint) -> i64 {
+                let temp_dist = self.temperature.distance(target.temperature);
+                let hum_dist = self.humidity.distance(target.humidity);
+                let cont_dist = self.continentalness.distance(target.continentalness);
+                let ero_dist = self.erosion.distance(target.erosion);
+                let dep_dist = self.depth.distance(target.depth);
+                let wei_dist = self.weirdness.distance(target.weirdness);
+
+                temp_dist * temp_dist
+                    + hum_dist * hum_dist
+                    + cont_dist * cont_dist
+                    + ero_dist * ero_dist
+                    + dep_dist * dep_dist
+                    + wei_dist * wei_dist
+                    + self.offset * self.offset
+            }
+
+            #[must_use]
+            pub const fn parameter_space(&self) -> [Parameter; 7] {
+                [
+                    self.temperature,
+                    self.humidity,
+                    self.continentalness,
+                    self.erosion,
+                    self.depth,
+                    self.weirdness,
+                    Parameter::new(self.offset, self.offset),
+                ]
+            }
+        }
+
+        #[must_use]
+        pub const fn target(
+            temperature: f32,
+            humidity: f32,
+            continentalness: f32,
+            erosion: f32,
+            depth: f32,
+            weirdness: f32,
+        ) -> TargetPoint {
+            TargetPoint::new(
+                quantize_coord(temperature),
+                quantize_coord(humidity),
+                quantize_coord(continentalness),
+                quantize_coord(erosion),
+                quantize_coord(depth),
+                quantize_coord(weirdness),
+            )
+        }
+
+        #[must_use]
+        pub const fn parameters(
+            temperature: f32,
+            humidity: f32,
+            continentalness: f32,
+            erosion: f32,
+            depth: f32,
+            weirdness: f32,
+            offset: f32,
+        ) -> ParameterPoint {
+            ParameterPoint::new(
+                Parameter::point(temperature),
+                Parameter::point(humidity),
+                Parameter::point(continentalness),
+                Parameter::point(erosion),
+                Parameter::point(depth),
+                Parameter::point(weirdness),
+                quantize_coord(offset),
+            )
         }
 
         #[derive(PartialEq)]
@@ -588,14 +953,15 @@ pub fn build() -> TokenStream {
                     Self::Branch { parameters, .. } => parameters,
                 };
 
-                // Fully unrolled for 7 dimensions to maximize throughput
-                params[0].calc_distance(p[0]) +
-                params[1].calc_distance(p[1]) +
-                params[2].calc_distance(p[2]) +
-                params[3].calc_distance(p[3]) +
-                params[4].calc_distance(p[4]) +
-                params[5].calc_distance(p[5]) +
-                params[6].calc_distance(p[6])
+                let d0 = params[0].calc_distance(p[0]);
+                let d1 = params[1].calc_distance(p[1]);
+                let d2 = params[2].calc_distance(p[2]);
+                let d3 = params[3].calc_distance(p[3]);
+                let d4 = params[4].calc_distance(p[4]);
+                let d5 = params[5].calc_distance(p[5]);
+                let d6 = params[6].calc_distance(p[6]);
+
+                d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3 + d4 * d4 + d5 * d5 + d6 * d6
             }
         }
 

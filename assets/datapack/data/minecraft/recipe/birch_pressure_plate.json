@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "group": "wooden_pressure_plate",
+  "key": {
+    "#": "minecraft:birch_planks"
+  },
+  "pattern": [
+    "##"
+  ],
+  "result": {
+    "id": "minecraft:birch_pressure_plate"
+  }
+}

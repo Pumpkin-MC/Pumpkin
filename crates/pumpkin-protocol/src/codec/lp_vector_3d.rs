@@ -5,7 +5,7 @@ use crate::{
     ser::{NetworkWriteExt, ReadingError, WritingError},
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LpVector3d(pub Vector3<f64>);
 
 impl LpVector3d {

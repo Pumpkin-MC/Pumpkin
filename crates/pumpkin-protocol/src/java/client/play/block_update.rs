@@ -1,5 +1,4 @@
-use pumpkin_data::block_state_remap::remap_block_state_for_version;
-use pumpkin_data::packet::clientbound::PLAY_BLOCK_UPDATE;
+use pumpkin_data::packet::clientbound::play::BLOCK_UPDATE;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -15,7 +14,7 @@ use crate::{
 ///
 /// This is the most common way to sync world changes to the client, such as
 /// when a player places a block, a fluid flows, or a redstone component toggles.
-#[java_packet(PLAY_BLOCK_UPDATE)]
+#[java_packet(BLOCK_UPDATE)]
 pub struct CBlockUpdate {
     /// The world coordinates of the block being updated.
     pub location: BlockPos,
@@ -37,12 +36,8 @@ impl ClientPacket for CBlockUpdate {
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
-        write.write_block_pos(&self.location)?;
-
-        let remapped_state = u16::try_from(self.state_id.0).map_or(self.state_id.0, |state_id| {
-            i32::from(remap_block_state_for_version(state_id, *version))
-        });
-        write.write_var_int(&VarInt(remapped_state))?;
+        write.write_block_pos(&self.location, version)?;
+        write.write_var_int(&self.state_id)?;
 
         Ok(())
     }

@@ -1,12 +1,12 @@
 use crate::IdOr;
 use crate::java::client::dialog::DialogNBT;
-use pumpkin_data::packet::clientbound::CONFIG_SHOW_DIALOG;
+use pumpkin_data::packet::clientbound::config::SHOW_DIALOG;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_SHOW_DIALOG)]
+#[java_packet(SHOW_DIALOG)]
 pub struct CConfigShowDialog<'a> {
     pub dialog: IdOr<DialogNBT<'a>>,
 }

@@ -1,8 +1,5 @@
-use pumpkin_data::packet::clientbound::LOGIN_HELLO;
-use pumpkin_macros::java_packet;
-
-use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
+use crate::{ClientPacket, MultiVersionJavaPacket};
 use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Sent by the server to initiate the encryption handshake.
@@ -10,7 +7,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This packet provides the client with the server's public key and a
 /// verification token, allowing the client to generate a shared secret
 /// for secure communication.
-#[java_packet(LOGIN_HELLO)]
+//#[java_packet(HELLO)]
 pub struct CEncryptionRequest<'a> {
     /// The server's ID string. In modern Minecraft, this is usually
     /// an empty string unless the server is using legacy authentication.
@@ -23,6 +20,12 @@ pub struct CEncryptionRequest<'a> {
     /// Indicates whether the server is in "online mode" and requires
     /// Mojang authentication.
     pub should_authenticate: bool,
+}
+
+impl MultiVersionJavaPacket for CEncryptionRequest<'_> {
+    fn to_id(_version: JavaMinecraftVersion) -> i32 {
+        1
+    }
 }
 
 impl<'a> CEncryptionRequest<'a> {
@@ -49,9 +52,17 @@ impl ClientPacket for CEncryptionRequest<'_> {
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_string(self.server_id)?;
-        write.write_var_int(&crate::VarInt(self.public_key.len() as i32))?;
+        if *version <= JavaMinecraftVersion::V_1_7_6 {
+            write.write_i16_be(self.public_key.len() as i16)?;
+        } else {
+            write.write_var_int(&crate::VarInt(self.public_key.len() as i32))?;
+        }
         write.write_all(self.public_key)?;
-        write.write_var_int(&crate::VarInt(self.verify_token.len() as i32))?;
+        if *version <= JavaMinecraftVersion::V_1_7_6 {
+            write.write_i16_be(self.verify_token.len() as i16)?;
+        } else {
+            write.write_var_int(&crate::VarInt(self.verify_token.len() as i32))?;
+        }
         write.write_all(self.verify_token)?;
         if version >= &JavaMinecraftVersion::V_1_20_5 {
             write.write_bool(self.should_authenticate)?;
@@ -67,10 +78,32 @@ impl<'a> crate::ServerPacket<'a> for CEncryptionRequest<'a> {
     ) -> Result<Self, crate::ReadingError> {
         use crate::ser::{NetworkReadExt, NetworkReadSliceExt};
         let server_id = read.get_str_bounded_borrowed(20)?;
-        let public_key_len = read.get_var_int()?.0 as usize;
+        let public_key_len = if *version <= JavaMinecraftVersion::V_1_7_6 {
+            let pkl = read.get_i16_be()?;
+            if pkl < 0 {
+                return Err(crate::ReadingError::Message(
+                    "Key was smaller than nothing! Weird key!".into(),
+                ));
+            }
+            pkl as usize
+        } else {
+            read.get_var_int()?.0 as usize
+        };
         let public_key = read.read_slice_borrowed(public_key_len)?;
-        let verify_token_len = read.get_var_int()?.0 as usize;
+
+        let verify_token_len = if *version <= JavaMinecraftVersion::V_1_7_6 {
+            let vtl = read.get_i16_be()?;
+            if vtl < 0 {
+                return Err(crate::ReadingError::Message(
+                    "Key was smaller than nothing! Weird key!".into(),
+                ));
+            }
+            vtl as usize
+        } else {
+            read.get_var_int()?.0 as usize
+        };
         let verify_token = read.read_slice_borrowed(verify_token_len)?;
+
         let should_authenticate = if version >= &JavaMinecraftVersion::V_1_20_5 {
             read.get_bool()?
         } else {

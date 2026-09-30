@@ -1,0 +1,17 @@
+{
+  "simultaneous_mobs": 1.0,
+  "simultaneous_mobs_added_per_player": 0.5,
+  "spawn_potentials": [
+    {
+      "data": {
+        "entity": {
+          "id": "minecraft:breeze"
+        }
+      },
+      "weight": 1
+    }
+  ],
+  "ticks_between_spawn": 20,
+  "total_mobs": 2.0,
+  "total_mobs_added_per_player": 1.0
+}

@@ -2,13 +2,13 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_RECIPE_BOOK_CHANGE_SETTINGS;
+use pumpkin_data::packet::serverbound::play::RECIPE_BOOK_CHANGE_SETTINGS;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
-#[java_packet(PLAY_RECIPE_BOOK_CHANGE_SETTINGS)]
+#[java_packet(RECIPE_BOOK_CHANGE_SETTINGS)]
 pub struct SRecipeBookChangeSettings {
     pub book_type: VarInt,
     pub is_open: bool,

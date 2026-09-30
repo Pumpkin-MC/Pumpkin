@@ -1,10 +1,10 @@
 use crate::java::client::dialog::DialogNBT;
 use crate::{ClientPacket, IdOr, ser::WritingError};
-use pumpkin_data::packet::clientbound::PLAY_SHOW_DIALOG;
+use pumpkin_data::packet::clientbound::play::SHOW_DIALOG;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_SHOW_DIALOG)]
+#[java_packet(SHOW_DIALOG)]
 pub struct CPlayShowDialog<'a> {
     pub dialog: IdOr<DialogNBT<'a>>,
 }

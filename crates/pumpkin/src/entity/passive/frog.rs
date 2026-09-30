@@ -10,10 +10,9 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
@@ -24,50 +23,9 @@ use crate::entity::{
     player::Player,
 };
 
+use pumpkin_data::frog_variant::FrogVariant;
+
 pub const FROG_FOOD: &[&Item] = &[&Item::SLIME_BALL];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[repr(i32)]
-pub enum FrogVariant {
-    Cold = 0,
-    #[default]
-    Temperate = 1,
-    Warm = 2,
-}
-
-impl FrogVariant {
-    #[must_use]
-    pub const fn from_id(id: i32) -> Self {
-        match id {
-            0 => Self::Cold,
-            2 => Self::Warm,
-            _ => Self::Temperate,
-        }
-    }
-
-    #[must_use]
-    pub const fn id(self) -> i32 {
-        self as i32
-    }
-
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Cold => "minecraft:cold",
-            Self::Temperate => "minecraft:temperate",
-            Self::Warm => "minecraft:warm",
-        }
-    }
-
-    #[must_use]
-    pub fn from_name(s: &str) -> Self {
-        match s {
-            "minecraft:cold" | "cold" => Self::Cold,
-            "minecraft:warm" | "warm" => Self::Warm,
-            _ => Self::Temperate,
-        }
-    }
-}
 
 /// Represents a Frog, an amphibious mob that can eat small slimes and magma cubes.
 ///
@@ -85,7 +43,7 @@ impl FrogEntity {
         let frog = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
-            variant: AtomicI32::new(FrogVariant::Temperate.id()),
+            variant: AtomicI32::new(FrogVariant::Temperate.id() as i32),
             tongue_target_id: AtomicI32::new(-1),
         };
         let mob_arc = Arc::new(frog);
@@ -102,7 +60,7 @@ impl FrogEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(TemptGoal::new(1.0, FROG_FOOD)));
+            goal_selector.add_goal(1, Box::new(TemptGoal::new(1.0, FROG_FOOD, false)));
             goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 3,
@@ -116,18 +74,15 @@ impl FrogEntity {
 
     #[must_use]
     pub fn get_variant(&self) -> FrogVariant {
-        FrogVariant::from_id(self.variant.load(Ordering::Relaxed))
+        FrogVariant::from_id(self.variant.load(Ordering::Relaxed) as u32)
     }
 
     pub fn set_variant(&self, variant: FrogVariant) {
-        self.variant.store(variant.id(), Ordering::Relaxed);
+        self.variant.store(variant.id() as i32, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::frog::VARIANT,
-                VarInt(variant.id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::frog::VARIANT,
+            VarInt(variant.id() as i32),
         );
     }
 }
@@ -145,74 +100,50 @@ impl Animal for FrogEntity {
     }
 }
 
-impl NBTStorage for FrogEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_ageable_nbt(nbt);
-            self.write_animal_nbt(nbt);
-            nbt.put_string("variant", self.get_variant().as_str().to_string());
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_ageable_nbt(nbt);
-            self.read_animal_nbt(nbt);
-            if let Some(variant_str) = nbt.get_string("variant") {
-                self.set_variant(FrogVariant::from_name(variant_str));
-            }
-        })
-    }
-}
-
 impl Mob for FrogEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_string("variant", self.get_variant().asset_id().to_string());
+    }
+
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(variant_str) = nbt.get_string("variant") {
+            self.set_variant(FrogVariant::from_name(variant_str).unwrap_or_default());
+        }
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        self.set_variant(FrogVariant::from_name(name));
+        self.set_variant(FrogVariant::from_name(name).unwrap_or_default());
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.ageable_ai_step();
-        })
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        self.ageable_ai_step();
     }
 
-    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-            if is_baby {
-                entity.send_meta_data(
-                    &[Metadata::new(
-                        pumpkin_data::tracked_data::frog::BABY_ID,
-                        true,
-                    )],
-                    None,
-                );
-            }
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::frog::VARIANT,
-                    VarInt(self.get_variant().id()),
-                )],
-                None,
-            );
-        })
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+        if is_baby {
+            entity.set_synced_data(pumpkin_data::tracked_data::frog::BABY_ID, true);
+        }
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::frog::VARIANT,
+            VarInt(self.get_variant().id() as i32),
+        );
     }
 
-    fn mob_interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            self.animal_interact(player, item_stack, Sound::EntityFrogAmbient)
-                .await
-        })
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        self.animal_interact(player, item_stack, Sound::EntityFrogAmbient)
     }
 }

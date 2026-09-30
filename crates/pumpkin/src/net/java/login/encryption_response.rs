@@ -2,27 +2,57 @@
 use super::*;
 
 impl PendingConnection {
-    pub async fn handle_encryption_response(
+    async fn verify_encryption_token(
         &mut self,
         server: &Server,
+        token: &[u8],
+    ) -> Result<(), EncryptionError> {
+        let Some(expected) = self.verify_token.take() else {
+            return Err(EncryptionError::NoPendingVerifyToken);
+        };
+
+        let decrypted = server.decrypt(token).await?;
+        if decrypted.as_slice() == expected.as_slice() {
+            Ok(())
+        } else {
+            Err(EncryptionError::VerifyTokenMismatch)
+        }
+    }
+
+    pub async fn handle_encryption_response(
+        &mut self,
+        server: &Arc<Server>,
         encryption_response: SEncryptionResponse,
-    ) {
+    ) -> Option<PacketHandlerResult> {
         debug!("Handling encryption");
+        if let Err(error) = self
+            .verify_encryption_token(server, &encryption_response.verify_token)
+            .await
+        {
+            debug!(
+                "Rejecting encryption response from '{}': {error}",
+                self.address
+            );
+            self.kick(TextComponent::text("Failed to verify encryption token"))
+                .await;
+            return Some(PacketHandlerResult::Stop);
+        }
+
         let Ok(shared_secret) = server.decrypt(&encryption_response.shared_secret).await else {
             self.kick(TextComponent::text("Failed to decrypt shared secret"))
                 .await;
-            return;
+            return Some(PacketHandlerResult::Stop);
         };
 
         if let Err(error) = self.set_encryption(&shared_secret) {
             self.kick(TextComponent::text(error.to_string())).await;
-            return;
+            return Some(PacketHandlerResult::Stop);
         }
 
         let profile_name = {
             let Some(profile) = self.gameprofile.as_ref() else {
                 self.kick(TextComponent::text("No `GameProfile`")).await;
-                return;
+                return Some(PacketHandlerResult::Stop);
             };
             profile.name.clone()
         };
@@ -48,13 +78,13 @@ impl PendingConnection {
                         e => TextComponent::text(e.to_string()),
                     })
                     .await;
-                    return;
+                    return Some(PacketHandlerResult::Stop);
                 }
             }
         }
 
         let Some(profile) = self.gameprofile.clone() else {
-            return;
+            return Some(PacketHandlerResult::Stop);
         };
 
         if let Some(online_player) = &server.get_player_by_uuid(profile.id) {
@@ -68,7 +98,7 @@ impl PendingConnection {
                 [],
             ))
             .await;
-            return;
+            return Some(PacketHandlerResult::Stop);
         }
 
         if let Some(online_player) = &server.get_player_by_name(&profile.name) {
@@ -82,16 +112,13 @@ impl PendingConnection {
                 [],
             ))
             .await;
-            return;
+            return Some(PacketHandlerResult::Stop);
         }
 
-        self.finish_login(&profile).await;
+        self.finish_login(server, &profile).await
     }
 
     pub(super) async fn enable_compression(&mut self, server: &Server) {
-        if self.version.load() < JavaMinecraftVersion::V_1_8 {
-            return;
-        }
         let compression = server
             .advanced_config
             .networking
@@ -106,7 +133,28 @@ impl PendingConnection {
         self.set_compression(&compression);
     }
 
-    pub(super) async fn finish_login(&mut self, profile: &GameProfile) {
+    pub(super) async fn finish_login(
+        &mut self,
+        server: &Arc<Server>,
+        profile: &GameProfile,
+    ) -> Option<PacketHandlerResult> {
+        let mut pre_login_event =
+            crate::plugin::api::events::player::async_player_pre_login::AsyncPlayerPreLoginEvent {
+                player_name: profile.name.clone(),
+                player_uuid: profile.id,
+                ip_address: self.address,
+                kick_message: TextComponent::text("Disconnected"),
+                cancelled: false,
+            };
+        server
+            .plugin_manager
+            .fire(server, &mut pre_login_event)
+            .await;
+        if pre_login_event.cancelled {
+            self.kick(pre_login_event.kick_message).await;
+            return Some(PacketHandlerResult::Stop);
+        }
+
         let props = profile.properties.load();
         let packet = CLoginSuccess::new(
             &profile.id,
@@ -116,9 +164,7 @@ impl PendingConnection {
             uuid::Uuid::new_v4(),
         );
         self.send_packet_now(&packet).await;
-        if self.version.load() < JavaMinecraftVersion::V_1_20_2 {
-            self.connection_state.store(ConnectionState::Play);
-        }
+        None
     }
 
     async fn authenticate(
@@ -127,14 +173,15 @@ impl PendingConnection {
         shared_secret: &[u8],
         username: &str,
     ) -> Result<GameProfile, AuthError> {
-        let hash = server.digest_secret(shared_secret).await;
+        let hash = server.digest_secret(shared_secret);
         let ip = self.address.ip();
         let profile = authentication::authenticate(
             username,
             &hash,
             &ip,
             &server.advanced_config.networking.java.authentication,
-        )?;
+        )
+        .await?;
 
         if let Some(actions) = &profile.profile_actions {
             if server

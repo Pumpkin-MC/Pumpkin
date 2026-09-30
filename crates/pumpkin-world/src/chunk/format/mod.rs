@@ -1,6 +1,5 @@
 use std::{
     path::PathBuf,
-    pin::Pin,
     str::FromStr,
     sync::{
         RwLock,
@@ -13,7 +12,6 @@ use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 use rustc_hash::FxHashMap;
-use tokio::sync::Mutex;
 
 use crate::{
     chunk::{
@@ -43,10 +41,8 @@ impl SingleChunkDataSerializer for ChunkData {
     }
 
     #[inline]
-    fn to_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
-        Box::pin(async move { Ok(self.internal_to_bytes()) })
+    fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        Ok(self.internal_to_bytes())
     }
 
     #[inline]
@@ -74,6 +70,39 @@ impl Dirtiable for ChunkData {
     }
 }
 
+/// The section stores `Y` as a byte, short, int or long depending on who wrote
+/// the file. The datafixer writes ints. Reading only bytes would map every int
+/// section to `Y = 0`, and they would overwrite each other.
+fn section_y(section: &NbtCompound) -> i32 {
+    use pumpkin_nbt::tag::NbtTag;
+
+    match section.get("Y") {
+        Some(NbtTag::Byte(value)) => i32::from(*value),
+        Some(NbtTag::Short(value)) => i32::from(*value),
+        Some(NbtTag::Int(value)) => *value,
+        Some(NbtTag::Long(value)) => i32::try_from(*value).unwrap_or(0),
+        _ => 0,
+    }
+}
+
+/// What vanilla does when `yPos` is missing, for example after it upgrades a
+/// world in place: the lowest section that stores biomes, and never above 0.
+/// That gives `-4` in the Overworld and `0` in the Nether and End, which are
+/// the section minimums of those dimensions.
+fn lowest_biome_section_y(root_tag: &NbtCompound) -> Option<i32> {
+    let sections = root_tag.get_list("sections")?;
+    sections
+        .iter()
+        .filter_map(|tag| match tag {
+            pumpkin_nbt::tag::NbtTag::Compound(compound) if compound.has("biomes") => {
+                Some(section_y(compound))
+            }
+            _ => None,
+        })
+        .min()
+        .map(|y| y.min(0))
+}
+
 fn extract_u16_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[BlockStateId]>> {
     match tag {
         pumpkin_nbt::tag::NbtTag::IntArray(arr) => Some(
@@ -94,15 +123,26 @@ fn extract_u16_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[BlockStateId
         pumpkin_nbt::tag::NbtTag::List(list) => {
             let ids: Box<[BlockStateId]> = list
                 .iter()
-                .map(|t| {
-                    let val = match t {
-                        pumpkin_nbt::tag::NbtTag::Int(x) => *x as u16,
-                        pumpkin_nbt::tag::NbtTag::Short(x) => *x as u16,
-                        pumpkin_nbt::tag::NbtTag::Byte(x) => *x as u16,
-                        pumpkin_nbt::tag::NbtTag::Long(x) => *x as u16,
-                        _ => 0,
-                    };
-                    BlockStateId::new_or_air(val)
+                .map(|t| match t {
+                    pumpkin_nbt::tag::NbtTag::Int(x) => BlockStateId::new_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::Short(x) => BlockStateId::new_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::Byte(x) => BlockStateId::new_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::Long(x) => BlockStateId::new_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::Compound(compound) => {
+                        if let Ok(entry) =
+                            crate::generation::structure::template::PaletteEntry::from_nbt_compound(
+                                compound,
+                            )
+                            && let Some(state) =
+                                crate::generation::structure::template::BlockStateResolver::resolve_simple(
+                                    &entry,
+                                )
+                        {
+                            return state.id;
+                        }
+                        BlockStateId::AIR
+                    }
+                    _ => BlockStateId::AIR,
                 })
                 .collect();
             Some(ids)
@@ -122,6 +162,10 @@ fn extract_u8_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[u8]>> {
                     pumpkin_nbt::tag::NbtTag::Byte(x) => *x as u8,
                     pumpkin_nbt::tag::NbtTag::Int(x) => *x as u8,
                     pumpkin_nbt::tag::NbtTag::Short(x) => *x as u8,
+                    pumpkin_nbt::tag::NbtTag::String(s) => {
+                        let name = s.strip_prefix("minecraft:").unwrap_or(s);
+                        pumpkin_data::biome::Biome::from_name(name).map_or(0, |b| b.id)
+                    }
                     _ => 0,
                 })
                 .collect();
@@ -187,15 +231,21 @@ impl ChunkData {
             )));
         }
 
-        let min_y_section = root_tag.get_int("yPos").ok_or_else(|| {
-            ChunkParsingError::ErrorDeserializingChunk("Missing yPos".to_string())
-        })?;
+        // Vanilla omits yPos when it upgrades a world in place. It uses the
+        // dimension minimum for such chunks, which is the lowest section that
+        // stores biomes. Do the same instead of rejecting the chunk.
+        let min_y_section = match root_tag.get_int("yPos") {
+            Some(y_pos) => y_pos,
+            None => lowest_biome_section_y(&root_tag).ok_or_else(|| {
+                ChunkParsingError::ErrorDeserializingChunk("Missing yPos".to_string())
+            })?,
+        };
 
         let mut max_y_section = min_y_section as i8;
         if let Some(sections_list) = root_tag.get_list("sections") {
             for section_tag in sections_list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(section_compound) = section_tag {
-                    let y = section_compound.get_byte("Y").unwrap_or(0);
+                    let y = section_y(section_compound) as i8;
                     if y > max_y_section {
                         max_y_section = y;
                     }
@@ -212,8 +262,8 @@ impl ChunkData {
         if let Some(sections_list) = root_tag.get_list("sections") {
             for section_tag in sections_list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(section_compound) = section_tag {
-                    let y = section_compound.get_byte("Y").unwrap_or(0);
-                    let index = (y as i32 - min_y_section) as usize;
+                    let y = section_y(section_compound);
+                    let index = (y - min_y_section) as usize;
                     if index >= section_count {
                         continue;
                     }
@@ -361,9 +411,9 @@ impl ChunkData {
             "minecraft:structure_starts" => ChunkStatus::StructureStarts,
             "minecraft:structure_references" => ChunkStatus::StructureReferences,
             "minecraft:biomes" => ChunkStatus::Biomes,
-            "minecraft:noise" => ChunkStatus::Noise,
-            "minecraft:surface" => ChunkStatus::Surface,
-            "minecraft:carvers" => ChunkStatus::Carvers,
+            "minecraft:terrain" | "minecraft:noise" | "minecraft:surface" | "minecraft:carvers" => {
+                ChunkStatus::Terrain
+            }
             "minecraft:features" => ChunkStatus::Features,
             "minecraft:initialize_light" => ChunkStatus::InitializeLight,
             "minecraft:light" => ChunkStatus::Light,
@@ -452,9 +502,7 @@ impl ChunkData {
             ChunkStatus::StructureStarts => "minecraft:structure_starts",
             ChunkStatus::StructureReferences => "minecraft:structure_references",
             ChunkStatus::Biomes => "minecraft:biomes",
-            ChunkStatus::Noise => "minecraft:noise",
-            ChunkStatus::Surface => "minecraft:surface",
-            ChunkStatus::Carvers => "minecraft:carvers",
+            ChunkStatus::Terrain => "minecraft:terrain",
             ChunkStatus::Features => "minecraft:features",
             ChunkStatus::InitializeLight => "minecraft:initialize_light",
             ChunkStatus::Light => "minecraft:light",
@@ -490,7 +538,27 @@ impl ChunkData {
             let palette_tags: Vec<NbtTag> = block_states_nbt
                 .palette
                 .iter()
-                .map(|id| NbtTag::Int(BlockStateId::as_u16(*id) as i32))
+                .map(|&id| {
+                    let block = Block::from_state_id(id);
+                    let mut comp = NbtCompound::new();
+                    let name = if block.name.starts_with("minecraft:") {
+                        block.name.to_string()
+                    } else {
+                        format!("minecraft:{}", block.name)
+                    };
+                    comp.put_string("Name", name);
+                    if let Some(props) = block.properties(id) {
+                        let prop_vec = props.to_props();
+                        if !prop_vec.is_empty() {
+                            let mut props_comp = NbtCompound::new();
+                            for (k, v) in prop_vec {
+                                props_comp.put_string(k, v.to_string());
+                            }
+                            comp.put_compound("Properties", props_comp);
+                        }
+                    }
+                    NbtTag::Compound(comp)
+                })
                 .collect();
             bs_comp.put_list("palette", palette_tags);
             section_comp.put_compound("block_states", bs_comp);
@@ -504,7 +572,16 @@ impl ChunkData {
             let biome_palette_tags: Vec<NbtTag> = biomes_nbt
                 .palette
                 .iter()
-                .map(|&val| NbtTag::Byte(val as i8))
+                .map(|&val| {
+                    let name = pumpkin_data::biome::Biome::from_id(val)
+                        .map_or("plains", |b| b.registry_id);
+                    let full_name = if name.starts_with("minecraft:") {
+                        name.to_string()
+                    } else {
+                        format!("minecraft:{name}")
+                    };
+                    NbtTag::String(full_name.into())
+                })
                 .collect();
             b_comp.put_list("palette", biome_palette_tags);
             section_comp.put_compound("biomes", b_comp);
@@ -663,10 +740,8 @@ impl SingleChunkDataSerializer for ChunkEntityData {
     }
 
     #[inline]
-    fn to_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
-        Box::pin(async move { self.internal_to_bytes().await })
+    fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        Ok(self.internal_to_bytes())
     }
 
     #[inline]
@@ -731,12 +806,13 @@ impl ChunkEntityData {
         Ok(Self {
             x: position.x,
             z: position.y,
-            data: Mutex::new(entities),
+            data: std::sync::Mutex::new(entities),
+            live: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
         })
     }
 
-    async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+    fn internal_to_bytes(&self) -> Bytes {
         let mut root = NbtCompound::new();
         root.put_int("DataVersion", WORLD_DATA_VERSION);
         root.put(
@@ -746,14 +822,14 @@ impl ChunkEntityData {
         let entities_tag: Vec<pumpkin_nbt::tag::NbtTag> = self
             .data
             .lock()
-            .await
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .map(|c| pumpkin_nbt::tag::NbtTag::Compound(c.clone()))
             .collect();
         root.put_list("Entities", entities_tag);
 
         let nbt = pumpkin_nbt::Nbt::from(root);
-        Ok(nbt.write())
+        nbt.write()
     }
 }
 
@@ -807,28 +883,31 @@ impl LightContainer {
         matches!(self, Self::Empty(_))
     }
 
+    #[inline]
     const fn index(x: usize, y: usize, z: usize) -> usize {
         y * 16 * 16 + z * 16 + x
     }
 
+    #[inline]
     #[must_use]
     pub fn get(&self, x: usize, y: usize, z: usize) -> u8 {
         match self {
             Self::Full(data) => {
                 let index = Self::index(x, y, z);
-                data[index >> 1] >> (4 * (index & 1)) & 0x0F
+                (data[index >> 1] >> (4 * (index & 1))) & 0x0F
             }
             Self::Empty(default) => *default,
         }
     }
 
+    #[inline]
     pub fn set(&mut self, x: usize, y: usize, z: usize, value: u8) {
         match self {
             Self::Full(data) => {
                 let index = Self::index(x, y, z);
-                let mask = 0x0F << (4 * (index & 1));
-                data[index >> 1] &= !mask;
-                data[index >> 1] |= value << (4 * (index & 1));
+                let shift = 4 * (index & 1);
+                let mask = 0x0F << shift;
+                data[index >> 1] = (data[index >> 1] & !mask) | (value << shift);
             }
             Self::Empty(default) => {
                 if value != *default {
@@ -839,6 +918,39 @@ impl LightContainer {
         }
     }
 
+    #[inline]
+    pub fn set_column_y_range(
+        &mut self,
+        x: usize,
+        z: usize,
+        y_start: usize,
+        y_end: usize,
+        value: u8,
+    ) {
+        if y_start >= y_end {
+            return;
+        }
+        match self {
+            Self::Full(data) => {
+                let shift = 4 * (x & 1);
+                let mask = 0x0F << shift;
+                let val = (value & 0x0F) << shift;
+                let mut byte_idx = (y_start * 256 + z * 16 + x) >> 1;
+                for _ in y_start..y_end {
+                    data[byte_idx] = (data[byte_idx] & !mask) | val;
+                    byte_idx += 128;
+                }
+            }
+            Self::Empty(default) => {
+                if value != *default {
+                    *self = Self::new_filled(*default);
+                    self.set_column_y_range(x, z, y_start, y_end, value);
+                }
+            }
+        }
+    }
+
+    #[inline]
     pub fn fill(&mut self, value: u8) {
         *self = Self::new_filled(value);
     }
@@ -847,5 +959,236 @@ impl LightContainer {
 impl Default for LightContainer {
     fn default() -> Self {
         Self::new_empty(15)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::Block;
+    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_nbt::tag::NbtTag;
+
+    fn test_section(y: i32, block: &str, with_biomes: bool) -> NbtCompound {
+        let mut block_states = NbtCompound::new();
+        let mut air = NbtCompound::new();
+        air.put_string("Name", "minecraft:air".to_string());
+        let mut solid = NbtCompound::new();
+        solid.put_string("Name", block.to_string());
+        block_states.put(
+            "palette",
+            NbtTag::List(vec![NbtTag::Compound(air), NbtTag::Compound(solid)]),
+        );
+        block_states.put("data", NbtTag::LongArray(vec![1; 256]));
+
+        let mut section = NbtCompound::new();
+        section.put_int("Y", y);
+        section.put("block_states", NbtTag::Compound(block_states));
+        if with_biomes {
+            let mut biomes = NbtCompound::new();
+            biomes.put(
+                "palette",
+                NbtTag::List(vec![NbtTag::String("minecraft:plains".into())]),
+            );
+            section.put("biomes", NbtTag::Compound(biomes));
+        }
+        section
+    }
+
+    fn test_chunk(sections: Vec<NbtCompound>) -> pumpkin_nbt::Nbt {
+        let mut root = NbtCompound::new();
+        root.put_int("DataVersion", 4903);
+        root.put_int("xPos", 0);
+        root.put_int("zPos", 0);
+        root.put_string("Status", "minecraft:full".to_string());
+        root.put(
+            "sections",
+            NbtTag::List(sections.into_iter().map(NbtTag::Compound).collect()),
+        );
+        pumpkin_nbt::Nbt::new(String::new(), root)
+    }
+
+    #[test]
+    fn chunk_without_y_pos_uses_the_lowest_biome_section() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        // The datafixer writes Y as an int, so the test must too.
+        let bytes = test_chunk(vec![test_section(-4, "minecraft:stone", true)]).write();
+        let chunk =
+            ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("chunk without yPos parses");
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, -64, 0),
+            Some(Block::STONE.default_state.id)
+        );
+    }
+
+    #[test]
+    fn chunk_with_int_y_sections_keeps_every_section() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let bytes = test_chunk(vec![
+            test_section(-4, "minecraft:stone", true),
+            test_section(0, "minecraft:dirt", true),
+        ])
+        .write();
+        let chunk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("int Y chunk parses");
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, -64, 0),
+            Some(Block::STONE.default_state.id)
+        );
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, 0, 0),
+            Some(Block::DIRT.default_state.id)
+        );
+    }
+
+    #[test]
+    fn chunk_with_mixed_numeric_y_tags_keeps_sections() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        // What a real upgraded chunk looks like: the map's own sections store Y
+        // as a byte, the datafixer writes ints. The int section must still land
+        // at its own height instead of collapsing to Y = 0.
+        let mut byte_section = test_section(-4, "minecraft:air", true);
+        byte_section.put_byte("Y", -4);
+
+        let bytes = test_chunk(vec![
+            byte_section,
+            test_section(0, "minecraft:stone", true),
+            test_section(4, "minecraft:dirt", true),
+        ])
+        .write();
+        let chunk =
+            ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("mixed Y chunk parses");
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, 0, 0),
+            Some(Block::STONE.default_state.id)
+        );
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, 64, 0),
+            Some(Block::DIRT.default_state.id)
+        );
+    }
+
+    #[test]
+    fn fallback_ignores_light_only_sections_below_zero() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        // Old worlds keep a light grid at Y = -1 after the upgrade. It has no
+        // biomes and must not decide where the chunk starts.
+        let mut light_section = NbtCompound::new();
+        light_section.put_byte("Y", -1);
+        light_section.put(
+            "BlockLight",
+            NbtTag::ByteArray(vec![0x0Fi8; 2048].into_boxed_slice()),
+        );
+
+        let bytes = test_chunk(vec![
+            light_section,
+            test_section(0, "minecraft:stone", true),
+        ])
+        .write();
+        let chunk =
+            ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("light section ignored");
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, 0, 0),
+            Some(Block::STONE.default_state.id)
+        );
+        assert_eq!(chunk.section.get_block_absolute_y(0, -1, 0), None);
+    }
+
+    #[test]
+    fn fallback_never_goes_above_zero() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let bytes = test_chunk(vec![test_section(1, "minecraft:stone", true)]).write();
+        let chunk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("caps at zero");
+        // The only section sits at Y=1, so the cap has to bring the chunk down
+        // to Y=0. Without the cap the chunk would start at Y=1 and a block at
+        // Y=0 would be out of range.
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, 0, 0),
+            Some(Block::AIR.default_state.id)
+        );
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, 16, 0),
+            Some(Block::STONE.default_state.id)
+        );
+    }
+
+    #[test]
+    fn chunk_without_y_pos_or_biomes_still_fails() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let mut light_section = NbtCompound::new();
+        light_section.put_byte("Y", -1);
+        light_section.put(
+            "BlockLight",
+            NbtTag::ByteArray(vec![0x0Fi8; 2048].into_boxed_slice()),
+        );
+
+        let bytes = test_chunk(vec![light_section]).write();
+        let Err(error) = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)) else {
+            panic!("chunk without yPos and without biomes must fail");
+        };
+        assert!(format!("{error:?}").contains("Missing yPos"));
+    }
+
+    #[test]
+    fn extract_u16_array_from_vanilla_compound_palette() {
+        let mut entry1 = NbtCompound::new();
+        entry1.put_string("Name", "minecraft:stone".to_string());
+
+        let mut entry2 = NbtCompound::new();
+        entry2.put_string("Name", "minecraft:repeater".to_string());
+        let mut props = NbtCompound::new();
+        props.put_string("facing", "north".to_string());
+        props.put_string("delay", "2".to_string());
+        props.put_string("locked", "false".to_string());
+        props.put_string("powered", "false".to_string());
+        entry2.put_compound("Properties", props);
+
+        let list_tag = NbtTag::List(vec![NbtTag::Compound(entry1), NbtTag::Compound(entry2)]);
+        let result = extract_u16_array(&list_tag).expect("should extract palette");
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], Block::STONE.default_state.id);
+
+        let repeater_state = Block::REPEATER
+            .from_properties(&[
+                ("facing", "north"),
+                ("delay", "2"),
+                ("locked", "false"),
+                ("powered", "false"),
+            ])
+            .to_state_id(&Block::REPEATER);
+        assert_eq!(result[1], repeater_state);
+    }
+
+    #[test]
+    fn extract_u8_array_from_vanilla_string_palette() {
+        let list_tag = NbtTag::List(vec![
+            NbtTag::String("minecraft:plains".to_string().into()),
+            NbtTag::String("minecraft:the_void".to_string().into()),
+        ]);
+        let result = extract_u8_array(&list_tag).expect("should extract biome palette");
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(
+            result[0],
+            pumpkin_data::biome::Biome::from_name("plains").unwrap().id
+        );
+        assert_eq!(
+            result[1],
+            pumpkin_data::biome::Biome::from_name("the_void")
+                .unwrap()
+                .id
+        );
     }
 }

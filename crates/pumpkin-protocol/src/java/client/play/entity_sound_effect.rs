@@ -1,9 +1,6 @@
 use std::io::Write;
 
-use pumpkin_data::{
-    packet::clientbound::PLAY_SOUND_ENTITY, sound::SoundCategory,
-    sound_id_remap::remap_sound_id_for_version,
-};
+use pumpkin_data::{packet::clientbound::play::SOUND_ENTITY, sound::SoundCategory};
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -14,7 +11,7 @@ use crate::{ClientPacket, IdOr, SoundEvent, VarInt, WritingError, ser::NetworkWr
 /// Unlike global sounds, this sound will follow the entity as it moves
 /// through the world. The client handles the panning and attenuation
 /// (volume drop-off) based on the distance between the player and the entity.
-#[java_packet(PLAY_SOUND_ENTITY)]
+#[java_packet(SOUND_ENTITY)]
 pub struct CEntitySoundEffect {
     /// The sound to play. Can be a hardcoded ID or a custom `SoundEvent`
     /// (Resource Location).
@@ -60,20 +57,35 @@ impl ClientPacket for CEntitySoundEffect {
         mut write: impl Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        let sound_event = match &self.sound_event {
-            IdOr::Id(id) => IdOr::Id(remap_sound_id_for_version(*id, *version)),
-            IdOr::Value(value) => IdOr::Value(value.clone()),
-        };
+        if *version >= JavaMinecraftVersion::V_1_19_3 {
+            crate::IdOr::<crate::SoundEvent>::write(&self.sound_event, &mut write, |w, e| {
+                w.write_string(&e.sound_name)?;
+                w.write_option(&e.range, |w2, r| w2.write_f32(*r))
+            })?;
+        } else {
+            let sound_id = match &self.sound_event {
+                IdOr::Id(id) => *id,
+                IdOr::Value(_) => 0,
+            };
+            write.write_var_int(&VarInt(i32::from(sound_id)))?;
+        }
 
-        crate::IdOr::<crate::SoundEvent>::write(&sound_event, &mut write, |w, e| {
-            w.write_string(&e.sound_name)?;
-            w.write_option(&e.range, |w2, r| w2.write_f32(*r))
-        })?;
         write.write_var_int(&self.sound_category)?;
         write.write_var_int(&self.entity_id)?;
         write.write_f32(self.volume)?;
-        write.write_f32(self.pitch)?;
-        write.write_i64(self.seed)
+
+        if *version >= JavaMinecraftVersion::V_1_10 {
+            write.write_f32(self.pitch)?;
+        } else {
+            let pitch_byte = (self.pitch * 63.0).round().clamp(0.0, 255.0) as u8;
+            write.write_u8(pitch_byte)?;
+        }
+
+        if *version >= JavaMinecraftVersion::V_1_19 {
+            write.write_i64(self.seed)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -82,64 +94,14 @@ mod tests {
     use std::io::Cursor;
 
     use pumpkin_data::sound::SoundCategory;
-    use pumpkin_data::sound_id_remap::remap_sound_id_for_version;
     use pumpkin_util::version::JavaMinecraftVersion;
 
     use crate::{ClientPacket, IdOr, SoundEvent, VarInt};
 
     use super::CEntitySoundEffect;
 
-    fn first_remapped_sound_id(version: JavaMinecraftVersion) -> u16 {
-        (0..=u16::MAX)
-            .find(|id| remap_sound_id_for_version(*id, version) != *id)
-            .expect("sound remap table should contain at least one changed id")
-    }
-
     fn first_var_int(bytes: Vec<u8>) -> VarInt {
         VarInt::decode(&mut Cursor::new(bytes)).unwrap()
-    }
-
-    #[test]
-    fn numeric_sound_id_remaps_for_1_21_11() {
-        let sound_id = first_remapped_sound_id(JavaMinecraftVersion::V_1_21_11);
-        let packet = CEntitySoundEffect::new(
-            IdOr::Id(sound_id),
-            SoundCategory::Players,
-            VarInt(123),
-            1.0,
-            1.0,
-            42,
-        );
-        let mut bytes = Vec::new();
-
-        packet
-            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_1_21_11)
-            .unwrap();
-
-        assert_eq!(
-            first_var_int(bytes),
-            VarInt::from(remap_sound_id_for_version(sound_id, JavaMinecraftVersion::V_1_21_11) + 1)
-        );
-    }
-
-    #[test]
-    fn numeric_sound_id_stays_latest_for_26_2() {
-        let sound_id = first_remapped_sound_id(JavaMinecraftVersion::V_1_21_11);
-        let packet = CEntitySoundEffect::new(
-            IdOr::Id(sound_id),
-            SoundCategory::Players,
-            VarInt(123),
-            1.0,
-            1.0,
-            42,
-        );
-        let mut bytes = Vec::new();
-
-        packet
-            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_26_2)
-            .unwrap();
-
-        assert_eq!(first_var_int(bytes), VarInt::from(sound_id + 1));
     }
 
     #[test]

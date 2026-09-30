@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_SET_ACTION_BAR_TEXT;
+use pumpkin_data::packet::clientbound::play::SET_ACTION_BAR_TEXT;
 use pumpkin_util::text::TextComponent;
 
 use crate::ClientPacket;
@@ -10,7 +10,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// Unlike chat messages, Action Bar text is transient and generally used for
 /// non-critical status information like "Now entering: Wilderness" or
 /// mana/stamina counters.
-#[java_packet(PLAY_SET_ACTION_BAR_TEXT)]
+#[java_packet(SET_ACTION_BAR_TEXT)]
 pub struct CActionBar<'a> {
     /// The text component to be displayed.
     pub action_bar: &'a TextComponent,
@@ -27,9 +27,8 @@ impl ClientPacket for CActionBar<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_slice(&self.action_bar.encode())?;
-        Ok(())
+        write.write_component(self.action_bar, version)
     }
 }

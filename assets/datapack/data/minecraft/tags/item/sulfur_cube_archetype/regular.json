@@ -1,0 +1,16 @@
+{
+  "values": [
+    "#minecraft:concrete_powders",
+    "minecraft:mud",
+    "minecraft:muddy_mangrove_roots",
+    "minecraft:packed_mud",
+    "minecraft:coal_block",
+    "minecraft:dirt",
+    "minecraft:coarse_dirt",
+    "minecraft:rooted_dirt",
+    "minecraft:podzol",
+    "minecraft:grass_block",
+    "minecraft:clay",
+    "minecraft:bone_block"
+  ]
+}

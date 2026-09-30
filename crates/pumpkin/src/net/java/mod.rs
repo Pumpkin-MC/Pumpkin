@@ -1,29 +1,29 @@
-use pumpkin_protocol::java::client::play::{
-    CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CChunkData, CPlayDisconnect,
-};
+use pumpkin_protocol::java::client::play::{CChunkBatchEnd, CChunkBatchStart, CPlayDisconnect};
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::server::play::{
-    SAttack, SBlockEntityTagQuery, SBundleItemSelected, SChangeGameMode, SChatCommand,
-    SChatMessage, SChunkBatch, SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd,
-    SCloseContainer, SCommandSuggestion, SConfigurationAcknowledged, SConfirmTeleport,
-    SContainerButtonClick, SContainerSlotStateChanged, SCookieResponse as SPCookieResponse,
-    SCustomPayload, SDebugSampleSubscription, SDebugSubscriptionRequest, SEditBook,
-    SEntityTagQuery, SInteract, SJigsawGenerate, SLockDifficulty, SMoveVehicle, SPaddleBoat,
-    SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayPong, SPlayResourcePack,
-    SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
-    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
-    SRecipeBookSeenRecipe, SRenameItem, SSeenAdvancement, SSelectTrade, SSetCommandBlock,
-    SSetCommandMinecart, SSetCreativeSlot, SSetGameRule, SSetHeldItem, SSetJigsawBlock,
-    SSetPlayerGround, SSetStructureBlock, SSetTestBlock, SSpectateEntity, SSwingArm,
-    STeleportToEntity, STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
+    SAttack, SBlockEntityTagQuery, SBundleItemSelected, SChangeDifficulty, SChangeGameMode,
+    SChatAck, SChatCommand, SChatCommandSigned, SChatMessage, SChunkBatch, SClickSlot,
+    SClientCommand, SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion,
+    SConfigurationAcknowledged, SConfirmTeleport, SContainerButtonClick,
+    SContainerSlotStateChanged, SCookieResponse as SPCookieResponse, SCustomPayload,
+    SDebugSampleSubscription, SDebugSubscriptionRequest, SEditBook, SEntityTagQuery, SInteract,
+    SJigsawGenerate, SLockDifficulty, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlaceRecipe,
+    SPlayPingRequest, SPlayPong, SPlayResourcePack, SPlayerAbilities, SPlayerAction,
+    SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation,
+    SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe, SRenameItem,
+    SSeenAdvancement, SSelectTrade, SSetBeacon, SSetCommandBlock, SSetCommandMinecart,
+    SSetCreativeSlot, SSetGameRule, SSetHeldItem, SSetJigsawBlock, SSetPlayerGround,
+    SSetStructureBlock, SSetTestBlock, SSpectateEntity, SSwingArm, STeleportToEntity,
+    STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -34,7 +34,7 @@ use pumpkin_protocol::{
         packet_decoder::TCPNetworkDecoder,
         packet_encoder::TCPNetworkEncoder,
     },
-    ser::{NetworkWriteExt, WritingError},
+    ser::{NetworkReadExt, NetworkWriteExt, WritingError},
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -44,32 +44,43 @@ use tokio::{
     sync::oneshot,
 };
 use tokio::{
-    sync::mpsc::{Receiver, Sender, error::TryRecvError},
+    sync::mpsc::{UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, warn};
 
-pub mod config;
+pub mod chunk_data;
 pub mod handshake;
 pub mod login;
+mod outgoing;
 pub mod pending;
 pub mod play;
 pub mod recipe_helper;
 pub mod status;
 
+pub use chunk_data::{CChunkData, ChunkLightExt};
+use outgoing::{DISCONNECT_FLUSH_TIMEOUT, OutgoingPacket, run_outgoing_packet_writer};
+
 use arc_swap::ArcSwap;
 use pending::PendingConnection;
 
 use crate::entity::player::Player;
-use crate::net::{GameProfile, PacketHandlerResult, PacketRateLimiter, PlayerConfig};
+use crate::net::{
+    ClientPlatform, GameProfile, MAX_PENDING_BYTES, PacketRateLimiter, PlayerConfig,
+    decrement_pending_bytes,
+};
 use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
+use crate::plugin::server::packet::PacketSentEvent;
 use crate::{error::PumpkinError, server::Server};
 
 pub struct JavaClient {
     pub id: u64,
+    /// The protocol the client speaks. Play packets are always encoded/decoded as
+    /// `CURRENT_MC_VERSION`. Older clients are not admitted; the packet events are the hook
+    /// for a plugin that converts them.
     pub version: AtomicCell<JavaMinecraftVersion>,
     /// The client's game profile information. Direct field (lock-free).
     pub gameprofile: GameProfile,
@@ -87,16 +98,15 @@ pub struct JavaClient {
     pub player: ArcSwap<Option<Arc<Player>>>,
     /// A collection of tasks associated with this client. The tasks await completion when removing the client.
     tasks: TaskTracker,
+    rt_handle: tokio::runtime::Handle,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
-    /// A normal-priority queue of serialized packets to send to the network.
-    outgoing_packet_queue_send: Sender<OutgoingPacket>,
-    /// A normal-priority queue of serialized packets to send to the network.
-    outgoing_packet_queue_recv: Option<Receiver<OutgoingPacket>>,
-    /// A high-priority queue of serialized packets to send to the network.
-    outgoing_packet_priority_send: Sender<OutgoingPacket>,
-    /// A high-priority queue of serialized packets to send to the network.
-    outgoing_packet_priority_recv: Option<Receiver<OutgoingPacket>>,
+    /// Per-connection FIFO of serialized packets (vanilla Netty eventLoop).
+    /// Unbounded like vanilla; `MAX_PENDING_BYTES` is the limit.
+    outgoing_packet_queue_send: UnboundedSender<OutgoingPacket>,
+    outgoing_packet_queue_recv: Option<UnboundedReceiver<OutgoingPacket>>,
+    /// Tracks total buffered payload bytes in the outgoing queue.
+    pub pending_bytes: Arc<AtomicUsize>,
     /// The packet encoder for outgoing packets.
     network_writer: std::sync::Mutex<Option<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
@@ -105,6 +115,10 @@ pub struct JavaClient {
     ///
     /// Whether we are waiting for a response after sending a keep alive packet.
     pub wait_for_keep_alive: AtomicBool,
+    /// Set to `true` when any movement packet is received this tick.
+    /// On `SClientTickEnd` (≥1.21.4), if still `false`, the player's known
+    /// movement is zeroed (they stood still). Matches vanilla's `receivedMovementThisTick`.
+    pub received_movement_this_tick: AtomicBool,
     /// The keep alive packet payload we send. The client should respond with the same id.
     pub keep_alive_id: AtomicCell<i64>,
     /// The last time we sent a keep alive packet.
@@ -117,32 +131,8 @@ pub struct JavaClient {
     pub packet_sequence: AtomicI32,
     /// Packet rate limiter for incoming client packets.
     pub packet_limiter: PacketRateLimiter,
-}
-
-pub enum OutgoingPacketType {
-    Normal,
-    HighPriority,
-}
-
-struct OutgoingPacket {
-    data: Bytes,
-    completion: Option<oneshot::Sender<()>>,
-}
-
-impl OutgoingPacket {
-    const fn normal(data: Bytes) -> Self {
-        Self {
-            data,
-            completion: None,
-        }
-    }
-
-    const fn high_priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
-        Self {
-            data,
-            completion: Some(completion),
-        }
-    }
+    /// Vanilla `suspendFlushingOnServerThread`.
+    suspend_flushing: Arc<AtomicBool>,
 }
 
 impl JavaClient {
@@ -152,8 +142,7 @@ impl JavaClient {
         gameprofile: GameProfile,
         config: PlayerConfig,
     ) -> Self {
-        let (send, recv) = tokio::sync::mpsc::channel(4096);
-        let (priority_send, priority_recv) = tokio::sync::mpsc::channel(4096);
+        let (send, recv) = tokio::sync::mpsc::unbounded_channel();
 
         Self {
             id: pending.id,
@@ -164,22 +153,51 @@ impl JavaClient {
             connection_state: pending.connection_state,
             close_token: pending.close_token,
             tasks: TaskTracker::new(),
+            rt_handle: tokio::runtime::Handle::current(),
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Some(recv),
-            outgoing_packet_priority_send: priority_send,
-            outgoing_packet_priority_recv: Some(priority_recv),
+            pending_bytes: Arc::new(AtomicUsize::new(0)),
             version: pending.version,
             network_writer: std::sync::Mutex::new(Some(pending.network_writer)),
             network_reader: std::sync::Mutex::new(Some(pending.network_reader)),
             brand: ArcSwap::from_pointee(pending.brand),
             player: ArcSwap::from_pointee(None),
             wait_for_keep_alive: AtomicBool::new(false),
+            received_movement_this_tick: AtomicBool::new(false),
             keep_alive_id: AtomicCell::new(0),
             last_keep_alive_time: AtomicCell::new(Instant::now()),
             last_packet_time: AtomicCell::new(Instant::now()),
             pending_keep_alives: std::sync::Mutex::new(Vec::new()),
             packet_sequence: AtomicI32::new(-1),
             packet_limiter: pending.packet_limiter,
+            suspend_flushing: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    /// Vanilla `ServerCommonPacketListenerImpl.suspendFlushing`.
+    pub fn suspend_flushing(&self) {
+        self.suspend_flushing.store(true, Ordering::Release);
+    }
+
+    /// Vanilla `resumeFlushing`: queue `flushChannel` then lift the hold.
+    pub fn resume_flushing(&self) {
+        self.flush_channel();
+        self.suspend_flushing.store(false, Ordering::Release);
+    }
+
+    /// Flushes Channel even while suspended.
+    pub fn flush_channel(&self) {
+        if self
+            .outgoing_packet_queue_send
+            .send(OutgoingPacket::Flush)
+            .is_err()
+            && !self.close_token.is_cancelled()
+        {
+            warn!(
+                "Failed to queue flush for client {}: channel closed",
+                self.id
+            );
+            self.close();
         }
     }
 
@@ -187,7 +205,6 @@ impl JavaClient {
         self.player.store(Arc::new(Some(player)));
     }
 
-    #[expect(clippy::too_many_lines)]
     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
         let Some(mut network_reader) = self
             .network_reader
@@ -226,11 +243,12 @@ impl JavaClient {
                         break;
                     }
 
-                    // Generate a unique ID (current timestamp in ms)
-                    let keep_alive_id = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis() as i64;
+                    let keep_alive_id = i64::from(
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis() as i32,
+                    );
 
                     self.keep_alive_id.store(keep_alive_id);
                     self.wait_for_keep_alive.store(true, Ordering::Relaxed);
@@ -247,6 +265,10 @@ impl JavaClient {
                     }
                     let packet = pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id);
                     self.enqueue_client_packet(&packet).await;
+                }
+
+                () = self.close_token.cancelled() => {
+                    break;
                 }
 
                 // INCOMING PACKETS
@@ -276,36 +298,7 @@ impl JavaClient {
                         break;
                     }
 
-                    match self.handle_play_packet(player, server, &packet).await {
-                        Ok(()) => {}
-                        Err(e) => {
-                            if e.is_kick() {
-                                if let Some(kick_reason) = e.client_kick_reason() {
-                                    self.kick(TextComponent::text(kick_reason)).await;
-                                } else {
-                                    self.kick(TextComponent::text(format!(
-                                        "Error while handling incoming packet {e}"
-                                    )))
-                                    .await;
-                                }
-                            }
-                            error!(
-                                "Failed to handle play packet id {} (payload {} bytes): {}",
-                                packet.id,
-                                packet.payload.len(),
-                                e
-                            );
-                        }
-                    }
-
-                    // ServerGamePacketListenerImpl acknowledges the sequence at the end of the
-                    // packet that carried it. Until we do, the client keeps predicting the block
-                    // it interacted with and drops our updates for that position
-                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
-                    if seq != -1 {
-                        self.send_packet(&CAcknowledgeBlockChange::new(seq.into()))
-                            .await;
-                    }
+                    player.inbound_packets.push(packet);
                 }
             }
         }
@@ -329,6 +322,7 @@ impl JavaClient {
         if self.close_token.is_cancelled() {
             None
         } else {
+            let _guard = self.rt_handle.enter();
             Some(self.tasks.spawn(task))
         }
     }
@@ -342,55 +336,129 @@ impl JavaClient {
             return;
         };
 
-        if self.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-            self.send_packet(&CChunkBatchStart).await;
-        }
+        let mut valid_chunks = Vec::with_capacity(chunks.len());
         for chunk in chunks {
             let mut event = ChunkSend::new(player.world(), chunk.clone());
             server.plugin_manager.fire(&server, &mut event).await;
-            if event.cancelled {
-                continue;
+            if !event.cancelled {
+                valid_chunks.push(chunk.clone());
             }
+        }
 
-            let mut buf = Vec::new();
-            let version = self.version.load();
-            if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(version))) {
-                error!("Failed to write chunk data id: {err:?}");
-                continue;
-            }
-            if let Err(err) = CChunkData(chunk).write_packet_data(&mut buf, &version) {
-                error!("Failed to write chunk data: {err:?}");
-                continue;
-            }
-            self.send_packet_now_data(buf.into()).await;
+        if valid_chunks.is_empty() {
+            return;
         }
-        if self.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-            self.send_packet(&CChunkBatchEnd::new(chunks.len() as u16))
-                .await;
+
+        let (tx, rx) = oneshot::channel();
+        rayon::spawn(move || {
+            let mut serialized = Vec::with_capacity(valid_chunks.len());
+            for chunk in valid_chunks {
+                let mut buf = Vec::with_capacity(32 * 1024);
+                if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(CURRENT_MC_VERSION)))
+                {
+                    error!("Failed to write chunk data id: {err:?}");
+                    continue;
+                }
+                if let Err(err) =
+                    CChunkData(&chunk).write_packet_data(&mut buf, &CURRENT_MC_VERSION)
+                {
+                    error!("Failed to write chunk data: {err:?}");
+                    continue;
+                }
+                serialized.push(Bytes::from(buf));
+            }
+            let _ = tx.send(serialized);
+        });
+
+        let Ok(serialized) = rx.await else {
+            return;
+        };
+        let sent_count = serialized.len();
+        if sent_count == 0 {
+            return;
         }
+
+        self.send_packet(&CChunkBatchStart).await;
+
+        // One FIFO per connection: batch start/data/end stay in enqueue order.
+        for chunk_data in serialized {
+            self.send_packet_now_data(chunk_data).await;
+        }
+
+        self.send_packet(&CChunkBatchEnd::new(sent_count as u16))
+            .await;
     }
 
     pub async fn enqueue_packet(&self, packet_data: Bytes) {
         self.enqueue_packet_data(packet_data).await;
     }
 
+    #[allow(clippy::unused_async)]
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
-        if let Err(err) = self
-            .outgoing_packet_queue_send
-            .send(OutgoingPacket::normal(packet_data))
-            .await
-        {
-            // This is expected to fail if we are closed
+        self.try_enqueue_packet_data(packet_data);
+    }
+
+    /// Outbound choke point of all enqueue/send paths. `None` when the packet must be dropped.
+    fn reserve_pending_bytes(&self, packet_data: Bytes) -> Option<(Bytes, usize)> {
+        if self.close_token.is_cancelled() {
+            return None;
+        }
+        let packet_data = self.translate_outgoing(packet_data)?;
+
+        // Reserve first, release again if it does not fit.
+        let packet_len = packet_data.len();
+        let prev_bytes = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
+        let new_bytes = prev_bytes.saturating_add(packet_len);
+
+        if new_bytes > MAX_PENDING_BYTES {
+            decrement_pending_bytes(&self.pending_bytes, packet_len);
             if !self.close_token.is_cancelled() {
                 warn!(
-                    "Failed to add packet to the outgoing packet queue for client {}: {}",
-                    self.id, err
+                    "Client {} outbound packet buffer overflow ({} bytes > {} bytes). Closing connection.",
+                    self.id, new_bytes, MAX_PENDING_BYTES
                 );
-                // We now need to close the connection to the client since the stream is in an
-                // unknown state
                 self.close();
             }
+            return None;
         }
+
+        Some((packet_data, packet_len))
+    }
+
+    /// `PacketSentEvent` for clients the multiversion plugin admitted below
+    /// `CURRENT_MC_VERSION`: it gets the 26.3 id + payload and rewrites both.
+    /// `None` when cancelled.
+    fn translate_outgoing(&self, packet_data: Bytes) -> Option<Bytes> {
+        if self.version.load() == CURRENT_MC_VERSION {
+            return Some(packet_data);
+        }
+        // TODO: packets sent before `set_player` (e.g. an `add_player` kick) go out untranslated.
+        let player = self.player.load_full();
+        let Some(player) = player.as_ref() else {
+            return Some(packet_data);
+        };
+        let Some(server) = player.world().server.upgrade() else {
+            return Some(packet_data);
+        };
+        if !server.plugin_manager.has_handlers::<PacketSentEvent>() {
+            return Some(packet_data);
+        }
+
+        let mut reader = &packet_data[..];
+        let Ok(packet_id) = reader.get_var_int() else {
+            return Some(packet_data);
+        };
+        let payload = packet_data.slice(packet_data.len() - reader.len()..);
+        let mut event = PacketSentEvent::new_raw(player.clone(), packet_id.0, payload);
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        if event.cancelled {
+            return None;
+        }
+
+        let mut framed = Vec::with_capacity(5 + event.payload.len());
+        framed.write_var_int(&VarInt(event.packet_id)).ok()?;
+        framed.extend_from_slice(&event.payload);
+        Some(framed.into())
     }
 
     pub fn try_enqueue_packet(&self, packet_data: Bytes) {
@@ -398,28 +466,28 @@ impl JavaClient {
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
-        if let Err(err) = self
-            .outgoing_packet_queue_send
-            .try_send(OutgoingPacket::normal(packet_data))
-        {
-            match err {
-                tokio::sync::mpsc::error::TrySendError::Full(_) => {
-                    debug!(
-                        "Failed to add packet to the outgoing packet queue for client {}: channel full",
-                        self.id
-                    );
-                }
-                tokio::sync::mpsc::error::TrySendError::Closed(_) => {
-                    if !self.close_token.is_cancelled() {
-                        warn!(
-                            "Failed to add packet to the outgoing packet queue for client {}: channel closed",
-                            self.id
-                        );
-                        self.close();
-                    }
-                }
-            }
+        let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data) else {
+            return;
+        };
+        self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len);
+    }
+
+    /// `false` once the writer is gone. Then the connection is closed.
+    fn queue_outgoing(&self, packet: OutgoingPacket, packet_len: usize) -> bool {
+        if self.outgoing_packet_queue_send.send(packet).is_ok() {
+            return true;
         }
+        decrement_pending_bytes(&self.pending_bytes, packet_len);
+        // It is expected that the packet will fail if closed
+        if !self.close_token.is_cancelled() {
+            warn!(
+                "Failed to add packet to the outgoing packet queue for client {}: channel closed",
+                self.id
+            );
+            // Connection to the client closed since the stream is in an unknown state
+            self.close();
+        }
+        false
     }
 
     pub async fn await_close_interrupt(&self) {
@@ -451,29 +519,70 @@ impl JavaClient {
         }
     }
 
+    /// Disconnect packet for the current state. `None` in handshake/status.
+    fn serialize_disconnect(&self, reason: &TextComponent) -> Option<Bytes> {
+        match self.connection_state.load() {
+            ConnectionState::Login => {
+                // TextComponent implements Serialize and writes in bytes instead of String
+                let packet = CLoginDisconnect::new(
+                    serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
+                );
+                self.serialize_packet(&packet).ok()
+            }
+            ConnectionState::Config => {
+                let reason_text = reason.clone().get_text();
+                let packet = CConfigDisconnect::new(&reason_text);
+                self.serialize_packet(&packet).ok()
+            }
+            ConnectionState::Play => {
+                let packet = CPlayDisconnect::new(reason);
+                self.serialize_packet(&packet).ok()
+            }
+            _ => None,
+        }
+    }
+
+    pub fn try_kick(&self, reason: &TextComponent) {
+        if let Some(data) = self
+            .serialize_disconnect(reason)
+            .and_then(|data| self.translate_outgoing(data))
+        {
+            let packet_len = data.len();
+            let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
+            // The writer drains and flushes it after `close()`
+            if self
+                .outgoing_packet_queue_send
+                .send(OutgoingPacket::normal(data))
+                .is_err()
+            {
+                decrement_pending_bytes(&self.pending_bytes, packet_len);
+                // Expected: the writer task is already gone.
+                debug!(
+                    "Disconnect packet for client {} dropped: outgoing packet queue closed",
+                    self.id
+                );
+            }
+        }
+        let reason_text = reason.clone().get_text();
+        warn!("Closing connection for {}: {reason_text}", self.id);
+        self.close();
+    }
+
     pub async fn kick(&self, reason: TextComponent) {
         self.kick_explicit(&reason, true).await;
     }
 
     pub async fn kick_explicit(&self, reason: &TextComponent, send_packet: bool) {
-        if send_packet {
-            match self.connection_state.load() {
-                ConnectionState::Login => {
-                    // TextComponent implements Serialize and writes in bytes instead of String, that's the reason we only use content
-                    self.send_packet(&CLoginDisconnect::new(
-                        serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
-                    ))
-                    .await;
-                }
-                ConnectionState::Config => {
-                    self.send_packet(&CConfigDisconnect::new(&reason.clone().get_text()))
-                        .await;
-                }
-                ConnectionState::Play => self.send_packet(&CPlayDisconnect::new(reason)).await,
-                _ => {}
-            }
+        if send_packet && let Some(data) = self.serialize_disconnect(reason) {
+            // Stalled peer: never flushes -> Close anyway.
+            let _ = tokio::time::timeout(
+                DISCONNECT_FLUSH_TIMEOUT,
+                self.send_and_wait(data, OutgoingPacket::flushed),
+            )
+            .await;
         }
-        debug!("Closing connection for {}", self.id);
+        let reason_text = reason.clone().get_text();
+        warn!("Closing connection for {}: {reason_text}", self.id);
         self.close();
     }
 
@@ -481,24 +590,25 @@ impl JavaClient {
         self.send_packet_now_data(packet).await;
     }
 
+    /// Enqueue on the per-connection FIFO and wait until the writer has
+    /// `write_frame`d into the `BufWriter`. Never waits for a TCP flush.
     pub async fn send_packet_now_data(&self, packet: Bytes) {
-        let (completion_tx, completion_rx) = oneshot::channel();
+        self.send_and_wait(packet, OutgoingPacket::high_priority)
+            .await;
+    }
 
-        if let Err(err) = self
-            .outgoing_packet_priority_send
-            .send(OutgoingPacket::high_priority(packet, completion_tx))
-            .await
-        {
-            // It is expected that the packet will fail if we are closed
-            if !self.close_token.is_cancelled() {
-                warn!(
-                    "Failed to add high-priority packet to the outgoing packet queue for client {}: {}",
-                    self.id, err
-                );
-                // We now need to close the connection to the client since the stream is in an
-                // unknown state
-                self.close();
-            }
+    /// Enqueue and wait for the writer's completion, `Framed` or `Flushed` per `make`.
+    async fn send_and_wait(
+        &self,
+        packet: Bytes,
+        make: fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket,
+    ) {
+        let Some((packet, packet_len)) = self.reserve_pending_bytes(packet) else {
+            return;
+        };
+
+        let (completion_tx, completion_rx) = oneshot::channel();
+        if !self.queue_outgoing(make(packet, completion_tx), packet_len) {
             return;
         }
 
@@ -524,7 +634,13 @@ impl JavaClient {
     }
 
     pub fn serialize_packet<P: ClientPacket>(&self, packet: &P) -> Result<Bytes, WritingError> {
-        Self::serialize_packet_for_version(packet, self.version.load())
+        Self::serialize_packet_for_version(packet, CURRENT_MC_VERSION)
+    }
+
+    pub fn try_send_packet<P: ClientPacket>(&self, packet: &P) {
+        if let Ok(data) = self.serialize_packet(packet) {
+            self.try_enqueue_packet(data);
+        }
     }
 
     pub async fn send_packet<P: ClientPacket>(&self, packet: &P) {
@@ -544,7 +660,7 @@ impl JavaClient {
         packet: &P,
         write: impl Write,
     ) -> Result<(), WritingError> {
-        Self::write_packet_for_version(packet, self.version.load(), write)
+        Self::write_packet_for_version(packet, CURRENT_MC_VERSION, write)
     }
 
     /// Handles an incoming packet, routing it to the appropriate handler based on the current connection state.
@@ -557,16 +673,12 @@ impl JavaClient {
     /// - **Login/Transfer:** Handles login and transfer packets.
     /// - **Config:** Handles configuration packets.
     pub fn start_outgoing_packet_task(&mut self) {
-        const MAX_BATCH_SIZE: usize = 64;
-
-        let Some(mut packet_receiver) = self.outgoing_packet_queue_recv.take() else {
-            return;
-        };
-        let Some(mut priority_packet_receiver) = self.outgoing_packet_priority_recv.take() else {
+        let Some(packet_receiver) = self.outgoing_packet_queue_recv.take() else {
             return;
         };
         let close_token = self.close_token.clone();
-        let Some(mut writer) = self
+        let pending_bytes = self.pending_bytes.clone();
+        let Some(writer) = self
             .network_writer
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -575,71 +687,17 @@ impl JavaClient {
             return;
         };
         let id = self.id;
+        let suspend_flushing = self.suspend_flushing.clone();
         self.spawn_task(async move {
-            while !close_token.is_cancelled() {
-                let recv_result = tokio::select! {
-                    biased;
-                    () = close_token.cancelled() => None,
-                    res = priority_packet_receiver.recv() => res,
-                    res = packet_receiver.recv() => res,
-                };
-
-                let Some(packet_data) = recv_result else {
-                    break;
-                };
-
-                let mut packet_batch = Vec::with_capacity(MAX_BATCH_SIZE);
-                packet_batch.push(packet_data);
-
-                while packet_batch.len() < MAX_BATCH_SIZE {
-                    match priority_packet_receiver.try_recv() {
-                        Ok(packet_data) => {
-                            packet_batch.push(packet_data);
-                            continue;
-                        }
-                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => {}
-                    }
-
-                    match packet_receiver.try_recv() {
-                        Ok(packet_data) => packet_batch.push(packet_data),
-                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => break,
-                    }
-                }
-
-                let send_failed = {
-                    let mut failed = false;
-                    for packet in &packet_batch {
-                        if let Err(err) = writer.write_packet(packet.data.clone()).await {
-                            failed = true;
-                            // It is expected that the packet will fail if we are closed
-                            if !close_token.is_cancelled() {
-                                warn!("Failed to send packet to client {id}: {err}");
-                            }
-                            break;
-                        }
-                    }
-
-                    if !failed && let Err(err) = writer.flush().await {
-                        failed = true;
-                        if !close_token.is_cancelled() {
-                            warn!("Failed to flush packet batch for client {id}: {err}");
-                        }
-                    }
-                    failed
-                };
-
-                if send_failed {
-                    // We now need to close the connection to the client since the stream is in an unknown state.
-                    close_token.cancel();
-                    break;
-                }
-
-                for packet in packet_batch {
-                    if let Some(completion) = packet.completion {
-                        let _ = completion.send(());
-                    }
-                }
-            }
+            run_outgoing_packet_writer(
+                packet_receiver,
+                writer,
+                close_token,
+                suspend_flushing,
+                pending_bytes,
+                id,
+            )
+            .await;
         });
     }
 
@@ -652,6 +710,7 @@ impl JavaClient {
     /// # Notes
     ///
     /// This function does not attempt to send any disconnect packets to the client.
+    /// Packets already queued are still written and flushed, bounded by `DISCONNECT_FLUSH_TIMEOUT`.
     pub fn close(&self) {
         self.close_token.cancel();
     }
@@ -661,107 +720,150 @@ impl JavaClient {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub async fn handle_play_packet(
+    pub fn handle_play_packet(
         &self,
         player: &Arc<Player>,
         server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
-        let version = self.version.load();
+        // The multiversion plugin has converted older clients' packets to 26.3 by now.
+        let version = CURRENT_MC_VERSION;
 
         let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
             player.clone(),
             packet.id,
             packet.payload.clone(),
         );
-        server.plugin_manager.fire(server, &mut event).await;
+        server.plugin_manager.fire_blocking(server, &mut event);
         if event.cancelled {
             return Ok(());
         }
 
         let mut payload = &event.payload[..];
-
         match event.packet_id {
             id if id == SConfirmTeleport::to_id(version) => {
                 self.handle_confirm_teleport(
                     player,
-                    SConfirmTeleport::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SConfirmTeleport::read(&mut payload, &version)?,
+                );
             }
             id if id == SChangeGameMode::to_id(version) => {
                 self.handle_change_game_mode(
                     player,
-                    SChangeGameMode::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SChangeGameMode::read(&mut payload, &version)?,
+                );
+            }
+            id if id == SChatAck::to_id(version) => {
+                let packet = SChatAck::read(&mut payload, &version)?;
+                self.handle_chat_ack(player, &packet);
             }
             id if id == SChatCommand::to_id(version) => {
-                self.handle_chat_command(
-                    player,
-                    server,
-                    &(SChatCommand::read(&mut payload, &version)?),
-                )
-                .await;
+                let packet = SChatCommand::read(&mut payload, &version)?;
+                let cmd = packet.command.to_string();
+                let client_platform = player.client.clone();
+                let player_c = player.clone();
+                let server_c = server.clone();
+                server.spawn_task(async move {
+                    if let ClientPlatform::Java(client) = client_platform.as_ref() {
+                        let packet = SChatCommand { command: &cmd };
+                        client
+                            .handle_chat_command(&player_c, &server_c, &packet)
+                            .await;
+                    }
+                });
+            }
+            id if id == SChatCommandSigned::to_id(version) => {
+                let mut signed_payload = payload;
+                let cmd =
+                    if let Ok(signed) = SChatCommandSigned::read(&mut signed_payload, &version) {
+                        signed.command.to_string()
+                    } else {
+                        SChatCommand::read(&mut payload, &version)?
+                            .command
+                            .to_string()
+                    };
+                let client_platform = player.client.clone();
+                let player_c = player.clone();
+                let server_c = server.clone();
+                server.spawn_task(async move {
+                    if let ClientPlatform::Java(client) = client_platform.as_ref() {
+                        let packet = SChatCommand { command: &cmd };
+                        client
+                            .handle_chat_command(&player_c, &server_c, &packet)
+                            .await;
+                    }
+                });
             }
             id if id == SChatMessage::to_id(version) => {
-                self.handle_chat_message(
-                    server,
-                    player,
-                    SChatMessage::read(&mut payload, &version)?,
-                )
-                .await;
+                let packet = SChatMessage::read(&mut payload, &version)?;
+                let msg = packet.message.to_string();
+                let signature = packet.signature.map(<[u8]>::to_vec);
+                let ack = packet.acknowledged.to_vec();
+                let ts = packet.timestamp;
+                let salt = packet.salt;
+                let count = packet.message_count;
+                let checksum = packet.checksum;
+                let client_platform = player.client.clone();
+                let player_c = player.clone();
+                let server_c = server.clone();
+                server.spawn_task(async move {
+                    if let ClientPlatform::Java(client) = client_platform.as_ref() {
+                        let packet = SChatMessage {
+                            message: &msg,
+                            timestamp: ts,
+                            salt,
+                            signature: signature.as_deref(),
+                            message_count: count,
+                            acknowledged: &ack,
+                            checksum,
+                        };
+                        client
+                            .handle_chat_message(&server_c, &player_c, packet)
+                            .await;
+                    }
+                });
             }
             id if id == SClientInformationPlay::to_id(version) => {
                 self.handle_client_information(
                     server,
                     player,
-                    SClientInformationPlay::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SClientInformationPlay::read(&mut payload, &version)?,
+                );
             }
             id if id == SClientCommand::to_id(version) => {
-                self.handle_client_status(player, SClientCommand::read(&mut payload, &version)?)
-                    .await;
+                self.handle_client_status(player, &SClientCommand::read(&mut payload, &version)?);
             }
             id if id == SPlayerInput::to_id(version) => {
                 self.handle_player_input(
                     player,
-                    SPlayerInput::read(&mut payload, &version)?,
+                    &SPlayerInput::read(&mut payload, &version)?,
                     server,
-                )
-                .await;
+                );
             }
             id if id == SMoveVehicle::to_id(version) => {
-                self.handle_move_vehicle(player, SMoveVehicle::read(&mut payload, &version)?)
-                    .await;
+                self.handle_move_vehicle(player, &SMoveVehicle::read(&mut payload, &version)?);
             }
             id if id == SPaddleBoat::to_id(version) => {
-                self.handle_paddle_boat(player, SPaddleBoat::read(&mut payload, &version)?)
-                    .await;
+                self.handle_paddle_boat(player, &SPaddleBoat::read(&mut payload, &version)?);
             }
             id if id == SInteract::to_id(version) => {
-                self.handle_interact(player, SInteract::read(&mut payload, &version)?, server)
-                    .await;
+                self.handle_interact(player, &SInteract::read(&mut payload, &version)?, server);
             }
             id if id == SBundleItemSelected::to_id(version) => {
                 self.handle_bundle_item_selected(
                     player,
-                    SBundleItemSelected::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SBundleItemSelected::read(&mut payload, &version)?,
+                );
             }
             id if id == SAttack::to_id(version) => {
-                self.handle_attack(player, SAttack::read(&mut payload, &version)?, server)
-                    .await;
+                self.handle_attack(player, &SAttack::read(&mut payload, &version)?, server);
             }
             id if id == STeleportToEntity::to_id(version) => {
                 self.handle_teleport_to_entity(
                     player,
-                    STeleportToEntity::read(&mut payload, &version)?,
+                    &STeleportToEntity::read(&mut payload, &version)?,
                     server,
-                )
-                .await;
+                );
             }
             id if id == pumpkin_protocol::java::server::play::SKeepAlive::to_id(version) => {
                 self.handle_keep_alive(
@@ -773,7 +875,7 @@ impl JavaClient {
                 );
             }
             id if id == SClientTickEnd::to_id(version) => {
-                // TODO
+                self.handle_client_tick_end(player);
             }
             id if id == STestInstanceBlockAction::to_id(version) => {
                 self.handle_test_instance_block_action(
@@ -800,21 +902,18 @@ impl JavaClient {
                 self.handle_position(
                     player,
                     server,
-                    SPlayerPosition::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SPlayerPosition::read(&mut payload, &version)?,
+                );
             }
             id if id == SPlayerPositionRotation::to_id(version) => {
                 self.handle_position_rotation(
                     player,
                     server,
-                    SPlayerPositionRotation::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SPlayerPositionRotation::read(&mut payload, &version)?,
+                );
             }
             id if id == SPlayerRotation::to_id(version) => {
-                self.handle_rotation(player, SPlayerRotation::read(&mut payload, &version)?)
-                    .await;
+                self.handle_rotation(player, &SPlayerRotation::read(&mut payload, &version)?);
             }
             id if id == SSetPlayerGround::to_id(version) => {
                 self.handle_player_ground(player, &SSetPlayerGround::read(&mut payload, &version)?);
@@ -822,180 +921,200 @@ impl JavaClient {
             id if id == SPickItemFromBlock::to_id(version) => {
                 self.handle_pick_item_from_block(
                     player,
-                    SPickItemFromBlock::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SPickItemFromBlock::read(&mut payload, &version)?,
+                );
             }
             id if id
                 == pumpkin_protocol::java::server::play::SPickItemFromEntity::to_id(version) =>
             {
                 self.handle_pick_item_from_entity(
                     player,
-                    pumpkin_protocol::java::server::play::SPickItemFromEntity::read(
+                    &pumpkin_protocol::java::server::play::SPickItemFromEntity::read(
                         &mut payload,
                         &version,
                     )?,
-                )
-                .await;
+                );
             }
             id if id == SPlayerAbilities::to_id(version) => {
                 self.handle_player_abilities(
                     player,
-                    SPlayerAbilities::read(&mut payload, &version)?,
+                    &SPlayerAbilities::read(&mut payload, &version)?,
                     server,
-                )
-                .await;
+                );
             }
             id if id == SPlayerAction::to_id(version) => {
                 self.handle_player_action(
                     player,
-                    SPlayerAction::read(&mut payload, &version)?,
+                    &SPlayerAction::read(&mut payload, &version)?,
                     server,
-                )
-                .await;
+                );
             }
             id if id == SSetCommandBlock::to_id(version) => {
                 self.handle_set_command_block(
                     player,
-                    SSetCommandBlock::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SSetCommandBlock::read(&mut payload, &version)?,
+                );
             }
             id if id == SSetJigsawBlock::to_id(version) => {
                 self.handle_set_jigsaw_block(
                     player,
-                    SSetJigsawBlock::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SSetJigsawBlock::read(&mut payload, &version)?,
+                );
             }
             id if id == SJigsawGenerate::to_id(version) => {
-                self.handle_jigsaw_generate(player, SJigsawGenerate::read(&mut payload, &version)?)
-                    .await;
+                self.handle_jigsaw_generate(
+                    player,
+                    &SJigsawGenerate::read(&mut payload, &version)?,
+                );
             }
             id if id == SPlayerCommand::to_id(version) => {
                 self.handle_player_command(
                     player,
-                    SPlayerCommand::read(&mut payload, &version)?,
+                    &SPlayerCommand::read(&mut payload, &version)?,
                     server,
-                )
-                .await;
+                );
             }
             id if id == SPlayerLoaded::to_id(version) => {
                 Self::handle_player_loaded(player);
             }
             id if id == SPlayPingRequest::to_id(version) => {
-                self.handle_play_ping_request(SPlayPingRequest::read(&mut payload, &version)?)
-                    .await;
+                self.handle_play_ping_request(&SPlayPingRequest::read(&mut payload, &version)?);
             }
             id if id == SClickSlot::to_id(version) => {
-                player
-                    .on_slot_click(SClickSlot::read(&mut payload, &version)?, server)
-                    .await;
+                player.on_slot_click(SClickSlot::read(&mut payload, &version)?, server);
             }
             id if id == SContainerButtonClick::to_id(version) => {
-                player
-                    .on_container_button_click(SContainerButtonClick::read(&mut payload, &version)?)
-                    .await;
+                player.on_container_button_click(&SContainerButtonClick::read(
+                    &mut payload,
+                    &version,
+                )?);
             }
             id if id == SSetHeldItem::to_id(version) => {
                 self.handle_set_held_item(
                     server,
                     player,
-                    SSetHeldItem::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SSetHeldItem::read(&mut payload, &version)?,
+                );
             }
             id if id == SSetCreativeSlot::to_id(version) => {
                 self.handle_set_creative_slot(
                     player,
                     SSetCreativeSlot::read(&mut payload, &version)?,
-                )
-                .await?;
+                )?;
             }
             id if id == SSwingArm::to_id(version) => {
-                self.handle_swing_arm(server, player, SSwingArm::read(&mut payload, &version)?)
-                    .await;
+                self.handle_swing_arm(server, player, &SSwingArm::read(&mut payload, &version)?);
             }
             id if id == SUpdateSign::to_id(version) => {
-                self.handle_sign_update(player, SUpdateSign::read(&mut payload, &version)?)
-                    .await;
+                self.handle_sign_update(player, &SUpdateSign::read(&mut payload, &version)?);
             }
             id if id == SEditBook::to_id(version) => {
-                self.handle_edit_book(player, SEditBook::read(&mut payload, &version)?)
-                    .await;
+                self.handle_edit_book(player, &SEditBook::read(&mut payload, &version)?);
             }
             id if id == SUseItemOn::to_id(version) => {
-                self.handle_use_item_on(player, SUseItemOn::read(&mut payload, &version)?, server)
-                    .await?;
+                self.handle_use_item_on(
+                    player,
+                    &SUseItemOn::read(&mut payload, &version)?,
+                    server,
+                )?;
             }
             id if id == SUseItem::to_id(version) => {
-                self.handle_use_item(player, &SUseItem::read(&mut payload, &version)?, server)
-                    .await;
+                self.handle_use_item(player, &SUseItem::read(&mut payload, &version)?, server);
             }
             id if id == SCommandSuggestion::to_id(version) => {
                 self.handle_command_suggestion(
                     player,
-                    SCommandSuggestion::read(&mut payload, &version)?,
+                    &SCommandSuggestion::read(&mut payload, &version)?,
                     server,
-                )
-                .await;
+                );
             }
             id if id == SPCookieResponse::to_id(version) => {
                 self.handle_cookie_response(&SPCookieResponse::read(&mut payload, &version)?);
             }
             id if id == SCloseContainer::to_id(version) => {
-                self.handle_close_container(
-                    player,
-                    server,
-                    SCloseContainer::read(&mut payload, &version)?,
-                )
-                .await;
+                let _ = SCloseContainer::read(&mut payload, &version)?;
+                self.handle_close_container(player);
             }
             id if id == SChunkBatch::to_id(version) => {
-                self.handle_chunk_batch(player, SChunkBatch::read(&mut payload, &version)?)
-                    .await;
+                self.handle_chunk_batch(player, &SChunkBatch::read(&mut payload, &version)?);
             }
             id if id == SPlayerSession::to_id(version) => {
-                self.handle_chat_session_update(
-                    player,
-                    server,
-                    SPlayerSession::read(&mut payload, &version)?,
-                )
-                .await;
+                let session = SPlayerSession::read(&mut payload, &version)?;
+                let client_platform = player.client.clone();
+                let player_c = player.clone();
+                let server_c = server.clone();
+                server.spawn_task(async move {
+                    if let ClientPlatform::Java(client) = client_platform.as_ref() {
+                        client
+                            .handle_chat_session_update(&player_c, &server_c, session)
+                            .await;
+                    }
+                });
             }
             id if id == SCustomPayload::to_id(version) => {
                 let payload = SCustomPayload::read(&mut payload, &version)?;
+                let channel_str = payload.channel.to_string();
                 let mut event = PlayerCustomPayloadEvent::new(
                     player.clone(),
-                    payload.channel.to_string(),
+                    channel_str.clone(),
                     Bytes::copy_from_slice(payload.data),
                 );
-                server.plugin_manager.fire(server, &mut event).await;
+                server.plugin_manager.fire_blocking(server, &mut event);
+
+                if channel_str == "minecraft:register" {
+                    if let Ok(channels_data) = std::str::from_utf8(payload.data) {
+                        for ch in channels_data.split('\0') {
+                            if !ch.is_empty() {
+                                let mut reg_event = crate::plugin::api::events::player::player_register_channel::PlayerRegisterChannelEvent::new(
+                                    player.clone(),
+                                    ch.to_string(),
+                                );
+                                server.plugin_manager.fire_blocking(server, &mut reg_event);
+                                let mut ch_event = crate::plugin::api::events::player::player_channel::PlayerChannelEvent {
+                                    player: player.clone(),
+                                    channel: ch.to_string(),
+                                    cancelled: false,
+                                };
+                                server.plugin_manager.fire_blocking(server, &mut ch_event);
+                            }
+                        }
+                    }
+                } else if channel_str == "minecraft:unregister"
+                    && let Ok(channels_data) = std::str::from_utf8(payload.data)
+                {
+                    for ch in channels_data.split('\0') {
+                        if !ch.is_empty() {
+                            let mut unreg_event = crate::plugin::api::events::player::player_unregister_channel::PlayerUnregisterChannelEvent::new(
+                                player.clone(),
+                                ch.to_string(),
+                            );
+                            server
+                                .plugin_manager
+                                .fire_blocking(server, &mut unreg_event);
+                        }
+                    }
+                }
             }
             id if id == SRecipeBookChangeSettings::to_id(version) => {
                 self.handle_recipe_book_change_settings(
                     server,
                     player,
-                    SRecipeBookChangeSettings::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SRecipeBookChangeSettings::read(&mut payload, &version)?,
+                );
             }
             id if id == SRecipeBookSeenRecipe::to_id(version) => {
                 self.handle_recipe_book_seen_recipe(
                     server,
                     player,
-                    SRecipeBookSeenRecipe::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SRecipeBookSeenRecipe::read(&mut payload, &version)?,
+                );
             }
             id if id == SRenameItem::to_id(version) => {
-                player
-                    .on_rename_item(SRenameItem::read(&mut payload, &version)?)
-                    .await;
+                player.on_rename_item(&SRenameItem::read(&mut payload, &version)?);
             }
             id if id == SPlaceRecipe::to_id(version) => {
                 let packet = SPlaceRecipe::read(&mut payload, &version)?;
-                self.handle_place_recipe(server, player, packet).await;
+                self.handle_place_recipe(server, player, &packet);
             }
             id if id
                 == pumpkin_protocol::java::server::play::SCustomClickAction::to_id(version) =>
@@ -1004,31 +1123,28 @@ impl JavaClient {
                     &mut payload,
                     &version,
                 )?;
-                let mut event = crate::plugin::api::events::player::custom_click_action::CustomClickActionEvent::new(
+                let mut event = crate::plugin::api::events::dialog::dialog_click_action::DialogClickActionEvent::new(
                     player.clone(),
                     packet.action_id.to_string(),
                     packet.payload.map(Bytes::copy_from_slice),
                 );
-                server.plugin_manager.fire(server, &mut event).await;
+                server.plugin_manager.fire_blocking(server, &mut event);
             }
             id if id == SSelectTrade::to_id(version) => {
-                self.handle_select_trade(player, SSelectTrade::read(&mut payload, &version)?)
-                    .await;
+                self.handle_select_trade(player, &SSelectTrade::read(&mut payload, &version)?);
             }
             id if id == SSeenAdvancement::to_id(version) => {
                 self.handle_seen_advancement(
                     player,
-                    SSeenAdvancement::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SSeenAdvancement::read(&mut payload, &version)?,
+                );
             }
             id if id == SPlayResourcePack::to_id(version) => {
                 self.handle_play_resource_pack_response(
                     server,
                     player,
-                    SPlayResourcePack::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SPlayResourcePack::read(&mut payload, &version)?,
+                );
             }
             id if id == SPlayPong::to_id(version) => {
                 self.handle_play_pong(player, &SPlayPong::read(&mut payload, &version)?);
@@ -1040,6 +1156,16 @@ impl JavaClient {
                     &SLockDifficulty::read(&mut payload, &version)?,
                 );
             }
+            id if id == SChangeDifficulty::to_id(version) => {
+                self.handle_change_difficulty(
+                    server,
+                    player,
+                    &SChangeDifficulty::read(&mut payload, &version)?,
+                );
+            }
+            id if id == SSetBeacon::to_id(version) => {
+                self.handle_set_beacon(player, &SSetBeacon::read(&mut payload, &version)?);
+            }
             id if id == SContainerSlotStateChanged::to_id(version) => {
                 self.handle_container_slot_state_changed(
                     player,
@@ -1050,9 +1176,8 @@ impl JavaClient {
                 self.handle_spectate_entity(
                     player,
                     server,
-                    SSpectateEntity::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SSpectateEntity::read(&mut payload, &version)?,
+                );
             }
             id if id == SSetCommandMinecart::to_id(version) => {
                 self.handle_set_command_minecart(
@@ -1072,16 +1197,14 @@ impl JavaClient {
             id if id == SBlockEntityTagQuery::to_id(version) => {
                 self.handle_block_entity_tag_query(
                     player,
-                    SBlockEntityTagQuery::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SBlockEntityTagQuery::read(&mut payload, &version)?,
+                );
             }
             id if id == SEntityTagQuery::to_id(version) => {
                 self.handle_entity_tag_query(
                     player,
-                    SEntityTagQuery::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SEntityTagQuery::read(&mut payload, &version)?,
+                );
             }
             id if id == SConfigurationAcknowledged::to_id(version) => {
                 self.handle_configuration_acknowledged(player);

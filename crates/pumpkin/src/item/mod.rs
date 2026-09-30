@@ -3,9 +3,9 @@ pub mod potion;
 pub mod registry;
 
 use std::any::Any;
-use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -13,6 +13,7 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -21,44 +22,55 @@ pub trait ItemMetadata {
 }
 
 pub trait ItemBehaviour: Send + Sync {
-    fn normal_use<'a>(
-        &'a self,
-        _item: &'a Item,
-        _player: &'a Player,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
+    fn normal_use(&self, _item: &Item, _player: &Player) {}
+
+    /// Handles an item use with the rotation reported for that action.
+    ///
+    /// Java clients include this rotation in the use-item packet. Item behaviours
+    /// that perform a raycast should override this method instead of relying on
+    /// the player's potentially stale entity rotation.
+    fn normal_use_with_rotation(&self, item: &Item, player: &Player, _yaw: f32, _pitch: f32) {
+        self.normal_use(item, player);
+    }
+
+    /// Handles an item use with the rotation and the hand reported for that
+    /// action, where [`Hand::Right`] is the main hand.
+    ///
+    /// Defaults to [`Self::normal_use_with_rotation`] so item behaviours that do
+    /// not care about the hand keep working unchanged.
+    fn normal_use_with_hand(
+        &self,
+        item: &Item,
+        player: &Player,
+        yaw: f32,
+        pitch: f32,
+        _hand: Hand,
+    ) {
+        self.normal_use_with_rotation(item, player, yaw, pitch);
     }
 
     #[expect(clippy::too_many_arguments)]
-    fn use_on_block<'a>(
-        &'a self,
-        _item: &'a mut ItemStack,
-        _player: &'a Player,
+    fn use_on_block(
+        &self,
+        _item: &mut ItemStack,
+        _player: &Player,
         _location: BlockPos,
         _face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        _block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
+        _block: &Block,
+        _server: &Server,
+    ) -> BlockActionResult {
+        BlockActionResult::Pass
     }
 
-    fn use_on_entity<'a>(
-        &'a self,
-        _item: &'a mut ItemStack,
-        _player: &'a Player,
-        _entity: Arc<dyn EntityBase>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
+    fn use_on_entity(&self, _item: &mut ItemStack, _player: &Player, _entity: Arc<dyn EntityBase>) {
     }
 
-    fn on_stopped_using<'a>(
-        &'a self,
-        _stack: &'a ItemStack,
-        _player: &'a Player,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
-    }
+    fn on_stopped_using(&self, _stack: &ItemStack, _player: &Player) {}
+
+    fn on_spear_jab(&self, _stack: &ItemStack, _player: &Player) {}
+
+    fn on_use_tick(&self, _stack: &ItemStack, _player: &Player, _remaining_use_ticks: i32) {}
 
     /// Returns the maximum number of ticks this item can be used for.
     /// Return 0 if the item does not have a behaviour-driven use duration.

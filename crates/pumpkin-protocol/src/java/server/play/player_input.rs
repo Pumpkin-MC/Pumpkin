@@ -2,11 +2,11 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_PLAYER_INPUT;
+use pumpkin_data::packet::serverbound::play::PLAYER_INPUT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_PLAYER_INPUT)]
+#[java_packet(PLAYER_INPUT)]
 pub struct SPlayerInput {
     // Yep, exactly how it looks like
     pub input: i8,

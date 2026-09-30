@@ -1,0 +1,51 @@
+{
+  "attribute_modifiers": [
+    {
+      "amount": -1.0,
+      "attribute": "minecraft:knockback_resistance",
+      "id": "minecraft:hot_add_knockback_resistance",
+      "operation": "add_value"
+    },
+    {
+      "amount": -1.0,
+      "attribute": "minecraft:explosion_knockback_resistance",
+      "id": "minecraft:hot_add_explosion_knockback_resistance",
+      "operation": "add_value"
+    },
+    {
+      "amount": 0.5,
+      "attribute": "minecraft:bounciness",
+      "id": "minecraft:hot_add_bounciness",
+      "operation": "add_value"
+    },
+    {
+      "amount": -0.699999988079071,
+      "attribute": "minecraft:friction_modifier",
+      "id": "minecraft:hot_mul_friction_modifier",
+      "operation": "add_multiplied_total"
+    },
+    {
+      "amount": -0.8999999985098839,
+      "attribute": "minecraft:air_drag_modifier",
+      "id": "minecraft:hot_mul_air_drag_modifier",
+      "operation": "add_multiplied_total"
+    }
+  ],
+  "buoyant": true,
+  "contact_damage": {
+    "amount": 1.0,
+    "attribute_to_source": false,
+    "damage_type": "minecraft:sulfur_cube_hot"
+  },
+  "items": "#minecraft:sulfur_cube_archetype/hot",
+  "knockback_modifiers": {
+    "horizontal_power": 0.4125,
+    "vertical_power": 0.09
+  },
+  "sound_settings": {
+    "hit_sound": "minecraft:entity.sulfur_cube.hot.hit",
+    "push_sound": "minecraft:entity.sulfur_cube.hot.push",
+    "push_sound_cooldown": 0.7,
+    "push_sound_impulse_threshold": 0.2
+  }
+}

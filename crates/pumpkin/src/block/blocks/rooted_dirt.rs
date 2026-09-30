@@ -2,7 +2,7 @@ use pumpkin_data::Block;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::{BlockBehaviour, BlockFuture, BonemealArgs};
+use crate::block::{BlockBehaviour, BonemealArgs};
 
 #[pumpkin_block("minecraft:rooted_dirt")]
 pub struct RootedDirtBlock;
@@ -15,15 +15,13 @@ impl BlockBehaviour for RootedDirtBlock {
             && args.world.get_block_state(&below).is_air()
     }
 
-    fn perform_bonemeal<'a>(&'a self, args: BonemealArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            args.world
-                .set_block_state(
-                    &args.position.down(),
-                    Block::HANGING_ROOTS.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
-        })
+    fn perform_bonemeal(&self, args: BonemealArgs<'_>) {
+        {
+            args.world.set_block_state(
+                &args.position.down(),
+                Block::HANGING_ROOTS.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            );
+        }
     }
 }

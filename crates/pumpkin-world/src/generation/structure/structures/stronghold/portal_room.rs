@@ -1,8 +1,8 @@
 use pumpkin_data::{
     Block, BlockState,
     block_properties::{
-        BlockProperties, EndPortalFrameLikeProperties, HorizontalFacing, OakFenceLikeProperties,
-        OakStairsLikeProperties,
+        EndPortalFrameLikeProperties, HorizontalFacing, OakFenceLikeProperties,
+        WhiteWoolStairsLikeProperties,
     },
 };
 use pumpkin_nbt::compound::NbtCompound;
@@ -81,7 +81,6 @@ impl StructurePieceBase for PortalRoomPiece {
         &self,
         _start: &StructurePiece,
         _random: &mut RandomGenerator,
-        // TODO: this is only for Stronghold and should not be here
         _weights: &mut Vec<PieceWeight>,
         _last_piece_type: &mut Option<StrongholdPieceType>,
         has_portal_room: &mut bool,
@@ -297,7 +296,7 @@ impl StructurePieceBase for PortalRoomPiece {
         );
 
         // Stairs Blocks
-        let mut props = OakStairsLikeProperties::default(&Block::STONE_BRICK_STAIRS);
+        let mut props = WhiteWoolStairsLikeProperties::default(&Block::STONE_BRICK_STAIRS);
         props.facing = HorizontalFacing::North;
         let stairs_n = BlockState::from_id(props.to_state_id(&Block::STONE_BRICK_STAIRS));
 

@@ -2,11 +2,11 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::CONFIG_CUSTOM_CLICK_ACTION;
+use pumpkin_data::packet::serverbound::config::CUSTOM_CLICK_ACTION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_CUSTOM_CLICK_ACTION)]
+#[java_packet(CUSTOM_CLICK_ACTION)]
 pub struct SCustomClickAction<'a> {
     pub action_id: &'a str,
     pub payload: Option<&'a [u8]>,

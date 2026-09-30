@@ -1,25 +1,99 @@
-use crate::{ClientPacket, VarInt, WritingError, ser::NetworkWriteExt};
-use pumpkin_data::packet::clientbound::PLAY_MAP_ITEM_DATA;
-use pumpkin_macros::java_packet;
 use std::io::Write;
 
-#[java_packet(PLAY_MAP_ITEM_DATA)]
+use pumpkin_data::packet::clientbound::play::MAP_ITEM_DATA;
+use pumpkin_macros::java_packet;
+use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
+
+use crate::{ClientPacket, VarInt, WritingError, ser::NetworkWriteExt};
+
+#[java_packet(MAP_ITEM_DATA)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CMapItemData<'a> {
     pub map_id: VarInt,
     pub scale: i8,
+    pub tracking_position: bool,
     pub locked: bool,
     pub icons: Option<&'a [MapIcon]>,
     pub data: Option<MapPatch<'a>>,
 }
 
+impl<'a> CMapItemData<'a> {
+    #[must_use]
+    pub const fn new(
+        map_id: VarInt,
+        scale: i8,
+        tracking_position: bool,
+        locked: bool,
+        icons: Option<&'a [MapIcon]>,
+        data: Option<MapPatch<'a>>,
+    ) -> Self {
+        Self {
+            map_id,
+            scale,
+            tracking_position,
+            locked,
+            icons,
+            data,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MapIcon {
     pub icon_type: VarInt,
     pub x: i8,
     pub z: i8,
     pub direction: i8,
-    pub display_name: Option<String>,
+    pub display_name: Option<TextComponent>,
 }
 
+impl MapIcon {
+    #[must_use]
+    pub const fn new(
+        icon_type: VarInt,
+        x: i8,
+        z: i8,
+        direction: i8,
+        display_name: Option<TextComponent>,
+    ) -> Self {
+        Self {
+            icon_type,
+            x,
+            z,
+            direction,
+            display_name,
+        }
+    }
+
+    pub fn write_with_version(
+        &self,
+        mut write: impl Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let v1_13 = *version >= JavaMinecraftVersion::V_1_13;
+        if v1_13 {
+            write.write_var_int(&self.icon_type)?;
+            write.write_i8(self.x)?;
+            write.write_i8(self.z)?;
+            write.write_i8(self.direction)?;
+            if let Some(display_name) = &self.display_name {
+                write.write_bool(true)?;
+                write.write_component(display_name, version)?;
+            } else {
+                write.write_bool(false)?;
+            }
+        } else {
+            let type_id = (self.icon_type.0 as u8) & 0x0F;
+            let direction = (self.direction as u8) & 0x0F;
+            write.write_u8((type_id << 4) | direction)?;
+            write.write_i8(self.x)?;
+            write.write_i8(self.z)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MapPatch<'a> {
     pub columns: u8,
     pub rows: u8,
@@ -28,33 +102,48 @@ pub struct MapPatch<'a> {
     pub data: &'a [u8],
 }
 
+impl<'a> MapPatch<'a> {
+    #[must_use]
+    pub const fn new(columns: u8, rows: u8, x: i8, z: i8, data: &'a [u8]) -> Self {
+        Self {
+            columns,
+            rows,
+            x,
+            z,
+            data,
+        }
+    }
+}
+
 impl ClientPacket for CMapItemData<'_> {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        _version: &pumpkin_util::version::JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_var_int(&self.map_id)?;
         write.write_i8(self.scale)?;
-        write.write_bool(self.locked)?;
+
+        if *version >= JavaMinecraftVersion::V_1_9 && *version < JavaMinecraftVersion::V_1_17 {
+            write.write_bool(self.tracking_position)?;
+        }
+
+        if *version >= JavaMinecraftVersion::V_1_14 {
+            write.write_bool(self.locked)?;
+        }
 
         if let Some(icons) = self.icons {
-            write.write_bool(true)?;
+            if *version >= JavaMinecraftVersion::V_1_17 {
+                write.write_bool(true)?;
+            }
             write.write_var_int(&VarInt(icons.len() as i32))?;
             for icon in icons {
-                write.write_var_int(&icon.icon_type)?;
-                write.write_i8(icon.x)?;
-                write.write_i8(icon.z)?;
-                write.write_i8(icon.direction)?;
-                if let Some(name) = &icon.display_name {
-                    write.write_bool(true)?;
-                    write.write_string(&format!("{{\"text\":\"{name}\"}}"))?;
-                } else {
-                    write.write_bool(false)?;
-                }
+                icon.write_with_version(&mut write, version)?;
             }
-        } else {
+        } else if *version >= JavaMinecraftVersion::V_1_17 {
             write.write_bool(false)?;
+        } else {
+            write.write_var_int(&VarInt(0))?;
         }
 
         if let Some(patch) = &self.data {

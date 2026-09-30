@@ -1,15 +1,16 @@
-use crate::slot::BoxFuture;
 use pumpkin_protocol::codec::recipe::DynamicRecipe;
 
 pub trait RecipeProvider: Send + Sync {
-    fn get_dynamic_recipes(&self) -> BoxFuture<'_, Vec<DynamicRecipe>>;
+    fn get_dynamic_recipes(&self) -> Vec<DynamicRecipe>;
 }
 
+#[derive(Clone, Copy)]
 pub enum GenericRecipe<'a> {
     Vanilla(&'a pumpkin_data::recipes::CraftingRecipeTypes),
     Dynamic(&'a pumpkin_protocol::codec::recipe::OwnedCraftingRecipe),
 }
 
+#[derive(Clone, Copy)]
 pub enum IngredientRef<'a> {
     Vanilla(&'a pumpkin_data::recipes::RecipeIngredientTypes),
     Dynamic(&'a pumpkin_protocol::codec::recipe::OwnedRecipeIngredient),

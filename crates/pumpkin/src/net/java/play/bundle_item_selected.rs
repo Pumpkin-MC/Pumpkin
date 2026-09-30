@@ -2,11 +2,7 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_bundle_item_selected(
-        &self,
-        player: &Arc<Player>,
-        packet: SBundleItemSelected,
-    ) {
+    pub fn handle_bundle_item_selected(&self, player: &Arc<Player>, packet: &SBundleItemSelected) {
         if !player.has_client_loaded() {
             return;
         }
@@ -14,8 +10,7 @@ impl JavaClient {
 
         let selected_item_index = packet.selected_item_index.0;
         if selected_item_index < 0 && selected_item_index != -1 {
-            self.kick(TextComponent::text("Invalid selected item index"))
-                .await;
+            self.try_kick(&TextComponent::text("Invalid selected item index"));
             return;
         }
 

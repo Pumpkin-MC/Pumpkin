@@ -8,9 +8,8 @@ use crate::{
 
 #[packet(145)]
 pub struct CCreativeContent<'a> {
-    // https://mojang.github.io/bedrock-protocol-docs/html/CreativeContentPacket.html
-    pub groups: &'a [Group],
-    pub entries: &'a [Entry],
+    pub groups: &'a [CreativeGroupInfoPayload],
+    pub entries: &'a [CreativeItemEntryPayload],
 }
 
 impl PacketWrite for CCreativeContent<'_> {
@@ -28,44 +27,57 @@ impl PacketWrite for CCreativeContent<'_> {
     }
 }
 
-#[derive(Copy, Clone)]
-#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
 pub enum CreativeCategory {
-    Construction = 1,
-    Nature = 2,
-    Equipment = 3,
-    Items = 4,
-    CommandOnly = 5,
-    Undefined = 6,
+    All,
+    Construction,
+    Nature,
+    Equipment,
+    Items,
+    ItemCommandOnly,
+    Undefined,
 }
 
 impl PacketWrite for CreativeCategory {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as u8).write(writer)
+        match self {
+            Self::Construction
+            | Self::Nature
+            | Self::Equipment
+            | Self::Items
+            | Self::ItemCommandOnly => (*self as u8).write(writer),
+            _ => Err(Error::other("Invalid CreativeCategory to send")),
+        }
     }
 }
 
-pub struct Group {
+pub struct CreativeGroupInfoPayload {
     pub creative_category: CreativeCategory,
     pub name: String,
-    pub icon_item: NetworkItemDescriptor,
+
+    // TODO: update inventory
+    pub group_icon_item: NetworkItemDescriptor,
 }
 
-impl PacketWrite for Group {
+impl PacketWrite for CreativeGroupInfoPayload {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.creative_category.write(writer)?;
         self.name.write(writer)?;
-        self.icon_item.write_item_instance(writer)
+        self.group_icon_item.write_item_instance(writer)
     }
 }
 
-pub struct Entry {
+pub struct CreativeItemEntryPayload {
     pub id: VarUInt,
+
+    // TODO: update inventory
     pub item: NetworkItemDescriptor,
+
     pub group_index: VarUInt,
 }
 
-impl PacketWrite for Entry {
+impl PacketWrite for CreativeItemEntryPayload {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.id.write(writer)?;
         self.item.write_item_instance(writer)?;

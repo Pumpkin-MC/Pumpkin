@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_CUSTOM_PAYLOAD;
+use pumpkin_data::packet::serverbound::play::CUSTOM_PAYLOAD;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -11,7 +11,7 @@ const MAX_PAYLOAD_SIZE: usize = 32_767;
 ///
 /// This allows mods, plugins, or proxy software to send proprietary data over the standard
 /// Minecraft protocol.
-#[java_packet(PLAY_CUSTOM_PAYLOAD)]
+#[java_packet(CUSTOM_PAYLOAD)]
 pub struct SCustomPayload<'a> {
     /// The name of the channel used to distinguish different types of messages.
     /// Example: `minecraft:brand` or `voicechat:request_secret`.

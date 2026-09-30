@@ -242,7 +242,7 @@ impl SurfaceTerrainBuilder {
             }
 
             let (top_block, bottom_block) = if block_threshold > 2.0 {
-                let value = sea_level as f64 - block_threshold - 7.0;
+                let value = sea_level as f32 - block_threshold - 7.0;
                 (block_threshold as i32 + sea_level, value as i32)
             } else {
                 (0, 0)

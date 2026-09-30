@@ -27,12 +27,11 @@ impl ScatteredOreFeature {
         pos: BlockPos,
     ) -> bool {
         let count = random.next_bounded_i32(self.size + 1);
-        let mut placed = false;
-
-        for _ in 0..count {
-            let offset_x = self.get_random_offset(random);
-            let offset_y = self.get_random_offset(random);
-            let offset_z = self.get_random_offset(random);
+        for i in 0..count {
+            let max_dist = i.min(7);
+            let offset_x = Self::get_random_offset(random, max_dist);
+            let offset_y = Self::get_random_offset(random, max_dist);
+            let offset_z = Self::get_random_offset(random, max_dist);
 
             let target_pos = pos.add(offset_x, offset_y, offset_z);
 
@@ -52,18 +51,17 @@ impl ScatteredOreFeature {
                     &target_pos,
                 ) {
                     chunk.set_block_state(&target_pos.0, target.state);
-                    placed = true;
                     break;
                 }
             }
         }
 
-        placed
+        true
     }
 
-    fn get_random_offset(&self, random: &mut RandomGenerator) -> i32 {
+    fn get_random_offset(random: &mut RandomGenerator, max_dist: i32) -> i32 {
         let f1 = random.next_f32();
         let f2 = random.next_f32();
-        ((f1 - f2) * self.size as f32).round() as i32
+        ((f1 - f2) * max_dist as f32).round() as i32
     }
 }

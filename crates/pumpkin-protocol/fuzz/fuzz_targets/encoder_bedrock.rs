@@ -23,7 +23,7 @@ fuzz_target!(|data: &[u8]| {
         2 => SubClient::SubClient1,
         _ => SubClient::SubClietn2,
     };
-    let use_compression = data[6] % 2 == 0;
+    let use_compression = data[6].is_multiple_of(2);
     let packet_payload = &data[7..];
 
     let mut encoder = BedrockBatchEncoder::new();

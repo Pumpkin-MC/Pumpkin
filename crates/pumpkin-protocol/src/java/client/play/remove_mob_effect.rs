@@ -1,12 +1,12 @@
 use crate::codec::var_int::VarInt;
-use pumpkin_data::packet::clientbound::PLAY_REMOVE_MOB_EFFECT;
+use pumpkin_data::packet::clientbound::play::REMOVE_MOB_EFFECT;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_REMOVE_MOB_EFFECT)]
+#[java_packet(REMOVE_MOB_EFFECT)]
 pub struct CRemoveMobEffect {
     pub entity_id: VarInt,
     pub effect_id: VarInt,
@@ -26,10 +26,19 @@ impl ClientPacket for CRemoveMobEffect {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_var_int(&self.entity_id)?;
-        write.write_var_int(&self.effect_id)?;
+        if *version <= JavaMinecraftVersion::V_1_7_6 {
+            write.write_i32_be(self.entity_id.0)?;
+        } else {
+            write.write_var_int(&self.entity_id)?;
+        }
+
+        if *version >= JavaMinecraftVersion::V_1_18_2 {
+            write.write_var_int(&self.effect_id)?;
+        } else {
+            write.write_u8(self.effect_id.0 as u8)?;
+        }
         Ok(())
     }
 }

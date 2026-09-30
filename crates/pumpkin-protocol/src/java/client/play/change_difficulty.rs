@@ -1,6 +1,8 @@
-use crate::ClientPacket;
-use crate::ser::NetworkWriteExt;
-use pumpkin_data::packet::clientbound::PLAY_CHANGE_DIFFICULTY;
+use crate::{
+    ClientPacket, ServerPacket, VarInt,
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
+};
+use pumpkin_data::packet::clientbound::play::CHANGE_DIFFICULTY;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -9,7 +11,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This updates the client's internal state, which affects certain UI elements
 /// and client-side behavior (though actual game logic like mob damage is
 /// primarily handled by the server).
-#[java_packet(PLAY_CHANGE_DIFFICULTY)]
+#[java_packet(CHANGE_DIFFICULTY)]
 pub struct CChangeDifficulty {
     /// The current difficulty level of the world.
     ///
@@ -18,7 +20,7 @@ pub struct CChangeDifficulty {
     /// * **2**: Normal
     /// * **3**: Hard
     pub difficulty: u8,
-    /// Whether the difficulty is locked. If true, the client's difficulty
+    /// Whether the difficulty is locked (Added in 1.14). If true, the client's difficulty
     /// toggle in the options menu will be disabled.
     pub locked: bool,
 }
@@ -34,10 +36,34 @@ impl ClientPacket for CChangeDifficulty {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), crate::ser::WritingError> {
-        write.write_u8(self.difficulty)?;
-        write.write_bool(self.locked)?;
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        // Difficulty enum serialized as VarInt in 1.21.6+, and unsigned byte before
+        if *version >= JavaMinecraftVersion::V_1_21_6 {
+            write.write_var_int(&VarInt(i32::from(self.difficulty)))?;
+        } else {
+            write.write_u8(self.difficulty)?;
+        }
+        // Added in 1.14: locked boolean
+        if *version >= JavaMinecraftVersion::V_1_14 {
+            write.write_bool(self.locked)?;
+        }
         Ok(())
+    }
+}
+
+impl<'a> ServerPacket<'a> for CChangeDifficulty {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let difficulty = if *version >= JavaMinecraftVersion::V_1_21_6 {
+            bytebuf.get_var_int()?.0 as u8
+        } else {
+            bytebuf.get_u8()?
+        };
+        let locked = if *version >= JavaMinecraftVersion::V_1_14 {
+            bytebuf.get_bool()?
+        } else {
+            false
+        };
+        Ok(Self { difficulty, locked })
     }
 }

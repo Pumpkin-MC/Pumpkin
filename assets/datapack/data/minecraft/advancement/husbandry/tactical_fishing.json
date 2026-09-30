@@ -1,0 +1,57 @@
+{
+  "parent": "minecraft:husbandry/fishy_business",
+  "criteria": {
+    "cod_bucket": {
+      "conditions": {
+        "item": {
+          "items": "minecraft:cod_bucket"
+        }
+      },
+      "trigger": "minecraft:filled_bucket"
+    },
+    "pufferfish_bucket": {
+      "conditions": {
+        "item": {
+          "items": "minecraft:pufferfish_bucket"
+        }
+      },
+      "trigger": "minecraft:filled_bucket"
+    },
+    "salmon_bucket": {
+      "conditions": {
+        "item": {
+          "items": "minecraft:salmon_bucket"
+        }
+      },
+      "trigger": "minecraft:filled_bucket"
+    },
+    "tropical_fish_bucket": {
+      "conditions": {
+        "item": {
+          "items": "minecraft:tropical_fish_bucket"
+        }
+      },
+      "trigger": "minecraft:filled_bucket"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.husbandry.tactical_fishing.description"
+    },
+    "icon": {
+      "id": "minecraft:pufferfish_bucket"
+    },
+    "title": {
+      "translate": "advancements.husbandry.tactical_fishing.title"
+    }
+  },
+  "requirements": [
+    [
+      "cod_bucket",
+      "tropical_fish_bucket",
+      "pufferfish_bucket",
+      "salmon_bucket"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

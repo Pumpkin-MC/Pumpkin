@@ -1,89 +1,109 @@
-use crate::command::{
-    CommandExecutor, CommandResult, CommandSender,
-    args::{
-        ConsumedArgs, FindArg, players::PlayersArgumentConsumer, sound::SoundArgumentConsumer,
-        sound_category::SoundCategoryArgumentConsumer,
-    },
-    tree::{CommandTree, builder::argument},
-};
 use pumpkin_data::translation;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-const NAMES: [&str; 1] = ["stopsound"];
+use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::argument_types::identifier::IdentifierArgumentType;
+use crate::command::argument_types::sound_category::SoundCategoryArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
+
 const DESCRIPTION: &str = "Stops a currently playing sound.";
+const PERMISSION: &str = "minecraft:command.stopsound";
 
-const ARG_TARGETS: &str = "targets";
-const ARG_SOURCE: &str = "source";
-const ARG_SOUND: &str = "sound";
+enum StopSoundMode {
+    All,
+    Category,
+    Sound,
+    CategoryAndSound,
+}
 
-pub struct Executor;
+struct StopSoundExecutor(StopSoundMode);
 
-impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+impl CommandExecutor for StopSoundExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_players(context, "targets")?;
 
-            let category = SoundCategoryArgumentConsumer::find_arg(args, ARG_SOURCE);
-            let sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND);
-
-            for target in targets {
-                target
-                    .stop_sound(
-                        sound
-                            .as_ref()
-                            .cloned()
-                            .map(|s| format!("minecraft:{}", s.to_name()))
-                            .ok(),
-                        category.as_ref().map(|s| **s).ok(),
-                    )
-                    .await;
+        let (category, sound) = match self.0 {
+            StopSoundMode::All => (None, None),
+            StopSoundMode::Category => {
+                let cat = SoundCategoryArgumentType::get(context, "source")?;
+                (Some(cat), None)
             }
+            StopSoundMode::Sound => {
+                let snd = IdentifierArgumentType::get(context, "sound")?;
+                (None, Some(snd.to_string()))
+            }
+            StopSoundMode::CategoryAndSound => {
+                let cat = SoundCategoryArgumentType::get(context, "source")?;
+                let snd = IdentifierArgumentType::get(context, "sound")?;
+                (Some(cat), Some(snd.to_string()))
+            }
+        };
 
-            let text = match (category, sound) {
-                (Ok(c), Ok(s)) => TextComponent::translate_cross(
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_SOUND,
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_SOUND,
-                    [
-                        TextComponent::text(s.to_name()),
-                        TextComponent::text(c.to_name()),
-                    ],
-                ),
-                (Ok(c), Err(_)) => TextComponent::translate_cross(
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_ANY,
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_ANY,
-                    [TextComponent::text(c.to_name())],
-                ),
-                (Err(_), Ok(s)) => TextComponent::translate_cross(
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_SOUND,
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_SOUND,
-                    [TextComponent::text(s.to_name())],
-                ),
-                (Err(_), Err(_)) => TextComponent::translate_cross(
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_ANY,
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_ANY,
-                    [],
-                ),
-            };
-            sender.send_message(text).await;
+        for target in &targets {
+            target.stop_sound(sound.clone(), category);
+        }
 
-            Ok(targets.len() as i32)
-        })
+        let text = match (category, &sound) {
+            (Some(c), Some(s)) => TextComponent::translate_cross(
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_SOUND,
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_SOUND,
+                [
+                    TextComponent::text(s.clone()),
+                    TextComponent::text(c.to_name()),
+                ],
+            ),
+            (Some(c), None) => TextComponent::translate_cross(
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_ANY,
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_ANY,
+                [TextComponent::text(c.to_name())],
+            ),
+            (None, Some(s)) => TextComponent::translate_cross(
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_SOUND,
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_SOUND,
+                [TextComponent::text(s.clone())],
+            ),
+            (None, None) => TextComponent::translate_cross(
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_ANY,
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_ANY,
+                [],
+            ),
+        };
+        context.source.send_feedback(text, true);
+
+        Ok(targets.len() as i32)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument(ARG_TARGETS, PlayersArgumentConsumer)
-            .execute(Executor)
-            .then(
-                argument(ARG_SOURCE, SoundCategoryArgumentConsumer)
-                    .execute(Executor)
-                    .then(argument(ARG_SOUND, SoundArgumentConsumer).execute(Executor)),
-            ),
-    )
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    dispatcher.register(
+        command("stopsound", DESCRIPTION).requires(PERMISSION).then(
+            argument("targets", EntityArgumentType::Players)
+                .executes(StopSoundExecutor(StopSoundMode::All))
+                .then(
+                    literal("*").then(
+                        argument("sound", IdentifierArgumentType)
+                            .executes(StopSoundExecutor(StopSoundMode::Sound)),
+                    ),
+                )
+                .then(
+                    argument("source", SoundCategoryArgumentType)
+                        .executes(StopSoundExecutor(StopSoundMode::Category))
+                        .then(
+                            argument("sound", IdentifierArgumentType)
+                                .executes(StopSoundExecutor(StopSoundMode::CategoryAndSound)),
+                        ),
+                ),
+        ),
+    );
 }

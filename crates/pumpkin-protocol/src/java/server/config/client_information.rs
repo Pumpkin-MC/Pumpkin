@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::CONFIG_CLIENT_INFORMATION;
+use pumpkin_data::packet::serverbound::config::CLIENT_INFORMATION;
 use pumpkin_macros::java_packet;
 
 use crate::VarInt;
@@ -10,7 +10,7 @@ use crate::{
 use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Sent by the client to inform the server about its local settings
-#[java_packet(CONFIG_CLIENT_INFORMATION)]
+#[java_packet(CLIENT_INFORMATION)]
 pub struct SClientInformationConfig<'a> {
     /// The language code used by the client (e.g., "`en_us`")
     pub locale: &'a str,

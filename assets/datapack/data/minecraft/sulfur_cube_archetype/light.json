@@ -1,0 +1,46 @@
+{
+  "attribute_modifiers": [
+    {
+      "amount": -1.0,
+      "attribute": "minecraft:knockback_resistance",
+      "id": "minecraft:light_add_knockback_resistance",
+      "operation": "add_value"
+    },
+    {
+      "amount": -1.0,
+      "attribute": "minecraft:explosion_knockback_resistance",
+      "id": "minecraft:light_add_explosion_knockback_resistance",
+      "operation": "add_value"
+    },
+    {
+      "amount": 1.0,
+      "attribute": "minecraft:bounciness",
+      "id": "minecraft:light_add_bounciness",
+      "operation": "add_value"
+    },
+    {
+      "amount": -0.699999988079071,
+      "attribute": "minecraft:friction_modifier",
+      "id": "minecraft:light_mul_friction_modifier",
+      "operation": "add_multiplied_total"
+    },
+    {
+      "amount": 0.7999999523162842,
+      "attribute": "minecraft:air_drag_modifier",
+      "id": "minecraft:light_mul_air_drag_modifier",
+      "operation": "add_multiplied_total"
+    }
+  ],
+  "buoyant": true,
+  "items": "#minecraft:sulfur_cube_archetype/light",
+  "knockback_modifiers": {
+    "horizontal_power": 0.4125,
+    "vertical_power": 0.18
+  },
+  "sound_settings": {
+    "hit_sound": "minecraft:entity.sulfur_cube.light.hit",
+    "push_sound": "minecraft:entity.sulfur_cube.light.push",
+    "push_sound_cooldown": 0.7,
+    "push_sound_impulse_threshold": 0.2
+  }
+}

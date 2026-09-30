@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::STATUS_STATUS_RESPONSE;
+use pumpkin_data::packet::clientbound::status::STATUS_RESPONSE;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -9,7 +9,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 ///
 /// This packet provides the client with the information required to display the
 /// server in the multiplayer menu, including the MOTD, player count, and icon
-#[java_packet(STATUS_STATUS_RESPONSE)]
+#[java_packet(STATUS_RESPONSE)]
 pub struct CStatusResponse {
     /// A JSON-encoded string containing the server's status data.
     ///

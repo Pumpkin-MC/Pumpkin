@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_COOKIE_RESPONSE;
+use pumpkin_data::packet::serverbound::play::COOKIE_RESPONSE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -7,7 +7,7 @@ use crate::{
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
 
-#[java_packet(PLAY_COOKIE_RESPONSE)]
+#[java_packet(COOKIE_RESPONSE)]
 /// Response to a `CCookieRequest` (play) from the server.
 /// The Notchian (vanilla) server only accepts responses of up to 5 KiB in size.
 pub struct SCookieResponse<'a> {

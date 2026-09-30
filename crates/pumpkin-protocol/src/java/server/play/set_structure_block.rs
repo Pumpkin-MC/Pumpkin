@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_SET_STRUCTURE_BLOCK;
+use pumpkin_data::packet::serverbound::play::SET_STRUCTURE_BLOCK;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
 };
 use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
 
-#[java_packet(PLAY_SET_STRUCTURE_BLOCK)]
+#[java_packet(SET_STRUCTURE_BLOCK)]
 pub struct SSetStructureBlock<'a> {
     pub location: BlockPos,
     pub action: VarInt,
@@ -28,10 +28,41 @@ pub struct SSetStructureBlock<'a> {
     pub flags: u8,
 }
 
+impl SSetStructureBlock<'_> {
+    pub const ACTION_UPDATE_DATA: i32 = 0;
+    pub const ACTION_SAVE_AREA: i32 = 1;
+    pub const ACTION_LOAD_AREA: i32 = 2;
+    pub const ACTION_SCAN_AREA: i32 = 3;
+
+    pub const MODE_SAVE: i32 = 0;
+    pub const MODE_LOAD: i32 = 1;
+    pub const MODE_CORNER: i32 = 2;
+    pub const MODE_DATA: i32 = 3;
+
+    pub const FLAG_IGNORE_ENTITIES: u8 = 0x01;
+    pub const FLAG_SHOW_AIR: u8 = 0x02;
+    pub const FLAG_SHOW_BOUNDING_BOX: u8 = 0x04;
+
+    #[must_use]
+    pub const fn ignore_entities(&self) -> bool {
+        (self.flags & Self::FLAG_IGNORE_ENTITIES) != 0
+    }
+
+    #[must_use]
+    pub const fn show_air(&self) -> bool {
+        (self.flags & Self::FLAG_SHOW_AIR) != 0
+    }
+
+    #[must_use]
+    pub const fn show_bounding_box(&self) -> bool {
+        (self.flags & Self::FLAG_SHOW_BOUNDING_BOX) != 0
+    }
+}
+
 impl<'a> ServerPacket<'a> for SSetStructureBlock<'a> {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
-            location: BlockPos::from_i64(bytebuf.get_i64_be()?),
+            location: bytebuf.get_block_pos(version)?,
             action: bytebuf.get_var_int()?,
             mode: bytebuf.get_var_int()?,
             name: bytebuf.get_str_borrowed()?,
@@ -55,10 +86,10 @@ impl crate::ClientPacket for SSetStructureBlock<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_block_pos(&self.location)?;
+        write.write_block_pos(&self.location, version)?;
         write.write_var_int(&self.action)?;
         write.write_var_int(&self.mode)?;
         write.write_string(self.name)?;

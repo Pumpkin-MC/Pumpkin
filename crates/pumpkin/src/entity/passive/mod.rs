@@ -37,6 +37,7 @@ pub mod snow_golem;
 pub mod squid;
 pub mod strider;
 pub mod tadpole;
+pub mod tamable;
 pub mod trader_llama;
 pub mod tropical_fish;
 pub mod turtle;

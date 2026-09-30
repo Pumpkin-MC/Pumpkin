@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_INTERACT;
+use pumpkin_data::packet::serverbound::play::INTERACT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
@@ -8,7 +8,7 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 
-#[java_packet(PLAY_INTERACT)]
+#[java_packet(INTERACT)]
 pub struct SInteract {
     pub entity_id: VarInt,
     pub r#type: VarInt,
@@ -36,21 +36,51 @@ impl<'a> ServerPacket<'a> for SInteract {
             });
         }
 
-        let entity_id = read.get_var_int()?;
-        let r#type = read.get_var_int()?;
+        let entity_id = if version >= &JavaMinecraftVersion::V_1_8 {
+            read.get_var_int()?
+        } else {
+            VarInt(read.get_i32_be()?)
+        };
+
+        let r#type = if version >= &JavaMinecraftVersion::V_1_8 {
+            read.get_var_int()?
+        } else {
+            VarInt(i32::from(read.get_u8()?))
+        };
+
         let action = ActionType::try_from(r#type.0)
             .map_err(|_| ReadingError::Message("invalid action type".to_string()))?;
 
         let target_position: Option<Vector3<f64>> = match action {
             ActionType::Interact | ActionType::Attack => None,
-            ActionType::InteractAt => Some(
-                Vector3::new(read.get_f32_be()?, read.get_f32_be()?, read.get_f32_be()?).to_f64(),
-            ),
+            ActionType::InteractAt => {
+                if version >= &JavaMinecraftVersion::V_1_8 {
+                    Some(
+                        Vector3::new(read.get_f32_be()?, read.get_f32_be()?, read.get_f32_be()?)
+                            .to_f64(),
+                    )
+                } else {
+                    None
+                }
+            }
         };
 
-        let hand = match action {
-            ActionType::Interact | ActionType::InteractAt => Some(read.get_var_int()?),
-            ActionType::Attack => None,
+        let hand = if version >= &JavaMinecraftVersion::V_1_9 {
+            match action {
+                ActionType::Interact | ActionType::InteractAt => Some(read.get_var_int()?),
+                ActionType::Attack => None,
+            }
+        } else {
+            match action {
+                ActionType::Interact | ActionType::InteractAt => Some(VarInt(0)),
+                ActionType::Attack => None,
+            }
+        };
+
+        let sneaking = if version >= &JavaMinecraftVersion::V_1_16 {
+            read.get_bool()?
+        } else {
+            false
         };
 
         Ok(Self {
@@ -58,7 +88,7 @@ impl<'a> ServerPacket<'a> for SInteract {
             r#type,
             target_position,
             hand,
-            sneaking: read.get_bool()?,
+            sneaking,
         })
     }
 }
@@ -82,28 +112,48 @@ impl crate::ClientPacket for SInteract {
             return Ok(());
         }
 
-        write.write_var_int(&self.entity_id)?;
-        write.write_var_int(&self.r#type)?;
-        if let Some(target) = self.target_position {
-            write.write_f32_be(target.x as f32)?;
-            write.write_f32_be(target.y as f32)?;
-            write.write_f32_be(target.z as f32)?;
+        if version >= &JavaMinecraftVersion::V_1_8 {
+            write.write_var_int(&self.entity_id)?;
+            write.write_var_int(&self.r#type)?;
+            let action = ActionType::try_from(self.r#type.0).map_err(|_| {
+                crate::ser::WritingError::Message("invalid action type".to_string())
+            })?;
+            if action == ActionType::InteractAt {
+                if let Some(target) = self.target_position {
+                    write.write_f32_be(target.x as f32)?;
+                    write.write_f32_be(target.y as f32)?;
+                    write.write_f32_be(target.z as f32)?;
+                } else {
+                    write.write_f32_be(0.0)?;
+                    write.write_f32_be(0.0)?;
+                    write.write_f32_be(0.0)?;
+                }
+            }
+            if version >= &JavaMinecraftVersion::V_1_9
+                && (action == ActionType::Interact || action == ActionType::InteractAt)
+            {
+                write.write_var_int(&self.hand.unwrap_or(VarInt(0)))?;
+            }
+            if version >= &JavaMinecraftVersion::V_1_16 {
+                write.write_bool(self.sneaking)?;
+            }
+        } else {
+            write.write_i32_be(self.entity_id.0)?;
+            write.write_u8(self.r#type.0 as u8)?;
         }
-        if let Some(hand) = self.hand {
-            write.write_var_int(&hand)?;
-        }
-        write.write_bool(self.sneaking)?;
+
         Ok(())
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum ActionType {
-    Interact,
-    Attack,
-    InteractAt,
+    Interact = 0,
+    Attack = 1,
+    InteractAt = 2,
 }
 
+#[derive(Debug)]
 pub struct InvalidActionType;
 
 impl TryFrom<i32> for ActionType {

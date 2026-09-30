@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_ENTITY_TAG_QUERY;
+use pumpkin_data::packet::serverbound::play::ENTITY_TAG_QUERY;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_ENTITY_TAG_QUERY)]
+#[java_packet(ENTITY_TAG_QUERY)]
 pub struct SEntityTagQuery {
     pub transaction_id: VarInt,
     pub entity_id: VarInt,

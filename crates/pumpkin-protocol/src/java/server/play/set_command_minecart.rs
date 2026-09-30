@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_SET_COMMAND_MINECART;
+use pumpkin_data::packet::serverbound::play::SET_COMMAND_MINECART;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_SET_COMMAND_MINECART)]
+#[java_packet(SET_COMMAND_MINECART)]
 pub struct SSetCommandMinecart<'a> {
     pub entity_id: VarInt,
     pub command: &'a str,

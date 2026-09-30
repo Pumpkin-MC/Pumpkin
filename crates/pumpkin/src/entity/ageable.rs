@@ -1,5 +1,4 @@
 use pumpkin_data::tracked_data;
-use pumpkin_protocol::java::client::play::Metadata;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
 use crate::entity::mob::Mob;
@@ -51,13 +50,7 @@ pub trait AgeableMob: Mob {
 
         if (old_age < 0 && new_age >= 0) || (old_age >= 0 && new_age < 0) {
             let is_baby = new_age < 0;
-            entity.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::ageable_mob::DATA_BABY_ID,
-                    is_baby,
-                )],
-                None,
-            );
+            entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, is_baby);
         }
     }
 
@@ -98,7 +91,10 @@ pub trait AgeableMob: Mob {
     }
 
     #[must_use]
-    fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32 {
+    fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32
+    where
+        Self: Sized,
+    {
         (ticks_until_adult as f32 / 20.0 * 0.1) as i32
     }
 

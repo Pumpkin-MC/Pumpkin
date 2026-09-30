@@ -12,7 +12,7 @@ pub struct Ignition;
 impl Ignition {
     /// Lights `block` at `location` itself if it can be lit (campfires, candles, candle
     /// cakes), otherwise places a fire block at `fire_pos`.
-    pub async fn ignite_block<F, Fut>(
+    pub fn ignite_block<F>(
         ignite_logic: F,
         world: &Arc<World>,
         location: BlockPos,
@@ -20,10 +20,9 @@ impl Ignition {
         block: &Block,
     ) -> bool
     where
-        F: FnOnce(Arc<World>, BlockPos, BlockStateId) -> Fut,
-        Fut: Future<Output = ()>,
+        F: FnOnce(Arc<World>, BlockPos, BlockStateId),
     {
-        if world.get_fluid(&location).name != Fluid::EMPTY.name {
+        if *world.get_fluid(&location) != Fluid::EMPTY {
             return false;
         }
         let fire_block = FireBlockBase::get_fire_type(world, &fire_pos);
@@ -31,13 +30,13 @@ impl Ignition {
         let state_id = world.get_block_state_id(&location);
 
         if let Some(new_state_id) = can_be_lit(block, state_id) {
-            ignite_logic(world.clone(), location, new_state_id).await;
+            ignite_logic(world.clone(), location, new_state_id);
             return true;
         }
 
         let state_id = FireBlock.get_state_for_position(world, &fire_block, &fire_pos);
         if FireBlockBase::can_place_at(world, &fire_pos) {
-            ignite_logic(world.clone(), fire_pos, state_id).await;
+            ignite_logic(world.clone(), fire_pos, state_id);
             return true;
         }
 
@@ -57,15 +56,13 @@ fn can_be_lit(block: &Block, state_id: BlockStateId) -> Option<BlockStateId> {
         return None;
     }
 
-    let mut props = {
-        let props = &block.properties(state_id)?;
-        props.to_props()
-    };
+    let mut props = block.properties(state_id)?.to_props();
 
     let (_, value) = props.iter_mut().find(|(k, _)| *k == "lit")?;
+    if *value == "true" {
+        return None;
+    }
+
     *value = "true";
-
-    let new_state_id = block.from_properties(&props).to_state_id(block);
-
-    (new_state_id != state_id).then_some(new_state_id)
+    Some(block.from_properties(&props).to_state_id(block))
 }

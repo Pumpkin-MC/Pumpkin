@@ -2,13 +2,13 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_CLIENT_INFORMATION;
+use pumpkin_data::packet::serverbound::play::CLIENT_INFORMATION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
-#[java_packet(PLAY_CLIENT_INFORMATION)]
+#[java_packet(CLIENT_INFORMATION)]
 pub struct SClientInformationPlay<'a> {
     pub locale: &'a str, // 16
     pub view_distance: i8,

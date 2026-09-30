@@ -3,10 +3,10 @@ use libfuzzer_sys::fuzz_target;
 use pumpkin_protocol::bedrock::packet_decoder::BedrockBatchDecoder;
 use pumpkin_protocol::bedrock::server::{
     SAnimate, SBlockPickRequest, SClientCacheBlobStatus, SClientCacheStatus, SCommandRequest,
-    SContainerClose, SEmote, SEmoteList, SInteraction, SInventoryTransaction, SItemStackRequest,
+    SContainerClose, SEmote, SEmoteList, SInteract, SInventoryTransaction, SItemStackRequest,
     SLoadingScreen, SLogin, SMobEquipment, SModalFormResponse, SPacketViolationWarning,
     SPlayerAction, SPlayerAuthInput, SPlayerHotbar, SRequestAbility, SRequestChunkRadius,
-    SRequestNetworkSettings, SResourcePackResponse, SRespawn, SSetLocalPlayerAsInitialized,
+    SRequestNetworkSettings, SResourcePackClientResponse, SRespawn, SSetLocalPlayerAsInitialized,
     SSetPlayerInventoryOptions, SText,
 };
 use pumpkin_protocol::serial::{PacketRead, PacketReadSlice};
@@ -46,7 +46,7 @@ fn fuzz_serverbound_packets(payload: &[u8]) {
         SContainerClose,
         SEmote,
         SEmoteList,
-        SInteraction,
+        SInteract,
         SInventoryTransaction,
         SItemStackRequest,
         SLoadingScreen,
@@ -60,7 +60,7 @@ fn fuzz_serverbound_packets(payload: &[u8]) {
         SRequestAbility,
         SRequestChunkRadius,
         SRequestNetworkSettings,
-        SResourcePackResponse,
+        SResourcePackClientResponse,
         SRespawn,
         SSetLocalPlayerAsInitialized,
         SSetPlayerInventoryOptions,

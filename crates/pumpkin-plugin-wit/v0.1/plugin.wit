@@ -1,0 +1,121 @@
+/// The main entry point for a Pumpkin plugin.
+/// This world defines the exports that the plugin must provide to the host
+/// and the imports that the host provides to the plugin.
+package pumpkin:plugin@0.1.0;
+
+world plugin {
+    use context.{context};
+    use event.{event};
+    use server.{server as server-instance};
+    use command.{command-sender, consumed-args, command-error, command-suggestions, suggestion-request};
+    use %world.{entity, chunk-buffer, generation-phase};
+    use ipc.{plugin-id, ipc-message};
+
+    // --- Host-provided imports ---
+
+    /// Provides logging capabilities to the plugin.
+    import logging;
+    /// Provides GUI creation and management.
+    import gui;
+    /// Provides scoreboard management.
+    import scoreboard;
+    /// Provides global server information and player lookup.
+    import server;
+    /// Provides text component building and formatting.
+    import text;
+    /// Provides command registration and argument parsing.
+    import command;
+    /// Provides the plugin execution context.
+    import context;
+    /// Provides internationalization and translation support.
+    import i18n;
+    /// Provides task scheduling for delayed or repeating logic.
+    import scheduler;
+    /// Provides world information and block manipulation.
+    import %world;
+    /// Provides entity types and manipulation.
+    import entity;
+    /// Provides boss bar creation and management.
+    import boss-bar;
+    /// Provides Bedrock custom forms.
+    import forms;
+    /// Provides Java Edition dialogs.
+    import java-dialogs;
+    /// Provides status effect types and instances.
+    import status-effect;
+    /// Provides block entity types and instances.
+    import block-entity;
+    /// Provides 1 : 1 inter-plugin communication
+    import ipc;
+    /// Provides entity attribute types and modifiers.
+    import attributes;
+    /// Provides player management.
+    import player;
+    /// Provides advancement definitions and progress types.
+    import advancement;
+    /// Provides custom recipe registration and management.
+    import recipe;
+    /// Provides inventory manipulation and management.
+    import inventory;
+    /// Provides datapack inspection and management.
+    import datapack;
+    /// Provides custom enchantment registration and management.
+    import enchantments;
+    /// Provides damage types.
+    import damage-types;
+    /// Provides screen / window types for GUIs and containers.
+    import screens;
+    /// Provides player statistics categories and types.
+    import statistics;
+    /// Provides Display and Interaction entities.
+    import display;
+    /// Provides game rules definitions and queries.
+    import game-rules;
+    /// Provides game event types.
+    import game-events;
+    /// Provides potion types.
+    import potions;
+    /// Provides entity status / animation event types.
+    import entity-statuses;
+
+    // --- Plugin-provided exports ---
+
+    /// Called by the host once to initialize the plugin.
+    /// Internal use only; plugins should use the `register_plugin!` macro.
+    export init-plugin: func();
+
+    /// Called when the plugin is being loaded.
+    /// Use this to register commands, events, and perform initial setup.
+    export on-load: func(context: context) -> result<_, string>;
+
+    /// Called when the plugin is being unloaded.
+    /// Use this to save data and clean up resources.
+    export on-unload: func(context: context) -> result<_, string>;
+
+    /// Provides plugin metadata (name, version, etc.) to the host.
+    export metadata;
+
+    /// Dispatches an event to the plugin for handling.
+    export handle-event: func(event-id: u32, server: server-instance, event: event) -> event;
+
+    /// Dispatches a command execution to the plugin.
+    export handle-command: func(command-id: u32, sender: command-sender, server: server-instance, args: consumed-args) -> result<s32, command-error>;
+
+    /// Dispatches a command suggestion request to the plugin.
+    export handle-command-suggestion: func(handler-id: u32, sender: command-sender, server: server-instance, request: suggestion-request) -> command-suggestions;
+
+    /// Dispatches a scheduled task execution to the plugin.
+    export handle-task: func(handler-id: u32, server: server-instance);
+
+    /// Processes an incoming message from another plugin if possible, and returns (a possibly empty) response.
+    export handle-ipc-message: func(sender: plugin-id, message: ipc-message) -> result<ipc-message, string>;
+
+    export handle-ai-goal-can-start: func(goal-id: u32, server: server-instance, entity: entity) -> bool;
+    export handle-ai-goal-should-continue: func(goal-id: u32, server: server-instance, entity: entity) -> bool;
+    export handle-ai-goal-start: func(goal-id: u32, server: server-instance, entity: entity);
+    export handle-ai-goal-tick: func(goal-id: u32, server: server-instance, entity: entity);
+    export handle-ai-goal-stop: func(goal-id: u32, server: server-instance, entity: entity);
+
+    /// Dispatches a chunk generation phase to the plugin.
+    export handle-generate-phase: func(generator-id: u32, phase: generation-phase, chunk: chunk-buffer);
+}

@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:courbet",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.courbet.author"
+  },
+  "height": 1,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.courbet.title"
+  },
+  "width": 2
+}

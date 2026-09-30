@@ -1,0 +1,8 @@
+{
+  "comparator_output": 14,
+  "description": {
+    "translate": "jukebox_song.minecraft.otherside"
+  },
+  "length_in_seconds": 195.0,
+  "sound_event": "minecraft:music_disc.otherside"
+}

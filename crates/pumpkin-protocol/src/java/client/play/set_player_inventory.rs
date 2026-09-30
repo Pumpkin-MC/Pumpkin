@@ -4,11 +4,11 @@ use crate::VarInt;
 use crate::codec::item_stack_seralizer::ItemStackSerializer;
 use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 
-use pumpkin_data::packet::clientbound::PLAY_SET_PLAYER_INVENTORY;
+use pumpkin_data::packet::clientbound::play::SET_PLAYER_INVENTORY;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_SET_PLAYER_INVENTORY)]
+#[java_packet(SET_PLAYER_INVENTORY)]
 pub struct CSetPlayerInventory<'a> {
     pub slot: VarInt,
     pub item: &'a ItemStackSerializer<'a>,

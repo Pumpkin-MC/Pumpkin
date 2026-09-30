@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_AWARD_STATS;
+use pumpkin_data::packet::clientbound::play::AWARD_STATS;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -6,7 +6,7 @@ use crate::codec::var_int::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_AWARD_STATS)]
+#[java_packet(AWARD_STATS)]
 pub struct CAwardStats<'a> {
     pub stats: &'a [Statistic],
 }
@@ -18,7 +18,15 @@ pub struct Statistic {
 }
 
 impl Statistic {
-    pub fn write(&self, mut write: impl std::io::Write) -> Result<(), crate::ser::WritingError> {
+    pub fn write(&self, write: impl std::io::Write) -> Result<(), crate::ser::WritingError> {
+        self.write_with_version(write, &JavaMinecraftVersion::V_26_3)
+    }
+
+    pub fn write_with_version(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.category_id)?;
         write.write_var_int(&self.statistic_id)?;
         write.write_var_int(&self.value)?;
@@ -30,11 +38,11 @@ impl ClientPacket for CAwardStats<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&VarInt(self.stats.len() as i32))?;
         for stat in self.stats {
-            stat.write(&mut write)?;
+            stat.write_with_version(&mut write, version)?;
         }
         Ok(())
     }

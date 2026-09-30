@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::LOGIN_LOGIN_COMPRESSION;
+use pumpkin_data::packet::clientbound::login::LOGIN_COMPRESSION;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -10,7 +10,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 ///
 /// Once this packet is sent, both the server and the client must compress any
 /// packet with a size equal to or greater than the specified threshold.
-#[java_packet(LOGIN_LOGIN_COMPRESSION)]
+#[java_packet(LOGIN_COMPRESSION)]
 pub struct CSetCompression {
     /// The packet size threshold (in bytes) at which compression is applied.
     ///

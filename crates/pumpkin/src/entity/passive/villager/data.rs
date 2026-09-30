@@ -130,6 +130,7 @@ impl pumpkin_protocol::java::client::play::MetadataSerializer for VillagerData {
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
+        _version: &pumpkin_util::version::JavaMinecraftVersion,
     ) -> Result<(), pumpkin_protocol::ser::WritingError> {
         use pumpkin_protocol::ser::NetworkWriteExt;
         writer.write_var_int(&self.r#type)?;

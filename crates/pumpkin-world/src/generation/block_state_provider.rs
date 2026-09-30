@@ -13,7 +13,7 @@ use pumpkin_util::{
 use super::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::block_predicate::BlockPredicate;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::WorldPortalExt;
+use crate::world::{BlockAccessor, WorldPortalExt};
 
 pub enum BlockStateProvider {
     Simple(SimpleStateProvider),
@@ -38,8 +38,37 @@ impl BlockStateProvider {
             Self::Simple(provider) => Some(provider.get(pos)),
             Self::Weighted(provider) => Some(provider.get(random)),
             Self::DualNoise(provider) => Some(provider.get(pos)),
-            Self::Pillar(provider) => Some(provider.get(pos)),
-            Self::RandomizedInt(_) | Self::Rule(_) => None,
+            Self::Pillar(provider) => Some(provider.get_with_random(random, pos)),
+            Self::RandomizedInt(provider) => provider.get_for_bonemeal(random, pos),
+            Self::Rule(_) => None,
+        }
+    }
+
+    pub fn get_state_for_world(
+        &self,
+        world: &dyn BlockAccessor,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> &'static BlockState {
+        match self {
+            Self::Simple(provider) => provider.get(pos),
+            Self::Weighted(provider) => provider.get(random),
+            Self::NoiseThreshold(provider) => provider.get(random, pos),
+            Self::NoiseProvider(provider) => provider.get(pos),
+            Self::DualNoise(provider) => provider.get(pos),
+            Self::Pillar(provider) => provider.get_with_random(random, pos),
+            Self::RandomizedInt(provider) => provider.get_state_for_world(world, random, pos),
+            Self::Rule(provider) => {
+                for rule in &provider.rules {
+                    if rule.if_true.test_world(world, None, &pos) {
+                        return rule.then.get_state_for_world(world, random, pos);
+                    }
+                }
+                provider.fallback.as_ref().map_or_else(
+                    || world.get_block_state(&pos),
+                    |f| f.get_state_for_world(world, random, pos),
+                )
+            }
         }
     }
 
@@ -56,7 +85,7 @@ impl BlockStateProvider {
             Self::Simple(provider) => provider.get(pos),
             Self::Weighted(provider) => provider.get(random),
             Self::DualNoise(provider) => provider.get(pos),
-            Self::Pillar(provider) => provider.get(pos),
+            Self::Pillar(provider) => provider.get_with_random(random, pos),
             Self::RandomizedInt(provider) => provider.get(random, pos, chunk, block_registry),
             Self::Rule(provider) => provider.get(block_registry, chunk, random, pos),
         }
@@ -140,6 +169,63 @@ pub struct RandomizedIntBlockStateProvider {
 }
 
 impl RandomizedIntBlockStateProvider {
+    fn apply_property(
+        &self,
+        base_state: &'static BlockState,
+        random: &mut RandomGenerator,
+    ) -> &'static BlockState {
+        let value = self.values.get(random);
+        let val_str = value.to_string();
+        let block = Block::from_id(base_state.id.to_block_id());
+        block.properties(base_state.id).map_or_else(
+            || {
+                let props = [(self.property.as_str(), val_str.as_str())];
+                let new_state_id = block.from_properties(&props).to_state_id(block);
+                BlockState::from_id(new_state_id)
+            },
+            |props_source| {
+                let mut props: Vec<(&str, &str)> = props_source
+                    .to_props()
+                    .iter()
+                    .map(|(k, v)| (*k, *v))
+                    .collect();
+                let mut found = false;
+                for (k, v) in &mut props {
+                    if *k == self.property {
+                        *v = &val_str;
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    props.push((&self.property, &val_str));
+                }
+                let new_state_id = block.from_properties(&props).to_state_id(block);
+                BlockState::from_id(new_state_id)
+            },
+        )
+    }
+
+    pub fn get_for_bonemeal(
+        &self,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> Option<&'static BlockState> {
+        self.source
+            .get_for_bonemeal(random, pos)
+            .map(|state| self.apply_property(state, random))
+    }
+
+    pub fn get_state_for_world(
+        &self,
+        world: &dyn BlockAccessor,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> &'static BlockState {
+        let state = self.source.get_state_for_world(world, random, pos);
+        self.apply_property(state, random)
+    }
+
     pub fn get<T: GenerationCache>(
         &self,
         random: &mut RandomGenerator,
@@ -147,8 +233,8 @@ impl RandomizedIntBlockStateProvider {
         chunk: &T,
         block_registry: &dyn WorldPortalExt,
     ) -> &'static BlockState {
-        // TODO
-        self.source.get(random, pos, chunk, block_registry)
+        let state = self.source.get(random, pos, chunk, block_registry);
+        self.apply_property(state, random)
     }
 }
 
@@ -157,8 +243,35 @@ pub struct PillarBlockStateProvider {
 }
 
 impl PillarBlockStateProvider {
+    #[must_use]
     pub const fn get(&self, _pos: BlockPos) -> &'static BlockState {
-        // TODO: random axis
+        self.state
+    }
+
+    #[must_use]
+    pub fn get_with_random(
+        &self,
+        random: &mut RandomGenerator,
+        _pos: BlockPos,
+    ) -> &'static BlockState {
+        let axis_str = match random.next_bounded_i32(3) {
+            0 => "x",
+            1 => "y",
+            _ => "z",
+        };
+        let block = Block::from_id(self.state.id.to_block_id());
+        if let Some(props_source) = block.properties(self.state.id) {
+            let prop_list = props_source.to_props();
+            if prop_list.iter().any(|(k, _)| *k == "axis") {
+                let new_props: Vec<(&str, &str)> = prop_list
+                    .iter()
+                    .map(|(k, v)| (*k, if *k == "axis" { axis_str } else { *v }))
+                    .collect();
+                let new_props_obj = block.from_properties(new_props.as_slice());
+                let new_state_id = new_props_obj.to_state_id(block);
+                return BlockState::from_id(new_state_id);
+            }
+        }
         self.state
     }
 }
@@ -171,12 +284,12 @@ pub struct DualNoiseBlockStateProvider {
 }
 
 impl DualNoiseBlockStateProvider {
+    #[must_use]
     pub fn get(&self, pos: BlockPos) -> &'static BlockState {
         let sampler = DoublePerlinNoiseSampler::new(
             &mut RandomGenerator::Legacy(LegacyRand::from_seed(self.base.base.seed as u64)),
             self.slow_noise.first_octave,
             &self.slow_noise.amplitudes,
-            self.slow_noise.amplitude,
             false,
         );
         let slow_noise =
@@ -201,11 +314,11 @@ impl DualNoiseBlockStateProvider {
     }
 
     fn get_slow_noise(&self, x: f64, y: f64, z: f64, sampler: &DoublePerlinNoiseSampler) -> f64 {
-        sampler.sample(
+        f64::from(sampler.sample(
             x * self.slow_scale,
             y * self.slow_scale,
             z * self.slow_scale,
-        )
+        ))
     }
 }
 
@@ -226,6 +339,7 @@ pub struct SimpleStateProvider {
 }
 
 impl SimpleStateProvider {
+    #[must_use]
     pub const fn get(&self, _pos: BlockPos) -> &'static BlockState {
         self.state
     }
@@ -238,19 +352,19 @@ pub struct NoiseBlockStateProviderBase {
 }
 
 impl NoiseBlockStateProviderBase {
+    #[must_use]
     pub fn get_noise(&self, pos: BlockPos) -> f64 {
         let sampler = DoublePerlinNoiseSampler::new(
             &mut RandomGenerator::Legacy(LegacyRand::from_seed(self.seed as u64)),
             self.noise.first_octave,
             &self.noise.amplitudes,
-            self.noise.amplitude,
             false,
         );
-        sampler.sample(
-            pos.0.x as f64 * self.scale as f64,
-            pos.0.y as f64 * self.scale as f64,
-            pos.0.z as f64 * self.scale as f64,
-        )
+        f64::from(sampler.sample(
+            pos.0.x as f64 * f64::from(self.scale),
+            pos.0.y as f64 * f64::from(self.scale),
+            pos.0.z as f64 * f64::from(self.scale),
+        ))
     }
 }
 
@@ -260,6 +374,7 @@ pub struct NoiseBlockStateProvider {
 }
 
 impl NoiseBlockStateProvider {
+    #[must_use]
     pub fn get(&self, pos: BlockPos) -> &'static BlockState {
         let value = self.base.get_noise(pos);
         Self::get_state_by_value(&self.states, value)

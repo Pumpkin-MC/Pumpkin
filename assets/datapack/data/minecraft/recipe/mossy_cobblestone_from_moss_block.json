@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "group": "mossy_cobblestone",
+  "ingredients": [
+    "minecraft:cobblestone",
+    "minecraft:moss_block"
+  ],
+  "result": {
+    "id": "minecraft:mossy_cobblestone"
+  }
+}

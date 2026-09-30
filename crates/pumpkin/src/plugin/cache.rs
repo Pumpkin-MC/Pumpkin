@@ -30,13 +30,8 @@ impl PermissionCache {
 }
 
 pub async fn calculate_hash(path: &Path) -> tokio::io::Result<String> {
-    let path = path.to_path_buf();
-    tokio::task::spawn_blocking(move || {
-        let bytes = std::fs::read(path)?;
-        Ok(calculate_hash_for_bytes(&bytes))
-    })
-    .await
-    .map_err(std::io::Error::other)?
+    let bytes = fs::read(path).await?;
+    Ok(calculate_hash_for_bytes(&bytes))
 }
 
 #[must_use]

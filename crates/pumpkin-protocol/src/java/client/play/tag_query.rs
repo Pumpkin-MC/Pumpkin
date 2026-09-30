@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::PLAY_TAG_QUERY;
+use pumpkin_data::packet::clientbound::play::TAG_QUERY;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_TAG_QUERY)]
+#[java_packet(TAG_QUERY)]
 pub struct CTagQueryResponse<'a> {
     pub transaction_id: VarInt,
     pub nbt_bytes: &'a [u8],

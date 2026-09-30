@@ -3,11 +3,11 @@ use std::io::Write;
 use crate::codec::item_stack_seralizer::ItemStackSerializer;
 use crate::{ClientPacket, WritingError};
 
-use pumpkin_data::packet::clientbound::PLAY_SET_CURSOR_ITEM;
+use pumpkin_data::packet::clientbound::play::SET_CURSOR_ITEM;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_SET_CURSOR_ITEM)]
+#[java_packet(SET_CURSOR_ITEM)]
 pub struct CSetCursorItem<'a> {
     pub stack: &'a ItemStackSerializer<'a>,
 }

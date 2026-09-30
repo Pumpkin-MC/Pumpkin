@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::{PLAY_PLAYER_COMBAT_END, PLAY_PLAYER_COMBAT_ENTER};
+use pumpkin_data::packet::clientbound::play::{PLAYER_COMBAT_END, PLAYER_COMBAT_ENTER};
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_PLAYER_COMBAT_ENTER)]
+#[java_packet(PLAYER_COMBAT_ENTER)]
 pub struct CCombatEnter;
 
 impl ClientPacket for CCombatEnter {
@@ -17,7 +17,7 @@ impl ClientPacket for CCombatEnter {
     }
 }
 
-#[java_packet(PLAY_PLAYER_COMBAT_END)]
+#[java_packet(PLAYER_COMBAT_END)]
 pub struct CCombatEnd {
     pub duration_ticks: VarInt,
 }

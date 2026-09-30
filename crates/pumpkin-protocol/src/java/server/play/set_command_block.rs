@@ -2,14 +2,14 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_SET_COMMAND_BLOCK;
+use pumpkin_data::packet::serverbound::play::SET_COMMAND_BLOCK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::codec::var_int::VarInt;
 
-#[java_packet(PLAY_SET_COMMAND_BLOCK)]
+#[java_packet(SET_COMMAND_BLOCK)]
 pub struct SSetCommandBlock<'a> {
     pub pos: BlockPos,
     pub command: &'a str,
@@ -22,10 +22,31 @@ pub struct SSetCommandBlock<'a> {
     pub flags: i8,
 }
 
+impl SSetCommandBlock<'_> {
+    pub const FLAG_TRACK_OUTPUT: i8 = 0x01;
+    pub const FLAG_CONDITIONAL: i8 = 0x02;
+    pub const FLAG_AUTOMATIC: i8 = 0x04;
+
+    #[must_use]
+    pub const fn track_output(&self) -> bool {
+        (self.flags & Self::FLAG_TRACK_OUTPUT) != 0
+    }
+
+    #[must_use]
+    pub const fn is_conditional(&self) -> bool {
+        (self.flags & Self::FLAG_CONDITIONAL) != 0
+    }
+
+    #[must_use]
+    pub const fn is_automatic(&self) -> bool {
+        (self.flags & Self::FLAG_AUTOMATIC) != 0
+    }
+}
+
 impl<'a> ServerPacket<'a> for SSetCommandBlock<'a> {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
-            pos: BlockPos::from_i64(bytebuf.get_i64_be()?),
+            pos: bytebuf.get_block_pos(version)?,
             command: bytebuf.get_str_bounded_borrowed(32767)?,
             mode: bytebuf.get_var_int()?,
             flags: bytebuf.get_i8()?,
@@ -37,10 +58,10 @@ impl crate::ClientPacket for SSetCommandBlock<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_block_pos(&self.pos)?;
+        write.write_block_pos(&self.pos, version)?;
         write.write_string_bounded(self.command, 32767)?;
         write.write_var_int(&self.mode)?;
         write.write_i8(self.flags)?;

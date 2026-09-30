@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::PLAY_CUSTOM_REPORT_DETAILS;
+use pumpkin_data::packet::clientbound::play::CUSTOM_REPORT_DETAILS;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_CUSTOM_REPORT_DETAILS)]
+#[java_packet(CUSTOM_REPORT_DETAILS)]
 pub struct CPlayCustomReportDetails<'a> {
     pub details: &'a [(&'a str, &'a str)],
 }

@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_orange_concrete": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:orange_concrete"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipes": "minecraft:orange_concrete_stairs"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_orange_concrete"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:orange_concrete_stairs"
+    ]
+  }
+}

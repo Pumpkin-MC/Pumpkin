@@ -4,13 +4,13 @@ use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 
 use crate::codec::var_int::VarInt;
 use pumpkin_data::{
-    packet::clientbound::CONFIG_UPDATE_TAGS,
+    packet::clientbound::config::UPDATE_TAGS,
     tag::{RegistryKey, get_registry_key_tags},
 };
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_UPDATE_TAGS)]
+#[java_packet(UPDATE_TAGS)]
 pub struct CUpdateTags<'a> {
     pub tags: &'a [pumpkin_data::tag::RegistryKey],
 }
@@ -28,10 +28,17 @@ impl ClientPacket for CUpdateTags<'_> {
         mut write: impl Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        write.write_list(self.tags, |p, registry_key| {
+        let valid_keys: Vec<_> = self
+            .tags
+            .iter()
+            .copied()
+            .filter(|key| key.is_valid_for_version(*version))
+            .collect();
+
+        write.write_list(&valid_keys, |p, &registry_key| {
             p.write_string(&format!("minecraft:{}", registry_key.identifier_string()))?;
 
-            let Some(values) = get_registry_key_tags(*version, *registry_key) else {
+            let Some(values) = get_registry_key_tags(*version, registry_key) else {
                 // no tags defined for that registry key in this version
                 // write an empty list and continue
                 p.write_var_int(&VarInt::from(0))?;
@@ -44,7 +51,7 @@ impl ClientPacket for CUpdateTags<'_> {
             for (key, values) in values.entries() {
                 // This is technically a `ResourceLocation` but same thing
                 p.write_string_bounded(key, u16::MAX as usize)?;
-                p.write_list(values.1, |p, id| p.write_var_int(&VarInt::from(*id)))?;
+                p.write_list(values.1, |p, &id| p.write_var_int(&VarInt::from(id)))?;
             }
 
             Ok(())

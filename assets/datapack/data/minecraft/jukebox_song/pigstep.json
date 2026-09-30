@@ -1,0 +1,8 @@
+{
+  "comparator_output": 13,
+  "description": {
+    "translate": "jukebox_song.minecraft.pigstep"
+  },
+  "length_in_seconds": 149.0,
+  "sound_event": "minecraft:music_disc.pigstep"
+}

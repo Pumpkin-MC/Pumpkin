@@ -1,9 +1,10 @@
 use crate::{ServerPacket, ser::ReadingError};
-use pumpkin_data::packet::serverbound::PLAY_PLAYER_LOADED;
+use pumpkin_data::packet::serverbound::play::PLAYER_LOADED;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_PLAYER_LOADED)]
+/// Added in 1.21.4
+#[java_packet(PLAYER_LOADED)]
 pub struct SPlayerLoaded;
 
 impl<'a> ServerPacket<'a> for SPlayerLoaded {

@@ -2,7 +2,7 @@ use crate::ClientPacket;
 use crate::VarInt;
 use crate::packet::MultiVersionJavaPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_data::packet::clientbound::{PLAY_ENTITY_POSITION_SYNC, PLAY_TELEPORT_ENTITY};
+use pumpkin_data::packet::clientbound::play::{ENTITY_POSITION_SYNC, TELEPORT_ENTITY};
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -54,9 +54,9 @@ impl CEntityPositionSync {
 impl MultiVersionJavaPacket for CEntityPositionSync {
     fn to_id(version: JavaMinecraftVersion) -> i32 {
         if version >= JavaMinecraftVersion::V_1_21_2 {
-            PLAY_ENTITY_POSITION_SYNC.to_id(version)
+            ENTITY_POSITION_SYNC.to_id(version)
         } else {
-            PLAY_TELEPORT_ENTITY.to_id(version)
+            TELEPORT_ENTITY.to_id(version)
         }
     }
 }
@@ -68,13 +68,20 @@ impl ClientPacket for CEntityPositionSync {
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
+        // Since 26.3 the position is a path. 0 is a linear path, which is just the end position.
+        if version >= &JavaMinecraftVersion::V_26_3 {
+            write.write_var_int(&VarInt(0))?;
+        }
         write.write_f64_be(self.position.x)?;
         write.write_f64_be(self.position.y)?;
         write.write_f64_be(self.position.z)?;
         if version >= &JavaMinecraftVersion::V_1_21_2 {
-            write.write_f64_be(self.delta.x)?;
-            write.write_f64_be(self.delta.y)?;
-            write.write_f64_be(self.delta.z)?;
+            // The delta was replaced by the path in 26.3.
+            if version < &JavaMinecraftVersion::V_26_3 {
+                write.write_f64_be(self.delta.x)?;
+                write.write_f64_be(self.delta.y)?;
+                write.write_f64_be(self.delta.z)?;
+            }
             write.write_f32_be(self.yaw)?;
             write.write_f32_be(self.pitch)?;
         } else {

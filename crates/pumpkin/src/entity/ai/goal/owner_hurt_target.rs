@@ -1,107 +1,94 @@
-use super::{Controls, Goal, GoalFuture};
+use super::track_target::TrackTargetGoal;
+use super::{Controls, Goal};
 use crate::entity::EntityBase;
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 
-const FOLLOW_RANGE: f64 = 16.0;
-
 pub struct OwnerHurtTargetGoal {
+    track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
-    last_attack_time: i32,
+    target_predicate: TargetPredicate,
+    timestamp: i32,
 }
 
 impl OwnerHurtTargetGoal {
     #[must_use]
     pub fn new() -> Box<Self> {
         Box::new(Self {
+            track_target_goal: TrackTargetGoal::with_default(false),
             target: None,
-            last_attack_time: 0,
+            target_predicate: TargetPredicate::create_attackable(),
+            timestamp: 0,
         })
     }
 }
 
 impl Goal for OwnerHurtTargetGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            if mob.is_sitting() {
-                return false;
-            }
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if !mob.is_tamed() || mob.is_sitting() {
+            return false;
+        }
 
-            let Some(owner_uuid) = mob.get_owner_uuid() else {
-                return false;
-            };
+        let Some(owner_uuid) = mob.get_owner_uuid() else {
+            return false;
+        };
 
-            let entity = &mob.get_mob_entity().living_entity.entity;
-            let world = entity.world.load_full();
-            let Some(owner) = world.get_player_by_uuid(owner_uuid) else {
-                return false;
-            };
+        let world = mob.get_mob_entity().living_entity.entity.world.load_full();
+        let Some(owner) = world.get_player_by_uuid(owner_uuid) else {
+            return false;
+        };
 
-            let attack_time = owner.living_entity.last_attack_time.load(Relaxed);
-            if attack_time == self.last_attack_time {
-                return false;
-            }
+        let timestamp = owner.living_entity.last_attack_time.load(Relaxed);
+        if timestamp == self.timestamp {
+            return false;
+        }
 
-            let attacking_id = owner.living_entity.last_attacking_id.load(Relaxed);
-            if attacking_id == 0 {
-                return false;
-            }
+        let other_id = owner.living_entity.last_attacking_id.load(Relaxed);
+        if other_id == 0 {
+            return false;
+        }
 
-            let Some(target) = world.get_entity_by_id(attacking_id) else {
-                return false;
-            };
+        let Some(other) = world.get_entity_by_id(other_id) else {
+            return false;
+        };
 
-            if !target.get_entity().is_alive() {
-                return false;
-            }
+        if !self
+            .track_target_goal
+            .can_track(mob, Some(other.as_ref()), &self.target_predicate)
+            || !mob.can_attack_with_owner(other.as_ref(), &*owner)
+        {
+            return false;
+        }
 
-            if !mob.can_attack_with_owner(target.as_ref(), &*owner) {
-                return false;
-            }
-
-            self.target = Some(target);
-            true
-        })
+        self.target = Some(other);
+        true
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            let target = mob.get_mob_entity().target.lock().await;
-            let Some(t) = target.as_ref() else {
-                return false;
-            };
-            if !t.get_entity().is_alive() {
-                return false;
-            }
-            let my_pos = mob.get_entity().pos.load();
-            let target_pos = t.get_entity().pos.load();
-            my_pos.squared_distance_to_vec(&target_pos) <= FOLLOW_RANGE * FOLLOW_RANGE
-        })
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        self.track_target_goal.should_continue(mob)
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            let mob_entity = mob.get_mob_entity();
-            mob_entity.target.lock().await.clone_from(&self.target);
+    fn start(&mut self, mob: &dyn Mob) {
+        mob.set_mob_target(self.target.clone());
 
-            if let Some(owner_uuid) = mob.get_owner_uuid() {
-                let world = mob_entity.living_entity.entity.world.load_full();
-                if let Some(owner) = world.get_player_by_uuid(owner_uuid) {
-                    self.last_attack_time = owner.living_entity.last_attack_time.load(Relaxed);
-                }
+        if let Some(owner_uuid) = mob.get_owner_uuid() {
+            let world = mob.get_mob_entity().living_entity.entity.world.load_full();
+            if let Some(owner) = world.get_player_by_uuid(owner_uuid) {
+                self.timestamp = owner.living_entity.last_attack_time.load(Relaxed);
             }
-        })
+        }
+
+        self.track_target_goal.start(mob);
     }
 
-    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            self.target = None;
-            *mob.get_mob_entity().target.lock().await = None;
-        })
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.target = None;
+        self.track_target_goal.stop(mob);
     }
 
     fn controls(&self) -> Controls {
-        Controls::TARGET
+        self.track_target_goal.controls()
     }
 }

@@ -1,7 +1,7 @@
 use crate::wit::pumpkin::plugin::biomes::Biome;
 use crate::wit::pumpkin::plugin::world::ChunkBuffer as WitChunkBuffer;
 use std::collections::BTreeMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub use crate::wit::pumpkin::plugin::biomes::Biome as PluginBiome;
 pub use crate::wit::pumpkin::plugin::world::GenerationPhase;
@@ -106,7 +106,7 @@ pub trait ChunkGenerator: Send + Sync + 'static {
     fn generate_features(&self, chunk: &mut ChunkBuffer) {}
 }
 
-pub(crate) static GENERATOR_HANDLERS: Mutex<BTreeMap<u32, Box<dyn ChunkGenerator>>> =
+pub(crate) static GENERATOR_HANDLERS: Mutex<BTreeMap<u32, Arc<dyn ChunkGenerator>>> =
     Mutex::new(BTreeMap::new());
 static NEXT_GENERATOR_ID: Mutex<u32> = Mutex::new(0);
 
@@ -123,7 +123,7 @@ impl GeneratorManager {
         *id_lock += 1;
 
         let mut handlers = GENERATOR_HANDLERS.lock().unwrap_or_else(|e| e.into_inner());
-        handlers.insert(id, Box::new(generator));
+        handlers.insert(id, Arc::new(generator));
         id
     }
 }

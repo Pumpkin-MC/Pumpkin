@@ -24,14 +24,36 @@ impl DataComponentImpl for BlockEntityDataImpl {
     default_impl!(BlockEntityData);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct EntityDataImpl;
+/// Entity NBT carried by an item, e.g. a spawn egg. `None` for the item's default component.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EntityDataImpl {
+    pub nbt: Option<NbtCompound>,
+}
+impl EntityDataImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        if let NbtTag::Compound(c) = tag {
+            Some(Self {
+                nbt: Some(c.clone()),
+            })
+        } else {
+            None
+        }
+    }
+}
 impl DataComponentImpl for EntityDataImpl {
+    fn write_data(&self) -> NbtTag {
+        self.nbt.clone().map_or(NbtTag::End, NbtTag::Compound)
+    }
     default_impl!(EntityData);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BucketEntityDataImpl;
+impl BucketEntityDataImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for BucketEntityDataImpl {
     default_impl!(BucketEntityData);
 }
@@ -148,6 +170,11 @@ impl DataComponentImpl for BlockStateImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BeesImpl;
+impl BeesImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for BeesImpl {
     default_impl!(Bees);
 }
@@ -177,6 +204,11 @@ impl DataComponentImpl for ContainerLootImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SulfurCubeContentImpl;
+impl SulfurCubeContentImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for SulfurCubeContentImpl {
     default_impl!(SulfurCubeContent);
 }

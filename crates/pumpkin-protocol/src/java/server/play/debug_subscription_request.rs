@@ -2,13 +2,17 @@ use crate::{
     ServerPacket, VarInt,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_DEBUG_SUBSCRIPTION_REQUEST;
+use pumpkin_data::packet::serverbound::play::DEBUG_SUBSCRIPTION_REQUEST;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_DEBUG_SUBSCRIPTION_REQUEST)]
+#[java_packet(DEBUG_SUBSCRIPTION_REQUEST)]
 pub struct SDebugSubscriptionRequest {
     pub sample_type: VarInt,
+}
+
+impl SDebugSubscriptionRequest {
+    pub const TICK_TIME: i32 = 0;
 }
 
 impl<'a> ServerPacket<'a> for SDebugSubscriptionRequest {

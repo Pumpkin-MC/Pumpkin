@@ -1,10 +1,10 @@
-use pumpkin_data::packet::serverbound::CONFIG_PONG;
+use pumpkin_data::packet::serverbound::config::PONG;
 use pumpkin_macros::java_packet;
 
 use crate::{ServerPacket, ser::NetworkReadExt, ser::ReadingError};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_PONG)]
+#[java_packet(PONG)]
 pub struct SConfigPong {
     pub id: i32,
 }

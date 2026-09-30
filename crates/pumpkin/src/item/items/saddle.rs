@@ -1,6 +1,4 @@
 use std::any::Any;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::EntityBase;
@@ -19,30 +17,23 @@ impl ItemMetadata for SaddleItem {
 }
 
 impl ItemBehaviour for SaddleItem {
-    fn use_on_entity<'a>(
-        &'a self,
-        item: &'a mut ItemStack,
-        player: &'a Player,
-        entity: Arc<dyn EntityBase>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if let Some(mob) = entity.get_mob()
-                && mob.can_be_saddled()
-                && !mob.is_saddled()
-            {
-                mob.set_saddled(true);
-                let ent = entity.get_entity();
-                let sound = if ent.entity_type == &pumpkin_data::entity::EntityType::STRIDER {
-                    Sound::EntityStriderSaddle
-                } else {
-                    Sound::EntityPigSaddle
-                };
-                player
-                    .world()
-                    .play_sound(sound, SoundCategory::Neutral, &ent.pos.load());
-                item.decrement_unless_creative(player.gamemode.load(), 1);
-            }
-        })
+    fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
+        if let Some(mob) = entity.get_mob()
+            && mob.can_be_saddled()
+            && !mob.is_saddled()
+        {
+            mob.set_saddled(true);
+            let ent = entity.get_entity();
+            let sound = if ent.entity_type == &pumpkin_data::entity::EntityType::STRIDER {
+                Sound::EntityStriderSaddle
+            } else {
+                Sound::EntityPigSaddle
+            };
+            player
+                .world()
+                .play_sound(sound, SoundCategory::Neutral, &ent.pos.load());
+            item.decrement_unless_creative(player.gamemode.load(), 1);
+        }
     }
 
     fn as_any(&self) -> &dyn Any {

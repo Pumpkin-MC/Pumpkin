@@ -44,34 +44,26 @@ impl ServerPlayerData {
     /// # Returns
     ///
     /// A Result indicating success or the error that occurred.
-    pub async fn handle_player_leave(&self, player: &Arc<Player>) -> Result<(), PlayerDataError> {
+    pub fn handle_player_leave(&self, player: &Arc<Player>) -> Result<(), PlayerDataError> {
         player
             .player_screen_handler
             .lock()
-            .await
-            .on_closed(player.as_ref())
-            .await;
-        player.on_handled_screen_closed().await;
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .on_closed(player.as_ref());
+        player.on_handled_screen_closed();
 
         let mut nbt = NbtCompound::new();
-        player.write_nbt(&mut nbt).await;
+        player.write_nbt(&mut nbt);
 
-        let storage = self.storage.clone();
-        let uuid = player.gameprofile.id;
-        // Save to disk
-        tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
-            .await
-            .unwrap_or(Err(PlayerDataError::Io(std::io::Error::from(
-                std::io::ErrorKind::Other,
-            ))))?;
+        self.storage.save_player_data(&player.gameprofile.id, nbt)?;
         Ok(())
     }
 
     /// Performs periodic maintenance tasks.
     ///
-    /// This function should be called regularly to save player data and clean
-    /// expired cache entries.
-    pub async fn tick(&self, server: &Server) -> Result<(), PlayerDataError> {
+    /// This function is called synchronously on the server tick loop to check
+    /// if it is time to save player data.
+    pub fn tick(&self, server: &Server) {
         let now = Instant::now();
 
         // Only save players periodically based on save_interval
@@ -80,47 +72,43 @@ impl ServerPlayerData {
 
         if should_save && self.storage.is_save_enabled() {
             self.last_save.store(now);
-            // Save all online players periodically across all worlds
+            // Snapshot all online players periodically across all worlds
+            let mut snapshots = Vec::new();
             for world in server.worlds.load().iter() {
                 for player in world.players.load().iter() {
                     let mut nbt = NbtCompound::new();
-                    player.write_nbt(&mut nbt).await;
-
-                    let storage = self.storage.clone();
-                    let uuid = player.gameprofile.id;
-                    // Save to disk periodically to prevent data loss on server crash
-                    if let Err(e) =
-                        tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
-                            .await
-                            .unwrap_or(Err(PlayerDataError::Io(std::io::Error::from(
-                                std::io::ErrorKind::Other,
-                            ))))
-                    {
-                        error!(
-                            "Failed to save player data for {}: {e}",
-                            player.gameprofile.id,
-                        );
-                    }
+                    player.write_nbt(&mut nbt);
+                    snapshots.push((player.gameprofile.id, nbt));
                 }
             }
 
-            debug!("Periodic player data save completed");
-        }
+            if snapshots.is_empty() {
+                return;
+            }
 
-        Ok(())
+            let storage = self.storage.clone();
+            rayon::spawn(move || {
+                for (uuid, nbt) in snapshots {
+                    if let Err(e) = storage.save_player_data(&uuid, nbt) {
+                        error!("Failed to save player data for {uuid}: {e}");
+                    }
+                }
+                debug!("Periodic player data save completed");
+            });
+        }
     }
 
     /// Saves all players' data immediately.
     ///
     /// This function immediately saves all online players' data to disk.
     /// Useful for server shutdown or backup operations.
-    pub async fn save_all_players(&self, server: &Server) -> Result<(), PlayerDataError> {
+    pub fn save_all_players(&self, server: &Server) -> Result<(), PlayerDataError> {
         let mut total_players = 0;
 
         // Save players from all worlds
         for world in server.worlds.load().iter() {
             for player in world.players.load().iter() {
-                self.extract_data_and_save_player(player).await?;
+                self.extract_data_and_save_player(player)?;
                 total_players += 1;
             }
         }
@@ -141,15 +129,8 @@ impl ServerPlayerData {
     /// # Returns
     ///
     /// A Result indicating success or the error that occurred.
-    pub async fn load_data(
-        &self,
-        uuid: &uuid::Uuid,
-    ) -> Result<Option<NbtCompound>, PlayerDataError> {
-        let storage = self.storage.clone();
-        let uuid = *uuid;
-        let result = tokio::task::spawn_blocking(move || storage.load_player_data(&uuid))
-            .await
-            .unwrap_or(Ok((false, NbtCompound::new())));
+    pub fn load_data(&self, uuid: &uuid::Uuid) -> Result<Option<NbtCompound>, PlayerDataError> {
+        let result = self.storage.load_player_data(uuid);
 
         match result {
             Ok((should_load, data)) => {
@@ -184,25 +165,16 @@ impl ServerPlayerData {
     /// # Returns
     ///
     /// A Result indicating success or the error that occurred.
-    pub async fn extract_data_and_save_player(
-        &self,
-        player: &Player,
-    ) -> Result<(), PlayerDataError> {
+    pub fn extract_data_and_save_player(&self, player: &Player) -> Result<(), PlayerDataError> {
         if !self.storage.is_save_enabled() {
             return Ok(());
         }
 
         let uuid = player.gameprofile.id;
         let mut nbt = NbtCompound::new();
-        player.write_nbt(&mut nbt).await;
+        player.write_nbt(&mut nbt);
 
-        let storage = self.storage.clone();
-        tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
-            .await
-            .unwrap_or(Err(PlayerDataError::Io(std::io::Error::from(
-                std::io::ErrorKind::Other,
-            ))))?;
-
+        self.storage.save_player_data(&uuid, nbt)?;
         Ok(())
     }
 }

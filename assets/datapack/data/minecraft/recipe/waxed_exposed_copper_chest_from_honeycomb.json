@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "group": "waxed_copper_chest",
+  "ingredients": [
+    "minecraft:exposed_copper_chest",
+    "minecraft:honeycomb"
+  ],
+  "result": {
+    "id": "minecraft:waxed_exposed_copper_chest"
+  }
+}

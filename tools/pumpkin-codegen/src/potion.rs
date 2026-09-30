@@ -68,6 +68,7 @@ pub fn build() -> TokenStream {
 
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
+    let mut id_to_type = TokenStream::new();
 
     for (name, potion) in potions {
         let format_name = format_ident!("{}", name.to_shouty_snake_case());
@@ -84,6 +85,7 @@ pub fn build() -> TokenStream {
         }]);
 
         name_to_type.extend(quote! { #name => Some(&Self::#format_name), });
+        id_to_type.extend(quote! { #id => Some(&Self::#format_name), });
     }
 
     quote! {
@@ -114,6 +116,14 @@ pub fn build() -> TokenStream {
             pub fn from_name(name: &str) -> Option<&'static Self> {
                 match name {
                     #name_to_type
+                    _ => None
+                }
+            }
+
+            #[must_use]
+            pub fn from_id(id: u8) -> Option<&'static Self> {
+                match id {
+                    #id_to_type
                     _ => None
                 }
             }

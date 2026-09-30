@@ -1,0 +1,16 @@
+{
+  "values": [
+    "#minecraft:sulfur_cube_archetype/bouncy",
+    "#minecraft:sulfur_cube_archetype/regular",
+    "#minecraft:sulfur_cube_archetype/slow_flat",
+    "#minecraft:sulfur_cube_archetype/fast_flat",
+    "#minecraft:sulfur_cube_archetype/light",
+    "#minecraft:sulfur_cube_archetype/fast_sliding",
+    "#minecraft:sulfur_cube_archetype/slow_sliding",
+    "#minecraft:sulfur_cube_archetype/sticky",
+    "#minecraft:sulfur_cube_archetype/high_resistance",
+    "#minecraft:sulfur_cube_archetype/explosive",
+    "#minecraft:sulfur_cube_archetype/hot",
+    "#minecraft:sulfur_cube_archetype/slow_bouncy"
+  ]
+}

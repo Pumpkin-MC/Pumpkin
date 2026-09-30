@@ -81,11 +81,20 @@ impl BlockDirection {
     }
 
     pub fn random(random: &mut RandomGenerator) -> Self {
-        Self::all()[random.next_bounded_i32(Self::all().len() as i32 - 1) as usize]
+        // Vanilla `Direction.getRandom` = `values[nextInt(values.length)]` over all six
+        // directions, in declaration order (DOWN, UP, NORTH, SOUTH, WEST, EAST).
+        Self::all()[random.next_bounded_i32(Self::all().len() as i32) as usize]
     }
 
+    /// Vanilla `Direction.Plane.HORIZONTAL.getRandomDirection`: `nextInt(4)` over `[NORTH, EAST,
+    /// SOUTH, WEST]`.
+    ///
+    /// The bound is the full length (a `len() - 1` here made the last direction unreachable) and
+    /// the order is [`Self::horizontal_worldgen`], not [`Self::horizontal`], so a given draw picks
+    /// the direction vanilla picks.
     pub fn random_horizontal(random: &mut RandomGenerator) -> HorizontalFacing {
-        Self::horizontal()[random.next_bounded_i32(Self::horizontal().len() as i32 - 1) as usize]
+        let directions = Self::horizontal_worldgen();
+        directions[random.next_bounded_i32(directions.len() as i32) as usize]
     }
 
     #[must_use]
@@ -165,6 +174,21 @@ impl BlockDirection {
             HorizontalFacing::South,
             HorizontalFacing::West,
             HorizontalFacing::East,
+        ]
+    }
+
+    /// The four horizontal directions in vanilla `Direction.Plane.HORIZONTAL` order NORTH, EAST,
+    /// SOUTH, WEST (matching vanilla's `getRandomDirection(random)` indexes with `nextInt(4)`).
+    /// Worldgen-parity code that samples or iterates a random horizontal direction MUST use this,
+    /// not [`Self::horizontal`] (whose `[North, South, West, East]` order would pick a different
+    /// direction for the same draw).
+    #[must_use]
+    pub const fn horizontal_worldgen() -> [HorizontalFacing; 4] {
+        [
+            HorizontalFacing::North,
+            HorizontalFacing::East,
+            HorizontalFacing::South,
+            HorizontalFacing::West,
         ]
     }
 
@@ -303,5 +327,115 @@ impl HorizontalFacingExt for HorizontalFacing {
             Self::West => BlockDirection::West,
             Self::East => BlockDirection::East,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_util::random::legacy_rand::LegacyRand;
+    use pumpkin_util::random::xoroshiro128::Xoroshiro;
+
+    fn legacy(seed: u64) -> RandomGenerator {
+        RandomGenerator::Legacy(LegacyRand::from_seed(seed))
+    }
+
+    fn xoroshiro(seed: u64) -> RandomGenerator {
+        RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed))
+    }
+
+    /// Vanilla `Direction.getRandom` indexes `values[nextInt(6)]` over the declaration order DOWN,
+    /// UP, NORTH, SOUTH, WEST, EAST. Pinned against `java.util.Random` with seed 12345.
+    #[test]
+    fn random_matches_java_util_random() {
+        let mut random = legacy(12345);
+        let drawn: Vec<BlockDirection> = (0..12)
+            .map(|_| BlockDirection::random(&mut random))
+            .collect();
+        use BlockDirection::{Down, East, South, Up, West};
+        assert_eq!(
+            drawn,
+            [
+                Up, West, South, Down, Up, West, Up, Down, Up, South, East, Down
+            ]
+        );
+    }
+
+    /// Vanilla `Direction.Plane.HORIZONTAL.getRandomDirection` indexes `nextInt(4)` over NORTH,
+    /// EAST, SOUTH, WEST. Pinned against `java.util.Random` with seed 12345.
+    #[test]
+    fn random_horizontal_matches_java_util_random() {
+        let mut random = legacy(12345);
+        let drawn: Vec<HorizontalFacing> = (0..8)
+            .map(|_| BlockDirection::random_horizontal(&mut random))
+            .collect();
+        use HorizontalFacing::{East, North, South, West};
+        assert_eq!(drawn, [East, South, West, West, West, North, East, North]);
+    }
+
+    /// Every production caller reaches these functions through the `Xoroshiro` variant
+    /// (feature-stage worldgen RNG, fire spread, gourd stems), while the parity tests above use
+    /// `Legacy`. These sequences are pinned from pumpkin's Xoroshiro implementation (whose
+    /// generator core is bit-verified against vanilla in `pumpkin-util`) to guard the enum dispatch
+    /// and the small-bound `next_bounded_i32` path against regressions.
+    #[test]
+    fn random_pinned_through_xoroshiro() {
+        let mut random = xoroshiro(12345);
+        let drawn: Vec<BlockDirection> = (0..12)
+            .map(|_| BlockDirection::random(&mut random))
+            .collect();
+        use BlockDirection::{Down, East, South, Up, West};
+        assert_eq!(
+            drawn,
+            [
+                Down, West, East, Down, South, West, Up, South, Up, East, West, East
+            ]
+        );
+
+        let mut random = xoroshiro(12345);
+        let drawn: Vec<HorizontalFacing> = (0..8)
+            .map(|_| BlockDirection::random_horizontal(&mut random))
+            .collect();
+        use HorizontalFacing as H;
+        assert_eq!(
+            drawn,
+            [
+                H::North,
+                H::West,
+                H::West,
+                H::North,
+                H::South,
+                H::South,
+                H::North,
+                H::South
+            ]
+        );
+    }
+
+    /// With the old `len() - 1` bound the last entry of each array was unreachable.
+    #[test]
+    fn every_direction_is_reachable() {
+        let mut random = legacy(0);
+        let mut seen = [false; 6];
+        for _ in 0..512 {
+            seen[BlockDirection::random(&mut random) as usize] = true;
+        }
+        assert!(seen.iter().all(|&s| s), "unreachable direction: {seen:?}");
+
+        let mut random = legacy(0);
+        let mut seen_horizontal = [false; 4];
+        for _ in 0..512 {
+            let index = match BlockDirection::random_horizontal(&mut random) {
+                HorizontalFacing::North => 0,
+                HorizontalFacing::East => 1,
+                HorizontalFacing::South => 2,
+                HorizontalFacing::West => 3,
+            };
+            seen_horizontal[index] = true;
+        }
+        assert!(
+            seen_horizontal.iter().all(|&s| s),
+            "unreachable horizontal direction: {seen_horizontal:?}"
+        );
     }
 }

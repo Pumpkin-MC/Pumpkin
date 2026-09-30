@@ -132,7 +132,7 @@ impl PotionContents {
     }
 
     /// Apply instant or duration effects to a target living entity.
-    pub async fn apply_effects_to(
+    pub fn apply_effects_to(
         target: &LivingEntity,
         effects: Vec<(&'static StatusEffect, i32, u8, bool, bool, bool)>,
         scale: f32,
@@ -150,31 +150,20 @@ impl PotionContents {
 
                 // Apply instant effects logic directly as they don't tick
                 if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id {
-                    let amount = (4 * ((amplifier as i32) + 1)) as f32 * instant_scale;
+                    let amount = 4.0 * (1 << amplifier) as f32 * instant_scale;
                     target.heal(amount);
                 } else if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id {
-                    let amount = (6 * ((amplifier as i32) + 1)) as f32 * instant_scale;
+                    let amount = 6.0 * (1 << amplifier) as f32 * instant_scale;
 
-                    target
-                        .damage(
-                            target.get_entity(),
-                            amount,
-                            pumpkin_data::damage::DamageType::MAGIC,
-                        )
-                        .await;
+                    let _ = target.damage(
+                        target.get_entity(),
+                        amount,
+                        pumpkin_data::damage::DamageType::MAGIC,
+                    );
                 }
 
-                // For instant effects, still add a short visual effect entry as before
-                let eff = pumpkin_data::potion::Effect {
-                    effect_type,
-                    duration: 1,
-                    amplifier,
-                    ambient,
-                    show_particles,
-                    show_icon,
-                    blend: false,
-                };
-                target.add_effect(eff).await;
+                // Like vanilla, instant effects are applied once and never added to the active
+                // effects, where they would linger.
             } else {
                 // Duration scaling
                 let duration_scale = source.duration_scale(scale);
@@ -189,7 +178,7 @@ impl PotionContents {
                     show_icon,
                     blend: false,
                 };
-                target.add_effect(eff).await;
+                target.add_effect(eff);
             }
         }
     }

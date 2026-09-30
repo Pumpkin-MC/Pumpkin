@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use pumpkin_data::packet::clientbound::LOGIN_CUSTOM_QUERY;
+use pumpkin_data::packet::clientbound::login::CUSTOM_QUERY;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -13,7 +13,7 @@ use crate::{
 ///
 /// This is used by server software (like proxies or anti-cheats) to request
 /// information from a client-side mod before the player officially joins.
-#[java_packet(LOGIN_CUSTOM_QUERY)]
+#[java_packet(CUSTOM_QUERY)]
 pub struct CLoginPluginRequest<'a> {
     /// A unique ID for this request. The client must include this same ID
     /// in its response so the server can match them up.

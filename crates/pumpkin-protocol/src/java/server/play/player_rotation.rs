@@ -2,11 +2,11 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_MOVE_PLAYER_ROT;
+use pumpkin_data::packet::serverbound::play::MOVE_PLAYER_ROT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_MOVE_PLAYER_ROT)]
+#[java_packet(MOVE_PLAYER_ROT)]
 pub struct SPlayerRotation {
     pub yaw: f32,
     pub pitch: f32,

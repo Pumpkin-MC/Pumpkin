@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_SPECTATE_ENTITY;
+use pumpkin_data::packet::serverbound::play::SPECTATE_ENTITY;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_SPECTATE_ENTITY)]
+#[java_packet(SPECTATE_ENTITY)]
 pub struct SSpectateEntity {
     pub target: uuid::Uuid,
 }

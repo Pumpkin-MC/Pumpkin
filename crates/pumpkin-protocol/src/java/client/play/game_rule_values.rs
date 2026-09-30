@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::PLAY_GAME_RULE_VALUES;
+use pumpkin_data::packet::clientbound::play::GAME_RULE_VALUES;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_GAME_RULE_VALUES)]
+#[java_packet(GAME_RULE_VALUES)]
 pub struct CGameRuleValues<'a> {
     pub rules: &'a [(&'a str, &'a str)],
 }

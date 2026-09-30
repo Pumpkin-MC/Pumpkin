@@ -2,11 +2,11 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_CHUNK_BATCH_RECEIVED;
+use pumpkin_data::packet::serverbound::play::CHUNK_BATCH_RECEIVED;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_CHUNK_BATCH_RECEIVED)]
+#[java_packet(CHUNK_BATCH_RECEIVED)]
 pub struct SChunkBatch {
     pub chunks_per_tick: f32,
 }

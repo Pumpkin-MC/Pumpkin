@@ -41,8 +41,7 @@ impl UpwardsBranchingTrunkPlacer {
                 if height_pos < height as i32 - 1
                     && random.next_f32() < self.place_branch_per_log_probability
                 {
-                    let branch_dir =
-                        BlockDirection::horizontal()[random.next_bounded_i32(4) as usize];
+                    let branch_dir = BlockDirection::random_horizontal(random);
                     let branch_len = self.extra_branch_length.get(random);
                     let branch_pos = (branch_len - self.extra_branch_length.get(random) - 1).max(0);
                     let branch_steps = self.extra_branch_steps.get(random);
