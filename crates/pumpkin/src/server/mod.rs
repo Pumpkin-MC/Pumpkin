@@ -177,7 +177,7 @@ impl Server {
 
         let block_registry = super::block::registry::default_registry();
 
-        let level_info = match AnvilLevelInfo.read_world_info(&world_path) {
+        let mut level_info = match AnvilLevelInfo.read_world_info(&world_path) {
             Ok(level_info) => {
                 let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
                 if dat_path.exists() {
@@ -224,6 +224,7 @@ impl Server {
         };
 
         let seed = level_info.world_gen_settings.seed;
+        level_info.difficulty = effective_difficulty(basic_config.hardcore, level_info.difficulty);
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
 
         let listing = std::sync::Mutex::new(CachedStatus::new(
@@ -862,11 +863,7 @@ impl Server {
             return;
         }
 
-        let new_difficulty = if self.basic_config.hardcore {
-            Difficulty::Hard
-        } else {
-            difficulty
-        };
+        let new_difficulty = effective_difficulty(self.basic_config.hardcore, difficulty);
 
         let mut new_info = (**current_info).clone();
 
@@ -1317,5 +1314,31 @@ impl Server {
                 plugin_name,
             );
         self.plugin_manager.fire(self, &mut disable_event).await;
+    }
+}
+
+const fn effective_difficulty(hardcore: bool, requested: Difficulty) -> Difficulty {
+    if hardcore {
+        Difficulty::Hard
+    } else {
+        requested
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hardcore_forces_hard_difficulty() {
+        for requested in [
+            Difficulty::Peaceful,
+            Difficulty::Easy,
+            Difficulty::Normal,
+            Difficulty::Hard,
+        ] {
+            assert_eq!(effective_difficulty(true, requested), Difficulty::Hard);
+            assert_eq!(effective_difficulty(false, requested), requested);
+        }
     }
 }
