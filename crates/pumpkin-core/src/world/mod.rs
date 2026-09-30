@@ -5922,6 +5922,13 @@ impl World {
         Self::fluid_state_from_block_state(id)
     }
 
+    /// Vanilla `getFluidState(pos).is(Fluids.WATER)`: source water, also inside water plants
+    /// and waterlogged blocks.
+    pub fn is_water_source(&self, position: &BlockPos) -> bool {
+        let (fluid, state) = self.get_fluid_and_fluid_state(position);
+        fluid.matches_type(&Fluid::WATER) && state.is_source
+    }
+
     /// `FluidState#getHeight` includes the full block when the same fluid is above.
     /// Keep `state.height` as the own height used by flow-velocity calculations.
     pub fn get_fluid_height(&self, position: &BlockPos, fluid: &Fluid, state: &FluidState) -> f32 {
