@@ -75,7 +75,7 @@ use crate::net::{
 };
 use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
-use crate::plugin::server::packet::PacketSentEvent;
+use crate::plugin::server::packet::{PacketReceivedEvent, PacketSentEvent};
 use crate::{error::PumpkinError, server::Server};
 
 pub struct JavaClient {
@@ -750,30 +750,22 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
-        // Older clients are rewritten in
-        // `PacketReceivedEvent`; CURRENT_MC_VERSION is already in that format.
+        // Decode as 26.3. `PacketReceivedEvent` can rewrite or cancel first.
         let version = CURRENT_MC_VERSION;
 
         let mut packet_id = packet.id;
         let payload_storage;
-        if self.version.load() == CURRENT_MC_VERSION
-            || !server
-                .plugin_manager
-                .has_handlers::<crate::plugin::server::packet::PacketReceivedEvent>()
-        {
-            payload_storage = packet.payload.clone();
-        } else {
-            let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
-                player.clone(),
-                packet.id,
-                packet.payload.clone(),
-            );
+        if server.plugin_manager.has_handlers::<PacketReceivedEvent>() {
+            let mut event =
+                PacketReceivedEvent::new(player.clone(), packet.id, packet.payload.clone());
             server.plugin_manager.fire_blocking(server, &mut event);
             if event.cancelled {
                 return Ok(());
             }
             packet_id = event.packet_id;
             payload_storage = event.payload;
+        } else {
+            payload_storage = packet.payload.clone();
         }
 
         let mut payload = &payload_storage[..];
