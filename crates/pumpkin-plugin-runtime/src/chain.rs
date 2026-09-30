@@ -137,6 +137,19 @@ pub async fn scope<T>(context: ReentryContext, future: impl Future<Output = T>) 
     REENTRY_CONTEXT.scope(context, future).await
 }
 
+/// Runs `operation` on Tokio's blocking pool under the caller's reentry context, so guest calls
+/// made from it inherit the active root admission instead of queueing for a new one.
+pub async fn spawn_blocking_in_context<T: Send + 'static>(
+    operation: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, tokio::task::JoinError> {
+    let context = ReentryContext::current();
+    tokio::task::spawn_blocking(move || match context {
+        Some(context) => sync_scope(context, operation),
+        None => operation(),
+    })
+    .await
+}
+
 pub fn sync_scope<T>(context: ReentryContext, operation: impl FnOnce() -> T) -> T {
     REENTRY_CONTEXT.sync_scope(context, operation)
 }

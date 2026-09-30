@@ -101,6 +101,8 @@ world plugin {
     ///
     /// The event is transferred by value. The host applies the returned value
     /// for blocking handlers and ignores it for nonblocking handlers.
+    /// If the returned variant case differs from the dispatched case, the host
+    /// treats the result as a handler error and keeps the original event.
     export handle-event: async func(event-id: u32, server: server-instance, event: event) -> event;
 
     /// Dispatches a command execution to the plugin.

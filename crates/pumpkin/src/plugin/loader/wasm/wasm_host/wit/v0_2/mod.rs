@@ -70,7 +70,8 @@ pub mod world;
 
 pub use pumpkin_host_bindings::v0_2::{Plugin, pumpkin};
 
-/// Runs synchronous server work on Tokio's blocking pool while the store keeps servicing the guest.
+/// Runs synchronous server work on Tokio's blocking pool while the store keeps servicing the guest,
+/// keeping the active reentry context so guest calls made from `operation` stay in the same chain.
 pub(crate) async fn run_blocking<R: Send + 'static>(
     operation: impl FnOnce() -> R + Send + 'static,
 ) -> wasmtime::Result<R> {

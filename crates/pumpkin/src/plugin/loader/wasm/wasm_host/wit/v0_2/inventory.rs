@@ -586,7 +586,10 @@ impl HostPlayerInventoryWithStore<PluginHostState> for HasSelf<PluginHostState> 
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<()> {
         let inv = Self::as_inventory(accessor, res).await?;
-        Self::clear(accessor, inv).await
+        let rep = inv.rep();
+        Self::clear(accessor, Resource::new_borrow(rep)).await?;
+        accessor.take_res::<WitInventory>(Resource::new_own(rep))?;
+        Ok(())
     }
 
     // Fixme: this method causes an unnecessary amount of resource table lookups

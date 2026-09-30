@@ -131,9 +131,7 @@ interface command {
         permission-level: async func() -> permission-level;
         has-permission-level: async func(level: permission-level) -> bool;
         /// Checks whether the sender has a permission on the server.
-        ///
-        /// The server handle is transferred by value and consumed by this call.
-        has-permission: async func(server: server, node: string) -> bool;
+        has-permission: async func(node: string) -> bool;
         position: async func() -> option<position>;
         %world: async func() -> option<%world>;
         get-locale: async func() -> locale;

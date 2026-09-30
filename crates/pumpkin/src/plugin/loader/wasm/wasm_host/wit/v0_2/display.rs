@@ -117,15 +117,15 @@ impl HostDisplayEntity for PluginHostState {
 impl HostDisplayEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn from_entity(
         accessor: &Accessor<PluginHostState, Self>,
-        entity: /* borrow */ Resource<Entity>,
-    ) -> wasmtime::Result<Option<Resource<DisplayEntity>>> {
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Result<Resource<DisplayEntity>, Resource<Entity>>> {
         accessor.with(|mut host| {
             let state = host.get();
-            let entity = state.get(&entity)?.clone();
+            let entity = state.take(entity)?;
             if get_display_entity(entity.as_ref()).is_some() {
-                Ok(Some(state.add(entity.clone())?))
+                Ok(Ok(state.add(entity)?))
             } else {
-                Ok(None)
+                Ok(Err(state.add(entity)?))
             }
         })
     }
@@ -566,14 +566,14 @@ impl HostBlockDisplayEntity for PluginHostState {
 impl HostBlockDisplayEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn from_entity(
         accessor: &Accessor<PluginHostState, Self>,
-        entity: /* borrow */ Resource<Entity>,
-    ) -> wasmtime::Result<Option<Resource<BlockDisplayEntity>>> {
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Result<Resource<BlockDisplayEntity>, Resource<Entity>>> {
         accessor.with(|mut host| {
             let state = host.get();
-            if let Ok(entity) = Arc::downcast(state.get(&entity)?.clone()) {
-                Ok(Some(state.add(entity)?))
-            } else {
-                Ok(None)
+            let entity = state.take(entity)?;
+            match Arc::downcast(entity.clone()) {
+                Ok(display) => Ok(Ok(state.add(display)?)),
+                Err(_) => Ok(Err(state.add(entity)?)),
             }
         })
     }
@@ -630,14 +630,14 @@ impl HostItemDisplayEntity for PluginHostState {
 impl HostItemDisplayEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn from_entity(
         accessor: &Accessor<PluginHostState, Self>,
-        entity: /* borrow */ Resource<Entity>,
-    ) -> wasmtime::Result<Option<Resource<ItemDisplayEntity>>> {
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Result<Resource<ItemDisplayEntity>, Resource<Entity>>> {
         accessor.with(|mut host| {
             let state = host.get();
-            if let Ok(entity) = Arc::downcast(state.get(&entity)?.clone()) {
-                Ok(Some(state.add(entity)?))
-            } else {
-                Ok(None)
+            let entity = state.take(entity)?;
+            match Arc::downcast(entity.clone()) {
+                Ok(display) => Ok(Ok(state.add(display)?)),
+                Err(_) => Ok(Err(state.add(entity)?)),
             }
         })
     }
@@ -730,14 +730,14 @@ impl HostTextDisplayEntity for PluginHostState {
 impl HostTextDisplayEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn from_entity(
         accessor: &Accessor<PluginHostState, Self>,
-        entity: /* borrow */ Resource<Entity>,
-    ) -> wasmtime::Result<Option<Resource<TextDisplayEntity>>> {
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Result<Resource<TextDisplayEntity>, Resource<Entity>>> {
         accessor.with(|mut host| {
             let state = host.get();
-            if let Ok(entity) = Arc::downcast(state.get(&entity)?.clone()) {
-                Ok(Some(state.add(entity)?))
-            } else {
-                Ok(None)
+            let entity = state.take(entity)?;
+            match Arc::downcast(entity.clone()) {
+                Ok(display) => Ok(Ok(state.add(display)?)),
+                Err(_) => Ok(Err(state.add(entity)?)),
             }
         })
     }
@@ -955,14 +955,14 @@ impl HostInteractionEntity for PluginHostState {
 impl HostInteractionEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn from_entity(
         accessor: &Accessor<PluginHostState, Self>,
-        entity: /* borrow */ Resource<Entity>,
-    ) -> wasmtime::Result<Option<Resource<InteractionEntity>>> {
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Result<Resource<InteractionEntity>, Resource<Entity>>> {
         accessor.with(|mut host| {
             let state = host.get();
-            if let Ok(entity) = Arc::downcast(state.get(&entity)?.clone()) {
-                Ok(Some(state.add(entity)?))
-            } else {
-                Ok(None)
+            let entity = state.take(entity)?;
+            match Arc::downcast(entity.clone()) {
+                Ok(display) => Ok(Ok(state.add(display)?)),
+                Err(_) => Ok(Err(state.add(entity)?)),
             }
         })
     }

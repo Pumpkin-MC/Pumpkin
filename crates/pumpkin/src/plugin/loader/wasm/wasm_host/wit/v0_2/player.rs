@@ -1442,7 +1442,10 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         accessor.with(|mut host| {
             let state = host.get();
             let player = state.get(&player)?;
-            let server = state.server.as_ref().expect("server not available");
+            let server = state
+                .server
+                .as_ref()
+                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
 
             server
                 .permission_manager
@@ -1460,7 +1463,10 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         accessor.with(|mut host| {
             let state = host.get();
             let player = state.get(&player)?;
-            let server = state.server.as_ref().expect("server not available");
+            let server = state
+                .server
+                .as_ref()
+                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
 
             server
                 .permission_manager
@@ -1478,7 +1484,10 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         accessor.with(|mut host| {
             let state = host.get();
             let player = state.get(&player)?;
-            let server = state.server.as_ref().expect("server not available");
+            let server = state
+                .server
+                .as_ref()
+                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
 
             Ok(server
                 .permission_manager
@@ -3444,7 +3453,10 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             let state = host.get();
             Ok((
                 state.get(&player)?.clone(),
-                state.server.as_ref().expect("server not available").clone(),
+                state
+                    .server
+                    .clone()
+                    .ok_or_else(|| wasmtime::Error::msg("Server not available"))?,
             ))
         })?;
         let level = from_wit_permission_level(level);
@@ -3465,7 +3477,10 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             let state = host.get();
             Ok((
                 state.get(&player)?.clone(),
-                state.server.as_ref().expect("server not available").clone(),
+                state
+                    .server
+                    .clone()
+                    .ok_or_else(|| wasmtime::Error::msg("Server not available"))?,
             ))
         })?;
 
@@ -3639,7 +3654,10 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             let state = host.get();
             Ok((
                 state.get(&player)?.clone(),
-                state.server.as_ref().expect("server not available").clone(),
+                state
+                    .server
+                    .clone()
+                    .ok_or_else(|| wasmtime::Error::msg("Server not available"))?,
                 reason.map(|t| state.take(t)).transpose()?,
             ))
         })?;
@@ -3675,7 +3693,10 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             let state = host.get();
             Ok((
                 state.get(&player)?.clone(),
-                state.server.as_ref().expect("server not available").clone(),
+                state
+                    .server
+                    .clone()
+                    .ok_or_else(|| wasmtime::Error::msg("Server not available"))?,
                 reason.map(|t| state.take(t)).transpose()?,
             ))
         })?;

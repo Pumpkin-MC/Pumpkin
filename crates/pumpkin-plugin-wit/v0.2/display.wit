@@ -58,7 +58,8 @@ interface display {
     /// Common base resource for all display entities.
     resource display-entity {
         /// Converts an owned entity handle to a display entity, if possible.
-        from-entity: static async func(entity: entity) -> option<display-entity>;
+        /// On failure, returns the original entity handle.
+        from-entity: static async func(entity: entity) -> result<display-entity, entity>;
         get-entity: async func() -> entity;
 
         get-transformation: async func() -> display-transformation;
@@ -101,7 +102,8 @@ interface display {
     /// Resource specifically for Block Display entities.
     resource block-display-entity {
         /// Converts an owned entity handle to a block display, if possible.
-        from-entity: static async func(entity: entity) -> option<block-display-entity>;
+        /// On failure, returns the original entity handle.
+        from-entity: static async func(entity: entity) -> result<block-display-entity, entity>;
         get-display: async func() -> display-entity;
         get-entity: async func() -> entity;
 
@@ -112,7 +114,8 @@ interface display {
     /// Resource specifically for Item Display entities.
     resource item-display-entity {
         /// Converts an owned entity handle to an item display, if possible.
-        from-entity: static async func(entity: entity) -> option<item-display-entity>;
+        /// On failure, returns the original entity handle.
+        from-entity: static async func(entity: entity) -> result<item-display-entity, entity>;
         get-display: async func() -> display-entity;
         get-entity: async func() -> entity;
 
@@ -126,7 +129,8 @@ interface display {
     /// Resource specifically for Text Display entities.
     resource text-display-entity {
         /// Converts an owned entity handle to a text display, if possible.
-        from-entity: static async func(entity: entity) -> option<text-display-entity>;
+        /// On failure, returns the original entity handle.
+        from-entity: static async func(entity: entity) -> result<text-display-entity, entity>;
         get-display: async func() -> display-entity;
         get-entity: async func() -> entity;
 
@@ -158,7 +162,8 @@ interface display {
     /// Resource specifically for Interaction entities.
     resource interaction-entity {
         /// Converts an owned entity handle to an interaction entity, if possible.
-        from-entity: static async func(entity: entity) -> option<interaction-entity>;
+        /// On failure, returns the original entity handle.
+        from-entity: static async func(entity: entity) -> result<interaction-entity, entity>;
         get-entity: async func() -> entity;
 
         get-width: async func() -> f32;

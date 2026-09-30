@@ -26,6 +26,11 @@ impl pumpkin::plugin::ipc::HostWithStore<PluginHostState> for HasSelf<PluginHost
                 .name
                 .clone()
                 .ok_or_else(|| wasmtime::Error::msg("Plugin name not available"))?;
+            state
+                .plugin
+                .as_ref()
+                .and_then(std::sync::Weak::upgrade)
+                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
             Ok((server, name))
         })?;
 

@@ -80,6 +80,8 @@ RUST_CI_IGNORED_FILES = {
 }
 
 WIT_ROOT = Path("crates/pumpkin-plugin-wit")
+# Crates that generate Rust bindings from the WIT files; their dependents follow from the closure.
+WIT_CONSUMER_PACKAGES = {"pumpkin-plugin-api", "pumpkin-host-bindings"}
 
 
 def run_command(command: list[str], *, capture: bool = False) -> str:
@@ -203,6 +205,11 @@ def select_packages(
 
         # WIT packages have their own validation job and no Cargo manifest.
         if path == WIT_ROOT or WIT_ROOT in path.parents:
+            directly_affected.update(
+                package
+                for package in WIT_CONSUMER_PACKAGES
+                if package in reverse_dependencies
+            )
             continue
 
         if is_rust_ci_ignored_change(path):

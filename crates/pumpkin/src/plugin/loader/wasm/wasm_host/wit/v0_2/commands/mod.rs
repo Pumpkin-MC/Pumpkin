@@ -1,4 +1,4 @@
-use super::run_blocking;
+use super::{AccessorExt, run_blocking};
 use wasmtime::component::Accessor;
 use wasmtime::component::{HasSelf, Resource};
 
@@ -40,7 +40,6 @@ use crate::{
                     },
                     common::{BlockPos as WitBlockPos, Locale, Position},
                     player::Player,
-                    server::Server,
                     text::TextComponent,
                     world::World,
                 },
@@ -544,15 +543,10 @@ impl pumpkin::plugin::command::HostCommandSenderWithStore<PluginHostState>
     async fn has_permission(
         accessor: &Accessor<PluginHostState, Self>,
         sender: Resource<CommandSender>,
-        server: /* borrow */ Resource<Server>,
         node: String,
     ) -> wasmtime::Result<bool> {
-        let (sender, server) = accessor.with(|mut host| -> wasmtime::Result<_> {
-            let state = host.get();
-            let sender = state.get(&sender)?.clone();
-            let server = state.get(&server)?.clone();
-            Ok((sender, server))
-        })?;
+        let sender = accessor.get_res(&sender)?;
+        let server = accessor.server()?;
 
         run_blocking(move || sender.has_permission(&server, &node)).await
     }
