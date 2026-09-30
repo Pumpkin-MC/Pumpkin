@@ -3078,6 +3078,7 @@ impl World {
                 .await;
         }
         // Actors come from the tracker, in range only.
+        self.track_new_player(&player);
         self.pair_new_player_with_tracked_entities(&player);
 
         player.has_played_before.store(true, Ordering::Relaxed);
@@ -3173,75 +3174,6 @@ impl World {
                 true,
             ))
             .await;
-
-        self.pair_new_player_with_tracked_entities(player);
-
-        // Send the current ticking state to the new player so they are in sync.
-        server.tick_rate_manager.update_joining_player(player).await;
-
-        // Permissions, i.e. the commands a player may use.
-        player.send_permission_lvl_update();
-
-        // Difficulty of the world
-        player.send_difficulty_update();
-        {
-            let command_dispatcher = server.command_dispatcher.load();
-
-            client_suggestions::send_c_commands_packet(player, server, &command_dispatcher);
-        };
-
-        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
-            let position = player.position();
-            let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
-            let pitch = player.get_entity().pitch.load();
-
-            (position, yaw, pitch)
-        } else {
-            let info = &self.level_info.load();
-            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
-            let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let top = self.get_top_block(spawn_position);
-            let pos_y = if top > self.dimension.min_y {
-                top + 1
-            } else {
-                info.spawn_y
-            };
-
-            let position = Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(info.spawn_z) + 0.5,
-            );
-            (position, info.spawn_yaw, info.spawn_pitch)
-        };
-
-        // Load chunks around the real spawn position before teleporting the client there.
-        player.living_entity.entity.set_pos(position);
-        player.living_entity.entity.set_rotation(yaw, pitch);
-        player.living_entity.entity.last_pos.store(position);
-        chunker::update_position(player);
-
-        let center_chunk = player.living_entity.entity.chunk_pos.load();
-        let chunk = self
-            .level
-            .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
-            .await;
-        if let Some(server) = self.server.upgrade() {
-            let mut event =
-                crate::plugin::world::chunk_send::ChunkSend::new(player.world(), chunk.clone());
-            server.plugin_manager.fire(&server, &mut event).await;
-            if event.cancelled {
-                return;
-            }
-        }
-        client.send_chunks(&[chunk]).await;
-        self.mark_chunks_held(player, &[center_chunk]);
-
-        let velocity = player.living_entity.entity.velocity.load();
-
-        debug!("Sending player teleport to {}", player.gameprofile.name);
-        player.request_teleport(position, yaw, pitch);
 
         let gameprofile = &player.gameprofile;
         let bedrock_player_list = CPlayerList {
@@ -3394,6 +3326,77 @@ impl World {
                 }
             }
         };
+
+        // Vanilla `placeNewPlayer`: tab-list info precedes any player spawn.
+        self.track_new_player(player);
+        self.pair_new_player_with_tracked_entities(player);
+
+        // Send the current ticking state to the new player so they are in sync.
+        server.tick_rate_manager.update_joining_player(player).await;
+
+        // Permissions, i.e. the commands a player may use.
+        player.send_permission_lvl_update();
+
+        // Difficulty of the world
+        player.send_difficulty_update();
+        {
+            let command_dispatcher = server.command_dispatcher.load();
+
+            client_suggestions::send_c_commands_packet(player, server, &command_dispatcher);
+        };
+
+        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
+            let position = player.position();
+            let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
+            let pitch = player.get_entity().pitch.load();
+
+            (position, yaw, pitch)
+        } else {
+            let info = &self.level_info.load();
+            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
+            let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
+            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
+            let top = self.get_top_block(spawn_position);
+            let pos_y = if top > self.dimension.min_y {
+                top + 1
+            } else {
+                info.spawn_y
+            };
+
+            let position = Vector3::new(
+                f64::from(info.spawn_x) + 0.5,
+                f64::from(pos_y),
+                f64::from(info.spawn_z) + 0.5,
+            );
+            (position, info.spawn_yaw, info.spawn_pitch)
+        };
+
+        // Load chunks around the real spawn position before teleporting the client there.
+        player.living_entity.entity.set_pos(position);
+        player.living_entity.entity.set_rotation(yaw, pitch);
+        player.living_entity.entity.last_pos.store(position);
+        chunker::update_position(player);
+
+        let center_chunk = player.living_entity.entity.chunk_pos.load();
+        let chunk = self
+            .level
+            .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
+            .await;
+        if let Some(server) = self.server.upgrade() {
+            let mut event =
+                crate::plugin::world::chunk_send::ChunkSend::new(player.world(), chunk.clone());
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return;
+            }
+        }
+        client.send_chunks(&[chunk]).await;
+        self.mark_chunks_held(player, &[center_chunk]);
+
+        let velocity = player.living_entity.entity.velocity.load();
+
+        debug!("Sending player teleport to {}", player.gameprofile.name);
+        player.request_teleport(position, yaw, pitch);
 
         let gameprofile = &player.gameprofile;
 
@@ -4575,9 +4578,13 @@ impl World {
             new_list.push(player.clone());
             new_list
         });
+        Ok(())
+    }
+
+    /// Starts tracking a joining player, tab-list info must already be sent.
+    fn track_new_player(&self, player: &Arc<Player>) {
         self.entity_tracker
             .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
-        Ok(())
     }
 
     /// Tab-list add entry for `player` from its stored state, as Java and Bedrock packets.
@@ -4625,8 +4632,7 @@ impl World {
             });
         }
 
-        self.entity_tracker
-            .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
+        self.track_new_player(player);
     }
 
     /// Sends the centre chunk and its neighbours ahead of the teleport and records them as held.
