@@ -179,9 +179,9 @@ pub trait NetworkReadExt {
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError>;
 
     #[inline]
-    fn get_block_pos(&mut self, version: &JavaMinecraftVersion) -> Result<BlockPos, ReadingError> {
+    fn get_block_pos(&mut self, _version: &JavaMinecraftVersion) -> Result<BlockPos, ReadingError> {
         let val = self.get_i64_be()?;
-        Ok(BlockPos::from_long_for_version(val, version))
+        Ok(BlockPos::from_i64(val))
     }
 
     #[inline]
@@ -755,9 +755,9 @@ pub trait NetworkWriteExt {
     fn write_component(
         &mut self,
         component: &TextComponent,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        self.write_slice(&component.encode_for_version(version))
+        self.write_slice(&component.encode())
     }
 
     fn write_i8(&mut self, data: i8) -> Result<(), WritingError>;
@@ -982,9 +982,9 @@ impl<W: Write> NetworkWriteExt for W {
     fn write_block_pos(
         &mut self,
         pos: &BlockPos,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        self.write_i64_be(pos.as_long_for_version(version))
+        self.write_i64_be(pos.as_long())
     }
 
     fn write_option<G>(

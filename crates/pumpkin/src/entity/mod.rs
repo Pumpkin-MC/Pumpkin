@@ -3946,8 +3946,7 @@ impl Entity {
         }
         nbt.put_int("TicksFrozen", self.frozen_ticks.load(Relaxed));
         if let Some(custom_name) = &**self.custom_name.load() {
-            let mut tag =
-                custom_name.to_nbt_tag_for_version(&pumpkin_data::packet::CURRENT_MC_VERSION);
+            let mut tag = custom_name.to_nbt_tag();
             // A literal string starting with '{' would read back as legacy JSON, so keep it a compound.
             if let NbtTag::String(text) = &tag
                 && text.starts_with('{')

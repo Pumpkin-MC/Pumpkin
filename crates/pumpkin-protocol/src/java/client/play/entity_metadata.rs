@@ -324,9 +324,9 @@ impl MetadataSerializer for pumpkin_util::text::TextComponent {
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        writer.write_slice(&self.encode_for_version(version))
+        writer.write_slice(&self.encode())
     }
 }
 

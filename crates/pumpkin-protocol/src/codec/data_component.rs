@@ -340,7 +340,7 @@ impl DataComponentCodec<Self> for LoreImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         seq.write_var_int(&VarInt(self.lines.len() as i32))?;
         for line in &self.lines {
-            seq.write_slice(&line.encode_for_version(&pumpkin_data::packet::CURRENT_MC_VERSION))?;
+            seq.write_slice(&line.encode())?;
         }
         Ok(())
     }
@@ -2275,7 +2275,7 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
         seq.write_var_int(&VarInt(0))?;
         seq.write_var_int(&VarInt::from(self.pages.len() as i32))?;
         for page in &self.pages {
-            seq.write_slice(&page.encode_for_version(&pumpkin_data::packet::CURRENT_MC_VERSION))?;
+            seq.write_slice(&page.encode())?;
             seq.write_bool(false)?;
         }
         seq.write_bool(true)
