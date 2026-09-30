@@ -1,22 +1,33 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
     Entity, EntityBase,
-    ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+    ai::{
+        goal::{
+            active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
+            look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        },
+        util::RandomExt,
     },
     mob::{Mob, MobEntity},
 };
 
+const INITIAL_ALLOWED_HEIGHT_OFFSET: f32 = 0.5;
+const HEIGHT_OFFSET_CHANGE_INTERVAL: i32 = 100;
+const HEIGHT_OFFSET_SPREAD: f64 = 6.891;
+const ASCENT_ACCELERATION: f64 = 0.3f32 as f64;
+
 pub struct BlazeEntity {
     pub entity: Arc<MobEntity>,
     pub is_charged: AtomicBool,
+    allowed_height_offset: AtomicCell<f32>,
+    next_height_offset_change_tick: AtomicI32,
 }
 
 impl BlazeEntity {
@@ -25,6 +36,8 @@ impl BlazeEntity {
         let blaze = Self {
             entity,
             is_charged: AtomicBool::new(false),
+            allowed_height_offset: AtomicCell::new(INITIAL_ALLOWED_HEIGHT_OFFSET),
+            next_height_offset_change_tick: AtomicI32::new(0),
         };
         let mob_arc = Arc::new(blaze);
         let mob_weak: Weak<dyn Mob> = {
@@ -105,6 +118,39 @@ impl Mob for BlazeEntity {
 
         if base_entity.touching_water.load(Ordering::Relaxed) {
             caller.damage(caller, 1.0, DamageType::DROWN);
+        }
+    }
+
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        if self
+            .next_height_offset_change_tick
+            .fetch_sub(1, Ordering::Relaxed)
+            <= 1
+        {
+            self.next_height_offset_change_tick
+                .store(HEIGHT_OFFSET_CHANGE_INTERVAL, Ordering::Relaxed);
+            let mut rng = self.get_random();
+            self.allowed_height_offset.store(rng.triangle(
+                f64::from(INITIAL_ALLOWED_HEIGHT_OFFSET),
+                HEIGHT_OFFSET_SPREAD,
+            ) as f32);
+        }
+
+        let Some(target) = self.entity.get_target() else {
+            return;
+        };
+        let entity = &self.entity.living_entity.entity;
+        if target.get_entity().get_eye_y()
+            > entity.get_eye_y() + f64::from(self.allowed_height_offset.load())
+            && self.can_attack(target.as_ref())
+        {
+            let velocity = entity.velocity.load();
+            entity.velocity.store(Vector3::new(
+                velocity.x,
+                velocity.y + (ASCENT_ACCELERATION - velocity.y) * ASCENT_ACCELERATION,
+                velocity.z,
+            ));
+            entity.velocity_dirty.store(true, Ordering::SeqCst);
         }
     }
 }
