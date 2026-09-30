@@ -3390,7 +3390,7 @@ impl World {
                 return;
             }
         }
-        client.send_chunks(&[chunk]).await;
+        client.send_chunk_batch(vec![chunk]).await;
         self.mark_chunks_held(player, &[center_chunk]);
 
         let velocity = player.living_entity.entity.velocity.load();
@@ -4652,7 +4652,25 @@ impl World {
                 .map(|&pos| self.level.get_or_fetch_chunk(pos, std::clone::Clone::clone)),
         )
         .await;
-        java_client.send_chunks(&chunks).await;
+
+        let (chunks, positions) = if let Some(server) = self.server.upgrade() {
+            let mut allowed_chunks = Vec::with_capacity(chunks.len());
+            let mut allowed_positions = Vec::with_capacity(positions.len());
+            for (pos, chunk) in positions.into_iter().zip(chunks) {
+                let mut event =
+                    crate::plugin::world::chunk_send::ChunkSend::new(player.world(), chunk.clone());
+                server.plugin_manager.fire(&server, &mut event).await;
+                if !event.cancelled {
+                    allowed_chunks.push(chunk);
+                    allowed_positions.push(pos);
+                }
+            }
+            (allowed_chunks, allowed_positions)
+        } else {
+            (chunks, positions)
+        };
+
+        java_client.send_chunk_batch(chunks).await;
         self.mark_chunks_held(player, &positions);
     }
 

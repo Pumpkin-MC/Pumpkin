@@ -355,14 +355,19 @@ impl JavaClient {
             }
         }
 
-        if valid_chunks.is_empty() {
+        self.send_chunk_batch(valid_chunks).await;
+    }
+
+    /// Encodes and sends chunks that have already been through [`ChunkSend`].
+    pub(crate) async fn send_chunk_batch(&self, chunks: Vec<SyncChunk>) {
+        if chunks.is_empty() {
             return;
         }
 
         let (tx, rx) = oneshot::channel();
         rayon::spawn(move || {
-            let mut serialized = Vec::with_capacity(valid_chunks.len());
-            for chunk in valid_chunks {
+            let mut serialized = Vec::with_capacity(chunks.len());
+            for chunk in chunks {
                 let mut buf = Vec::with_capacity(32 * 1024);
                 if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(CURRENT_MC_VERSION)))
                 {
