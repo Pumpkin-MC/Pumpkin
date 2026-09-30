@@ -69,9 +69,11 @@ async fn main() {
 
     let config = PumpkinConfig::load(&exec_dir);
 
-    let vanilla_data = VanillaData::load();
-
+    // Install the logger before loading the vanilla data files, so their errors
+    // (for example an unwritable data directory) actually reach the console.
     pumpkin::init_logger(&config.advanced);
+
+    let vanilla_data = VanillaData::load();
 
     info!(
         "{}",
