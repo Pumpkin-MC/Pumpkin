@@ -170,6 +170,13 @@ impl JavaClient {
 
         let after = item.clone();
 
+        // The client predicts the placement, so undo it when the server refuses.
+        if matches!(item_result, BlockActionResult::Fail) {
+            player.reset_block_change(position);
+            player.reset_block_change(position.offset(face.to_offset()));
+            player.sync_hand_slot(slot_index, after.clone());
+        }
+
         if matches!(item_result, BlockActionResult::SuccessServer) {
             player.swing_hand(hand, true);
         }
