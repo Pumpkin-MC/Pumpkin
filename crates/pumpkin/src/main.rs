@@ -78,7 +78,9 @@ async fn main() {
 
     pumpkin_core::init_logger(&config.advanced);
 
-    let show_banner = config.advanced.logging.color && io::stdout().is_terminal();
+    let show_banner = config.advanced.logging.show_banner
+        && config.advanced.logging.color
+        && io::stdout().is_terminal();
     if show_banner {
         print_banner();
     }
