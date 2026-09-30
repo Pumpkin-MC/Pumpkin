@@ -150,6 +150,15 @@ pub async fn spawn_blocking_in_context<T: Send + 'static>(
     .await
 }
 
+/// Awaits `future` under the caller's reentry context, so guest calls made while it runs inherit
+/// the active root admission.
+pub async fn in_current_context<T>(future: impl Future<Output = T>) -> T {
+    match ReentryContext::current() {
+        Some(context) => scope(context, future).await,
+        None => future.await,
+    }
+}
+
 pub fn sync_scope<T>(context: ReentryContext, operation: impl FnOnce() -> T) -> T {
     REENTRY_CONTEXT.sync_scope(context, operation)
 }

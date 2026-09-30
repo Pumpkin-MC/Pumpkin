@@ -760,7 +760,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
             Ok(server)
         })?;
 
-        Ok(server.unload_world(&name).await)
+        Ok(pumpkin_plugin_runtime::in_current_context(server.unload_world(&name)).await)
     }
 
     async fn save_all(
@@ -776,7 +776,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
             Ok(server)
         })?;
 
-        Ok(server.save_all().await)
+        Ok(pumpkin_plugin_runtime::in_current_context(server.save_all()).await)
     }
 
     async fn broadcast(

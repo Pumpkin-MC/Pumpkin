@@ -4199,7 +4199,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             Ok(())
         };
 
-        operation.await
+        pumpkin_plugin_runtime::in_current_context(operation).await
     }
 
     async fn clear_dialog(
@@ -4247,7 +4247,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             Ok(())
         };
 
-        operation.await
+        pumpkin_plugin_runtime::in_current_context(operation).await
     }
 
     async fn kick(
@@ -4295,7 +4295,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             Ok(())
         };
 
-        operation.await
+        pumpkin_plugin_runtime::in_current_context(operation).await
     }
 }
 
@@ -4735,6 +4735,6 @@ impl pumpkin::plugin::player::HostBedrockPlayerWithStore<PluginHostState>
             Ok(())
         };
 
-        operation.await
+        pumpkin_plugin_runtime::in_current_context(operation).await
     }
 }

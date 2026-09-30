@@ -1423,7 +1423,7 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
         world: Resource<World>,
     ) -> wasmtime::Result<Result<(), String>> {
         let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
-        world.save().await;
+        pumpkin_plugin_runtime::in_current_context(world.save()).await;
         Ok(Ok(()))
     }
 
