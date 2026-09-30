@@ -25,6 +25,7 @@ use crate::plugin::{
         server_tick_start::ServerTickStartEvent,
     },
 };
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 
 impl ToFromWasmEvent for PacketReceivedEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
@@ -33,11 +34,18 @@ impl ToFromWasmEvent for PacketReceivedEvent {
             .expect("failed to add player resource");
 
         let packet = match self.player.client.as_ref() {
-            // Packet ids are per connection state. Config `client_information` and play
-            // `accept_teleportation` are both 0, and this event still carries the client's
-            // bytes (the multiversion plugin rewrites id + payload). Typed decode here
-            // panics on `try_into` when the wrong struct is chosen.
-            ClientPlatform::Java(_) => ServerboundPacket::Unknown,
+            ClientPlatform::Java(client) => {
+                if client.version.load() == CURRENT_MC_VERSION {
+                    generated_packets::deserialize_java_serverbound_packet(
+                        self.packet_id,
+                        &self.payload,
+                        CURRENT_MC_VERSION,
+                    )
+                    .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java)
+                } else {
+                    ServerboundPacket::Unknown
+                }
+            }
             ClientPlatform::Bedrock(_) => {
                 generated_packets::deserialize_bedrock_serverbound_packet(
                     self.packet_id,
