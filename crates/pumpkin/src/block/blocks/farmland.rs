@@ -6,6 +6,7 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::block_properties::FarmlandLikeProperties;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
@@ -54,8 +55,14 @@ impl BlockBehaviour for FarmlandBlock {
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
-        // TODO: add rain check. Remember to check which one is most optimized.
-        if is_water_nearby(args.world, args.position) {
+        let hydrated = is_water_nearby(args.world, args.position)
+            || args.world.is_raining_at(&args.position.up());
+        let state_id = args.world.get_block_state_id(args.position);
+        if hydrated {
+            let current_moisture = FarmlandProperties::from_state_id(state_id).moisture;
+            if current_moisture >= 7 {
+                return;
+            }
             let mut props = FarmlandProperties::default(args.block);
             let mut new_moisture = 7;
             if let Some(server) = args.world.server.upgrade() {
@@ -78,7 +85,6 @@ impl BlockBehaviour for FarmlandBlock {
                 BlockFlags::NOTIFY_NEIGHBORS,
             );
         } else {
-            let state_id = args.world.get_block_state_id(args.position);
             let mut props = FarmlandProperties::from_state_id(state_id);
             if props.moisture == 0 {
                 if !args
@@ -136,8 +142,7 @@ fn is_water_nearby(world: &Arc<World>, block_pos: &BlockPos) -> bool {
                     y: dy,
                     z: dz,
                 });
-                //TODO this should use tag water. It does not seem to work rn.
-                if world.get_block(&check_pos) == &Block::WATER {
+                if world.get_fluid(&check_pos).matches_type(&Fluid::WATER) {
                     return true;
                 }
             }
