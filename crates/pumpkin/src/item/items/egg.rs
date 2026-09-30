@@ -10,6 +10,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 
+use pumpkin_util::Hand;
 pub struct EggItem;
 
 impl ItemMetadata for EggItem {
@@ -21,7 +22,7 @@ impl ItemMetadata for EggItem {
 const POWER: f32 = 1.5;
 
 impl ItemBehaviour for EggItem {
-    fn normal_use(&self, _block: &Item, player: &Player) {
+    fn normal_use(&self, _block: &Item, player: &Player, _hand: Hand) {
         let position = player.position();
         let world = player.world();
         world.play_sound(

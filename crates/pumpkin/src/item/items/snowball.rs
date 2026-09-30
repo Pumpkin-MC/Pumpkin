@@ -9,6 +9,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 
+use pumpkin_util::Hand;
 pub struct SnowBallItem;
 
 impl ItemMetadata for SnowBallItem {
@@ -20,7 +21,7 @@ impl ItemMetadata for SnowBallItem {
 const POWER: f32 = 1.5;
 
 impl ItemBehaviour for SnowBallItem {
-    fn normal_use(&self, _block: &Item, player: &Player) {
+    fn normal_use(&self, _block: &Item, player: &Player, _hand: Hand) {
         let position = player.position();
         let world = player.world();
         world.play_sound(

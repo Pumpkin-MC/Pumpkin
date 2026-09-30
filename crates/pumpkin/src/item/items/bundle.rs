@@ -5,6 +5,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag;
 
+use pumpkin_util::Hand;
 pub struct BundleItem;
 
 impl ItemMetadata for BundleItem {
@@ -14,7 +15,7 @@ impl ItemMetadata for BundleItem {
 }
 
 impl ItemBehaviour for BundleItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let mut held_item = player.inventory.held_item();
         let mut matched = false;
         let mut used_slot_index = player.inventory.get_selected_slot() as usize;

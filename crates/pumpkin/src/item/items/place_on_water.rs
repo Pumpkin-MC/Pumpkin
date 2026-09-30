@@ -10,6 +10,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_util::math::position::BlockPos;
 
+use pumpkin_util::Hand;
 pub struct PlaceOnWaterBlockItem;
 
 impl ItemMetadata for PlaceOnWaterBlockItem {
@@ -19,7 +20,7 @@ impl ItemMetadata for PlaceOnWaterBlockItem {
 }
 
 impl ItemBehaviour for PlaceOnWaterBlockItem {
-    fn normal_use(&self, item: &Item, player: &Player) {
+    fn normal_use(&self, item: &Item, player: &Player, _hand: Hand) {
         let world = player.world();
         let (start_pos, end_pos) = self.get_start_and_end_pos(player);
         let checker = |pos: &BlockPos, world_inner: &Arc<World>| {

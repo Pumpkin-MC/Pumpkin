@@ -10,6 +10,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 
+use pumpkin_util::Hand;
 pub struct FishingRodItem;
 
 impl ItemMetadata for FishingRodItem {
@@ -19,7 +20,7 @@ impl ItemMetadata for FishingRodItem {
 }
 
 impl ItemBehaviour for FishingRodItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let world = player.world();
         let bobber_id = player.fishing_bobber.load(Ordering::Relaxed);
 

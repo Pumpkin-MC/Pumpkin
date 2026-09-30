@@ -15,7 +15,7 @@ impl ItemMetadata for WritableBookItem {
 }
 
 impl ItemBehaviour for WritableBookItem {
-    fn normal_use_with_hand(
+    fn normal_use_with_rotation(
         &self,
         item: &Item,
         player: &Player,

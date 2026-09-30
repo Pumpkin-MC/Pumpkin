@@ -35,7 +35,7 @@ impl ItemMetadata for SpearItem {
 }
 
 impl ItemBehaviour for SpearItem {
-    fn normal_use(&self, item: &Item, player: &Player) {
+    fn normal_use(&self, item: &Item, player: &Player, _hand: Hand) {
         if player
             .living_entity
             .item_in_use

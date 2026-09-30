@@ -15,6 +15,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::world::World;
 
+use pumpkin_util::Hand;
 pub struct BoatItem;
 
 impl BoatItem {
@@ -92,7 +93,7 @@ impl ItemMetadata for BoatItem {
 
 impl ItemBehaviour for BoatItem {
     /// Vanilla: `BoatItem.use()` - raycasts to find placement position
-    fn normal_use(&self, item: &Item, player: &Player) {
+    fn normal_use(&self, item: &Item, player: &Player, _hand: Hand) {
         let world = player.world();
         let (start_pos, end_pos) = self.get_start_and_end_pos(player);
 

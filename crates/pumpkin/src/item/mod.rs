@@ -22,31 +22,22 @@ pub trait ItemMetadata {
 }
 
 pub trait ItemBehaviour: Send + Sync {
-    fn normal_use(&self, _item: &Item, _player: &Player) {}
+    fn normal_use(&self, _item: &Item, _player: &Player, _hand: Hand) {}
 
-    /// Handles an item use with the rotation reported for that action.
+    /// Handles an item use with the rotation and hand reported for that action.
     ///
-    /// Java clients include this rotation in the use-item packet. Item behaviours
-    /// that perform a raycast should override this method instead of relying on
-    /// the player's potentially stale entity rotation.
-    fn normal_use_with_rotation(&self, item: &Item, player: &Player, _yaw: f32, _pitch: f32) {
-        self.normal_use(item, player);
-    }
-
-    /// Handles an item use with the rotation and the hand reported for that
-    /// action, where [`Hand::Right`] is the main hand.
-    ///
-    /// Defaults to [`Self::normal_use_with_rotation`] so item behaviours that do
-    /// not care about the hand keep working unchanged.
-    fn normal_use_with_hand(
+    /// Java clients include this information in the use-item packet. Item
+    /// behaviours that perform a raycast should override this method instead of
+    /// relying on the player's potentially stale entity rotation.
+    fn normal_use_with_rotation(
         &self,
         item: &Item,
         player: &Player,
-        yaw: f32,
-        pitch: f32,
-        _hand: Hand,
+        _yaw: f32,
+        _pitch: f32,
+        hand: Hand,
     ) {
-        self.normal_use_with_rotation(item, player, yaw, pitch);
+        self.normal_use(item, player, hand);
     }
 
     #[expect(clippy::too_many_arguments)]

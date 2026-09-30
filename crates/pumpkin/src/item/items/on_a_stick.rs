@@ -7,6 +7,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 
+use pumpkin_util::Hand;
 pub struct CarrotOnAStickItem;
 pub struct WarpedFungusOnAStickItem;
 
@@ -17,7 +18,7 @@ impl ItemMetadata for CarrotOnAStickItem {
 }
 
 impl ItemBehaviour for CarrotOnAStickItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let vehicle_opt = player
             .get_entity()
             .vehicle
@@ -51,7 +52,7 @@ impl ItemMetadata for WarpedFungusOnAStickItem {
 }
 
 impl ItemBehaviour for WarpedFungusOnAStickItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let vehicle_opt = player
             .get_entity()
             .vehicle

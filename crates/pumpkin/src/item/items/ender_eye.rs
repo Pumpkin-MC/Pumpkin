@@ -24,6 +24,7 @@ use pumpkin_world::world::BlockFlags;
 
 use crate::entity::player::Player;
 
+use pumpkin_util::Hand;
 pub struct EnderEyeItem;
 
 impl ItemMetadata for EnderEyeItem {
@@ -69,7 +70,7 @@ impl ItemBehaviour for EnderEyeItem {
         BlockActionResult::Success
     }
 
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let world = player.world();
 
         let (start_pos, end_pos) = self.get_start_and_end_pos(player);
