@@ -515,7 +515,7 @@ interface bedrock-packets {
     client-cooldown-state: u8,
   }
   record player-block-action {
-    action: s32,
+    action: player-action-type,
     block-pos: tuple<s32, s32, s32>,
     face: s32,
   }

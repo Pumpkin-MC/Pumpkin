@@ -40,7 +40,8 @@ use crate::item::items::bucket::{
 use crate::item::items::honeycomb::try_wax_block;
 use crate::item::items::ignite::ignition::Ignition;
 use crate::item::items::minecart::MinecartItem;
-use crate::item::items::spawn_egg::apply_entity_variant;
+use crate::item::items::spawn_egg::prepare_egg_mob;
+use crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason;
 use crate::world::World;
 
 use crate::block::entities::dispenser::DispenserBlockEntity;
@@ -53,6 +54,7 @@ use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{EquippableImpl, IDSet, PotionContentsImpl};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
@@ -572,20 +574,24 @@ impl DispenserBlock {
     }
 
     fn dispense_tnt(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
-        const TNT_POWER: f32 = 4.0;
-        const TNT_FUSE: u32 = 80;
+        // Vanilla keeps the item and plays the fail click when TNT is disabled.
+        if !ctx.world.level_info.load().game_rules.tnt_explodes {
+            Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserFail);
+            return;
+        }
 
         let _ = item.split(1);
-        let spawn_pos = Self::target_position(ctx).to_f64();
+        let target = Self::target_position(ctx);
 
-        let entity = Entity::new(ctx.world.clone(), spawn_pos, &EntityType::TNT);
-        let tnt = Arc::new(TNTEntity::new(entity, TNT_POWER, TNT_FUSE));
+        let tnt = TNTEntity::primed(ctx.world, &target, TNTEntity::DEFAULT_FUSE);
+        let spawn_pos = tnt.get_entity().pos.load();
         ctx.world.spawn_entity(tnt);
         ctx.world
             .play_sound(Sound::EntityTntPrimed, SoundCategory::Blocks, &spawn_pos);
-
         ctx.world
-            .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);
+            .emit_game_event(GameEvent::EntityPlace.name(), target.to_centered_f64());
+
+        Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
     }
 
     fn dispense_spawn_egg(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
@@ -593,15 +599,21 @@ impl DispenserBlock {
             return;
         };
 
-        let _ = item.split(1);
         let spawn_pos = Self::target_position(ctx).to_f64();
 
         let mob = from_type(entity_type, spawn_pos, ctx.world, Uuid::new_v4());
         let yaw = wrap_degrees(rng().random::<f32>() * 360.0) % 360.0;
         mob.get_entity().set_rotation(yaw, 0.0);
-        apply_entity_variant(item, mob.as_ref());
+        // A dispenser has no acting player, matching vanilla's null `user` for this source.
+        prepare_egg_mob(item, &mob, ctx.world, None);
 
-        ctx.world.spawn_entity(mob);
+        // Vanilla SpawnEggItemBehavior keeps the egg when nothing spawned.
+        if ctx
+            .world
+            .spawn_creature(mob, CreatureSpawnReason::DispenseEgg, None)
+        {
+            item.decrement(1);
+        }
 
         ctx.world
             .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);

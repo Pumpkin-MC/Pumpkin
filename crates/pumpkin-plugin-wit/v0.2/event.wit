@@ -549,6 +549,7 @@ interface event {
         position: position,
         target-world: %world,
         spawn-reason: string,
+        player: option<player>,
         cancelled: bool
     }
 
