@@ -4,10 +4,11 @@ pub mod v1_18;
 
 pub use light::ChunkLightExt;
 
-use pumpkin_data::packet::clientbound::play::LEVEL_CHUNK_WITH_LIGHT;
+use pumpkin_data::packet::clientbound::play::{CHUNKS_BIOMES, LEVEL_CHUNK_WITH_LIGHT};
 use pumpkin_protocol::ClientPacket;
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
-use pumpkin_protocol::ser::WritingError;
+use pumpkin_protocol::ser::{NetworkWriteExt, WritingError};
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
 use std::io::Write;
@@ -42,10 +43,70 @@ impl ClientPacket for CChunkData<'_> {
     }
 }
 
+/// Replaces the biomes of chunks the client already has, without resending
+/// their blocks (`CHUNKS_BIOMES`).
+pub struct CChunksBiomes<'a>(pub &'a [&'a ChunkData]);
+
+impl MultiVersionJavaPacket for CChunksBiomes<'_> {
+    fn to_id(version: JavaMinecraftVersion) -> i32 {
+        CHUNKS_BIOMES.to_id(version)
+    }
+}
+
+impl ClientPacket for CChunksBiomes<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        write.write_var_int(&VarInt(self.0.len() as i32))?;
+        for chunk in self.0 {
+            let biome_sections =
+                chunk.section.biome_sections.read().map_err(|_| {
+                    WritingError::Message("biome_sections read lock poisoned".into())
+                })?;
+            let mut data = Vec::new();
+            for biomes in biome_sections.iter() {
+                v1_18::write_biomes(&mut data, biomes, version)?;
+            }
+            // A chunk position is one long with z in the high half.
+            write.write_i32_be(chunk.z)?;
+            write.write_i32_be(chunk.x)?;
+            write.write_var_int(&VarInt(data.len() as i32))?;
+            write.write_slice(&data)?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use pumpkin_world::chunk::ChunkData;
+
+    /// The client reads each entry as a packed chunk position (z in the high
+    /// half) and a length-prefixed byte array; get either wrong and every
+    /// following entry is garbage.
+    #[test]
+    fn chunks_biomes_entry_layout() {
+        let chunk = ChunkData::empty(3, -2);
+        let mut buf = Vec::new();
+        CChunksBiomes(&[&chunk])
+            .write_packet_data(&mut buf, &JavaMinecraftVersion::V_26_3)
+            .unwrap();
+
+        assert_eq!(buf[0], 1, "one entry");
+        assert_eq!(&buf[1..5], &(-2i32).to_be_bytes(), "z comes first");
+        assert_eq!(&buf[5..9], &3i32.to_be_bytes());
+        let mut rest = &buf[9..];
+        let len = pumpkin_protocol::ser::NetworkReadExt::get_var_int(&mut rest).unwrap();
+        assert_eq!(
+            len.0 as usize,
+            rest.len(),
+            "the length covers exactly the biome data"
+        );
+        assert!(!rest.is_empty());
+    }
 
     #[test]
     fn chunk_data_all_versions() {

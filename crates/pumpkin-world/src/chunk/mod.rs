@@ -427,6 +427,22 @@ impl ChunkSections {
         }
     }
 
+    /// Sets the biome for the 4x4x4 cell containing an absolute Y, mirroring
+    /// [`Self::get_rough_biome_absolute_y`]. `relative_x` and `relative_z` are
+    /// block coordinates within the chunk, not cell coordinates.
+    pub fn set_biome_absolute_y(&self, relative_x: usize, y: i32, relative_z: usize, biome_id: u8) {
+        let y = y - self.min_y;
+        if y < 0 {
+            return;
+        }
+        self.set_relative_biome(
+            relative_x >> 2 & 3,
+            y as usize / BiomePalette::SIZE,
+            relative_z >> 2 & 3,
+            biome_id,
+        );
+    }
+
     /// Gets the given block in the chunk
     fn get_relative_block(
         &self,
