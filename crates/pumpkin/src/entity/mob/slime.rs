@@ -3,8 +3,10 @@ use std::sync::{Arc, Weak};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
+use pumpkin_data::biome::Biome;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
@@ -33,6 +35,21 @@ pub struct SlimeEntity {
     pub o_squish: AtomicCell<f32>,
     speed_modifier: AtomicCell<f64>,
     has_split: AtomicBool,
+}
+
+#[must_use]
+fn surface_slime_spawn_succeeds(
+    biome: &Biome,
+    y: i32,
+    spawn_chance: f32,
+    brightness: u8,
+    spawn_roll: f32,
+    brightness_roll: u8,
+) -> bool {
+    biome.has_tag(&pumpkin_data::tag::WorldgenBiome::MINECRAFT_ALLOWS_SURFACE_SLIME_SPAWNS)
+        && (51..=69).contains(&y)
+        && spawn_roll < spawn_chance
+        && brightness <= brightness_roll
 }
 
 impl SlimeEntity {
@@ -168,23 +185,18 @@ impl SlimeEntity {
         // TODO: check spawn reason. if it's spawner, we should return true if block below is valid
         // For now, we assume natural spawning as that's what we are implementing.
 
-        // Swamp/Surface Spawning
-        // TODO: fix
-        // let biome = world.get_biome(pos);
-        // if biome.has_tag(&pumpkin_data::tag::WorldgenBiome::MINECRAFT_ALLOWS_SURFACE_SLIME_SPAWNS)
-        //     && pos.0.y > 50
-        //     && pos.0.y < 70
-        // {
-        //     let time = world.level_time.lock().await.time_of_day;
-        //     let moon_phase = (time / 24000) % 8;
-        //     let surface_slime_spawn_chance = Self::get_spawn_chance(moon_phase);
-        //     let mut rng = rand::rng();
-        //     if rng.random::<f32>() < surface_slime_spawn_chance
-        //         && world.get_max_local_raw_brightness(pos) <= rng.random_range(0..8)
-        //     {
-        //         return true;
-        //     }
-        // }
+        let mut rng = rand::rng();
+        let biome = world.get_biome(pos);
+        if surface_slime_spawn_succeeds(
+            biome,
+            pos.0.y,
+            world.surface_slime_spawn_chance(pos),
+            world.get_max_local_raw_brightness(pos),
+            rng.random(),
+            rng.random_range(0..8),
+        ) {
+            return true;
+        }
 
         // Slime Chunk Spawning
         let chunk_pos = pos.chunk_position();
@@ -197,23 +209,12 @@ impl SlimeEntity {
         );
         let mut slime_rand = pumpkin_util::random::legacy_rand::LegacyRand::from_seed(slime_seed);
 
-        let mut rng = rand::rng();
         if rng.random_range(0..10) == 0 && slime_rand.next_bounded_i32(10) == 0 && pos.0.y < 40 {
             return true;
         }
 
         false
     }
-
-    // const fn get_spawn_chance(moon_phase: i64) -> f32 {
-    //     match moon_phase {
-    //         0 => 1.0,
-    //         1 | 7 => 0.75,
-    //         2 | 6 => 0.5,
-    //         3 | 5 => 0.25,
-    //         _ => 0.0,
-    //     }
-    // }
 
     fn get_jump_delay() -> i32 {
         rand::random_range(10..30)
@@ -631,5 +632,78 @@ impl Goal for SlimeKeepOnJumpingGoal {
 
     fn controls(&self) -> crate::entity::ai::goal::Controls {
         crate::entity::ai::goal::Controls::JUMP | crate::entity::ai::goal::Controls::MOVE
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn surface_slime_spawn_rules_cover_biomes_height_light_and_moon_roll() {
+        assert!(surface_slime_spawn_succeeds(
+            &pumpkin_data::biome::Biome::SWAMP,
+            51,
+            0.5,
+            0,
+            0.49,
+            0,
+        ));
+        assert!(surface_slime_spawn_succeeds(
+            &pumpkin_data::biome::Biome::MANGROVE_SWAMP,
+            69,
+            0.5,
+            7,
+            0.49,
+            7,
+        ));
+        assert!(!surface_slime_spawn_succeeds(
+            &pumpkin_data::biome::Biome::SWAMP,
+            50,
+            0.5,
+            0,
+            0.0,
+            0,
+        ));
+        assert!(!surface_slime_spawn_succeeds(
+            &pumpkin_data::biome::Biome::SWAMP,
+            70,
+            0.5,
+            0,
+            0.0,
+            0,
+        ));
+        assert!(!surface_slime_spawn_succeeds(
+            &pumpkin_data::biome::Biome::PLAINS,
+            60,
+            0.5,
+            0,
+            0.0,
+            0,
+        ));
+        assert!(!surface_slime_spawn_succeeds(
+            &pumpkin_data::biome::Biome::SWAMP,
+            60,
+            0.5,
+            0,
+            0.5,
+            0,
+        ));
+        assert!(!surface_slime_spawn_succeeds(
+            &pumpkin_data::biome::Biome::SWAMP,
+            60,
+            0.5,
+            8,
+            0.0,
+            7,
+        ));
+        assert!(!surface_slime_spawn_succeeds(
+            &pumpkin_data::biome::Biome::SWAMP,
+            60,
+            0.0,
+            0,
+            0.0,
+            0,
+        ));
     }
 }
