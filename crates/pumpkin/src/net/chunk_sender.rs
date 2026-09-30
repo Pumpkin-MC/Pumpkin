@@ -11,7 +11,6 @@ use pumpkin_protocol::java::client::play::{CChunkBatchEnd, CChunkBatchStart, CUn
 use pumpkin_protocol::ser::NetworkWriteExt;
 use pumpkin_protocol::{ClientPacket, MultiVersionJavaPacket};
 use pumpkin_util::math::vector2::Vector2;
-use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 use pumpkin_world::level::{Level, SyncChunk};
@@ -38,8 +37,8 @@ pub struct DispatchedChunk {
 pub struct PreparedBatch {
     pub chunks: Vec<PreparedChunk>,
     pub epoch_snapshot: u32,
-    /// Client protocol, only for batch flow -> chunks are always encoded as `CURRENT_MC_VERSION`.
-    pub target_version: JavaMinecraftVersion,
+    /// Wrapped in batch start/end, and the client acknowledges them.
+    pub batch_acks: bool,
 }
 
 #[derive(Clone)]
@@ -245,10 +244,9 @@ impl ChunkSender {
         player_chunk: Vector2<i32>,
         view_distance: NonZero<u8>,
         epoch: u32,
-        version: JavaMinecraftVersion,
+        batch_acks: bool,
     ) -> Option<PreparedBatch> {
-        if version >= JavaMinecraftVersion::V_1_20_2 && self.in_flight_batches >= self.max_in_flight
-        {
+        if batch_acks && self.in_flight_batches >= self.max_in_flight {
             return None;
         }
 
@@ -267,7 +265,7 @@ impl ChunkSender {
         Some(PreparedBatch {
             chunks: candidates,
             epoch_snapshot: epoch,
-            target_version: version,
+            batch_acks,
         })
     }
 
@@ -332,9 +330,7 @@ impl ChunkSender {
         }
 
         let mut dispatched_positions = Vec::with_capacity(encoded_chunks.len());
-        let version = batch.target_version;
-
-        if version >= JavaMinecraftVersion::V_1_20_2
+        if batch.batch_acks
             && let ClientPlatform::Java(java_client) = client
         {
             java_client.try_send_packet(&CChunkBatchStart);
@@ -354,7 +350,7 @@ impl ChunkSender {
 
         let sent_count = dispatched_positions.len();
         if sent_count > 0 {
-            if version >= JavaMinecraftVersion::V_1_20_2
+            if batch.batch_acks
                 && let ClientPlatform::Java(java_client) = client
             {
                 java_client.try_send_packet(&CChunkBatchEnd::new(sent_count as u16));
@@ -425,7 +421,7 @@ mod tests {
                 chunk: chunk.clone(),
             }],
             epoch_snapshot: 7,
-            target_version: JavaMinecraftVersion::V_1_20_2,
+            batch_acks: true,
         };
         let mut sender = ChunkSender::new();
         sender.enqueue_chunk(position);
@@ -456,7 +452,7 @@ mod tests {
                 chunk: ChunkData::empty_sync(position.x, position.y),
             }],
             epoch_snapshot: 7,
-            target_version: JavaMinecraftVersion::V_1_20_2,
+            batch_acks: true,
         };
         let mut sender = ChunkSender::new();
         sender.enqueue_chunk(position);
@@ -477,7 +473,7 @@ mod tests {
                 chunk: ChunkData::empty_sync(position.x, position.y),
             }],
             epoch_snapshot: 0,
-            target_version: JavaMinecraftVersion::V_1_20_2,
+            batch_acks: true,
         };
         let mut first = ChunkSender::new();
         let mut second = ChunkSender::new();
@@ -556,7 +552,7 @@ mod tests {
                 chunk: ChunkData::empty_sync(position.x, position.y),
             }],
             epoch_snapshot,
-            target_version: JavaMinecraftVersion::V_1_20_2,
+            batch_acks: true,
         }
     }
 }

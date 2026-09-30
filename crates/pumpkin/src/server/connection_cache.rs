@@ -104,7 +104,7 @@ impl CachedStatus {
 
         if let Some(version) = &mut response.version {
             if admit_known_java {
-                version.name = format!("{}-{CURRENT_MC_VERSION}", JavaMinecraftVersion::V_1_7_2);
+                version.name = format!("{}-{CURRENT_MC_VERSION}", JavaMinecraftVersion::OLDEST);
                 if JavaMinecraftVersion::from_protocol(client_protocol as u32)
                     != JavaMinecraftVersion::Unknown
                 {

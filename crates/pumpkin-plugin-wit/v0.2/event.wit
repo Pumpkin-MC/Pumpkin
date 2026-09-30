@@ -363,11 +363,19 @@ interface event {
         cancelled: bool
     }
 
+    /// A packet already in the client's format.
+    record raw-packet {
+        packet-id: s32,
+        payload: list<u8>,
+    }
+
     record packet-sent-event-data {
         player: player,
         packet: clientbound-packet,
         packet-id: s32,
         raw-payload: list<u8>,
+        /// Java only: sent right after this packet, even when it is cancelled.
+        extra-packets: list<raw-packet>,
         cancelled: bool
     }
 
@@ -381,14 +389,28 @@ interface event {
         play,
     }
 
+    /// What a Java client's protocol has beyond the packet format.
+    flags java-connection-features {
+        /// Login goes through the configuration state.
+        configuration-state,
+        /// Chunks go in batches the client acknowledges.
+        chunk-batch-acks,
+        /// The client reports when it has loaded the world.
+        player-loaded,
+        /// An empty encryption verify token is accepted.
+        optional-verify-token,
+    }
+
     /// A Java packet before play (no player exists yet). Fired only for clients below the
-    /// server's protocol; ids and payload are the client's.
+    /// server's protocol. `features` is kept for the
+    /// connection, set it on the first login packet.
     record connection-packet-received-event-data {
         connection-id: u64,
         version: java-minecraft-version,
         state: connection-state,
         packet-id: s32,
         raw-payload: list<u8>,
+        features: java-connection-features,
         cancelled: bool
     }
 

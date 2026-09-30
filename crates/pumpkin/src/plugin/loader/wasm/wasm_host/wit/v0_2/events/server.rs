@@ -1,4 +1,5 @@
 use crate::net::ClientPlatform;
+use crate::net::java::features::JavaConnectionFeatures;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_2::player::to_wasm_java_version;
 use crate::plugin::{
     loader::wasm::wasm_host::{
@@ -9,10 +10,11 @@ use crate::plugin::{
             pumpkin::plugin::event::{
                 ClientboundPacket, ConnectionPacketReceivedEventData,
                 ConnectionPacketSentEventData, ConnectionState as WitConnectionState, Event,
-                MapInitializeEventData, PacketReceivedEventData, PacketSentEventData,
-                ServerBroadcastEventData, ServerCommandEventData, ServerListPingAddress,
-                ServerListPingEventData, ServerLoadEventData, ServerLoadType,
-                ServerTickEndEventData, ServerTickStartEventData, ServerboundPacket,
+                JavaConnectionFeatures as WitJavaConnectionFeatures, MapInitializeEventData,
+                PacketReceivedEventData, PacketSentEventData, RawPacket, ServerBroadcastEventData,
+                ServerCommandEventData, ServerListPingAddress, ServerListPingEventData,
+                ServerLoadEventData, ServerLoadType, ServerTickEndEventData,
+                ServerTickStartEventData, ServerboundPacket,
             },
         },
     },
@@ -106,6 +108,14 @@ impl ToFromWasmEvent for PacketSentEvent {
             packet,
             packet_id: self.packet_id,
             raw_payload: self.payload.iter().copied().collect(),
+            extra_packets: self
+                .extra_packets
+                .iter()
+                .map(|(packet_id, payload)| RawPacket {
+                    packet_id: *packet_id,
+                    payload: payload.to_vec(),
+                })
+                .collect(),
             cancelled: self.cancelled,
         })
     }
@@ -115,6 +125,11 @@ impl ToFromWasmEvent for PacketSentEvent {
         if let Event::PacketSentEvent(data) = event {
             self.packet_id = data.packet_id;
             self.payload = data.raw_payload.into();
+            self.extra_packets = data
+                .extra_packets
+                .into_iter()
+                .map(|packet| (packet.packet_id, packet.payload.into()))
+                .collect();
             self.cancelled = data.cancelled;
         }
     }
@@ -139,10 +154,45 @@ const fn to_wasm_connection_state(state: ConnectionState) -> WitConnectionState 
     }
 }
 
+fn to_wasm_features(features: JavaConnectionFeatures) -> WitJavaConnectionFeatures {
+    [
+        (
+            features.configuration_state,
+            WitJavaConnectionFeatures::CONFIGURATION_STATE,
+        ),
+        (
+            features.chunk_batch_acks,
+            WitJavaConnectionFeatures::CHUNK_BATCH_ACKS,
+        ),
+        (
+            features.player_loaded,
+            WitJavaConnectionFeatures::PLAYER_LOADED,
+        ),
+        (
+            features.optional_verify_token,
+            WitJavaConnectionFeatures::OPTIONAL_VERIFY_TOKEN,
+        ),
+    ]
+    .into_iter()
+    .filter(|(has, _)| *has)
+    .fold(WitJavaConnectionFeatures::empty(), |flags, (_, flag)| {
+        flags | flag
+    })
+}
+
+fn from_wasm_features(flags: WitJavaConnectionFeatures) -> JavaConnectionFeatures {
+    JavaConnectionFeatures {
+        configuration_state: flags.contains(WitJavaConnectionFeatures::CONFIGURATION_STATE),
+        chunk_batch_acks: flags.contains(WitJavaConnectionFeatures::CHUNK_BATCH_ACKS),
+        player_loaded: flags.contains(WitJavaConnectionFeatures::PLAYER_LOADED),
+        optional_verify_token: flags.contains(WitJavaConnectionFeatures::OPTIONAL_VERIFY_TOKEN),
+    }
+}
+
 /// Generates the WIT conversion for a connection packet event
-/// -> only id, payload and `cancelled` flow back.
+/// -> only id, payload, `cancelled` (and `features`) flow back.
 macro_rules! connection_packet_event {
-    ($event:ident, $data:ident) => {
+    ($event:ident, $data:ident $(, $features:ident)?) => {
         impl ToFromWasmEvent for $event {
             fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
                 Event::$event($data {
@@ -151,6 +201,7 @@ macro_rules! connection_packet_event {
                     state: to_wasm_connection_state(self.state),
                     packet_id: self.packet_id,
                     raw_payload: self.payload.to_vec(),
+                    $($features: to_wasm_features(self.$features),)?
                     cancelled: self.cancelled,
                 })
             }
@@ -160,6 +211,7 @@ macro_rules! connection_packet_event {
                 if let Event::$event(data) = event {
                     self.packet_id = data.packet_id;
                     self.payload = data.raw_payload.into();
+                    $(self.$features = from_wasm_features(data.$features);)?
                     self.cancelled = data.cancelled;
                 }
             }
@@ -173,7 +225,8 @@ macro_rules! connection_packet_event {
 
 connection_packet_event!(
     ConnectionPacketReceivedEvent,
-    ConnectionPacketReceivedEventData
+    ConnectionPacketReceivedEventData,
+    features
 );
 connection_packet_event!(ConnectionPacketSentEvent, ConnectionPacketSentEventData);
 

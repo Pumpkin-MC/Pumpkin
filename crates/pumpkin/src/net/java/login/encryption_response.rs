@@ -1,11 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use crate::net::can_not_join;
-use pumpkin_util::version::JavaMinecraftVersion;
-
-fn may_omit_verify_token(version: JavaMinecraftVersion) -> bool {
-    (JavaMinecraftVersion::V_1_19_3..JavaMinecraftVersion::V_1_20_2).contains(&version)
-}
 
 impl PendingConnection {
     async fn verify_encryption_token(
@@ -17,7 +12,7 @@ impl PendingConnection {
             return Err(EncryptionError::NoPendingVerifyToken);
         };
 
-        if token.is_empty() && may_omit_verify_token(self.version.load()) {
+        if token.is_empty() && self.features.load().optional_verify_token {
             return Ok(());
         }
 
@@ -177,7 +172,7 @@ impl PendingConnection {
             uuid::Uuid::new_v4(),
         );
         self.send_packet_now(&packet).await;
-        if self.version.load().supports_configuration_state() {
+        if self.features.load().configuration_state {
             return None;
         }
 

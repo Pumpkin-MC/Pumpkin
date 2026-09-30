@@ -45,32 +45,27 @@ impl ClientPacket for CChunkData<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pumpkin_data::packet::CURRENT_MC_VERSION;
     use pumpkin_world::chunk::ChunkData;
 
     #[test]
-    fn chunk_data_all_versions() {
+    fn chunk_data_serializes() {
         let chunk = ChunkData::empty(0, 0);
         let packet = CChunkData(&chunk);
 
-        let versions = [JavaMinecraftVersion::V_26_3];
-
-        for version in versions {
-            let mut buf = Vec::new();
-            let id = CChunkData::to_id(version);
-            assert_ne!(id, -1, "Packet ID for version {version:?} must be valid");
-            assert!(
-                packet.write_packet_data(&mut buf, &version).is_ok(),
-                "Failed to serialize chunk data for version {version:?}"
-            );
-            assert!(
-                !buf.is_empty(),
-                "Serialized buffer must not be empty for version {version:?}"
-            );
-        }
+        let mut buf = Vec::new();
+        assert_ne!(CChunkData::to_id(CURRENT_MC_VERSION), -1);
+        assert!(
+            packet
+                .write_packet_data(&mut buf, &CURRENT_MC_VERSION)
+                .is_ok(),
+            "Failed to serialize chunk data"
+        );
+        assert!(!buf.is_empty());
     }
 
     #[test]
-    fn populated_chunk_data_all_versions() {
+    fn populated_chunk_data_serializes() {
         let chunk = ChunkData::empty(0, 0);
         chunk
             .section
@@ -90,20 +85,14 @@ mod tests {
 
         let packet = CChunkData(&chunk);
 
-        let versions = [JavaMinecraftVersion::V_26_3];
-
-        for version in versions {
-            let mut buf = Vec::new();
-            let id = CChunkData::to_id(version);
-            assert_ne!(id, -1, "Packet ID for version {version:?} must be valid");
-            assert!(
-                packet.write_packet_data(&mut buf, &version).is_ok(),
-                "Failed to serialize populated chunk data for version {version:?}"
-            );
-            assert!(
-                !buf.is_empty(),
-                "Serialized buffer must not be empty for version {version:?}"
-            );
-        }
+        let mut buf = Vec::new();
+        assert_ne!(CChunkData::to_id(CURRENT_MC_VERSION), -1);
+        assert!(
+            packet
+                .write_packet_data(&mut buf, &CURRENT_MC_VERSION)
+                .is_ok(),
+            "Failed to serialize populated chunk data"
+        );
+        assert!(!buf.is_empty());
     }
 }

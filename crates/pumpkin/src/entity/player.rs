@@ -46,7 +46,6 @@ use pumpkin_protocol::bedrock::server::{
 };
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
-use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
@@ -716,7 +715,7 @@ impl Player {
         }
 
         let supports_player_loaded = match client.as_ref() {
-            ClientPlatform::Java(client) => client.version.load() >= JavaMinecraftVersion::V_1_21_4,
+            ClientPlatform::Java(client) => client.features.load().player_loaded,
             ClientPlatform::Bedrock(_) => true,
         };
         let initially_loaded = !supports_player_loaded;
@@ -2804,14 +2803,14 @@ impl Player {
         let world = self.world();
         let player_chunk = self.get_entity().chunk_pos.load();
         let epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
-        let version = match self.client.as_ref() {
-            ClientPlatform::Java(java_client) => java_client.version.load(),
-            ClientPlatform::Bedrock(_) => JavaMinecraftVersion::V_1_20_2,
+        let batch_acks = match self.client.as_ref() {
+            ClientPlatform::Java(java_client) => java_client.features.load().chunk_batch_acks,
+            ClientPlatform::Bedrock(_) => false,
         };
 
         let view_distance = self.watched_section.load().view_distance;
         let prepared_batch = self.chunk_sender.try_lock().ok().and_then(|mut sender| {
-            sender.prepare_batch(&world.level, player_chunk, view_distance, epoch, version)
+            sender.prepare_batch(&world.level, player_chunk, view_distance, epoch, batch_acks)
         });
 
         let total_sent_chunks = prepared_batch.map_or_else(
@@ -3111,7 +3110,7 @@ impl Player {
     #[must_use]
     pub fn supports_player_loaded(&self) -> bool {
         match self.client.as_ref() {
-            ClientPlatform::Java(client) => client.version.load() >= JavaMinecraftVersion::V_1_21_4,
+            ClientPlatform::Java(client) => client.features.load().player_loaded,
             ClientPlatform::Bedrock(_) => true,
         }
     }

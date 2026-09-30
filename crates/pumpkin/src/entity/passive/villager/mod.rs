@@ -2371,7 +2371,6 @@ impl Mob for VillagerEntity {
 mod tests {
     use pumpkin_data::data_component_impl::{EnchantmentsImpl, StoredEnchantmentsImpl};
     use pumpkin_data::villager::VillagerTradeModifier;
-    use pumpkin_util::version::JavaMinecraftVersion;
 
     use super::*;
 
@@ -2382,7 +2381,7 @@ mod tests {
         let mut bytes = Vec::new();
 
         metadata
-            .write(&mut bytes, &JavaMinecraftVersion::V_26_3)
+            .write(&mut bytes, &pumpkin_data::packet::CURRENT_MC_VERSION)
             .unwrap();
 
         assert_eq!(bytes, [19, 18, 2, 9, 1]);
@@ -2423,7 +2422,7 @@ mod tests {
         let mut bytes = Vec::new();
 
         metadata
-            .write(&mut bytes, &JavaMinecraftVersion::V_26_3)
+            .write(&mut bytes, &pumpkin_data::packet::CURRENT_MC_VERSION)
             .unwrap();
 
         assert_eq!(bytes, [18, 1, 40]);

@@ -85,6 +85,9 @@ pub enum JavaMinecraftVersion {
 }
 
 impl JavaMinecraftVersion {
+    /// The oldest known version.
+    pub const OLDEST: Self = Self::V_1_7_2;
+
     /// Returns the network protocol number for this version.
     ///
     /// Returns `-1` for [`JavaMinecraftVersion::Unknown`].

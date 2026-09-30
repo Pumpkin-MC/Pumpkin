@@ -4,10 +4,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use bytes::BufMut;
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::tracked_data::{TrackedData, TrackedId};
 use pumpkin_protocol::java::client::play::{Metadata, MetadataSerializer};
 use pumpkin_protocol::ser::WritingError;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 pub trait ErasedSerializer: Send + Sync {
     fn write(
@@ -15,7 +15,6 @@ pub trait ErasedSerializer: Send + Sync {
         index: TrackedId,
         r#type: MetaDataType,
         writer: &mut dyn std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError>;
 
     fn write_canonical(&self, index: TrackedId, r#type: MetaDataType) -> Vec<u8>;
@@ -33,16 +32,15 @@ impl<T: MetadataSerializer + Clone + Send + Sync + 'static> ErasedSerializer
         index: TrackedId,
         r#type: MetaDataType,
         writer: &mut dyn std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let meta = Metadata::new_raw(index, r#type, &self.value);
-        meta.write(writer, version)
+        meta.write(writer, &CURRENT_MC_VERSION)
     }
 
     fn write_canonical(&self, index: TrackedId, r#type: MetaDataType) -> Vec<u8> {
         let mut buf = Vec::new();
         let meta = Metadata::new_raw(index, r#type, &self.value);
-        let _ = meta.write(&mut buf, &JavaMinecraftVersion::V_26_3);
+        let _ = meta.write(&mut buf, &CURRENT_MC_VERSION);
         buf
     }
 }
@@ -147,7 +145,7 @@ impl SynchedEntityData {
 
     /// Serializes the values that changed since the last [`Self::clear_dirty`], or
     /// `None` when nothing changed.
-    pub fn pack_dirty_for_version(&self, version: &JavaMinecraftVersion) -> Option<Box<[u8]>> {
+    pub fn pack_dirty(&self) -> Option<Box<[u8]>> {
         if !self.is_dirty.load(Ordering::Acquire) {
             return None;
         }
@@ -164,7 +162,7 @@ impl SynchedEntityData {
                 let before_len = buf.len();
                 if item
                     .serializer
-                    .write(item.tracked.id, item.tracked.r#type, &mut buf, version)
+                    .write(item.tracked.id, item.tracked.r#type, &mut buf)
                     .is_ok()
                     && buf.len() > before_len
                 {
@@ -195,10 +193,7 @@ impl SynchedEntityData {
 
     /// Serializes every value that differs from the default the client assumes, or
     /// `None` when they are all still at their default.
-    pub fn get_non_default_values_for_version(
-        &self,
-        version: &JavaMinecraftVersion,
-    ) -> Option<Box<[u8]>> {
+    pub fn get_non_default_values(&self) -> Option<Box<[u8]>> {
         let items = self
             .items
             .lock()
@@ -211,7 +206,7 @@ impl SynchedEntityData {
                 let before_len = buf.len();
                 if item
                     .serializer
-                    .write(item.tracked.id, item.tracked.r#type, &mut buf, version)
+                    .write(item.tracked.id, item.tracked.r#type, &mut buf)
                     .is_ok()
                     && buf.len() > before_len
                 {
@@ -235,23 +230,15 @@ mod test {
 
     use super::*;
 
-    /// Metadata ids no longer vary per version: core serializes the current format for
-    /// every client and `pumpkin-java-multiversion` translates. So the senders need no
-    /// version check of their own to decide whether a value reaches a client.
     #[test]
-    fn a_set_value_is_serialized_for_every_version() {
+    fn a_set_value_is_serialized() {
         let data = SynchedEntityData::new();
         data.define(PLAYER_MODE_CUSTOMISATION, 0u8);
         assert!(data.set(PLAYER_MODE_CUSTOMISATION, 0x7Fu8));
 
-        let current = data.get_non_default_values_for_version(&JavaMinecraftVersion::V_26_3);
-        let legacy = data.get_non_default_values_for_version(&JavaMinecraftVersion::V_1_20_5);
-        assert!(current.is_some());
-        assert_eq!(current, legacy);
-        assert_eq!(
-            data.pack_dirty_for_version(&JavaMinecraftVersion::V_1_20_5),
-            current
-        );
+        let non_default = data.get_non_default_values();
+        assert!(non_default.is_some());
+        assert_eq!(data.pack_dirty(), non_default);
     }
 
     /// A value still at the default the client assumes is not sent.
@@ -260,9 +247,6 @@ mod test {
         let data = SynchedEntityData::new();
         data.define(PLAYER_MODE_CUSTOMISATION, 0u8);
 
-        assert!(
-            data.get_non_default_values_for_version(&JavaMinecraftVersion::V_26_3)
-                .is_none()
-        );
+        assert!(data.get_non_default_values().is_none());
     }
 }

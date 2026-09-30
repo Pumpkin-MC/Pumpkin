@@ -141,11 +141,11 @@ pub fn bungeecord_login(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pumpkin_data::packet::CURRENT_MC_VERSION;
     use pumpkin_protocol::ser::NetworkWriteExt;
     use pumpkin_protocol::{
         ServerPacket, codec::var_int::VarInt, java::server::handshake::SHandShake,
     };
-    use pumpkin_util::version::JavaMinecraftVersion;
 
     /// Drives the whole path a proxied login takes: the handshake is encoded as
     /// `BungeeCord` puts it on the wire, decoded by the real packet reader, and
@@ -162,14 +162,14 @@ mod tests {
         );
 
         let mut buf = Vec::new();
-        let protocol_version = JavaMinecraftVersion::V_1_21_11.protocol_version();
+        let protocol_version = CURRENT_MC_VERSION.protocol_version();
         buf.write_var_int(&VarInt(protocol_version))
             .expect("write protocol version");
         buf.write_string(&address).expect("write server address");
         buf.write_u16_be(25565).expect("write server port");
         buf.write_var_int(&VarInt(2)).expect("write next state");
 
-        let handshake = SHandShake::read(&mut &buf[..], &JavaMinecraftVersion::V_1_21_11)
+        let handshake = SHandShake::read(&mut &buf[..], &CURRENT_MC_VERSION)
             .expect("a handshake sent by BungeeCord should be readable");
 
         let client_address = SocketAddr::from(([10, 0, 0, 1], 51234));

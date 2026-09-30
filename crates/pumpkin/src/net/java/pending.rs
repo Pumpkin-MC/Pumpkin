@@ -46,7 +46,7 @@ use crate::{
     server::Server,
 };
 
-use super::JavaClient;
+use super::{JavaClient, features::JavaConnectionFeatures};
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
 
@@ -65,6 +65,8 @@ pub struct PendingConnection {
     pub address: SocketAddr,
     pub server_address: String,
     pub version: AtomicCell<JavaMinecraftVersion>,
+    /// Set by the multiversion plugin for older clients.
+    pub features: AtomicCell<JavaConnectionFeatures>,
     pub connection_state: AtomicCell<ConnectionState>,
     pub close_token: CancellationToken,
     pub network_writer: TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
@@ -94,6 +96,7 @@ impl PendingConnection {
             address,
             server_address: String::new(),
             version: AtomicCell::new(CURRENT_MC_VERSION),
+            features: AtomicCell::new(JavaConnectionFeatures::CURRENT),
             connection_state: AtomicCell::new(ConnectionState::HandShake),
             close_token: CancellationToken::new(),
             network_writer: TCPNetworkEncoder::new(BufWriter::new(write)),
@@ -266,8 +269,10 @@ impl PendingConnection {
             self.connection_state.load(),
             packet.id,
             packet.payload.clone(),
+            self.features.load(),
         );
         server.plugin_manager.fire(&server, &mut event).await;
+        self.features.store(event.features);
         (!event.cancelled).then(|| RawPacket {
             id: event.packet_id,
             payload: event.payload,

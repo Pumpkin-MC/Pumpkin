@@ -52,6 +52,7 @@ use tokio_util::task::TaskTracker;
 use tracing::{debug, error, warn};
 
 pub mod chunk_data;
+pub mod features;
 pub mod handshake;
 pub mod login;
 mod outgoing;
@@ -82,6 +83,8 @@ pub struct JavaClient {
     /// `CURRENT_MC_VERSION`. Older clients only get in with the `pumpkin-java-multiversion`
     /// plugin, which converts at `PacketReceivedEvent` / `PacketSentEvent`.
     pub version: AtomicCell<JavaMinecraftVersion>,
+    /// Set by the multiversion plugin for older clients.
+    pub features: AtomicCell<features::JavaConnectionFeatures>,
     /// The client's game profile information. Direct field (lock-free).
     pub gameprofile: GameProfile,
     /// The client's configuration settings. Lock-free `ArcSwap`.
@@ -158,6 +161,7 @@ impl JavaClient {
             outgoing_packet_queue_recv: Some(recv),
             pending_bytes: Arc::new(AtomicUsize::new(0)),
             version: pending.version,
+            features: pending.features,
             network_writer: std::sync::Mutex::new(Some(pending.network_writer)),
             network_reader: std::sync::Mutex::new(Some(pending.network_reader)),
             brand: ArcSwap::from_pointee(pending.brand),
@@ -403,12 +407,12 @@ impl JavaClient {
         self.try_enqueue_packet_data(packet_data);
     }
 
-    /// Outbound choke point of all enqueue/send paths. `None` when the packet must be dropped.
+    /// Outbound choke point of all enqueue/send paths, after `translate_outgoing`.
+    /// `None` when the packet must be dropped.
     fn reserve_pending_bytes(&self, packet_data: Bytes) -> Option<(Bytes, usize)> {
         if self.close_token.is_cancelled() {
             return None;
         }
-        let packet_data = self.translate_outgoing(packet_data)?;
 
         // Reserve first, release again if it does not fit.
         let packet_len = packet_data.len();
@@ -432,37 +436,42 @@ impl JavaClient {
 
     /// `PacketSentEvent` for clients the multiversion plugin admitted below
     /// `CURRENT_MC_VERSION`: it gets the 26.3 id + payload and rewrites both.
-    /// `None` when cancelled.
-    fn translate_outgoing(&self, packet_data: Bytes) -> Option<Bytes> {
+    /// The packet is `None` when cancelled; the extra packets go right after it, as is.
+    fn translate_outgoing(&self, packet_data: Bytes) -> (Option<Bytes>, Vec<Bytes>) {
+        if self.close_token.is_cancelled() {
+            return (None, Vec::new());
+        }
         if self.version.load() == CURRENT_MC_VERSION {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         }
         let player = self.player.load_full();
         let Some(player) = player.as_ref() else {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         };
         let Some(server) = player.world().server.upgrade() else {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         };
         if !server.plugin_manager.has_handlers::<PacketSentEvent>() {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         }
 
         let mut reader = &packet_data[..];
         let Ok(packet_id) = reader.get_var_int() else {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         };
         let payload = packet_data.slice(packet_data.len() - reader.len()..);
         let mut event = PacketSentEvent::new_raw(player.clone(), packet_id.0, payload);
         server.plugin_manager.fire_blocking(&server, &mut event);
-        if event.cancelled {
-            return None;
-        }
 
-        let mut framed = Vec::with_capacity(5 + event.payload.len());
-        framed.write_var_int(&VarInt(event.packet_id)).ok()?;
-        framed.extend_from_slice(&event.payload);
-        Some(framed.into())
+        let extra = event
+            .extra_packets
+            .iter()
+            .filter_map(|(id, payload)| frame_packet(*id, payload))
+            .collect();
+        if event.cancelled {
+            return (None, extra);
+        }
+        (frame_packet(event.packet_id, &event.payload), extra)
     }
 
     pub fn try_enqueue_packet(&self, packet_data: Bytes) {
@@ -470,6 +479,17 @@ impl JavaClient {
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        let (packet, extra) = self.translate_outgoing(packet_data);
+        if let Some(packet) = packet {
+            self.enqueue_translated(packet);
+        }
+        for packet in extra {
+            self.enqueue_translated(packet);
+        }
+    }
+
+    /// Queues a packet already in the client's format.
+    fn enqueue_translated(&self, packet_data: Bytes) {
         let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data) else {
             return;
         };
@@ -549,7 +569,7 @@ impl JavaClient {
     pub fn try_kick(&self, reason: &TextComponent) {
         if let Some(data) = self
             .serialize_disconnect(reason)
-            .and_then(|data| self.translate_outgoing(data))
+            .and_then(|data| self.translate_outgoing(data).0)
         {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
@@ -607,13 +627,20 @@ impl JavaClient {
         packet: Bytes,
         make: fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket,
     ) {
-        let Some((packet, packet_len)) = self.reserve_pending_bytes(packet) else {
+        let (packet, extra) = self.translate_outgoing(packet);
+        let Some((packet, packet_len)) = packet.and_then(|p| self.reserve_pending_bytes(p)) else {
+            for packet in extra {
+                self.enqueue_translated(packet);
+            }
             return;
         };
 
         let (completion_tx, completion_rx) = oneshot::channel();
         if !self.queue_outgoing(make(packet, completion_tx), packet_len) {
             return;
+        }
+        for packet in extra {
+            self.enqueue_translated(packet);
         }
 
         if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
@@ -1232,4 +1259,12 @@ impl JavaClient {
         }
         Ok(())
     }
+}
+
+/// Packet id + payload as one frame body.
+fn frame_packet(packet_id: i32, payload: &[u8]) -> Option<Bytes> {
+    let mut framed = Vec::with_capacity(5 + payload.len());
+    framed.write_var_int(&VarInt(packet_id)).ok()?;
+    framed.extend_from_slice(payload);
+    Some(framed.into())
 }
