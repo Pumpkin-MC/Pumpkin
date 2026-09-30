@@ -3,7 +3,6 @@ use pumpkin_data::BlockState;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
@@ -98,9 +97,7 @@ impl EntityBase for FallingEntity {
                     {
                         state_id = concrete.default_state.id;
                     }
-                    let (fluid, fluid_state) = world.get_fluid_and_fluid_state(&landing_pos);
-                    if fluid.matches_type(&Fluid::WATER)
-                        && fluid_state.is_source
+                    if world.is_water_source(&landing_pos)
                         && let Some(waterlogged) = state_id.to_state().set_waterlogged(true)
                     {
                         state_id = waterlogged.id;

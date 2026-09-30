@@ -88,7 +88,7 @@ impl BlockBehaviour for ScaffoldingBlock {
         let mut props = ScaffoldingLikeProperties::default(args.block);
         props.distance = distance;
         props.bottom = Self::is_bottom(args.world, args.position, distance);
-        props.waterlogged = args.replacing.water_source();
+        props.waterlogged = args.world.is_water_source(args.position);
         props.to_state_id(args.block)
     }
 
