@@ -303,6 +303,9 @@ impl DataAccessor for BlockDataAccessor {
         let Some(block_entity) = block_entity_from_nbt(&tag) else {
             return Err(ERROR_BLOCK_INVALID.create_without_context());
         };
+        // Open screens hold the old block entity's inventory, and clicks there would no longer
+        // reach the block, so close them.
+        self.world.close_container_screens_at(&self.pos);
         self.world.add_block_entity(block_entity);
         // Vanilla `BlockEntity.setChanged`.
         self.world
