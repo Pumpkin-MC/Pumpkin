@@ -630,6 +630,7 @@ impl PluginManager {
                 Err(e) => {
                     // Handle initialization failure
                     let error_msg = format!("Initialization failed: {e}");
+                    self_ref_clone.release_registrations(&plugin_name, &context);
                     let _ = instance.on_unload(context).await;
 
                     // Get the loader data before removing the plugin
@@ -1100,9 +1101,7 @@ impl PluginManager {
             plugins.remove(index)
         };
 
-        self.unregister_handlers(name);
-        self.java_versions.unregister(name);
-        plugin.context.unregister_commands();
+        self.release_registrations(name, &plugin.context);
 
         if let Some(instance) = plugin.instance.take() {
             instance.on_unload(plugin.context.clone()).await.ok();
@@ -1124,6 +1123,13 @@ impl PluginManager {
         self.plugin_states.write().await.remove(name);
 
         Ok(())
+    }
+
+    /// Drops everything a plugin registered: handlers, Java versions and commands.
+    fn release_registrations(&self, name: &str, context: &Context) {
+        self.unregister_handlers(name);
+        self.java_versions.unregister(name);
+        context.unregister_commands();
     }
 
     fn unregister_handlers(&self, source: &str) {
