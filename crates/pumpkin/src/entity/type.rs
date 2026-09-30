@@ -307,6 +307,9 @@ pub fn from_type(
         }
         id if id == EntityType::LIGHTNING_BOLT.id => Arc::new(LightningBoltEntity::new(entity)),
         id if id == EntityType::MARKER.id => MarkerEntity::new(entity),
+        id if id == EntityType::LEASH_KNOT.id => Arc::new(
+            crate::entity::decoration::leash_knot::LeashKnotEntity::new(entity),
+        ),
         id if id == EntityType::INTERACTION.id => InteractionEntity::new(entity),
         id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(entity)),
         id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity)),

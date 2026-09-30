@@ -1,6 +1,7 @@
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, living::LivingEntity};
 use crate::world::World;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -12,28 +13,41 @@ use std::sync::Arc;
 
 pub struct LeashKnotEntity {
     entity: Entity,
-    pos: BlockPos,
 }
 
 impl LeashKnotEntity {
     pub const OFFSET_Y: f64 = 0.375;
 
-    pub const fn new(entity: Entity, pos: BlockPos) -> Self {
-        Self { entity, pos }
+    pub const fn new(entity: Entity) -> Self {
+        Self { entity }
     }
 
-    pub const fn block_pos(&self) -> BlockPos {
-        self.pos
+    /// The fence block this knot is attached to. Derived from the entity position so a knot loaded
+    /// from disk (whose position is only known after the entity NBT is read) reports the right block.
+    pub fn block_pos(&self) -> BlockPos {
+        self.entity.block_pos.load()
     }
 
-    pub fn get_or_create(world: &Arc<World>, pos: BlockPos) -> Arc<Self> {
-        if let Some(existing) = Self::get_knot(world, pos) {
-            return existing;
+    pub fn get_or_create(world: &Arc<World>, pos: BlockPos) -> Arc<dyn EntityBase> {
+        Self::find_knot(world, pos)
+            .unwrap_or_else(|| Self::create_knot(world, pos) as Arc<dyn EntityBase>)
+    }
+
+    /// Finds a knot placed at `pos`, returned as a trait object so it can be used directly as a
+    /// leash holder.
+    pub fn find_knot(world: &Arc<World>, pos: BlockPos) -> Option<Arc<dyn EntityBase>> {
+        for entity_base in world.get_entities_at_box(&Self::search_box(pos)) {
+            if entity_base.get_entity().entity_type == &EntityType::LEASH_KNOT
+                && let Some(knot) = entity_base.cast_any().downcast_ref::<Self>()
+                && knot.block_pos() == pos
+            {
+                return Some(entity_base);
+            }
         }
-        Self::create_knot(world, pos)
+        None
     }
 
-    pub fn get_knot(world: &Arc<World>, pos: BlockPos) -> Option<Arc<Self>> {
+    fn search_box(pos: BlockPos) -> BoundingBox {
         let center = Vector3::new(
             f64::from(pos.0.x) + 0.5,
             f64::from(pos.0.y) + Self::OFFSET_Y,
@@ -46,18 +60,7 @@ impl LeashKnotEntity {
             eye_height: 1.0,
         };
 
-        let search_box = BoundingBox::new_from_pos(center.x, center.y, center.z, &search_dim);
-        let entities = world.get_entities_at_box(&search_box);
-
-        for entity_base in entities {
-            if entity_base.get_entity().entity_type == &EntityType::LEASH_KNOT
-                && let Some(knot) = entity_base.cast_any().downcast_ref::<Arc<Self>>()
-                && knot.pos == pos
-            {
-                return Some(knot.clone());
-            }
-        }
-        None
+        BoundingBox::new_from_pos(center.x, center.y, center.z, &search_dim)
     }
 
     pub fn create_knot(world: &Arc<World>, pos: BlockPos) -> Arc<Self> {
@@ -68,7 +71,7 @@ impl LeashKnotEntity {
         );
 
         let entity = Entity::new(world.clone(), raw_pos, &EntityType::LEASH_KNOT);
-        let knot = Arc::new(Self::new(entity, pos));
+        let knot = Arc::new(Self::new(entity));
         world.spawn_entity(knot.clone() as Arc<dyn EntityBase>);
 
         world.play_sound(Sound::ItemLeadTied, SoundCategory::Neutral, &raw_pos);
@@ -95,7 +98,8 @@ impl EntityBase for LeashKnotEntity {
 
     fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
         let world = self.entity.world.load();
-        let block = world.get_block(&self.pos);
+        let knot_pos = self.block_pos();
+        let block = world.get_block(&knot_pos);
         if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FENCES) {
             let knot_id = self.entity.entity_id;
             let search_dim = EntityDimensions {
@@ -121,12 +125,7 @@ impl EntityBase for LeashKnotEntity {
                     .unwrap_or(false);
 
                 if is_attached_to_knot {
-                    ent.unleash();
-                    let lead_item = pumpkin_data::item_stack::ItemStack::new(
-                        1,
-                        &pumpkin_data::item::Item::LEAD,
-                    );
-                    world.drop_stack(&ent.block_pos.load(), lead_item);
+                    ent.drop_leash_with_item();
                 }
             }
 
@@ -162,9 +161,9 @@ impl EntityBase for LeashKnotEntity {
             }
         }
 
-        if let Some(self_knot) = Self::get_knot(&world, self.pos) {
+        if let Some(self_knot) = Self::find_knot(&world, self.block_pos()) {
             for mob in player_leashed_mobs {
-                mob.leash_to(self_knot.clone() as Arc<dyn EntityBase>);
+                mob.leash_to(self_knot.clone());
                 attached_mob = true;
             }
         }
@@ -192,5 +191,45 @@ impl EntityBase for LeashKnotEntity {
     }
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
+        _amount: f32,
+        damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        // Vanilla `BlockAttachedEntity.hurtServer` checks `isInvulnerableToBase` first, and a
+        // creative player bypasses invulnerability there.
+        let creative_player = source.is_some_and(|source| {
+            source
+                .cast_any()
+                .downcast_ref::<Player>()
+                .is_some_and(Player::is_creative)
+        });
+        if self.entity.is_removed()
+            || (!creative_player && self.entity.is_invulnerable_to(&damage_type))
+        {
+            return false;
+        }
+        // `BlockAttachedEntity.hurtServer`: no damage from a mob while `mob_griefing` is off.
+        let world = self.entity.world.load();
+        if !world.level_info.load().game_rules.mob_griefing
+            && cause.or(source).is_some_and(|atk| atk.get_mob().is_some())
+        {
+            return false;
+        }
+        // Hitting the knot destroys it. The mobs leashed to it drop their lead on their next tick,
+        // once they see the holder is gone.
+        world.play_sound(
+            Sound::ItemLeadUntied,
+            SoundCategory::Neutral,
+            &self.entity.pos.load(),
+        );
+        self.entity.remove();
+        true
     }
 }
