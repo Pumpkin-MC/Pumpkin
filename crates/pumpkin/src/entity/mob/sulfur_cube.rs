@@ -2,7 +2,7 @@ use std::sync::{Arc, Weak};
 
 use pumpkin_data::sound::{Sound, SoundCategory};
 
-use crate::entity::mob::cube_mob::{AbstractCubeMob, CubeMobHooks};
+use crate::entity::mob::cube_mob::{CubeMob, CubeMobData};
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::{Entity, EntityBase, custom_sound::CustomSound};
 
@@ -10,34 +10,29 @@ pub const SPLIT_COUNT: i32 = 2;
 pub const MAX_SIZE: i32 = 2;
 
 pub struct SulfurCubeEntity {
-    pub cube: AbstractCubeMob,
+    pub mob_entity: MobEntity,
+    pub cube_mob_data: CubeMobData,
 }
 
 impl SulfurCubeEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let cube = Arc::new(Self {
-            cube: AbstractCubeMob::new(entity),
+            cube_mob_data: CubeMobData::new(&entity),
+            mob_entity: MobEntity::new(entity),
         });
-        let weak: Weak<dyn CubeMobHooks> = {
-            let mob: Arc<dyn CubeMobHooks> = cube.clone();
+        let weak: Weak<dyn CubeMob> = {
+            let mob: Arc<dyn CubeMob> = cube.clone();
             Arc::downgrade(&mob)
         };
-        cube.cube.register_common_goals(weak);
+        cube.register_common_goals(weak);
         cube.set_size(MAX_SIZE, true);
         cube
     }
-
-    pub fn get_size(&self) -> i32 {
-        self.cube.get_size()
-    }
-    pub fn is_tiny(&self) -> bool {
-        self.cube.is_tiny()
-    }
 }
 
-impl CubeMobHooks for SulfurCubeEntity {
-    fn cube_mob(&self) -> &AbstractCubeMob {
-        &self.cube
+impl CubeMob for SulfurCubeEntity {
+    fn get_cube_mob_data(&self) -> &CubeMobData {
+        &self.cube_mob_data
     }
     fn jump_sound(&self) -> Sound {
         if self.is_tiny() {
@@ -55,9 +50,6 @@ impl CubeMobHooks for SulfurCubeEntity {
     }
     fn sound_source(&self) -> SoundCategory {
         SoundCategory::Neutral
-    }
-    fn set_size(&self, size: i32, update_health: bool) {
-        self.cube.set_size(self, size, update_health);
     }
     fn cube_mob_health(&self, actual_size: i32) -> f64 {
         f64::from(4 * actual_size)
@@ -94,18 +86,18 @@ impl Mob for SulfurCubeEntity {
         Some(self)
     }
     fn mob_write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-        self.cube.mob_write_nbt(nbt);
+        self.write_cube_mob_nbt(nbt);
     }
     fn mob_read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
-        self.cube.mob_read_nbt(self, nbt);
+        self.read_cube_mob_nbt(nbt);
     }
     fn get_mob_entity(&self) -> &MobEntity {
-        &self.cube.mob_entity
+        &self.mob_entity
     }
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.cube.mob_tick(self);
+        self.cube_mob_tick();
     }
     fn post_tick(&self) {
-        self.cube.post_tick(self);
+        self.cube_mob_post_tick();
     }
 }

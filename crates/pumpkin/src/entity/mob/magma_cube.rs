@@ -4,26 +4,28 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::sound::Sound;
 
-use crate::entity::mob::cube_mob::{AbstractCubeMob, CubeMobHooks};
+use crate::entity::mob::cube_mob::{CubeMob, CubeMobData};
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, custom_sound::CustomSound};
 
 pub struct MagmaCubeEntity {
-    pub cube: AbstractCubeMob,
+    pub mob_entity: MobEntity,
+    pub cube_mob_data: CubeMobData,
 }
 
 impl MagmaCubeEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let cube = Arc::new(Self {
-            cube: AbstractCubeMob::new(entity),
+            cube_mob_data: CubeMobData::new(&entity),
+            mob_entity: MobEntity::new(entity),
         });
-        let weak: Weak<dyn CubeMobHooks> = {
-            let mob: Arc<dyn CubeMobHooks> = cube.clone();
+        let weak: Weak<dyn CubeMob> = {
+            let mob: Arc<dyn CubeMob> = cube.clone();
             Arc::downgrade(&mob)
         };
-        cube.cube.register_common_goals(weak.clone());
-        cube.cube.add_attack_goal(weak);
+        cube.register_common_goals(weak.clone());
+        cube.add_attack_goal(weak);
         cube.randomize_size();
         cube
     }
@@ -35,18 +37,11 @@ impl MagmaCubeEntity {
         }
         self.set_size(1 << size_scale, true);
     }
-
-    pub fn get_size(&self) -> i32 {
-        self.cube.get_size()
-    }
-    pub fn is_tiny(&self) -> bool {
-        self.cube.is_tiny()
-    }
 }
 
-impl CubeMobHooks for MagmaCubeEntity {
-    fn cube_mob(&self) -> &AbstractCubeMob {
-        &self.cube
+impl CubeMob for MagmaCubeEntity {
+    fn get_cube_mob_data(&self) -> &CubeMobData {
+        &self.cube_mob_data
     }
     fn jump_sound(&self) -> Sound {
         Sound::EntityMagmaCubeJump
@@ -59,10 +54,9 @@ impl CubeMobHooks for MagmaCubeEntity {
         }
     }
     fn set_size(&self, size: i32, update_health: bool) {
-        self.cube.set_size(self, size, update_health);
+        self.set_cube_mob_size(size, update_health);
         let actual_size = self.get_size();
         let mut attributes = self
-            .cube
             .mob_entity
             .living_entity
             .attributes
@@ -116,21 +110,21 @@ impl Mob for MagmaCubeEntity {
         Some(self)
     }
     fn mob_write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-        self.cube.mob_write_nbt(nbt);
+        self.write_cube_mob_nbt(nbt);
     }
     fn mob_read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
-        self.cube.mob_read_nbt(self, nbt);
+        self.read_cube_mob_nbt(nbt);
     }
     fn get_mob_entity(&self) -> &MobEntity {
-        &self.cube.mob_entity
+        &self.mob_entity
     }
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.cube.mob_tick(self);
+        self.cube_mob_tick();
     }
     fn post_tick(&self) {
-        self.cube.post_tick(self);
+        self.cube_mob_post_tick();
     }
     fn mob_player_collision(&self, player: &Arc<Player>) {
-        self.cube.mob_entity.try_attack(self, &**player);
+        self.mob_entity.try_attack(self, &**player);
     }
 }
