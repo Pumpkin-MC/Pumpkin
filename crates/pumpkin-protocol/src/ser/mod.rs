@@ -4,9 +4,7 @@ use std::io::{Read, Write};
 
 use crate::{
     FixedBitSet,
-    codec::{
-        bit_set::BitSet, var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
-    },
+    codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
 };
 
 use pumpkin_nbt::{
@@ -844,8 +842,6 @@ pub trait NetworkWriteExt {
         self.write_u64_be(second)
     }
 
-    fn write_bitset(&mut self, bitset: &BitSet) -> Result<(), WritingError>;
-
     fn write_option<G>(
         &mut self,
         data: &Option<G>,
@@ -989,10 +985,6 @@ impl<W: Write> NetworkWriteExt for W {
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         self.write_i64_be(pos.as_long_for_version(version))
-    }
-
-    fn write_bitset(&mut self, data: &BitSet) -> Result<(), WritingError> {
-        data.encode(self)
     }
 
     fn write_option<G>(

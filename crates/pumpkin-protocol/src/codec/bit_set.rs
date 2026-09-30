@@ -74,29 +74,6 @@ impl BitSet {
         Ok(length as usize)
     }
 
-    pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
-        write.write_var_int(&self.0.len().try_into().map_err(|_| {
-            WritingError::Message(format!("{} isn't representable as a VarInt", self.0.len()))
-        })?)?;
-
-        for b in &self.0 {
-            write.write_i64_be(*b)?;
-        }
-
-        Ok(())
-    }
-
-    pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
-        // Read length
-        let length = Self::checked_len(read.get_var_int()?.0)?;
-        let mut array: Vec<i64> = Vec::with_capacity(length);
-        for _ in 0..length {
-            let long = read.get_i64_be()?;
-            array.push(long);
-        }
-        Ok(Self(array.into_boxed_slice()))
-    }
-
     /// Since 26.3 bit sets are sent as a little endian byte array without its trailing zero bytes
     /// instead of a long array.
     pub fn encode_with_version(

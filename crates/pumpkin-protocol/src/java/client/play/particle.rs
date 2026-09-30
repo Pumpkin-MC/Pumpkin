@@ -65,58 +65,6 @@ impl<'a> CParticle<'a> {
     }
 }
 
-#[must_use]
-pub const fn particle_name_for_v1_7(particle: pumpkin_data::particle::Particle) -> &'static str {
-    use pumpkin_data::particle::Particle::{
-        AngryVillager, Block, BlockCrumble, BlockMarker, Bubble, BubbleColumnUp, BubblePop,
-        CampfireSignalSmoke, Cloud, Composter, Crit, DamageIndicator, DragonBreath,
-        DrippingDripstoneLava, DrippingDripstoneWater, DrippingLava, DrippingWater, Dust,
-        DustColorTransition, DustPillar, DustPlume, Effect, Enchant, EnchantedHit, EntityEffect,
-        Explosion, ExplosionEmitter, FallingDust, Firework, Fishing, Flame, HappyVillager, Heart,
-        InstantEffect, Item, ItemSlime, ItemSnowball, LargeSmoke, Lava, Mycelium, Note, Poof,
-        Portal, Rain, ReversePortal, SmallFlame, Snowflake, SoulFireFlame, Splash, SweepAttack,
-        TotemOfUndying, Underwater, Witch,
-    };
-    match particle {
-        ExplosionEmitter => "hugeexplosion",
-        Explosion => "largeexplode",
-        Poof => "explode",
-        Firework => "fireworksSpark",
-        Bubble | BubblePop | BubbleColumnUp => "bubble",
-        Splash => "splash",
-        Fishing => "wake",
-        Underwater => "suspended",
-        Crit | DamageIndicator | SweepAttack => "crit",
-        EnchantedHit => "magicCrit",
-        LargeSmoke | CampfireSignalSmoke => "largesmoke",
-        InstantEffect => "spell",
-        EntityEffect => "mobSpell",
-        Effect => "mobSpellAmbient",
-        Witch | TotemOfUndying | DragonBreath => "witchMagic",
-        DrippingWater | DrippingDripstoneWater => "dripWater",
-        DrippingLava | DrippingDripstoneLava => "dripLava",
-        AngryVillager => "angryVillager",
-        HappyVillager | Composter => "happyVillager",
-        Mycelium => "townaura",
-        Note => "note",
-        Portal | ReversePortal => "portal",
-        Enchant => "enchantmenttable",
-        Flame | SmallFlame | SoulFireFlame => "flame",
-        Lava => "lava",
-        Cloud => "cloud",
-        Dust | DustColorTransition | DustPillar | DustPlume => "reddust",
-        ItemSnowball | Snowflake => "snowballpoof",
-        ItemSlime => "slime",
-        Heart => "heart",
-        BlockMarker => "barrier",
-        Rain => "droplet",
-        Item => "iconcrack_",
-        Block | BlockCrumble => "blockcrack_",
-        FallingDust => "blockdust_",
-        _ => "smoke",
-    }
-}
-
 impl ClientPacket for CParticle<'_> {
     fn write_packet_data(
         &self,
