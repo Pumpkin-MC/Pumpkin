@@ -4947,14 +4947,6 @@ impl Player {
             pumpkin_data::tracked_data::player::PLAYER_MAIN_HAND,
             config.main_hand as u8,
         );
-        self.living_entity.entity.set_synced_data(
-            pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
-            config.skin_parts,
-        );
-        self.living_entity.entity.set_synced_data(
-            pumpkin_data::tracked_data::player::MAIN_ARM_ID,
-            config.main_hand as u8,
-        );
     }
 
     pub fn can_harvest(&self, state: &BlockState, block: &'static Block) -> bool {

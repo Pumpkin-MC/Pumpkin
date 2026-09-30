@@ -480,7 +480,7 @@ mod tests {
     use super::build;
 
     #[test]
-    fn living_entity_flags_merge_yarn_and_mojang_names() {
+    fn living_entity_flags_use_id_8() {
         let generated = build().to_string();
         let living = generated
             .split("pub mod living_entity")
@@ -512,7 +512,7 @@ mod tests {
     }
 
     #[test]
-    fn living_health_and_air_merge_yarn_names() {
+    fn living_health_and_entity_air_supply_have_ids() {
         let generated = build().to_string();
         let health = field_body(&generated, "living_entity", "DATA_HEALTH_ID");
         assert!(health.contains("TrackedId (9u8)"));
@@ -522,7 +522,7 @@ mod tests {
     }
 
     #[test]
-    fn yarn_entity_modules_merge_into_mojang_names() {
+    fn boat_ageable_mob_and_item_modules_have_ids() {
         let generated = build().to_string();
 
         let boat_hurt = field_body(&generated, "boat", "DATA_ID_HURT");

@@ -4,7 +4,6 @@ use std::sync::atomic::{
     Ordering::{self, Relaxed},
 };
 
-use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
 use dashmap::DashMap;
 use dashmap::DashSet;
@@ -23,7 +22,6 @@ use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
     CEntityPositionSync, CEntityVelocity, CHeadRot, CRemoveEntities, CSetEntityMetadata,
     CSetEquipment, CSetPassengers, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot,
-    Metadata,
 };
 use pumpkin_protocol::{BClientPacket, ClientPacket};
 use pumpkin_util::GameMode;
@@ -459,21 +457,7 @@ impl TrackedEntity {
             let target_id = target_entity.entity_id;
 
             if let ClientPlatform::Java(client) = player.client.as_ref() {
-                let mut buf = Vec::new();
-                for meta in [
-                    Metadata::new(
-                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
-                        skin_parts,
-                    ),
-                    Metadata::new(
-                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
-                        skin_parts,
-                    ),
-                ] {
-                    let _ = meta.write(&mut buf);
-                }
-                buf.put_u8(255);
-                client.try_send_packet(&CSetEntityMetadata::new(target_id.into(), buf.into()));
+                client.try_send_packet(&World::skin_parts_metadata(target_id, skin_parts));
 
                 let head_yaw = target_entity.head_yaw.load();
                 // TODO: use `pumpkin_util::math::pack_degrees`.

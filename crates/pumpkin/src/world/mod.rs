@@ -1184,8 +1184,19 @@ impl World {
         Self::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
     }
 
-    /// Broadcasts the skin layers of a player, encoding the metadata for each Java client's own
-    /// protocol version since the tracked data index differs between versions.
+    /// Builds the metadata packet carrying a player's skin layers.
+    pub(crate) fn skin_parts_metadata(entity_id: i32, skin_parts: u8) -> CSetEntityMetadata {
+        let mut buf = Vec::new();
+        let _ = Metadata::new(
+            pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
+            skin_parts,
+        )
+        .write(&mut buf);
+        buf.put_u8(255);
+        CSetEntityMetadata::new(entity_id.into(), buf.into())
+    }
+
+    /// Broadcasts the skin layers of a player to Java and Bedrock clients.
     fn broadcast_skin_parts<B: BClientPacket>(
         &self,
         except: &[uuid::Uuid],
@@ -1207,21 +1218,7 @@ impl World {
             }
         }
 
-        let mut buf = Vec::new();
-        for meta in [
-            Metadata::new(
-                pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
-                skin_parts,
-            ),
-            Metadata::new(
-                pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
-                skin_parts,
-            ),
-        ] {
-            let _ = meta.write(&mut buf);
-        }
-        buf.put_u8(255);
-        let packet = CSetEntityMetadata::new(entity_id.into(), buf.into());
+        let packet = Self::skin_parts_metadata(entity_id, skin_parts);
         Self::broadcast_java_players(&packet, java_recipients.into_iter());
 
         Self::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
@@ -3446,29 +3443,11 @@ impl World {
                 player.client.try_enqueue_packet_editioned(java, bedrock);
             });
 
-            let config = existing_player.config.load();
-            let mut buf = Vec::new();
-            {
-                let meta = Metadata::new(
-                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
-                    config.skin_parts,
-                );
-                let _ = meta.write(&mut buf);
-            };
-            {
-                let meta = Metadata::new(
-                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
-                    config.skin_parts,
-                );
-                let _ = meta.write(&mut buf);
-            };
-            drop(config);
-            // END
-            buf.put_u8(255);
+            let skin_parts = existing_player.config.load().skin_parts;
             client
-                .enqueue_client_packet(&CSetEntityMetadata::new(
-                    existing_player.get_entity().entity_id.into(),
-                    buf.into(),
+                .enqueue_client_packet(&Self::skin_parts_metadata(
+                    existing_player.get_entity().entity_id,
+                    skin_parts,
                 ))
                 .await;
 
