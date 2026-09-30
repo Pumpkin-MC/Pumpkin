@@ -80,7 +80,8 @@ async fn main() {
 
     let show_banner = config.advanced.logging.show_banner
         && config.advanced.logging.color
-        && io::stdout().is_terminal();
+        && io::stdout().is_terminal()
+        && enable_ansi();
     if show_banner {
         print_banner();
     }
@@ -209,6 +210,27 @@ async fn main() {
     );
 
     exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
+}
+
+#[cfg(not(windows))]
+const fn enable_ansi() -> bool {
+    true
+}
+
+#[cfg(windows)]
+fn enable_ansi() -> bool {
+    use windows_sys::Win32::System::Console::{
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode, GetStdHandle, STD_OUTPUT_HANDLE,
+        SetConsoleMode,
+    };
+
+    let mut mode = 0;
+    // SAFETY: GetConsoleMode validates the stdout handle before SetConsoleMode uses it.
+    unsafe {
+        let handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        GetConsoleMode(handle, &raw mut mode) != 0
+            && SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0
+    }
 }
 
 // Prints the logo with the version and support links beside it.
