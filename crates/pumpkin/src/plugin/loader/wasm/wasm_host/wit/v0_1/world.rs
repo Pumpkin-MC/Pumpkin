@@ -644,6 +644,22 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         }
     }
 
+    async fn load_chunk(
+        &mut self,
+        world: Resource<World>,
+        x: i32,
+        z: i32,
+    ) -> wasmtime::Result<Resource<WitChunk>> {
+        let world_provider = self.get_world_res(&world)?.provider.clone();
+        let pos = pumpkin_util::math::vector2::Vector2::new(x, z);
+        let chunk = world_provider
+            .level
+            .get_or_fetch_chunk(pos, std::sync::Arc::clone)
+            .await;
+
+        self.add_chunk(world_provider, std::sync::Arc::downgrade(&chunk))
+    }
+
     async fn get_block_state_id(
         &mut self,
         world: Resource<World>,
