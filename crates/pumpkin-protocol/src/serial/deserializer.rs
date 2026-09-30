@@ -245,9 +245,11 @@ impl PacketRead for SocketAddr {
 
 impl PacketRead for Uuid {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let mut bytes = [0; 16];
-        reader.read_exact(&mut bytes)?;
-        Ok(Self::from_bytes(bytes))
+        let most_significant = u64::read(reader)?;
+        let least_significant = u64::read(reader)?;
+        Ok(Self::from_u128(
+            (u128::from(most_significant) << 64) | u128::from(least_significant),
+        ))
     }
 }
 
