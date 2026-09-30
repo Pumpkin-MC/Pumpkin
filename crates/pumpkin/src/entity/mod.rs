@@ -1002,11 +1002,7 @@ impl Entity {
         let floor_y = position.y.floor() as i32;
         let floor_z = position.z.floor() as i32;
 
-        let bounding_box_size = EntityDimensions {
-            width: entity_type.dimension[0],
-            height: entity_type.dimension[1],
-            eye_height: entity_type.eye_height,
-        };
+        let bounding_box_size = Self::type_dimensions(entity_type);
 
         let current_biome = world
             .level
@@ -1162,6 +1158,16 @@ impl Entity {
         }
 
         metadata
+    }
+
+    /// The type's default size, vanilla `EntityType.getDimensions`.
+    #[must_use]
+    pub const fn type_dimensions(entity_type: &EntityType) -> EntityDimensions {
+        EntityDimensions {
+            width: entity_type.dimension[0],
+            height: entity_type.dimension[1],
+            eye_height: entity_type.eye_height,
+        }
     }
 
     /// Sets the entity's age in ticks.
@@ -3972,10 +3978,18 @@ impl Entity {
             nbt.put_bool("HasVisualFire", true);
         }
         nbt.put_int("TicksFrozen", self.frozen_ticks.load(Relaxed));
-        if let Some(custom_name) = &**self.custom_name.load()
-            && let Ok(name_json) = pumpkin_util::serde_json::to_string(custom_name)
-        {
-            nbt.put_string("CustomName", name_json);
+        if let Some(custom_name) = &**self.custom_name.load() {
+            let mut tag = custom_name
+                .to_nbt_tag_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_3);
+            // A literal string starting with '{' would read back as legacy JSON, so keep it a compound.
+            if let NbtTag::String(text) = &tag
+                && text.starts_with('{')
+            {
+                let mut literal = NbtCompound::new();
+                literal.put_string("text", text.to_string());
+                tag = NbtTag::Compound(literal);
+            }
+            nbt.put("CustomName", tag);
         }
         nbt.put_bool("CustomNameVisible", self.custom_name_visible.load(Relaxed));
 
@@ -4038,25 +4052,42 @@ impl Entity {
             self.head_yaw.store(yaw);
             self.last_sent_head_yaw.store(yaw_byte, Relaxed);
         }
-        self.fire_ticks
-            .store(i32::from(nbt.get_short("Fire").unwrap_or(0)), Relaxed);
-        self.on_ground
-            .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
-        self.invulnerable
-            .store(nbt.get_bool("Invulnerable").unwrap_or(false), Relaxed);
-        self.portal_cooldown
-            .store(nbt.get_int("PortalCooldown").unwrap_or(0) as u32, Relaxed);
-        self.has_visual_fire
-            .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
-        self.frozen_ticks
-            .store(nbt.get_int("TicksFrozen").unwrap_or(0), Relaxed);
-        if let Some(name_json) = nbt.get_string("CustomName")
-            && let Ok(component) = pumpkin_util::serde_json::from_str(name_json)
-        {
-            self.custom_name.store(Arc::new(Some(component)));
+        // Only keys present are applied, so partial NBT leaves the rest untouched.
+        if let Some(fire) = nbt.get_short("Fire") {
+            self.fire_ticks.store(i32::from(fire), Relaxed);
         }
-        self.custom_name_visible
-            .store(nbt.get_bool("CustomNameVisible").unwrap_or(false), Relaxed);
+        if let Some(on_ground) = nbt.get_bool("OnGround") {
+            self.on_ground.store(on_ground, Relaxed);
+        }
+        if let Some(invulnerable) = nbt.get_bool("Invulnerable") {
+            self.invulnerable.store(invulnerable, Relaxed);
+        }
+        if let Some(cooldown) = nbt.get_int("PortalCooldown") {
+            self.portal_cooldown.store(cooldown as u32, Relaxed);
+        }
+        if let Some(visual_fire) = nbt.get_bool("HasVisualFire") {
+            self.has_visual_fire.store(visual_fire, Relaxed);
+        }
+        if let Some(frozen) = nbt.get_int("TicksFrozen") {
+            self.frozen_ticks.store(frozen, Relaxed);
+        }
+        if let Some(name) = nbt.get("CustomName") {
+            // Vanilla stores a text component tag; a string is literal text. Older
+            // Pumpkin saves hold a JSON string (same data version, so it can't be told
+            // apart by version); the writer never emits a literal starting with '{'.
+            let component = match name {
+                NbtTag::String(json) if json.starts_with('{') => {
+                    pumpkin_util::serde_json::from_str(json)
+                        .unwrap_or_else(|_| TextComponent::from_nbt(name))
+                }
+                _ => TextComponent::from_nbt(name),
+            };
+            // set_custom_name also updates the synced tracked data
+            self.set_custom_name(component);
+        }
+        if let Some(visible) = nbt.get_bool("CustomNameVisible") {
+            self.set_custom_name_visible(visible);
+        }
 
         if let Some(tag_list) = nbt.get_list("Tags") {
             let mut tags = self

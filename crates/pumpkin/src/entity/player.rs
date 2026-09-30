@@ -1339,7 +1339,6 @@ impl Player {
         let base_attack_speed = 4.0;
 
         let mut damage_multiplier = 1.0;
-        let mut add_damage = 0.0;
         let mut add_speed = 0.0;
         let mut extra_ench_damage = 0.0;
         let mut knockback_level = 0u32;
@@ -1350,13 +1349,14 @@ impl Player {
                 // Vanilla fist: base_attack_speed = -2.4
                 add_speed = -2.4;
             } else if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
+                // Only attack speed is read from the item here.
+                // Attack damage is already  part of `base_damage` via the held item's live
+                // ATTACK_DAMAGE modifier, re-adding it here would double it.
                 for item_mod in modifiers.attribute_modifiers.iter() {
-                    if item_mod.operation == Operation::AddValue {
-                        if item_mod.id == "minecraft:base_attack_damage" {
-                            add_damage = item_mod.amount;
-                        } else if item_mod.id == "minecraft:base_attack_speed" {
-                            add_speed = item_mod.amount;
-                        }
+                    if item_mod.operation == Operation::AddValue
+                        && item_mod.id == "minecraft:base_attack_speed"
+                    {
+                        add_speed = item_mod.amount;
                     }
                 }
             }
@@ -1391,7 +1391,7 @@ impl Player {
         }
 
         // Modify the added damage based on the multiplier.
-        let mut damage = (base_damage + add_damage) * damage_multiplier;
+        let mut damage = base_damage * damage_multiplier;
         damage += extra_ench_damage * attack_cooldown_progress;
 
         if let Some(strength) = self
@@ -4804,6 +4804,7 @@ impl Player {
         self.trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilled,
         );
+        crate::entity::mob::neutral::tell_neutral_mobs_player_died(self, &self.world());
         let block_pos = self.position().to_block_pos();
 
         let keep_inventory = { self.world().level_info.load().game_rules.keep_inventory };
@@ -6330,11 +6331,20 @@ impl Player {
     }
 
     pub fn has_permission(self: &Arc<Self>, server: &Server, node: &str) -> bool {
-        let result = server.permission_manager.has_permission(
-            &self.gameprofile.id,
-            node,
-            self.permission_lvl.load(),
-        );
+        self.has_permission_at_level(server, node, self.permission_lvl.load())
+    }
+
+    /// Like [`Self::has_permission`], but node defaults compare against `level`
+    /// instead of the player's own permission level.
+    pub fn has_permission_at_level(
+        self: &Arc<Self>,
+        server: &Server,
+        node: &str,
+        level: PermissionLvl,
+    ) -> bool {
+        let result = server
+            .permission_manager
+            .has_permission(&self.gameprofile.id, node, level);
 
         let mut event = PlayerPermissionCheckEvent::new(self.clone(), node.to_string(), result);
         let server_arc = self.world().server.upgrade();
@@ -6348,6 +6358,26 @@ impl Player {
 
     pub fn is_creative(&self) -> bool {
         self.gamemode.load() == GameMode::Creative
+    }
+
+    /// Vanilla `Player.canBeSeenAsEnemy`: not `abilities.invulnerable`, and alive and not a spectator.
+    #[must_use]
+    pub fn can_be_seen_as_enemy(&self) -> bool {
+        !self
+            .abilities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .invulnerable
+            && self.living_entity.can_take_damage()
+    }
+
+    /// Vanilla `NeutralMob.isValidPlayerTarget`: not creative or spectator, and the world is
+    /// not Peaceful. `abilities.invulnerable` is left out like vanilla, `can_attack` checks it.
+    #[must_use]
+    pub fn is_valid_mob_target(&self) -> bool {
+        !self.is_creative()
+            && !self.is_spectator()
+            && self.world().level_info.load().difficulty != Difficulty::Peaceful
     }
 
     /// Swing the hand of the player

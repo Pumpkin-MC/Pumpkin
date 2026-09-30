@@ -495,6 +495,9 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
         }
         Event::CreatureSpawnEvent(data) => {
             cleanup_world(state, &data.target_world);
+            if let Some(res) = &data.player {
+                cleanup_player(state, res);
+            }
         }
         Event::EnderDragonChangePhaseEvent(_) => {}
         Event::EntityBreakDoorEvent(_) => {}

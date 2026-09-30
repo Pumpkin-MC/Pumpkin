@@ -21,6 +21,7 @@ use std::{
 use tracing::{debug, error, info, trace, warn};
 
 mod active_chunks;
+pub mod brightness;
 pub mod chunker;
 pub mod explosion;
 pub mod generation_cache;
@@ -4828,9 +4829,25 @@ impl World {
             new_entities.push(entity.clone());
             new_entities
         });
+        self.add_pending_riders(&entity);
     }
 
-    pub fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) {
+    /// Adds the riders a mob queued while being finalized (vanilla `addFreshEntityWithPassengers`).
+    fn add_pending_riders(&self, vehicle: &Arc<dyn EntityBase>) {
+        let Some(mob) = vehicle.get_mob() else {
+            return;
+        };
+        for rider in mob.get_mob_entity().take_pending_riders() {
+            rider.init_data_tracker();
+            self.add_entity_silent(rider.clone());
+            vehicle.get_entity().add_passenger(vehicle.clone(), rider);
+        }
+    }
+
+    /// Returns `false` when a plugin cancels the [`EntitySpawnEvent`].
+    ///
+    /// [`EntitySpawnEvent`]: crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent
+    pub fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) -> bool {
         let mut event = crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent::new(
             entity.get_entity().entity_id,
             entity.get_entity().entity_type.id.to_string(),
@@ -4841,11 +4858,39 @@ impl World {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
         if event.cancelled {
-            return;
+            return false;
         }
 
         entity.init_data_tracker();
         self.add_entity_silent(entity);
+        true
+    }
+
+    /// Fires [`CreatureSpawnEvent`], then spawns the entity; `false` if either event is cancelled.
+    ///
+    /// [`CreatureSpawnEvent`]: crate::plugin::api::events::entity::creature_spawn::CreatureSpawnEvent
+    pub fn spawn_creature(
+        self: &Arc<Self>,
+        entity: Arc<dyn EntityBase>,
+        reason: crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason,
+        player: Option<Arc<Player>>,
+    ) -> bool {
+        let base = entity.get_entity();
+        let mut event = crate::plugin::api::events::entity::creature_spawn::CreatureSpawnEvent::new(
+            base.entity_id,
+            base.entity_type.resource_name.to_string(),
+            base.pos.load(),
+            self.clone(),
+            reason,
+            player,
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled {
+            return false;
+        }
+        self.spawn_entity(entity)
     }
 
     #[expect(clippy::needless_pass_by_value)]
@@ -4875,6 +4920,7 @@ impl World {
             new_entities.push(entity.clone());
             new_entities
         });
+        self.add_pending_riders(&entity);
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase) {
@@ -5354,8 +5400,11 @@ impl World {
 
     #[must_use]
     pub fn get_effective_sky_brightness(&self, pos: &BlockPos) -> i32 {
-        let sky_light = self.get_sky_light_level(pos) as i32;
-        sky_light - self.get_sky_darken()
+        self.effective_sky_brightness_from(self.get_sky_light_level(pos))
+    }
+
+    fn effective_sky_brightness_from(&self, sky_light: u8) -> i32 {
+        i32::from(sky_light) - self.get_sky_darken()
     }
 
     #[must_use]
@@ -5404,6 +5453,20 @@ impl World {
         self.get_raw_brightness(pos, self.get_sky_darken() as u8)
     }
 
+    /// local brightness through the dimension curve.
+    #[must_use]
+    pub fn get_light_level_dependent_magic_value(&self, pos: &BlockPos) -> f32 {
+        self.light_level_dependent_magic_value_with_sky(pos, self.get_sky_light_level(pos))
+    }
+
+    /// [`Self::get_light_level_dependent_magic_value`] for a sky light the caller already read.
+    #[must_use]
+    pub fn light_level_dependent_magic_value_with_sky(&self, pos: &BlockPos, sky_light: u8) -> f32 {
+        let sky_light = sky_light.saturating_sub(self.get_sky_darken() as u8);
+        let block_light = self.get_block_light_level(pos).unwrap_or(0);
+        brightness::light_level_curve(sky_light.max(block_light), self.dimension.ambient_light)
+    }
+
     pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
         self.level
             .light_engine
@@ -5418,9 +5481,19 @@ impl World {
 
     #[must_use]
     pub fn can_see_sky(&self, position: &BlockPos) -> bool {
+        self.is_within_build_height(position)
+            && self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
+    }
+
+    /// [`Self::can_see_sky`] for a sky light the caller already read.
+    #[must_use]
+    pub const fn can_see_sky_with_light(&self, position: &BlockPos, sky_light: u8) -> bool {
+        self.is_within_build_height(position) && sky_light >= MAX_LIGHT_LEVEL
+    }
+
+    const fn is_within_build_height(&self, position: &BlockPos) -> bool {
         position.0.y >= self.dimension.min_y
             && position.0.y < self.dimension.min_y + self.dimension.height
-            && self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
     }
 
     pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {
