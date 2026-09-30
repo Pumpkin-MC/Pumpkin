@@ -308,9 +308,7 @@ interface gametest {
         get-fence-connectivity: func(block-location: vector3) -> fence-connectivity;
         get-sculk-spreader: func(block-location: vector3) -> option<sculk-spreader>;
         get-test-direction: func() -> direction;
-
         idle: func(tick-delay: f64) -> future;
-
         is-cleaning-up: func() -> bool;
         is-completed: func() -> bool;
         kill-all-entities: func();
