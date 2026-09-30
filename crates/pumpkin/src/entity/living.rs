@@ -2541,7 +2541,11 @@ impl LivingEntity {
     }
 
     pub fn is_part_of_game(&self) -> bool {
-        !self.is_spectator() && self.entity.is_alive()
+        !self.is_spectator() && self.is_alive()
+    }
+
+    pub fn is_alive(&self) -> bool {
+        self.entity.is_alive() && self.health.load() > 0.0
     }
 
     pub fn can_attack(&self, target: &Self) -> bool {
