@@ -519,7 +519,7 @@ pub enum BlockPlacingError {
     BlockOutOfWorld,
 }
 
-fn can_replace_with_other_block(block: &Block, state: &BlockState) -> bool {
+pub(crate) fn can_replace_with_other_block(block: &Block, state: &BlockState) -> bool {
     // Vanilla SnowLayerBlock.canBeReplaced: only a single layer gives way to another item.
     if block == &Block::SNOW {
         return SnowLikeProperties::from_state_id(state.id).layers == 1;
