@@ -1852,10 +1852,12 @@ impl LivingEntity {
                 return;
             }
             let world = self.entity.world.load();
-            let block = world.get_block(&self.entity.get_pos_with_y_offset(0.2).0);
+            let pos = self.entity.get_pos_with_y_offset(0.2).0;
+            let block = world.get_block(&pos);
             let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
             if let Some(pumpkin_block) = pumpkin_block {
                 pumpkin_block.on_landed_upon(OnLandedUponArgs {
+                    position: &pos,
                     world: &world,
                     fall_distance,
                     entity: caller,
