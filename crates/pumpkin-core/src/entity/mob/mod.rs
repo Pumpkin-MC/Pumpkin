@@ -742,6 +742,13 @@ impl MobEntity {
             return;
         }
 
+        // Vanilla `Mob.requiresCustomPersistence`: passengers and leashed mobs never despawn.
+        // Without this a mob leashed to a fence is removed as soon as the player walks away
+        // instead of being saved with its chunk.
+        if entity.has_vehicle() || entity.is_leashed() {
+            return;
+        }
+
         if (**entity.custom_name.load()).is_some() {
             return;
         }
@@ -1370,7 +1377,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let mob_entity = self.get_mob_entity();
-        mob_entity.living_entity.entity.tick_leash();
+        let entity = &mob_entity.living_entity.entity;
+        entity.try_restore_leash();
+        entity.tick_leash();
         sun_burn::tick(self);
 
         if mob_entity.breeding_cooldown.load(Relaxed) > 0 {

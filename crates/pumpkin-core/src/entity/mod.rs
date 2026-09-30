@@ -835,6 +835,55 @@ struct SpawnState {
     head_yaw: u8,
 }
 
+/// A leash holder restored from NBT. It is resolved lazily because the holder (a fence
+/// knot or another entity) may not be in the world yet when the entity NBT is read.
+#[derive(Clone, Copy)]
+pub enum LeashRef {
+    /// The holder is an entity with this UUID (a player or another entity).
+    Entity(Uuid),
+    /// The holder is a fence knot at this block position (vanilla `leash` int array).
+    Knot(BlockPos),
+}
+
+impl LeashRef {
+    fn from_holder(holder: &Arc<dyn EntityBase>) -> Self {
+        holder
+            .cast_any()
+            .downcast_ref::<crate::entity::decoration::leash_knot::LeashKnotEntity>()
+            .map_or_else(
+                || Self::Entity(holder.get_entity().entity_uuid),
+                |knot| Self::Knot(knot.block_pos()),
+            )
+    }
+
+    /// Vanilla `Leashable.LeashData.CODEC`: a fence knot is the bare `[x, y, z]` int array, every
+    /// other holder a compound carrying its `UUID`.
+    fn to_nbt(self) -> NbtTag {
+        match self {
+            Self::Knot(pos) => {
+                let pos = pos.0;
+                NbtTag::IntArray(vec![pos.x, pos.y, pos.z])
+            }
+            Self::Entity(uuid) => {
+                let mut leash = NbtCompound::new();
+                leash.put_uuid("UUID", uuid);
+                NbtTag::Compound(leash)
+            }
+        }
+    }
+
+    /// Decodes the `leash` tag written by [`Self::to_nbt`] or by vanilla.
+    fn from_nbt(nbt: &NbtCompound) -> Option<Self> {
+        if let Some(&[x, y, z]) = nbt.get_int_array("leash") {
+            Some(Self::Knot(BlockPos::new(x, y, z)))
+        } else {
+            nbt.get_compound("leash")
+                .and_then(|leash| leash.get_uuid("UUID"))
+                .map(Self::Entity)
+        }
+    }
+}
+
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
     /// A unique identifier for the entity
@@ -920,6 +969,11 @@ pub struct Entity {
     pub vehicle: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     /// The entity this entity is attached/leashed to (if any)
     pub leashed_to: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
+    /// Leash holder read from NBT, attached on the first tick once the holder is loaded.
+    pub pending_leash: std::sync::Mutex<Option<LeashRef>>,
+    /// Ticks spent waiting for a [`Self::pending_leash`] holder to load; see
+    /// [`Self::LEASH_RESTORE_TIMEOUT_TICKS`]. Not persisted, like vanilla's `Entity.tickCount`.
+    pending_leash_ticks: AtomicI32,
     /// Cooldown before entity can mount again after dismounting
     pub riding_cooldown: AtomicI32,
     /// The age of the entity in ticks. Negative values indicate a baby.
@@ -1071,6 +1125,8 @@ impl Entity {
             passengers: std::sync::Mutex::new(Vec::new()),
             vehicle: std::sync::Mutex::new(None),
             leashed_to: std::sync::Mutex::new(None),
+            pending_leash: std::sync::Mutex::new(None),
+            pending_leash_ticks: AtomicI32::new(0),
 
             riding_cooldown: AtomicI32::new(0),
             age: AtomicI32::new(0),
@@ -3278,6 +3334,55 @@ impl Entity {
 
     pub const LEASH_SNAP_DISTANCE: f64 = 12.0;
     pub const LEASH_ELASTIC_DISTANCE: f64 = 6.0;
+    /// Vanilla `Leashable.restoreLeashFromSave` only retries until the entity's `tickCount` passes
+    /// this, then drops a lead and forgets the leash.
+    pub const LEASH_RESTORE_TIMEOUT_TICKS: i32 = 100;
+
+    /// Reattaches a leash read from NBT once its holder is loaded. Vanilla resolves the stored
+    /// `leash` tag while reading the entity; Pumpkin defers it to the mob's first tick because the
+    /// holder (a fence knot or another entity) may not be in the world when the NBT is read.
+    pub fn try_restore_leash(&self) {
+        let pending = *self
+            .pending_leash
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(pending) = pending else {
+            return;
+        };
+
+        let world = self.world.load();
+        let holder: Option<Arc<dyn EntityBase>> = match pending {
+            // Only reattach to a knot that is already loaded. Creating one here would spawn a
+            // duplicate when the saved knot's chunk loads a moment later; keeping the reference
+            // pending lets the next tick retry once it is in the world.
+            LeashRef::Knot(pos) => {
+                crate::entity::decoration::leash_knot::LeashKnotEntity::find_knot(&world, pos)
+            }
+            LeashRef::Entity(uuid) => world.get_entity_by_uuid(uuid).or_else(|| {
+                world
+                    .get_player_by_uuid(uuid)
+                    .map(|p| p as Arc<dyn EntityBase>)
+            }),
+        };
+
+        let Some(holder) = holder else {
+            // Vanilla `Leashable.restoreLeashFromSave`: if the holder never loads, drop a lead and
+            // forget the leash once the entity has ticked past the timeout.
+            if self.pending_leash_ticks.fetch_add(1, Relaxed) >= Self::LEASH_RESTORE_TIMEOUT_TICKS {
+                self.pending_leash_ticks.store(0, Relaxed);
+                *self
+                    .pending_leash
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+                let lead_item = ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
+                world.drop_stack(&self.block_pos.load(), lead_item);
+            }
+            return;
+        };
+
+        self.pending_leash_ticks.store(0, Relaxed);
+        self.leash_to(holder);
+    }
 
     pub fn leash_to(&self, holder: Arc<dyn EntityBase>) {
         let holder_entity_id = holder.get_entity().entity_id;
@@ -3299,6 +3404,12 @@ impl Entity {
             }
         }
 
+        // Vanilla `Leashable.LeashData.setLeashHolder` clears the delayed restore info when an
+        // explicit holder is set, so a pending reference is dropped instead of overriding it later.
+        *self
+            .pending_leash
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         *self
             .leashed_to
             .lock()
@@ -3396,9 +3507,21 @@ impl Entity {
         if let Some(holder) = holder {
             let holder_entity = holder.get_entity();
 
-            // Drop leash if entity or holder is removed or dead
-            if !self.is_alive() || !holder_entity.is_alive() {
+            // The mob itself is gone: just clear the link, without refunding a lead.
+            if !self.is_alive() {
                 self.unleash();
+                return;
+            }
+
+            // Vanilla `Leashable.tickLeash`: when the holder is gone (for example the knot was
+            // broken) the mob is released, and a lead is only dropped when the entity-drop game
+            // rule allows it, otherwise the leash is removed without an item.
+            if !holder_entity.is_alive() {
+                if self.world.load().level_info.load().game_rules.entity_drops {
+                    self.drop_leash_with_item();
+                } else {
+                    self.unleash();
+                }
                 return;
             }
 
@@ -3409,12 +3532,7 @@ impl Entity {
 
             if distance > Self::LEASH_SNAP_DISTANCE {
                 // Too far: snap/break leash and drop lead item
-                self.unleash();
-                let lead_item =
-                    pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
-                self.world
-                    .load()
-                    .drop_stack(&self.block_pos.load(), lead_item);
+                self.drop_leash_with_item();
             } else if distance > Self::LEASH_ELASTIC_DISTANCE {
                 // Elastic pull force towards leash holder
                 let dir = (holder_pos - self_pos).normalize();
@@ -3436,6 +3554,25 @@ impl Entity {
             stack,
         );
         world.spawn_entity(Arc::new(item_entity));
+    }
+
+    /// Vanilla `Leashable.dropLeash(true)`: release the holder and drop a lead item.
+    fn drop_leash_with_item(&self) {
+        // `unleash` fires a cancellable `EntityUnleashEvent` and leaves the holder in place when a
+        // plugin cancels it, and it is a no-op when there is no leash. Only refund a lead when a
+        // leash was present and actually released, otherwise every tick would drop another one.
+        if !self.is_leashed() {
+            return;
+        }
+        self.unleash();
+        if self.is_leashed() {
+            return;
+        }
+        let lead_item =
+            pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
+        self.world
+            .load()
+            .drop_stack(&self.block_pos.load(), lead_item);
     }
 
     pub fn has_passengers(&self) -> bool {
@@ -4054,6 +4191,26 @@ impl Entity {
             nbt.put_compound("PumpkinCustomData", custom_data.clone());
         }
 
+        // Vanilla `Leashable.writeLeashData` writes the holder, or, while it is still unloaded, the
+        // unresolved reference, so the leash is not lost when the entity is saved again before the
+        // holder loads.
+        let mut leash_ref = {
+            let holder = self
+                .leashed_to
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            holder.as_ref().map(LeashRef::from_holder)
+        };
+        if leash_ref.is_none() {
+            leash_ref = *self
+                .pending_leash
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+        if let Some(leash_ref) = leash_ref {
+            nbt.put("leash", leash_ref.to_nbt());
+        }
+
         // todo more...
     }
 
@@ -4150,6 +4307,14 @@ impl Entity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             *data = custom_data.clone();
+        }
+
+        // The holder may not be in the world yet, so the reference is resolved on the first tick.
+        if let Some(pending) = LeashRef::from_nbt(nbt) {
+            *self
+                .pending_leash
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(pending);
         }
 
         // todo more...
@@ -4303,5 +4468,32 @@ mod tests {
                 "status mismatch at index {i}"
             );
         }
+    }
+
+    #[test]
+    fn leash_nbt_matches_the_vanilla_shape() {
+        // Vanilla `Leashable.LeashData.CODEC` is an `xor` of `UUIDUtil` and `BlockPos`, so it
+        // writes a fence knot as a bare int array and any other holder as a compound with `UUID`.
+        let mut nbt = NbtCompound::new();
+        nbt.put("leash", LeashRef::Knot(BlockPos::new(3, 70, -5)).to_nbt());
+        assert!(
+            matches!(nbt.get("leash"), Some(NbtTag::IntArray(pos)) if pos == &[3, 70, -5]),
+            "a knot must be written as a bare int array"
+        );
+        assert!(matches!(
+            LeashRef::from_nbt(&nbt),
+            Some(LeashRef::Knot(pos)) if pos == BlockPos::new(3, 70, -5)
+        ));
+
+        let uuid = Uuid::from_u128(0x1234_5678_9abc_def0_1122_3344_5566_7788);
+        nbt.put("leash", LeashRef::Entity(uuid).to_nbt());
+        assert!(
+            matches!(nbt.get("leash"), Some(NbtTag::Compound(_))),
+            "an entity holder must be written as a UUID compound"
+        );
+        assert!(matches!(
+            LeashRef::from_nbt(&nbt),
+            Some(LeashRef::Entity(id)) if id == uuid
+        ));
     }
 }
