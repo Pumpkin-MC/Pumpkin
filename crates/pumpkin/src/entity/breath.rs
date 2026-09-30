@@ -1,9 +1,11 @@
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use pumpkin_data::Block;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::GameMode;
+use pumpkin_util::math::position::BlockPos;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 pub const MAX_AIR: i32 = 300;
@@ -54,7 +56,11 @@ impl BreathManager {
             return;
         }
 
-        let in_water = player.get_entity().is_submerged_in_water();
+        let entity = player.get_entity();
+        let pos = entity.pos.load();
+        let eye_block = BlockPos::floored(pos.x, entity.get_eye_y(), pos.z);
+        let in_water = entity.is_submerged_in_water()
+            && player.world().get_block(&eye_block).id != Block::BUBBLE_COLUMN.id;
         let prev = self.air_supply.load(Ordering::Relaxed);
 
         if in_water {
