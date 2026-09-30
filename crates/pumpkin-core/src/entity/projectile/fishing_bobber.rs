@@ -6,6 +6,7 @@ use crossbeam::atomic::AtomicCell;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::item::ItemEntity;
 use crate::entity::projectile::is_projectile;
+use crate::entity::util::RandomExt;
 use crate::world::World;
 use crate::world::loot::LootContextParameters;
 use crate::{
@@ -31,7 +32,6 @@ pub struct FishingBobberEntity {
     pub owner_id: i32,
     pub hooked_entity_id: AtomicI32,
     pub in_ground: AtomicBool,
-    /// Vanilla `life`: ticks spent resting on the ground before the hook despawns.
     pub life: AtomicI32,
     pub bobbing: AtomicBool,
     pub wait_countdown: AtomicI32,
@@ -62,7 +62,7 @@ impl FishingBobberEntity {
             yaw,
             pitch,
             // Vanilla `RandomSource.triangle(0.5, 0.0103365)`.
-            (rand::random::<f64>() - rand::random::<f64>()) * 0.010_336_5 + 0.5,
+            rand::rng().triangle(0.5, 0.010_336_5),
         );
 
         let owner_pos = owner_entity.pos.load();
@@ -405,8 +405,7 @@ impl FishingBobberEntity {
             self.hook_countdown.store(hooked, Ordering::Relaxed);
             if hooked > 0 {
                 // Vanilla `RandomSource.triangle(0.0, 9.188)`: the approaching fish wanders.
-                let angle = self.fish_angle.load()
-                    + ((rand::random::<f64>() - rand::random::<f64>()) * 9.188) as f32;
+                let angle = self.fish_angle.load() + rand::rng().triangle(0.0, 9.188) as f32;
                 self.fish_angle.store(angle);
                 let radians = f64::from(angle).to_radians();
                 let angle_sin = radians.sin();
@@ -449,7 +448,7 @@ impl FishingBobberEntity {
                     SoundCategory::Neutral,
                     &pos,
                     0.25,
-                    1.0 + (rand::random::<f32>() - rand::random::<f32>()) * 0.4,
+                    rand::rng().triangle(1.0, 0.4) as f32,
                 );
 
                 let width = entity.width();
