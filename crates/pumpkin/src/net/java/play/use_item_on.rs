@@ -108,10 +108,36 @@ impl JavaClient {
             EquipmentSlot::OFF_HAND
         };
 
+        let slot_index = if matches!(hand, Hand::Right) {
+            inventory.get_selected_slot() as usize
+        } else {
+            PlayerInventory::OFF_HAND_SLOT
+        };
+
+        let sync_hand_item_changes = |before: &ItemStack, after: &mut ItemStack| {
+            if after.is_empty() {
+                *after = ItemStack::EMPTY.clone();
+            }
+            if !before.is_empty() && after.is_empty() && before.is_damageable() {
+                player.increment_stat(StatisticCategory::Broken, before.item.id as i32, 1);
+                player.world().send_entity_status(
+                    player.get_entity(),
+                    equipment_break_status(&equipment_slot),
+                    None,
+                );
+            }
+
+            if !after.are_equal(before) {
+                inventory.set_stack_in_hand(hand, after.clone());
+                player.sync_hand_slot(slot_index, after.clone());
+            }
+        };
+
         let sneaking = player.get_entity().is_sneaking();
 
         // Code based on the java class ServerPlayerInteractionManager
         if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {
+            let before = item.clone();
             let result = Self::call_use_item_on(
                 player,
                 &position,
@@ -123,6 +149,7 @@ impl JavaClient {
                 block,
                 server,
             );
+            sync_hand_item_changes(&before, &mut item);
             if result.consumes_action() {
                 // TODO: Trigger ANY_BLOCK_USE Criteria
 
@@ -132,12 +159,6 @@ impl JavaClient {
                 return Ok(());
             }
         }
-
-        let slot_index = if matches!(hand, Hand::Right) {
-            inventory.get_selected_slot() as usize
-        } else {
-            PlayerInventory::OFF_HAND_SLOT
-        };
 
         if item.is_empty() {
             // TODO item cool down
@@ -168,34 +189,11 @@ impl JavaClient {
             }
         }
 
-        let after = item.clone();
-
         if matches!(item_result, BlockActionResult::SuccessServer) {
             player.swing_hand(hand, true);
         }
 
-        // Broadcast the break entity status before the slot sync; the client
-        // needs the old item texture in the slot for break particles.
-        if !before.is_empty() && after.is_empty() {
-            let slot = if slot_index == player.inventory.get_selected_slot() as usize {
-                &EquipmentSlot::MAIN_HAND
-            } else {
-                &EquipmentSlot::OFF_HAND
-            };
-            if before.is_damageable() {
-                player.increment_stat(StatisticCategory::Broken, before.item.id as i32, 1);
-            }
-            player.world().send_entity_status(
-                player.get_entity(),
-                equipment_break_status(slot),
-                None,
-            );
-        }
-
-        if !after.are_equal(&before) {
-            player.sync_hand_slot(slot_index, after.clone());
-            inventory.set_stack_in_hand(hand, after);
-        }
+        sync_hand_item_changes(&before, &mut item);
 
         Ok(())
     }
