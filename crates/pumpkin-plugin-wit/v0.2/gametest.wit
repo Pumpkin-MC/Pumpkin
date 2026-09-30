@@ -2,12 +2,6 @@
 // https://www.npmjs.com/package/@minecraft/server-gametest
 // Copyright (c) Microsoft Corporation. MIT terms: ../LICENSE-MIT.
 
-/// Pumpkin WIT 0.2 mapping for @minecraft/server-gametest.
-///
-/// Source API surface:
-///   @minecraft/server-gametest 1.0.0-beta.1.26.60-preview.28
-///   (Minecraft Bedrock experimental docs, current as of 2026-09-28)
-///
 interface gametest {
     use common.{game-mode as server-game-mode};
     use item-stack.{item-stack};
@@ -186,32 +180,32 @@ interface gametest {
 
     /// @minecraft/server-gametest.RegistrationBuilder.
     resource registration-builder {
-        batch: func(batch-name: string) -> registration-builder;
-        max-attempts: func(attempt-count: f64) -> registration-builder;
-        max-ticks: func(tick-count: f64) -> registration-builder;
-        padding: func(padding-blocks: f64) -> registration-builder;
-        required: func(is-required: bool) -> registration-builder;
-        required-successful-attempts: func(attempt-count: f64) -> registration-builder;
-        rotate-test: func(rotate: bool) -> registration-builder;
-        setup-ticks: func(tick-count: f64) -> registration-builder;
+        batch: func(batch-name: string);
+        max-attempts: func(attempt-count: f64);
+        max-ticks: func(tick-count: f64);
+        padding: func(padding-blocks: f64);
+        required: func(is-required: bool);
+        required-successful-attempts: func(attempt-count: f64);
+        rotate-test: func(rotate: bool);
+        setup-ticks: func(tick-count: f64);
         structure-location: func(
             structure-location: vector3,
             structure-dimension: option<dimension-type-or-id>,
-        ) -> registration-builder;
-        structure-name: func(structure-name: string) -> registration-builder;
-        tag: func(tag: string) -> registration-builder;
+        );
+        structure-name: func(structure-name: string);
+        tag: func(tag: string);
     }
 
     /// @minecraft/server-gametest.GameTestSequence.
     resource game-test-sequence {
-        then-execute: func(callback: void-callback-id) -> game-test-sequence;
-        then-execute-after: func(delay-ticks: f64, callback: void-callback-id) -> game-test-sequence;
-        then-execute-for: func(tick-count: f64, callback: void-callback-id) -> game-test-sequence;
+        then-execute: func(callback: void-callback-id);
+        then-execute-after: func(delay-ticks: f64, callback: void-callback-id);
+        then-execute-for: func(tick-count: f64, callback: void-callback-id);
         then-fail: func(error-message: string);
-        then-idle: func(delay-ticks: f64) -> game-test-sequence;
+        then-idle: func(delay-ticks: f64);
         then-succeed: func();
-        then-wait: func(callback: void-callback-id) -> game-test-sequence;
-        then-wait-after: func(delay-ticks: f64, callback: void-callback-id) -> game-test-sequence;
+        then-wait: func(callback: void-callback-id);
+        then-wait-after: func(delay-ticks: f64, callback: void-callback-id);
     }
 
     /// @minecraft/server-gametest.Tags.

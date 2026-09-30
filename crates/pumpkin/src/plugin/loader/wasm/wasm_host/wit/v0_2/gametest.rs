@@ -125,7 +125,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _batch_name: String,
-    ) -> wasmtime::Result<Resource<RegistrationBuilder>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.registration-builder.batch not implemented",
         ))
@@ -135,7 +135,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _attempt_count: f64,
-    ) -> wasmtime::Result<Resource<RegistrationBuilder>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.registration-builder.max-attempts not implemented",
         ))
@@ -145,7 +145,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _tick_count: f64,
-    ) -> wasmtime::Result<Resource<RegistrationBuilder>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.registration-builder.max-ticks not implemented",
         ))
@@ -155,7 +155,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _padding_blocks: f64,
-    ) -> wasmtime::Result<Resource<RegistrationBuilder>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.registration-builder.padding not implemented",
         ))
@@ -165,7 +165,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _is_required: bool,
-    ) -> wasmtime::Result<Resource<RegistrationBuilder>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.registration-builder.required not implemented",
         ))
@@ -175,7 +175,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _attempt_count: f64,
-    ) -> wasmtime::Result<Resource<RegistrationBuilder>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.registration-builder.required-successful-attempts not implemented",
         ))
@@ -185,7 +185,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _rotate: bool,
-    ) -> wasmtime::Result<Resource<RegistrationBuilder>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.registration-builder.rotate-test not implemented",
         ))
@@ -195,7 +195,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _tick_count: f64,
-    ) -> wasmtime::Result<Resource<RegistrationBuilder>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.registration-builder.setup-ticks not implemented",
         ))
@@ -206,7 +206,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         _res: Resource<RegistrationBuilder>,
         _structure_location: Vector3,
         _structure_dimension: Option<DimensionTypeOrId>,
-    ) -> wasmtime::Result<Resource<RegistrationBuilder>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.registration-builder.structure-location not implemented",
         ))
@@ -216,7 +216,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _structure_name: String,
-    ) -> wasmtime::Result<Resource<RegistrationBuilder>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.registration-builder.structure-name not implemented",
         ))
@@ -226,7 +226,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _tag: String,
-    ) -> wasmtime::Result<Resource<RegistrationBuilder>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.registration-builder.tag not implemented",
         ))
@@ -244,7 +244,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
         &mut self,
         _res: Resource<GameTestSequence>,
         _callback: VoidCallbackId,
-    ) -> wasmtime::Result<Resource<GameTestSequence>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.game-test-sequence.then-execute not implemented",
         ))
@@ -255,7 +255,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
         _res: Resource<GameTestSequence>,
         _delay_ticks: f64,
         _callback: VoidCallbackId,
-    ) -> wasmtime::Result<Resource<GameTestSequence>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.game-test-sequence.then-execute-after not implemented",
         ))
@@ -266,7 +266,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
         _res: Resource<GameTestSequence>,
         _tick_count: f64,
         _callback: VoidCallbackId,
-    ) -> wasmtime::Result<Resource<GameTestSequence>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.game-test-sequence.then-execute-for not implemented",
         ))
@@ -286,7 +286,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
         &mut self,
         _res: Resource<GameTestSequence>,
         _delay_ticks: f64,
-    ) -> wasmtime::Result<Resource<GameTestSequence>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.game-test-sequence.then-idle not implemented",
         ))
@@ -302,7 +302,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
         &mut self,
         _res: Resource<GameTestSequence>,
         _callback: VoidCallbackId,
-    ) -> wasmtime::Result<Resource<GameTestSequence>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.game-test-sequence.then-wait not implemented",
         ))
@@ -313,7 +313,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
         _res: Resource<GameTestSequence>,
         _delay_ticks: f64,
         _callback: VoidCallbackId,
-    ) -> wasmtime::Result<Resource<GameTestSequence>> {
+    ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
             "gametest.game-test-sequence.then-wait-after not implemented",
         ))
