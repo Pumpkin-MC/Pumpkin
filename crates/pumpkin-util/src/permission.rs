@@ -160,6 +160,16 @@ impl PermissionRegistry {
     pub fn has_permission(&self, node: &str) -> bool {
         self.permissions.contains_key(node)
     }
+
+    /// Removes every permission node in a namespace, e.g. a plugin's own nodes on unload.
+    ///
+    /// Lets a plugin re-register the same nodes on reload instead of hitting
+    /// "already registered".
+    pub fn unregister_namespace(&self, namespace: &str) {
+        let prefix = format!("{namespace}:");
+        self.permissions
+            .retain(|node, _| !node.starts_with(&prefix));
+    }
 }
 
 /// Storage for player permissions.
@@ -256,6 +266,11 @@ impl PermissionManager {
     /// Registers a new permission node in the global registry or panics if already registered.
     pub fn register_permission_or_panic(&self, permission: Permission) {
         self.registry.register_permission_or_panic(permission);
+    }
+
+    /// Removes every permission node in a namespace, e.g. a plugin's own nodes on unload.
+    pub fn unregister_namespace(&self, namespace: &str) {
+        self.registry.unregister_namespace(namespace);
     }
 
     /// Retrieves a permission node by its name from the registry.
