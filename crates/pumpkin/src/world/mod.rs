@@ -3379,16 +3379,19 @@ impl World {
             .level
             .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
             .await;
-        if let Some(server) = self.server.upgrade() {
+        let send_allowed = if let Some(server) = self.server.upgrade() {
             let mut event =
                 crate::plugin::world::chunk_send::ChunkSend::new(player.world(), chunk.clone());
             server.plugin_manager.fire(&server, &mut event).await;
-            if event.cancelled {
-                return;
-            }
+            !event.cancelled
+        } else {
+            true
+        };
+        // A cancelled send skips the chunk, never the rest of the join.
+        if send_allowed {
+            client.send_chunk_batch(vec![chunk]).await;
+            self.mark_chunks_held(player, &[center_chunk]);
         }
-        client.send_chunk_batch(vec![chunk]).await;
-        self.mark_chunks_held(player, &[center_chunk]);
 
         let velocity = player.living_entity.entity.velocity.load();
 
