@@ -1,4 +1,4 @@
-use super::{AccessorExt, run_blocking};
+use super::{AccessorExt, in_active_context, run_blocking};
 use pumpkin_protocol::bedrock::client::PackIdVersion;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -3427,7 +3427,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let player = accessor.get_res(&player)?;
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             player.open_ender_chest();
         })
         .await
@@ -3441,7 +3441,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         let player = accessor.get_res(&player)?;
         let mode = from_wasm_game_mode(mode);
 
-        run_blocking(move || player.set_gamemode(mode)).await
+        run_blocking(accessor, move || player.set_gamemode(mode)).await
     }
 
     async fn set_permission_level(
@@ -3461,7 +3461,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         })?;
         let level = from_wit_permission_level(level);
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             let command_dispatcher = server.command_dispatcher.load();
             player.set_permission_lvl(&server, level, &command_dispatcher);
         })
@@ -3484,7 +3484,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             ))
         })?;
 
-        run_blocking(move || player.has_permission(&server, &node)).await
+        run_blocking(accessor, move || player.has_permission(&server, &node)).await
     }
 
     async fn add_effect(
@@ -3509,7 +3509,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             blend: false,
         };
 
-        run_blocking(move || player.add_effect(effect)).await
+        run_blocking(accessor, move || player.add_effect(effect)).await
     }
 
     async fn heal(
@@ -3519,7 +3519,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let player = accessor.get_res(&player)?;
 
-        run_blocking(move || player.heal(amount)).await
+        run_blocking(accessor, move || player.heal(amount)).await
     }
 
     async fn damage(
@@ -3531,7 +3531,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         let player = accessor.get_res(&player)?;
         let damage_type = from_wit_damage_type(damage_type);
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             player.damage(&*player, amount, damage_type);
         })
         .await
@@ -3543,7 +3543,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let player = accessor.get_res(&player)?;
 
-        run_blocking(move || player.kill()).await
+        run_blocking(accessor, move || player.kill()).await
     }
 
     async fn teleport(
@@ -3560,7 +3560,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         })?;
         let position = from_wasm_position(position);
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             player.teleport(position, yaw, pitch, world);
         })
         .await
@@ -3581,7 +3581,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         let position = from_wasm_position(position);
         let runtime = tokio::runtime::Handle::current();
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             runtime.block_on(player.teleport_world(world, position, yaw, pitch));
         })
         .await
@@ -3594,7 +3594,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         let player = accessor.get_res(&player)?;
         let runtime = tokio::runtime::Handle::current();
 
-        run_blocking(move || runtime.block_on(player.respawn())).await
+        run_blocking(accessor, move || runtime.block_on(player.respawn())).await
     }
 
     async fn open_gui(
@@ -3620,7 +3620,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         })
         .await;
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             player.increment_screen_handler_sync_id();
             let sync_id = player.screen_handler_sync_id.load(Ordering::Relaxed);
             let screen_handler: Arc<
@@ -3663,7 +3663,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         })?;
         let expires = parse_ban_expiry(expires_at_utc, duration_seconds);
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             player.ban_explicit(
                 &server,
                 reason,
@@ -3702,7 +3702,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         })?;
         let expires = parse_ban_expiry(expires_at_utc, duration_seconds);
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             player.ban_ip_explicit(
                 &server,
                 reason,
@@ -3722,7 +3722,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let player = accessor.get_res(&player)?;
 
-        run_blocking(move || player.set_food_level(level)).await
+        run_blocking(accessor, move || player.set_food_level(level)).await
     }
 
     async fn set_experience_level(
@@ -3732,7 +3732,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let player = accessor.get_res(&player)?;
 
-        run_blocking(move || player.set_experience_level(level, true)).await
+        run_blocking(accessor, move || player.set_experience_level(level, true)).await
     }
 
     async fn set_experience_progress(
@@ -3742,7 +3742,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let player = accessor.get_res(&player)?;
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             player.set_experience(
                 player.experience_level.load(Ordering::Relaxed),
                 progress,
@@ -3759,7 +3759,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let player = accessor.get_res(&player)?;
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             player.set_experience(
                 player.experience_level.load(Ordering::Relaxed),
                 player.experience_progress.load(),
@@ -3776,7 +3776,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let player = accessor.get_res(&player)?;
 
-        run_blocking(move || player.add_experience_levels(levels)).await
+        run_blocking(accessor, move || player.add_experience_levels(levels)).await
     }
 
     async fn add_experience_points(
@@ -3786,7 +3786,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let player = accessor.get_res(&player)?;
 
-        run_blocking(move || player.add_experience_points(points)).await
+        run_blocking(accessor, move || player.add_experience_points(points)).await
     }
 
     async fn award_advancement_criterion(
@@ -3804,7 +3804,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             return Ok(false);
         };
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             let result = {
                 let mut guard = player
                     .advancements
@@ -3840,7 +3840,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             return Ok(false);
         };
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             let result = {
                 let mut guard = player
                     .advancements
@@ -4199,7 +4199,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             Ok(())
         };
 
-        pumpkin_plugin_runtime::in_current_context(operation).await
+        in_active_context(accessor, operation).await?
     }
 
     async fn clear_dialog(
@@ -4247,7 +4247,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             Ok(())
         };
 
-        pumpkin_plugin_runtime::in_current_context(operation).await
+        in_active_context(accessor, operation).await?
     }
 
     async fn kick(
@@ -4295,7 +4295,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             Ok(())
         };
 
-        pumpkin_plugin_runtime::in_current_context(operation).await
+        in_active_context(accessor, operation).await?
     }
 }
 
@@ -4735,6 +4735,6 @@ impl pumpkin::plugin::player::HostBedrockPlayerWithStore<PluginHostState>
             Ok(())
         };
 
-        pumpkin_plugin_runtime::in_current_context(operation).await
+        in_active_context(accessor, operation).await?
     }
 }

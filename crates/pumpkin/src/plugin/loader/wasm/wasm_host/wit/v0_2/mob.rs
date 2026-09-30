@@ -987,7 +987,7 @@ impl HostMobWithStore<PluginHostState> for HasSelf<PluginHostState> {
             let entity = state.get(&this)?.clone();
             Ok(entity)
         })?;
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             if let Some(mob) = entity.get_mob() {
                 mob.get_mob_entity().clear_ai_goals(mob);
             }

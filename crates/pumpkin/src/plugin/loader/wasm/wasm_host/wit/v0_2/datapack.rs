@@ -109,7 +109,10 @@ impl HostDatapackManagerWithStore<PluginHostState> for HasSelf<PluginHostState> 
         })?;
         let position = to_data_enable_position(position);
 
-        run_blocking(move || DatapackManager::enable_pack(&server, &name, position)).await
+        run_blocking(accessor, move || {
+            DatapackManager::enable_pack(&server, &name, position)
+        })
+        .await
     }
 
     async fn disable_pack(
@@ -126,7 +129,10 @@ impl HostDatapackManagerWithStore<PluginHostState> for HasSelf<PluginHostState> 
             Ok(server)
         })?;
 
-        run_blocking(move || DatapackManager::disable_pack(&server, &name)).await
+        run_blocking(accessor, move || {
+            DatapackManager::disable_pack(&server, &name)
+        })
+        .await
     }
 
     async fn reload(
@@ -142,7 +148,7 @@ impl HostDatapackManagerWithStore<PluginHostState> for HasSelf<PluginHostState> 
             Ok(server)
         })?;
 
-        run_blocking(move || DatapackManager::reload(&server)).await
+        run_blocking(accessor, move || DatapackManager::reload(&server)).await
     }
 
     async fn execute_function(
@@ -159,7 +165,7 @@ impl HostDatapackManagerWithStore<PluginHostState> for HasSelf<PluginHostState> 
             Ok(server)
         })?;
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             DatapackManager::execute_function_from_console(&server, &name).map(|count| count as u32)
         })
         .await

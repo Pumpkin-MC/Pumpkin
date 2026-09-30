@@ -1,4 +1,4 @@
-use super::{AccessorExt, run_blocking};
+use super::{AccessorExt, in_active_context, run_blocking};
 use pumpkin_data::block_properties::NoteblockInstrument as InternalNoteblockInstrument;
 use pumpkin_data::block_state::PistonBehavior;
 use pumpkin_data::{BlockDirection as InternalBlockDirection, BlockId, BlockStateId};
@@ -153,7 +153,7 @@ async fn set_block_state_with_store(
     let internal_flags = from_wit_block_flags(update_flags);
     let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
 
-    run_blocking(move || {
+    run_blocking(accessor, move || {
         world.set_block_state(&internal_pos, state_id, internal_flags);
     })
     .await
@@ -1358,7 +1358,7 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
         raining: bool,
     ) -> wasmtime::Result<()> {
         let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
-        run_blocking(move || world.set_raining(raining)).await
+        run_blocking(accessor, move || world.set_raining(raining)).await
     }
 
     async fn set_thundering(
@@ -1367,7 +1367,7 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
         thundering: bool,
     ) -> wasmtime::Result<()> {
         let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
-        run_blocking(move || world.set_thundering(thundering)).await
+        run_blocking(accessor, move || world.set_thundering(thundering)).await
     }
 
     async fn create_explosion(
@@ -1387,7 +1387,7 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
             pumpkin::plugin::world::ExplosionInteraction::Trigger => ExplosionInteraction::Trigger,
         };
         let pos = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
-        run_blocking(move || world.explode(pos, power, interaction)).await
+        run_blocking(accessor, move || world.explode(pos, power, interaction)).await
     }
 
     async fn spawn_entity(
@@ -1403,7 +1403,7 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
         let entity =
             crate::entity::r#type::from_type(internal_type, pos, &world, uuid::Uuid::new_v4());
         let spawned_entity = Arc::clone(&entity);
-        run_blocking(move || world.spawn_entity(spawned_entity)).await?;
+        run_blocking(accessor, move || world.spawn_entity(spawned_entity)).await?;
         accessor.add_res(entity)
     }
 
@@ -1415,7 +1415,7 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
     ) -> wasmtime::Result<()> {
         let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
         let pos = super::events::from_wasm_position(pos);
-        run_blocking(move || world.strike_lightning(pos, effect_only)).await
+        run_blocking(accessor, move || world.strike_lightning(pos, effect_only)).await
     }
 
     async fn save(
@@ -1423,7 +1423,7 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
         world: Resource<World>,
     ) -> wasmtime::Result<Result<(), String>> {
         let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
-        pumpkin_plugin_runtime::in_current_context(world.save()).await;
+        in_active_context(accessor, world.save()).await?;
         Ok(Ok(()))
     }
 

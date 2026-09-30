@@ -70,18 +70,41 @@ pub mod world;
 
 pub use pumpkin_host_bindings::v0_2::{Plugin, pumpkin};
 
+fn active_plugin(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
+) -> wasmtime::Result<std::sync::Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>> {
+    accessor.with(|mut host| {
+        host.get()
+            .plugin
+            .as_ref()
+            .and_then(std::sync::Weak::upgrade)
+            .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))
+    })
+}
+
 /// Runs synchronous server work on Tokio's blocking pool while the store keeps servicing the guest,
-/// keeping the active reentry context so guest calls made from `operation` stay in the same chain.
+/// keeping the active guest call's reentry context so guest calls made from `operation` stay in
+/// the same chain.
 pub(crate) async fn run_blocking<R: Send + 'static>(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
     operation: impl FnOnce() -> R + Send + 'static,
 ) -> wasmtime::Result<R> {
-    tokio::task::spawn_blocking(operation)
+    active_plugin(accessor)?
+        .store
+        .spawn_blocking_in_active_context(operation)
         .await
-        .map_err(|error| {
-            wasmtime::Error::msg(format!(
-                "Synchronous Wasm plugin host operation failed: {error}"
-            ))
-        })
+}
+
+/// Awaits a host operation that can fire plugin events under the active guest call's reentry
+/// context.
+pub(crate) async fn in_active_context<R>(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
+    future: impl std::future::Future<Output = R>,
+) -> wasmtime::Result<R> {
+    Ok(active_plugin(accessor)?
+        .store
+        .in_active_context(future)
+        .await)
 }
 
 /// Resource-table access from an [`Accessor`](wasmtime::component::Accessor) without holding the

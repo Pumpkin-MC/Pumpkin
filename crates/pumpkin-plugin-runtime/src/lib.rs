@@ -4,7 +4,6 @@ mod lifecycle;
 mod policy;
 mod spawn;
 
-pub use chain::{in_current_context, spawn_blocking_in_context};
 pub use executor::{
     LegacyGuestScope, LegacyStore, StoreDataMut, StoreExecutor, StoreFuture, StoreHandle,
 };

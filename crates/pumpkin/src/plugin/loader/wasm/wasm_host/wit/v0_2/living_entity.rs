@@ -572,7 +572,7 @@ impl HostLivingEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
     ) -> wasmtime::Result<()> {
         let entity = accessor.get_res(&this)?;
         let damage_type = from_wit_damage_type(damage_type);
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             entity.damage(&*entity, amount, damage_type);
         })
         .await

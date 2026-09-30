@@ -548,7 +548,7 @@ impl pumpkin::plugin::command::HostCommandSenderWithStore<PluginHostState>
         let sender = accessor.get_res(&sender)?;
         let server = accessor.server()?;
 
-        run_blocking(move || sender.has_permission(&server, &node)).await
+        run_blocking(accessor, move || sender.has_permission(&server, &node)).await
     }
 }
 

@@ -1135,7 +1135,7 @@ impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
             Ok((entity, world))
         })?;
         let pos = Vector3::new(pos.0, pos.1, pos.2);
-        run_blocking(move || entity.teleport(pos, None, None, world)).await
+        run_blocking(accessor, move || entity.teleport(pos, None, None, world)).await
     }
 
     async fn set_swimming(
@@ -1144,7 +1144,7 @@ impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
         swimming: bool,
     ) -> wasmtime::Result<()> {
         let entity = accessor.get_res(&entity)?;
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             entity.get_entity().set_swimming(swimming);
         })
         .await
@@ -1161,7 +1161,7 @@ impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
             let vehicle = vehicle.map(|vehicle| state.take(vehicle)).transpose()?;
             Ok((entity, vehicle))
         })?;
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             let current_vehicle = entity
                 .get_entity()
                 .vehicle
@@ -1191,7 +1191,7 @@ impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
             let state = host.get();
             Ok((state.get(&entity)?.clone(), state.take(passenger)?))
         })?;
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             entity
                 .get_entity()
                 .add_passenger(Arc::clone(&entity), passenger);
@@ -1210,7 +1210,7 @@ impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
             let passenger = state.take(passenger)?;
             Ok((entity, passenger.get_entity().entity_id))
         })?;
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             entity.get_entity().remove_passenger(passenger_id);
         })
         .await
@@ -1221,7 +1221,7 @@ impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
         entity: Resource<Entity>,
     ) -> wasmtime::Result<()> {
         let entity = accessor.get_res(&entity)?;
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             let passenger_ids: Vec<i32> = entity
                 .get_entity()
                 .passengers

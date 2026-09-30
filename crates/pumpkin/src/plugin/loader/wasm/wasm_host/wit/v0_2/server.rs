@@ -1,4 +1,4 @@
-use super::{AccessorExt, run_blocking};
+use super::{AccessorExt, in_active_context, run_blocking};
 use pumpkin_util::text::TextComponent;
 use wasmtime::component::Accessor;
 use wasmtime::component::{HasSelf, Resource};
@@ -739,7 +739,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
             Dimension::Nether => pumpkin_data::dimension::Dimension::THE_NETHER,
             Dimension::End => pumpkin_data::dimension::Dimension::THE_END,
         };
-        let world = run_blocking(move || server.create_world(name, internal_dim)).await?;
+        let world = run_blocking(accessor, move || server.create_world(name, internal_dim)).await?;
 
         accessor
             .add_res(world)
@@ -760,7 +760,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
             Ok(server)
         })?;
 
-        Ok(pumpkin_plugin_runtime::in_current_context(server.unload_world(&name)).await)
+        in_active_context(accessor, server.unload_world(&name)).await
     }
 
     async fn save_all(
@@ -776,7 +776,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
             Ok(server)
         })?;
 
-        Ok(pumpkin_plugin_runtime::in_current_context(server.save_all()).await)
+        in_active_context(accessor, server.save_all()).await
     }
 
     async fn broadcast(
@@ -795,7 +795,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
         let message = TextComponent::text(message);
         let sender = TextComponent::text("Server");
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             server.broadcast_message(&message, &sender, 0, None);
         })
         .await
@@ -823,7 +823,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
             Ok((server, native_sender))
         })?;
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             let dispatcher = server.command_dispatcher.load();
             dispatcher.handle_command(&native_sender.into_source(&server), &command);
         })
@@ -955,7 +955,7 @@ impl pumpkin::plugin::server::HostOpManagerWithStore<PluginHostState> for HasSel
         let uuid = WitUuid::from_wit(&id);
         let internal_level = from_wit_permission_level(level);
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             let mut config = server
                 .data
                 .operator_config
@@ -996,7 +996,7 @@ impl pumpkin::plugin::server::HostOpManagerWithStore<PluginHostState> for HasSel
         })?;
         let uuid = WitUuid::from_wit(&id);
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             let removed = {
                 let mut config = server
                     .data
@@ -1310,7 +1310,7 @@ impl pumpkin::plugin::server::HostBanManagerWithStore<PluginHostState>
         let kick_if_online = options.kick_if_online;
         let log_to_console = options.log_to_console;
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             let mut list = server.data.banned_player_list.write().unwrap();
             if let Some(existing) = list.banned_players.iter_mut().find(|e| e.uuid == uuid) {
                 existing.name.clone_from(&name);
@@ -1372,7 +1372,7 @@ impl pumpkin::plugin::server::HostBanManagerWithStore<PluginHostState>
         let kick_matching_players = options.kick_matching_players;
         let log_to_console = options.log_to_console;
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             let mut list = server.data.banned_ip_list.write().unwrap();
             if let Some(existing) = list.banned_ips.iter_mut().find(|e| e.ip == ip_addr) {
                 existing.source = source_name;
@@ -1536,7 +1536,7 @@ impl pumpkin::plugin::server::HostWhitelistManagerWithStore<PluginHostState>
             Ok(server)
         })?;
 
-        run_blocking(move || {
+        run_blocking(accessor, move || {
             server
                 .white_list
                 .store(enabled, std::sync::atomic::Ordering::Relaxed);
