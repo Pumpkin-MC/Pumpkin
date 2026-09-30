@@ -341,6 +341,14 @@ impl ItemStack {
         self.get_max_damage().unwrap_or(0) > 0
     }
 
+    #[must_use]
+    pub fn next_damage_will_break(&self) -> bool {
+        self.get_data_component::<MaxDamageImpl>().is_some()
+            && self.get_data_component::<DamageImpl>().is_some()
+            && !self.is_unbreakable()
+            && self.get_damage() >= self.get_max_damage().unwrap_or(0).wrapping_sub(1)
+    }
+
     pub fn repair_item(&mut self, amount: i32) -> i32 {
         if amount <= 0 {
             return 0;
