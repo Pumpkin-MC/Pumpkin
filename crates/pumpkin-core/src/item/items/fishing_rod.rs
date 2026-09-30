@@ -12,7 +12,6 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::Hand;
-use pumpkin_util::math::vector3::Vector3;
 
 pub struct FishingRodItem;
 
@@ -91,14 +90,14 @@ impl ItemBehaviour for FishingRodItem {
                 player.position(),
                 &EntityType::FISHING_BOBBER,
             );
-            let bobber =
-                FishingBobberEntity::new(bobber_entity, player, luck_bonus, wait_time_reduction);
-
-            let look_vec = Vector3::from_yaw_pitch(yaw, pitch);
-            bobber
-                .entity
-                .velocity
-                .store(look_vec.multiply(1.5, 1.5, 1.5));
+            let bobber = FishingBobberEntity::new(
+                bobber_entity,
+                player,
+                yaw,
+                pitch,
+                luck_bonus,
+                wait_time_reduction,
+            );
 
             player
                 .fishing_bobber

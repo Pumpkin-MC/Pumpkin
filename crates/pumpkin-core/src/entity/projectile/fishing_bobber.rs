@@ -5,7 +5,7 @@ use crossbeam::atomic::AtomicCell;
 
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::item::ItemEntity;
-use crate::entity::projectile::{ProjectileHit, is_projectile};
+use crate::entity::projectile::is_projectile;
 use crate::world::World;
 use crate::world::loot::LootContextParameters;
 use crate::{
@@ -33,7 +33,6 @@ pub struct FishingBobberEntity {
     pub in_ground: AtomicBool,
     /// Vanilla `life`: ticks spent resting on the ground before the hook despawns.
     pub life: AtomicI32,
-    pub has_hit: AtomicBool,
     pub bobbing: AtomicBool,
     pub wait_countdown: AtomicI32,
     pub bite_countdown: AtomicI32,
@@ -47,19 +46,37 @@ impl FishingBobberEntity {
     const INERTIA: f64 = 0.92;
     const GRAVITY: f64 = 0.03;
 
-    /// Creates a bobber owned by `owner`, spawned at their eye.
+    /// Creates a bobber owned by `owner`, thrown along the given `yaw` and `pitch`.
     pub fn new(
         entity: Entity,
         owner: &Player,
+        yaw: f32,
+        pitch: f32,
         luck_bonus: i32,
         wait_time_reduction_ticks: i32,
     ) -> Self {
         let owner_id = owner.living_entity.entity.entity_id;
-        let mut owner_pos = owner.living_entity.entity.pos.load();
-        owner_pos.y += owner.living_entity.entity.get_eye_height() - 0.1;
-        entity.pos.store(owner_pos);
+        let owner_entity = &owner.living_entity.entity;
+
+        let (origin, velocity) = throw_setup(
+            yaw,
+            pitch,
+            // Vanilla `RandomSource.triangle(0.5, 0.0103365)`.
+            (rand::random::<f64>() - rand::random::<f64>()) * 0.010_336_5 + 0.5,
+        );
+
+        let owner_pos = owner_entity.pos.load();
+        entity.pos.store(Vector3::new(
+            owner_pos.x + origin.x,
+            owner_pos.y + owner_entity.get_eye_height(),
+            owner_pos.z + origin.z,
+        ));
+        entity.yaw.store(yaw);
+        entity.pitch.store(pitch);
+        entity.head_yaw.store(yaw);
         // The client reads the owner id from the spawn packet's data field to render the line.
         entity.data.store(owner_id, Ordering::Relaxed);
+        entity.velocity.store(velocity);
 
         let luck_bonus = luck_bonus.max(0);
         let wait_time_reduction_ticks = wait_time_reduction_ticks.max(0);
@@ -72,7 +89,6 @@ impl FishingBobberEntity {
             hooked_entity_id: AtomicI32::new(0),
             in_ground: AtomicBool::new(false),
             life: AtomicI32::new(0),
-            has_hit: AtomicBool::new(false),
             bobbing: AtomicBool::new(false),
             wait_countdown: AtomicI32::new(wait_countdown),
             bite_countdown: AtomicI32::new(0),
@@ -165,6 +181,7 @@ impl FishingBobberEntity {
                 let xp = rand::random_range(1..=6);
                 let mut xp_pos = player_pos;
                 xp_pos.y += 0.5;
+                xp_pos.z += 0.5;
                 ExperienceOrbEntity::spawn(&world, xp_pos, xp);
 
                 if item_stack.item.has_tag(&tag::Item::MINECRAFT_FISHES) {
@@ -228,7 +245,7 @@ impl FishingBobberEntity {
                     self.hooked_entity_id.store(0, Ordering::Relaxed);
                 } else {
                     let mut hooked_pos = hooked.get_entity().pos.load();
-                    hooked_pos.y += hooked.get_entity().get_eye_height() * 0.8;
+                    hooked_pos.y += f64::from(hooked.get_entity().height()) * 0.8;
                     entity.set_pos(hooked_pos);
                     return;
                 }
@@ -512,6 +529,25 @@ fn bob_velocity(
     )
 }
 
+/// Vanilla `FishingBobberEntity(Player, Level, int, int)`: the throw origin offset (X/Z,
+/// relative to the owner) and launch velocity for the owner's yaw and pitch.
+fn throw_setup(yaw: f32, pitch: f32, random_triangle: f64) -> (Vector3<f64>, Vector3<f64>) {
+    let yaw_rad = f64::from(yaw).to_radians();
+    let pitch_rad = f64::from(pitch).to_radians();
+    let y_sin = (-yaw_rad - std::f64::consts::PI).sin();
+    let y_cos = (-yaw_rad - std::f64::consts::PI).cos();
+    let x_cos = -(-pitch_rad).cos();
+    let x_sin = (-pitch_rad).sin();
+
+    let origin = Vector3::new(-y_sin * 0.3, 0.0, -y_cos * 0.3);
+
+    let mut movement = Vector3::new(-y_sin, (-(x_sin / x_cos)).clamp(-5.0, 5.0), -y_cos);
+    let distance = movement.length();
+    let scale = 0.6 / distance + random_triangle;
+    movement = movement.multiply(scale, scale, scale);
+    (origin, movement)
+}
+
 impl EntityBase for FishingBobberEntity {
     fn get_owner_id(&self) -> Option<i32> {
         Some(self.owner_id)
@@ -527,9 +563,6 @@ impl EntityBase for FishingBobberEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
-    }
-    fn on_hit(&self, _hit: ProjectileHit) {
-        self.has_hit.store(true, Ordering::Relaxed);
     }
 
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
@@ -571,5 +604,41 @@ mod tests {
                 "bobber settled at {y}, expected the surface at {surface}"
             );
         }
+    }
+
+    #[test]
+    fn throw_uses_the_look_direction() {
+        // Due +Z at the default rotation, spawned 0.3 blocks in front of the eye.
+        let (origin, forward) = throw_setup(0.0, 0.0, 0.5);
+        assert!((origin.z - 0.3).abs() < 1e-9 && origin.x.abs() < 1e-9);
+        assert!(
+            forward.x.abs() < 1e-9 && (forward.z - 1.1).abs() < 1e-9 && forward.y.abs() < 1e-9,
+            "expected due +Z at 1.1, got {forward:?}"
+        );
+
+        // Looking east throws east and offsets the origin to -X.
+        let (origin, east) = throw_setup(90.0, 0.0, 0.5);
+        assert!((origin.x + 0.3).abs() < 1e-9 && origin.z.abs() < 1e-9);
+        assert!(
+            (east.x + 1.1).abs() < 1e-9 && east.z.abs() < 1e-9,
+            "expected due -X at 1.1, got {east:?}"
+        );
+    }
+
+    #[test]
+    fn throw_clamps_steep_pitch() {
+        let (_, down) = throw_setup(0.0, 90.0, 0.0);
+        assert!(down.y < 0.0 && down.z > 0.0);
+        assert!(
+            (down.y / down.z + 5.0).abs() < 1e-9,
+            "expected the -Y clamp, got {down:?}"
+        );
+
+        let (_, up) = throw_setup(0.0, -90.0, 0.0);
+        assert!(up.y > 0.0 && up.z > 0.0);
+        assert!(
+            (up.y / up.z - 5.0).abs() < 1e-9,
+            "expected the +Y clamp, got {up:?}"
+        );
     }
 }
