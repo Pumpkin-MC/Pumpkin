@@ -21,6 +21,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_util::Hand;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -30,6 +31,8 @@ pub struct FishingBobberEntity {
     pub owner_id: i32,
     pub hooked_entity_id: AtomicI32,
     pub in_ground: AtomicBool,
+    /// Vanilla `life`: ticks spent resting on the ground before the hook despawns.
+    pub life: AtomicI32,
     pub has_hit: AtomicBool,
     pub bobbing: AtomicBool,
     pub wait_countdown: AtomicI32,
@@ -68,6 +71,7 @@ impl FishingBobberEntity {
             owner_id,
             hooked_entity_id: AtomicI32::new(0),
             in_ground: AtomicBool::new(false),
+            life: AtomicI32::new(0),
             has_hit: AtomicBool::new(false),
             bobbing: AtomicBool::new(false),
             wait_countdown: AtomicI32::new(wait_countdown),
@@ -189,13 +193,33 @@ impl FishingBobberEntity {
     }
 
     /// Advances the bobber a tick, moving it and running the fishing cycle.
+    #[expect(clippy::too_many_lines)]
     pub fn process_tick(&self, caller: &dyn EntityBase) {
         let entity = self.get_entity();
         let world = entity.world.load();
 
-        if self.in_ground.load(Ordering::Relaxed) {
+        // Vanilla `FishingBobberEntity.tick`: drop the hook once the owner stops fishing.
+        let Some(owner) = world.get_entity_by_id(self.owner_id) else {
+            entity.remove();
+            return;
+        };
+        let Some(player) = owner.cast_any().downcast_ref::<Player>() else {
+            entity.remove();
+            return;
+        };
+        if self.should_stop_fishing(player) {
+            self.discard(player);
             return;
         }
+
+        if self.in_ground.load(Ordering::Relaxed) {
+            let life = self.life.fetch_add(1, Ordering::Relaxed) + 1;
+            if life >= 1200 {
+                self.discard(player);
+            }
+            return;
+        }
+        self.life.store(0, Ordering::Relaxed);
 
         let hooked_id = self.hooked_entity_id.load(Ordering::Relaxed);
         if hooked_id != 0 {
@@ -304,6 +328,32 @@ impl FishingBobberEntity {
                 return;
             }
         }
+    }
+
+    /// Vanilla `FishingBobberEntity.shouldStopFishing(Player)`.
+    fn should_stop_fishing(&self, player: &Player) -> bool {
+        let owner = player.get_entity();
+        // Vanilla `Entity.canInteractWithLevel` gates the checks below.
+        let can_interact = player.living_entity.health.load() > 0.0
+            && !owner.removed.load(Ordering::Relaxed)
+            && !player.is_spectator();
+        if can_interact {
+            let inventory = player.inventory();
+            let holding_rod = inventory.held_item().item.id == Item::FISHING_ROD.id
+                || inventory.get_stack_in_hand(Hand::Left).item.id == Item::FISHING_ROD.id;
+            if holding_rod {
+                let owner_pos = owner.pos.load();
+                let bobber_pos = self.entity.pos.load();
+                return owner_pos.squared_distance_to_vec(&bobber_pos) > 1024.0;
+            }
+        }
+        true
+    }
+
+    /// Vanilla `FishingBobberEntity.remove`: clears `owner.fishing` and drops the hook.
+    fn discard(&self, player: &Player) {
+        player.fishing_bobber.store(-1, Ordering::Relaxed);
+        self.entity.remove();
     }
 
     /// Matches vanilla `FishingBobberEntity.catchingFish(BlockPos)`.
