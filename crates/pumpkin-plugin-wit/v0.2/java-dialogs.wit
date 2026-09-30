@@ -1,5 +1,5 @@
 /// Provides types and utilities for displaying rich dialogs to Java Edition players.
-/// These dialogs support various layouts, body elements (text and items), 
+/// These dialogs support various layouts, body elements (text and items),
 /// and interactive inputs (checkboxes, text fields, sliders).
 interface java-dialogs {
     use text.{text-component};

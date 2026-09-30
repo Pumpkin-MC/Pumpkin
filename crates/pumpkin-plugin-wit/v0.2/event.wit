@@ -2158,6 +2158,7 @@ interface event {
         lightning-strike-event,
     }
 
+    /// Event payload transferred by value to and from `handle-event`.
     variant event {
         player-join-event(player-join-event-data),
         player-leave-event(player-leave-event-data),

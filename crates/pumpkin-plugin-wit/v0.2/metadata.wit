@@ -15,5 +15,8 @@ interface metadata {
         permissions: list<string>,
     }
 
+    /// Returns an immutable, guest-owned snapshot of the plugin's metadata.
+    ///
+    /// This callback must not call host imports or perform I/O.
     get-metadata: func() -> plugin-metadata;
 }

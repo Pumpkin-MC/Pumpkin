@@ -36,26 +36,27 @@ interface context {
         /// * `handler-id`: Unique ID for the event handler.
         /// * `event-type`: The type of event to listen for.
         /// * `event-priority`: When this handler should be called relative to others.
-        /// * `blocking`: Whether the event should wait for this handler to finish.
-        register-event: func(handler-id: u32, event-type: event-type, event-priority: event-priority, blocking: bool);
+        /// * `blocking`: If true, the returned event updates the event being
+        ///   dispatched. Otherwise the result is ignored. Either kind of
+        ///   handler may suspend without blocking a host thread.
+        register-event: async func(handler-id: u32, event-type: event-type, event-priority: event-priority, blocking: bool);
 
         /// Registers a new command.
         ///
         /// * `command`: The command definition.
         /// * `permission`: The required permission node to execute this command.
-        register-command: func(command: command, permission: string);
+        register-command: async func(command: command, permission: string);
 
         /// Registers a permission node with the server.
-        register-permission: func(permission: permission) -> result<_, string>;
+        register-permission: async func(permission: permission) -> result<_, string>;
 
         /// Returns the path to the plugin's private data folder.
-        get-data-folder: func() -> string;
+        get-data-folder: async func() -> string;
 
         /// Returns the global server instance.
-        get-server: func() -> server;
+        get-server: async func() -> server;
 
         /// Returns verified marketplace metadata if this plugin binary is signed, or none if unsigned.
-        get-marketplace-metadata: func() -> option<marketplace-metadata>;
+        get-marketplace-metadata: async func() -> option<marketplace-metadata>;
     }
 }
-

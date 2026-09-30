@@ -1,4 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
+use wasmtime::component::Accessor;
+use wasmtime::component::HasSelf;
 use wasmtime::component::Resource;
 
 use crate::plugin::{
@@ -1417,349 +1419,368 @@ fn register_hanging_event(
 impl pumpkin::plugin::context::Host for PluginHostState {}
 
 impl pumpkin::plugin::context::HostContext for PluginHostState {
+    async fn drop(&mut self, rep: Resource<WitContext>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+}
+
+impl pumpkin::plugin::context::HostContextWithStore<PluginHostState> for HasSelf<PluginHostState> {
     #[allow(clippy::too_many_lines)]
     async fn register_event(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         context: Resource<WitContext>,
         handler_id: u32,
         event_type: EventType,
         event_priority: EventPriority,
         blocking: bool,
     ) -> wasmtime::Result<()> {
-        // Updated return type
-        let priority = match event_priority {
-            EventPriority::Highest => crate::plugin::EventPriority::Highest,
-            EventPriority::High => crate::plugin::EventPriority::High,
-            EventPriority::Normal => crate::plugin::EventPriority::Normal,
-            EventPriority::Low => crate::plugin::EventPriority::Low,
-            EventPriority::Lowest => crate::plugin::EventPriority::Lowest,
-        };
+        accessor.with(|mut host| {
+            let st = host.get();
+            // Updated return type
+            let priority = match event_priority {
+                EventPriority::Highest => crate::plugin::EventPriority::Highest,
+                EventPriority::High => crate::plugin::EventPriority::High,
+                EventPriority::Normal => crate::plugin::EventPriority::Normal,
+                EventPriority::Low => crate::plugin::EventPriority::Low,
+                EventPriority::Lowest => crate::plugin::EventPriority::Lowest,
+            };
 
-        // Use ? to trap if the plugin was dropped or the context handle is dead
-        let plugin = self
-            .plugin
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Plugin state uninitialized"))?
-            .upgrade()
-            .ok_or_else(|| wasmtime::Error::msg("Plugin has been dropped"))?;
+            // Use ? to trap if the plugin was dropped or the context handle is dead
+            let plugin = st
+                .plugin
+                .as_ref()
+                .ok_or_else(|| wasmtime::Error::msg("Plugin state uninitialized"))?
+                .upgrade()
+                .ok_or_else(|| wasmtime::Error::msg("Plugin has been dropped"))?;
 
-        let ctx = self.get(&context)?.as_ref();
-        let handler = Arc::new(WasmPluginEventHandler { handler_id, plugin });
+            let ctx = st.get(&context)?.as_ref();
+            let handler = Arc::new(WasmPluginEventHandler { handler_id, plugin });
 
-        match event_type {
-            event_type @ (EventType::PacketReceivedEvent
-            | EventType::PacketSentEvent
-            | EventType::ServerCommandEvent
-            | EventType::ServerListPingEvent
-            | EventType::ServerBroadcastEvent
-            | EventType::ServerLoadEvent
-            | EventType::ServerTickEndEvent
-            | EventType::ServerTickStartEvent
-            | EventType::MapInitializeEvent) => {
-                register_server_event(ctx, &handler, priority, blocking, event_type);
+            match event_type {
+                event_type @ (EventType::PacketReceivedEvent
+                | EventType::PacketSentEvent
+                | EventType::ServerCommandEvent
+                | EventType::ServerListPingEvent
+                | EventType::ServerBroadcastEvent
+                | EventType::ServerLoadEvent
+                | EventType::ServerTickEndEvent
+                | EventType::ServerTickStartEvent
+                | EventType::MapInitializeEvent) => {
+                    register_server_event(ctx, &handler, priority, blocking, event_type);
+                }
+                event_type @ (EventType::HangingBreakEvent
+                | EventType::HangingBreakByEntityEvent
+                | EventType::HangingPlaceEvent) => {
+                    register_hanging_event(ctx, &handler, priority, blocking, event_type);
+                }
+                event_type @ (EventType::SpawnChangeEvent
+                | EventType::ChunkLoadEvent
+                | EventType::ChunkSaveEvent
+                | EventType::ChunkSendEvent
+                | EventType::WeatherChangeEvent
+                | EventType::ThunderChangeEvent
+                | EventType::WorldLoadEvent
+                | EventType::WorldUnloadEvent
+                | EventType::AsyncStructureGenerateEvent
+                | EventType::AsyncStructureSpawnEvent
+                | EventType::ChunkPopulateEvent
+                | EventType::ChunkUnloadEvent
+                | EventType::EntitiesLoadEvent
+                | EventType::EntitiesUnloadEvent
+                | EventType::GenericGameEvent
+                | EventType::LootGenerateEvent
+                | EventType::PortalCreateEvent
+                | EventType::StructureGrowEvent
+                | EventType::TimeSkipEvent
+                | EventType::WorldInitEvent
+                | EventType::WorldSaveEvent
+                | EventType::LightningStrikeEvent) => {
+                    register_world_event(ctx, &handler, priority, blocking, event_type);
+                }
+                event_type @ (EventType::EntityDamageEvent
+                | EventType::EntityDeathEvent
+                | EventType::PlayerDeathEvent
+                | EventType::EntitySpawnEvent
+                | EventType::EntityCombustEvent
+                | EventType::EntityRegainHealthEvent
+                | EventType::EntityAirChangeEvent
+                | EventType::EntityBreedEvent
+                | EventType::EntityDismountEvent
+                | EventType::EntityDyeEvent
+                | EventType::EntityEnterLoveModeEvent
+                | EventType::EntityExplodeEvent
+                | EventType::EntityMountEvent
+                | EventType::EntityPickupItemEvent
+                | EventType::EntityPortalEvent
+                | EventType::EntityResurrectEvent
+                | EventType::EntityShootBowEvent
+                | EventType::EntityTameEvent
+                | EventType::EntityTargetEvent
+                | EventType::EntityTeleportEvent
+                | EventType::EntityToggleGlideEvent
+                | EventType::EntityTransformEvent
+                | EventType::CreatureSpawnEvent
+                | EventType::EnderDragonChangePhaseEvent
+                | EventType::EntityBreakDoorEvent
+                | EventType::EntityChangeBlockEvent
+                | EventType::EntityDamageByBlockEvent
+                | EventType::EntityDamageByEntityEvent
+                | EventType::EntityDropItemEvent
+                | EventType::EntityEnterBlockEvent
+                | EventType::EntityExhaustionEvent
+                | EventType::EntityInteractEvent
+                | EventType::EntityKnockbackEvent
+                | EventType::EntityPlaceEvent
+                | EventType::EntityPoseChangeEvent
+                | EventType::EntityPotionEffectEvent
+                | EventType::EntitySpellCastEvent
+                | EventType::EntityTargetLivingEntityEvent
+                | EventType::EntityToggleSwimEvent
+                | EventType::ExplosionPrimeEvent
+                | EventType::FireworkExplodeEvent
+                | EventType::FoodLevelChangeEvent
+                | EventType::ItemDespawnEvent
+                | EventType::ItemMergeEvent
+                | EventType::ItemSpawnEvent
+                | EventType::PiglinBarterEvent
+                | EventType::ProjectileHitEvent
+                | EventType::ProjectileLaunchEvent
+                | EventType::SheepDyeWoolEvent
+                | EventType::SheepRegrowWoolEvent
+                | EventType::SlimeSplitEvent
+                | EventType::StriderTemperatureChangeEvent
+                | EventType::VillagerAcquireTradeEvent
+                | EventType::VillagerCareerChangeEvent
+                | EventType::VillagerReplenishTradeEvent
+                | EventType::WardenAngerChangeEvent
+                | EventType::AreaEffectCloudApplyEvent
+                | EventType::ArrowBodyCountChangeEvent
+                | EventType::BatToggleSleepEvent
+                | EventType::CreeperPowerEvent
+                | EventType::EntityCombustByBlockEvent
+                | EventType::EntityCombustByEntityEvent
+                | EventType::EntityKnockbackByEntityEvent
+                | EventType::EntityPortalEnterEvent
+                | EventType::EntityPortalExitEvent
+                | EventType::EntityRemoveEvent
+                | EventType::EntityTargetBlockEvent
+                | EventType::EntityUnleashEvent
+                | EventType::ExpBottleEvent
+                | EventType::HorseJumpEvent
+                | EventType::LingeringPotionSplashEvent
+                | EventType::PigZapEvent
+                | EventType::PigZombieAngerEvent
+                | EventType::PotionSplashEvent
+                | EventType::SpawnerSpawnEvent
+                | EventType::TrialSpawnerSpawnEvent
+                | EventType::VillagerReputationChangeEvent) => {
+                    register_entity_event(ctx, &handler, priority, blocking, event_type);
+                }
+                event_type @ (EventType::BlockRedstoneEvent
+                | EventType::BlockBreakEvent
+                | EventType::BlockBurnEvent
+                | EventType::BlockCanBuildEvent
+                | EventType::BlockGrowEvent
+                | EventType::BlockPlaceEvent
+                | EventType::BlockDamageEvent
+                | EventType::BlockIgniteEvent
+                | EventType::BlockFromToEvent
+                | EventType::BlockFormEvent
+                | EventType::BlockFadeEvent
+                | EventType::BlockDispenseEvent
+                | EventType::BlockExplodeEvent
+                | EventType::BlockPhysicsEvent
+                | EventType::BlockPistonExtendEvent
+                | EventType::BlockPistonRetractEvent
+                | EventType::NotePlayEvent
+                | EventType::SignChangeEvent
+                | EventType::SpongeAbsorbEvent
+                | EventType::TntPrimeEvent
+                | EventType::BellResonateEvent
+                | EventType::BellRingEvent
+                | EventType::BlockBrushEvent
+                | EventType::BlockCookEvent
+                | EventType::BlockDamageAbortEvent
+                | EventType::BlockDispenseArmorEvent
+                | EventType::BlockDispenseLootEvent
+                | EventType::BlockDropItemEvent
+                | EventType::BlockExpEvent
+                | EventType::BlockFertilizeEvent
+                | EventType::BlockMultiPlaceEvent
+                | EventType::BlockReceiveGameEvent
+                | EventType::BlockShearEntityEvent
+                | EventType::BlockSpreadEvent
+                | EventType::BrewingStartEvent
+                | EventType::CampfireStartEvent
+                | EventType::CauldronLevelChangeEvent
+                | EventType::CrafterCraftEvent
+                | EventType::EntityBlockFormEvent
+                | EventType::FluidLevelChangeEvent
+                | EventType::InventoryBlockStartEvent
+                | EventType::LeavesDecayEvent
+                | EventType::MoistureChangeEvent
+                | EventType::SculkBloomEvent
+                | EventType::VaultDisplayItemEvent) => {
+                    register_block_event(ctx, &handler, priority, blocking, event_type);
+                }
+                event_type @ (EventType::InventoryOpenEvent
+                | EventType::InventoryDragEvent
+                | EventType::CraftItemEvent
+                | EventType::FurnaceSmeltEvent
+                | EventType::BrewEvent
+                | EventType::BrewingStandFuelEvent
+                | EventType::FurnaceBurnEvent
+                | EventType::FurnaceExtractEvent
+                | EventType::FurnaceStartSmeltEvent
+                | EventType::HopperInventorySearchEvent
+                | EventType::InventoryCreativeEvent
+                | EventType::InventoryInteractEvent
+                | EventType::InventoryMoveItemEvent
+                | EventType::InventoryPickupItemEvent
+                | EventType::PrepareAnvilEvent
+                | EventType::PrepareGrindstoneEvent
+                | EventType::PrepareInventoryResultEvent
+                | EventType::PrepareItemCraftEvent
+                | EventType::PrepareSmithingEvent
+                | EventType::SmithItemEvent
+                | EventType::TradeSelectEvent) => {
+                    register_inventory_event(ctx, &handler, priority, blocking, event_type);
+                }
+                event_type @ (EventType::PrepareItemEnchantEvent | EventType::EnchantItemEvent) => {
+                    register_enchantment_event(ctx, &handler, priority, blocking, event_type);
+                }
+                event_type @ (EventType::VehicleBlockCollisionEvent
+                | EventType::VehicleCollisionEvent
+                | EventType::VehicleCreateEvent
+                | EventType::VehicleDamageEvent
+                | EventType::VehicleDestroyEvent
+                | EventType::VehicleEnterEvent
+                | EventType::VehicleEntityCollisionEvent
+                | EventType::VehicleExitEvent
+                | EventType::VehicleMoveEvent
+                | EventType::VehicleUpdateEvent) => {
+                    register_vehicle_event(ctx, &handler, priority, blocking, event_type);
+                }
+                event_type @ (EventType::RaidFinishEvent
+                | EventType::RaidSpawnWaveEvent
+                | EventType::RaidStopEvent
+                | EventType::RaidTriggerEvent) => {
+                    register_raid_event(ctx, &handler, priority, blocking, event_type);
+                }
+                event_type @ (EventType::DialogClickActionEvent
+                | EventType::DialogShowEvent
+                | EventType::DialogClearEvent) => {
+                    register_dialog_event(ctx, &handler, priority, blocking, event_type);
+                }
+                event_type => {
+                    register_player_event(ctx, &handler, priority, blocking, event_type);
+                }
             }
-            event_type @ (EventType::HangingBreakEvent
-            | EventType::HangingBreakByEntityEvent
-            | EventType::HangingPlaceEvent) => {
-                register_hanging_event(ctx, &handler, priority, blocking, event_type);
-            }
-            event_type @ (EventType::SpawnChangeEvent
-            | EventType::ChunkLoadEvent
-            | EventType::ChunkSaveEvent
-            | EventType::ChunkSendEvent
-            | EventType::WeatherChangeEvent
-            | EventType::ThunderChangeEvent
-            | EventType::WorldLoadEvent
-            | EventType::WorldUnloadEvent
-            | EventType::AsyncStructureGenerateEvent
-            | EventType::AsyncStructureSpawnEvent
-            | EventType::ChunkPopulateEvent
-            | EventType::ChunkUnloadEvent
-            | EventType::EntitiesLoadEvent
-            | EventType::EntitiesUnloadEvent
-            | EventType::GenericGameEvent
-            | EventType::LootGenerateEvent
-            | EventType::PortalCreateEvent
-            | EventType::StructureGrowEvent
-            | EventType::TimeSkipEvent
-            | EventType::WorldInitEvent
-            | EventType::WorldSaveEvent
-            | EventType::LightningStrikeEvent) => {
-                register_world_event(ctx, &handler, priority, blocking, event_type);
-            }
-            event_type @ (EventType::EntityDamageEvent
-            | EventType::EntityDeathEvent
-            | EventType::PlayerDeathEvent
-            | EventType::EntitySpawnEvent
-            | EventType::EntityCombustEvent
-            | EventType::EntityRegainHealthEvent
-            | EventType::EntityAirChangeEvent
-            | EventType::EntityBreedEvent
-            | EventType::EntityDismountEvent
-            | EventType::EntityDyeEvent
-            | EventType::EntityEnterLoveModeEvent
-            | EventType::EntityExplodeEvent
-            | EventType::EntityMountEvent
-            | EventType::EntityPickupItemEvent
-            | EventType::EntityPortalEvent
-            | EventType::EntityResurrectEvent
-            | EventType::EntityShootBowEvent
-            | EventType::EntityTameEvent
-            | EventType::EntityTargetEvent
-            | EventType::EntityTeleportEvent
-            | EventType::EntityToggleGlideEvent
-            | EventType::EntityTransformEvent
-            | EventType::CreatureSpawnEvent
-            | EventType::EnderDragonChangePhaseEvent
-            | EventType::EntityBreakDoorEvent
-            | EventType::EntityChangeBlockEvent
-            | EventType::EntityDamageByBlockEvent
-            | EventType::EntityDamageByEntityEvent
-            | EventType::EntityDropItemEvent
-            | EventType::EntityEnterBlockEvent
-            | EventType::EntityExhaustionEvent
-            | EventType::EntityInteractEvent
-            | EventType::EntityKnockbackEvent
-            | EventType::EntityPlaceEvent
-            | EventType::EntityPoseChangeEvent
-            | EventType::EntityPotionEffectEvent
-            | EventType::EntitySpellCastEvent
-            | EventType::EntityTargetLivingEntityEvent
-            | EventType::EntityToggleSwimEvent
-            | EventType::ExplosionPrimeEvent
-            | EventType::FireworkExplodeEvent
-            | EventType::FoodLevelChangeEvent
-            | EventType::ItemDespawnEvent
-            | EventType::ItemMergeEvent
-            | EventType::ItemSpawnEvent
-            | EventType::PiglinBarterEvent
-            | EventType::ProjectileHitEvent
-            | EventType::ProjectileLaunchEvent
-            | EventType::SheepDyeWoolEvent
-            | EventType::SheepRegrowWoolEvent
-            | EventType::SlimeSplitEvent
-            | EventType::StriderTemperatureChangeEvent
-            | EventType::VillagerAcquireTradeEvent
-            | EventType::VillagerCareerChangeEvent
-            | EventType::VillagerReplenishTradeEvent
-            | EventType::WardenAngerChangeEvent
-            | EventType::AreaEffectCloudApplyEvent
-            | EventType::ArrowBodyCountChangeEvent
-            | EventType::BatToggleSleepEvent
-            | EventType::CreeperPowerEvent
-            | EventType::EntityCombustByBlockEvent
-            | EventType::EntityCombustByEntityEvent
-            | EventType::EntityKnockbackByEntityEvent
-            | EventType::EntityPortalEnterEvent
-            | EventType::EntityPortalExitEvent
-            | EventType::EntityRemoveEvent
-            | EventType::EntityTargetBlockEvent
-            | EventType::EntityUnleashEvent
-            | EventType::ExpBottleEvent
-            | EventType::HorseJumpEvent
-            | EventType::LingeringPotionSplashEvent
-            | EventType::PigZapEvent
-            | EventType::PigZombieAngerEvent
-            | EventType::PotionSplashEvent
-            | EventType::SpawnerSpawnEvent
-            | EventType::TrialSpawnerSpawnEvent
-            | EventType::VillagerReputationChangeEvent) => {
-                register_entity_event(ctx, &handler, priority, blocking, event_type);
-            }
-            event_type @ (EventType::BlockRedstoneEvent
-            | EventType::BlockBreakEvent
-            | EventType::BlockBurnEvent
-            | EventType::BlockCanBuildEvent
-            | EventType::BlockGrowEvent
-            | EventType::BlockPlaceEvent
-            | EventType::BlockDamageEvent
-            | EventType::BlockIgniteEvent
-            | EventType::BlockFromToEvent
-            | EventType::BlockFormEvent
-            | EventType::BlockFadeEvent
-            | EventType::BlockDispenseEvent
-            | EventType::BlockExplodeEvent
-            | EventType::BlockPhysicsEvent
-            | EventType::BlockPistonExtendEvent
-            | EventType::BlockPistonRetractEvent
-            | EventType::NotePlayEvent
-            | EventType::SignChangeEvent
-            | EventType::SpongeAbsorbEvent
-            | EventType::TntPrimeEvent
-            | EventType::BellResonateEvent
-            | EventType::BellRingEvent
-            | EventType::BlockBrushEvent
-            | EventType::BlockCookEvent
-            | EventType::BlockDamageAbortEvent
-            | EventType::BlockDispenseArmorEvent
-            | EventType::BlockDispenseLootEvent
-            | EventType::BlockDropItemEvent
-            | EventType::BlockExpEvent
-            | EventType::BlockFertilizeEvent
-            | EventType::BlockMultiPlaceEvent
-            | EventType::BlockReceiveGameEvent
-            | EventType::BlockShearEntityEvent
-            | EventType::BlockSpreadEvent
-            | EventType::BrewingStartEvent
-            | EventType::CampfireStartEvent
-            | EventType::CauldronLevelChangeEvent
-            | EventType::CrafterCraftEvent
-            | EventType::EntityBlockFormEvent
-            | EventType::FluidLevelChangeEvent
-            | EventType::InventoryBlockStartEvent
-            | EventType::LeavesDecayEvent
-            | EventType::MoistureChangeEvent
-            | EventType::SculkBloomEvent
-            | EventType::VaultDisplayItemEvent) => {
-                register_block_event(ctx, &handler, priority, blocking, event_type);
-            }
-            event_type @ (EventType::InventoryOpenEvent
-            | EventType::InventoryDragEvent
-            | EventType::CraftItemEvent
-            | EventType::FurnaceSmeltEvent
-            | EventType::BrewEvent
-            | EventType::BrewingStandFuelEvent
-            | EventType::FurnaceBurnEvent
-            | EventType::FurnaceExtractEvent
-            | EventType::FurnaceStartSmeltEvent
-            | EventType::HopperInventorySearchEvent
-            | EventType::InventoryCreativeEvent
-            | EventType::InventoryInteractEvent
-            | EventType::InventoryMoveItemEvent
-            | EventType::InventoryPickupItemEvent
-            | EventType::PrepareAnvilEvent
-            | EventType::PrepareGrindstoneEvent
-            | EventType::PrepareInventoryResultEvent
-            | EventType::PrepareItemCraftEvent
-            | EventType::PrepareSmithingEvent
-            | EventType::SmithItemEvent
-            | EventType::TradeSelectEvent) => {
-                register_inventory_event(ctx, &handler, priority, blocking, event_type);
-            }
-            event_type @ (EventType::PrepareItemEnchantEvent | EventType::EnchantItemEvent) => {
-                register_enchantment_event(ctx, &handler, priority, blocking, event_type);
-            }
-            event_type @ (EventType::VehicleBlockCollisionEvent
-            | EventType::VehicleCollisionEvent
-            | EventType::VehicleCreateEvent
-            | EventType::VehicleDamageEvent
-            | EventType::VehicleDestroyEvent
-            | EventType::VehicleEnterEvent
-            | EventType::VehicleEntityCollisionEvent
-            | EventType::VehicleExitEvent
-            | EventType::VehicleMoveEvent
-            | EventType::VehicleUpdateEvent) => {
-                register_vehicle_event(ctx, &handler, priority, blocking, event_type);
-            }
-            event_type @ (EventType::RaidFinishEvent
-            | EventType::RaidSpawnWaveEvent
-            | EventType::RaidStopEvent
-            | EventType::RaidTriggerEvent) => {
-                register_raid_event(ctx, &handler, priority, blocking, event_type);
-            }
-            event_type @ (EventType::DialogClickActionEvent
-            | EventType::DialogShowEvent
-            | EventType::DialogClearEvent) => {
-                register_dialog_event(ctx, &handler, priority, blocking, event_type);
-            }
-            event_type => {
-                register_player_event(ctx, &handler, priority, blocking, event_type);
-            }
-        }
 
-        Ok(())
+            Ok(())
+        })
     }
 
     async fn register_command(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         context: Resource<WitContext>,
         command: Resource<Command>,
         permission: String,
     ) -> wasmtime::Result<()> {
-        use crate::command::argument_builder::ArgumentBuilder;
+        accessor.with(|mut host| {
+            use crate::command::argument_builder::ArgumentBuilder;
+            let state = host.get();
 
-        let command = self.take(command)?;
-        let context = self.get(&context)?.clone();
-        let aliases = if command.names.len() > 1 {
-            command.names[1..].to_vec()
-        } else {
-            Vec::new()
-        };
-        let node = command.builder.build();
-        context.register_command_with_aliases(node, &aliases, permission);
+            let command = state.take(command)?;
+            let context = state.get(&context)?.clone();
+            let aliases = if command.names.len() > 1 {
+                command.names[1..].to_vec()
+            } else {
+                Vec::new()
+            };
+            let node = command.builder.build();
+            context.register_command_with_aliases(node, &aliases, permission);
 
-        Ok(())
+            Ok(())
+        })
     }
 
     async fn register_permission(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         context: Resource<WitContext>,
         permission: Permission,
     ) -> wasmtime::Result<Result<(), String>> {
-        let mut children = HashMap::with_capacity(permission.children.len());
-        for child in permission.children {
-            children.insert(child.node, child.value);
-        }
+        accessor.with(|mut host| {
+            let state = host.get();
+            let mut children = HashMap::with_capacity(permission.children.len());
+            for child in permission.children {
+                children.insert(child.node, child.value);
+            }
 
-        let util_permission = pumpkin_util::permission::Permission {
-            node: permission.node,
-            description: permission.description,
-            default: match permission.default {
-                PermissionDefault::Deny => pumpkin_util::permission::PermissionDefault::Deny,
-                PermissionDefault::Allow => pumpkin_util::permission::PermissionDefault::Allow,
-                PermissionDefault::Op(lvl) => {
-                    pumpkin_util::permission::PermissionDefault::Op(match lvl {
-                        PermissionLevel::Zero => pumpkin_util::permission::PermissionLvl::Zero,
-                        PermissionLevel::One => pumpkin_util::permission::PermissionLvl::One,
-                        PermissionLevel::Two => pumpkin_util::permission::PermissionLvl::Two,
-                        PermissionLevel::Three => pumpkin_util::permission::PermissionLvl::Three,
-                        PermissionLevel::Four => pumpkin_util::permission::PermissionLvl::Four,
-                    })
-                }
-            },
-            children,
-        };
+            let util_permission = pumpkin_util::permission::Permission {
+                node: permission.node,
+                description: permission.description,
+                default: match permission.default {
+                    PermissionDefault::Deny => pumpkin_util::permission::PermissionDefault::Deny,
+                    PermissionDefault::Allow => pumpkin_util::permission::PermissionDefault::Allow,
+                    PermissionDefault::Op(lvl) => {
+                        pumpkin_util::permission::PermissionDefault::Op(match lvl {
+                            PermissionLevel::Zero => pumpkin_util::permission::PermissionLvl::Zero,
+                            PermissionLevel::One => pumpkin_util::permission::PermissionLvl::One,
+                            PermissionLevel::Two => pumpkin_util::permission::PermissionLvl::Two,
+                            PermissionLevel::Three => {
+                                pumpkin_util::permission::PermissionLvl::Three
+                            }
+                            PermissionLevel::Four => pumpkin_util::permission::PermissionLvl::Four,
+                        })
+                    }
+                },
+                children,
+            };
 
-        let context_res = self.get(&context)?;
-        Ok(context_res.register_permission(util_permission))
+            let context_res = state.get(&context)?;
+            Ok(context_res.register_permission(util_permission))
+        })
     }
 
     async fn get_data_folder(
-        &mut self,
+        _accessor: &Accessor<PluginHostState, Self>,
         _context: Resource<WitContext>,
     ) -> wasmtime::Result<String> {
         Ok("data".to_string())
     }
 
     async fn get_server(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         context: Resource<WitContext>,
     ) -> wasmtime::Result<Resource<Server>> {
-        self.add(self.get(&context)?.server.clone())
+        accessor.with(|mut host| {
+            let state = host.get();
+            state.add(state.get(&context)?.server.clone())
+        })
     }
 
     async fn get_marketplace_metadata(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         _context: Resource<WitContext>,
     ) -> wasmtime::Result<Option<MarketplaceMetadata>> {
-        Ok(self
-            .marketplace_metadata
-            .clone()
-            .map(|metadata| MarketplaceMetadata {
-                marketplace_url: metadata.marketplace_url,
-                plugin_id: metadata.plugin_id,
-                plugin_name: metadata.plugin_name,
-                version: metadata.version,
-                dev_id: metadata.dev_id,
-                dev_name: metadata.dev_name,
-                is_paid: metadata.is_paid,
-                user_id: metadata.user_id,
-                license_key: metadata.license_key,
-                issued_at: metadata.issued_at,
-            }))
-    }
-
-    async fn drop(&mut self, rep: Resource<WitContext>) -> wasmtime::Result<()> {
-        self.drop(rep)
+        accessor.with(|mut host| {
+            let state = host.get();
+            Ok(state
+                .marketplace_metadata
+                .clone()
+                .map(|metadata| MarketplaceMetadata {
+                    marketplace_url: metadata.marketplace_url,
+                    plugin_id: metadata.plugin_id,
+                    plugin_name: metadata.plugin_name,
+                    version: metadata.version,
+                    dev_id: metadata.dev_id,
+                    dev_name: metadata.dev_name,
+                    is_paid: metadata.is_paid,
+                    user_id: metadata.user_id,
+                    license_key: metadata.license_key,
+                    issued_at: metadata.issued_at,
+                }))
+        })
     }
 }

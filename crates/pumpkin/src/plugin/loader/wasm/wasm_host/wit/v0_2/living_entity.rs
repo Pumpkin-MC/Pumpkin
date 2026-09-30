@@ -1,5 +1,7 @@
+use super::{AccessorExt, run_blocking};
 use std::sync::Arc;
-use wasmtime::component::{Access, HasSelf, Resource};
+use wasmtime::component::Accessor;
+use wasmtime::component::{HasSelf, Resource};
 
 use crate::plugin::loader::wasm::wasm_host::{
     state::PluginHostState,
@@ -12,21 +14,11 @@ use crate::plugin::loader::wasm::wasm_host::{
         item_stack::ItemStack as WitHostItemStack,
         text::TextComponent,
         world::{
-            Entity, EquipmentSlot as WitEquipmentSlot, HostLivingEntity,
+            Entity, EquipmentSlot as WitEquipmentSlot, HostLivingEntity, HostLivingEntityWithStore,
             LivingEntity as WitLivingEntity, Mob as WitMob,
         },
     },
 };
-
-fn active_plugin(
-    state: &PluginHostState,
-) -> wasmtime::Result<Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>> {
-    state
-        .plugin
-        .as_ref()
-        .and_then(std::sync::Weak::upgrade)
-        .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))
-}
 
 #[must_use]
 pub const fn from_wit_attribute(attr: Attribute) -> &'static pumpkin_data::attributes::Attributes {
@@ -135,276 +127,355 @@ pub fn from_wit_damage_type(wit: WitDamageType) -> pumpkin_data::damage::DamageT
 }
 
 impl HostLivingEntity for PluginHostState {
+    async fn drop(&mut self, rep: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+}
+
+impl HostLivingEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn as_entity(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
     ) -> wasmtime::Result<Resource<Entity>> {
-        self.add(self.get(&this)?.clone())
+        accessor.with(|mut host| {
+            let state = host.get();
+            state.add(state.get(&this)?.clone())
+        })
     }
 
     async fn as_mob(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
     ) -> wasmtime::Result<Option<Resource<WitMob>>> {
-        let entity = self.get(&this)?;
-        if entity.get_mob().is_some() {
-            Ok(Some(self.add(entity.clone())?))
-        } else {
-            Ok(None)
-        }
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            if entity.get_mob().is_some() {
+                Ok(Some(state.add(entity.clone())?))
+            } else {
+                Ok(None)
+            }
+        })
     }
 
-    async fn is_mob(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<bool> {
-        let entity = self.get(&this)?;
-        Ok(entity.get_mob().is_some())
+    async fn is_mob(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+    ) -> wasmtime::Result<bool> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            Ok(entity.get_mob().is_some())
+        })
     }
 
-    async fn get_health(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<f32> {
-        let entity = self.get(&this)?;
-        Ok(entity
-            .get_living_entity()
-            .map_or(0.0, |living| living.health.load()))
+    async fn get_health(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+    ) -> wasmtime::Result<f32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            Ok(entity
+                .get_living_entity()
+                .map_or(0.0, |living| living.health.load()))
+        })
     }
 
     async fn set_health(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         health: f32,
     ) -> wasmtime::Result<()> {
-        let entity = self.get(&this)?;
-        if let Some(living) = entity.get_living_entity() {
-            living.health.store(health);
-        }
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            if let Some(living) = entity.get_living_entity() {
+                living.health.store(health);
+            }
+            Ok(())
+        })
     }
 
-    async fn get_max_health(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<f32> {
-        let entity = self.get(&this)?;
-        Ok(entity
-            .get_living_entity()
-            .map_or(0.0, crate::entity::living::LivingEntity::get_max_health))
+    async fn get_max_health(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+    ) -> wasmtime::Result<f32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            Ok(entity
+                .get_living_entity()
+                .map_or(0.0, crate::entity::living::LivingEntity::get_max_health))
+        })
     }
 
     async fn set_max_health(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         max_health: f32,
     ) -> wasmtime::Result<()> {
-        let entity = self.get(&this)?;
-        if let Some(living) = entity.get_living_entity() {
-            living.set_max_health(max_health);
-        }
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            if let Some(living) = entity.get_living_entity() {
+                living.set_max_health(max_health);
+            }
+            Ok(())
+        })
     }
 
-    async fn is_dead(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<bool> {
-        let entity = self.get(&this)?;
-        Ok(entity.get_living_entity().map_or_else(
-            || entity.get_entity().removal_reason.load().is_some(),
-            |living| living.dead.load(std::sync::atomic::Ordering::Relaxed),
-        ))
+    async fn is_dead(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+    ) -> wasmtime::Result<bool> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            Ok(entity.get_living_entity().map_or_else(
+                || entity.get_entity().removal_reason.load().is_some(),
+                |living| living.dead.load(std::sync::atomic::Ordering::Relaxed),
+            ))
+        })
     }
 
-    async fn get_absorption(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<f32> {
-        let entity = self.get(&this)?;
-        Ok(entity
-            .get_living_entity()
-            .map_or(0.0, |living| living.absorption.load()))
+    async fn get_absorption(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+    ) -> wasmtime::Result<f32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            Ok(entity
+                .get_living_entity()
+                .map_or(0.0, |living| living.absorption.load()))
+        })
     }
 
     async fn set_absorption(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         amount: f32,
     ) -> wasmtime::Result<()> {
-        let entity = self.get(&this)?;
-        if let Some(living) = entity.get_living_entity() {
-            living.absorption.store(amount);
-        }
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            if let Some(living) = entity.get_living_entity() {
+                living.absorption.store(amount);
+            }
+            Ok(())
+        })
     }
 
     async fn get_attribute_value(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
     ) -> wasmtime::Result<f64> {
-        let entity = self.get(&this)?;
-        let attribute = from_wit_attribute(attr);
-        Ok(entity
-            .get_living_entity()
-            .map_or(attribute.default_value, |living| {
-                living.get_attribute_value(attribute)
-            }))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            let attribute = from_wit_attribute(attr);
+            Ok(entity
+                .get_living_entity()
+                .map_or(attribute.default_value, |living| {
+                    living.get_attribute_value(attribute)
+                }))
+        })
     }
 
     async fn get_attribute_base(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
     ) -> wasmtime::Result<f64> {
-        let entity = self.get(&this)?;
-        let attribute = from_wit_attribute(attr);
-        Ok(entity
-            .get_living_entity()
-            .map_or(attribute.default_value, |living| {
-                living.get_attribute_base(attribute)
-            }))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            let attribute = from_wit_attribute(attr);
+            Ok(entity
+                .get_living_entity()
+                .map_or(attribute.default_value, |living| {
+                    living.get_attribute_base(attribute)
+                }))
+        })
     }
 
     async fn set_attribute_base(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
         value: f64,
     ) -> wasmtime::Result<()> {
-        let entity = self.get(&this)?;
-        let attribute = from_wit_attribute(attr);
-        if let Some(living) = entity.get_living_entity() {
-            living.set_attribute_base(attribute, value);
-            crate::entity::attributes::send_attribute_updates_for_living(
-                living,
-                vec![attribute.clone()],
-            );
-        }
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            let attribute = from_wit_attribute(attr);
+            if let Some(living) = entity.get_living_entity() {
+                living.set_attribute_base(attribute, value);
+                crate::entity::attributes::send_attribute_updates_for_living(
+                    living,
+                    vec![attribute.clone()],
+                );
+            }
+            Ok(())
+        })
     }
 
     async fn add_attribute_modifier(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
         modifier: WitAttributeModifier,
     ) -> wasmtime::Result<()> {
-        let entity = self.get(&this)?;
-        let attribute = from_wit_attribute(attr);
-        if let Some(living) = entity.get_living_entity() {
-            let internal_mod = crate::entity::attributes::Modifier {
-                id: modifier.id,
-                amount: modifier.amount,
-                operation: from_wit_modifier_op(modifier.operation),
-            };
-            living.update_attribute(attribute, |inst| inst.add_or_replace_modifier(internal_mod));
-            crate::entity::attributes::send_attribute_updates_for_living(
-                living,
-                vec![attribute.clone()],
-            );
-        }
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            let attribute = from_wit_attribute(attr);
+            if let Some(living) = entity.get_living_entity() {
+                let internal_mod = crate::entity::attributes::Modifier {
+                    id: modifier.id,
+                    amount: modifier.amount,
+                    operation: from_wit_modifier_op(modifier.operation),
+                };
+                living
+                    .update_attribute(attribute, |inst| inst.add_or_replace_modifier(internal_mod));
+                crate::entity::attributes::send_attribute_updates_for_living(
+                    living,
+                    vec![attribute.clone()],
+                );
+            }
+            Ok(())
+        })
     }
 
     async fn remove_attribute_modifier(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
         id: String,
     ) -> wasmtime::Result<()> {
-        let entity = self.get(&this)?;
-        let attribute = from_wit_attribute(attr);
-        if let Some(living) = entity.get_living_entity() {
-            living.update_attribute(attribute, |inst| inst.remove_modifier(&id));
-            crate::entity::attributes::send_attribute_updates_for_living(
-                living,
-                vec![attribute.clone()],
-            );
-        }
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            let attribute = from_wit_attribute(attr);
+            if let Some(living) = entity.get_living_entity() {
+                living.update_attribute(attribute, |inst| inst.remove_modifier(&id));
+                crate::entity::attributes::send_attribute_updates_for_living(
+                    living,
+                    vec![attribute.clone()],
+                );
+            }
+            Ok(())
+        })
     }
 
     async fn get_attribute_modifiers(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
     ) -> wasmtime::Result<Vec<WitAttributeModifier>> {
-        let entity = self.get(&this)?;
-        let attribute = from_wit_attribute(attr);
-        if let Some(living) = entity.get_living_entity() {
-            let map = living
-                .attributes
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(inst) = map.get(&attribute.id) {
-                return Ok(inst
-                    .modifiers
-                    .iter()
-                    .map(|m| WitAttributeModifier {
-                        id: m.id.clone(),
-                        amount: m.amount,
-                        operation: to_wit_modifier_op(m.operation),
-                    })
-                    .collect());
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            let attribute = from_wit_attribute(attr);
+            if let Some(living) = entity.get_living_entity() {
+                let map = living
+                    .attributes
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(inst) = map.get(&attribute.id) {
+                    return Ok(inst
+                        .modifiers
+                        .iter()
+                        .map(|m| WitAttributeModifier {
+                            id: m.id.clone(),
+                            amount: m.amount,
+                            operation: to_wit_modifier_op(m.operation),
+                        })
+                        .collect());
+                }
             }
-        }
-        Ok(Vec::new())
+            Ok(Vec::new())
+        })
     }
 
     async fn reset_attribute(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
     ) -> wasmtime::Result<()> {
-        let entity = self.get(&this)?;
-        let attribute = from_wit_attribute(attr);
-        if let Some(living) = entity.get_living_entity() {
-            {
-                let mut map = living
-                    .attributes
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                map.remove(&attribute.id);
-            };
-            crate::entity::attributes::send_attribute_updates_for_living(
-                living,
-                vec![attribute.clone()],
-            );
-        }
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            let attribute = from_wit_attribute(attr);
+            if let Some(living) = entity.get_living_entity() {
+                {
+                    let mut map = living
+                        .attributes
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    map.remove(&attribute.id);
+                };
+                crate::entity::attributes::send_attribute_updates_for_living(
+                    living,
+                    vec![attribute.clone()],
+                );
+            }
+            Ok(())
+        })
     }
 
     async fn reset_all_attributes(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
     ) -> wasmtime::Result<()> {
-        let entity = self.get(&this)?;
-        if let Some(living) = entity.get_living_entity() {
-            living.reset_effects_and_attributes();
-        }
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            if let Some(living) = entity.get_living_entity() {
+                living.reset_effects_and_attributes();
+            }
+            Ok(())
+        })
     }
 
     async fn get_equipment(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         slot: WitEquipmentSlot,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let entity = self.get(&this)?.clone();
-        if let Some(living) = entity.get_living_entity() {
-            let slot = from_wit_equipment_slot(slot);
-            let equipment = living
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let stack = equipment.get(&slot);
-            if !stack.is_empty() {
-                return Ok(Some(self.add(Arc::new(tokio::sync::Mutex::new(stack)))?));
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?.clone();
+            if let Some(living) = entity.get_living_entity() {
+                let slot = from_wit_equipment_slot(slot);
+                let equipment = living
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let stack = equipment.get(&slot);
+                if !stack.is_empty() {
+                    return Ok(Some(state.add(Arc::new(tokio::sync::Mutex::new(stack)))?));
+                }
             }
-        }
-        Ok(None)
+            Ok(None)
+        })
     }
 
     async fn set_equipment(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         slot: WitEquipmentSlot,
         stack: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let item_stack = if let Some(stack_res) = stack {
-            self.take(stack_res)?.lock().await.clone()
+            accessor.take_res(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
 
-        let entity = self.get(&this)?;
+        let entity = accessor.get_res(&this)?;
         if let Some(living) = entity.get_living_entity() {
             let slot = from_wit_equipment_slot(slot);
             {
@@ -420,86 +491,90 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn clear_equipment(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
-        let entity = self.get(&this)?;
-        if let Some(living) = entity.get_living_entity() {
-            let mut equipment = living
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let slots_to_clear: Vec<(
-                pumpkin_data::data_component_impl::EquipmentSlot,
-                pumpkin_data::item_stack::ItemStack,
-            )> = equipment
-                .equipment
-                .drain()
-                .map(|(slot, _)| (slot, pumpkin_data::item_stack::ItemStack::EMPTY.clone()))
-                .collect();
-            drop(equipment);
+    async fn clear_equipment(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+    ) -> wasmtime::Result<()> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            if let Some(living) = entity.get_living_entity() {
+                let mut equipment = living
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let slots_to_clear: Vec<(
+                    pumpkin_data::data_component_impl::EquipmentSlot,
+                    pumpkin_data::item_stack::ItemStack,
+                )> = equipment
+                    .equipment
+                    .drain()
+                    .map(|(slot, _)| (slot, pumpkin_data::item_stack::ItemStack::EMPTY.clone()))
+                    .collect();
+                drop(equipment);
 
-            living.send_equipment_changes(&slots_to_clear);
-        }
-        Ok(())
+                living.send_equipment_changes(&slots_to_clear);
+            }
+            Ok(())
+        })
     }
 
-    async fn get_age(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<i32> {
-        let entity = self.get(&this)?;
-        Ok(entity.get_living_entity().map_or(0, |living| {
-            living.entity.age.load(std::sync::atomic::Ordering::Relaxed)
-        }))
+    async fn get_age(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+    ) -> wasmtime::Result<i32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            Ok(entity.get_living_entity().map_or(0, |living| {
+                living.entity.age.load(std::sync::atomic::Ordering::Relaxed)
+            }))
+        })
     }
 
-    async fn set_age(&mut self, this: Resource<WitLivingEntity>, age: i32) -> wasmtime::Result<()> {
-        let entity = self.get(&this)?;
-        if let Some(living) = entity.get_living_entity() {
-            living
-                .entity
-                .age
-                .store(age, std::sync::atomic::Ordering::Relaxed);
-        }
-        Ok(())
+    async fn set_age(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+        age: i32,
+    ) -> wasmtime::Result<()> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = state.get(&this)?;
+            if let Some(living) = entity.get_living_entity() {
+                living
+                    .entity
+                    .age
+                    .store(age, std::sync::atomic::Ordering::Relaxed);
+            }
+            Ok(())
+        })
     }
 
     async fn send_system_message(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         message: Resource<TextComponent>,
     ) -> wasmtime::Result<()> {
-        let text_res = self.take(message)?;
-        if let Some(player) = self.get(&this)?.get_player() {
-            player.send_system_message(&text_res);
-        }
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let text_res = state.take(message)?;
+            if let Some(player) = state.get(&this)?.get_player() {
+                player.send_system_message(&text_res);
+            }
+            Ok(())
+        })
     }
-
-    async fn drop(&mut self, rep: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-}
-
-impl crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::world::HostLivingEntityWithStore<
-    PluginHostState,
-> for HasSelf<PluginHostState>
-{
     async fn damage(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         amount: f32,
         damage_type: WitDamageType,
     ) -> wasmtime::Result<()> {
-        let (entity, plugin) = {
-            let state = host.get();
-            (
-                state.get(&this)?.clone(),
-                active_plugin(state)?,
-            )
-        };
+        let entity = accessor.get_res(&this)?;
         let damage_type = from_wit_damage_type(damage_type);
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                entity.damage(&*entity, amount, damage_type);
-            })
-            .await
+        run_blocking(accessor, move || {
+            entity.damage(&*entity, amount, damage_type);
+        })
+        .await
     }
 }

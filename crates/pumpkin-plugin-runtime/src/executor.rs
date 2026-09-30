@@ -305,6 +305,17 @@ where
     }
 }
 
+struct ConcurrentGuestTask<T>(Box<dyn GuestStoreJob<T>>);
+
+impl<T> AccessorTask<T> for ConcurrentGuestTask<T>
+where
+    T: Send + 'static,
+{
+    fn run(self, accessor: &Accessor<T>) -> impl Future<Output = wasmtime::Result<()>> + Send {
+        self.0.run_concurrent(accessor)
+    }
+}
+
 enum StoreMessage<T> {
     Call(Box<dyn StoreJob<T>>),
     GuestCall(Box<dyn GuestStoreJob<T>>),
@@ -660,6 +671,38 @@ where
 
         self.receive_result(receiver, "Wasm plugin guest call did not complete")
             .await
+    }
+
+    /// Awaits `future` under the reentry context of the guest call that is active in this Store, so
+    /// guest calls made while it runs inherit that call's root admission.
+    ///
+    /// Host imports are polled by Wasmtime's own event loop, outside the guest call's task-local
+    /// scope, so the context has to come from the Store's active-context registry.
+    pub async fn in_active_context<R>(&self, future: impl Future<Output = R>) -> R {
+        match self.shared.reentry.current_context() {
+            Some(context) => scope(context, future).await,
+            None => future.await,
+        }
+    }
+
+    /// Runs synchronous host work on Tokio's blocking pool under the active guest call's reentry
+    /// context, without pumping the Store.
+    pub async fn spawn_blocking_in_active_context<R, F>(&self, operation: F) -> wasmtime::Result<R>
+    where
+        R: Send + 'static,
+        F: FnOnce() -> R + Send + 'static,
+    {
+        let context = self.shared.reentry.current_context();
+        tokio::task::spawn_blocking(move || match context {
+            Some(context) => sync_scope(context, operation),
+            None => operation(),
+        })
+        .await
+        .map_err(|error| {
+            wasmtime::Error::msg(format!(
+                "Synchronous Wasm plugin host operation failed: {error}"
+            ))
+        })
     }
 
     /// Waits for an outbound host operation while servicing callbacks routed
@@ -1033,7 +1076,7 @@ async fn run_driver<T>(
                                     active_calls.push(accessor.spawn(ConcurrentTask(job))?);
                                 }
                                 StoreMessage::GuestCall(job) => {
-                                    job.run_concurrent(accessor).await?;
+                                    active_calls.push(accessor.spawn(ConcurrentGuestTask(job))?);
                                 }
                                 StoreMessage::Shutdown {
                                     job,
@@ -1071,7 +1114,7 @@ async fn run_driver<T>(
                         tokio::task::yield_now().await;
                     }
                     StoreMessage::GuestCall(job) => {
-                        job.run_concurrent(accessor).await?;
+                        active_calls.push(accessor.spawn(ConcurrentGuestTask(job))?);
                     }
                     StoreMessage::Shutdown {
                         job,

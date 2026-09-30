@@ -6,11 +6,11 @@ interface uuid {
     }
 
     /// Generates a new random v4 UUID.
-    generate: func() -> uuid;
+    generate: async func() -> uuid;
 
-    /// Parses a UUID from a string. Returns none if the string is not a valid UUID.
+    /// Parses a UUID in memory. Returns none if the string is invalid.
     parse: func(s: string) -> option<uuid>;
 
-    /// Converts a UUID to its standard string representation.
+    /// Formats a UUID in its standard string representation in memory.
     to-string: func(id: uuid) -> string;
 }

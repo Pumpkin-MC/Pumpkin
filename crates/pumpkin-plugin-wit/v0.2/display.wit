@@ -57,115 +57,125 @@ interface display {
 
     /// Common base resource for all display entities.
     resource display-entity {
-        from-entity: static func(entity: borrow<entity>) -> option<display-entity>;
-        get-entity: func() -> entity;
+        /// Converts an owned entity handle to a display entity, if possible.
+        /// On failure, returns the original entity handle.
+        from-entity: static async func(entity: entity) -> result<display-entity, entity>;
+        get-entity: async func() -> entity;
 
-        get-transformation: func() -> display-transformation;
-        set-transformation: func(transformation: display-transformation);
+        get-transformation: async func() -> display-transformation;
+        set-transformation: async func(transformation: display-transformation);
 
-        get-interpolation-duration: func() -> s32;
-        set-interpolation-duration: func(duration: s32);
+        get-interpolation-duration: async func() -> s32;
+        set-interpolation-duration: async func(duration: s32);
 
-        get-interpolation-start: func() -> s32;
-        set-interpolation-start: func(delta-ticks: s32);
+        get-interpolation-start: async func() -> s32;
+        set-interpolation-start: async func(delta-ticks: s32);
 
-        get-teleport-duration: func() -> s32;
-        set-teleport-duration: func(duration: s32);
+        get-teleport-duration: async func() -> s32;
+        set-teleport-duration: async func(duration: s32);
 
-        get-billboard: func() -> billboard-mode;
-        set-billboard: func(mode: billboard-mode);
+        get-billboard: async func() -> billboard-mode;
+        set-billboard: async func(mode: billboard-mode);
 
-        get-view-range: func() -> f32;
-        set-view-range: func(range: f32);
+        get-view-range: async func() -> f32;
+        set-view-range: async func(range: f32);
 
-        get-shadow-radius: func() -> f32;
-        set-shadow-radius: func(radius: f32);
+        get-shadow-radius: async func() -> f32;
+        set-shadow-radius: async func(radius: f32);
 
-        get-shadow-strength: func() -> f32;
-        set-shadow-strength: func(strength: f32);
+        get-shadow-strength: async func() -> f32;
+        set-shadow-strength: async func(strength: f32);
 
-        get-display-width: func() -> f32;
-        set-display-width: func(width: f32);
+        get-display-width: async func() -> f32;
+        set-display-width: async func(width: f32);
 
-        get-display-height: func() -> f32;
-        set-display-height: func(height: f32);
+        get-display-height: async func() -> f32;
+        set-display-height: async func(height: f32);
 
-        get-glow-color-override: func() -> s32;
-        set-glow-color-override: func(color: s32);
+        get-glow-color-override: async func() -> s32;
+        set-glow-color-override: async func(color: s32);
 
-        get-brightness: func() -> s32;
-        set-brightness: func(brightness: s32);
+        get-brightness: async func() -> s32;
+        set-brightness: async func(brightness: s32);
     }
 
     /// Resource specifically for Block Display entities.
     resource block-display-entity {
-        from-entity: static func(entity: borrow<entity>) -> option<block-display-entity>;
-        get-display: func() -> display-entity;
-        get-entity: func() -> entity;
+        /// Converts an owned entity handle to a block display, if possible.
+        /// On failure, returns the original entity handle.
+        from-entity: static async func(entity: entity) -> result<block-display-entity, entity>;
+        get-display: async func() -> display-entity;
+        get-entity: async func() -> entity;
 
-        get-block-state-id: func() -> u16;
-        set-block-state-id: func(state-id: u16);
+        get-block-state-id: async func() -> u16;
+        set-block-state-id: async func(state-id: u16);
     }
 
     /// Resource specifically for Item Display entities.
     resource item-display-entity {
-        from-entity: static func(entity: borrow<entity>) -> option<item-display-entity>;
-        get-display: func() -> display-entity;
-        get-entity: func() -> entity;
+        /// Converts an owned entity handle to an item display, if possible.
+        /// On failure, returns the original entity handle.
+        from-entity: static async func(entity: entity) -> result<item-display-entity, entity>;
+        get-display: async func() -> display-entity;
+        get-entity: async func() -> entity;
 
-        get-item: func() -> option<item-stack>;
-        set-item: func(item: option<item-stack>);
+        get-item: async func() -> option<item-stack>;
+        set-item: async func(item: option<item-stack>);
 
-        get-item-display-mode: func() -> item-display-mode;
-        set-item-display-mode: func(mode: item-display-mode);
+        get-item-display-mode: async func() -> item-display-mode;
+        set-item-display-mode: async func(mode: item-display-mode);
     }
 
     /// Resource specifically for Text Display entities.
     resource text-display-entity {
-        from-entity: static func(entity: borrow<entity>) -> option<text-display-entity>;
-        get-display: func() -> display-entity;
-        get-entity: func() -> entity;
+        /// Converts an owned entity handle to a text display, if possible.
+        /// On failure, returns the original entity handle.
+        from-entity: static async func(entity: entity) -> result<text-display-entity, entity>;
+        get-display: async func() -> display-entity;
+        get-entity: async func() -> entity;
 
-        get-text: func() -> text-component;
-        set-text: func(text: text-component);
+        get-text: async func() -> text-component;
+        set-text: async func(text: text-component);
 
-        get-line-width: func() -> s32;
-        set-line-width: func(width: s32);
+        get-line-width: async func() -> s32;
+        set-line-width: async func(width: s32);
 
-        get-background: func() -> s32;
-        set-background: func(color: s32);
+        get-background: async func() -> s32;
+        set-background: async func(color: s32);
 
-        get-text-opacity: func() -> s8;
-        set-text-opacity: func(opacity: s8);
+        get-text-opacity: async func() -> s8;
+        set-text-opacity: async func(opacity: s8);
 
-        get-shadow: func() -> bool;
-        set-shadow: func(shadow: bool);
+        get-shadow: async func() -> bool;
+        set-shadow: async func(shadow: bool);
 
-        get-see-through: func() -> bool;
-        set-see-through: func(see-through: bool);
+        get-see-through: async func() -> bool;
+        set-see-through: async func(see-through: bool);
 
-        get-default-background: func() -> bool;
-        set-default-background: func(default-background: bool);
+        get-default-background: async func() -> bool;
+        set-default-background: async func(default-background: bool);
 
-        get-alignment: func() -> text-alignment;
-        set-alignment: func(alignment: text-alignment);
+        get-alignment: async func() -> text-alignment;
+        set-alignment: async func(alignment: text-alignment);
     }
 
     /// Resource specifically for Interaction entities.
     resource interaction-entity {
-        from-entity: static func(entity: borrow<entity>) -> option<interaction-entity>;
-        get-entity: func() -> entity;
+        /// Converts an owned entity handle to an interaction entity, if possible.
+        /// On failure, returns the original entity handle.
+        from-entity: static async func(entity: entity) -> result<interaction-entity, entity>;
+        get-entity: async func() -> entity;
 
-        get-width: func() -> f32;
-        set-width: func(width: f32);
+        get-width: async func() -> f32;
+        set-width: async func(width: f32);
 
-        get-height: func() -> f32;
-        set-height: func(height: f32);
+        get-height: async func() -> f32;
+        set-height: async func(height: f32);
 
-        get-response: func() -> bool;
-        set-response: func(response: bool);
+        get-response: async func() -> bool;
+        set-response: async func(response: bool);
 
-        get-last-attacker: func() -> option<uuid>;
-        get-last-interaction: func() -> option<uuid>;
+        get-last-attacker: async func() -> option<uuid>;
+        get-last-interaction: async func() -> option<uuid>;
     }
 }

@@ -35,49 +35,49 @@ interface boss-bar {
 
     /// Represents a boss bar that can be shown to players.
     resource boss-bar {
-        /// Creates a new boss bar.
-        constructor(title: text-component, color: boss-bar-color, division: boss-bar-division);
-        
+        /// Creates a boss bar and returns its handle.
+        create: static async func(title: text-component, color: boss-bar-color, division: boss-bar-division) -> boss-bar;
+
         /// Returns the title of this boss bar.
-        get-title: func() -> text-component;
-        
+        get-title: async func() -> text-component;
+
         /// Sets the title of this boss bar.
-        set-title: func(title: text-component);
-        
+        set-title: async func(title: text-component);
+
         /// Returns the health (0.0 to 1.0) of this boss bar.
-        get-health: func() -> f32;
-        
+        get-health: async func() -> f32;
+
         /// Sets the health (0.0 to 1.0) of this boss bar.
-        set-health: func(health: f32);
-        
+        set-health: async func(health: f32);
+
         /// Returns the color of this boss bar.
-        get-color: func() -> boss-bar-color;
-        
+        get-color: async func() -> boss-bar-color;
+
         /// Sets the color of this boss bar.
-        set-color: func(color: boss-bar-color);
-        
+        set-color: async func(color: boss-bar-color);
+
         /// Returns the division of this boss bar.
-        get-division: func() -> boss-bar-division;
-        
+        get-division: async func() -> boss-bar-division;
+
         /// Sets the division of this boss bar.
-        set-division: func(division: boss-bar-division);
+        set-division: async func(division: boss-bar-division);
 
         /// Returns the currently active metadata on this boss bar.
-        get-metadata: func() -> boss-bar-metadata;
+        get-metadata: async func() -> boss-bar-metadata;
 
         /// Updates the metadata on this boss bar.
-        set-metadata: func(metadata: boss-bar-metadata);
-        
+        set-metadata: async func(metadata: boss-bar-metadata);
+
         /// Adds a player to this boss bar, making it visible to them.
-        add-player: func(player: player);
-        
+        add-player: async func(player: player);
+
         /// Removes a player from this boss bar, hiding it from them.
-        remove-player: func(player: player);
-        
+        remove-player: async func(player: player);
+
         /// Returns a list of all players currently seeing this boss bar.
-        get-players: func() -> list<player>;
-        
+        get-players: async func() -> list<player>;
+
         /// Removes this boss bar from all players and cleans it up.
-        remove-all: func();
+        remove-all: async func();
     }
 }

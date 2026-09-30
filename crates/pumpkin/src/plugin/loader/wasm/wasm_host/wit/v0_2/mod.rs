@@ -1,12 +1,13 @@
 use crate::plugin::{
     PluginMetadata,
     loader::wasm::wasm_host::{
-        PluginInitError, PluginInstance, concurrent_store::LegacySyncReentry,
-        state::PluginHostState,
+        PluginInitError, PluginInstance,
+        concurrent_store::LegacySyncReentry,
+        state::{FromResource, PluginHostState},
     },
 };
 use pumpkin_host_bindings::v0_2::PluginPre;
-use wasmtime::component::{HasSelf, InstancePre, Linker};
+use wasmtime::component::{Accessor, HasSelf, InstancePre, Linker, Resource};
 use wasmtime::{Engine, Store};
 
 pub mod advancement;
@@ -68,6 +69,80 @@ pub mod uuid;
 pub mod world;
 
 pub use pumpkin_host_bindings::v0_2::{Plugin, pumpkin};
+
+fn active_plugin(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
+) -> wasmtime::Result<std::sync::Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>> {
+    accessor.with(|mut host| {
+        host.get()
+            .plugin
+            .as_ref()
+            .and_then(std::sync::Weak::upgrade)
+            .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))
+    })
+}
+
+/// Runs synchronous server work on Tokio's blocking pool while the store keeps servicing the guest,
+/// keeping the active guest call's reentry context so guest calls made from `operation` stay in
+/// the same chain.
+pub(crate) async fn run_blocking<R: Send + 'static>(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
+    operation: impl FnOnce() -> R + Send + 'static,
+) -> wasmtime::Result<R> {
+    active_plugin(accessor)?
+        .store
+        .spawn_blocking_in_active_context(operation)
+        .await
+}
+
+/// Awaits a host operation that can fire plugin events under the active guest call's reentry
+/// context.
+pub(crate) async fn in_active_context<R>(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
+    future: impl std::future::Future<Output = R>,
+) -> wasmtime::Result<R> {
+    Ok(active_plugin(accessor)?
+        .store
+        .in_active_context(future)
+        .await)
+}
+
+/// Resource-table access from an [`Accessor`](wasmtime::component::Accessor) without holding the
+/// store borrow across an `.await`.
+pub(crate) trait AccessorExt {
+    fn get_res<T: FromResource>(&self, res: &Resource<T>) -> wasmtime::Result<T::Internal>
+    where
+        T::Internal: Clone;
+    fn take_res<T: FromResource>(&self, res: Resource<T>) -> wasmtime::Result<T::Internal>;
+    fn add_res<T: FromResource>(&self, item: T::Internal) -> wasmtime::Result<Resource<T>>;
+    fn server(&self) -> wasmtime::Result<std::sync::Arc<crate::server::Server>>;
+}
+
+impl AccessorExt for Accessor<PluginHostState, HasSelf<PluginHostState>> {
+    fn get_res<T: FromResource>(&self, res: &Resource<T>) -> wasmtime::Result<T::Internal>
+    where
+        T::Internal: Clone,
+    {
+        self.with(|mut host| host.get().get(res).cloned())
+    }
+
+    fn take_res<T: FromResource>(&self, res: Resource<T>) -> wasmtime::Result<T::Internal> {
+        self.with(|mut host| host.get().take(res))
+    }
+
+    fn add_res<T: FromResource>(&self, item: T::Internal) -> wasmtime::Result<Resource<T>> {
+        self.with(|mut host| host.get().add(item))
+    }
+
+    fn server(&self) -> wasmtime::Result<std::sync::Arc<crate::server::Server>> {
+        self.with(|mut host| {
+            host.get()
+                .server
+                .clone()
+                .ok_or_else(|| wasmtime::Error::msg("Server not available"))
+        })
+    }
+}
 
 mod resource_with {
     use super::pumpkin::plugin;

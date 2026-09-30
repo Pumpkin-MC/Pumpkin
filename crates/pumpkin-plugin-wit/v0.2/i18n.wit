@@ -9,7 +9,7 @@ interface i18n {
     ///
     /// # Returns
     /// The localized string, falling back to English or the key itself.
-    translate: func(key: string, locale: locale) -> string;
+    translate: async func(key: string, locale: locale) -> string;
 
     /// Loads custom translations from a JSON string.
     ///
@@ -17,5 +17,5 @@ interface i18n {
     /// * `namespace`: The namespace to associate these keys with.
     /// * `json`: A JSON string containing a flat map of translations.
     /// * `locale`: The target locale for these translations.
-    load-translations: func(namespace: string, json: string, locale: locale);
+    load-translations: async func(namespace: string, json: string, locale: locale);
 }
