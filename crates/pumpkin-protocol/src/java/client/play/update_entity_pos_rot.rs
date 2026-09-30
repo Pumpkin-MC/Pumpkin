@@ -7,6 +7,8 @@ use crate::{
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
 };
 
+use super::update_entity_pos::read_on_ground_and_linear_delta;
+
 #[java_packet(MOVE_ENTITY_POS_ROT)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CUpdateEntityPosRot {
@@ -59,14 +61,9 @@ impl ClientPacket for CUpdateEntityPosRot {
 impl<'a> ServerPacket<'a> for CUpdateEntityPosRot {
     fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let entity_id = bytebuf.get_var_int()?;
-        let delta = Vector3::new(
-            bytebuf.get_i16_be()?,
-            bytebuf.get_i16_be()?,
-            bytebuf.get_i16_be()?,
-        );
+        let (on_ground, delta) = read_on_ground_and_linear_delta(bytebuf)?;
         let yaw = bytebuf.get_u8()?;
         let pitch = bytebuf.get_u8()?;
-        let on_ground = bytebuf.get_bool()?;
         Ok(Self {
             entity_id,
             delta,

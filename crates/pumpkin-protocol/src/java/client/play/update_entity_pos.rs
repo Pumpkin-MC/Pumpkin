@@ -8,6 +8,28 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
+/// 26.3 packs `on_ground` in bit 0 of a `VarInt` ahead of the delta. Remaining bits are the
+/// `VecDelta` step count; Pumpkin only writes 0 (one linear i16 triple).
+pub(super) fn read_on_ground_and_linear_delta(
+    bytebuf: &mut impl NetworkReadExt,
+) -> Result<(bool, Vector3<i16>), ReadingError> {
+    let properties = bytebuf.get_var_int()?.0;
+    if properties >> 1 != 0 {
+        return Err(ReadingError::Message(
+            "entity move delta is not a single linear step".into(),
+        ));
+    }
+    let on_ground = properties & 1 != 0;
+    Ok((
+        on_ground,
+        Vector3::new(
+            bytebuf.get_i16_be()?,
+            bytebuf.get_i16_be()?,
+            bytebuf.get_i16_be()?,
+        ),
+    ))
+}
+
 #[java_packet(MOVE_ENTITY_POS)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CUpdateEntityPos {
@@ -48,12 +70,7 @@ impl ClientPacket for CUpdateEntityPos {
 impl<'a> ServerPacket<'a> for CUpdateEntityPos {
     fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let entity_id = bytebuf.get_var_int()?;
-        let delta = Vector3::new(
-            bytebuf.get_i16_be()?,
-            bytebuf.get_i16_be()?,
-            bytebuf.get_i16_be()?,
-        );
-        let on_ground = bytebuf.get_bool()?;
+        let (on_ground, delta) = read_on_ground_and_linear_delta(bytebuf)?;
         Ok(Self {
             entity_id,
             delta,

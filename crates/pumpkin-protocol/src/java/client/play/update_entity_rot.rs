@@ -47,9 +47,9 @@ impl ClientPacket for CUpdateEntityRot {
 impl<'a> ServerPacket<'a> for CUpdateEntityRot {
     fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let entity_id = bytebuf.get_var_int()?;
+        let on_ground = bytebuf.get_bool()?;
         let yaw = bytebuf.get_u8()?;
         let pitch = bytebuf.get_u8()?;
-        let on_ground = bytebuf.get_bool()?;
         Ok(Self {
             entity_id,
             yaw,
