@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:noise_threshold",
+  "default_state": "minecraft:dandelion",
+  "high_chance": 0.33333334,
+  "high_states": [
+    "minecraft:poppy",
+    "minecraft:azure_bluet",
+    "minecraft:oxeye_daisy",
+    "minecraft:cornflower"
+  ],
+  "low_states": [
+    "minecraft:orange_tulip",
+    "minecraft:red_tulip",
+    "minecraft:pink_tulip",
+    "minecraft:white_tulip"
+  ],
+  "noise": {
+    "base_amplitude": 0.955388882960065,
+    "base_octave": 0
+  },
+  "scale": 0.005,
+  "seed": 2345,
+  "threshold": -0.8
+}

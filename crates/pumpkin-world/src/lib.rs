@@ -1,10 +1,7 @@
 #![allow(clippy::unreachable)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
-use pumpkin_data::{
-    Block, BlockState, chunk_gen_settings::GenerationSettings, dimension::Dimension,
-};
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_data::{Block, dimension::Dimension};
 
 pub mod biome;
 pub mod block;
@@ -14,17 +11,17 @@ pub mod cylindrical_chunk_iterator;
 pub mod data;
 pub mod dimension;
 pub mod generation;
-pub mod inventory;
 pub mod level;
 pub mod lighting;
 pub mod poi;
+pub mod test_instance;
 pub mod tick;
 pub mod world;
 pub mod world_info;
 
-pub const CURRENT_MC_VERSION: &str = "26.2";
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26.40";
-pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 2168;
+pub const CURRENT_MC_VERSION: &str = "26.3";
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26.51";
+pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 2193;
 
 #[macro_export]
 macro_rules! global_path {
@@ -49,19 +46,14 @@ pub use generation::{
 };
 
 use crate::generation::{
-    biome_coords,
-    noise::{CHUNK_DIM, ChunkNoiseGenerator, aquifer_sampler::FluidLevel},
+    noise::{
+        CHUNK_DIM, ChunkNoiseGenerator, aquifer_sampler::FluidLevel,
+        router::density_volume::DensityVolume,
+    },
     positions::chunk_pos,
-    proto_chunk::TerrainCache,
 };
 
-pub fn bench_create_and_populate_noise(
-    _base_router: &ProtoNoiseRouters,
-    random_config: &GlobalRandomConfig,
-    _settings: &GenerationSettings,
-    _terrain_cache: &TerrainCache,
-    _default_block: &'static BlockState,
-) {
+pub fn bench_create_and_populate_noise(random_config: &GlobalRandomConfig) {
     use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
     use crate::generation::noise::router::surface_height_sampler::{
         SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
@@ -81,7 +73,6 @@ pub fn bench_create_and_populate_noise(
     // Create noise sampler and other required components
     let settings = generator.settings;
     let generation_shape = &settings.shape;
-    let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
     let sampler = StandardChunkFluidLevelSampler::new(
         FluidLevel::new(
             settings.sea_level,
@@ -96,9 +87,14 @@ pub fn bench_create_and_populate_noise(
     let mut noise_sampler = ChunkNoiseGenerator::new(
         &generator.base_router.noise,
         &generator.random_config,
-        horizontal_cell_count as usize,
-        start_x,
-        start_z,
+        DensityVolume::with_block_step(
+            CHUNK_DIM as usize,
+            generation_shape.height as usize,
+            CHUNK_DIM as usize,
+            start_x,
+            i32::from(generation_shape.min_y),
+            start_z,
+        ),
         generation_shape,
         sampler,
         settings.aquifers_enabled,
@@ -109,17 +105,7 @@ pub fn bench_create_and_populate_noise(
     );
 
     // Surface height estimator
-    let biome_pos = Vector2::new(
-        biome_coords::from_block(start_x),
-        biome_coords::from_block(start_z),
-    );
-    let horizontal_biome_end = biome_coords::from_block(
-        horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
-    );
     let surface_config = SurfaceHeightSamplerBuilderOptions::new(
-        biome_pos.x,
-        biome_pos.y,
-        horizontal_biome_end as usize,
         generation_shape.min_y as i32,
         generation_shape.max_y() as i32,
         generation_shape.vertical_cell_block_count() as usize,
@@ -137,18 +123,9 @@ pub fn bench_create_and_populate_noise(
     );
 }
 
-pub fn bench_create_and_populate_biome(
-    _base_router: &ProtoNoiseRouters,
-    random_config: &GlobalRandomConfig,
-    _settings: &GenerationSettings,
-    _terrain_cache: &TerrainCache,
-    _default_block: &'static BlockState,
-) {
+pub fn bench_create_and_populate_biome(random_config: &GlobalRandomConfig) {
     use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
-    use crate::generation::noise::router::multi_noise_sampler::{
-        MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
-    };
-    use crate::generation::{biome_coords, positions::chunk_pos};
+    use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
     use pumpkin_util::world_seed::Seed;
 
     let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(
@@ -161,34 +138,16 @@ pub fn bench_create_and_populate_biome(
     let mut chunk = ProtoChunk::new(0, 0, &world_gen);
 
     // Create multi-noise sampler
-    let start_x = chunk_pos::start_block_x(0);
-    let start_z = chunk_pos::start_block_z(0);
-    let biome_pos = Vector2::new(
-        biome_coords::from_block(start_x),
-        biome_coords::from_block(start_z),
-    );
-    let horizontal_biome_end = biome_coords::from_block(16);
-    let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
-        biome_pos.x,
-        biome_pos.y,
-        horizontal_biome_end as usize,
-    );
-    let mut multi_noise_sampler =
-        MultiNoiseSampler::generate(&generator.base_router.multi_noise, &multi_noise_config);
+    let mut multi_noise_sampler = MultiNoiseSampler::generate(&generator.base_router.multi_noise);
 
     chunk.populate_biomes(generator, &mut multi_noise_sampler);
 }
 
-pub fn bench_create_and_populate_noise_with_surface(
-    _base_router: &ProtoNoiseRouters,
-    random_config: &GlobalRandomConfig,
-    _settings: &GenerationSettings,
-    _terrain_cache: &TerrainCache,
-    _default_block: &'static BlockState,
-) {
+pub fn bench_create_and_populate_noise_with_surface(random_config: &GlobalRandomConfig) {
+    use crate::chunk_system::{Chunk, generation_cache::SurfaceBiomeNeighborhood};
     use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
     use crate::generation::noise::router::{
-        multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+        multi_noise_sampler::MultiNoiseSampler,
         surface_height_sampler::{
             SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
         },
@@ -208,23 +167,11 @@ pub fn bench_create_and_populate_noise_with_surface(
     // Create all required components
     let settings = generator.settings;
     let generation_shape = &settings.shape;
-    let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
     let start_x = chunk_pos::start_block_x(0);
     let start_z = chunk_pos::start_block_z(0);
 
     // Multi-noise sampler for biomes
-    let biome_pos = Vector2::new(
-        biome_coords::from_block(start_x),
-        biome_coords::from_block(start_z),
-    );
-    let horizontal_biome_end = biome_coords::from_block(16);
-    let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
-        biome_pos.x,
-        biome_pos.y,
-        horizontal_biome_end as usize,
-    );
-    let mut multi_noise_sampler =
-        MultiNoiseSampler::generate(&generator.base_router.multi_noise, &multi_noise_config);
+    let mut multi_noise_sampler = MultiNoiseSampler::generate(&generator.base_router.multi_noise);
 
     // Noise sampler
     let sampler = StandardChunkFluidLevelSampler::new(
@@ -238,9 +185,14 @@ pub fn bench_create_and_populate_noise_with_surface(
     let mut noise_sampler = ChunkNoiseGenerator::new(
         &generator.base_router.noise,
         &generator.random_config,
-        horizontal_cell_count as usize,
-        start_x,
-        start_z,
+        DensityVolume::with_block_step(
+            CHUNK_DIM as usize,
+            generation_shape.height as usize,
+            CHUNK_DIM as usize,
+            start_x,
+            i32::from(generation_shape.min_y),
+            start_z,
+        ),
         generation_shape,
         sampler,
         settings.aquifers_enabled,
@@ -252,9 +204,6 @@ pub fn bench_create_and_populate_noise_with_surface(
 
     // Surface height estimator
     let surface_config = SurfaceHeightSamplerBuilderOptions::new(
-        biome_pos.x,
-        biome_pos.y,
-        horizontal_biome_end as usize,
         generation_shape.min_y as i32,
         generation_shape.max_y() as i32,
         generation_shape.vertical_cell_block_count() as usize,
@@ -265,11 +214,35 @@ pub fn bench_create_and_populate_noise_with_surface(
     );
 
     chunk.populate_biomes(generator, &mut multi_noise_sampler);
+
+    // Surface biome zoom may select a quart from an immediate neighbor. Build the same read-only
+    // palette snapshot that the runtime scheduler supplies to a Surface task.
+    let mut surface_biomes = SurfaceBiomeNeighborhood::new(0, 0);
+    for chunk_x in -1..=1 {
+        for chunk_z in -1..=1 {
+            if chunk_x == 0 && chunk_z == 0 {
+                continue;
+            }
+            let mut neighbor = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
+            neighbor.step_to_biomes(generator);
+            assert!(surface_biomes.push_chunk(&Chunk::Proto(Box::new(neighbor))));
+        }
+    }
+    let center = Chunk::Proto(Box::new(chunk));
+    assert!(surface_biomes.push_chunk(&center));
+    let Chunk::Proto(mut chunk) = center else {
+        unreachable!()
+    };
+
     chunk.populate_noise(
         generator,
         &mut noise_sampler,
         &generator.random_config.ore_random_deriver,
         &mut surface_height_estimate_sampler,
     );
-    chunk.build_surface(generator, &mut surface_height_estimate_sampler);
+    chunk.build_surface(
+        generator,
+        &surface_biomes,
+        &mut surface_height_estimate_sampler,
+    );
 }

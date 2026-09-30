@@ -1,7 +1,4 @@
-use pumpkin_data::{
-    Block, BlockState,
-    block_properties::{BlockProperties, OakFenceLikeProperties},
-};
+use pumpkin_data::{Block, BlockState, block_properties::OakFenceLikeProperties};
 use pumpkin_util::{
     BlockDirection,
     math::block_box::BlockBox,

@@ -1,3 +1,5 @@
+// Last verified for v2169
+
 use pumpkin_macros::packet;
 
 use crate::{
@@ -9,7 +11,6 @@ use crate::{
 #[derive(PacketWrite)]
 #[packet(49)]
 pub struct CInventoryContent {
-    // https://mojang.github.io/bedrock-protocol-docs/docs/InventoryContentPacket.html
     pub container_id: VarUInt,
     pub slots: Vec<NetworkItemStackDescriptor>,
     pub full_container_name: FullContainerName,

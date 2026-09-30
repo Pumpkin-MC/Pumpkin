@@ -1,7 +1,7 @@
 use pumpkin_data::recipes::RecipeCategoryTypes;
 use pumpkin_protocol::codec::recipe::{
-    DynamicRecipe, OwnedCookingRecipe, OwnedCookingRecipeType, OwnedCraftingRecipe,
-    OwnedRecipeIngredient, OwnedRecipeResult,
+    DynamicRecipe, OwnedBrewingRecipe, OwnedCookingRecipe, OwnedCookingRecipeType,
+    OwnedCraftingRecipe, OwnedRecipeIngredient, OwnedRecipeResult,
 };
 use serde_json::Value;
 
@@ -22,6 +22,7 @@ pub fn parse_recipe(namespace: &str, name: &str, json_str: &str) -> Option<Dynam
             .map(|c| DynamicRecipe::Cooking(OwnedCookingRecipeType::Smoking(c))),
         "campfire_cooking" => parse_cooking(recipe_id, &value, 600)
             .map(|c| DynamicRecipe::Cooking(OwnedCookingRecipeType::CampfireCooking(c))),
+        "brewing" => parse_brewing(recipe_id, &value).map(DynamicRecipe::Brewing),
         _ => None,
     }
 }
@@ -197,6 +198,36 @@ fn parse_cooking(
     })
 }
 
+fn parse_brewing(recipe_id: String, value: &Value) -> Option<OwnedBrewingRecipe> {
+    let input = value.get("input")?;
+    let input_item = normalize_id(input.get("item")?.as_str()?);
+    let input_potion = input
+        .get("potion_contents")
+        .and_then(|pc| pc.get("potions").or_else(|| pc.get("potion")))
+        .and_then(Value::as_str)
+        .map(normalize_id);
+
+    let reagent = normalize_id(value.get("reagent")?.get("item")?.as_str()?);
+
+    let output = value.get("output")?;
+    let output_item = normalize_id(output.get("id").or_else(|| output.get("item"))?.as_str()?);
+    let output_potion = output
+        .get("components")
+        .and_then(|c| c.get("minecraft:potion_contents"))
+        .and_then(|pc| pc.get("potion"))
+        .and_then(Value::as_str)
+        .map(normalize_id);
+
+    Some(OwnedBrewingRecipe {
+        recipe_id,
+        input_item,
+        input_potion,
+        reagent,
+        output_item,
+        output_potion,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,6 +320,46 @@ mod tests {
             assert_eq!(cooking.cooking_time, 200);
         } else {
             panic!("Expected smelting recipe");
+        }
+    }
+
+    #[test]
+    fn parse_brewing_recipe() {
+        let json = r#"{
+            "type": "minecraft:brewing",
+            "input": {
+                "item": "minecraft:potion",
+                "potion_contents": {
+                    "potions": "minecraft:water"
+                }
+            },
+            "output": {
+                "components": {
+                    "minecraft:potion_contents": {
+                        "potion": "minecraft:awkward"
+                    }
+                },
+                "id": "minecraft:potion"
+            },
+            "reagent": {
+                "item": "minecraft:nether_wart"
+            }
+        }"#;
+
+        let parsed = parse_recipe("minecraft", "brewing/potion_water_nether_wart", json);
+        assert!(parsed.is_some());
+        if let Some(DynamicRecipe::Brewing(brewing)) = parsed {
+            assert_eq!(
+                brewing.recipe_id,
+                "minecraft:brewing/potion_water_nether_wart"
+            );
+            assert_eq!(brewing.input_item, "minecraft:potion");
+            assert_eq!(brewing.input_potion.as_deref(), Some("minecraft:water"));
+            assert_eq!(brewing.reagent, "minecraft:nether_wart");
+            assert_eq!(brewing.output_item, "minecraft:potion");
+            assert_eq!(brewing.output_potion.as_deref(), Some("minecraft:awkward"));
+        } else {
+            panic!("Expected brewing recipe");
         }
     }
 }

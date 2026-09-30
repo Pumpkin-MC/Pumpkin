@@ -17,23 +17,18 @@ const PERMISSION: &str = "minecraft:command.stop";
 struct StopCommandExecutor;
 
 impl CommandExecutor for StopCommandExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_STOP_STOPPING,
-                        translation::bedrock::COMMANDS_STOP_START,
-                        [],
-                    )
-                    .color_named(NamedColor::Red),
-                    true,
-                )
-                .await;
-            stop_server();
-            Ok(1)
-        })
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_STOP_STOPPING,
+                translation::bedrock::COMMANDS_STOP_START,
+                [],
+            )
+            .color_named(NamedColor::Red),
+            true,
+        );
+        stop_server();
+        Ok(1)
     }
 }
 

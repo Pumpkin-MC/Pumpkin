@@ -81,12 +81,19 @@ impl ClientPacket for CCommandSuggestions {
         mut write: impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_var_int(&self.id)?;
-        write.write_var_int(&self.start)?;
-        write.write_var_int(&self.length)?;
-        write.write_var_int(&VarInt(self.matches.len() as i32))?;
-        for match_ in &self.matches {
-            match_.write(&mut write, version)?;
+        if *version >= JavaMinecraftVersion::V_1_13 {
+            write.write_var_int(&self.id)?;
+            write.write_var_int(&self.start)?;
+            write.write_var_int(&self.length)?;
+            write.write_var_int(&VarInt(self.matches.len() as i32))?;
+            for match_ in &self.matches {
+                match_.write(&mut write, version)?;
+            }
+        } else {
+            write.write_var_int(&VarInt(self.matches.len() as i32))?;
+            for match_ in &self.matches {
+                write.write_string(&match_.suggestion)?;
+            }
         }
         Ok(())
     }

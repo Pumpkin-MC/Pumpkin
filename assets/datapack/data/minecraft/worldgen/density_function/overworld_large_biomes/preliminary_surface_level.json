@@ -1,0 +1,87 @@
+{
+  "type": "minecraft:find_top_surface",
+  "cell_height": 8,
+  "density": {
+    "type": "minecraft:add",
+    "left": {
+      "type": "minecraft:lerp",
+      "alpha": {
+        "type": "minecraft:gradient",
+        "axis": "y",
+        "from_coordinate": -64,
+        "from_value": 0.0,
+        "to_coordinate": -40,
+        "to_value": 1.0
+      },
+      "first": 0.1171875,
+      "second": {
+        "type": "minecraft:lerp",
+        "alpha": {
+          "type": "minecraft:gradient",
+          "axis": "y",
+          "from_coordinate": 240,
+          "from_value": 1.0,
+          "to_coordinate": 256,
+          "to_value": 0.0
+        },
+        "first": -0.078125,
+        "second": {
+          "type": "minecraft:clamp",
+          "input": {
+            "type": "minecraft:add",
+            "left": {
+              "type": "minecraft:mul",
+              "left": {
+                "type": "minecraft:quarter_negative",
+                "input": {
+                  "type": "minecraft:mul",
+                  "left": {
+                    "type": "minecraft:add",
+                    "left": {
+                      "type": "minecraft:gradient",
+                      "axis": "y",
+                      "from_coordinate": -64,
+                      "from_value": 1.5,
+                      "to_coordinate": 320,
+                      "to_value": -1.5
+                    },
+                    "right": "minecraft:overworld_large_biomes/offset"
+                  },
+                  "right": "minecraft:overworld_large_biomes/factor"
+                }
+              },
+              "right": 4.0
+            },
+            "right": -0.703125
+          },
+          "max": 64.0,
+          "min": -64.0
+        }
+      }
+    },
+    "right": -0.390625
+  },
+  "lower_bound": -64,
+  "upper_bound": {
+    "type": "minecraft:clamp",
+    "input": {
+      "type": "minecraft:add",
+      "left": {
+        "type": "minecraft:mul",
+        "left": {
+          "type": "minecraft:sub",
+          "left": {
+            "type": "minecraft:div",
+            "left": 0.2734375,
+            "right": "minecraft:overworld_large_biomes/factor"
+          },
+          "right": "minecraft:overworld_large_biomes/offset"
+        },
+        "right": -128.0
+      },
+      "right": 128.0
+    },
+    "max": 320.0,
+    "min": -40.0
+  }
+}

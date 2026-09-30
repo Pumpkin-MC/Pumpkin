@@ -1,25 +1,16 @@
-use std::io::{Error, Read};
+// Last verified for v2169
 
 use pumpkin_macros::packet;
 
 use crate::{codec::var_int::VarInt, serial::PacketRead};
 
-#[derive(Debug)]
+#[derive(Debug, PacketRead)]
 #[packet(156)]
 pub struct SPacketViolationWarning {
+    // TODO: enum PacketViolationType
     pub violation_type: VarInt,
-    pub severity: VarInt,
-    pub packet_id: VarInt,
-    pub context: String,
-}
-
-impl PacketRead for SPacketViolationWarning {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        Ok(Self {
-            violation_type: VarInt::read(reader)?,
-            severity: VarInt::read(reader)?,
-            packet_id: VarInt::read(reader)?,
-            context: String::read(reader)?,
-        })
-    }
+    // TODO: enum PacketViolationSeverity
+    pub violation_severity: VarInt,
+    pub violation_packet_id: VarInt,
+    pub violation_context: String,
 }

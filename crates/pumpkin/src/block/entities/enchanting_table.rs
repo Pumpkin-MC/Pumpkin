@@ -1,8 +1,7 @@
 use super::BlockEntity;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use std::pin::Pin;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 pub struct EnchantingTableBlockEntity {
     pub position: BlockPos,
@@ -29,15 +28,12 @@ impl BlockEntity for EnchantingTableBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if let Some(name) = self.custom_name.lock().await.as_ref() {
-                nbt.put_string("CustomName", name.clone());
-            }
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Ok(name) = self.custom_name.lock()
+            && let Some(name) = name.as_ref()
+        {
+            nbt.put_string("CustomName", name.clone());
+        }
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -61,7 +57,7 @@ impl EnchantingTableBlockEntity {
     pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
-            custom_name: Mutex::const_new(None),
+            custom_name: Mutex::new(None),
         }
     }
 }

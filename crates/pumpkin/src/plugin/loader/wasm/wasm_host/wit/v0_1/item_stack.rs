@@ -1,10 +1,15 @@
-use crate::plugin::loader::wasm::wasm_host::state::{ItemStackResource, PluginHostState};
+use crate::plugin::loader::wasm::wasm_host::state::PluginHostState;
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::attributes::{
+    Attribute as WitAttribute, AttributeModifier as WitAttributeModifier,
+    ModifierOperation as WitModifierOperation,
+};
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::data_components::DataComponent as WitDataComponent;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::enchantments::Enchantment as WitEnchantment;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::item_stack::{
     CustomEnchantmentValue as WitCustomEnchantmentValue,
     DataComponentValue as WitDataComponentValue, EnchantmentValue as WitEnchantmentValue,
-    Host as ItemStackInterfaceHost, HostItemStack, ItemStack as ItemStackHandle,
+    Host as ItemStackInterfaceHost, HostItemStack,
+    ItemAttributeModifier as WitItemAttributeModifier, ItemStack as ItemStackHandle,
 };
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::text::TextComponent as WitTextComponent;
 use std::sync::Arc;
@@ -12,10 +17,13 @@ use tokio::sync::Mutex;
 use wasmtime::component::Resource;
 
 use super::common::{WitNbtTree, from_wit_nbt_tree, to_wit_nbt_tree};
-use crate::plugin::loader::wasm::wasm_host::wit::v0_1::player::text_component_from_resource;
 use pumpkin_data::Enchantment;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component_impl::{CustomNameImpl, EnchantmentsImpl, LoreImpl};
+use pumpkin_data::data_component_impl::combat::{Modifier, Operation};
+use pumpkin_data::data_component_impl::{
+    AttributeModifiersImpl, CustomNameImpl, EnchantmentsImpl, LoreImpl,
+};
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::data_component::{deserialize, serialize};
 use std::borrow::Cow;
@@ -40,15 +48,27 @@ pub(crate) fn from_wit_enchantment(id: WitEnchantment) -> &'static Enchantment {
     Enchantment::from_id(id as u8).expect("valid enchantment ID")
 }
 
-impl PluginHostState {
-    pub fn get_item_stack(
-        &self,
-        res: &Resource<ItemStackHandle>,
-    ) -> wasmtime::Result<Arc<Mutex<pumpkin_data::item_stack::ItemStack>>> {
-        self.resource_table
-            .get::<ItemStackResource>(&Resource::new_own(res.rep()))
-            .map(|r| r.provider.clone())
-            .map_err(wasmtime::Error::from)
+#[must_use]
+pub fn to_wit_attribute(attr: &Attributes) -> WitAttribute {
+    // SAFETY: WIT enum is generated in the same order as the internal ID
+    unsafe { std::mem::transmute(attr.id) }
+}
+
+#[must_use]
+pub const fn from_wit_item_operation(op: WitModifierOperation) -> Operation {
+    match op {
+        WitModifierOperation::Add => Operation::AddValue,
+        WitModifierOperation::MultiplyBase => Operation::AddMultipliedBase,
+        WitModifierOperation::MultiplyTotal => Operation::AddMultipliedTotal,
+    }
+}
+
+#[must_use]
+pub const fn to_wit_item_operation(op: Operation) -> WitModifierOperation {
+    match op {
+        Operation::AddValue => WitModifierOperation::Add,
+        Operation::AddMultipliedBase => WitModifierOperation::MultiplyBase,
+        Operation::AddMultipliedTotal => WitModifierOperation::MultiplyTotal,
     }
 }
 
@@ -67,20 +87,20 @@ impl HostItemStack for PluginHostState {
         )
         .unwrap_or(&pumpkin_data::item::Item::AIR);
         let stack = pumpkin_data::item_stack::ItemStack::new(count, item);
-        self.add_item_stack(Arc::new(Mutex::new(stack)))
+        self.add(Arc::new(Mutex::new(stack)))
     }
 
     async fn get_registry_key(
         &mut self,
         res: Resource<ItemStackHandle>,
     ) -> wasmtime::Result<String> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let stack = stack.lock().await;
         Ok(stack.item.registry_key.to_string())
     }
 
     async fn get_count(&mut self, res: Resource<ItemStackHandle>) -> wasmtime::Result<u8> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let stack = stack.lock().await;
         Ok(stack.item_count)
     }
@@ -90,14 +110,14 @@ impl HostItemStack for PluginHostState {
         res: Resource<ItemStackHandle>,
         count: u8,
     ) -> wasmtime::Result<()> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let mut stack = stack.lock().await;
         stack.item_count = count;
         Ok(())
     }
 
     async fn get_max_count(&mut self, res: Resource<ItemStackHandle>) -> wasmtime::Result<u8> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let stack = stack.lock().await;
         // Search in components for MaxStackSize
         if let Some((_, data)) = stack
@@ -118,7 +138,7 @@ impl HostItemStack for PluginHostState {
         &mut self,
         res: Resource<ItemStackHandle>,
     ) -> wasmtime::Result<Vec<WitEnchantmentValue>> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let stack = stack.lock().await;
         let mut enchantments = Vec::new();
         if let Some((_, Some(data))) = stack
@@ -143,7 +163,7 @@ impl HostItemStack for PluginHostState {
         enchantment: WitEnchantment,
         level: u32,
     ) -> wasmtime::Result<()> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let mut stack = stack.lock().await;
         let enc = from_wit_enchantment(enchantment);
 
@@ -187,7 +207,7 @@ impl HostItemStack for PluginHostState {
         res: Resource<ItemStackHandle>,
         enchantment: WitEnchantment,
     ) -> wasmtime::Result<()> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let mut stack = stack.lock().await;
         let enc = from_wit_enchantment(enchantment);
 
@@ -208,7 +228,7 @@ impl HostItemStack for PluginHostState {
         &mut self,
         res: Resource<ItemStackHandle>,
     ) -> wasmtime::Result<Vec<WitCustomEnchantmentValue>> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let stack = stack.lock().await;
         let mut result = Vec::new();
 
@@ -252,7 +272,7 @@ impl HostItemStack for PluginHostState {
         enchantment_id: String,
         level: u32,
     ) -> wasmtime::Result<()> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let mut stack = stack.lock().await;
 
         stack.set_custom_data(
@@ -304,7 +324,7 @@ impl HostItemStack for PluginHostState {
         res: Resource<ItemStackHandle>,
         enchantment_id: String,
     ) -> wasmtime::Result<()> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let mut stack = stack.lock().await;
 
         stack.remove_custom_data("pumpkin:enchantments", &enchantment_id);
@@ -329,7 +349,7 @@ impl HostItemStack for PluginHostState {
         res: Resource<ItemStackHandle>,
         enchantment_id: String,
     ) -> wasmtime::Result<Option<u32>> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let stack = stack.lock().await;
 
         if let Some(NbtTag::Int(level)) =
@@ -360,7 +380,7 @@ impl HostItemStack for PluginHostState {
         res: Resource<ItemStackHandle>,
         enchantment_id: String,
     ) -> wasmtime::Result<bool> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let stack = stack.lock().await;
 
         if stack.has_custom_data("pumpkin:enchantments", &enchantment_id) {
@@ -380,11 +400,106 @@ impl HostItemStack for PluginHostState {
         Ok(false)
     }
 
+    async fn get_attribute_modifiers(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+    ) -> wasmtime::Result<Vec<WitItemAttributeModifier>> {
+        let stack = self.get(&res)?;
+        let stack = stack.lock().await;
+        let mut modifiers = Vec::new();
+        if let Some(comp) = stack.get_data_component::<AttributeModifiersImpl>() {
+            for m in comp.attribute_modifiers.iter() {
+                modifiers.push(WitItemAttributeModifier {
+                    attribute: to_wit_attribute(m.r#type),
+                    modifier: WitAttributeModifier {
+                        id: m.id.to_string(),
+                        amount: m.amount,
+                        operation: to_wit_item_operation(m.operation),
+                    },
+                    slot: super::enchantment::to_wit_slot(&m.slot),
+                });
+            }
+        }
+        Ok(modifiers)
+    }
+
+    async fn add_attribute_modifier(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+        modifier: WitItemAttributeModifier,
+    ) -> wasmtime::Result<()> {
+        let stack = self.get(&res)?;
+        let mut stack = stack.lock().await;
+        let attr = super::living_entity::from_wit_attribute(modifier.attribute);
+        let slot = super::enchantment::to_data_slot(modifier.slot);
+        let op = from_wit_item_operation(modifier.modifier.operation);
+        let leaked_id: &'static str = Box::leak(modifier.modifier.id.into_boxed_str());
+
+        let mut current_mods = stack
+            .get_data_component::<AttributeModifiersImpl>()
+            .map_or_else(Vec::new, |comp| {
+                comp.attribute_modifiers.clone().into_owned()
+            });
+
+        current_mods.retain(|m| !(m.r#type == attr && m.id == leaked_id && m.slot == slot));
+        current_mods.push(Modifier {
+            r#type: attr,
+            id: leaked_id,
+            amount: modifier.modifier.amount,
+            operation: op,
+            slot,
+        });
+
+        stack.set_data_component(AttributeModifiersImpl {
+            attribute_modifiers: Cow::Owned(current_mods),
+        });
+
+        Ok(())
+    }
+
+    async fn remove_attribute_modifiers(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+        attribute: WitAttribute,
+    ) -> wasmtime::Result<()> {
+        let stack = self.get(&res)?;
+        let mut stack = stack.lock().await;
+        let attr = super::living_entity::from_wit_attribute(attribute);
+
+        if let Some(comp) = stack.get_data_component::<AttributeModifiersImpl>() {
+            let mut current_mods = comp.attribute_modifiers.clone().into_owned();
+            current_mods.retain(|m| m.r#type != attr);
+            if current_mods.is_empty() {
+                stack
+                    .patch
+                    .retain(|(id, _)| *id != DataComponent::AttributeModifiers);
+            } else {
+                stack.set_data_component(AttributeModifiersImpl {
+                    attribute_modifiers: Cow::Owned(current_mods),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn clear_attribute_modifiers(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+    ) -> wasmtime::Result<()> {
+        let stack = self.get(&res)?;
+        let mut stack = stack.lock().await;
+        stack
+            .patch
+            .retain(|(id, _)| *id != DataComponent::AttributeModifiers);
+        Ok(())
+    }
+
     async fn get_lore(
         &mut self,
         res: Resource<ItemStackHandle>,
     ) -> wasmtime::Result<Vec<Resource<WitTextComponent>>> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let lines = {
             let stack = stack.lock().await;
             stack
@@ -392,10 +507,7 @@ impl HostItemStack for PluginHostState {
                 .map_or_else(Vec::new, |lore| lore.lines.clone())
         };
 
-        lines
-            .into_iter()
-            .map(|line| self.add_text_component(line))
-            .collect()
+        lines.into_iter().map(|line| self.add(line)).collect()
     }
 
     async fn set_lore(
@@ -404,10 +516,10 @@ impl HostItemStack for PluginHostState {
         lore: Vec<Resource<WitTextComponent>>,
     ) -> wasmtime::Result<()> {
         let lore = lore
-            .iter()
-            .map(|line| text_component_from_resource(self, line))
-            .collect();
-        let stack = self.get_item_stack(&res)?;
+            .into_iter()
+            .map(|line| self.take(line))
+            .collect::<Result<_, _>>()?;
+        let stack = self.get(&res)?;
         stack.lock().await.set_lore(lore);
         Ok(())
     }
@@ -417,8 +529,8 @@ impl HostItemStack for PluginHostState {
         res: Resource<ItemStackHandle>,
         line: Resource<WitTextComponent>,
     ) -> wasmtime::Result<()> {
-        let line = text_component_from_resource(self, &line);
-        let stack = self.get_item_stack(&res)?;
+        let line = self.take(line)?;
+        let stack = self.get(&res)?;
         stack.lock().await.add_lore(line);
         Ok(())
     }
@@ -427,7 +539,7 @@ impl HostItemStack for PluginHostState {
         &mut self,
         res: Resource<ItemStackHandle>,
     ) -> wasmtime::Result<Option<Resource<WitTextComponent>>> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?.clone();
         let stack = stack.lock().await;
         if let Some((_, Some(data))) = stack
             .patch
@@ -435,7 +547,7 @@ impl HostItemStack for PluginHostState {
             .find(|(id, _)| *id == DataComponent::CustomName)
             && let Some(name_impl) = data.as_any().downcast_ref::<CustomNameImpl>()
         {
-            return Ok(Some(self.add_text_component(name_impl.name.clone())?));
+            return Ok(Some(self.add(name_impl.name.clone())?));
         }
         Ok(None)
     }
@@ -445,10 +557,10 @@ impl HostItemStack for PluginHostState {
         res: Resource<ItemStackHandle>,
         name: Option<Resource<WitTextComponent>>,
     ) -> wasmtime::Result<()> {
-        let stack = self.get_item_stack(&res)?;
+        let name = name.map(|r| self.take(r)).transpose()?;
+        let stack = self.get(&res)?;
         let mut stack = stack.lock().await;
-        if let Some(name_res) = name {
-            let name = text_component_from_resource(self, &name_res);
+        if let Some(name) = name {
             if let Some((_, data)) = stack
                 .patch
                 .iter_mut()
@@ -476,7 +588,7 @@ impl HostItemStack for PluginHostState {
         key: String,
         value: WitNbtTree,
     ) -> wasmtime::Result<()> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let mut stack = stack.lock().await;
         let value = from_wit_nbt_tree(&value).map_err(wasmtime::Error::msg)?;
         stack.set_custom_data(&namespace, &key, value);
@@ -489,7 +601,7 @@ impl HostItemStack for PluginHostState {
         namespace: String,
         key: String,
     ) -> wasmtime::Result<Option<WitNbtTree>> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let stack = stack.lock().await;
         Ok(stack.get_custom_data(&namespace, &key).map(to_wit_nbt_tree))
     }
@@ -500,7 +612,7 @@ impl HostItemStack for PluginHostState {
         namespace: String,
         key: String,
     ) -> wasmtime::Result<()> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let mut stack = stack.lock().await;
         stack.remove_custom_data(&namespace, &key);
         Ok(())
@@ -512,7 +624,7 @@ impl HostItemStack for PluginHostState {
         namespace: String,
         key: String,
     ) -> wasmtime::Result<bool> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let stack = stack.lock().await;
         Ok(stack.has_custom_data(&namespace, &key))
     }
@@ -521,7 +633,7 @@ impl HostItemStack for PluginHostState {
         &mut self,
         res: Resource<ItemStackHandle>,
     ) -> wasmtime::Result<Vec<WitDataComponentValue>> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let stack = stack.lock().await;
         let mut components = Vec::new();
         for (id, data) in &stack.patch {
@@ -544,7 +656,7 @@ impl HostItemStack for PluginHostState {
         component: WitDataComponent,
         value: Vec<u8>,
     ) -> wasmtime::Result<()> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let mut stack = stack.lock().await;
         let id = from_wit_data_component(component);
         let mut cursor = std::io::Cursor::new(value);
@@ -564,7 +676,7 @@ impl HostItemStack for PluginHostState {
         res: Resource<ItemStackHandle>,
         component: WitDataComponent,
     ) -> wasmtime::Result<()> {
-        let stack = self.get_item_stack(&res)?;
+        let stack = self.get(&res)?;
         let mut stack = stack.lock().await;
         let id = from_wit_data_component(component);
         stack.patch.retain(|(pid, _)| *pid != id);
@@ -572,9 +684,6 @@ impl HostItemStack for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<ItemStackHandle>) -> wasmtime::Result<()> {
-        self.resource_table
-            .delete::<ItemStackResource>(Resource::new_own(rep.rep()))
-            .map_err(wasmtime::Error::from)?;
-        Ok(())
+        self.drop(rep)
     }
 }

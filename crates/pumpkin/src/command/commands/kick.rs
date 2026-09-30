@@ -1,81 +1,81 @@
 use pumpkin_data::translation;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 
-use crate::command::args::message::MsgArgConsumer;
-use crate::command::args::players::PlayersArgumentConsumer;
-use crate::command::args::{Arg, ConsumedArgs};
-use crate::command::tree::CommandTree;
-use crate::command::tree::builder::argument;
-use crate::command::{CommandError, CommandResult};
-use crate::command::{CommandExecutor, CommandSender};
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::core::string::StringArgumentType;
+use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
 use crate::net::DisconnectReason;
-use CommandError::InvalidConsumption;
 
-const NAMES: [&str; 1] = ["kick"];
 const DESCRIPTION: &str = "Kicks the target player from the server.";
+const PERMISSION: &str = "minecraft:command.kick";
 
-const ARG_TARGETS: &str = "targets";
+struct KickExecutor {
+    has_reason: bool,
+}
 
-const ARG_REASON: &str = "reason";
+impl CommandExecutor for KickExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_players(context, "targets")?;
 
-struct Executor;
+        let reason = if self.has_reason {
+            let custom_reason = StringArgumentType::get(context, "reason")?;
+            TextComponent::text(custom_reason.to_string())
+        } else {
+            TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_KICKED,
+                translation::bedrock::DISCONNECT_KICKED,
+                [],
+            )
+        };
 
-impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Players(targets)) = args.get(&ARG_TARGETS) else {
-                return Err(InvalidConsumption(Some(ARG_TARGETS.into())));
+        for target in &targets {
+            target.kick(DisconnectReason::Kicked, &reason);
+
+            let feedback = if self.has_reason {
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_KICK_SUCCESS,
+                    translation::bedrock::COMMANDS_KICK_SUCCESS_REASON,
+                    [target.as_ref().get_display_name(), reason.clone()],
+                )
+            } else {
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_KICK_SUCCESS,
+                    translation::bedrock::COMMANDS_KICK_SUCCESS,
+                    [target.as_ref().get_display_name(), reason.clone()],
+                )
             };
 
-            let custom_reason = args.get(&ARG_REASON);
-            let reason = match custom_reason {
-                Some(Arg::Msg(r)) => TextComponent::text(r.clone()),
-                _ => TextComponent::translate_cross(
-                    translation::java::MULTIPLAYER_DISCONNECT_KICKED,
-                    translation::bedrock::DISCONNECT_KICKED,
-                    [],
-                ),
-            };
+            context
+                .source
+                .send_feedback(feedback.color_named(NamedColor::Blue), true);
+        }
 
-            for target in targets {
-                target.kick(DisconnectReason::Kicked, reason.clone()).await;
-
-                let feedback = if custom_reason.is_some() {
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_KICK_SUCCESS,
-                        translation::bedrock::COMMANDS_KICK_SUCCESS_REASON,
-                        [target.get_display_name().await, reason.clone()],
-                    )
-                } else {
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_KICK_SUCCESS,
-                        translation::bedrock::COMMANDS_KICK_SUCCESS,
-                        [target.get_display_name().await, reason.clone()],
-                    )
-                };
-
-                sender
-                    .send_message(feedback.color_named(NamedColor::Blue))
-                    .await;
-            }
-
-            Ok(targets.len() as i32)
-        })
+        Ok(targets.len() as i32)
     }
 }
 
-// TODO: Permission
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument(ARG_TARGETS, PlayersArgumentConsumer)
-            .execute(Executor)
-            .then(argument(ARG_REASON, MsgArgConsumer).execute(Executor)),
-    )
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Three),
+    ));
+
+    dispatcher.register(
+        command("kick", DESCRIPTION).requires(PERMISSION).then(
+            argument("targets", EntityArgumentType::Players)
+                .executes(KickExecutor { has_reason: false })
+                .then(
+                    argument("reason", StringArgumentType::GreedyPhrase)
+                        .executes(KickExecutor { has_reason: true }),
+                ),
+        ),
+    );
 }

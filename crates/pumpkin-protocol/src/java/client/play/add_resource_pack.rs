@@ -41,15 +41,19 @@ impl ClientPacket for CAddResourcePack<'_> {
         mut write: impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_uuid(self.uuid)?;
+        if *version >= JavaMinecraftVersion::V_1_20_3 {
+            write.write_uuid(self.uuid)?;
+        }
         write.write_string(self.url)?;
         write.write_string(self.hash)?;
-        write.write_bool(self.forced)?;
-        if let Some(prompt) = &self.prompt_message {
-            write.write_bool(true)?;
-            write.write_component(prompt, version)?;
-        } else {
-            write.write_bool(false)?;
+        if *version >= JavaMinecraftVersion::V_1_17 {
+            write.write_bool(self.forced)?;
+            if let Some(prompt) = &self.prompt_message {
+                write.write_bool(true)?;
+                write.write_component(prompt, version)?;
+            } else {
+                write.write_bool(false)?;
+            }
         }
         Ok(())
     }

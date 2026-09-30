@@ -2,7 +2,7 @@
 use super::*;
 
 impl BedrockClient {
-    pub async fn handle_modal_form_response(
+    pub fn handle_modal_form_response(
         &self,
         player: &Arc<Player>,
         server: &Arc<Server>,
@@ -13,10 +13,10 @@ impl BedrockClient {
                 player.clone(),
                 packet.form_id.0,
                 packet
-                    .form_data
+                    .json_response
                     .filter(|data| data != "null")
                     .map(std::borrow::Cow::into_owned),
             );
-        server.plugin_manager.fire(server, &mut event).await;
+        server.plugin_manager.fire_blocking(server, &mut event);
     }
 }

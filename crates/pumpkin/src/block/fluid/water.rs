@@ -1,6 +1,6 @@
 use super::flowing_trait::FlowingFluid;
 use crate::{
-    block::{BlockFuture, FluidMetadata, fluid::FluidBehaviour},
+    block::{FluidMetadata, fluid::FluidBehaviour},
     entity::EntityBase,
     world::World,
 };
@@ -21,63 +21,39 @@ impl FluidMetadata for FlowingWater {
 const WATER_FLOW_SPEED: u8 = 5;
 
 impl FluidBehaviour for FlowingWater {
-    fn placed<'a>(
-        &'a self,
-        world: &'a Arc<World>,
-        fluid: &'a Fluid,
+    fn placed(
+        &self,
+        world: &Arc<World>,
+        fluid: &Fluid,
         state_id: BlockStateId,
-        block_pos: &'a BlockPos,
+        block_pos: &BlockPos,
         old_state_id: BlockStateId,
         _notify: bool,
-    ) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if old_state_id != state_id {
-                world.schedule_fluid_tick(
-                    fluid,
-                    *block_pos,
-                    WATER_FLOW_SPEED,
-                    TickPriority::Normal,
-                );
-            }
-        })
+    ) {
+        if old_state_id != state_id {
+            world.schedule_fluid_tick(fluid, *block_pos, WATER_FLOW_SPEED, TickPriority::Normal);
+        }
     }
 
-    fn on_scheduled_tick<'a>(
-        &'a self,
-        world: &'a Arc<World>,
-        fluid: &'a Fluid,
-        block_pos: &'a BlockPos,
-    ) -> BlockFuture<'a, ()> {
-        Box::pin(async {
-            self.on_scheduled_tick_internal(world, fluid, block_pos)
-                .await;
-        })
+    fn on_scheduled_tick(&self, world: &Arc<World>, _fluid: &Fluid, block_pos: &BlockPos) {
+        Self.on_scheduled_tick_internal(world, &Fluid::FLOWING_WATER, block_pos);
     }
 
-    fn on_neighbor_update<'a>(
-        &'a self,
-        world: &'a Arc<World>,
-        fluid: &'a Fluid,
-        block_pos: &'a BlockPos,
+    fn on_neighbor_update(
+        &self,
+        world: &Arc<World>,
+        fluid: &Fluid,
+        block_pos: &BlockPos,
         _notify: bool,
-    ) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            // Avoid rescheduling a fluid tick if one is already queued.
-            if !world.is_fluid_tick_scheduled(block_pos, fluid) {
-                world.schedule_fluid_tick(
-                    fluid,
-                    *block_pos,
-                    WATER_FLOW_SPEED,
-                    TickPriority::Normal,
-                );
-            }
-        })
+    ) {
+        // Avoid rescheduling a fluid tick if one is already queued.
+        if !world.is_fluid_tick_scheduled(block_pos, fluid) {
+            world.schedule_fluid_tick(fluid, *block_pos, WATER_FLOW_SPEED, TickPriority::Normal);
+        }
     }
 
-    fn on_entity_collision<'a>(&'a self, entity: &'a dyn EntityBase) -> BlockFuture<'a, ()> {
-        Box::pin(async {
-            entity.get_entity().extinguish();
-        })
+    fn on_entity_collision(&self, entity: &dyn EntityBase) {
+        entity.get_entity().extinguish();
     }
 }
 

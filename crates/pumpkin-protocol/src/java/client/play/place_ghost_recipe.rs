@@ -24,9 +24,9 @@ impl ClientPacket for CPlaceGhostRecipe<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_u8(self.window_id)?;
+        write.write_container_id(&crate::VarInt(i32::from(self.window_id)), version)?;
         write.write_string(self.recipe_id)?;
         Ok(())
     }

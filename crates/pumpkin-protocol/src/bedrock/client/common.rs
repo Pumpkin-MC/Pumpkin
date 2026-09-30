@@ -1,8 +1,8 @@
-use std::io::{Error, Write};
+use pumpkin_util::GameMode;
 
 use crate::{codec::var_long::VarLong, serial::PacketWrite};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
 #[repr(i32)]
 pub enum BuildPlatform {
     Unknown = -1,
@@ -11,26 +11,86 @@ pub enum BuildPlatform {
     Osx = 3,
     Amazon = 4,
     GearVr = 5,
-    Hololens = 6,
     Uwp = 7,
     Win32 = 8,
     Dedicated = 9,
     TvOs = 10,
     Sony = 11,
-    Nx = 12,
+    Nintendo = 12,
     Xbox = 13,
     WindowsPhone = 14,
     Linux = 15,
 }
 
-impl PacketWrite for BuildPlatform {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as i32).write(writer)
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
+#[repr(i32)]
+#[serial(varint)]
+pub enum GameType {
+    Unknown = -1,
+    Survival = 0,
+    Creative = 1,
+    Adventure = 2,
+    Default = 5,
+    Spectator = 6,
+    //WorldDefault = 0,
+}
+
+impl From<GameMode> for GameType {
+    fn from(value: GameMode) -> Self {
+        match value {
+            GameMode::Survival => Self::Survival,
+            GameMode::Creative => Self::Creative,
+            GameMode::Adventure => Self::Adventure,
+            GameMode::Spectator => Self::Spectator,
+        }
+    }
+}
+
+#[derive(Clone, PacketWrite)]
+pub struct SerializedAbilitiesData {
+    pub target_player_raw_id: i64,
+    pub player_permissions: PlayerPermissionLevel,
+    pub command_permissions: CommandPermissionLevel,
+    pub layers: Vec<SerializedAbilitiesDataSerializedLayer>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
+#[repr(i8)]
+pub enum PlayerPermissionLevel {
+    Visitor = 0,
+    Member = 1,
+    Operator = 2,
+    Custom = 3,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
+#[repr(u8)]
+pub enum CommandPermissionLevel {
+    Any = 0,
+    GameDirectors = 1,
+    Admin = 2,
+    Host = 3,
+    Owner = 4,
+    Internal = 5,
+}
+
+#[allow(clippy::to_string_trait_impl)]
+impl ToString for CommandPermissionLevel {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Any => "any",
+            Self::GameDirectors => "gamedirectors",
+            Self::Admin => "admin",
+            Self::Host => "host",
+            Self::Owner => "owner",
+            Self::Internal => "internal",
+        }
+        .into()
     }
 }
 
 #[derive(Default, Clone, PacketWrite)]
-pub struct AbilityLayer {
+pub struct SerializedAbilitiesDataSerializedLayer {
     pub serialized_layer: u16,
     pub abilities_set: u32,
     pub ability_value: u32,
@@ -40,7 +100,7 @@ pub struct AbilityLayer {
 }
 
 #[derive(Default, Clone, PacketWrite)]
-pub struct EntityLink {
+pub struct ActorLink {
     pub ridden_unique_id: VarLong,
     pub rider_unique_id: VarLong,
     pub link_type: u8,

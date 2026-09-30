@@ -7,37 +7,31 @@ use pumpkin_protocol::java::{
 };
 
 impl JavaClient {
-    pub async fn handle_block_entity_tag_query(
-        &self,
-        player: &Player,
-        packet: SBlockEntityTagQuery,
-    ) {
+    pub fn handle_block_entity_tag_query(&self, player: &Player, packet: &SBlockEntityTagQuery) {
         if player.permission_lvl.load() < PermissionLvl::Two {
             return;
         }
 
         let mut compound = NbtCompound::new();
         if let Some(block_entity) = player.world().get_block_entity(&packet.location) {
-            block_entity.write_nbt(&mut compound).await;
+            block_entity.write_nbt(&mut compound);
         }
 
         let nbt_bytes = Nbt::new(String::new(), compound).write_unnamed();
-        self.send_packet(&CTagQueryResponse::new(packet.transaction_id, &nbt_bytes))
-            .await;
+        self.try_send_packet(&CTagQueryResponse::new(packet.transaction_id, &nbt_bytes));
     }
 
-    pub async fn handle_entity_tag_query(&self, player: &Player, packet: SEntityTagQuery) {
+    pub fn handle_entity_tag_query(&self, player: &Player, packet: &SEntityTagQuery) {
         if player.permission_lvl.load() < PermissionLvl::Two {
             return;
         }
 
         let mut compound = NbtCompound::new();
         if let Some(entity) = player.world().get_entity_by_id(packet.entity_id.0) {
-            entity.write_nbt(&mut compound).await;
+            entity.write_nbt(&mut compound);
         }
 
         let nbt_bytes = Nbt::new(String::new(), compound).write_unnamed();
-        self.send_packet(&CTagQueryResponse::new(packet.transaction_id, &nbt_bytes))
-            .await;
+        self.try_send_packet(&CTagQueryResponse::new(packet.transaction_id, &nbt_bytes));
     }
 }

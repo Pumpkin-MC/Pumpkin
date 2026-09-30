@@ -74,7 +74,18 @@ pub enum OwnedCookingRecipeType {
 }
 
 #[derive(Clone, Debug)]
+pub struct OwnedBrewingRecipe {
+    pub recipe_id: String,
+    pub input_item: String,
+    pub input_potion: Option<String>,
+    pub reagent: String,
+    pub output_item: String,
+    pub output_potion: Option<String>,
+}
+
+#[derive(Clone, Debug)]
 pub enum DynamicRecipe {
     Crafting(OwnedCraftingRecipe),
     Cooking(OwnedCookingRecipeType),
+    Brewing(OwnedBrewingRecipe),
 }

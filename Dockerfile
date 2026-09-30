@@ -1,34 +1,30 @@
-FROM rust:1-alpine3.23 AS builder
-ENV RUSTFLAGS="-C target-feature=-crt-static"
-RUN apk add --no-cache musl-dev \
-    # Required for git-version
-    git
-
-WORKDIR /pumpkin
-COPY . /pumpkin
-
-RUN rustup show active-toolchain || rustup toolchain install
-RUN rustup component add rustfmt
-
-# build release
-RUN --mount=type=cache,sharing=private,target=/pumpkin/target \
-    --mount=type=cache,target=/usr/local/cargo/git/db \
-    --mount=type=cache,target=/usr/local/cargo/registry/ \
-    cargo build --release -p pumpkin && cp target/release/pumpkin ./pumpkin.release
-
 FROM alpine:3.24
 
-COPY --from=builder /pumpkin/pumpkin.release /bin/pumpkin
+ARG TARGETARCH
+ARG PUMPKIN_TAG=nightly
 
-# set workdir to /pumpkin, this is required to influence the PWD environment variable
-# it allows for bind mounting the server files without overwriting the pumpkin
-# executable (without requiring an `docker cp`-ing the binary to the host folder)
+RUN apk add --no-cache curl ca-certificates && \
+    case "${TARGETARCH}" in \
+        "amd64") BIN_ARCH="X64" ;; \
+        "arm64") BIN_ARCH="ARM64" ;; \
+        *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
+    esac && \
+    curl -fsSL "https://github.com/Pumpkin-MC/Pumpkin/releases/download/${PUMPKIN_TAG}/pumpkin-${BIN_ARCH}-Linux-musl" \
+        -o /usr/local/bin/pumpkin && \
+    chmod +x /usr/local/bin/pumpkin && \
+    apk del curl
+
+RUN addgroup -g 2613 pumpkin && \
+    adduser -u 2613 -G pumpkin -D -h /pumpkin pumpkin && \
+    chown -R pumpkin:pumpkin /pumpkin
+
 WORKDIR /pumpkin
-
-RUN apk add --no-cache libgcc && chown 2613:2613 .
+USER pumpkin:pumpkin
 
 ENV RUST_BACKTRACE=1
 EXPOSE 25565
-USER 2613:2613
-ENTRYPOINT [ "/bin/pumpkin" ]
-HEALTHCHECK CMD nc -z 127.0.0.1 25565 || exit 1
+
+ENTRYPOINT [ "pumpkin" ]
+
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+    CMD nc -z 127.0.0.1 25565 || exit 1

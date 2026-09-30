@@ -1,6 +1,5 @@
 use super::EnderDragonPhase;
 use crate::entity::boss::ender_dragon::EnderDragonEntity;
-use futures::future::BoxFuture;
 
 pub struct LandingPhase;
 
@@ -9,17 +8,22 @@ impl super::Phase for LandingPhase {
         EnderDragonPhase::Landing
     }
 
-    fn begin<'a>(&'a self, dragon: &'a EnderDragonEntity) -> BoxFuture<'a, ()> {
-        Box::pin(async move {
-            *dragon.target_location.lock().await = None;
-        })
+    fn begin(&self, dragon: &EnderDragonEntity) {
+        *dragon
+            .target_location
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
-    fn tick<'a>(&'a self, dragon: &'a EnderDragonEntity) -> BoxFuture<'a, ()> {
-        Box::pin(async move {
-            dragon.set_phase(EnderDragonPhase::SitAttacking).await;
-            *dragon.ticks_sitting.lock().await = 0;
-            *dragon.sit_attack_timer.lock().await = 0;
-        })
+    fn tick(&self, dragon: &EnderDragonEntity) {
+        dragon.set_phase(EnderDragonPhase::SitAttacking);
+        *dragon
+            .ticks_sitting
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = 0;
+        *dragon
+            .sit_attack_timer
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = 0;
     }
 }

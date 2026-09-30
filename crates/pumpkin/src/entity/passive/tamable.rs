@@ -2,9 +2,9 @@ use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use uuid::Uuid;
 
+use crate::entity::EntityBase;
 use crate::entity::passive::animal::Animal;
 
 pub const SITTING_FLAG: u8 = 1;
@@ -46,12 +46,9 @@ pub trait TamableAnimal: Animal {
         if tame {
             flags |= TAME_FLAG;
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::tamable_animal::DATA_FLAGS_ID,
-                flags as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::tamable_animal::DATA_FLAGS_ID,
+            flags as i8,
         );
     }
 
@@ -69,12 +66,9 @@ pub trait TamableAnimal: Animal {
         if self.is_tame() {
             flags |= TAME_FLAG;
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::tamable_animal::DATA_FLAGS_ID,
-                flags as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::tamable_animal::DATA_FLAGS_ID,
+            flags as i8,
         );
     }
 
@@ -90,16 +84,27 @@ pub trait TamableAnimal: Animal {
         self.get_tamable_data().owner.load()
     }
 
+    /// Returns `None` when the plain team rule should apply instead.
+    fn tamable_considers_entity_as_ally(&self, other: &dyn EntityBase) -> Option<bool> {
+        if !self.is_tame() {
+            return None;
+        }
+        let owner_uuid = self.get_owner()?;
+        if other.get_entity().entity_uuid == owner_uuid {
+            return Some(true);
+        }
+        let world = self.get_mob_entity().living_entity.entity.world.load();
+        let owner = world.get_player_by_uuid(owner_uuid)?;
+        Some(owner.considers_entity_as_ally(other))
+    }
+
     fn set_owner(&self, owner: Option<Uuid>) {
         let mob_entity = self.get_mob_entity();
         let entity = &mob_entity.living_entity.entity;
         self.get_tamable_data().owner.store(owner);
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::tamable_animal::DATA_OWNERUUID_ID,
-                owner,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::tamable_animal::DATA_OWNERUUID_ID,
+            owner,
         );
     }
 

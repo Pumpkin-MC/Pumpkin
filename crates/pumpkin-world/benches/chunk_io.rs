@@ -54,30 +54,13 @@ impl WorldPortalExt for BlockRegistry {
 
 fn bench_chunk_deserialization(c: &mut Criterion) {
     let dimension = Dimension::OVERWORLD;
-    let world_gen = get_world_gen(
-        Seed(42),
-        dimension.clone(),
-        false,
-        Vec::new(),
-        String::new(),
-    );
-    let chunk = generate_single_chunk(
-        &dimension,
-        0,
-        &world_gen,
-        &BlockRegistry,
-        0,
-        0,
-        StagedChunkEnum::Full,
-    );
+    let world_gen = get_world_gen(Seed(42), dimension, false, Vec::new(), String::new());
+    let chunk = generate_single_chunk(&world_gen, &BlockRegistry, 0, 0, StagedChunkEnum::Full);
     let Chunk::Level(chunk) = chunk else {
         panic!("full generation must return a level chunk");
     };
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .build()
-        .expect("failed to create benchmark runtime");
-    let bytes = runtime
-        .block_on(chunk.to_bytes())
+    let bytes = chunk
+        .to_bytes()
         .expect("failed to serialize benchmark chunk");
     let position = Vector2::new(chunk.x, chunk.z);
 

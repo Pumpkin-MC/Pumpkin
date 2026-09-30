@@ -1,9 +1,12 @@
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::{damage::DamageType, sound::Sound};
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
-    Entity,
+    Entity, EntityBase,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
@@ -67,8 +70,38 @@ impl GuardianEntity {
     }
 }
 
+impl CustomSound for GuardianEntity {
+    fn hurt_sound(&self) -> Option<Sound> {
+        let entity = self.get_entity();
+        let is_water = entity.touching_water.load(Ordering::Relaxed);
+        Some(if is_water {
+            Sound::EntityGuardianHurt
+        } else {
+            Sound::EntityGuardianHurtLand
+        })
+    }
+
+    fn death_sound(&self) -> Option<Sound> {
+        let entity = self.get_entity();
+        let is_water = entity.touching_water.load(Ordering::Relaxed);
+        Some(if is_water {
+            Sound::EntityGuardianDeath
+        } else {
+            Sound::EntityGuardianDeathLand
+        })
+    }
+}
+
 impl Mob for GuardianEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn on_damage(&self, _damage_type: DamageType, source: Option<&dyn EntityBase>) {
+        if let Some(src) = source
+            && let Some(living) = src.get_living_entity()
+        {
+            let _ = living.damage(src, 2.0, DamageType::THORNS);
+        }
     }
 }

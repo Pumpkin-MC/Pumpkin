@@ -1,0 +1,40 @@
+{
+  "given_item_modifier": [
+    {
+      "type": "minecraft:set_random_dyes",
+      "number_of_dyes": {
+        "type": "minecraft:add",
+        "inputs": [
+          1,
+          {
+            "type": "minecraft:binomial",
+            "n": 2,
+            "p": 0.75
+          }
+        ]
+      }
+    },
+    {
+      "type": "minecraft:filtered",
+      "item_filter": {
+        "items": "minecraft:leather_horse_armor",
+        "predicates": {
+          "minecraft:dyed_color": {}
+        }
+      },
+      "on_fail": {
+        "type": "minecraft:discard"
+      }
+    }
+  ],
+  "gives": {
+    "id": "minecraft:leather_horse_armor"
+  },
+  "max_uses": 12,
+  "reputation_discount": 0.2,
+  "wants": {
+    "count": 6,
+    "id": "minecraft:emerald"
+  },
+  "xp": 15
+}

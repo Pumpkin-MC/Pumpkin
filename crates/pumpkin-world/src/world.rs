@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 use crate::generation::proto_chunk::GenerationCache;
 use bitflags::bitflags;
 use pumpkin_data::{Block, BlockState, BlockStateId, Mirror, Rotation, chunk::Biome};
@@ -53,8 +51,6 @@ impl std::fmt::Display for GetBlockError {
         write!(f, "{self:?}")
     }
 }
-
-pub type WorldFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub trait WorldPortalExt: Send + Sync {
     fn can_place_at(

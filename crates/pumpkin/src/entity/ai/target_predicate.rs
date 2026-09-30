@@ -1,16 +1,13 @@
 use pumpkin_util::Difficulty;
 
-use crate::entity::living::LivingEntity;
+use crate::entity::EntityBase;
+use crate::entity::living::{LivingEntity, can_be_seen_as_enemy};
 use crate::world::World;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 const MIN_DISTANCE: f64 = 2.0;
 
-pub type PredicateFn = dyn Fn(Arc<LivingEntity>, Arc<World>) -> Pin<Box<dyn Future<Output = bool> + Send>>
-    + Send
-    + Sync;
+pub type PredicateFn = dyn Fn(&LivingEntity, &World) -> bool + Send + Sync;
 
 pub struct TargetPredicate {
     pub attackable: bool,
@@ -79,49 +76,61 @@ impl TargetPredicate {
         self
     }
 
-    pub fn set_predicate<F, Fut>(&mut self, predicate: F)
+    pub fn set_predicate<F>(&mut self, predicate: F)
     where
-        F: Fn(Arc<LivingEntity>, Arc<World>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = bool> + Send + 'static,
+        F: Fn(&LivingEntity, &World) -> bool + Send + Sync + 'static,
     {
-        self.predicate = Some(Arc::new(
-            move |living_entity: Arc<LivingEntity>, world: Arc<World>| {
-                Box::pin(predicate(living_entity, world))
-            },
-        ));
+        self.predicate = Some(Arc::new(predicate));
     }
 
-    pub async fn test(
+    pub fn test(
         &self,
         world: &World,
-        tester: Option<&LivingEntity>,
-        target: &LivingEntity,
+        tester: Option<&dyn EntityBase>,
+        target: &dyn EntityBase,
     ) -> bool {
-        if tester.is_some_and(|t| std::ptr::eq(t, target)) {
+        let Some(target_living) = target.get_living_entity() else {
+            return false;
+        };
+
+        if tester.is_some_and(|t| t.get_entity().entity_id == target.get_entity().entity_id) {
             return false;
         }
 
-        if !target.is_part_of_game() {
+        if !target_living.is_part_of_game() {
             return false;
         }
+
+        let Some(tester) = tester else {
+            // Without a tester only the plain "can be seen as enemy" rule applies.
+            return !(self.attackable
+                && (!can_be_seen_as_enemy(target)
+                    || world.level_info.load().difficulty == Difficulty::Peaceful));
+        };
+        let Some(tester_living) = tester.get_living_entity() else {
+            return false;
+        };
 
         if self.attackable
-            && (!target.can_take_damage()
-                || world.level_info.load().difficulty == Difficulty::Peaceful)
+            && (!tester.get_mob().map_or_else(
+                || tester_living.can_attack(target),
+                |mob| mob.can_attack(target),
+            ) || tester.is_allied_to(target))
         {
             return false;
         }
 
-        if let Some(tester_ent) = tester
-            && self.base_max_distance > 0.0
-        {
+        if self.base_max_distance > 0.0 {
             // TODO: use distance_scaling_factor from target
+            // Vanilla `getVisibilityPercent`: sneaking, invisibility (by armor cover) and mob heads
+            // shrink the range, min 2 blocks. Only piglin_ai::visibility_percent has it, move to
+            // `LivingEntity` and gate on `use_distance_scaling_factor` (revenge ignores it).
             let max_dist = self.base_max_distance.max(MIN_DISTANCE);
-            let dist_sq = tester_ent
-                .entity
+            let dist_sq = tester
+                .get_entity()
                 .pos
                 .load()
-                .squared_distance_to_vec(&target.entity.pos.load());
+                .squared_distance_to_vec(&target.get_entity().pos.load());
 
             if dist_sq > max_dist * max_dist {
                 return false;
@@ -129,18 +138,16 @@ impl TargetPredicate {
         }
 
         if self.respects_visibility
-            && let Some(tester_ent) = tester
-            && tester_ent
-                .entity
-                .world
-                .load_full()
-                .raycast(
-                    tester_ent.entity.get_eye_pos(),
-                    target.entity.get_eye_pos(),
-                    async |block_pos, world| world.get_block_state(block_pos).is_solid(),
-                )
-                .await
-                .is_some()
+            && let Some(mob) = tester.get_mob()
+            && !mob.has_line_of_sight(target.get_entity())
+        {
+            return false;
+        }
+
+        // Mirrors vanilla `TargetingConditions.test`, which runs the custom
+        // selector last, after the generic attackability/range/visibility checks.
+        if let Some(predicate) = &self.predicate
+            && !predicate(target_living, world)
         {
             return false;
         }

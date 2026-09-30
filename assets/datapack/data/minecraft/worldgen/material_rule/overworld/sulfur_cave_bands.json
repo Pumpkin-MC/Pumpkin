@@ -1,0 +1,47 @@
+{
+  "type": "minecraft:sequence",
+  "sequence": [
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:noise_threshold",
+        "is_3d": true,
+        "max_threshold": -0.10000000149011612,
+        "min_threshold": -0.4000000059604645,
+        "noise": "minecraft:sulfur_cave_gradient"
+      },
+      "then_run": {
+        "type": "minecraft:block",
+        "result_state": "minecraft:cinnabar"
+      }
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:noise_threshold",
+        "is_3d": true,
+        "max_threshold": 0.4000000059604645,
+        "min_threshold": 0.0,
+        "noise": "minecraft:sulfur_cave_gradient"
+      },
+      "then_run": {
+        "type": "minecraft:block",
+        "result_state": "minecraft:sulfur"
+      }
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:noise_threshold",
+        "is_3d": true,
+        "max_threshold": 1.7976931348623157E308,
+        "min_threshold": 0.4000000059604645,
+        "noise": "minecraft:sulfur_cave_gradient"
+      },
+      "then_run": {
+        "type": "minecraft:block",
+        "result_state": "minecraft:cinnabar"
+      }
+    }
+  ]
+}

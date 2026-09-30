@@ -1,4 +1,10 @@
-use crate::{codec::var_uint::VarUInt, serial::PacketWrite};
+// Last verified for v2169
+
+use crate::{
+    bedrock::{client::CommandPermissionLevel, enum_as_str::EnumAsStr},
+    codec::var_uint::VarUInt,
+    serial::PacketWrite,
+};
 use pumpkin_macros::packet;
 
 #[derive(PacketWrite)]
@@ -6,66 +12,60 @@ use pumpkin_macros::packet;
 pub struct CAvailableCommands {
     pub enum_values: Vec<String>,
     pub chained_subcommand_values: Vec<String>,
-    pub suffixes: Vec<String>,
-    pub enums: Vec<CommandEnum>,
-    pub chained_subcommands: Vec<ChainedSubcommand>,
-    pub commands: Vec<Command>,
-    pub soft_enums: Vec<SoftEnum>,
-    pub constraints: Vec<CommandEnumConstraint>,
+    pub post_fixes: Vec<String>,
+    pub enum_data: Vec<EnumData>,
+    pub chained_subcommand_data: Vec<ChainedSubcommandData>,
+    pub commands: Vec<CommandData>,
+    pub soft_enums: Vec<SoftEnumData>,
+    pub constraints: Vec<ConstrainedValueData>,
+}
+
+#[derive(PacketWrite)]
+pub struct EnumData {
+    pub name: String,
+    pub values: Vec<u32>,
 }
 
 // Represents a subcommand that can chain commands, e.g. /execute.
 // Written as a flat list in section 3 of the packet; Commands reference
 // entries by index via ChainedSubcommandOffsets.
 #[derive(PacketWrite)]
-pub struct ChainedSubcommand {
+pub struct ChainedSubcommandData {
     pub name: String,
-    pub values: Vec<ChainedSubcommandValue>,
+    pub subcommand_values: Vec<ChainedSubcommandRelationship>,
 }
 
 #[derive(PacketWrite)]
-pub struct ChainedSubcommandValue {
-    /// Index into the `ChainedSubcommandValues` flat list — `VarUInt`
+pub struct ChainedSubcommandRelationship {
+    /// Index into the `ChainedSubcommandValues` flat list
     pub index: VarUInt,
-    /// Argument type flags (basic types only, no `ARG_FLAG`_* modifiers) — `VarUInt`
+    /// Argument type flags (basic types only, no `ARG_FLAG`_* modifiers)
     pub value: VarUInt,
 }
-
 #[derive(PacketWrite)]
-pub struct CommandEnum {
-    pub name: String,
-    pub value_indices: Vec<u32>,
-}
-
-#[derive(PacketWrite)]
-pub struct Command {
+pub struct CommandData {
     pub name: String,
     pub description: String,
-    /// LE u16 — putLShort
     pub flags: u16,
-    /// Permission string (e.g. "any", "admin")
-    pub permission: String,
-    /// LE i32 — putLInt; -1 means no aliases
-    pub aliases_enum_index: i32,
-    /// LE u32 each — indices into the `chained_subcommands` flat list
-    pub chained_subcommand_offsets: Vec<u32>,
-    pub overloads: Vec<CommandOverload>,
+    pub permission_level: EnumAsStr<CommandPermissionLevel>,
+    /// -1 means no aliases
+    pub alias_enum: i32,
+    pub command_data_chained_subcommand_indexes: Vec<u32>,
+    pub overloads: Vec<OverloadData>,
 }
 
 #[derive(PacketWrite)]
-pub struct CommandOverload {
-    /// Written as a single byte before parameter count ← MISSING in original
-    /// true = this overload uses chained subcommands instead of regular params
-    pub chaining: bool,
-    pub parameters: Vec<CommandParameter>,
+pub struct OverloadData {
+    pub is_chaining: bool,
+    pub parameter_data: Vec<ParamData>,
 }
 
 #[derive(Clone, PacketWrite)]
-pub struct CommandParameter {
+pub struct ParamData {
     pub name: String,
-    /// LE u32 — encodes type flags (`ARG_FLAG_VALID` | `ARG_FLAG_ENUM` | index, or raw type)
-    pub type_info: u32,
-    pub optional: bool,
+    /// encodes type flags (`ARG_FLAG_VALID` | `ARG_FLAG_ENUM` | index, or raw type)
+    pub parse_symbol: u32,
+    pub is_optional: bool,
     /// Options byte (`ARG_FLAG`_* options) — putByte
     pub options: u8,
 }
@@ -99,24 +99,15 @@ pub mod arg_types {
     pub const ARG_TYPE_COMMAND: u32 = 0x46;
 }
 
-pub mod command_permissions {
-    pub const ANY: &str = "any";
-    pub const GAME_DIRECTORS: &str = "gamedirectors";
-    pub const ADMIN: &str = "admin";
-    pub const HOST: &str = "host";
-    pub const OWNER: &str = "owner";
-    pub const INTERNAL: &str = "internal";
+#[derive(Clone, PacketWrite)]
+pub struct SoftEnumData {
+    pub enum_name: String,
+    pub enum_options: Vec<String>,
 }
 
 #[derive(Clone, PacketWrite)]
-pub struct SoftEnum {
-    pub name: String,
-    pub values: Vec<String>,
-}
-
-#[derive(Clone, PacketWrite)]
-pub struct CommandEnumConstraint {
-    pub affected_value_index: i32,
-    pub enum_index: i32,
-    pub constraints: Vec<u8>,
+pub struct ConstrainedValueData {
+    pub enum_value_symbol: u32,
+    pub enum_symbol: u32,
+    pub constraint_indices: Vec<u8>,
 }

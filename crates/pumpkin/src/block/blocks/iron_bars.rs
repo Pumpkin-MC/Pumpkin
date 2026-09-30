@@ -1,42 +1,36 @@
-use crate::block::BlockFuture;
-use crate::block::GetStateForNeighborUpdateArgs;
-use crate::block::OnPlaceArgs;
-use pumpkin_data::BlockDirection;
-use pumpkin_data::BlockStateId;
-use pumpkin_data::HorizontalFacingExt;
-use pumpkin_data::block_properties::BlockProperties;
+use crate::block::{
+    BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
+};
+use crate::world::World;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 
 type IronBarsProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
-use crate::block::BlockBehaviour;
-use crate::world::World;
-
 #[pumpkin_block("minecraft:iron_bars")]
 pub struct IronBarsBlock;
 
 impl BlockBehaviour for IronBarsBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut bars_props = IronBarsProperties::default(args.block);
-            bars_props.waterlogged = args.replacing.water_source();
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut bars_props = IronBarsProperties::default(args.block);
+        bars_props.waterlogged = args.replacing.water_source();
 
-            compute_bars_state(bars_props, args.world, args.block, args.position)
-        })
+        compute_bars_state(bars_props, args.world, args.block, args.position)
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let bars_props = IronBarsProperties::from_state_id(args.state_id, args.block);
-            compute_bars_state(bars_props, args.world, args.block, args.position)
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let bars_props = IronBarsProperties::from_state_id(args.state_id);
+        compute_bars_state(bars_props, args.world, args.block, args.position)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

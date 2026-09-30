@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "group": "mushroom_stew",
+  "ingredients": [
+    "#minecraft:mushrooms",
+    "#minecraft:mushrooms",
+    "minecraft:bowl"
+  ],
+  "result": {
+    "id": "minecraft:mushroom_stew"
+  }
+}

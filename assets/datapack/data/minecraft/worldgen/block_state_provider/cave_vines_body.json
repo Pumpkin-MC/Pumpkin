@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:weighted",
+  "entries": [
+    {
+      "data": "minecraft:cave_vines_plant",
+      "weight": 4
+    },
+    {
+      "data": {
+        "id": "minecraft:cave_vines_plant",
+        "properties": {
+          "berries": "true"
+        }
+      },
+      "weight": 1
+    }
+  ]
+}

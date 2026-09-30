@@ -1,0 +1,32 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "condition": "minecraft:tool/can_silk_touch",
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "modifier": [
+            {
+              "type": "minecraft:copy_components",
+              "include": [
+                "minecraft:bees"
+              ],
+              "source": "block_entity"
+            },
+            {
+              "type": "minecraft:copy_state",
+              "block": "minecraft:bee_nest",
+              "properties": [
+                "honey_level"
+              ]
+            }
+          ],
+          "name": "minecraft:bee_nest"
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:blocks/bee_nest"
+}

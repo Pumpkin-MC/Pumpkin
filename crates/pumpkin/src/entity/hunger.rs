@@ -1,7 +1,4 @@
-use std::sync::Arc;
-
 use super::{NBTStorage, NBTStorageInit, player::Player};
-use crate::entity::NbtFuture;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 use pumpkin_nbt::compound::NbtCompound;
@@ -30,7 +27,7 @@ impl Default for HungerManager {
 }
 
 impl HungerManager {
-    pub async fn tick(&self, player: &Arc<Player>) {
+    pub fn tick(&self, player: &Player) {
         let mut level = self.level.load();
         let mut saturation = self.saturation.load();
         let mut exhaustion = self.exhaustion.load();
@@ -60,9 +57,8 @@ impl HungerManager {
             timer += 1;
             if timer >= 10 {
                 let cost = saturation.min(6.0);
-                saturation -= cost;
-                exhaustion += cost;
                 heal_amount = cost / 6.0;
+                exhaustion = (exhaustion + cost).min(MAX_EXHAUSTION);
                 timer = 0;
                 needs_sync = true;
             }
@@ -70,7 +66,7 @@ impl HungerManager {
             timer += 1;
             if timer >= 80 {
                 heal_amount = 1.0;
-                exhaustion += 6.0;
+                exhaustion = (exhaustion + 6.0).min(MAX_EXHAUSTION);
                 timer = 0;
                 needs_sync = true;
             }
@@ -78,12 +74,9 @@ impl HungerManager {
             timer += 1;
             if timer >= 80 {
                 timer = 0;
-                let should_starve = match difficulty {
-                    Difficulty::Peaceful => false,
-                    Difficulty::Easy => health > 10.0,
-                    Difficulty::Normal => health > 1.0,
-                    Difficulty::Hard => true,
-                };
+                let should_starve = health > 10.0
+                    || difficulty == Difficulty::Hard
+                    || (health > 1.0 && difficulty == Difficulty::Normal);
 
                 if should_starve {
                     damage_amount = 1.0;
@@ -102,32 +95,26 @@ impl HungerManager {
         }
 
         if needs_sync {
-            player.send_health().await;
+            player.send_health();
         }
         if heal_amount > 0.0 {
-            player.heal(heal_amount).await;
+            player.heal(heal_amount);
         }
         if damage_amount > 0.0 {
             player
-                .damage(&**player, damage_amount, DamageType::STARVE)
-                .await;
+                .living_entity
+                .damage(player, damage_amount, DamageType::STARVE);
         }
     }
 
-    pub async fn eat(&self, player: &Player, food: u8, saturation_modifier: f32) {
-        let added_saturation = f32::from(food) * saturation_modifier * 2.0;
-
-        let current_level = self.level.load();
-        let current_sat = self.saturation.load();
-
-        let new_level = (current_level + food).min(MAX_FOOD);
-
-        let new_sat = (current_sat + added_saturation).min(f32::from(new_level));
+    pub fn eat(&self, player: &Player, food: u8, saturation: f32) {
+        let new_level = self.level.load().saturating_add(food).min(MAX_FOOD);
+        let new_sat = (self.saturation.load() + saturation).clamp(0.0, f32::from(new_level));
 
         self.level.store(new_level);
         self.saturation.store(new_sat);
 
-        player.send_health().await;
+        player.send_health();
     }
 
     /// Add exhaustion to trigger hunger decrease
@@ -151,12 +138,11 @@ impl HungerManager {
     }
 
     pub fn set_level(&self, level: u8) {
-        self.level.store(level.min(MAX_FOOD));
+        self.level.store(level);
     }
 
     pub fn set_saturation(&self, saturation: f32) {
-        self.saturation
-            .store(saturation.min(f32::from(self.level.load())));
+        self.saturation.store(saturation);
     }
 
     pub fn get_exhaustion(&self) -> f32 {
@@ -176,26 +162,22 @@ impl HungerManager {
 }
 
 impl NBTStorage for HungerManager {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            nbt.put_int("foodLevel", self.level.load().into());
-            nbt.put_float("foodSaturationLevel", self.saturation.load());
-            nbt.put_float("foodExhaustionLevel", self.exhaustion.load());
-            nbt.put_int("foodTickTimer", self.tick_timer.load() as i32);
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_int("foodLevel", self.level.load().into());
+        nbt.put_float("foodSaturationLevel", self.saturation.load());
+        nbt.put_float("foodExhaustionLevel", self.exhaustion.load());
+        nbt.put_int("foodTickTimer", self.tick_timer.load() as i32);
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.level
-                .store(nbt.get_int("foodLevel").unwrap_or(20) as u8);
-            self.saturation
-                .store(nbt.get_float("foodSaturationLevel").unwrap_or(5.0));
-            self.exhaustion
-                .store(nbt.get_float("foodExhaustionLevel").unwrap_or(0.0));
-            self.tick_timer
-                .store(nbt.get_int("foodTickTimer").unwrap_or(0) as u32);
-        })
+    fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
+        self.level
+            .store(nbt.get_int("foodLevel").unwrap_or(20) as u8);
+        self.saturation
+            .store(nbt.get_float("foodSaturationLevel").unwrap_or(5.0));
+        self.exhaustion
+            .store(nbt.get_float("foodExhaustionLevel").unwrap_or(0.0));
+        self.tick_timer
+            .store(nbt.get_int("foodTickTimer").unwrap_or(0) as u32);
     }
 }
 

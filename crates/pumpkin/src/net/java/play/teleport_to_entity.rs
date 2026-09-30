@@ -2,10 +2,10 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_teleport_to_entity(
+    pub fn handle_teleport_to_entity(
         &self,
         player: &Arc<Player>,
-        packet: STeleportToEntity,
+        packet: &STeleportToEntity,
         server: &Server,
     ) {
         if !player.has_client_loaded() {
@@ -24,13 +24,9 @@ impl JavaClient {
 
             let target_id = target_player.living_entity.entity.entity_id;
             player.camera_target_id.store(Some(target_id));
-            player
-                .send_client_packet(&CSetCamera::new(target_id.into()))
-                .await;
+            player.try_send_client_packet(&CSetCamera::new(target_id.into()));
 
-            player
-                .request_teleport(target_pos, target_yaw, target_pitch)
-                .await;
+            player.request_teleport(target_pos, target_yaw, target_pitch);
         }
     }
 }

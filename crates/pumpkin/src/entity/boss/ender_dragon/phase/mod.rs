@@ -1,5 +1,4 @@
 use crate::entity::boss::ender_dragon::EnderDragonEntity;
-use futures::future::BoxFuture;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;
 
@@ -29,13 +28,9 @@ pub use taking_off::TakingOffPhase;
 
 pub trait Phase: Send + Sync {
     fn get_type(&self) -> EnderDragonPhase;
-    fn tick<'a>(&'a self, dragon: &'a EnderDragonEntity) -> BoxFuture<'a, ()>;
-    fn begin<'a>(&'a self, _dragon: &'a EnderDragonEntity) -> BoxFuture<'a, ()> {
-        Box::pin(async {})
-    }
-    fn end<'a>(&'a self, _dragon: &'a EnderDragonEntity) -> BoxFuture<'a, ()> {
-        Box::pin(async {})
-    }
+    fn tick(&self, dragon: &EnderDragonEntity);
+    fn begin(&self, _dragon: &EnderDragonEntity) {}
+    fn end(&self, _dragon: &EnderDragonEntity) {}
     fn is_sitting(&self) -> bool {
         false
     }

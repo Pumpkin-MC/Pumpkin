@@ -6,10 +6,7 @@ use pumpkin_data::{
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockAccessor;
 
-use crate::{
-    block::{BlockFuture, GetStateForNeighborUpdateArgs},
-    entity::player::Player,
-};
+use crate::{block::GetStateForNeighborUpdateArgs, entity::player::Player};
 
 pub trait WallMountedBlock: Send + Sync {
     fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection;
@@ -49,10 +46,10 @@ pub trait WallMountedBlock: Send + Sync {
         }
     }
 
-    fn can_place_at<'a>(
-        &'a self,
-        world: &'a dyn BlockAccessor,
-        pos: &'a BlockPos,
+    fn can_place_at(
+        &self,
+        world: &dyn BlockAccessor,
+        pos: &BlockPos,
         direction: BlockDirection,
     ) -> bool {
         let block_pos = pos.offset(direction.to_offset());
@@ -60,18 +57,16 @@ pub trait WallMountedBlock: Send + Sync {
         block_state.is_side_solid(direction.opposite())
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if self.get_direction(args.state_id, args.block).opposite() == args.direction
-                && !self.can_place_at(args.world, args.position, args.direction)
-            {
-                Block::AIR.default_state.id
-            } else {
-                args.state_id
-            }
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if self.get_direction(args.state_id, args.block).opposite() == args.direction
+            && !self.can_place_at(args.world, args.position, args.direction)
+        {
+            Block::AIR.default_state.id
+        } else {
+            args.state_id
+        }
     }
 }

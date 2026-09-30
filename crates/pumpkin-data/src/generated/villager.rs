@@ -585,14 +585,14 @@ pub const TRADES_CARTOGRAPHER_LEVEL_2: &[VillagerTrade] = &[
             count: 1i32,
         }),
         gives: VillagerTradeItem {
-            item: &crate::item::Item::MAP,
+            item: &crate::item::Item::TAIGA_VILLAGE_MAP,
             count: 1i32,
         },
         max_uses: 12i32,
         xp: 5i32,
         price_multiplier: 0.2f32,
         modifier: VillagerTradeModifier::ExplorationMap {
-            destination: "minecraft:on_taiga_village_maps",
+            destination: "#minecraft:on_taiga_village_maps",
         },
         allowed_types: &[
             VillagerType::Swamp,
@@ -610,14 +610,14 @@ pub const TRADES_CARTOGRAPHER_LEVEL_2: &[VillagerTrade] = &[
             count: 1i32,
         }),
         gives: VillagerTradeItem {
-            item: &crate::item::Item::MAP,
+            item: &crate::item::Item::SWAMP_HUT_MAP,
             count: 1i32,
         },
         max_uses: 12i32,
         xp: 5i32,
         price_multiplier: 0.2f32,
         modifier: VillagerTradeModifier::ExplorationMap {
-            destination: "minecraft:on_swamp_explorer_maps",
+            destination: "#minecraft:on_swamp_hut_maps",
         },
         allowed_types: &[
             VillagerType::Taiga,
@@ -635,14 +635,14 @@ pub const TRADES_CARTOGRAPHER_LEVEL_2: &[VillagerTrade] = &[
             count: 1i32,
         }),
         gives: VillagerTradeItem {
-            item: &crate::item::Item::MAP,
+            item: &crate::item::Item::SNOWY_VILLAGE_MAP,
             count: 1i32,
         },
         max_uses: 12i32,
         xp: 5i32,
         price_multiplier: 0.2f32,
         modifier: VillagerTradeModifier::ExplorationMap {
-            destination: "minecraft:on_snowy_village_maps",
+            destination: "#minecraft:on_snowy_village_maps",
         },
         allowed_types: &[VillagerType::Taiga, VillagerType::Swamp],
     },
@@ -656,14 +656,14 @@ pub const TRADES_CARTOGRAPHER_LEVEL_2: &[VillagerTrade] = &[
             count: 1i32,
         }),
         gives: VillagerTradeItem {
-            item: &crate::item::Item::MAP,
+            item: &crate::item::Item::SAVANNA_VILLAGE_MAP,
             count: 1i32,
         },
         max_uses: 12i32,
         xp: 5i32,
         price_multiplier: 0.2f32,
         modifier: VillagerTradeModifier::ExplorationMap {
-            destination: "minecraft:on_savanna_village_maps",
+            destination: "#minecraft:on_savanna_village_maps",
         },
         allowed_types: &[
             VillagerType::Plains,
@@ -681,14 +681,14 @@ pub const TRADES_CARTOGRAPHER_LEVEL_2: &[VillagerTrade] = &[
             count: 1i32,
         }),
         gives: VillagerTradeItem {
-            item: &crate::item::Item::MAP,
+            item: &crate::item::Item::PLAINS_VILLAGE_MAP,
             count: 1i32,
         },
         max_uses: 12i32,
         xp: 5i32,
         price_multiplier: 0.2f32,
         modifier: VillagerTradeModifier::ExplorationMap {
-            destination: "minecraft:on_plains_village_maps",
+            destination: "#minecraft:on_plains_village_maps",
         },
         allowed_types: &[
             VillagerType::Taiga,
@@ -707,14 +707,14 @@ pub const TRADES_CARTOGRAPHER_LEVEL_2: &[VillagerTrade] = &[
             count: 1i32,
         }),
         gives: VillagerTradeItem {
-            item: &crate::item::Item::MAP,
+            item: &crate::item::Item::JUNGLE_PYRAMID_MAP,
             count: 1i32,
         },
         max_uses: 12i32,
         xp: 5i32,
         price_multiplier: 0.2f32,
         modifier: VillagerTradeModifier::ExplorationMap {
-            destination: "minecraft:on_jungle_explorer_maps",
+            destination: "#minecraft:on_jungle_pyramid_maps",
         },
         allowed_types: &[
             VillagerType::Swamp,
@@ -732,14 +732,14 @@ pub const TRADES_CARTOGRAPHER_LEVEL_2: &[VillagerTrade] = &[
             count: 1i32,
         }),
         gives: VillagerTradeItem {
-            item: &crate::item::Item::MAP,
+            item: &crate::item::Item::DESERT_VILLAGE_MAP,
             count: 1i32,
         },
         max_uses: 12i32,
         xp: 5i32,
         price_multiplier: 0.2f32,
         modifier: VillagerTradeModifier::ExplorationMap {
-            destination: "minecraft:on_desert_village_maps",
+            destination: "#minecraft:on_desert_village_maps",
         },
         allowed_types: &[VillagerType::Savanna, VillagerType::Jungle],
     },
@@ -771,14 +771,14 @@ pub const TRADES_CARTOGRAPHER_LEVEL_3: &[VillagerTrade] = &[
             count: 1i32,
         }),
         gives: VillagerTradeItem {
-            item: &crate::item::Item::MAP,
+            item: &crate::item::Item::OCEAN_MONUMENT_MAP,
             count: 1i32,
         },
         max_uses: 12i32,
         xp: 10i32,
         price_multiplier: 0.2f32,
         modifier: VillagerTradeModifier::ExplorationMap {
-            destination: "minecraft:on_ocean_explorer_maps",
+            destination: "#minecraft:on_ocean_monument_maps",
         },
         allowed_types: &[],
     },
@@ -792,14 +792,14 @@ pub const TRADES_CARTOGRAPHER_LEVEL_3: &[VillagerTrade] = &[
             count: 1i32,
         }),
         gives: VillagerTradeItem {
-            item: &crate::item::Item::MAP,
+            item: &crate::item::Item::BURIED_TRIAL_CHAMBERS_MAP,
             count: 1i32,
         },
         max_uses: 12i32,
         xp: 10i32,
         price_multiplier: 0.2f32,
         modifier: VillagerTradeModifier::ExplorationMap {
-            destination: "minecraft:on_trial_chambers_maps",
+            destination: "#minecraft:on_buried_trial_chambers_maps",
         },
         allowed_types: &[],
     },
@@ -1093,14 +1093,14 @@ pub const TRADES_CARTOGRAPHER_LEVEL_5: &[VillagerTrade] = &[
             count: 1i32,
         }),
         gives: VillagerTradeItem {
-            item: &crate::item::Item::MAP,
+            item: &crate::item::Item::WOODLAND_MANSION_MAP,
             count: 1i32,
         },
         max_uses: 12i32,
         xp: 30i32,
         price_multiplier: 0.2f32,
         modifier: VillagerTradeModifier::ExplorationMap {
-            destination: "minecraft:on_woodland_explorer_maps",
+            destination: "#minecraft:on_woodland_mansion_maps",
         },
         allowed_types: &[],
     },
@@ -5838,6 +5838,22 @@ pub const TRADES_WANDERING_TRADER_COMMON: &[VillagerTrade] = &[
     VillagerTrade {
         wants: VillagerTradeItem {
             item: &crate::item::Item::EMERALD,
+            count: 5i32,
+        },
+        wants_b: None,
+        gives: VillagerTradeItem {
+            item: &crate::item::Item::POPLAR_SAPLING,
+            count: 1i32,
+        },
+        max_uses: 8i32,
+        xp: 2i32,
+        price_multiplier: 0.05f32,
+        modifier: VillagerTradeModifier::None,
+        allowed_types: &[],
+    },
+    VillagerTrade {
+        wants: VillagerTradeItem {
+            item: &crate::item::Item::EMERALD,
             count: 3i32,
         },
         wants_b: None,
@@ -6203,6 +6219,22 @@ pub const TRADES_WANDERING_TRADER_COMMON: &[VillagerTrade] = &[
         modifier: VillagerTradeModifier::None,
         allowed_types: &[],
     },
+    VillagerTrade {
+        wants: VillagerTradeItem {
+            item: &crate::item::Item::EMERALD,
+            count: 1i32,
+        },
+        wants_b: None,
+        gives: VillagerTradeItem {
+            item: &crate::item::Item::SHELF_MUSHROOM,
+            count: 3i32,
+        },
+        max_uses: 12i32,
+        xp: 2i32,
+        price_multiplier: 0.05f32,
+        modifier: VillagerTradeModifier::None,
+        allowed_types: &[],
+    },
 ];
 pub const TRADES_WANDERING_TRADER_UNCOMMON: &[VillagerTrade] = &[
     VillagerTrade {
@@ -6405,6 +6437,22 @@ pub const TRADES_WANDERING_TRADER_UNCOMMON: &[VillagerTrade] = &[
         wants_b: None,
         gives: VillagerTradeItem {
             item: &crate::item::Item::PALE_OAK_LOG,
+            count: 8i32,
+        },
+        max_uses: 16i32,
+        xp: 2i32,
+        price_multiplier: 0.05f32,
+        modifier: VillagerTradeModifier::None,
+        allowed_types: &[],
+    },
+    VillagerTrade {
+        wants: VillagerTradeItem {
+            item: &crate::item::Item::EMERALD,
+            count: 1i32,
+        },
+        wants_b: None,
+        gives: VillagerTradeItem {
+            item: &crate::item::Item::POPLAR_LOG,
             count: 8i32,
         },
         max_uses: 16i32,
@@ -6714,6 +6762,51 @@ impl VillagerProfession {
             Self::Shepherd => "entity.minecraft.villager.shepherd",
             Self::Toolsmith => "entity.minecraft.villager.toolsmith",
             Self::Weaponsmith => "entity.minecraft.villager.weaponsmith",
+        }
+    }
+    #[must_use]
+    pub const fn to_name(&self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Armorer => "armorer",
+            Self::Butcher => "butcher",
+            Self::Cartographer => "cartographer",
+            Self::Cleric => "cleric",
+            Self::Farmer => "farmer",
+            Self::Fisherman => "fisherman",
+            Self::Fletcher => "fletcher",
+            Self::Leatherworker => "leatherworker",
+            Self::Librarian => "librarian",
+            Self::Mason => "mason",
+            Self::Nitwit => "nitwit",
+            Self::Shepherd => "shepherd",
+            Self::Toolsmith => "toolsmith",
+            Self::Weaponsmith => "weaponsmith",
+        }
+    }
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        let clean = match name.strip_prefix("minecraft:") {
+            Some(stripped) => stripped,
+            None => name,
+        };
+        match clean {
+            "none" => Some(Self::None),
+            "armorer" => Some(Self::Armorer),
+            "butcher" => Some(Self::Butcher),
+            "cartographer" => Some(Self::Cartographer),
+            "cleric" => Some(Self::Cleric),
+            "farmer" => Some(Self::Farmer),
+            "fisherman" => Some(Self::Fisherman),
+            "fletcher" => Some(Self::Fletcher),
+            "leatherworker" => Some(Self::Leatherworker),
+            "librarian" => Some(Self::Librarian),
+            "mason" => Some(Self::Mason),
+            "nitwit" => Some(Self::Nitwit),
+            "shepherd" => Some(Self::Shepherd),
+            "toolsmith" => Some(Self::Toolsmith),
+            "weaponsmith" => Some(Self::Weaponsmith),
+            _ => None,
         }
     }
     #[must_use]
@@ -7052,6 +7145,35 @@ impl VillagerType {
             4i32 => Some(Self::Snow),
             5i32 => Some(Self::Swamp),
             6i32 => Some(Self::Taiga),
+            _ => None,
+        }
+    }
+    #[must_use]
+    pub const fn to_name(&self) -> &'static str {
+        match self {
+            Self::Desert => "desert",
+            Self::Jungle => "jungle",
+            Self::Plains => "plains",
+            Self::Savanna => "savanna",
+            Self::Snow => "snow",
+            Self::Swamp => "swamp",
+            Self::Taiga => "taiga",
+        }
+    }
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        let clean = match name.strip_prefix("minecraft:") {
+            Some(stripped) => stripped,
+            None => name,
+        };
+        match clean {
+            "desert" => Some(Self::Desert),
+            "jungle" => Some(Self::Jungle),
+            "plains" => Some(Self::Plains),
+            "savanna" => Some(Self::Savanna),
+            "snow" => Some(Self::Snow),
+            "swamp" => Some(Self::Swamp),
+            "taiga" => Some(Self::Taiga),
             _ => None,
         }
     }

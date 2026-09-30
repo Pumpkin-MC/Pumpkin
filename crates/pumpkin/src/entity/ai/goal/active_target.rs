@@ -1,29 +1,84 @@
 use super::{Controls, Goal, to_goal_ticks};
-use crate::entity::ai::goal::GoalFuture;
+
+use crate::entity::ageable::AgeableMob;
+use crate::entity::ai::goal::revenge::MobFilter;
 use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
+use crate::entity::mob::neutral::{NeutralMob, find_by_uuid};
 use crate::entity::{EntityBase, mob::MobEntity, player::Player};
 use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use rand::RngExt;
-use std::future::Future;
 use std::sync::Arc;
+use uuid::Uuid;
 
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
+
+/// Extra gate on top of the target predicate, for mobs that pick targets conditionally.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub enum TargetCondition {
+    #[default]
+    Always,
+    /// Only what the mob holds a grudge against. Neutral mobs.
+    AngryAt,
+    /// Nothing at all in daylight. Spiders.
+    NoDaylight,
+    /// Nothing at all while the mob is a baby. (Polar bears hunting foxes)
+    Adult,
+}
+
+impl TargetCondition {
+    /// Checked once per search attempt.
+    fn allows_search(self, mob: &dyn Mob) -> bool {
+        match self {
+            Self::NoDaylight => !mob.get_mob_entity().is_in_daylight(),
+            // A calm mob matches nobody: skip the search. Grudge check first, it is lock-free.
+            Self::AngryAt => mob.as_neutral().is_some_and(|neutral| {
+                neutral.get_persistent_anger_target().is_some() || neutral.is_angry()
+            }),
+            Self::Adult => !mob.as_ageable().is_some_and(AgeableMob::is_baby),
+            Self::Always => true,
+        }
+    }
+
+    /// Fixed candidate the grudge points at. Replaces the area search.
+    /// Universal anger has no such target and still searches.
+    fn grudge_target(self, mob: &dyn Mob) -> Option<Uuid> {
+        match self {
+            Self::AngryAt => mob
+                .as_neutral()
+                .and_then(NeutralMob::get_persistent_anger_target),
+            Self::Always | Self::NoDaylight | Self::Adult => None,
+        }
+    }
+
+    /// Checked per candidate during the search.
+    /// The grudge target is already filtered by the search.
+    fn allows_target(self, mob: &dyn Mob, target: &dyn EntityBase, world: &World) -> bool {
+        match self {
+            Self::AngryAt => mob
+                .as_neutral()
+                .is_some_and(|neutral| neutral.is_angry_at(target, world)),
+            Self::Always | Self::NoDaylight | Self::Adult => true,
+        }
+    }
+}
 
 pub struct ActiveTargetGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
     reciprocal_chance: i32,
-    target_type: &'static EntityType,
+    target_type: Option<&'static EntityType>,
     target_predicate: TargetPredicate,
+    condition: TargetCondition,
+    gate: Option<MobFilter>,
 }
 
 impl ActiveTargetGoal {
-    pub fn new<F, Fut>(
+    pub fn new<F>(
         mob: &MobEntity,
         target_type: &'static EntityType,
         reciprocal_chance: i32,
@@ -32,8 +87,7 @@ impl ActiveTargetGoal {
         predicate: Option<F>,
     ) -> Self
     where
-        F: Fn(Arc<LivingEntity>, Arc<World>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = bool> + Send + 'static,
+        F: Fn(&LivingEntity, &World) -> bool + Send + Sync + 'static,
     {
         let track_target_goal = TrackTargetGoal::new(check_visibility, check_can_navigate);
         let mut target_predicate = TargetPredicate::create_attackable();
@@ -49,9 +103,25 @@ impl ActiveTargetGoal {
             track_target_goal,
             target: None,
             reciprocal_chance: to_goal_ticks(reciprocal_chance),
-            target_type,
+            target_type: Some(target_type),
             target_predicate,
+            condition: TargetCondition::Always,
+            gate: None,
         }
+    }
+
+    /// Chains onto any of the constructors, including the boxed ones.
+    #[must_use]
+    pub fn when(mut self: Box<Self>, condition: TargetCondition) -> Box<Self> {
+        self.condition = condition;
+        self
+    }
+
+    /// Extra condition for starting and for continuing, e.g. an angry, unspent bee.
+    #[must_use]
+    pub fn gated_by(mut self: Box<Self>, gate: MobFilter) -> Box<Self> {
+        self.gate = Some(gate);
+        self
     }
 
     #[must_use]
@@ -70,8 +140,38 @@ impl ActiveTargetGoal {
             track_target_goal,
             target: None,
             reciprocal_chance: to_goal_ticks(DEFAULT_RECIPROCAL_CHANCE),
-            target_type,
+            target_type: Some(target_type),
             target_predicate,
+            condition: TargetCondition::Always,
+            gate: None,
+        })
+    }
+
+    /// Targets the closest entity of any type passing `predicate`, like vanilla's
+    /// class-agnostic `NearestAttackableTargetGoal` (e.g. iron golems targeting
+    /// every `Enemy` but creepers). All candidates are tested, so an invalid
+    /// entity nearest to the mob cannot block a valid one farther away.
+    pub fn predicated(
+        mob: &MobEntity,
+        reciprocal_chance: i32,
+        check_visibility: bool,
+        predicate: impl Fn(&LivingEntity, &World) -> bool + Send + Sync + 'static,
+    ) -> Box<Self> {
+        let track_target_goal = TrackTargetGoal::new(check_visibility, false);
+        let mut target_predicate = TargetPredicate::create_attackable();
+        target_predicate.base_max_distance = mob
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
+        target_predicate.set_predicate(predicate);
+
+        Box::new(Self {
+            track_target_goal,
+            target: None,
+            reciprocal_chance: to_goal_ticks(reciprocal_chance),
+            target_type: None,
+            target_predicate,
+            condition: TargetCondition::Always,
+            gate: None,
         })
     }
 
@@ -79,82 +179,97 @@ impl ActiveTargetGoal {
         self.target = target;
     }
 
-    async fn find_closest_target(&mut self, mob: &MobEntity) {
-        let follow_range = mob
+    fn find_closest_target(&mut self, mob: &dyn Mob) {
+        let mob_entity = mob.get_mob_entity();
+        let follow_range = mob_entity
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
 
         // Vanilla updates the target conditions with the current follow distance on every search
         self.target_predicate.base_max_distance = follow_range;
 
-        let world = mob.living_entity.entity.world.load();
+        let world = mob_entity.living_entity.entity.world.load();
 
         // Vanilla searches using getEyeY(), so we offset the position by the eye height
-        let mut search_pos = mob.living_entity.entity.pos.load();
-        search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
+        let mut search_pos = mob_entity.living_entity.entity.pos.load();
+        search_pos.y += mob_entity
+            .living_entity
+            .entity
+            .entity_dimension
+            .load()
+            .eye_height as f64;
 
-        if self.target_type == &EntityType::PLAYER {
-            let potential_player = world
-                .get_closest_player(search_pos, follow_range)
-                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
-
-            if let Some(potential_entity) = potential_player
-                && let Some(living) = potential_entity.get_living_entity()
-                && self
-                    .target_predicate
-                    .test(&world, Some(&mob.living_entity), living)
-                    .await
-            {
-                self.target = Some(potential_entity);
-                return;
-            }
+        // Pick the nearest candidate that passes the conditions, not the nearest overall.
+        let predicate = &self.target_predicate;
+        let condition = self.condition;
+        let found = if let Some(uuid) = condition.grudge_target(mob) {
+            // Same range rule as the area search: follow range from the eye.
+            find_by_uuid(&world, uuid).filter(|candidate| {
+                let entity = candidate.get_entity();
+                self.target_type
+                    .is_none_or(|target_type| entity.entity_type == target_type)
+                    && entity.pos.load().squared_distance_to_vec(&search_pos)
+                        <= follow_range * follow_range
+                    && predicate.test(&world, Some(mob), candidate.as_ref())
+                    && condition.allows_target(mob, candidate.as_ref(), &world)
+            })
+        } else if self.target_type == Some(&EntityType::PLAYER) {
+            world
+                .get_nearest_player(search_pos, follow_range, |player| {
+                    predicate.test(&world, Some(mob), player.as_ref())
+                        && condition.allows_target(mob, player.as_ref(), &world)
+                })
+                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>)
         } else {
-            let potential_entity =
-                world.get_closest_entity(search_pos, follow_range, Some(&[self.target_type]));
+            let entity_types = self.target_type.map(|t| [t]);
+            world.get_nearest_entity(
+                search_pos,
+                follow_range,
+                entity_types.as_ref().map(<[&EntityType; 1]>::as_slice),
+                |entity| {
+                    predicate.test(&world, Some(mob), entity.as_ref())
+                        && condition.allows_target(mob, entity.as_ref(), &world)
+                },
+            )
+        };
 
-            if let Some(potential_entity) = potential_entity
-                && let Some(living) = potential_entity.get_living_entity()
-                && self
-                    .target_predicate
-                    .test(&world, Some(&mob.living_entity), living)
-                    .await
-            {
-                self.target = Some(potential_entity);
-                return;
-            }
-        }
-        self.target = None;
+        self.target = found;
     }
 }
 
 impl Goal for ActiveTargetGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            if self.reciprocal_chance > 0
-                && mob.get_random().random_range(0..self.reciprocal_chance) != 0
-            {
-                return false;
-            }
-            self.find_closest_target(mob.get_mob_entity()).await;
-            self.target.is_some()
-        })
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if self.gate.is_some_and(|gate| !gate(mob)) {
+            return false;
+        }
+        if self.reciprocal_chance > 0
+            && mob.get_random().random_range(0..self.reciprocal_chance) != 0
+        {
+            return false;
+        }
+        if !self.condition.allows_search(mob) {
+            return false;
+        }
+        self.find_closest_target(mob);
+        self.target.is_some()
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async { self.track_target_goal.should_continue(mob).await })
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        if self.gate.is_some_and(|gate| !gate(mob)) {
+            self.target = None;
+            return false;
+        }
+        // Like vanilla TargetGoal.canContinueToUse, the condition only gates the search.
+        self.track_target_goal.should_continue(mob)
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            mob.set_mob_target(self.target.clone()).await;
-            self.track_target_goal.start(mob).await;
-        })
+    fn start(&mut self, mob: &dyn Mob) {
+        mob.set_mob_target(self.target.clone());
+        self.track_target_goal.start(mob);
     }
 
-    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            self.track_target_goal.stop(mob).await;
-        })
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.track_target_goal.stop(mob);
     }
 
     fn controls(&self) -> Controls {
