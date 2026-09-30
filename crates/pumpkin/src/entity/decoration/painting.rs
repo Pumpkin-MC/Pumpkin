@@ -36,6 +36,7 @@ fn facing_from_nbt(nbt: &NbtCompound) -> BlockDirection {
     facing_from_horizontal(nbt.get_byte("facing").unwrap_or(0) as u8)
 }
 
+/// Converts a facing to the horizontal value the world file stores, the inverse of `facing_from_horizontal`.
 const fn facing_to_horizontal(direction: BlockDirection) -> u8 {
     match direction {
         BlockDirection::West => 1,
@@ -43,6 +44,11 @@ const fn facing_to_horizontal(direction: BlockDirection) -> u8 {
         BlockDirection::East => 3,
         _ => 0,
     }
+}
+
+/// The variant entity data is an `ID or X`: 0 means an inline definition, so a registry ID is sent as ID + 1.
+const fn variant_metadata_value(variant: PaintingVariant) -> VarInt {
+    VarInt(variant.id() as i32 + 1)
 }
 
 pub struct PaintingEntity {
@@ -78,10 +84,11 @@ impl PaintingEntity {
         self.sync_variant();
     }
 
+    /// Pushes the current variant into the tracked entity data so clients receive it.
     pub fn sync_variant(&self) {
         self.entity.set_synced_data(
             pumpkin_data::tracked_data::painting::DATA_PAINTING_VARIANT_ID,
-            VarInt(self.variant().id() as i32),
+            variant_metadata_value(self.variant()),
         );
     }
 
@@ -244,11 +251,12 @@ impl EntityBase for PaintingEntity {
         self.sync_variant();
     }
 
+    /// Metadata sent right after the spawn packet, carrying the variant to the client.
     fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
         let mut metadata = Vec::new();
         Metadata::new(
             pumpkin_data::tracked_data::painting::DATA_PAINTING_VARIANT_ID,
-            VarInt(self.variant().id() as i32),
+            variant_metadata_value(self.variant()),
         )
         .write(&mut metadata, &version)
         .ok()?;
@@ -357,6 +365,7 @@ mod tests {
         assert!((pos_south.z - 21.03125).abs() < 1e-6);
     }
 
+    /// Names resolve to a variant with or without the `minecraft:` prefix.
     #[test]
     fn variant_resolution() {
         assert_eq!(
@@ -369,5 +378,11 @@ mod tests {
         );
         assert_eq!(PaintingVariant::from_name("invalid"), None);
         assert_eq!(PaintingVariant::Kebab.asset_id(), "minecraft:kebab");
+    }
+
+    /// 0 tells the client that an inline variant definition follows, so the first variant is sent as 1.
+    #[test]
+    fn first_variant_is_not_sent_as_inline() {
+        assert_eq!(variant_metadata_value(PaintingVariant::Alban).0, 1);
     }
 }
