@@ -217,25 +217,6 @@ pub mod wit {
     export!(Component);
 }
 
-/// WIT 0.2 guest bindings.
-pub mod v0_2 {
-    #[allow(clippy::too_many_arguments, missing_docs)]
-    pub mod wit {
-        wit_bindgen::generate!({
-            skip: ["init-plugin"],
-            path: "../pumpkin-plugin-wit/v0.2",
-            world: "plugin",
-            chainable_methods: [
-                "pumpkin:plugin/command@0.2.0#command",
-                "pumpkin:plugin/command@0.2.0#command-node",
-                "pumpkin:plugin/text@0.2.0#text-component",
-                "pumpkin:plugin/gametest@0.2.0#registration-builder",
-                "pumpkin:plugin/gametest@0.2.0#game-test-sequence"
-            ]
-        });
-    }
-}
-
 struct Component;
 
 /// Metadata that describes a plugin to the server.

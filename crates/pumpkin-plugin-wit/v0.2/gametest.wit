@@ -27,13 +27,6 @@ interface gametest {
         z: f64,
     }
 
-    /// One-to-one structural mapping of @minecraft/server.RGB.
-    record rgb {
-        red: f64,
-        green: f64,
-        blue: f64,
-    }
-
     /// @minecraft/server.Direction.
     type direction = server-direction;
 
@@ -90,7 +83,6 @@ interface gametest {
         id(string),
     }
 
-
     type void-callback-id = u32;
     type test-callback-id = u32;
     type async-test-callback-id = u32;
@@ -103,56 +95,9 @@ interface gametest {
         until-move,
     }
 
-    enum persona-arm-size {
-        slim,
-        wide,
-    }
-
-    enum persona-piece-type {
-        arms,
-        back,
-        body,
-        bottom,
-        capes,
-        dress,
-        eyes,
-        face-accessory,
-        facial-hair,
-        feet,
-        hair,
-        hands,
-        head,
-        high-pants,
-        hood,
-        left-arm,
-        left-leg,
-        legs,
-        mouth,
-        outerwear,
-        right-arm,
-        right-leg,
-        skeleton,
-        skin,
-        top,
-    }
-
     record move-to-options {
         face-target: option<bool>,
         speed: option<f64>,
-    }
-
-    record player-persona-piece {
-        id: string,
-        is-default-piece: option<bool>,
-        pack-id: string,
-        product-id: string,
-        %type: persona-piece-type,
-    }
-
-    record player-skin-data {
-        arm-size: option<persona-arm-size>,
-        persona-pieces: option<list<player-persona-piece>>,
-        skin-color: option<rgb>,
     }
 
     /// @minecraft/server-gametest.FenceConnectivity.
@@ -253,7 +198,6 @@ interface gametest {
         rotate-body: func(angle-in-degrees: f64);
         set-body-rotation: func(angle-in-degrees: f64);
         set-item: func(item-stack: borrow<item-stack>, slot: f64, select-slot: option<bool>) -> bool;
-        set-skin: func(options: player-skin-data);
         start-build: func(slot: option<f64>);
         stop-breaking-block: func();
         stop-build: func();
@@ -441,10 +385,6 @@ interface gametest {
         world-block-location: func(relative-block-location: vector3) -> vector3;
         world-location: func(relative-location: vector3) -> vector3;
     }
-
-
-    get-player-skin: func(player: borrow<player>) -> player-skin-data;
-
 
     register: func(
         test-class-name: string,

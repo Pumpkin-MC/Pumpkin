@@ -3,21 +3,12 @@ use pumpkin_host_bindings::v0_2::pumpkin::plugin::gametest::{
     self, AsyncTestCallbackId, BlockPermutation, BlockPredicateCallbackId, BlockTypeOrId,
     Dimension, DimensionLocation, DimensionTypeOrId, Direction, Entity, EntityPredicateCallbackId,
     FenceConnectivity, FluidType, GameMode, GameTestSequence, ItemStack, ItemTypeOrId,
-    LookDuration, MoveToOptions, NavigationResult, Player, PlayerSkinData, RegistrationBuilder,
-    SculkSpreader, SimulatedPlayer, Tags, Test, TestCallbackId, Vector2, Vector3, VoidCallbackId,
+    LookDuration, MoveToOptions, NavigationResult, Player, RegistrationBuilder, SculkSpreader,
+    SimulatedPlayer, Tags, Test, TestCallbackId, Vector2, Vector3, VoidCallbackId,
 };
 use wasmtime::component::Resource;
 
 impl gametest::Host for PluginHostState {
-    async fn get_player_skin(
-        &mut self,
-        _player: Resource<Player>,
-    ) -> wasmtime::Result<PlayerSkinData> {
-        Err(wasmtime::Error::msg(
-            "gametest.get-player-skin not implemented",
-        ))
-    }
-
     async fn register(
         &mut self,
         _test_class_name: String,
@@ -666,16 +657,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
     ) -> wasmtime::Result<bool> {
         Err(wasmtime::Error::msg(
             "gametest.simulated-player.set-item not implemented",
-        ))
-    }
-
-    async fn set_skin(
-        &mut self,
-        _res: Resource<SimulatedPlayer>,
-        _options: PlayerSkinData,
-    ) -> wasmtime::Result<()> {
-        Err(wasmtime::Error::msg(
-            "gametest.simulated-player.set-skin not implemented",
         ))
     }
 
