@@ -225,6 +225,52 @@ pub fn stop_or_exit_server() {
     stop_server();
 }
 
+/// Runs one Java connection from handshake to disconnect: login, configuration, play, and the
+/// player save when they leave.
+pub async fn serve_java_connection(server: Arc<Server>, mut pending: PendingConnection) {
+    let login_result = pending.handle_login_sequence(&server).await;
+
+    match login_result {
+        PacketHandlerResult::Stop => {
+            pending.close();
+        }
+        PacketHandlerResult::ReadyToPlay(profile, config) => {
+            let mut java_client =
+                JavaClient::from_pending(pending, profile.clone(), config.clone());
+            java_client.start_outgoing_packet_task();
+
+            if let Some((player, world)) = server.add_player(
+                Arc::new(ClientPlatform::Java(java_client)),
+                profile,
+                Some(config),
+            ) {
+                if let ClientPlatform::Java(client) = player.client.as_ref() {
+                    client.set_player(player.clone());
+                }
+                world
+                    .spawn_java_player(&server.basic_config, &player, &server)
+                    .await;
+
+                if let ClientPlatform::Java(client) = player.client.as_ref() {
+                    client.progress_player_packets(&player, &server).await;
+
+                    // Close when done
+                    client.close();
+                    client.await_tasks().await;
+                }
+                player.remove().await;
+                server.remove_player(&player);
+                if let Err(e) = server.player_data_storage.handle_player_leave(&player) {
+                    error!("Failed to save player data on disconnect: {e}");
+                }
+                if let Err(e) = server.advancement_manager.save_player(&player).await {
+                    error!("Failed to save player advancement on disconnect: {e}");
+                }
+            }
+        }
+    }
+}
+
 fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
     opt: Option<D>,
     func: F,
@@ -241,6 +287,10 @@ pub struct PumpkinServer {
     pub tcp_listener: Option<TcpListener>,
     pub bedrock_status: Option<StatusResponder>,
     pub nethernet_listener: Option<NetherNetListener>,
+    /// Whether this instance owns the process: on shutdown, a standalone server also ends the
+    /// process-wide tasks (RCON, query, LAN broadcast, telemetry), while an embedded server
+    /// only ends its own world.
+    pub standalone: bool,
 }
 
 impl PumpkinServer {
@@ -355,6 +405,7 @@ impl PumpkinServer {
             tcp_listener,
             bedrock_status,
             nethernet_listener,
+            standalone: true,
         })
     }
 
@@ -504,7 +555,25 @@ impl PumpkinServer {
         }
 
         info!("Stopped accepting incoming connections");
+        if self.standalone {
+            // `stop.rs` only cancels this server's own `stop_token`; escalate here so RCON,
+            // query, LAN broadcast and telemetry end too. An embedded server skips this and
+            // only ends its own world.
+            stop_server();
+        }
 
+        self.shutdown(&tasks).await;
+
+        if let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
+            && let Some(rl) = wrapper.take_readline()
+        {
+            let _ = rl;
+        }
+    }
+
+    /// Saves every player, kicks them, waits for their connection `tasks` to end, then unloads
+    /// plugins and saves the worlds.
+    pub async fn shutdown(&self, tasks: &TaskTracker) {
         if let Err(e) = self
             .server
             .player_data_storage
@@ -539,12 +608,6 @@ impl PumpkinServer {
         self.server.shutdown().await;
 
         info!("Completed save!");
-
-        if let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
-            && let Some(rl) = wrapper.take_readline()
-        {
-            let _ = rl;
-        }
     }
 
     #[allow(clippy::too_many_lines)]
@@ -578,57 +641,14 @@ impl PumpkinServer {
                             let packet_limiter = PacketRateLimiter::from_config(
                                 &server_clone.advanced_config.networking.java.packet_limiter,
                             );
-                            let mut pending = PendingConnection::new(
+                            let pending = PendingConnection::new(
                                 connection,
                                 client_addr,
                                 client_id,
                                 packet_limiter,
                                 Arc::downgrade(&server_clone),
                             );
-                            let login_result = pending.handle_login_sequence(&server_clone).await;
-
-                            match login_result {
-                                PacketHandlerResult::Stop => {
-                                     pending.close();
-                                },
-                                PacketHandlerResult::ReadyToPlay(profile, config) => {
-                                     let mut java_client = JavaClient::from_pending(pending, profile.clone(), config.clone());
-                                     java_client.start_outgoing_packet_task();
-
-                                     if let Some((player, world)) = server_clone
-                                         .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
-                                 {
-
-                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                         client.set_player(player.clone());
-                                     }
-                                     world
-                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
-                                         .await;
-
-                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                         client.progress_player_packets(&player, &server_clone).await;
-
-                                         // Close when done
-                                         client.close();
-                                         client.await_tasks().await;
-                                     }
-                                     player.remove().await;
-                                     server_clone.remove_player(&player);
-                                    if let Err(e) = server_clone
-                                        .player_data_storage
-                                        .handle_player_leave(&player)
-                                    {
-                                        error!("Failed to save player data on disconnect: {e}");
-                                    }
-                                    if let Err(e) = server_clone.advancement_manager
-                                        .save_player(&player)
-                                        .await {
-                                            error!("Failed to save player advancement on disconnect: {e}");
-                                        }
-                                    }
-                                },
-                            }
+                            serve_java_connection(server_clone, pending).await;
                         });
                     }
                     Err(e) => {
@@ -692,8 +712,8 @@ impl PumpkinServer {
                 }
             },
 
-            // Branch for the global stop signal
-            () = STOP_INTERRUPT.cancelled() => {
+            // Branch for this server's stop signal, which the global one also reaches
+            () = self.server.stop_token.cancelled() => {
                 return false;
             }
         }
