@@ -269,10 +269,10 @@ impl<S: CommandSource> CommandDispatcher<S> {
                 let main_node = &self.tree[main_node_id];
                 let description = main_node.meta.description.clone();
                 let mut alias =
-                    crate::argument_builder::CommandArgumentBuilder::new(single_slash, description);
+                    crate::argument_builder::CommandArgumentBuilder::new(single_slash, description)
+                        .overwrite_requirements(main_node.owned.requirements.clone());
                 if let Some(executor) = &main_node.owned.command {
                     alias = alias.executes_arc(executor.clone());
-                    alias = alias.overwrite_requirements(main_node.owned.requirements.clone());
                 }
                 alias = alias.redirect(crate::node::Redirection::Local(main_node_id.into()));
                 self.tree.add_child_to_root(alias.build());
@@ -283,10 +283,10 @@ impl<S: CommandSource> CommandDispatcher<S> {
                 let main_node = &self.tree[main_node_id];
                 let description = main_node.meta.description.clone();
                 let mut alias =
-                    crate::argument_builder::CommandArgumentBuilder::new(double_slash, description);
+                    crate::argument_builder::CommandArgumentBuilder::new(double_slash, description)
+                        .overwrite_requirements(main_node.owned.requirements.clone());
                 if let Some(executor) = &main_node.owned.command {
                     alias = alias.executes_arc(executor.clone());
-                    alias = alias.overwrite_requirements(main_node.owned.requirements.clone());
                 }
                 alias = alias.redirect(crate::node::Redirection::Local(main_node_id.into()));
                 self.tree.add_child_to_root(alias.build());
@@ -323,20 +323,9 @@ impl<S: CommandSource> CommandDispatcher<S> {
 
             // We take a look at the original node's owned data.
             let reference = &main_node.owned;
-
-            // If the reference contains an executor, we clone that over.
-            // If not, we need not check for the permission, as it
-            // will be done by the target node.
+            alias = alias.overwrite_requirements(reference.requirements.clone());
             if let Some(executor) = &reference.command {
                 alias = alias.executes_arc(executor.clone());
-
-                // We must add the appropriate requirements as well.
-                // This is because if we just simply set an executor, then
-                // any player can execute it without any requirements (including permissions)!
-                //
-                // For example, if an alias `/s` was added for `/stop` (hypothetically),
-                // any player can stop the server with `/s`!
-                alias = alias.overwrite_requirements(reference.requirements.clone());
             }
 
             // And we redirect to the node.
@@ -973,6 +962,8 @@ impl<S: CommandSource> CommandDispatcher<S> {
 
 #[cfg(test)]
 mod test {
+    use pumpkin_util::text::TextComponent;
+
     use crate::argument_builder::{
         ArgumentBuilder, CommandArgumentBuilder, LiteralArgumentBuilder, RequiredArgumentBuilder,
     };
@@ -981,7 +972,7 @@ mod test {
     use crate::errors::error_types::DISPATCHER_UNKNOWN_COMMAND;
     use crate::node::dispatcher::CommandDispatcher;
     use crate::node::{CommandExecutor, CommandExecutorResult};
-    use crate::source::DummySource;
+    use crate::source::{CommandSource, DummySource};
 
     #[test]
     fn unknown_command() {
@@ -1217,6 +1208,61 @@ mod test {
         let source = DummySource::dummy();
         assert_eq!(dispatcher.execute_input("a 5", &source), Ok(5));
         assert_eq!(dispatcher.execute_input("b 7", &source), Ok(7));
+    }
+
+    #[test]
+    fn alias_inherits_root_permission_without_root_executor() {
+        #[derive(Clone)]
+        struct PermissionSource(bool);
+
+        impl CommandSource for PermissionSource {
+            fn send_message(&self, _message: TextComponent) {}
+
+            fn has_permission(&self, permission: &str) -> bool {
+                permission == "test.command" && self.0
+            }
+        }
+
+        let mut dispatcher = CommandDispatcher::<PermissionSource>::new();
+        let executor: fn(&CommandContext<PermissionSource>) -> CommandExecutorResult = |_| Ok(1);
+        dispatcher.register_with_aliases(
+            CommandArgumentBuilder::new("primary", "A restricted command")
+                .requires("test.command")
+                .then(
+                    RequiredArgumentBuilder::new("value", IntegerArgumentType::any())
+                        .executes(executor),
+                ),
+            &["alias"],
+        );
+        dispatcher.register(
+            CommandArgumentBuilder::new("//slash", "Another restricted command")
+                .requires("test.command")
+                .then(
+                    RequiredArgumentBuilder::new("value", IntegerArgumentType::any())
+                        .executes(executor),
+                ),
+        );
+
+        let denied_commands = dispatcher.get_all_permitted_commands(&PermissionSource(false));
+        let allowed_commands = dispatcher.get_all_permitted_commands(&PermissionSource(true));
+        for (name, input) in [
+            ("primary", "primary 1"),
+            ("alias", "alias 1"),
+            ("//slash", "//slash 1"),
+            ("/slash", "/slash 1"),
+        ] {
+            assert!(!denied_commands.contains_key(name));
+            assert!(allowed_commands.contains_key(name));
+            assert!(
+                dispatcher
+                    .execute_input(input, &PermissionSource(false))
+                    .is_err()
+            );
+            assert_eq!(
+                dispatcher.execute_input(input, &PermissionSource(true)),
+                Ok(1)
+            );
+        }
     }
 
     #[test]
