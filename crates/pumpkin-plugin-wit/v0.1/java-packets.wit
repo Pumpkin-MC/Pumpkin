@@ -420,7 +420,7 @@ interface java-packets {
     accept,
   }
   record s-spectate-entity {
-    target: uuid,
+    target: s32,
   }
   record s-swing-arm {
     hand: s32,
