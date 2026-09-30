@@ -22,6 +22,7 @@ use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::block_properties::WaterLikeProperties;
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item_stack::ItemStack;
@@ -188,6 +189,14 @@ pub trait BlockBehaviour: Send + Sync {
 
     fn get_inside_collision_shape(&self, _args: GetInsideCollisionShapeArgs<'_>) -> BoundingBox {
         BoundingBox::full_block()
+    }
+
+    /// Whether entities in the way stop this block from being placed.
+    ///
+    /// Vanilla checks placement against `getCollisionShape`
+    /// I had to add this just for scaffolding idk where else its used
+    fn has_placement_collision(&self) -> bool {
+        true
     }
 
     fn mirror(&self, block: &Block, state_id: BlockStateId, mirror: Mirror) -> &'static BlockState {
@@ -547,6 +556,36 @@ impl BlockIsReplacing {
             // Level 0 means the water is a source block
             Self::Water(level) => *level == 0,
             _ => false,
+        }
+    }
+}
+
+/// Where a block item places its block, like vanilla's `BlockPlaceContext`.
+pub struct BlockPlaceContext {
+    /// `getClickedPos`: the position the block is placed at.
+    pub position: BlockPos,
+    pub clicked_face: BlockDirection,
+    /// `isInside`: the click came from inside the clicked block.
+    pub inside: bool,
+    pub replacing: BlockIsReplacing,
+}
+
+impl BlockPlaceContext {
+    /// `BlockPlaceContext.at`: places into the replaceable block at `position` as if its
+    /// `direction` face was clicked.
+    #[must_use]
+    pub fn at(world: &World, position: BlockPos, direction: BlockDirection) -> Self {
+        let state_id = world.get_block_state_id(&position);
+        let replacing = if Block::from_state_id(state_id) == &Block::WATER {
+            BlockIsReplacing::Water(WaterLikeProperties::from_state_id(state_id).level)
+        } else {
+            BlockIsReplacing::Other
+        };
+        Self {
+            position,
+            clicked_face: direction,
+            inside: false,
+            replacing,
         }
     }
 }

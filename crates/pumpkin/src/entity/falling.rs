@@ -3,6 +3,8 @@ use pumpkin_data::BlockState;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_protocol::bedrock::client::CUpdateBlock;
 use pumpkin_protocol::java::client::play::CBlockUpdate;
@@ -72,14 +74,31 @@ impl EntityBase for FallingEntity {
             {
                 state_id = concrete.default_state.id;
             }
-            world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
-            // block updates to watchers before the despawn, else a invisible block gap until the tick flush.
-            let placed = world.get_block_state_id(&landing_pos);
-            world.send_to_tracking_players_editioned(
-                entity,
-                &CBlockUpdate::new(landing_pos, i32::from(placed.as_u16()).into()),
-                &CUpdateBlock::new(landing_pos, BlockState::to_be_network_id(placed)),
-            );
+            let landed_block = Block::from_state_id(state_id);
+            if world.block_registry.can_place_at(
+                None,
+                Some(&**world),
+                &**world,
+                None,
+                landed_block,
+                BlockState::from_id(state_id),
+                &landing_pos,
+                None,
+                None,
+            ) {
+                world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
+                // block updates to watchers before the despawn, else a invisible block gap until the tick flush.
+                let placed = world.get_block_state_id(&landing_pos);
+                world.send_to_tracking_players_editioned(
+                    entity,
+                    &CBlockUpdate::new(landing_pos, i32::from(placed.as_u16()).into()),
+                    &CUpdateBlock::new(landing_pos, BlockState::to_be_network_id(placed)),
+                );
+            } else if world.level_info.load().game_rules.entity_drops
+                && let Some(item) = Item::from_id(block.item_id)
+            {
+                world.drop_stack(&landing_pos, ItemStack::new(1, item));
+            }
             self.entity.remove();
         }
 

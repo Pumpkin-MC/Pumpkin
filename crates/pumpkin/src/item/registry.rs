@@ -1,7 +1,9 @@
+use crate::block::BlockPlaceContext;
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
+use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
@@ -157,6 +159,25 @@ impl ItemRegistry {
             return pumpkin_block.can_mine(player);
         }
         true
+    }
+
+    pub fn update_placement_context(
+        &self,
+        item_id: u16,
+        world: &World,
+        player: &Player,
+        context: BlockPlaceContext,
+    ) -> Option<BlockPlaceContext> {
+        match self.get_pumpkin_item(item_id) {
+            Some(pumpkin_item) => pumpkin_item.update_placement_context(world, player, context),
+            None => Some(context),
+        }
+    }
+
+    #[must_use]
+    pub fn must_survive(&self, item_id: u16) -> bool {
+        self.get_pumpkin_item(item_id)
+            .is_none_or(|pumpkin_item| pumpkin_item.must_survive())
     }
 
     #[must_use]
