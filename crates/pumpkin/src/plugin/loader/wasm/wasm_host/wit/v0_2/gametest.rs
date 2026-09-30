@@ -2,9 +2,8 @@ use crate::plugin::loader::wasm::wasm_host::state::PluginHostState;
 use pumpkin_host_bindings::v0_2::pumpkin::plugin::gametest::{
     self, AsyncTestCallbackId, Block, BlockPermutation, BlockPredicateCallbackId, BlockTypeOrId,
     Dimension, DimensionLocation, DimensionTypeOrId, Direction, Entity, EntityPredicateCallbackId,
-    FenceConnectivity, FluidType, GameMode, GameTestCompletedError, GameTestCompletedErrorReason,
-    GameTestError, GameTestErrorContext, GameTestErrorType, GameTestSequence, ItemStack,
-    ItemTypeOrId, LookDuration, MoveToOptions, NavigationResult, Player, PlayerSkinData,
+    FenceConnectivity, FluidType, GameMode, GameTestSequence, ItemStack, ItemTypeOrId,
+    LookDuration, MoveToOptions, NavigationResult, Player, PlayerSkinData,
     RegistrationBuilder, SculkSpreader, SimulatedPlayer, Tags, Test, TestCallbackId, Vector2,
     Vector3, VoidCallbackId,
 };
@@ -84,131 +83,6 @@ impl gametest::HostBlock for PluginHostState {
 
     async fn drop(&mut self, _res: Resource<Block>) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg("gametest.block.drop not implemented"))
-    }
-}
-
-impl gametest::HostGameTestCompletedError for PluginHostState {
-    async fn get_message(
-        &mut self,
-        _res: Resource<GameTestCompletedError>,
-    ) -> wasmtime::Result<String> {
-        Err(wasmtime::Error::msg(
-            "gametest.game-test-completed-error.get-message not implemented",
-        ))
-    }
-
-    async fn get_reason(
-        &mut self,
-        _res: Resource<GameTestCompletedError>,
-    ) -> wasmtime::Result<GameTestCompletedErrorReason> {
-        Err(wasmtime::Error::msg(
-            "gametest.game-test-completed-error.get-reason not implemented",
-        ))
-    }
-
-    async fn drop(&mut self, _res: Resource<GameTestCompletedError>) -> wasmtime::Result<()> {
-        Err(wasmtime::Error::msg(
-            "gametest.game-test-completed-error.drop not implemented",
-        ))
-    }
-}
-
-impl gametest::HostGameTestError for PluginHostState {
-    async fn get_message(&mut self, _res: Resource<GameTestError>) -> wasmtime::Result<String> {
-        Err(wasmtime::Error::msg(
-            "gametest.game-test-error.get-message not implemented",
-        ))
-    }
-
-    async fn get_context(
-        &mut self,
-        _res: Resource<GameTestError>,
-    ) -> wasmtime::Result<Option<GameTestErrorContext>> {
-        Err(wasmtime::Error::msg(
-            "gametest.game-test-error.get-context not implemented",
-        ))
-    }
-
-    async fn get_message_parameters(
-        &mut self,
-        _res: Resource<GameTestError>,
-    ) -> wasmtime::Result<Vec<String>> {
-        Err(wasmtime::Error::msg(
-            "gametest.game-test-error.get-message-parameters not implemented",
-        ))
-    }
-
-    async fn get_type(
-        &mut self,
-        _res: Resource<GameTestError>,
-    ) -> wasmtime::Result<GameTestErrorType> {
-        Err(wasmtime::Error::msg(
-            "gametest.game-test-error.get-type not implemented",
-        ))
-    }
-
-    async fn drop(&mut self, _res: Resource<GameTestError>) -> wasmtime::Result<()> {
-        Err(wasmtime::Error::msg(
-            "gametest.game-test-error.drop not implemented",
-        ))
-    }
-}
-
-impl gametest::HostFenceConnectivity for PluginHostState {
-    async fn get_east(&mut self, _res: Resource<FenceConnectivity>) -> wasmtime::Result<bool> {
-        Err(wasmtime::Error::msg(
-            "gametest.fence-connectivity.get-east not implemented",
-        ))
-    }
-
-    async fn get_north(&mut self, _res: Resource<FenceConnectivity>) -> wasmtime::Result<bool> {
-        Err(wasmtime::Error::msg(
-            "gametest.fence-connectivity.get-north not implemented",
-        ))
-    }
-
-    async fn get_south(&mut self, _res: Resource<FenceConnectivity>) -> wasmtime::Result<bool> {
-        Err(wasmtime::Error::msg(
-            "gametest.fence-connectivity.get-south not implemented",
-        ))
-    }
-
-    async fn get_west(&mut self, _res: Resource<FenceConnectivity>) -> wasmtime::Result<bool> {
-        Err(wasmtime::Error::msg(
-            "gametest.fence-connectivity.get-west not implemented",
-        ))
-    }
-
-    async fn drop(&mut self, _res: Resource<FenceConnectivity>) -> wasmtime::Result<()> {
-        Err(wasmtime::Error::msg(
-            "gametest.fence-connectivity.drop not implemented",
-        ))
-    }
-}
-
-impl gametest::HostNavigationResult for PluginHostState {
-    async fn get_is_full_path(
-        &mut self,
-        _res: Resource<NavigationResult>,
-    ) -> wasmtime::Result<bool> {
-        Err(wasmtime::Error::msg(
-            "gametest.navigation-result.get-is-full-path not implemented",
-        ))
-    }
-
-    async fn get_path(
-        &mut self,
-        _res: Resource<NavigationResult>,
-    ) -> wasmtime::Result<Vec<Vector3>> {
-        Err(wasmtime::Error::msg(
-            "gametest.navigation-result.get-path not implemented",
-        ))
-    }
-
-    async fn drop(&mut self, _res: Resource<NavigationResult>) -> wasmtime::Result<()> {
-        Err(wasmtime::Error::msg(
-            "gametest.navigation-result.drop not implemented",
-        ))
     }
 }
 
@@ -734,7 +608,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _res: Resource<SimulatedPlayer>,
         _block_location: Vector3,
         _speed: Option<f64>,
-    ) -> wasmtime::Result<Resource<NavigationResult>> {
+    ) -> wasmtime::Result<NavigationResult> {
         Err(wasmtime::Error::msg(
             "gametest.simulated-player.navigate-to-block not implemented",
         ))
@@ -745,7 +619,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _res: Resource<SimulatedPlayer>,
         _entity: Resource<Entity>,
         _speed: Option<f64>,
-    ) -> wasmtime::Result<Resource<NavigationResult>> {
+    ) -> wasmtime::Result<NavigationResult> {
         Err(wasmtime::Error::msg(
             "gametest.simulated-player.navigate-to-entity not implemented",
         ))
@@ -756,7 +630,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _res: Resource<SimulatedPlayer>,
         _location: Vector3,
         _speed: Option<f64>,
-    ) -> wasmtime::Result<Resource<NavigationResult>> {
+    ) -> wasmtime::Result<NavigationResult> {
         Err(wasmtime::Error::msg(
             "gametest.simulated-player.navigate-to-location not implemented",
         ))
@@ -1205,7 +1079,7 @@ impl gametest::HostTest for PluginHostState {
         &mut self,
         _res: Resource<Test>,
         _block_location: Vector3,
-    ) -> wasmtime::Result<Resource<FenceConnectivity>> {
+    ) -> wasmtime::Result<FenceConnectivity> {
         Err(wasmtime::Error::msg(
             "gametest.test.get-fence-connectivity not implemented",
         ))

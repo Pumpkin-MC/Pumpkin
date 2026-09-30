@@ -5,7 +5,7 @@ use crate::plugin::{
         state::PluginHostState,
     },
 };
-use pumpkin_host_bindings::v0_2::{LinkOptions, PluginPre};
+use pumpkin_host_bindings::v0_2::PluginPre;
 use wasmtime::component::{HasSelf, InstancePre, Linker};
 use wasmtime::{Engine, Store};
 
@@ -392,9 +392,7 @@ impl pumpkin::plugin::potions::Host for PluginHostState {}
 impl pumpkin::plugin::entity_statuses::Host for PluginHostState {}
 
 pub fn add_to_linker(linker: &mut Linker<PluginHostState>) -> wasmtime::Result<()> {
-    let mut options = LinkOptions::default();
-    options.r#future(true);
-    Plugin::add_to_linker::<_, HasSelf<_>>(linker, &options, |state: &mut PluginHostState| state)?;
+    Plugin::add_to_linker::<_, HasSelf<_>>(linker, |state: &mut PluginHostState| state)?;
     Ok(())
 }
 

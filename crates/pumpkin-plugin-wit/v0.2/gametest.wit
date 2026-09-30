@@ -1,3 +1,7 @@
+// API design inspired by the MIT-licensed @minecraft/server-gametest npm package:
+// https://www.npmjs.com/package/@minecraft/server-gametest
+// Copyright (c) Microsoft Corporation. MIT terms: ../LICENSE-MIT.
+
 /// Pumpkin WIT 0.2 mapping for @minecraft/server-gametest.
 ///
 /// Source API surface:
@@ -51,7 +55,6 @@ interface gametest {
     /// @minecraft/server.ItemType.
     record item-type {
         id: string,
-        localization-key: string,
     }
 
     /// @minecraft/server.DimensionType.
@@ -108,24 +111,6 @@ interface gametest {
     type block-predicate-callback-id = u32;
     type entity-predicate-callback-id = u32;
 
-    enum game-test-completed-error-reason {
-        cleanup,
-        done,
-    }
-
-    enum game-test-error-type {
-        assert,
-        assert-at-position,
-        execution-timeout,
-        exhausted-attempts,
-        fail-conditions-met,
-        level-state-modification-failed,
-        method-not-implemented,
-        simulated-player-out-of-bounds,
-        unknown,
-        waiting,
-    }
-
     enum look-duration {
         continuous,
         instant,
@@ -165,12 +150,6 @@ interface gametest {
         top,
     }
 
-    record game-test-error-context {
-        absolute-position: vector3,
-        relative-position: vector3,
-        tick-count: f64,
-    }
-
     record move-to-options {
         face-target: option<bool>,
         speed: option<f64>,
@@ -190,32 +169,18 @@ interface gametest {
         skin-color: option<rgb>,
     }
 
-    /// @minecraft/server-gametest.GameTestCompletedError (extends JS Error).
-    resource game-test-completed-error {
-        get-message: func() -> string;
-        get-reason: func() -> game-test-completed-error-reason;
-    }
-
-    /// @minecraft/server-gametest.GameTestError (extends JS Error).
-    resource game-test-error {
-        get-message: func() -> string;
-        get-context: func() -> option<game-test-error-context>;
-        get-message-parameters: func() -> list<string>;
-        get-type: func() -> game-test-error-type;
-    }
-
     /// @minecraft/server-gametest.FenceConnectivity.
-    resource fence-connectivity {
-        get-east: func() -> bool;
-        get-north: func() -> bool;
-        get-south: func() -> bool;
-        get-west: func() -> bool;
+    flags fence-connectivity {
+        east,
+        north,
+        south,
+        west,
     }
 
     /// @minecraft/server-gametest.NavigationResult.
-    resource navigation-result {
-        get-is-full-path: func() -> bool;
-        get-path: func() -> list<vector3>;
+    record navigation-result {
+        is-full-path: bool,
+        path: list<vector3>,
     }
 
     /// @minecraft/server-gametest.SculkSpreader.
@@ -416,7 +381,6 @@ interface gametest {
         get-test-direction: func() -> direction;
 
         /// TypeScript: idle(tickDelay: number): Promise<void>
-        @unstable(feature = %future)
         idle: func(tick-delay: f64) -> future;
 
         is-cleaning-up: func() -> bool;
@@ -485,7 +449,6 @@ interface gametest {
             event-parameters: option<list<f64>>,
         );
 
-        @unstable(feature = %future)
         until: func(callback: void-callback-id) -> future;
 
         walk-to: func(mob: borrow<entity>, block-location: vector3, speed-modifier: option<f64>);
@@ -504,7 +467,6 @@ interface gametest {
         test-function: test-callback-id,
     ) -> registration-builder;
 
-    @unstable(feature = %future)
     register-async: func(
         test-class-name: string,
         test-name: string,
@@ -539,7 +501,6 @@ interface gametest-callbacks {
     /// The plugin can retain this handle for callbacks scheduled after invocation.
     invoke-test: func(callback: test-callback-id, test: test);
 
-    @unstable(feature = %async)
     invoke-async-test: async func(callback: async-test-callback-id, test: test);
 
     invoke-block-predicate: func(callback: block-predicate-callback-id, block: borrow<block>) -> bool;
