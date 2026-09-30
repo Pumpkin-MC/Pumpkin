@@ -879,13 +879,7 @@ impl<S: CommandSource> CommandDispatcher<S> {
                     let target_usage = if target == node {
                         "...".to_string()
                     } else if self.tree.is_command_node(node) && self.tree.is_command_node(target) {
-                        // We do this so for example it will show usage for /?:
-                        //
-                        // /? [<commandOrPage>]
-                        //
-                        // instead of
-                        //
-                        // /? -> help
+                        // Show the target's usage under the alias name, not as a redirect.
                         return self.get_usage_recursive(
                             target,
                             source,
