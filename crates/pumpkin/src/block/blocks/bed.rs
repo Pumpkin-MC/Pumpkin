@@ -18,7 +18,7 @@ use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
     PathComputationType, PlacedArgs,
 };
-use crate::entity::{Entity, EntityBase, player::Player};
+use crate::entity::{Entity, EntityBase, passive::villager::VillagerEntity, player::Player};
 use crate::world::World;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
@@ -216,6 +216,36 @@ impl BedBlock {
             return BlockActionResult::SuccessServer;
         }
 
+        // Vanilla handles an occupied bed before distance, spawn-point, safety, and
+        // enter-bed checks. A sleeping villager is woken and the click ends.
+        if bed_props.occupied {
+            let villager_woken = world.entities.load().iter().any(|entity| {
+                entity
+                    .cast_any()
+                    .downcast_ref::<VillagerEntity>()
+                    .is_some_and(|villager| villager.wake_up_if_sleeping_at(bed_head_pos))
+            });
+
+            if villager_woken {
+                Self::set_occupied(
+                    false,
+                    world,
+                    block,
+                    &bed_head_pos,
+                    world.get_block_state_id(&bed_head_pos),
+                );
+            } else {
+                player.send_system_message_raw(
+                    &pumpkin_macros::translate_cross!(
+                        translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
+                        translation::bedrock::TILE_BED_OCCUPIED
+                    ),
+                    true,
+                );
+            }
+            return BlockActionResult::SuccessServer;
+        }
+
         let is_dark = world.is_dark_outside();
         let can_sleep = world.dimension.bed_rule.can_sleep(is_dark);
         let can_set_spawn = world.dimension.bed_rule.can_set_spawn(is_dark);
@@ -231,7 +261,7 @@ impl BedBlock {
             return BlockActionResult::SuccessServer;
         }
 
-        // Make sure the bed is not obstructed
+        // Make sure the bed is not obstructed.
         if world.get_block_state(&bed_head_pos.up()).is_solid()
             || world.get_block_state(&bed_foot_pos.up()).is_solid()
         {
@@ -239,20 +269,6 @@ impl BedBlock {
                 &pumpkin_macros::translate_cross!(
                     translation::java::BLOCK_MINECRAFT_BED_OBSTRUCTED,
                     translation::bedrock::TILE_BED_OBSTRUCTED
-                ),
-                true,
-            );
-            return BlockActionResult::SuccessServer;
-        }
-
-        // Make sure the bed is not occupied
-        if bed_props.occupied {
-            // TODO: Wake up villager
-
-            player.send_system_message_raw(
-                &pumpkin_macros::translate_cross!(
-                    translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
-                    translation::bedrock::TILE_BED_OCCUPIED
                 ),
                 true,
             );
@@ -389,4 +405,224 @@ impl BedBlock {
 
 fn entity_prevents_sleep(entity: &Entity) -> bool {
     NO_SLEEP_IDS.contains(&entity.entity_type.id)
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
+mod tests {
+    use std::{
+        path::Path,
+        sync::{Arc, RwLock},
+    };
+
+    use arc_swap::ArcSwap;
+    use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+    use pumpkin_data::block_properties::BedPart;
+    use pumpkin_data::entity::{EntityPose, EntityType};
+    use pumpkin_data::{Block, BlockDirection, dimension::Dimension};
+    use pumpkin_util::GameMode;
+    use pumpkin_util::math::{position::BlockPos, vector2::Vector2, vector3::Vector3};
+    use pumpkin_world::world::BlockFlags;
+    use tokio::net::{TcpListener, TcpStream};
+    use uuid::Uuid;
+
+    use crate::block::{BlockBehaviour, BlockHitResult, NormalUseArgs};
+    use crate::data::{
+        VanillaData, banned_ip::BannedIpList, banned_player::BannedPlayerList, op::OperatorConfig,
+        usercache::UserCache, whitelist::WhitelistConfig,
+    };
+    use crate::entity::{Entity, EntityBase, passive::villager::VillagerEntity, player::Player};
+    use crate::net::java::JavaClient;
+    use crate::net::java::pending::PendingConnection;
+    use crate::net::{ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig};
+    use crate::server::Server;
+
+    use super::{BedBlock, BedProperties};
+
+    fn empty_vanilla_data() -> VanillaData {
+        VanillaData {
+            banned_ip_list: RwLock::new(BannedIpList::default()),
+            banned_player_list: RwLock::new(BannedPlayerList::default()),
+            operator_config: RwLock::new(OperatorConfig::default()),
+            user_cache: RwLock::new(UserCache::default()),
+            whitelist_config: RwLock::new(WhitelistConfig::default()),
+        }
+    }
+
+    async fn test_server(world_path: &Path) -> std::sync::Arc<Server> {
+        let basic_config = BasicConfiguration {
+            default_level_name: world_path.to_string_lossy().into_owned(),
+            allow_nether: false,
+            allow_end: false,
+            ..BasicConfiguration::default()
+        };
+
+        let mut advanced_config = AdvancedConfiguration::default();
+        advanced_config.networking.bedrock.online_mode = false;
+
+        let telemetry_config = TelemetryConfig {
+            enabled: false,
+            ..TelemetryConfig::default()
+        };
+
+        Server::new(
+            basic_config,
+            advanced_config,
+            telemetry_config,
+            empty_vanilla_data(),
+        )
+        .await
+    }
+
+    async fn test_player(
+        world: &std::sync::Arc<crate::world::World>,
+    ) -> (std::sync::Arc<Player>, TcpStream) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (client_socket, accepted_socket) =
+            tokio::join!(TcpStream::connect(address), listener.accept(),);
+        let client_socket = client_socket.unwrap();
+        let server_socket = accepted_socket.unwrap().0;
+        let pending = PendingConnection::new(
+            server_socket,
+            address,
+            1,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+        );
+        let profile = GameProfile {
+            id: Uuid::new_v4(),
+            name: "bed-click-test".to_string(),
+            properties: ArcSwap::from_pointee(Vec::new()),
+            profile_actions: None,
+        };
+        let client = Arc::new(ClientPlatform::Java(JavaClient::from_pending(
+            pending,
+            profile.clone(),
+            PlayerConfig::default(),
+        )));
+        let player = Arc::new(Player::new(
+            client,
+            profile,
+            PlayerConfig::default(),
+            world,
+            GameMode::Survival,
+        ));
+
+        (player, client_socket)
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[allow(clippy::too_many_lines)]
+    async fn clicking_an_obstructed_occupied_bed_wakes_the_villager_and_returns() {
+        let temporary_directory = tempfile::tempdir().unwrap();
+        let server = test_server(&temporary_directory.path().join("world")).await;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        world
+            .level
+            .get_or_fetch_chunk(Vector2::new(0, 0), |_| ())
+            .await;
+
+        let (player, _client_socket) = test_player(&world).await;
+        player
+            .get_entity()
+            .set_pos(Vector3::new(100.0, 100.0, 100.0));
+
+        let foot_pos = BlockPos::new(8, 64, 8);
+        let mut foot_properties = BedProperties::default(&Block::RED_BED);
+        foot_properties.part = BedPart::Foot;
+        let facing = foot_properties.facing;
+        let mut head_properties = BedProperties::default(&Block::RED_BED);
+        head_properties.facing = facing;
+        head_properties.part = BedPart::Head;
+        let head_pos = foot_pos.offset(facing.to_offset());
+        let flags = BlockFlags::SKIP_DROPS | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK;
+
+        world.set_block_state(
+            &foot_pos,
+            foot_properties.to_state_id(&Block::RED_BED),
+            flags,
+        );
+        world.set_block_state(
+            &head_pos,
+            head_properties.to_state_id(&Block::RED_BED),
+            flags,
+        );
+        BedBlock::set_occupied(
+            true,
+            &world,
+            &Block::RED_BED,
+            &foot_pos,
+            world.get_block_state_id(&foot_pos),
+        );
+        world.set_block_state(&head_pos.up(), Block::STONE.default_state.id, flags);
+
+        let villager = VillagerEntity::new(Entity::from_uuid(
+            Uuid::new_v4(),
+            world.clone(),
+            Vector3::new(8.5, 64.0, 8.5),
+            &EntityType::VILLAGER,
+        ));
+        villager.get_entity().set_pose(EntityPose::Sleeping);
+        villager
+            .mob_entity
+            .living_entity
+            .sleeping_pos
+            .store(Some(head_pos));
+        world.spawn_entity_non_save(villager.clone());
+
+        let face = BlockDirection::Up;
+        let cursor_pos = Vector3::new(0.5, 1.0, 0.5);
+        let hit = BlockHitResult {
+            face: &face,
+            cursor_pos: &cursor_pos,
+        };
+        let head_was_occupied =
+            BedProperties::from_state_id(world.get_block_state_id(&head_pos)).occupied;
+        let foot_was_occupied =
+            BedProperties::from_state_id(world.get_block_state_id(&foot_pos)).occupied;
+        let head_was_head =
+            BedProperties::from_state_id(world.get_block_state_id(&head_pos)).part == BedPart::Head;
+        let foot_was_foot =
+            BedProperties::from_state_id(world.get_block_state_id(&foot_pos)).part == BedPart::Foot;
+        let result = BedBlock.normal_use(NormalUseArgs {
+            server: &server,
+            world: &world,
+            block: &Block::RED_BED,
+            position: &foot_pos,
+            player: &player,
+            hit: &hit,
+        });
+
+        let villager_pose = villager.get_entity().pose.load();
+        let villager_sleeping_pos = villager.mob_entity.living_entity.sleeping_pos.load();
+        let head_occupied =
+            BedProperties::from_state_id(world.get_block_state_id(&head_pos)).occupied;
+        let foot_occupied =
+            BedProperties::from_state_id(world.get_block_state_id(&foot_pos)).occupied;
+        let player_pose = player.get_entity().pose.load();
+        let player_sleeping_since = player.sleeping_since.load();
+
+        server.shutdown().await;
+
+        assert!(matches!(
+            result,
+            crate::block::registry::BlockActionResult::SuccessServer
+        ));
+        assert!(
+            head_was_occupied && foot_was_occupied,
+            "test bed was not occupied before click"
+        );
+        assert!(
+            head_was_head && foot_was_foot,
+            "test bed halves had incorrect parts before click"
+        );
+        assert!(villager_pose == EntityPose::Standing);
+        assert_eq!(villager_sleeping_pos, None);
+        assert!(
+            !head_occupied && !foot_occupied,
+            "bed stayed occupied after click (head={head_occupied}, foot={foot_occupied})"
+        );
+        assert!(player_pose != EntityPose::Sleeping);
+        assert_eq!(player_sleeping_since, None);
+    }
 }

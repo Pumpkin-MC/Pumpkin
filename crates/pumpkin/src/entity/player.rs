@@ -422,8 +422,6 @@ pub struct Player {
     pub respawn_point: std::sync::Mutex<Option<RespawnPoint>>,
     /// The player's sleep status
     pub sleeping_since: AtomicCell<Option<u8>>,
-    /// Head position of the bed the player is currently sleeping in.
-    pub sleeping_bed_pos: AtomicCell<Option<BlockPos>>,
     /// Manages the player's breath level
     pub breath_manager: BreathManager,
     /// Manages the player's hunger level.
@@ -760,7 +758,6 @@ impl Player {
             // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
             respawn_point: std::sync::Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
-            sleeping_bed_pos: AtomicCell::new(None),
             // We want this to be an impossible watched section so that `chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)
@@ -2174,7 +2171,7 @@ impl Player {
         self.get_entity().set_velocity(Vector3::default());
 
         self.sleeping_since.store(Some(0));
-        self.sleeping_bed_pos.store(Some(bed_head_pos));
+        self.living_entity.sleeping_pos.store(Some(bed_head_pos));
         self.set_stat(
             statistics::StatisticCategory::Custom,
             statistics::CustomStatistic::TimeSinceRest as i32,
@@ -2307,7 +2304,7 @@ impl Player {
 
     pub fn wake_up(&self) {
         let world = self.world();
-        let Some(bed_pos) = self.sleeping_bed_pos.load() else {
+        let Some(bed_pos) = self.living_entity.sleeping_pos.load() else {
             self.living_entity.entity.set_pose(EntityPose::Standing);
             self.sleeping_since.store(None);
             return;
@@ -2352,7 +2349,7 @@ impl Player {
         );
 
         self.sleeping_since.store(None);
-        self.sleeping_bed_pos.store(None);
+        self.living_entity.sleeping_pos.store(None);
     }
 
     pub fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
