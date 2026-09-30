@@ -800,6 +800,11 @@ interface %world {
         /// Gets the chunk at the specified chunk coordinates.
         get-chunk: func(x: s32, z: s32) -> option<chunk>;
 
+        /// Returns the chunk at the given chunk coordinates, loading it from disk
+        /// or generating it first if it is not in memory. Like any loaded chunk, it
+        /// is unloaded again once nothing keeps it.
+        load-chunk: func(x: s32, z: s32) -> chunk;
+
         /// Gets the block state ID at the specified position.
         get-block-state-id: func(pos: block-pos) -> u16;
 
