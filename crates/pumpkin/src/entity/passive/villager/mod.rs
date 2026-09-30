@@ -1650,6 +1650,12 @@ impl VillagerEntity {
         self.work_at_job_site(game_time, day_time, day);
 
         let age = self.get_entity().age.load(Ordering::Relaxed);
+
+
+// When awake, nothing changes; when asleep, it remains stationary with every tick
+if self.get_entity().pose.load() == EntityPose::Sleeping {
+    self.get_entity().set_velocity(Vector3::default());
+}
         if age % 20 != 0 {
             return;
         }
