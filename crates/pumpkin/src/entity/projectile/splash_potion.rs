@@ -2,7 +2,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
 use crate::{
-    entity::{Entity, EntityBase, projectile::ThrownItemEntity},
+    entity::{Entity, EntityBase, mob::Mob, projectile::ThrownItemEntity},
     server::Server,
 };
 use pumpkin_data::item_stack::ItemStack;
@@ -55,7 +55,7 @@ impl SplashPotionEntity {
     }
 }
 
-fn is_water_potion(stack: &ItemStack) -> bool {
+pub(crate) fn is_water_potion(stack: &ItemStack) -> bool {
     stack
         .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
         .and_then(|pc| pc.potion_id)
@@ -95,6 +95,53 @@ pub(crate) fn extinguish_fire_if_water_potion(
 ) {
     if is_water_potion(stack) {
         extinguish_fire(world, hit_pos);
+    }
+}
+
+/// Hurts water-sensitive mobs around `hit_pos`, mirroring the
+/// `HURTS_WATER_SENSITIVE_ENTITIES` branch of vanilla `AbstractThrownPotion#affectEntitiesAround`.
+/// `kept_ids` restricts the candidates so a plugin can prune them.
+pub(crate) fn hurt_water_sensitive_entities(
+    world: &Arc<crate::world::World>,
+    projectile: &dyn EntityBase,
+    hit_pos: Vector3<f64>,
+    kept_ids: Option<&[i32]>,
+) {
+    let owner = projectile
+        .get_owner_id()
+        .and_then(|owner_id| world.get_entity_by_id(owner_id));
+
+    // Vanilla moves the projectile onto the hit location before `onHit`, so the
+    // box and distance are measured from `hit_pos`, not the entity's position.
+    let entity = projectile.get_entity();
+    let hurt_box = entity
+        .bounding_box
+        .load()
+        .shift(hit_pos.sub(&entity.pos.load()))
+        .expand(4.0, 2.0, 4.0);
+
+    for candidate in world.get_entities_at_box(&hurt_box) {
+        let entity_id = candidate.get_entity().entity_id;
+        if let Some(kept_ids) = kept_ids
+            && !kept_ids.contains(&entity_id)
+        {
+            continue;
+        }
+        if !candidate.get_mob().is_some_and(Mob::is_sensitive_to_water) {
+            continue;
+        }
+        if hit_pos.squared_distance_to_vec(&candidate.get_entity().pos.load()) >= 16.0 {
+            continue;
+        }
+
+        let _ = candidate.damage_with_context(
+            candidate.as_ref(),
+            1.0,
+            pumpkin_data::damage::DamageType::INDIRECT_MAGIC,
+            None,
+            Some(entity),
+            owner.as_deref(),
+        );
     }
 }
 
@@ -212,8 +259,11 @@ impl EntityBase for SplashPotionEntity {
             &CWorldEvent::new(event_id, block_pos, color, false),
         );
 
+        // A water bottle hurts water-sensitive mobs even though it has no effects.
+        let hurts_water_sensitive = is_water_potion(&stack);
+
         // If no effects, just splash (like water bottles)
-        if effects.is_empty() {
+        if effects.is_empty() && !hurts_water_sensitive {
             return;
         }
 
@@ -244,11 +294,11 @@ impl EntityBase for SplashPotionEntity {
             }
         }
 
-        let affected_ids: Vec<i32> = affected
-            .iter()
-            .map(|(c, _)| c.get_entity().entity_id)
-            .collect();
         if let Some(server) = world.server.upgrade() {
+            let affected_ids: Vec<i32> = affected
+                .iter()
+                .map(|(c, _)| c.get_entity().entity_id)
+                .collect();
             let mut event =
                 crate::plugin::api::events::entity::potion_splash::PotionSplashEvent::new(
                     self.get_entity().entity_id,
@@ -261,6 +311,15 @@ impl EntityBase for SplashPotionEntity {
                 return;
             }
             affected.retain(|(c, _)| event.affected_entities.contains(&c.get_entity().entity_id));
+        }
+
+        // Reuse the event-filtered entities so the event also gates water damage.
+        if hurts_water_sensitive {
+            let kept_ids: Vec<i32> = affected
+                .iter()
+                .map(|(c, _)| c.get_entity().entity_id)
+                .collect();
+            hurt_water_sensitive_entities(&world, self, hit_pos, Some(&kept_ids));
         }
 
         for (cand, scale) in affected {

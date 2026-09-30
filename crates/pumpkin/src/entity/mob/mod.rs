@@ -966,6 +966,11 @@ pub trait Mob: EntityBase + Send + Sync {
         amount
     }
 
+    /// Mirrors vanilla `LivingEntity#isSensitiveToWater`.
+    fn is_sensitive_to_water(&self) -> bool {
+        false
+    }
+
     fn can_attack_with_owner(&self, _target: &dyn EntityBase, _owner: &dyn EntityBase) -> bool {
         true
     }
