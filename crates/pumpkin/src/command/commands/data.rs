@@ -22,6 +22,7 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 
+use crate::block::entities::block_entity_from_nbt;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::argument_types::core::double::DoubleArgumentType;
@@ -288,12 +289,28 @@ impl BlockDataAccessor {
 
 impl DataAccessor for BlockDataAccessor {
     fn set_data(&self, tag: &NbtCompound) -> Result<(), CommandSyntaxError> {
-        if self.world.get_block_entity(&self.pos).is_some() {
-            self.world.add_block_entity_nbt(self.pos, tag);
-            Ok(())
-        } else {
-            Err(ERROR_BLOCK_INVALID.create_without_context())
-        }
+        let Some(block_entity) = self.world.get_block_entity(&self.pos) else {
+            return Err(ERROR_BLOCK_INVALID.create_without_context());
+        };
+        // Vanilla loads the tag into the live block entity, which keeps its type and position.
+        // Block entities here are built from NBT, so swap in a new one like `/clone` does, which
+        // also sends it to clients.
+        let mut tag = tag.clone();
+        tag.put_string("id", block_entity.resource_location().to_string());
+        tag.put_int("x", self.pos.0.x);
+        tag.put_int("y", self.pos.0.y);
+        tag.put_int("z", self.pos.0.z);
+        let Some(block_entity) = block_entity_from_nbt(&tag) else {
+            return Err(ERROR_BLOCK_INVALID.create_without_context());
+        };
+        // Open screens hold the old block entity's inventory, and clicks there would no longer
+        // reach the block, so close them.
+        self.world.close_container_screens_at(&self.pos);
+        self.world.add_block_entity(block_entity);
+        // Vanilla `BlockEntity.setChanged`.
+        self.world
+            .update_neighbour_for_output_signal(&self.pos, self.world.get_block(&self.pos));
+        Ok(())
     }
 
     fn get_data(&self) -> Result<NbtCompound, CommandSyntaxError> {
