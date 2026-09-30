@@ -703,7 +703,5 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
         Event::RaidStopEvent(_) => {}
         Event::RaidTriggerEvent(_) => {}
         Event::LightningStrikeEvent(_) => {}
-        Event::ConnectionPacketReceivedEvent(_) => {}
-        Event::ConnectionPacketSentEvent(_) => {}
     }
 }

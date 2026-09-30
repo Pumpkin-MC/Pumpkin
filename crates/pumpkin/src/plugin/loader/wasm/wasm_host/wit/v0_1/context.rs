@@ -1342,10 +1342,7 @@ fn register_server_event(
 ) {
     use crate::plugin::server::{
         list_ping::ServerListPingEvent,
-        packet::{
-            ConnectionPacketReceivedEvent, ConnectionPacketSentEvent, PacketReceivedEvent,
-            PacketSentEvent,
-        },
+        packet::{PacketReceivedEvent, PacketSentEvent},
         server_broadcast::ServerBroadcastEvent,
         server_command::ServerCommandEvent,
         server_load::ServerLoadEvent,
@@ -1359,16 +1356,6 @@ fn register_server_event(
         }
         EventType::PacketSentEvent => {
             register_typed_event::<PacketSentEvent>(resource, handler, priority, blocking);
-        }
-        EventType::ConnectionPacketReceivedEvent => {
-            register_typed_event::<ConnectionPacketReceivedEvent>(
-                resource, handler, priority, blocking,
-            );
-        }
-        EventType::ConnectionPacketSentEvent => {
-            register_typed_event::<ConnectionPacketSentEvent>(
-                resource, handler, priority, blocking,
-            );
         }
         EventType::ServerCommandEvent => {
             register_typed_event::<ServerCommandEvent>(resource, handler, priority, blocking);
@@ -1462,8 +1449,6 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         match event_type {
             event_type @ (EventType::PacketReceivedEvent
             | EventType::PacketSentEvent
-            | EventType::ConnectionPacketReceivedEvent
-            | EventType::ConnectionPacketSentEvent
             | EventType::ServerCommandEvent
             | EventType::ServerListPingEvent
             | EventType::ServerBroadcastEvent

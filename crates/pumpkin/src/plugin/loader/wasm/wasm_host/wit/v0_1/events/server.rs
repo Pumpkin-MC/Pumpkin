@@ -1,5 +1,4 @@
 use crate::net::ClientPlatform;
-use crate::plugin::loader::wasm::wasm_host::wit::v0_1::player::to_wasm_java_version;
 use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
@@ -7,22 +6,18 @@ use crate::plugin::{
             events::{ToFromWasmEvent, cleanup_event, consume_text_component},
             generated_packets,
             pumpkin::plugin::event::{
-                ClientboundPacket, ConnectionPacketReceivedEventData,
-                ConnectionPacketSentEventData, ConnectionState as WitConnectionState, Event,
-                MapInitializeEventData, PacketReceivedEventData, PacketSentEventData,
-                ServerBroadcastEventData, ServerCommandEventData, ServerListPingAddress,
-                ServerListPingEventData, ServerLoadEventData, ServerLoadType,
-                ServerTickEndEventData, ServerTickStartEventData, ServerboundPacket,
+                ClientboundPacket, Event, MapInitializeEventData, PacketReceivedEventData,
+                PacketSentEventData, ServerBroadcastEventData, ServerCommandEventData,
+                ServerListPingAddress, ServerListPingEventData, ServerLoadEventData,
+                ServerLoadType, ServerTickEndEventData, ServerTickStartEventData,
+                ServerboundPacket,
             },
         },
     },
     server::{
         list_ping::ServerListPingEvent,
         map_initialize::MapInitializeEvent,
-        packet::{
-            ConnectionPacketReceivedEvent, ConnectionPacketSentEvent, PacketReceivedEvent,
-            PacketSentEvent,
-        },
+        packet::{PacketReceivedEvent, PacketSentEvent},
         server_broadcast::ServerBroadcastEvent,
         server_command::ServerCommandEvent,
         server_load::{LoadType, ServerLoadEvent},
@@ -30,7 +25,6 @@ use crate::plugin::{
         server_tick_start::ServerTickStartEvent,
     },
 };
-use pumpkin_protocol::ConnectionState;
 
 impl ToFromWasmEvent for PacketReceivedEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
@@ -39,11 +33,14 @@ impl ToFromWasmEvent for PacketReceivedEvent {
             .expect("failed to add player resource");
 
         let packet = match self.player.client.as_ref() {
-            // Packet ids are per connection state. Config `client_information` and play
-            // `accept_teleportation` are both 0, and this event still carries the client's
-            // bytes (the multiversion plugin rewrites id + payload). Typed decode here
-            // panics on `try_into` when the wrong struct is chosen.
-            ClientPlatform::Java(_) => ServerboundPacket::Unknown,
+            // Typed view is 26.3
+            // for older clients only valid after the multiversion plugin ran.
+            ClientPlatform::Java(_) => generated_packets::deserialize_java_serverbound_packet(
+                self.packet_id,
+                &self.payload,
+                pumpkin_data::packet::CURRENT_MC_VERSION,
+            )
+            .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java),
             ClientPlatform::Bedrock(_) => {
                 generated_packets::deserialize_bedrock_serverbound_packet(
                     self.packet_id,
@@ -127,55 +124,6 @@ impl ToFromWasmEvent for PacketSentEvent {
         }
     }
 }
-
-const fn to_wasm_connection_state(state: ConnectionState) -> WitConnectionState {
-    match state {
-        ConnectionState::HandShake => WitConnectionState::Handshake,
-        ConnectionState::Status => WitConnectionState::Status,
-        ConnectionState::Login => WitConnectionState::Login,
-        ConnectionState::Transfer => WitConnectionState::Transfer,
-        ConnectionState::Config => WitConnectionState::Config,
-        ConnectionState::Play => WitConnectionState::Play,
-    }
-}
-
-/// Generates the WIT conversion for a connection packet event
-/// -> only id, payload and `cancelled` flow back.
-macro_rules! connection_packet_event {
-    ($event:ident, $data:ident) => {
-        impl ToFromWasmEvent for $event {
-            fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-                Event::$event($data {
-                    connection_id: self.connection_id,
-                    version: to_wasm_java_version(self.version),
-                    state: to_wasm_connection_state(self.state),
-                    packet_id: self.packet_id,
-                    raw_payload: self.payload.to_vec(),
-                    cancelled: self.cancelled,
-                })
-            }
-
-            fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-                cleanup_event(&event, state);
-                if let Event::$event(data) = event {
-                    self.packet_id = data.packet_id;
-                    self.payload = data.raw_payload.into();
-                    self.cancelled = data.cancelled;
-                }
-            }
-
-            fn from_wasm_event(_event: Event, _state: &mut PluginHostState) -> Self {
-                panic!("Creating connection packet events from WASM is not supported.");
-            }
-        }
-    };
-}
-
-connection_packet_event!(
-    ConnectionPacketReceivedEvent,
-    ConnectionPacketReceivedEventData
-);
-connection_packet_event!(ConnectionPacketSentEvent, ConnectionPacketSentEventData);
 
 impl ToFromWasmEvent for ServerCommandEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
