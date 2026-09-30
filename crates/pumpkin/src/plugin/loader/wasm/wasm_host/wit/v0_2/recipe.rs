@@ -1,27 +1,36 @@
+use super::AccessorExt;
 use crate::plugin::loader::wasm::wasm_host::state::PluginHostState;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::recipe::{
     CookingRecipe as WitCookingRecipe, CookingType as WitCookingType, Host as RecipeHost,
-    HostRecipeManager, Ingredient as WitIngredient, RecipeCategory as WitRecipeCategory,
-    RecipeManager as WitRecipeManager, ShapedRecipe as WitShapedRecipe,
-    ShapelessRecipe as WitShapelessRecipe,
+    HostRecipeManager, HostRecipeManagerWithStore, Ingredient as WitIngredient,
+    RecipeCategory as WitRecipeCategory, RecipeManager as WitRecipeManager,
+    ShapedRecipe as WitShapedRecipe, ShapelessRecipe as WitShapelessRecipe,
 };
 use pumpkin_data::recipes::RecipeCategoryTypes;
 use pumpkin_protocol::codec::recipe::{
     DynamicRecipe, OwnedCookingRecipe, OwnedCookingRecipeType, OwnedCraftingRecipe,
     OwnedRecipeIngredient, OwnedRecipeResult,
 };
+use wasmtime::component::Accessor;
+use wasmtime::component::HasSelf;
 use wasmtime::component::Resource;
 
 impl RecipeHost for PluginHostState {}
 
 impl HostRecipeManager for PluginHostState {
+    async fn drop(&mut self, _rep: Resource<WitRecipeManager>) -> wasmtime::Result<()> {
+        Ok(())
+    }
+}
+
+impl HostRecipeManagerWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn register_shaped(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitRecipeManager>,
         id: String,
         recipe: WitShapedRecipe,
     ) -> wasmtime::Result<()> {
-        let result_stack = self.take(recipe.output)?;
+        let result_stack = accessor.take_res(recipe.output)?;
         let result_stack = result_stack.lock().await;
 
         let category = recipe
@@ -45,10 +54,7 @@ impl HostRecipeManager for PluginHostState {
             },
         };
 
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = accessor.server()?;
         server
             .recipe_manager
             .add_recipe(DynamicRecipe::Crafting(owned_recipe));
@@ -56,12 +62,12 @@ impl HostRecipeManager for PluginHostState {
     }
 
     async fn register_shapeless(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitRecipeManager>,
         id: String,
         recipe: WitShapelessRecipe,
     ) -> wasmtime::Result<()> {
-        let result_stack = self.take(recipe.output)?;
+        let result_stack = accessor.take_res(recipe.output)?;
         let result_stack = result_stack.lock().await;
 
         let category = recipe
@@ -83,10 +89,7 @@ impl HostRecipeManager for PluginHostState {
             },
         };
 
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = accessor.server()?;
         server
             .recipe_manager
             .add_recipe(DynamicRecipe::Crafting(owned_recipe));
@@ -94,13 +97,13 @@ impl HostRecipeManager for PluginHostState {
     }
 
     async fn register_cooking(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitRecipeManager>,
         id: String,
         station_type: WitCookingType,
         recipe: WitCookingRecipe,
     ) -> wasmtime::Result<()> {
-        let result_stack = self.take(recipe.output)?;
+        let result_stack = accessor.take_res(recipe.output)?;
         let result_stack = result_stack.lock().await;
 
         let category = recipe
@@ -135,15 +138,8 @@ impl HostRecipeManager for PluginHostState {
             }
         };
 
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = accessor.server()?;
         server.recipe_manager.add_recipe(dynamic_recipe);
-        Ok(())
-    }
-
-    async fn drop(&mut self, _rep: Resource<WitRecipeManager>) -> wasmtime::Result<()> {
         Ok(())
     }
 }

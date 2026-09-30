@@ -1,12 +1,13 @@
 use crate::plugin::{
     PluginMetadata,
     loader::wasm::wasm_host::{
-        PluginInitError, PluginInstance, concurrent_store::LegacySyncReentry,
-        state::PluginHostState,
+        PluginInitError, PluginInstance,
+        concurrent_store::LegacySyncReentry,
+        state::{FromResource, PluginHostState},
     },
 };
 use pumpkin_host_bindings::v0_2::PluginPre;
-use wasmtime::component::{HasSelf, InstancePre, Linker};
+use wasmtime::component::{Accessor, HasSelf, InstancePre, Linker, Resource};
 use wasmtime::{Engine, Store};
 
 pub mod advancement;
@@ -68,6 +69,56 @@ pub mod uuid;
 pub mod world;
 
 pub use pumpkin_host_bindings::v0_2::{Plugin, pumpkin};
+
+/// Runs synchronous server work on Tokio's blocking pool while the store keeps servicing the guest.
+pub(crate) async fn run_blocking<R: Send + 'static>(
+    operation: impl FnOnce() -> R + Send + 'static,
+) -> wasmtime::Result<R> {
+    tokio::task::spawn_blocking(operation)
+        .await
+        .map_err(|error| {
+            wasmtime::Error::msg(format!(
+                "Synchronous Wasm plugin host operation failed: {error}"
+            ))
+        })
+}
+
+/// Resource-table access from an [`Accessor`](wasmtime::component::Accessor) without holding the
+/// store borrow across an `.await`.
+pub(crate) trait AccessorExt {
+    fn get_res<T: FromResource>(&self, res: &Resource<T>) -> wasmtime::Result<T::Internal>
+    where
+        T::Internal: Clone;
+    fn take_res<T: FromResource>(&self, res: Resource<T>) -> wasmtime::Result<T::Internal>;
+    fn add_res<T: FromResource>(&self, item: T::Internal) -> wasmtime::Result<Resource<T>>;
+    fn server(&self) -> wasmtime::Result<std::sync::Arc<crate::server::Server>>;
+}
+
+impl AccessorExt for Accessor<PluginHostState, HasSelf<PluginHostState>> {
+    fn get_res<T: FromResource>(&self, res: &Resource<T>) -> wasmtime::Result<T::Internal>
+    where
+        T::Internal: Clone,
+    {
+        self.with(|mut host| host.get().get(res).cloned())
+    }
+
+    fn take_res<T: FromResource>(&self, res: Resource<T>) -> wasmtime::Result<T::Internal> {
+        self.with(|mut host| host.get().take(res))
+    }
+
+    fn add_res<T: FromResource>(&self, item: T::Internal) -> wasmtime::Result<Resource<T>> {
+        self.with(|mut host| host.get().add(item))
+    }
+
+    fn server(&self) -> wasmtime::Result<std::sync::Arc<crate::server::Server>> {
+        self.with(|mut host| {
+            host.get()
+                .server
+                .clone()
+                .ok_or_else(|| wasmtime::Error::msg("Server not available"))
+        })
+    }
+}
 
 mod resource_with {
     use super::pumpkin::plugin;

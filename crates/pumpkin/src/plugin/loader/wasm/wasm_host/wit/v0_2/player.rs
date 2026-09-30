@@ -1,7 +1,9 @@
+use super::{AccessorExt, run_blocking};
 use pumpkin_protocol::bedrock::client::PackIdVersion;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use wasmtime::component::{Access, HasSelf, Resource};
+use wasmtime::component::Accessor;
+use wasmtime::component::{HasSelf, Resource};
 
 use crate::plugin::api::gui::PluginScreenHandler;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::forms::Form;
@@ -16,7 +18,6 @@ use crate::{
     },
     net::DisconnectReason,
     plugin::loader::wasm::wasm_host::{
-        WasmPlugin,
         state::PluginHostState,
         wit::v0_2::{
             events::{
@@ -565,14 +566,6 @@ pub(crate) fn text_component_from_resource(
         .clone()
 }
 
-fn plugin_from_state(state: &PluginHostState) -> wasmtime::Result<Arc<WasmPlugin>> {
-    state
-        .plugin
-        .as_ref()
-        .and_then(std::sync::Weak::upgrade)
-        .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))
-}
-
 pub(crate) const fn to_wit_permission_level(
     level: PermissionLvl,
 ) -> pumpkin::plugin::permission::PermissionLevel {
@@ -1060,19 +1053,24 @@ const fn from_wasm_bedrock_disconnect_reason(
     }
 }
 
-impl pumpkin::plugin::player::Host for PluginHostState {
+impl pumpkin::plugin::player::Host for PluginHostState {}
+
+impl pumpkin::plugin::player::HostWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn get_world_players(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         world: Resource<pumpkin::plugin::world::World>,
     ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::player::Player>>> {
-        let world = self.take(world)?;
+        accessor.with(|mut host| {
+            let state = host.get();
+            let world = state.take(world)?;
 
-        let mut players = Vec::new();
-        for player in world.players.load().iter() {
-            players.push(self.add(player.clone())?);
-        }
+            let mut players = Vec::new();
+            for player in world.players.load().iter() {
+                players.push(state.add(player.clone())?);
+            }
 
-        Ok(players)
+            Ok(players)
+        })
     }
 }
 use crate::plugin::loader::wasm::wasm_host::wit::v0_2::events::from_wasm_hand;
@@ -1085,18 +1083,24 @@ use pumpkin_protocol::java::client::play::CSetContainerSlot;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::item_stack::ItemStack as WitHostItemStack;
 
 impl pumpkin::plugin::player::HostPlayer for PluginHostState {
+    async fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+}
+
+impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn set_item_in_hand(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         hand: pumpkin::plugin::common::Hand,
         stack: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let stack = if let Some(stack_res) = stack {
-            self.take(stack_res)?.lock().await.clone()
+            accessor.take_res(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
-        let player = self.get(&player)?;
+        let player = accessor.get_res(&player)?;
 
         let hand = from_wasm_hand(hand);
         let slot = match hand {
@@ -1115,17 +1119,17 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     }
 
     async fn set_inventory_item(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         slot: u8,
         stack: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let stack = if let Some(stack_res) = stack {
-            self.take(stack_res)?.lock().await.clone()
+            accessor.take_res(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
-        let player = self.get(&player)?;
+        let player = accessor.get_res(&player)?;
 
         player.inventory().set_stack(slot as usize, stack.clone());
 
@@ -1137,73 +1141,83 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
-    async fn get_inventory(
-        &mut self,
+    async fn get_inventory(accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<
         Resource<
             crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::inventory::PlayerInventory,
         >,
     >{
-        self.add(self.get(&player)?.clone())
+        accessor.with(|mut host| {
+            let state = host.get();
+            state.add(state.get(&player)?.clone())
+        })
     }
 
-    async fn get_ender_chest(
-        &mut self,
+    async fn get_ender_chest(accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<
         Resource<
             crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::inventory::Inventory,
         >,
     >{
-        self.add(
-            crate::plugin::loader::wasm::wasm_host::state::InventoryProvider::PlayerEnderChest(
-                self.get(&player)?.clone(),
-            ),
-        )
+        accessor.with(|mut host| {
+            let st = host.get();
+            st.add(
+                crate::plugin::loader::wasm::wasm_host::state::InventoryProvider::PlayerEnderChest(
+                    st.get(&player)?.clone(),
+                ),
+            )
+        })
     }
 
     async fn get_inventory_item(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         slot: u8,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get(&player)?;
-        let stack = player.inventory().get_stack(slot as usize);
-        if stack.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(self.add(Arc::new(tokio::sync::Mutex::new(stack)))?))
-        }
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let stack = player.inventory().get_stack(slot as usize);
+            if stack.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(state.add(Arc::new(tokio::sync::Mutex::new(stack)))?))
+            }
+        })
     }
 
     async fn get_ender_chest_item(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         slot: u8,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get(&player)?;
-        let ec = player.ender_chest_inventory();
-        let stack = ec.get_stack(slot as usize);
-        if stack.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(self.add(Arc::new(tokio::sync::Mutex::new(stack)))?))
-        }
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let ec = player.ender_chest_inventory();
+            let stack = ec.get_stack(slot as usize);
+            if stack.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(state.add(Arc::new(tokio::sync::Mutex::new(stack)))?))
+            }
+        })
     }
 
     async fn set_ender_chest_item(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         slot: u8,
         stack: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let stack = if let Some(stack_res) = stack {
-            self.take(stack_res)?.lock().await.clone()
+            accessor.take_res(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
-        let player = self.get(&player)?;
+        let player = accessor.get_res(&player)?;
 
         let ec = player.ender_chest_inventory();
         ec.set_stack(slot as usize, stack.clone());
@@ -1237,8 +1251,11 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
-    async fn clear_ender_chest(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
+    async fn clear_ender_chest(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<()> {
+        let player = accessor.get_res(&player)?;
         let ec = player.ender_chest_inventory();
         ec.clear();
 
@@ -1276,201 +1293,282 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     }
 
     async fn get_item_in_hand(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         hand: pumpkin::plugin::common::Hand,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get(&player)?;
-        let hand = from_wasm_hand(hand);
-        let stack = player.inventory().get_stack_in_hand(hand);
-        if stack.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(self.add(Arc::new(tokio::sync::Mutex::new(stack)))?))
-        }
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let hand = from_wasm_hand(hand);
+            let stack = player.inventory().get_stack_in_hand(hand);
+            if stack.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(state.add(Arc::new(tokio::sync::Mutex::new(stack)))?))
+            }
+        })
     }
 
     async fn as_entity(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<Resource<pumpkin::plugin::world::Entity>> {
-        self.add(self.get(&player)?.clone() as _)
+        accessor.with(|mut host| {
+            let state = host.get();
+            state.add(state.get(&player)?.clone() as _)
+        })
     }
 
-    async fn get_id(&mut self, player: Resource<Player>) -> wasmtime::Result<Uuid> {
-        let player = self.get(&player)?;
-        Ok(Uuid::to_wit(&player.gameprofile.id))
+    async fn get_id(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Uuid> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(Uuid::to_wit(&player.gameprofile.id))
+        })
     }
 
-    async fn get_name(&mut self, player: Resource<Player>) -> wasmtime::Result<String> {
-        let player = self.get(&player)?;
-        Ok(player.gameprofile.name.clone())
+    async fn get_name(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<String> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.gameprofile.name.clone())
+        })
     }
 
     async fn get_position(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<pumpkin::plugin::common::Position> {
-        let player = self.get(&player)?;
-        Ok(to_wasm_position(player.position()))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(to_wasm_position(player.position()))
+        })
     }
 
-    async fn get_yaw(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
-        let player = self.get(&player)?;
-        Ok(player.get_entity().yaw.load())
+    async fn get_yaw(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<f32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_entity().yaw.load())
+        })
     }
 
-    async fn get_pitch(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
-        let player = self.get(&player)?;
-        Ok(player.get_entity().pitch.load())
+    async fn get_pitch(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<f32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_entity().pitch.load())
+        })
     }
 
     async fn get_world(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<Resource<pumpkin::plugin::world::World>> {
-        let player = self.get(&player)?;
-        let world = player.world();
-        self.add(world)
-            .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let world = player.world();
+            state
+                .add(world)
+                .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
+        })
     }
 
     async fn get_gamemode(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<pumpkin::plugin::common::GameMode> {
-        let player = self.get(&player)?;
-        Ok(to_wasm_game_mode(player.gamemode.load()))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(to_wasm_game_mode(player.gamemode.load()))
+        })
     }
 
-    async fn get_locale(&mut self, player: Resource<Player>) -> wasmtime::Result<String> {
-        let player = self.get(&player)?;
-        Ok(player.config.load().locale.clone())
+    async fn get_locale(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<String> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.config.load().locale.clone())
+        })
     }
 
-    async fn get_ping(&mut self, player: Resource<Player>) -> wasmtime::Result<u32> {
-        let player = self.get(&player)?;
-        Ok(player.ping.load(Ordering::Relaxed))
+    async fn get_ping(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<u32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.ping.load(Ordering::Relaxed))
+        })
     }
 
     async fn get_permission_level(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<pumpkin::plugin::permission::PermissionLevel> {
-        let player = self.get(&player)?;
-        Ok(to_wit_permission_level(player.permission_lvl.load()))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(to_wit_permission_level(player.permission_lvl.load()))
+        })
     }
 
     async fn set_permission(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         node: String,
         value: bool,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let server = self.server.as_ref().expect("server not available");
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let server = state.server.as_ref().expect("server not available");
 
-        server
-            .permission_manager
-            .set_permission(player.gameprofile.id, node, value);
+            server
+                .permission_manager
+                .set_permission(player.gameprofile.id, node, value);
 
-        Ok(())
+            Ok(())
+        })
     }
 
     async fn unset_permission(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         node: String,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let server = self.server.as_ref().expect("server not available");
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let server = state.server.as_ref().expect("server not available");
 
-        server
-            .permission_manager
-            .unset_permission(&player.gameprofile.id, &node);
+            server
+                .permission_manager
+                .unset_permission(&player.gameprofile.id, &node);
 
-        Ok(())
+            Ok(())
+        })
     }
 
     async fn has_permission_set(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         node: String,
     ) -> wasmtime::Result<Option<bool>> {
-        let player = self.get(&player)?;
-        let server = self.server.as_ref().expect("server not available");
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let server = state.server.as_ref().expect("server not available");
 
-        Ok(server
-            .permission_manager
-            .has_permission_set(&player.gameprofile.id, &node))
+            Ok(server
+                .permission_manager
+                .has_permission_set(&player.gameprofile.id, &node))
+        })
     }
 
     async fn get_display_name(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<Resource<pumpkin::plugin::text::TextComponent>> {
-        let player = self.get(&player)?;
-        let display_name = player.get_display_name();
-        self.add(display_name)
-            .map_err(|_| wasmtime::Error::msg("failed to add text-component resource"))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let display_name = player.get_display_name();
+            state
+                .add(display_name)
+                .map_err(|_| wasmtime::Error::msg("failed to add text-component resource"))
+        })
     }
 
     async fn set_display_name(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         display_name: Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let display_name = self.take(display_name)?;
-        let player = self.get(&player)?;
-        player.set_display_name(Some(display_name));
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let display_name = state.take(display_name)?;
+            let player = state.get(&player)?;
+            player.set_display_name(Some(display_name));
+            Ok(())
+        })
     }
 
     async fn get_tab_list_name(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::text::TextComponent>>> {
-        let player = self.get(&player)?;
-        let tab_list_name = player.get_tab_list_name();
-        tab_list_name.map_or_else(
-            || Ok(None),
-            |name| {
-                self.add(name)
-                    .map(Some)
-                    .map_err(|_| wasmtime::Error::msg("failed to add text-component resource"))
-            },
-        )
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let tab_list_name = player.get_tab_list_name();
+            tab_list_name.map_or_else(
+                || Ok(None),
+                |name| {
+                    state
+                        .add(name)
+                        .map(Some)
+                        .map_err(|_| wasmtime::Error::msg("failed to add text-component resource"))
+                },
+            )
+        })
     }
 
     async fn set_tab_list_name(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         name: Option<Resource<pumpkin::plugin::text::TextComponent>>,
     ) -> wasmtime::Result<()> {
-        let name = name.map(|n| self.take(n)).transpose()?;
-        let player = self.get(&player)?;
-        player.set_tab_list_name(name);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let name = name.map(|n| state.take(n)).transpose()?;
+            let player = state.get(&player)?;
+            player.set_tab_list_name(name);
+            Ok(())
+        })
     }
 
     async fn send_system_message(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         text: Resource<pumpkin::plugin::text::TextComponent>,
         overlay: bool,
     ) -> wasmtime::Result<()> {
-        let component = self.take(text)?;
-        let player = self.get(&player)?;
-        player.send_system_message_raw(&component, overlay);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let component = state.take(text)?;
+            let player = state.get(&player)?;
+            player.send_system_message_raw(&component, overlay);
+            Ok(())
+        })
     }
 
     async fn delete_message_by_signature(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         signature: Vec<u8>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
+        let player = accessor.get_res(&player)?;
         if let Some(client) = player.client.java() {
             let packet =
                 pumpkin_protocol::java::client::play::CDeleteChat::from_signature(&signature);
@@ -1480,11 +1578,11 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     }
 
     async fn delete_message_by_id(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         signature_id: i32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
+        let player = accessor.get_res(&player)?;
         if let Some(client) = player.client.java() {
             let packet =
                 pumpkin_protocol::java::client::play::CDeleteChat::from_cache_id(signature_id);
@@ -1494,7 +1592,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     }
 
     async fn set_camera(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         entity: Option<
             Resource<
@@ -1502,64 +1600,85 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             >,
         >,
     ) -> wasmtime::Result<()> {
-        let entity = entity.map(|r| self.take(r)).transpose()?;
-        let player = self.get(&player)?;
-        if let Some(target) = entity {
-            player.set_camera_entity_id(target.get_entity().entity_id);
-        } else {
-            player.reset_camera();
-        }
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let entity = entity.map(|r| state.take(r)).transpose()?;
+            let player = state.get(&player)?;
+            if let Some(target) = entity {
+                player.set_camera_entity_id(target.get_entity().entity_id);
+            } else {
+                player.reset_camera();
+            }
+            Ok(())
+        })
     }
 
     async fn set_camera_entity_id(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         entity_id: u32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_camera_entity_id(entity_id as i32);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_camera_entity_id(entity_id as i32);
+            Ok(())
+        })
     }
 
-    async fn get_camera_entity_id(&mut self, player: Resource<Player>) -> wasmtime::Result<u32> {
-        let player = self.get(&player)?;
-        Ok(player.get_camera_entity_id() as u32)
+    async fn get_camera_entity_id(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<u32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_camera_entity_id() as u32)
+        })
     }
 
-    async fn reset_camera(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.reset_camera();
-        Ok(())
+    async fn reset_camera(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<()> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.reset_camera();
+            Ok(())
+        })
     }
 
     async fn play_sound(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         sound: pumpkin::plugin::sounds::Sound,
         category: pumpkin::plugin::sounds::SoundCategory,
         volume: f32,
         pitch: f32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
-        let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
-        let internal_category = super::world::from_wit_sound_category(category);
-        let pos = player.position();
-        player.play_sound(
-            sound_data as u16,
-            internal_category,
-            &pos,
-            volume,
-            pitch,
-            rand::random::<i64>(),
-        );
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
+            let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
+                .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
+            let internal_category = super::world::from_wit_sound_category(category);
+            let pos = player.position();
+            player.play_sound(
+                sound_data as u16,
+                internal_category,
+                &pos,
+                volume,
+                pitch,
+                rand::random::<i64>(),
+            );
+            Ok(())
+        })
     }
 
     async fn play_sound_at(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         pos: pumpkin::plugin::common::Position,
         sound: pumpkin::plugin::sounds::Sound,
@@ -1567,55 +1686,64 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         volume: f32,
         pitch: f32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
-        let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
-        let internal_category = super::world::from_wit_sound_category(category);
-        player.play_sound(
-            sound_data as u16,
-            internal_category,
-            &pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
-            volume,
-            pitch,
-            rand::random::<i64>(),
-        );
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
+            let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
+                .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
+            let internal_category = super::world::from_wit_sound_category(category);
+            player.play_sound(
+                sound_data as u16,
+                internal_category,
+                &pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+                volume,
+                pitch,
+                rand::random::<i64>(),
+            );
+            Ok(())
+        })
     }
 
     async fn stop_sound(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         sound: Option<pumpkin::plugin::sounds::Sound>,
         category: Option<pumpkin::plugin::sounds::SoundCategory>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let sound_rl = sound.and_then(|s| {
-            let sound_name = format!("{s:?}").to_lowercase().replace('_', ".");
-            pumpkin_data::sound::Sound::from_name(&sound_name).map(|s| s.to_name().into())
-        });
-        let cat = category.map(super::world::from_wit_sound_category);
-        player.stop_sound(sound_rl, cat);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let sound_rl = sound.and_then(|s| {
+                let sound_name = format!("{s:?}").to_lowercase().replace('_', ".");
+                pumpkin_data::sound::Sound::from_name(&sound_name).map(|s| s.to_name().into())
+            });
+            let cat = category.map(super::world::from_wit_sound_category);
+            player.stop_sound(sound_rl, cat);
+            Ok(())
+        })
     }
 
     async fn play_custom_sound(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         sound_name: String,
         category: pumpkin::plugin::sounds::SoundCategory,
         volume: f32,
         pitch: f32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let internal_category = super::world::from_wit_sound_category(category);
-        let pos = player.position();
-        player.play_custom_sound(&sound_name, internal_category, &pos, volume, pitch);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let internal_category = super::world::from_wit_sound_category(category);
+            let pos = player.position();
+            player.play_custom_sound(&sound_name, internal_category, &pos, volume, pitch);
+            Ok(())
+        })
     }
 
     async fn play_custom_sound_at(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         pos: pumpkin::plugin::common::Position,
         sound_name: String,
@@ -1623,35 +1751,41 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         volume: f32,
         pitch: f32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let internal_category = super::world::from_wit_sound_category(category);
-        player.play_custom_sound(
-            &sound_name,
-            internal_category,
-            &pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
-            volume,
-            pitch,
-        );
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let internal_category = super::world::from_wit_sound_category(category);
+            player.play_custom_sound(
+                &sound_name,
+                internal_category,
+                &pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+                volume,
+                pitch,
+            );
+            Ok(())
+        })
     }
 
     async fn stop_custom_sound(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         sound_name: Option<String>,
         category: Option<pumpkin::plugin::sounds::SoundCategory>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let sound_rl = sound_name
-            .as_deref()
-            .map(pumpkin_util::resource_location::ResourceLocation::from);
-        let cat = category.map(super::world::from_wit_sound_category);
-        player.stop_sound(sound_rl, cat);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let sound_rl = sound_name
+                .as_deref()
+                .map(pumpkin_util::resource_location::ResourceLocation::from);
+            let cat = category.map(super::world::from_wit_sound_category);
+            player.stop_sound(sound_rl, cat);
+            Ok(())
+        })
     }
 
     async fn spawn_particles(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         particle: pumpkin::plugin::particles::Particle,
         pos: pumpkin::plugin::common::Position,
@@ -1659,652 +1793,837 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         offset: pumpkin::plugin::common::Position,
         max_speed: f32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let particle_data =
-            pumpkin_data::particle::Particle::from_id(particle as u16).ok_or_else(|| {
-                wasmtime::Error::msg(format!("Unknown particle ID: {}", particle as u16))
-            })?;
-        player.spawn_particles(
-            particle_data,
-            pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
-            count,
-            pumpkin_util::math::vector3::Vector3::new(
-                offset.0 as f32,
-                offset.1 as f32,
-                offset.2 as f32,
-            ),
-            max_speed,
-        );
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let particle_data = pumpkin_data::particle::Particle::from_id(particle as u16)
+                .ok_or_else(|| {
+                    wasmtime::Error::msg(format!("Unknown particle ID: {}", particle as u16))
+                })?;
+            player.spawn_particles(
+                particle_data,
+                pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+                count,
+                pumpkin_util::math::vector3::Vector3::new(
+                    offset.0 as f32,
+                    offset.1 as f32,
+                    offset.2 as f32,
+                ),
+                max_speed,
+            );
+            Ok(())
+        })
     }
 
     async fn send_block_change(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         pos: pumpkin::plugin::common::BlockPos,
         block_id: u16,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.send_block_change(
-            pumpkin_util::math::position::BlockPos(pumpkin_util::math::vector3::Vector3::new(
-                pos.x, pos.y, pos.z,
-            )),
-            block_id,
-        );
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.send_block_change(
+                pumpkin_util::math::position::BlockPos(pumpkin_util::math::vector3::Vector3::new(
+                    pos.x, pos.y, pos.z,
+                )),
+                block_id,
+            );
+            Ok(())
+        })
     }
 
     async fn reset_block_change(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         pos: pumpkin::plugin::common::BlockPos,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.reset_block_change(pumpkin_util::math::position::BlockPos(
-            pumpkin_util::math::vector3::Vector3::new(pos.x, pos.y, pos.z),
-        ));
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.reset_block_change(pumpkin_util::math::position::BlockPos(
+                pumpkin_util::math::vector3::Vector3::new(pos.x, pos.y, pos.z),
+            ));
+            Ok(())
+        })
     }
 
     async fn send_hurt_animation(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         yaw: f32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.send_hurt_animation(yaw);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.send_hurt_animation(yaw);
+            Ok(())
+        })
     }
 
     async fn open_book(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         hand: pumpkin::plugin::common::Hand,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let hand = match hand {
-            pumpkin::plugin::common::Hand::Right => pumpkin_util::Hand::Right,
-            pumpkin::plugin::common::Hand::Left => pumpkin_util::Hand::Left,
-        };
-        player.open_book(hand);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let hand = match hand {
+                pumpkin::plugin::common::Hand::Right => pumpkin_util::Hand::Right,
+                pumpkin::plugin::common::Hand::Left => pumpkin_util::Hand::Left,
+            };
+            player.open_book(hand);
+            Ok(())
+        })
     }
 
     async fn open_sign_editor(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         pos: pumpkin::plugin::common::BlockPos,
         is_front_text: bool,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.open_sign_editor(
-            pumpkin_util::math::position::BlockPos(pumpkin_util::math::vector3::Vector3::new(
-                pos.x, pos.y, pos.z,
-            )),
-            is_front_text,
-        );
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.open_sign_editor(
+                pumpkin_util::math::position::BlockPos(pumpkin_util::math::vector3::Vector3::new(
+                    pos.x, pos.y, pos.z,
+                )),
+                is_front_text,
+            );
+            Ok(())
+        })
     }
 
     async fn set_velocity(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         velocity: pumpkin::plugin::common::Position,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_velocity(pumpkin_util::math::vector3::Vector3::new(
-            velocity.0, velocity.1, velocity.2,
-        ));
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_velocity(pumpkin_util::math::vector3::Vector3::new(
+                velocity.0, velocity.1, velocity.2,
+            ));
+            Ok(())
+        })
     }
 
     async fn apply_knockback(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         strength: f64,
         x: f64,
         z: f64,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.apply_knockback(strength, x, z);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.apply_knockback(strength, x, z);
+            Ok(())
+        })
     }
 
     async fn set_movement_locked(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         locked: bool,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_movement_locked(locked);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_movement_locked(locked);
+            Ok(())
+        })
     }
 
-    async fn is_movement_locked(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
-        let player = self.get(&player)?;
-        Ok(player.is_movement_locked())
+    async fn is_movement_locked(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<bool> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.is_movement_locked())
+        })
     }
 
     async fn set_freeze_ticks(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         ticks: i32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_freeze_ticks(ticks);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_freeze_ticks(ticks);
+            Ok(())
+        })
     }
 
-    async fn get_freeze_ticks(&mut self, player: Resource<Player>) -> wasmtime::Result<i32> {
-        let player = self.get(&player)?;
-        Ok(player.get_freeze_ticks())
+    async fn get_freeze_ticks(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<i32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_freeze_ticks())
+        })
     }
 
     async fn set_server_links(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         links: Vec<pumpkin::plugin::player::ServerLink>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
-        let mut converted = Vec::new();
-        for link in links {
-            converted.push(from_wit_server_link(self, link)?);
-        }
-        let protocol_links: Vec<pumpkin_protocol::Link<'_>> = converted
-            .iter()
-            .map(|(label, url)| pumpkin_protocol::Link::new(label.clone(), url))
-            .collect();
-        player.set_server_links(&protocol_links);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
+            let mut converted = Vec::new();
+            for link in links {
+                converted.push(from_wit_server_link(state, link)?);
+            }
+            let protocol_links: Vec<pumpkin_protocol::Link<'_>> = converted
+                .iter()
+                .map(|(label, url)| pumpkin_protocol::Link::new(label.clone(), url))
+                .collect();
+            player.set_server_links(&protocol_links);
+            Ok(())
+        })
     }
 
     async fn remove_effect(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         effect: pumpkin::plugin::status_effect::StatusEffectType,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
-        if let Some(status_effect) =
-            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
-        {
-            player.remove_effect(status_effect);
-        }
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
+            if let Some(status_effect) =
+                pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+            {
+                player.remove_effect(status_effect);
+            }
+            Ok(())
+        })
     }
 
-    async fn clear_effects(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.remove_all_effects();
-        Ok(())
+    async fn clear_effects(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<()> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.remove_all_effects();
+            Ok(())
+        })
     }
 
     async fn has_effect(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         effect: pumpkin::plugin::status_effect::StatusEffectType,
     ) -> wasmtime::Result<bool> {
-        let player = self.get(&player)?;
-        let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
-        Ok(
-            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
-                .is_some_and(|status_effect| player.has_effect(status_effect)),
-        )
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
+            Ok(
+                pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+                    .is_some_and(|status_effect| player.has_effect(status_effect)),
+            )
+        })
     }
 
     async fn get_effect(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         effect: pumpkin::plugin::status_effect::StatusEffectType,
     ) -> wasmtime::Result<Option<pumpkin::plugin::status_effect::StatusEffectInstance>> {
-        let player = self.get(&player)?;
-        let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
-        if let Some(status_effect) =
-            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
-            && let Some(eff) = player.get_effect(status_effect)
-        {
-            return Ok(super::status_effect::to_wasm_status_effect_instance(&eff));
-        }
-        Ok(None)
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
+            if let Some(status_effect) =
+                pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+                && let Some(eff) = player.get_effect(status_effect)
+            {
+                return Ok(super::status_effect::to_wasm_status_effect_instance(&eff));
+            }
+            Ok(None)
+        })
     }
 
     async fn get_active_effects(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<Vec<pumpkin::plugin::status_effect::StatusEffectInstance>> {
-        let player = self.get(&player)?;
-        let effects = player.get_active_effects();
-        let mut list = Vec::with_capacity(effects.len());
-        for eff in &effects {
-            if let Some(instance) = super::status_effect::to_wasm_status_effect_instance(eff) {
-                list.push(instance);
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let effects = player.get_active_effects();
+            let mut list = Vec::with_capacity(effects.len());
+            for eff in &effects {
+                if let Some(instance) = super::status_effect::to_wasm_status_effect_instance(eff) {
+                    list.push(instance);
+                }
             }
-        }
-        Ok(list)
+            Ok(list)
+        })
     }
 
     async fn get_statistic(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         category: WitStatisticCategory,
         stat_id: i32,
     ) -> wasmtime::Result<i32> {
-        let player = self.get(&player)?;
-        Ok(player.get_stat(from_wit_statistic_category(category), stat_id))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_stat(from_wit_statistic_category(category), stat_id))
+        })
     }
 
     async fn set_statistic(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         category: WitStatisticCategory,
         stat_id: i32,
         value: i32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_stat(from_wit_statistic_category(category), stat_id, value);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_stat(from_wit_statistic_category(category), stat_id, value);
+            Ok(())
+        })
     }
 
     async fn increment_statistic(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         category: WitStatisticCategory,
         stat_id: i32,
         amount: i32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.increment_stat(from_wit_statistic_category(category), stat_id, amount);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.increment_stat(from_wit_statistic_category(category), stat_id, amount);
+            Ok(())
+        })
     }
 
     async fn get_custom_statistic(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         stat: WitCustomStatistic,
     ) -> wasmtime::Result<i32> {
-        let player = self.get(&player)?;
-        Ok(player.get_custom_stat(from_wit_custom_statistic(stat)))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_custom_stat(from_wit_custom_statistic(stat)))
+        })
     }
 
     async fn set_custom_statistic(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         stat: WitCustomStatistic,
         value: i32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_custom_stat(from_wit_custom_statistic(stat), value);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_custom_stat(from_wit_custom_statistic(stat), value);
+            Ok(())
+        })
     }
 
     async fn increment_custom_statistic(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         stat: WitCustomStatistic,
         amount: i32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.increment_custom_stat(from_wit_custom_statistic(stat), amount);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.increment_custom_stat(from_wit_custom_statistic(stat), amount);
+            Ok(())
+        })
     }
 
-    async fn send_stats(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.send_stats();
-        Ok(())
+    async fn send_stats(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<()> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.send_stats();
+            Ok(())
+        })
     }
 
-    async fn get_team(&mut self, player: Resource<Player>) -> wasmtime::Result<Option<String>> {
-        let player = self.get(&player)?;
-        let team = player.get_team();
-        Ok(team.map(|t| t.name))
+    async fn get_team(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Option<String>> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let team = player.get_team();
+            Ok(team.map(|t| t.name))
+        })
     }
 
     async fn start_cooldown(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         group: String,
         duration_ticks: i32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.start_cooldown(group, duration_ticks);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.start_cooldown(group, duration_ticks);
+            Ok(())
+        })
     }
 
     async fn get_cooldown(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         group: String,
     ) -> wasmtime::Result<f32> {
-        let player = self.get(&player)?;
-        Ok(player.get_cooldown(&group))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_cooldown(&group))
+        })
     }
 
     async fn is_on_cooldown(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         group: String,
     ) -> wasmtime::Result<bool> {
-        let player = self.get(&player)?;
-        Ok(player.is_on_cooldown(&group))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.is_on_cooldown(&group))
+        })
     }
 
     async fn set_allow_flight(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         allowed: bool,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_allow_flight(allowed);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_allow_flight(allowed);
+            Ok(())
+        })
     }
 
     async fn set_fly_speed(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         speed: f32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_fly_speed(speed);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_fly_speed(speed);
+            Ok(())
+        })
     }
 
     async fn set_walk_speed(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         speed: f32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_walk_speed(speed);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_walk_speed(speed);
+            Ok(())
+        })
     }
 
     async fn set_invulnerable(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         invulnerable: bool,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_invulnerable(invulnerable);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_invulnerable(invulnerable);
+            Ok(())
+        })
     }
 
     async fn set_player_time(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         time: u64,
         relative: bool,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_player_time(time, relative);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_player_time(time, relative);
+            Ok(())
+        })
     }
 
-    async fn reset_player_time(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.reset_player_time();
-        Ok(())
+    async fn reset_player_time(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<()> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.reset_player_time();
+            Ok(())
+        })
     }
 
-    async fn get_player_time(&mut self, player: Resource<Player>) -> wasmtime::Result<Option<u64>> {
-        let player = self.get(&player)?;
-        Ok(player.get_player_time())
+    async fn get_player_time(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Option<u64>> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_player_time())
+        })
     }
 
     async fn is_player_time_relative(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<bool> {
-        let player = self.get(&player)?;
-        Ok(player.is_player_time_relative())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.is_player_time_relative())
+        })
     }
 
     async fn set_player_weather(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         weather: crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::player::PlayerWeather,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let w = match weather {
-            crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::player::PlayerWeather::Clear => crate::entity::player::PlayerWeather::Clear,
-            crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::player::PlayerWeather::Downfall => crate::entity::player::PlayerWeather::Downfall,
-        };
-        player.set_player_weather(w);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let w = match weather {
+                crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::player::PlayerWeather::Clear => crate::entity::player::PlayerWeather::Clear,
+                crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::player::PlayerWeather::Downfall => crate::entity::player::PlayerWeather::Downfall,
+            };
+            player.set_player_weather(w);
+            Ok(())
+        })
     }
 
-    async fn reset_player_weather(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.reset_player_weather();
-        Ok(())
+    async fn reset_player_weather(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<()> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.reset_player_weather();
+            Ok(())
+        })
     }
 
-    async fn get_player_weather(
-        &mut self,
+    async fn get_player_weather(accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<Option<crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::player::PlayerWeather>>{
-        let player = self.get(&player)?;
-        Ok(player.get_player_weather().map(|w| match w {
-            crate::entity::player::PlayerWeather::Clear => crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::player::PlayerWeather::Clear,
-            crate::entity::player::PlayerWeather::Downfall => crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::player::PlayerWeather::Downfall,
-        }))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_player_weather().map(|w| match w {
+                crate::entity::player::PlayerWeather::Clear => crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::player::PlayerWeather::Clear,
+                crate::entity::player::PlayerWeather::Downfall => crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::player::PlayerWeather::Downfall,
+            }))
+        })
     }
 
     async fn set_compass_target(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         pos: crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::common::Position,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let pos_vec = from_wasm_position(pos);
-        let block_pos = pumpkin_util::math::position::BlockPos::new(
-            pos_vec.x as i32,
-            pos_vec.y as i32,
-            pos_vec.z as i32,
-        );
-        player.set_compass_target(block_pos);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let pos_vec = from_wasm_position(pos);
+            let block_pos = pumpkin_util::math::position::BlockPos::new(
+                pos_vec.x as i32,
+                pos_vec.y as i32,
+                pos_vec.z as i32,
+            );
+            player.set_compass_target(block_pos);
+            Ok(())
+        })
     }
 
     async fn get_compass_target(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<
         crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::common::Position,
     > {
-        let player = self.get(&player)?;
-        let target = player
-            .get_compass_target()
-            .unwrap_or(pumpkin_util::math::position::BlockPos::new(0, 0, 0));
-        let vec3 = pumpkin_util::math::vector3::Vector3::new(
-            f64::from(target.0.x),
-            f64::from(target.0.y),
-            f64::from(target.0.z),
-        );
-        Ok(to_wasm_position(vec3))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let target = player
+                .get_compass_target()
+                .unwrap_or(pumpkin_util::math::position::BlockPos::new(0, 0, 0));
+            let vec3 = pumpkin_util::math::vector3::Vector3::new(
+                f64::from(target.0.x),
+                f64::from(target.0.y),
+                f64::from(target.0.z),
+            );
+            Ok(to_wasm_position(vec3))
+        })
     }
 
     async fn set_respawn_location(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         pos: crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::common::Position,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let pos_vec = from_wasm_position(pos);
-        let block_pos = pumpkin_util::math::position::BlockPos::new(
-            pos_vec.x as i32,
-            pos_vec.y as i32,
-            pos_vec.z as i32,
-        );
-        player.set_respawn_location(block_pos);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let pos_vec = from_wasm_position(pos);
+            let block_pos = pumpkin_util::math::position::BlockPos::new(
+                pos_vec.x as i32,
+                pos_vec.y as i32,
+                pos_vec.z as i32,
+            );
+            player.set_respawn_location(block_pos);
+            Ok(())
+        })
     }
 
     async fn get_respawn_location(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<
         Option<
             crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::common::Position,
         >,
     > {
-        let player = self.get(&player)?;
-        Ok(player.get_respawn_location().map(|p| {
-            let vec3 = pumpkin_util::math::vector3::Vector3::new(
-                f64::from(p.0.x),
-                f64::from(p.0.y),
-                f64::from(p.0.z),
-            );
-            to_wasm_position(vec3)
-        }))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_respawn_location().map(|p| {
+                let vec3 = pumpkin_util::math::vector3::Vector3::new(
+                    f64::from(p.0.x),
+                    f64::from(p.0.y),
+                    f64::from(p.0.z),
+                );
+                to_wasm_position(vec3)
+            }))
+        })
     }
 
     async fn hide_player(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         other: Resource<Player>,
     ) -> wasmtime::Result<()> {
-        let other = self.take(other)?;
-        let player = self.get(&player)?;
-        player.hide_player(other.gameprofile.id);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let other = state.take(other)?;
+            let player = state.get(&player)?;
+            player.hide_player(other.gameprofile.id);
+            Ok(())
+        })
     }
 
     async fn show_player(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         other: Resource<Player>,
     ) -> wasmtime::Result<()> {
-        let other = self.take(other)?;
-        let player = self.get(&player)?;
-        player.show_player(other.gameprofile.id);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let other = state.take(other)?;
+            let player = state.get(&player)?;
+            player.show_player(other.gameprofile.id);
+            Ok(())
+        })
     }
 
     async fn can_see(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         other: Resource<Player>,
     ) -> wasmtime::Result<bool> {
-        let other = self.take(other)?;
-        let player = self.get(&player)?;
-        Ok(player.can_see(&other.gameprofile.id))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let other = state.take(other)?;
+            let player = state.get(&player)?;
+            Ok(player.can_see(&other.gameprofile.id))
+        })
     }
 
     async fn can_see_player(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         other: Resource<Player>,
     ) -> wasmtime::Result<bool> {
-        let other = self.take(other)?;
-        let player = self.get(&player)?;
-        Ok(player.can_see(&other.gameprofile.id))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let other = state.take(other)?;
+            let player = state.get(&player)?;
+            Ok(player.can_see(&other.gameprofile.id))
+        })
     }
 
     async fn set_tab_list_ping(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         latency_ms: i32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_tab_list_ping(latency_ms);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_tab_list_ping(latency_ms);
+            Ok(())
+        })
     }
 
     async fn set_item_cooldown(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         item_id: String,
         ticks: i32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_item_cooldown(&item_id, ticks);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_item_cooldown(&item_id, ticks);
+            Ok(())
+        })
     }
 
     async fn get_item_cooldown(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         item_id: String,
     ) -> wasmtime::Result<Option<i32>> {
-        let player = self.get(&player)?;
-        Ok(player.get_item_cooldown(&item_id))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_item_cooldown(&item_id))
+        })
     }
 
     async fn has_item_cooldown(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         item_id: String,
     ) -> wasmtime::Result<bool> {
-        let player = self.get(&player)?;
-        Ok(player.has_item_cooldown(&item_id))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.has_item_cooldown(&item_id))
+        })
     }
 
     async fn ray_trace_block(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         max_distance: f64,
         include_fluids: bool,
     ) -> wasmtime::Result<Option<pumpkin::plugin::world::RayTraceBlockResult>> {
-        let player = self.get(&player)?;
-        let start = player.living_entity.entity.get_eye_pos();
-        let direction = player.living_entity.entity.get_looking_vector();
-        let end = start + direction * max_distance;
-        let world = player.living_entity.entity.world.load_full();
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let start = player.living_entity.entity.get_eye_pos();
+            let direction = player.living_entity.entity.get_looking_vector();
+            let end = start + direction * max_distance;
+            let world = player.living_entity.entity.world.load_full();
 
-        let hit = world.ray_trace_block(start, end, include_fluids);
+            let hit = world.ray_trace_block(start, end, include_fluids);
 
-        Ok(hit.map(|(pos, face, hit_pos)| pumpkin::plugin::world::RayTraceBlockResult {
-            pos: pumpkin::plugin::world::BlockPos {
-                x: pos.0.x,
-                y: pos.0.y,
-                z: pos.0.z,
-            },
-            face: crate::plugin::loader::wasm::wasm_host::wit::v0_2::world::to_wasm_block_direction(face),
-            hit_pos: to_wasm_position(hit_pos),
-        }))
+            Ok(hit.map(|(pos, face, hit_pos)| pumpkin::plugin::world::RayTraceBlockResult {
+                pos: pumpkin::plugin::world::BlockPos {
+                    x: pos.0.x,
+                    y: pos.0.y,
+                    z: pos.0.z,
+                },
+                face: crate::plugin::loader::wasm::wasm_host::wit::v0_2::world::to_wasm_block_direction(face),
+                hit_pos: to_wasm_position(hit_pos),
+            }))
+        })
     }
 
     async fn ray_trace_entity(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         max_distance: f64,
     ) -> wasmtime::Result<Option<pumpkin::plugin::world::RayTraceEntityResult>> {
-        let player = self.get(&player)?;
-        let start = player.living_entity.entity.get_eye_pos();
-        let direction = player.living_entity.entity.get_looking_vector();
-        let end = start + direction * max_distance;
-        let world = player.living_entity.entity.world.load_full();
-        let self_id = player.living_entity.entity.entity_id;
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let start = player.living_entity.entity.get_eye_pos();
+            let direction = player.living_entity.entity.get_looking_vector();
+            let end = start + direction * max_distance;
+            let world = player.living_entity.entity.world.load_full();
+            let self_id = player.living_entity.entity.entity_id;
 
-        let hits = world.ray_trace_entities(start, end);
-        for (hit_entity, hit_pos, distance) in hits {
-            if hit_entity.get_entity().entity_id != self_id {
-                let entity_res = self
-                    .add(hit_entity)
-                    .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?;
-                return Ok(Some(pumpkin::plugin::world::RayTraceEntityResult {
-                    entity: entity_res,
-                    hit_pos: to_wasm_position(hit_pos),
-                    distance,
-                }));
+            let hits = world.ray_trace_entities(start, end);
+            for (hit_entity, hit_pos, distance) in hits {
+                if hit_entity.get_entity().entity_id != self_id {
+                    let entity_res = state
+                        .add(hit_entity)
+                        .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?;
+                    return Ok(Some(pumpkin::plugin::world::RayTraceEntityResult {
+                        entity: entity_res,
+                        hit_pos: to_wasm_position(hit_pos),
+                        distance,
+                    }));
+                }
             }
-        }
 
-        Ok(None)
+            Ok(None)
+        })
     }
 
     async fn get_target_entity(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         max_distance: f64,
     ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::world::Entity>>> {
-        let res = self.ray_trace_entity(player, max_distance).await?;
+        let res = Self::ray_trace_entity(accessor, player, max_distance).await?;
         Ok(res.map(|r| r.entity))
     }
 
     async fn get_target_block(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         max_distance: u32,
     ) -> wasmtime::Result<
@@ -2312,33 +2631,35 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::common::Position,
         >,
     > {
-        let player = self.get(&player)?;
-        let res = player.get_target_block(
-            &player.living_entity.entity.world.load_full(),
-            f64::from(max_distance),
-        );
-        Ok(res.map(|p| {
-            let vec3 = pumpkin_util::math::vector3::Vector3::new(
-                f64::from(p.0.x),
-                f64::from(p.0.y),
-                f64::from(p.0.z),
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let res = player.get_target_block(
+                &player.living_entity.entity.world.load_full(),
+                f64::from(max_distance),
             );
-            to_wasm_position(vec3)
-        }))
+            Ok(res.map(|p| {
+                let vec3 = pumpkin_util::math::vector3::Vector3::new(
+                    f64::from(p.0.x),
+                    f64::from(p.0.y),
+                    f64::from(p.0.z),
+                );
+                to_wasm_position(vec3)
+            }))
+        })
     }
 
     async fn get_target_block_exact(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         max_distance: f64,
         include_fluids: bool,
     ) -> wasmtime::Result<Option<pumpkin::plugin::world::RayTraceBlockResult>> {
-        self.ray_trace_block(player, max_distance, include_fluids)
-            .await
+        Self::ray_trace_block(accessor, player, max_distance, include_fluids).await
     }
 
     async fn launch_projectile(
-        &mut self,
+        _accessor: &Accessor<PluginHostState, Self>,
         _player: Resource<Player>,
         _type_: crate::plugin::loader::wasm::wasm_host::wit::v0_2::pumpkin::plugin::player::ProjectileType,
     ) -> wasmtime::Result<
@@ -2352,100 +2673,124 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     }
 
     async fn set_tab_list_header_footer(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         header: Resource<pumpkin::plugin::text::TextComponent>,
         footer: Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let header = self.take(header)?;
-        let footer = self.take(footer)?;
-        let player = self.get(&player)?;
-        player.set_tab_list_header_footer(&header, &footer);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let header = state.take(header)?;
+            let footer = state.take(footer)?;
+            let player = state.get(&player)?;
+            player.set_tab_list_header_footer(&header, &footer);
+            Ok(())
+        })
     }
 
     async fn set_tab_list_order(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         order: i32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_tab_list_order(order);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_tab_list_order(order);
+            Ok(())
+        })
     }
 
     async fn set_tab_list_latency(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         latency: i32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_tab_list_latency(latency);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_tab_list_latency(latency);
+            Ok(())
+        })
     }
 
     async fn set_tab_list_listed(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         listed: bool,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_tab_list_listed(listed);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_tab_list_listed(listed);
+            Ok(())
+        })
     }
 
     async fn show_title(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         text: Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let component = self.take(text)?;
-        let player = self.get(&player)?;
-        player.show_title(&component, &TitleMode::Title);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let component = state.take(text)?;
+            let player = state.get(&player)?;
+            player.show_title(&component, &TitleMode::Title);
+            Ok(())
+        })
     }
 
     async fn show_subtitle(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         text: Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let component = self.take(text)?;
-        let player = self.get(&player)?;
-        player.show_title(&component, &TitleMode::SubTitle);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let component = state.take(text)?;
+            let player = state.get(&player)?;
+            player.show_title(&component, &TitleMode::SubTitle);
+            Ok(())
+        })
     }
 
     async fn show_actionbar(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         text: Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let component = self.take(text)?;
-        let player = self.get(&player)?;
-        player.show_title(&component, &TitleMode::ActionBar);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let component = state.take(text)?;
+            let player = state.get(&player)?;
+            player.show_title(&component, &TitleMode::ActionBar);
+            Ok(())
+        })
     }
 
     async fn send_title_animation(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         fade_in: i32,
         stay: i32,
         fade_out: i32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.send_title_animation(fade_in, stay, fade_out);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.send_title_animation(fade_in, stay, fade_out);
+            Ok(())
+        })
     }
 
     async fn transfer(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         host: String,
         port: u16,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
+        let player = accessor.get_res(&player)?;
         if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             client
                 .send_packet(&pumpkin_protocol::java::client::play::CTransfer::new(
@@ -2457,561 +2802,682 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
-    async fn get_selected_slot(&mut self, player: Resource<Player>) -> wasmtime::Result<u8> {
-        let player = self.get(&player)?;
-        Ok(player.inventory.get_selected_slot())
+    async fn get_selected_slot(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<u8> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.inventory.get_selected_slot())
+        })
     }
 
-    async fn get_health(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
-        let player = self.get(&player)?;
-        Ok(player.living_entity.health.load())
+    async fn get_health(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<f32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.living_entity.health.load())
+        })
     }
 
-    async fn set_health(&mut self, player: Resource<Player>, health: f32) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_health(health);
-        Ok(())
+    async fn set_health(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        health: f32,
+    ) -> wasmtime::Result<()> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_health(health);
+            Ok(())
+        })
     }
 
-    async fn get_max_health(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
-        let player = self.get(&player)?;
-        Ok(player.living_entity.get_max_health())
+    async fn get_max_health(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<f32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.living_entity.get_max_health())
+        })
     }
 
     async fn set_max_health(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         max_health: f32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_max_health(max_health);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_max_health(max_health);
+            Ok(())
+        })
     }
 
-    async fn get_food_level(&mut self, player: Resource<Player>) -> wasmtime::Result<u8> {
-        let player = self.get(&player)?;
-        Ok(player.hunger_manager.level.load())
+    async fn get_food_level(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<u8> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.hunger_manager.level.load())
+        })
     }
 
-    async fn get_saturation(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
-        let player = self.get(&player)?;
-        Ok(player.hunger_manager.saturation.load())
+    async fn get_saturation(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<f32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.hunger_manager.saturation.load())
+        })
     }
 
     async fn set_saturation(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         saturation: f32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_saturation(saturation);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_saturation(saturation);
+            Ok(())
+        })
     }
 
-    async fn get_exhaustion(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
-        let player = self.get(&player)?;
-        Ok(player.get_exhaustion())
+    async fn get_exhaustion(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<f32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_exhaustion())
+        })
     }
 
     async fn set_exhaustion(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         exhaustion: f32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_exhaustion(exhaustion);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_exhaustion(exhaustion);
+            Ok(())
+        })
     }
 
-    async fn get_absorption(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
-        let player = self.get(&player)?;
-        Ok(player.get_absorption())
+    async fn get_absorption(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<f32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_absorption())
+        })
     }
 
     async fn set_absorption(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         absorption: f32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.set_absorption(absorption);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            player.set_absorption(absorption);
+            Ok(())
+        })
     }
 
-    async fn get_experience_level(&mut self, player: Resource<Player>) -> wasmtime::Result<i32> {
-        let player = self.get(&player)?;
-        Ok(player.experience_level.load(Ordering::Relaxed))
+    async fn get_experience_level(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<i32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.experience_level.load(Ordering::Relaxed))
+        })
     }
 
-    async fn get_experience_progress(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
-        let player = self.get(&player)?;
-        Ok(player.experience_progress.load())
+    async fn get_experience_progress(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<f32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.experience_progress.load())
+        })
     }
 
-    async fn get_experience_points(&mut self, player: Resource<Player>) -> wasmtime::Result<i32> {
-        let player = self.get(&player)?;
-        Ok(player.experience_points.load(Ordering::Relaxed))
+    async fn get_experience_points(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<i32> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.experience_points.load(Ordering::Relaxed))
+        })
     }
 
-    async fn is_flying(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
-        let player = self.get(&player)?;
-        Ok(player.is_flying())
+    async fn is_flying(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<bool> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.is_flying())
+        })
     }
 
-    async fn set_flying(&mut self, player: Resource<Player>, flying: bool) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        {
-            let mut abilities = player
-                .abilities
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            abilities.flying = flying;
-        };
-        player.send_abilities_update();
-        Ok(())
+    async fn set_flying(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        flying: bool,
+    ) -> wasmtime::Result<()> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            {
+                let mut abilities = player
+                    .abilities
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                abilities.flying = flying;
+            };
+            player.send_abilities_update();
+            Ok(())
+        })
     }
 
     async fn get_abilities(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<pumpkin::plugin::player::PlayerAbilities> {
-        let player = self.get(&player)?;
-        let abilities = player
-            .abilities
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        Ok(pumpkin::plugin::player::PlayerAbilities {
-            invulnerable: abilities.invulnerable,
-            flying: abilities.flying,
-            allow_flying: abilities.allow_flying,
-            creative: abilities.creative,
-            allow_modify_world: abilities.allow_modify_world,
-            fly_speed: abilities.fly_speed,
-            walk_speed: abilities.walk_speed,
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let abilities = player
+                .abilities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            Ok(pumpkin::plugin::player::PlayerAbilities {
+                invulnerable: abilities.invulnerable,
+                flying: abilities.flying,
+                allow_flying: abilities.allow_flying,
+                creative: abilities.creative,
+                allow_modify_world: abilities.allow_modify_world,
+                fly_speed: abilities.fly_speed,
+                walk_speed: abilities.walk_speed,
+            })
         })
     }
 
     async fn set_abilities(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         abilities: pumpkin::plugin::player::PlayerAbilities,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        {
-            let mut a = player
-                .abilities
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            a.invulnerable = abilities.invulnerable;
-            a.flying = abilities.flying;
-            a.allow_flying = abilities.allow_flying;
-            a.creative = abilities.creative;
-            a.allow_modify_world = abilities.allow_modify_world;
-            a.fly_speed = abilities.fly_speed;
-            a.walk_speed = abilities.walk_speed;
-        };
-        player.send_abilities_update();
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            {
+                let mut a = player
+                    .abilities
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                a.invulnerable = abilities.invulnerable;
+                a.flying = abilities.flying;
+                a.allow_flying = abilities.allow_flying;
+                a.creative = abilities.creative;
+                a.allow_modify_world = abilities.allow_modify_world;
+                a.fly_speed = abilities.fly_speed;
+                a.walk_speed = abilities.walk_speed;
+            };
+            player.send_abilities_update();
+            Ok(())
+        })
     }
 
-    async fn get_ip(&mut self, player: Resource<Player>) -> wasmtime::Result<String> {
-        let player = self.get(&player)?;
-        Ok(player.get_ip())
+    async fn get_ip(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<String> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player.get_ip())
+        })
     }
 
-    async fn get_skin(&mut self, player: Resource<Player>) -> wasmtime::Result<Option<PlayerSkin>> {
-        let player = self.get(&player)?;
-        Ok(player
-            .gameprofile
-            .properties
-            .load()
-            .iter()
-            .find(|p| p.name.as_ref() == "textures")
-            .map(|p| PlayerSkin {
-                value: p.value.to_string(),
-                signature: p.signature.as_ref().map(std::string::ToString::to_string),
-            }))
+    async fn get_skin(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Option<PlayerSkin>> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            Ok(player
+                .gameprofile
+                .properties
+                .load()
+                .iter()
+                .find(|p| p.name.as_ref() == "textures")
+                .map(|p| PlayerSkin {
+                    value: p.value.to_string(),
+                    signature: p.signature.as_ref().map(std::string::ToString::to_string),
+                }))
+        })
     }
 
     async fn set_skin(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         skin: PlayerSkin,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let mut properties = (**player.gameprofile.properties.load()).clone();
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let mut properties = (**player.gameprofile.properties.load()).clone();
 
-        properties.retain(|p| p.name.as_ref() != "textures");
-        properties.push(Property {
-            name: "textures".into(),
-            value: skin.value.into(),
-            signature: skin.signature.map(std::convert::Into::into),
-        });
+            properties.retain(|p| p.name.as_ref() != "textures");
+            properties.push(Property {
+                name: "textures".into(),
+                value: skin.value.into(),
+                signature: skin.signature.map(std::convert::Into::into),
+            });
 
-        player.gameprofile.properties.store(Arc::new(properties));
+            player.gameprofile.properties.store(Arc::new(properties));
 
-        Ok(())
+            Ok(())
+        })
     }
 
-    async fn get_skin_parts(&mut self, player: Resource<Player>) -> wasmtime::Result<SkinParts> {
-        let player = self.get(&player)?;
-        let mask = player.config.load().skin_parts;
-        let mut parts = SkinParts::empty();
-        if mask & 0x01 != 0 {
-            parts |= SkinParts::CAPE;
-        }
-        if mask & 0x02 != 0 {
-            parts |= SkinParts::JACKET;
-        }
-        if mask & 0x04 != 0 {
-            parts |= SkinParts::LEFT_SLEEVE;
-        }
-        if mask & 0x08 != 0 {
-            parts |= SkinParts::RIGHT_SLEEVE;
-        }
-        if mask & 0x10 != 0 {
-            parts |= SkinParts::LEFT_PANTS_LEG;
-        }
-        if mask & 0x20 != 0 {
-            parts |= SkinParts::RIGHT_PANTS_LEG;
-        }
-        if mask & 0x40 != 0 {
-            parts |= SkinParts::HAT;
-        }
-        Ok(parts)
+    async fn get_skin_parts(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<SkinParts> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let mask = player.config.load().skin_parts;
+            let mut parts = SkinParts::empty();
+            if mask & 0x01 != 0 {
+                parts |= SkinParts::CAPE;
+            }
+            if mask & 0x02 != 0 {
+                parts |= SkinParts::JACKET;
+            }
+            if mask & 0x04 != 0 {
+                parts |= SkinParts::LEFT_SLEEVE;
+            }
+            if mask & 0x08 != 0 {
+                parts |= SkinParts::RIGHT_SLEEVE;
+            }
+            if mask & 0x10 != 0 {
+                parts |= SkinParts::LEFT_PANTS_LEG;
+            }
+            if mask & 0x20 != 0 {
+                parts |= SkinParts::RIGHT_PANTS_LEG;
+            }
+            if mask & 0x40 != 0 {
+                parts |= SkinParts::HAT;
+            }
+            Ok(parts)
+        })
     }
 
     async fn set_skin_parts(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         parts: SkinParts,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let mut mask = 0u8;
-        if parts.contains(SkinParts::CAPE) {
-            mask |= 0x01;
-        }
-        if parts.contains(SkinParts::JACKET) {
-            mask |= 0x02;
-        }
-        if parts.contains(SkinParts::LEFT_SLEEVE) {
-            mask |= 0x04;
-        }
-        if parts.contains(SkinParts::RIGHT_SLEEVE) {
-            mask |= 0x08;
-        }
-        if parts.contains(SkinParts::LEFT_PANTS_LEG) {
-            mask |= 0x10;
-        }
-        if parts.contains(SkinParts::RIGHT_PANTS_LEG) {
-            mask |= 0x20;
-        }
-        if parts.contains(SkinParts::HAT) {
-            mask |= 0x40;
-        }
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let mut mask = 0u8;
+            if parts.contains(SkinParts::CAPE) {
+                mask |= 0x01;
+            }
+            if parts.contains(SkinParts::JACKET) {
+                mask |= 0x02;
+            }
+            if parts.contains(SkinParts::LEFT_SLEEVE) {
+                mask |= 0x04;
+            }
+            if parts.contains(SkinParts::RIGHT_SLEEVE) {
+                mask |= 0x08;
+            }
+            if parts.contains(SkinParts::LEFT_PANTS_LEG) {
+                mask |= 0x10;
+            }
+            if parts.contains(SkinParts::RIGHT_PANTS_LEG) {
+                mask |= 0x20;
+            }
+            if parts.contains(SkinParts::HAT) {
+                mask |= 0x40;
+            }
 
-        {
-            let mut config = (**player.config.load()).clone();
-            config.skin_parts = mask;
-            player.config.store(Arc::new(config));
-        };
-        player.send_client_information();
-        Ok(())
+            {
+                let mut config = (**player.config.load()).clone();
+                config.skin_parts = mask;
+                player.config.store(Arc::new(config));
+            };
+            player.send_client_information();
+            Ok(())
+        })
     }
 
     async fn get_advancement_progress(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         advancement_id: String,
     ) -> wasmtime::Result<Option<pumpkin::plugin::advancement::AdvancementProgress>> {
-        let player = self.get(&player)?;
-        let Some(advancement) =
-            crate::plugin::loader::wasm::wasm_host::wit::v0_2::advancement::find_advancement(
-                &advancement_id,
-            )
-        else {
-            return Ok(None);
-        };
-        let guard = player
-            .advancements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let progress = guard.progress.map.get(advancement).map_or_else(
-            || pumpkin::plugin::advancement::AdvancementProgress {
-                advancement_id: advancement.id.to_string(),
-                done: false,
-                awarded_criteria: Vec::new(),
-                remaining_criteria: advancement
-                    .criteria
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect(),
-            },
-            |progress| pumpkin::plugin::advancement::AdvancementProgress {
-                advancement_id: advancement.id.to_string(),
-                done: progress.is_done(),
-                awarded_criteria: progress
-                    .get_completed_criteria()
-                    .map(|s| s.to_string())
-                    .collect(),
-                remaining_criteria: progress
-                    .get_remaining_criteria()
-                    .map(|s| s.to_string())
-                    .collect(),
-            },
-        );
-        Ok(Some(progress))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let Some(advancement) =
+                crate::plugin::loader::wasm::wasm_host::wit::v0_2::advancement::find_advancement(
+                    &advancement_id,
+                )
+            else {
+                return Ok(None);
+            };
+            let guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let progress = guard.progress.map.get(advancement).map_or_else(
+                || pumpkin::plugin::advancement::AdvancementProgress {
+                    advancement_id: advancement.id.to_string(),
+                    done: false,
+                    awarded_criteria: Vec::new(),
+                    remaining_criteria: advancement
+                        .criteria
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect(),
+                },
+                |progress| pumpkin::plugin::advancement::AdvancementProgress {
+                    advancement_id: advancement.id.to_string(),
+                    done: progress.is_done(),
+                    awarded_criteria: progress
+                        .get_completed_criteria()
+                        .map(|s| s.to_string())
+                        .collect(),
+                    remaining_criteria: progress
+                        .get_remaining_criteria()
+                        .map(|s| s.to_string())
+                        .collect(),
+                },
+            );
+            Ok(Some(progress))
+        })
     }
 
     async fn revoke_advancement_criterion(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         advancement_id: String,
         criterion: String,
     ) -> wasmtime::Result<bool> {
-        let player = self.get(&player)?;
-        let Some(advancement) =
-            crate::plugin::loader::wasm::wasm_host::wit::v0_2::advancement::find_advancement(
-                &advancement_id,
-            )
-        else {
-            return Ok(false);
-        };
-        let mut guard = player
-            .advancements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let revoked = guard.revoke(advancement, &criterion);
-        if revoked {
-            guard.flush_dirty(player, true);
-        }
-        Ok(revoked)
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let Some(advancement) =
+                crate::plugin::loader::wasm::wasm_host::wit::v0_2::advancement::find_advancement(
+                    &advancement_id,
+                )
+            else {
+                return Ok(false);
+            };
+            let mut guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let revoked = guard.revoke(advancement, &criterion);
+            if revoked {
+                guard.flush_dirty(player, true);
+            }
+            Ok(revoked)
+        })
     }
 
     async fn revoke_advancement(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         advancement_id: String,
     ) -> wasmtime::Result<bool> {
-        let player = self.get(&player)?;
-        let Some(advancement) =
-            crate::plugin::loader::wasm::wasm_host::wit::v0_2::advancement::find_advancement(
-                &advancement_id,
-            )
-        else {
-            return Ok(false);
-        };
-        let mut guard = player
-            .advancements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let progress = guard.progress.get_mut_or_start_progress(advancement);
-        if !progress.has_progress() {
-            return Ok(false);
-        }
-        let completed: Vec<Arc<str>> = progress.get_completed_criteria().collect();
-        let mut any_revoked = false;
-        for criterion in completed {
-            if guard.revoke(advancement, &criterion) {
-                any_revoked = true;
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let Some(advancement) =
+                crate::plugin::loader::wasm::wasm_host::wit::v0_2::advancement::find_advancement(
+                    &advancement_id,
+                )
+            else {
+                return Ok(false);
+            };
+            let mut guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let progress = guard.progress.get_mut_or_start_progress(advancement);
+            if !progress.has_progress() {
+                return Ok(false);
             }
-        }
-        if any_revoked {
-            guard.flush_dirty(player, true);
-        }
-        Ok(any_revoked)
+            let completed: Vec<Arc<str>> = progress.get_completed_criteria().collect();
+            let mut any_revoked = false;
+            for criterion in completed {
+                if guard.revoke(advancement, &criterion) {
+                    any_revoked = true;
+                }
+            }
+            if any_revoked {
+                guard.flush_dirty(player, true);
+            }
+            Ok(any_revoked)
+        })
     }
 
     async fn has_advancement(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         advancement_id: String,
     ) -> wasmtime::Result<bool> {
-        let player = self.get(&player)?;
-        let Some(advancement) =
-            crate::plugin::loader::wasm::wasm_host::wit::v0_2::advancement::find_advancement(
-                &advancement_id,
-            )
-        else {
-            return Ok(false);
-        };
-        let guard = player
-            .advancements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let done = guard
-            .progress
-            .map
-            .get(advancement)
-            .is_some_and(crate::entity::player::advancement::AdvancementProgress::is_done);
-        Ok(done)
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let Some(advancement) =
+                crate::plugin::loader::wasm::wasm_host::wit::v0_2::advancement::find_advancement(
+                    &advancement_id,
+                )
+            else {
+                return Ok(false);
+            };
+            let guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let done = guard
+                .progress
+                .map
+                .get(advancement)
+                .is_some_and(crate::entity::player::advancement::AdvancementProgress::is_done);
+            Ok(done)
+        })
     }
 
     async fn get_completed_advancements(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<Vec<String>> {
-        let player = self.get(&player)?;
-        let guard = player
-            .advancements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let list = guard
-            .progress
-            .map
-            .iter()
-            .filter(|(_, p)| p.is_done())
-            .map(|(adv, _)| adv.id.to_string())
-            .collect();
-        Ok(list)
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let list = guard
+                .progress
+                .map
+                .iter()
+                .filter(|(_, p)| p.is_done())
+                .map(|(adv, _)| adv.id.to_string())
+                .collect();
+            Ok(list)
+        })
     }
 
     async fn get_selected_advancement_tab(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<Option<String>> {
-        let player = self.get(&player)?;
-        let guard = player
-            .advancements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        Ok(guard.last_selected_tab.map(|adv| adv.id.to_string()))
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            Ok(guard.last_selected_tab.map(|adv| adv.id.to_string()))
+        })
     }
 
     async fn set_selected_advancement_tab(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         tab_id: Option<String>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        let target_adv = tab_id.as_deref().and_then(
-            crate::plugin::loader::wasm::wasm_host::wit::v0_2::advancement::find_advancement,
-        );
-        let mut guard = player
-            .advancements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        guard.set_selected_tab(target_adv);
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
+            let target_adv = tab_id.as_deref().and_then(
+                crate::plugin::loader::wasm::wasm_host::wit::v0_2::advancement::find_advancement,
+            );
+            let mut guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            guard.set_selected_tab(target_adv);
+            Ok(())
+        })
     }
 
     async fn as_java(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::player::JavaPlayer>>> {
-        let player = self.get(&player)?.clone();
-        if let crate::net::ClientPlatform::Java(_) = player.client.as_ref() {
-            Ok(Some(self.add(player)?))
-        } else {
-            Ok(None)
-        }
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
+            if let crate::net::ClientPlatform::Java(_) = player.client.as_ref() {
+                Ok(Some(state.add(player)?))
+            } else {
+                Ok(None)
+            }
+        })
     }
 
     async fn as_bedrock(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::player::BedrockPlayer>>> {
-        let player = self.get(&player)?.clone();
-        if let crate::net::ClientPlatform::Bedrock(_) = player.client.as_ref() {
-            Ok(Some(self.add(player)?))
-        } else {
-            Ok(None)
-        }
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
+            if let crate::net::ClientPlatform::Bedrock(_) = player.client.as_ref() {
+                Ok(Some(state.add(player)?))
+            } else {
+                Ok(None)
+            }
+        })
     }
-
-    async fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-}
-
-impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn open_ender_chest(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                player.open_ender_chest();
-            })
-            .await
+        run_blocking(move || {
+            player.open_ender_chest();
+        })
+        .await
     }
 
     async fn set_gamemode(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         mode: pumpkin::plugin::common::GameMode,
     ) -> wasmtime::Result<bool> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
         let mode = from_wasm_game_mode(mode);
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || player.set_gamemode(mode))
-            .await
+        run_blocking(move || player.set_gamemode(mode)).await
     }
 
     async fn set_permission_level(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         level: pumpkin::plugin::permission::PermissionLevel,
     ) -> wasmtime::Result<()> {
-        let (player, server, plugin) = {
+        let (player, server) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
-            (
+            Ok((
                 state.get(&player)?.clone(),
                 state.server.as_ref().expect("server not available").clone(),
-                plugin_from_state(state)?,
-            )
-        };
+            ))
+        })?;
         let level = from_wit_permission_level(level);
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                let command_dispatcher = server.command_dispatcher.load();
-                player.set_permission_lvl(&server, level, &command_dispatcher);
-            })
-            .await
+        run_blocking(move || {
+            let command_dispatcher = server.command_dispatcher.load();
+            player.set_permission_lvl(&server, level, &command_dispatcher);
+        })
+        .await
     }
 
     async fn has_permission(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         node: String,
     ) -> wasmtime::Result<bool> {
-        let (player, server, plugin) = {
+        let (player, server) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
-            (
+            Ok((
                 state.get(&player)?.clone(),
                 state.server.as_ref().expect("server not available").clone(),
-                plugin_from_state(state)?,
-            )
-        };
+            ))
+        })?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || player.has_permission(&server, &node))
-            .await
+        run_blocking(move || player.has_permission(&server, &node)).await
     }
 
     async fn add_effect(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         effect: pumpkin::plugin::status_effect::StatusEffectInstance,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
         let effect_type = super::status_effect::from_wasm_status_effect_type(effect.effect_type);
         let Some(status_effect) =
             pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
@@ -3028,178 +3494,136 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             blend: false,
         };
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || player.add_effect(effect))
-            .await
+        run_blocking(move || player.add_effect(effect)).await
     }
 
     async fn heal(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         amount: f32,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || player.heal(amount))
-            .await
+        run_blocking(move || player.heal(amount)).await
     }
 
     async fn damage(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         amount: f32,
         damage_type: WitDamageType,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
         let damage_type = from_wit_damage_type(damage_type);
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                player.damage(&*player, amount, damage_type);
-            })
-            .await
+        run_blocking(move || {
+            player.damage(&*player, amount, damage_type);
+        })
+        .await
     }
 
     async fn kill(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || player.kill())
-            .await
+        run_blocking(move || player.kill()).await
     }
 
     async fn teleport(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         position: pumpkin::plugin::common::Position,
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Resource<World>,
     ) -> wasmtime::Result<()> {
-        let (player, world, plugin) = {
+        let (player, world) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
-            (
-                state.get(&player)?.clone(),
-                state.take(world)?,
-                plugin_from_state(state)?,
-            )
-        };
+            Ok((state.get(&player)?.clone(), state.take(world)?))
+        })?;
         let position = from_wasm_position(position);
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                player.teleport(position, yaw, pitch, world);
-            })
-            .await
+        run_blocking(move || {
+            player.teleport(position, yaw, pitch, world);
+        })
+        .await
     }
 
     async fn teleport_world(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         world: Resource<World>,
         position: pumpkin::plugin::common::Position,
         yaw: Option<f32>,
         pitch: Option<f32>,
     ) -> wasmtime::Result<()> {
-        let (player, world, plugin) = {
+        let (player, world) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
-            (
-                state.get(&player)?.clone(),
-                state.take(world)?,
-                plugin_from_state(state)?,
-            )
-        };
+            Ok((state.get(&player)?.clone(), state.take(world)?))
+        })?;
         let position = from_wasm_position(position);
         let runtime = tokio::runtime::Handle::current();
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                runtime.block_on(player.teleport_world(world, position, yaw, pitch));
-            })
-            .await
+        run_blocking(move || {
+            runtime.block_on(player.teleport_world(world, position, yaw, pitch));
+        })
+        .await
     }
 
     async fn respawn(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
         let runtime = tokio::runtime::Handle::current();
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || runtime.block_on(player.respawn()))
-            .await
+        run_blocking(move || runtime.block_on(player.respawn())).await
     }
 
     async fn open_gui(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         gui: Resource<pumpkin::plugin::gui::Gui>,
     ) -> wasmtime::Result<()> {
-        let (player, gui, plugin) = {
+        let (player, gui) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
             let gui = state.take(gui)?;
-            (state.get(&player)?.clone(), gui, plugin_from_state(state)?)
-        };
+            Ok((state.get(&player)?.clone(), gui))
+        })?;
 
-        let (window_type, inventory, allow_grab_items, allow_put_items, title) = plugin
-            .store
-            .pump_reentry(&mut host, async move {
-                let gui = gui.lock().await;
-                (
-                    gui.window_type,
-                    gui.inventory.clone(),
-                    gui.allow_grab_items,
-                    gui.allow_put_items,
-                    gui.title.clone(),
-                )
-            })
-            .await?;
+        let (window_type, inventory, allow_grab_items, allow_put_items, title) = (async move {
+            let gui = gui.lock().await;
+            (
+                gui.window_type,
+                gui.inventory.clone(),
+                gui.allow_grab_items,
+                gui.allow_put_items,
+                gui.title.clone(),
+            )
+        })
+        .await;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                player.increment_screen_handler_sync_id();
-                let sync_id = player.screen_handler_sync_id.load(Ordering::Relaxed);
-                let screen_handler: Arc<
-                    std::sync::Mutex<dyn pumpkin_inventory::screen_handler::ScreenHandler>,
-                > = Arc::new(std::sync::Mutex::new(PluginScreenHandler::new(
-                    sync_id,
-                    window_type,
-                    &inventory,
-                    allow_grab_items,
-                    allow_put_items,
-                )));
-                player.open_handled_screen_direct(screen_handler, &title);
-            })
-            .await
+        run_blocking(move || {
+            player.increment_screen_handler_sync_id();
+            let sync_id = player.screen_handler_sync_id.load(Ordering::Relaxed);
+            let screen_handler: Arc<
+                std::sync::Mutex<dyn pumpkin_inventory::screen_handler::ScreenHandler>,
+            > = Arc::new(std::sync::Mutex::new(PluginScreenHandler::new(
+                sync_id,
+                window_type,
+                &inventory,
+                allow_grab_items,
+                allow_put_items,
+            )));
+            player.open_handled_screen_direct(screen_handler, &title);
+        })
+        .await
     }
 
     async fn ban(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         options: pumpkin::plugin::player::BanPlayerOptions,
     ) -> wasmtime::Result<()> {
@@ -3211,34 +3635,31 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             kick_if_online,
             log_to_console,
         } = options;
-        let (player, server, reason, plugin) = {
+        let (player, server, reason) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
-            (
+            Ok((
                 state.get(&player)?.clone(),
                 state.server.as_ref().expect("server not available").clone(),
                 reason.map(|t| state.take(t)).transpose()?,
-                plugin_from_state(state)?,
-            )
-        };
+            ))
+        })?;
         let expires = parse_ban_expiry(expires_at_utc, duration_seconds);
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                player.ban_explicit(
-                    &server,
-                    reason,
-                    source,
-                    expires,
-                    kick_if_online,
-                    log_to_console,
-                );
-            })
-            .await
+        run_blocking(move || {
+            player.ban_explicit(
+                &server,
+                reason,
+                source,
+                expires,
+                kick_if_online,
+                log_to_console,
+            );
+        })
+        .await
     }
 
     async fn ban_ip(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         options: pumpkin::plugin::player::BanIpOptions,
     ) -> wasmtime::Result<()> {
@@ -3250,150 +3671,110 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             kick_matching_players,
             log_to_console,
         } = options;
-        let (player, server, reason, plugin) = {
+        let (player, server, reason) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
-            (
+            Ok((
                 state.get(&player)?.clone(),
                 state.server.as_ref().expect("server not available").clone(),
                 reason.map(|t| state.take(t)).transpose()?,
-                plugin_from_state(state)?,
-            )
-        };
+            ))
+        })?;
         let expires = parse_ban_expiry(expires_at_utc, duration_seconds);
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                player.ban_ip_explicit(
-                    &server,
-                    reason,
-                    source,
-                    expires,
-                    kick_matching_players,
-                    log_to_console,
-                );
-            })
-            .await
+        run_blocking(move || {
+            player.ban_ip_explicit(
+                &server,
+                reason,
+                source,
+                expires,
+                kick_matching_players,
+                log_to_console,
+            );
+        })
+        .await
     }
 
     async fn set_food_level(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         level: u8,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || player.set_food_level(level))
-            .await
+        run_blocking(move || player.set_food_level(level)).await
     }
 
     async fn set_experience_level(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         level: i32,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || player.set_experience_level(level, true))
-            .await
+        run_blocking(move || player.set_experience_level(level, true)).await
     }
 
     async fn set_experience_progress(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         progress: f32,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                player.set_experience(
-                    player.experience_level.load(Ordering::Relaxed),
-                    progress,
-                    player.experience_points.load(Ordering::Relaxed),
-                );
-            })
-            .await
+        run_blocking(move || {
+            player.set_experience(
+                player.experience_level.load(Ordering::Relaxed),
+                progress,
+                player.experience_points.load(Ordering::Relaxed),
+            );
+        })
+        .await
     }
 
     async fn set_experience_points(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         points: i32,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                player.set_experience(
-                    player.experience_level.load(Ordering::Relaxed),
-                    player.experience_progress.load(),
-                    points,
-                );
-            })
-            .await
+        run_blocking(move || {
+            player.set_experience(
+                player.experience_level.load(Ordering::Relaxed),
+                player.experience_progress.load(),
+                points,
+            );
+        })
+        .await
     }
 
     async fn add_experience_levels(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         levels: i32,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || player.add_experience_levels(levels))
-            .await
+        run_blocking(move || player.add_experience_levels(levels)).await
     }
 
     async fn add_experience_points(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         points: i32,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || player.add_experience_points(points))
-            .await
+        run_blocking(move || player.add_experience_points(points)).await
     }
 
     async fn award_advancement_criterion(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         advancement_id: String,
         criterion: String,
     ) -> wasmtime::Result<bool> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
         let Some(advancement) =
             crate::plugin::loader::wasm::wasm_host::wit::v0_2::advancement::find_advancement(
                 &advancement_id,
@@ -3402,39 +3783,34 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             return Ok(false);
         };
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                let result = {
-                    let mut guard = player
-                        .advancements
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    guard.award(advancement, &criterion)
-                };
+        run_blocking(move || {
+            let result = {
+                let mut guard = player
+                    .advancements
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                guard.award(advancement, &criterion)
+            };
 
-                PlayerAdvancement::finish_award(&player, advancement, result);
-                if result.awarded() {
-                    let mut guard = player
-                        .advancements
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    guard.flush_dirty(&player, true);
-                }
-                result.awarded()
-            })
-            .await
+            PlayerAdvancement::finish_award(&player, advancement, result);
+            if result.awarded() {
+                let mut guard = player
+                    .advancements
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                guard.flush_dirty(&player, true);
+            }
+            result.awarded()
+        })
+        .await
     }
 
     async fn award_advancement(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
         advancement_id: String,
     ) -> wasmtime::Result<bool> {
-        let (player, plugin) = {
-            let state = host.get();
-            (state.get(&player)?.clone(), plugin_from_state(state)?)
-        };
+        let player = accessor.get_res(&player)?;
         let Some(advancement) =
             crate::plugin::loader::wasm::wasm_host::wit::v0_2::advancement::find_advancement(
                 &advancement_id,
@@ -3443,132 +3819,153 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             return Ok(false);
         };
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                let result = {
-                    let mut guard = player
-                        .advancements
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    let progress = guard.progress.get_mut_or_start_progress(advancement);
-                    if progress.is_done() {
-                        return false;
-                    }
-                    let remaining: Vec<Arc<str>> = progress.get_remaining_criteria().collect();
-                    let mut result = AdvancementAward::default();
-                    for criterion in remaining {
-                        result = result.combine(guard.award(advancement, &criterion));
-                    }
-                    result
-                };
-
-                PlayerAdvancement::finish_award(&player, advancement, result);
-                if result.awarded() {
-                    let mut guard = player
-                        .advancements
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    guard.flush_dirty(&player, true);
+        run_blocking(move || {
+            let result = {
+                let mut guard = player
+                    .advancements
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let progress = guard.progress.get_mut_or_start_progress(advancement);
+                if progress.is_done() {
+                    return false;
                 }
-                result.awarded()
-            })
-            .await
+                let remaining: Vec<Arc<str>> = progress.get_remaining_criteria().collect();
+                let mut result = AdvancementAward::default();
+                for criterion in remaining {
+                    result = result.combine(guard.award(advancement, &criterion));
+                }
+                result
+            };
+
+            PlayerAdvancement::finish_award(&player, advancement, result);
+            if result.awarded() {
+                let mut guard = player
+                    .advancements
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                guard.flush_dirty(&player, true);
+            }
+            result.awarded()
+        })
+        .await
     }
 }
 
 impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
-    async fn get_version(
+    async fn drop(
         &mut self,
+        rep: Resource<pumpkin::plugin::player::JavaPlayer>,
+    ) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+}
+
+impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
+    for HasSelf<PluginHostState>
+{
+    async fn get_version(
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<pumpkin::plugin::player::JavaMinecraftVersion> {
-        let player = self.get(&player)?.clone();
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
 
-        let client = player
-            .client
-            .java()
-            .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
-        Ok(to_wasm_java_version(client.version.load()))
+            let client = player
+                .client
+                .java()
+                .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
+            Ok(to_wasm_java_version(client.version.load()))
+        })
     }
 
     async fn get_brand(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<String> {
-        let player = self.get(&player)?.clone();
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
 
-        let client = player
-            .client
-            .java()
-            .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
-        Ok(client.brand.load().as_ref().clone().unwrap_or_default())
+            let client = player
+                .client
+                .java()
+                .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
+            Ok(client.brand.load().as_ref().clone().unwrap_or_default())
+        })
     }
 
     async fn get_server_address(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<String> {
-        let player = self.get(&player)?.clone();
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
 
-        let client = player
-            .client
-            .java()
-            .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
-        Ok(client.server_address.clone())
+            let client = player
+                .client
+                .java()
+                .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
+            Ok(client.server_address.clone())
+        })
     }
 
     async fn get_settings(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<pumpkin::plugin::player::JavaPlayerSettings> {
-        let player = self.get(&player)?.clone();
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
 
-        let config = player.config.load();
-        let mask = config.skin_parts;
-        let mut parts = SkinParts::empty();
-        if mask & 0x01 != 0 {
-            parts |= SkinParts::CAPE;
-        }
-        if mask & 0x02 != 0 {
-            parts |= SkinParts::JACKET;
-        }
-        if mask & 0x04 != 0 {
-            parts |= SkinParts::LEFT_SLEEVE;
-        }
-        if mask & 0x08 != 0 {
-            parts |= SkinParts::RIGHT_SLEEVE;
-        }
-        if mask & 0x10 != 0 {
-            parts |= SkinParts::LEFT_PANTS_LEG;
-        }
-        if mask & 0x20 != 0 {
-            parts |= SkinParts::RIGHT_PANTS_LEG;
-        }
-        if mask & 0x40 != 0 {
-            parts |= SkinParts::HAT;
-        }
+            let config = player.config.load();
+            let mask = config.skin_parts;
+            let mut parts = SkinParts::empty();
+            if mask & 0x01 != 0 {
+                parts |= SkinParts::CAPE;
+            }
+            if mask & 0x02 != 0 {
+                parts |= SkinParts::JACKET;
+            }
+            if mask & 0x04 != 0 {
+                parts |= SkinParts::LEFT_SLEEVE;
+            }
+            if mask & 0x08 != 0 {
+                parts |= SkinParts::RIGHT_SLEEVE;
+            }
+            if mask & 0x10 != 0 {
+                parts |= SkinParts::LEFT_PANTS_LEG;
+            }
+            if mask & 0x20 != 0 {
+                parts |= SkinParts::RIGHT_PANTS_LEG;
+            }
+            if mask & 0x40 != 0 {
+                parts |= SkinParts::HAT;
+            }
 
-        Ok(pumpkin::plugin::player::JavaPlayerSettings {
-            locale: config.locale.clone(),
-            view_distance: config.view_distance.get(),
-            chat_mode: to_wasm_chat_mode(&config.chat_mode),
-            chat_colors: config.chat_colors,
-            skin_parts: parts,
-            main_hand: match config.main_hand {
-                pumpkin_util::Hand::Left => pumpkin::plugin::common::Hand::Left,
-                pumpkin_util::Hand::Right => pumpkin::plugin::common::Hand::Right,
-            },
-            text_filtering: config.text_filtering,
-            server_listing: config.server_listing,
+            Ok(pumpkin::plugin::player::JavaPlayerSettings {
+                locale: config.locale.clone(),
+                view_distance: config.view_distance.get(),
+                chat_mode: to_wasm_chat_mode(&config.chat_mode),
+                chat_colors: config.chat_colors,
+                skin_parts: parts,
+                main_hand: match config.main_hand {
+                    pumpkin_util::Hand::Left => pumpkin::plugin::common::Hand::Left,
+                    pumpkin_util::Hand::Right => pumpkin::plugin::common::Hand::Right,
+                },
+                text_filtering: config.text_filtering,
+                server_listing: config.server_listing,
+            })
         })
     }
 
     async fn send_packet(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         packet: pumpkin::plugin::java_packets::ClientboundPacket,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
+        let player = accessor.get_res(&player)?.clone();
 
         let client = player
             .client
@@ -3583,12 +3980,12 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
     }
 
     async fn send_custom_payload(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         channel: String,
         data: Vec<u8>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
+        let player = accessor.get_res(&player)?.clone();
 
         if let crate::net::ClientPlatform::Java(_) = player.client.as_ref() {
             player
@@ -3601,31 +3998,42 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
     }
 
     async fn get_scoreboard(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<Resource<pumpkin::plugin::scoreboard::Scoreboard>> {
-        let player = self.get(&player)?.clone();
-        self.add(crate::plugin::loader::wasm::wasm_host::state::ScoreboardProvider::Player(player))
+        accessor.with(|mut host| {
+            let st = host.get();
+            let player = st.get(&player)?.clone();
+            st.add(
+                crate::plugin::loader::wasm::wasm_host::state::ScoreboardProvider::Player(player),
+            )
+        })
     }
 
     async fn reset_scoreboard(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
-        player.reset_scoreboard();
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
+            player.reset_scoreboard();
+            Ok(())
+        })
     }
 
     async fn send_resource_pack(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         pack: pumpkin::plugin::player::JavaResourcePack,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
+        let player = accessor.get_res(&player)?.clone();
 
         let uuid = Uuid::from_wit(&pack.id);
-        let prompt_message = pack.prompt_message.map(|t| self.take(t)).transpose()?;
+        let prompt_message = pack
+            .prompt_message
+            .map(|t| accessor.take_res(t))
+            .transpose()?;
 
         if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             client
@@ -3644,11 +4052,11 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
     }
 
     async fn remove_resource_pack(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         id: pumpkin::plugin::uuid::Uuid,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
+        let player = accessor.get_res(&player)?.clone();
 
         let uuid = Uuid::from_wit(&id);
 
@@ -3663,10 +4071,10 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
     }
 
     async fn clear_resource_packs(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
+        let player = accessor.get_res(&player)?.clone();
 
         if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             client
@@ -3677,65 +4085,54 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
     }
 
     async fn send_game_event(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         event: pumpkin::plugin::player::ClientGameEvent,
         value: f32,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
 
-        let internal_event = from_wit_client_game_event(event);
-        player.send_game_event(internal_event, value);
-        Ok(())
+            let internal_event = from_wit_client_game_event(event);
+            player.send_game_event(internal_event, value);
+            Ok(())
+        })
     }
 
     async fn send_entity_status(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         entity_id: i32,
         status: pumpkin::plugin::entity_statuses::EntityStatus,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
 
-        // SAFETY: The WIT enum variants and discriminants are 1:1 generated from entity_statuses.json
-        let internal_status: pumpkin_data::entity_status::EntityStatus =
-            unsafe { std::mem::transmute(status as u8) };
-        let packet = pumpkin_protocol::java::client::play::CEntityStatus::new(
-            entity_id,
-            internal_status as u8 as i8,
-        );
-        player.try_send_client_packet(&packet);
-        Ok(())
+            // SAFETY: The WIT enum variants and discriminants are 1:1 generated from entity_statuses.json
+            let internal_status: pumpkin_data::entity_status::EntityStatus =
+                unsafe { std::mem::transmute(status as u8) };
+            let packet = pumpkin_protocol::java::client::play::CEntityStatus::new(
+                entity_id,
+                internal_status as u8 as i8,
+            );
+            player.try_send_client_packet(&packet);
+            Ok(())
+        })
     }
-
-    async fn drop(
-        &mut self,
-        rep: Resource<pumpkin::plugin::player::JavaPlayer>,
-    ) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-}
-
-impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
-    for HasSelf<PluginHostState>
-{
     #[allow(clippy::too_many_lines)]
     async fn show_dialog(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         dialog: Dialog,
     ) -> wasmtime::Result<()> {
-        let (player, protocol_dialog, plugin) = {
+        let (player, protocol_dialog) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
             let player = state.get(&player)?.clone();
             let protocol_dialog = super::events::dialog::protocol_dialog_from_wasm(state, &dialog);
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
-            (player, protocol_dialog, plugin)
-        };
+            Ok((player, protocol_dialog))
+        })?;
 
         let operation = async move {
             if let Some(server) = player.world().server.upgrade() {
@@ -3781,23 +4178,18 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             Ok(())
         };
 
-        plugin.store.pump_reentry(&mut host, operation).await?
+        operation.await
     }
 
     async fn clear_dialog(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
+        let player = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
             let player = state.get(&player)?.clone();
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
-            (player, plugin)
-        };
+            Ok(player)
+        })?;
 
         let operation = async move {
             if let Some(server) = player.world().server.upgrade() {
@@ -3834,25 +4226,20 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             Ok(())
         };
 
-        plugin.store.pump_reentry(&mut host, operation).await?
+        operation.await
     }
 
     async fn kick(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         options: pumpkin::plugin::player::JavaKickOptions,
     ) -> wasmtime::Result<()> {
-        let (player, reason, plugin) = {
+        let (player, reason) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
             let player = state.get(&player)?.clone();
             let reason = state.take(options.reason)?;
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
-            (player, reason, plugin)
-        };
+            Ok((player, reason))
+        })?;
 
         if options.log_to_console {
             tracing::info!(
@@ -3887,128 +4274,151 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             Ok(())
         };
 
-        plugin.store.pump_reentry(&mut host, operation).await?
+        operation.await
     }
 }
 
 impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
-    async fn get_version(
+    async fn drop(
         &mut self,
+        rep: Resource<pumpkin::plugin::player::BedrockPlayer>,
+    ) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+}
+
+impl pumpkin::plugin::player::HostBedrockPlayerWithStore<PluginHostState>
+    for HasSelf<PluginHostState>
+{
+    async fn get_version(
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
     ) -> wasmtime::Result<pumpkin::plugin::player::BedrockMinecraftVersion> {
-        let player = self.get(&player)?;
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?;
 
-        if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
-            Ok(to_wasm_bedrock_version(client.version.load()))
-        } else {
-            Ok(pumpkin::plugin::player::BedrockMinecraftVersion::Unknown)
-        }
+            if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
+                Ok(to_wasm_bedrock_version(client.version.load()))
+            } else {
+                Ok(pumpkin::plugin::player::BedrockMinecraftVersion::Unknown)
+            }
+        })
     }
 
     async fn get_ability(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
         ability: pumpkin::plugin::player::BedrockAbility,
     ) -> wasmtime::Result<bool> {
-        let player = self.get(&player)?.clone();
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
 
-        let ability = from_wasm_bedrock_ability(ability);
-        let abilities = player
-            .abilities
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        match ability {
-            pumpkin_protocol::bedrock::client::update_abilities::Ability::Build
-            | pumpkin_protocol::bedrock::client::update_abilities::Ability::Mine => {
-                Ok(abilities.allow_modify_world)
-            }
-            pumpkin_protocol::bedrock::client::update_abilities::Ability::Invulnerable => {
-                Ok(abilities.invulnerable)
-            }
-            pumpkin_protocol::bedrock::client::update_abilities::Ability::Flying => {
-                Ok(abilities.flying)
-            }
-            pumpkin_protocol::bedrock::client::update_abilities::Ability::MayFly => {
-                Ok(abilities.allow_flying)
-            }
-            pumpkin_protocol::bedrock::client::update_abilities::Ability::Instabuild => {
-                Ok(abilities.creative)
-            }
-            _ => Ok(false), // Most Bedrock-specific abilities aren't tracked in generic Abilities struct yet
-        }
-    }
-
-    async fn set_ability(
-        &mut self,
-        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
-        ability: pumpkin::plugin::player::BedrockAbility,
-        value: bool,
-    ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
-
-        let ability = from_wasm_bedrock_ability(ability);
-        {
-            let mut abilities = player
+            let ability = from_wasm_bedrock_ability(ability);
+            let abilities = player
                 .abilities
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+
             match ability {
                 pumpkin_protocol::bedrock::client::update_abilities::Ability::Build
                 | pumpkin_protocol::bedrock::client::update_abilities::Ability::Mine => {
-                    abilities.allow_modify_world = value;
+                    Ok(abilities.allow_modify_world)
                 }
                 pumpkin_protocol::bedrock::client::update_abilities::Ability::Invulnerable => {
-                    abilities.invulnerable = value;
+                    Ok(abilities.invulnerable)
                 }
                 pumpkin_protocol::bedrock::client::update_abilities::Ability::Flying => {
-                    abilities.flying = value;
+                    Ok(abilities.flying)
                 }
                 pumpkin_protocol::bedrock::client::update_abilities::Ability::MayFly => {
-                    abilities.allow_flying = value;
+                    Ok(abilities.allow_flying)
                 }
                 pumpkin_protocol::bedrock::client::update_abilities::Ability::Instabuild => {
-                    abilities.creative = value;
+                    Ok(abilities.creative)
                 }
-                _ => {} // Not supported yet
+                _ => Ok(false), // Most Bedrock-specific abilities aren't tracked in generic Abilities struct yet
             }
-        };
-        player.send_abilities_update();
-        Ok(())
+        })
+    }
+
+    async fn set_ability(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        ability: pumpkin::plugin::player::BedrockAbility,
+        value: bool,
+    ) -> wasmtime::Result<()> {
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
+
+            let ability = from_wasm_bedrock_ability(ability);
+            {
+                let mut abilities = player
+                    .abilities
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                match ability {
+                    pumpkin_protocol::bedrock::client::update_abilities::Ability::Build
+                    | pumpkin_protocol::bedrock::client::update_abilities::Ability::Mine => {
+                        abilities.allow_modify_world = value;
+                    }
+                    pumpkin_protocol::bedrock::client::update_abilities::Ability::Invulnerable => {
+                        abilities.invulnerable = value;
+                    }
+                    pumpkin_protocol::bedrock::client::update_abilities::Ability::Flying => {
+                        abilities.flying = value;
+                    }
+                    pumpkin_protocol::bedrock::client::update_abilities::Ability::MayFly => {
+                        abilities.allow_flying = value;
+                    }
+                    pumpkin_protocol::bedrock::client::update_abilities::Ability::Instabuild => {
+                        abilities.creative = value;
+                    }
+                    _ => {} // Not supported yet
+                }
+            };
+            player.send_abilities_update();
+            Ok(())
+        })
     }
 
     async fn get_status_flag(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
         flag: pumpkin::plugin::player::BedrockStatusFlag,
     ) -> wasmtime::Result<bool> {
-        let player = self.get(&player)?.clone();
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
 
-        let flag_index = from_wasm_bedrock_status_flag(flag);
-        if flag_index < 64 {
-            let flags = player
-                .living_entity
-                .entity
-                .bedrock_flags
-                .load(Ordering::Relaxed);
-            Ok((flags & (1 << flag_index)) != 0)
-        } else {
-            let flags = player
-                .living_entity
-                .entity
-                .bedrock_flags_two
-                .load(Ordering::Relaxed);
-            Ok((flags & (1 << (flag_index - 64))) != 0)
-        }
+            let flag_index = from_wasm_bedrock_status_flag(flag);
+            if flag_index < 64 {
+                let flags = player
+                    .living_entity
+                    .entity
+                    .bedrock_flags
+                    .load(Ordering::Relaxed);
+                Ok((flags & (1 << flag_index)) != 0)
+            } else {
+                let flags = player
+                    .living_entity
+                    .entity
+                    .bedrock_flags_two
+                    .load(Ordering::Relaxed);
+                Ok((flags & (1 << (flag_index - 64))) != 0)
+            }
+        })
     }
 
     async fn set_status_flag(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
         flag: pumpkin::plugin::player::BedrockStatusFlag,
         value: bool,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
+        let player = accessor.get_res(&player)?.clone();
 
         let flag_index = from_wasm_bedrock_status_flag(flag);
         if flag_index < 64 {
@@ -4085,53 +4495,56 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
     }
 
     async fn get_settings(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
     ) -> wasmtime::Result<pumpkin::plugin::player::BedrockPlayerSettings> {
-        let player = self.get(&player)?.clone();
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
 
-        if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
-            let data = client.client_data.load();
-            (**data).as_ref().map_or_else(
-                || Err(wasmtime::Error::msg("client data not available")),
-                |data| {
-                    Ok(pumpkin::plugin::player::BedrockPlayerSettings {
-                        game_version: data.game_version.clone(),
-                        device_os: to_wasm_bedrock_device_os(data.device_os),
-                        device_id: data.device_id.clone(),
-                        device_model: data.device_model.clone(),
-                        language_code: data.language_code.clone(),
-                        current_input_mode: to_wasm_bedrock_input_mode(data.current_input_mode),
-                        default_input_mode: to_wasm_bedrock_input_mode(data.default_input_mode),
-                        ui_profile: to_wasm_bedrock_ui_profile(data.ui_profile),
-                        gui_scale: data.gui_scale,
-                        is_editor_mode: data.client_is_editor_capable,
-                        max_view_distance: data.max_view_distance,
-                        memory_tier: data.memory_tier,
-                        graphics_mode: to_wasm_bedrock_graphics_mode(data.graphics_mode),
-                        playfab_id: data.play_fab_id.clone(),
-                        client_random_id: data.client_random_id,
-                        platform_offline_id: data.platform_offline_id.clone(),
-                        platform_online_id: data.platform_online_id.clone(),
-                        skin_id: data.skin_id.clone(),
-                        arm_size: data.arm_size.clone(),
-                        is_persona_skin: data.persona_skin,
-                        is_premium_skin: data.premium_skin,
-                        is_trusted_skin: data.trusted_skin,
-                    })
-                },
-            )
-        } else {
-            Err(wasmtime::Error::msg("not a bedrock player"))
-        }
+            if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
+                let data = client.client_data.load();
+                (**data).as_ref().map_or_else(
+                    || Err(wasmtime::Error::msg("client data not available")),
+                    |data| {
+                        Ok(pumpkin::plugin::player::BedrockPlayerSettings {
+                            game_version: data.game_version.clone(),
+                            device_os: to_wasm_bedrock_device_os(data.device_os),
+                            device_id: data.device_id.clone(),
+                            device_model: data.device_model.clone(),
+                            language_code: data.language_code.clone(),
+                            current_input_mode: to_wasm_bedrock_input_mode(data.current_input_mode),
+                            default_input_mode: to_wasm_bedrock_input_mode(data.default_input_mode),
+                            ui_profile: to_wasm_bedrock_ui_profile(data.ui_profile),
+                            gui_scale: data.gui_scale,
+                            is_editor_mode: data.client_is_editor_capable,
+                            max_view_distance: data.max_view_distance,
+                            memory_tier: data.memory_tier,
+                            graphics_mode: to_wasm_bedrock_graphics_mode(data.graphics_mode),
+                            playfab_id: data.play_fab_id.clone(),
+                            client_random_id: data.client_random_id,
+                            platform_offline_id: data.platform_offline_id.clone(),
+                            platform_online_id: data.platform_online_id.clone(),
+                            skin_id: data.skin_id.clone(),
+                            arm_size: data.arm_size.clone(),
+                            is_persona_skin: data.persona_skin,
+                            is_premium_skin: data.premium_skin,
+                            is_trusted_skin: data.trusted_skin,
+                        })
+                    },
+                )
+            } else {
+                Err(wasmtime::Error::msg("not a bedrock player"))
+            }
+        })
     }
 
     async fn send_packet(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
         packet: pumpkin::plugin::bedrock_packets::ClientboundPacket,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
+        let player = accessor.get_res(&player)?.clone();
 
         if let Some(bytes) = crate::plugin::loader::wasm::wasm_host::wit::v0_2::generated_packets::serialize_bedrock_packet(
             &packet,
@@ -4142,11 +4555,11 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
     }
 
     async fn open_form(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
         form: Form,
     ) -> wasmtime::Result<u32> {
-        let player = self.get(&player)?.clone();
+        let player = accessor.get_res(&player)?.clone();
 
         if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
             let form_id = client.next_form_id.fetch_add(1, Ordering::Relaxed);
@@ -4154,11 +4567,15 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
             let locale_str = player.config.load().locale.clone();
             let locale = Locale::from_str(&locale_str).unwrap_or(Locale::EnUs);
 
-            let form_json = match form {
-                Form::Simple(simple) => self.serialize_simple_form_v0_2(simple, locale),
-                Form::Modal(modal) => self.serialize_modal_form_v0_2(modal, locale),
-                Form::Custom(custom) => self.serialize_custom_form_v0_2(custom, locale),
-            };
+            let form_json =
+                match form {
+                    Form::Simple(simple) => accessor
+                        .with(|mut host| host.get().serialize_simple_form_v0_2(simple, locale)),
+                    Form::Modal(modal) => accessor
+                        .with(|mut host| host.get().serialize_modal_form_v0_2(modal, locale)),
+                    Form::Custom(custom) => accessor
+                        .with(|mut host| host.get().serialize_custom_form_v0_2(custom, locale)),
+                };
 
             client
                 .send_packet(&CModalFormRequest {
@@ -4174,28 +4591,34 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
     }
 
     async fn get_scoreboard(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
     ) -> wasmtime::Result<Resource<pumpkin::plugin::scoreboard::BedrockScoreboard>> {
-        let player = self.get(&player)?.clone();
-        self.add(player)
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
+            state.add(player)
+        })
     }
 
     async fn reset_scoreboard(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
-        player.reset_scoreboard();
-        Ok(())
+        accessor.with(|mut host| {
+            let state = host.get();
+            let player = state.get(&player)?.clone();
+            player.reset_scoreboard();
+            Ok(())
+        })
     }
 
     async fn send_resource_packs_info(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
         info: pumpkin::plugin::player::BedrockResourcePacksInfo,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?.clone();
+        let player = accessor.get_res(&player)?.clone();
 
         if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
             let entries = info
@@ -4237,33 +4660,16 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         }
         Ok(())
     }
-
-    async fn drop(
-        &mut self,
-        rep: Resource<pumpkin::plugin::player::BedrockPlayer>,
-    ) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-}
-
-impl pumpkin::plugin::player::HostBedrockPlayerWithStore<PluginHostState>
-    for HasSelf<PluginHostState>
-{
     async fn kick(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
         options: pumpkin::plugin::player::BedrockKickOptions,
     ) -> wasmtime::Result<()> {
-        let (player, plugin) = {
+        let player = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
             let player = state.get(&player)?.clone();
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
-            (player, plugin)
-        };
+            Ok(player)
+        })?;
 
         let disconnect_reason = from_wasm_bedrock_disconnect_reason(options.reason);
         if options.log_to_console {
@@ -4308,6 +4714,6 @@ impl pumpkin::plugin::player::HostBedrockPlayerWithStore<PluginHostState>
             Ok(())
         };
 
-        plugin.store.pump_reentry(&mut host, operation).await?
+        operation.await
     }
 }
