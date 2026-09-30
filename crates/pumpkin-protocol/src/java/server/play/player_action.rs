@@ -18,10 +18,10 @@ pub struct SPlayerAction {
 }
 
 impl<'a> ServerPacket<'a> for SPlayerAction {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let status = bytebuf.get_var_int()?;
         let status = status_from_wire(status);
-        let position = bytebuf.get_block_pos(version)?;
+        let position = bytebuf.get_block_pos()?;
         let face = bytebuf.get_u8()?;
         let sequence = bytebuf.get_var_int()?;
 
@@ -38,12 +38,12 @@ impl crate::ClientPacket for SPlayerAction {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         let status = status_to_wire(self.status);
         write.write_var_int(&status)?;
-        write.write_block_pos(&self.position, version)?;
+        write.write_block_pos(&self.position)?;
         write.write_u8(self.face)?;
         write.write_var_int(&self.sequence)?;
         Ok(())

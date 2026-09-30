@@ -13,7 +13,6 @@ use pumpkin_data::data_component_impl::PotionDurationScaleImpl;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
@@ -502,36 +501,36 @@ impl EntityBase for ArrowEntity {
                 pumpkin_data::tracked_data::entity::DATA_SHARED_FLAGS_ID,
                 shared_flags,
             )
-            .write(&mut buf, &CURRENT_MC_VERSION);
+            .write(&mut buf);
         }
         if entity.entity_type.id == EntityType::SPECTRAL_ARROW.id {
             let _ = Metadata::new(pumpkin_data::tracked_data::spectral_arrow::ID_FLAGS, flags)
-                .write(&mut buf, &CURRENT_MC_VERSION);
+                .write(&mut buf);
             let _ = Metadata::new(
                 pumpkin_data::tracked_data::spectral_arrow::PIERCE_LEVEL,
                 pierce,
             )
-            .write(&mut buf, &CURRENT_MC_VERSION);
+            .write(&mut buf);
             let _ = Metadata::new(
                 pumpkin_data::tracked_data::spectral_arrow::IN_GROUND,
                 in_ground,
             )
-            .write(&mut buf, &CURRENT_MC_VERSION);
+            .write(&mut buf);
         } else {
             let item_stack = self
                 .item_stack
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let color = Self::get_effect_color(&item_stack);
-            let _ = Metadata::new(pumpkin_data::tracked_data::arrow::ID_FLAGS, flags)
-                .write(&mut buf, &CURRENT_MC_VERSION);
+            let _ =
+                Metadata::new(pumpkin_data::tracked_data::arrow::ID_FLAGS, flags).write(&mut buf);
             let _ = Metadata::new(pumpkin_data::tracked_data::arrow::PIERCE_LEVEL, pierce)
-                .write(&mut buf, &CURRENT_MC_VERSION);
+                .write(&mut buf);
             let _ = Metadata::new(pumpkin_data::tracked_data::arrow::IN_GROUND, in_ground)
-                .write(&mut buf, &CURRENT_MC_VERSION);
+                .write(&mut buf);
             if color != -1 {
                 let _ = Metadata::new(pumpkin_data::tracked_data::arrow::ID_EFFECT_COLOR, color)
-                    .write(&mut buf, &CURRENT_MC_VERSION);
+                    .write(&mut buf);
             }
         }
         (!buf.is_empty()).then(|| {

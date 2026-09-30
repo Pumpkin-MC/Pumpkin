@@ -71,10 +71,6 @@ pub fn build() -> TokenStream {
 
             #aliases
 
-            #[must_use]
-            pub const fn id(&self, _version: pumpkin_util::version::JavaMinecraftVersion) -> i32 {
-                self.id
-            }
         }
     }
 }

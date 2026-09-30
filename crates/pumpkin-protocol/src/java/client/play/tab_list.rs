@@ -26,10 +26,10 @@ impl ClientPacket for CTabList<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_component(self.header, version)?;
-        write.write_component(self.footer, version)?;
+        write.write_component(self.header)?;
+        write.write_component(self.footer)?;
         Ok(())
     }
 }

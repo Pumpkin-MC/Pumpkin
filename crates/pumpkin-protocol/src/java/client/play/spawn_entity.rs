@@ -98,10 +98,7 @@ impl CSpawnEntity {
         (self.head_yaw as i8 as f32) / ROTATION_FACTOR
     }
 
-    pub fn read_packet_data(
-        mut read: impl Read,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, ReadingError> {
+    pub fn read_packet_data(mut read: impl Read) -> Result<Self, ReadingError> {
         let entity_id = read.get_var_int()?;
 
         let entity_uuid = read.get_uuid()?;

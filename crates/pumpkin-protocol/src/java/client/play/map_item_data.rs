@@ -65,18 +65,14 @@ impl MapIcon {
         }
     }
 
-    pub fn write_with_version(
-        &self,
-        mut write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    pub fn write(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_var_int(&self.icon_type)?;
         write.write_i8(self.x)?;
         write.write_i8(self.z)?;
         write.write_i8(self.direction)?;
         if let Some(display_name) = &self.display_name {
             write.write_bool(true)?;
-            write.write_component(display_name, version)?;
+            write.write_component(display_name)?;
         } else {
             write.write_bool(false)?;
         }
@@ -110,7 +106,7 @@ impl ClientPacket for CMapItemData<'_> {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_var_int(&self.map_id)?;
         write.write_i8(self.scale)?;
@@ -121,7 +117,7 @@ impl ClientPacket for CMapItemData<'_> {
             write.write_bool(true)?;
             write.write_var_int(&VarInt(icons.len() as i32))?;
             for icon in icons {
-                icon.write_with_version(&mut write, version)?;
+                icon.write(&mut write)?;
             }
         } else {
             write.write_bool(false)?;

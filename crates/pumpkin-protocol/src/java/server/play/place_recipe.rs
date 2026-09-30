@@ -16,9 +16,9 @@ pub struct SPlaceRecipe {
 }
 
 impl<'a> ServerPacket<'a> for SPlaceRecipe {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         {
-            let container_id = bytebuf.get_container_id(version)?.0 as i8;
+            let container_id = bytebuf.get_container_id()?.0 as i8;
             let recipe_display_id = bytebuf.get_var_int()?;
             let use_max_items = bytebuf.get_bool()?;
             Ok(Self {

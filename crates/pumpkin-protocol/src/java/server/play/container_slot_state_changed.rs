@@ -16,9 +16,9 @@ pub struct SContainerSlotStateChanged {
 }
 
 impl<'a> ServerPacket<'a> for SContainerSlotStateChanged {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let slot_id = bytebuf.get_var_int()?;
-        let container_id = bytebuf.get_container_id(version)?;
+        let container_id = bytebuf.get_container_id()?;
         let new_state = bytebuf.get_bool()?;
 
         Ok(Self {
@@ -33,11 +33,11 @@ impl crate::ClientPacket for SContainerSlotStateChanged {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_var_int(&self.slot_id)?;
-        write.write_container_id(&self.container_id, version)?;
+        write.write_container_id(&self.container_id)?;
         write.write_bool(self.new_state)?;
         Ok(())
     }

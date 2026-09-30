@@ -36,11 +36,11 @@ impl ClientPacket for CCommands<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_list(&self.nodes, |bytebuf, node: &ProtoNode| {
-            node.write_to(bytebuf, version)
+            node.write_to(bytebuf)
         })?;
         write.write_var_int(&self.root_node_index)
     }
@@ -79,11 +79,7 @@ impl ProtoNode<'_> {
     /// Added in 1.21.6 (bit 0x20). Indicates that the command node is restricted.
     const FLAG_IS_RESTRICTED: u8 = 32;
 
-    pub fn write_to(
-        &self,
-        write: &mut impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    pub fn write_to(&self, write: &mut impl Write) -> Result<(), WritingError> {
         // flags
         let mut redirect_target_on_flag = 0i32;
 
@@ -155,7 +151,7 @@ impl ProtoNode<'_> {
 
         // parser id + properties
         if let ProtoNodeType::Argument { parser, .. } = &self.node_type {
-            parser.write_to_buffer(write, version)?;
+            parser.write_to_buffer(write)?;
         }
 
         if flags & Self::FLAG_HAS_SUGGESTION_TYPE != 0 {
@@ -249,20 +245,16 @@ impl ArgumentType {
     pub const SCORE_HOLDER_FLAG_ALLOW_MULTIPLE: u8 = 1;
 
     #[must_use]
-    pub const fn to_id(&self, _version: &JavaMinecraftVersion) -> i32 {
+    pub const fn to_id(&self) -> i32 {
         // SAFETY: Since Self is repr(u32), it is guaranteed to hold the discriminant in the first 4 bytes
         // See https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
         unsafe { *std::ptr::from_ref::<Self>(self).cast::<u32>() as i32 }
     }
 
     #[expect(clippy::match_same_arms)]
-    pub fn write_to_buffer(
-        &self,
-        write: &mut impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    pub fn write_to_buffer(&self, write: &mut impl Write) -> Result<(), WritingError> {
         {
-            let id = self.to_id(version);
+            let id = self.to_id();
             write.write_var_int(&(id).into())?;
             if id == 5 {
                 let behavior_val = match self {

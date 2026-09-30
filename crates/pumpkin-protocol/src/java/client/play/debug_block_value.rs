@@ -24,9 +24,9 @@ impl ClientPacket for CDebugBlockValue<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        write.write_block_pos(&self.pos, version)?;
+        write.write_block_pos(&self.pos)?;
         write.write_string(self.name)?;
         write.write_string(self.value)?;
         Ok(())
@@ -34,9 +34,9 @@ impl ClientPacket for CDebugBlockValue<'_> {
 }
 
 impl<'a> ServerPacket<'a> for CDebugBlockValue<'a> {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
-            pos: bytebuf.get_block_pos(version)?,
+            pos: bytebuf.get_block_pos()?,
             name: bytebuf.get_str_borrowed()?,
             value: bytebuf.get_str_borrowed()?,
         })

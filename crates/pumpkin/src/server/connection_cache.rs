@@ -3,7 +3,7 @@ use crate::net::java::versions::JavaVersions;
 use base64::{Engine as _, engine::general_purpose};
 use core::error;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::packet::{CURRENT_MC_VERSION, LOWEST_SUPPORTED_MC_VERSION};
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::{
     Players, Sample, StatusResponse, Version,
     java::client::{config::CPluginMessage, status::CStatusResponse},
@@ -214,11 +214,7 @@ impl CachedStatus {
 
         StatusResponse {
             version: Some(Version {
-                name: if LOWEST_SUPPORTED_MC_VERSION == CURRENT_MC_VERSION {
-                    CURRENT_MC_VERSION.to_string()
-                } else {
-                    format!("{LOWEST_SUPPORTED_MC_VERSION}-{CURRENT_MC_VERSION}")
-                },
+                name: CURRENT_MC_VERSION.to_string(),
                 protocol: CURRENT_MC_VERSION.protocol_version() as u32,
             }),
             players: Some(Players {

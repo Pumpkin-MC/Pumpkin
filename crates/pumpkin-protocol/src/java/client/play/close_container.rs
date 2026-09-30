@@ -29,16 +29,16 @@ impl ClientPacket for CCloseContainer {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        write.write_container_id(&self.sync_id, version)?;
+        write.write_container_id(&self.sync_id)?;
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CCloseContainer {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let sync_id = bytebuf.get_container_id(version)?;
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let sync_id = bytebuf.get_container_id()?;
         Ok(Self { sync_id })
     }
 }

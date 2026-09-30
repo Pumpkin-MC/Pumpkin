@@ -193,9 +193,7 @@ impl PendingConnection {
     /// `false` when a handler cancelled the packet.
     pub async fn send_packet_now<P: ClientPacket>(&mut self, packet: &P) -> bool {
         let mut packet_buf = Vec::new();
-        if let Err(err) =
-            JavaClient::write_packet_for_version(packet, CURRENT_MC_VERSION, &mut packet_buf)
-        {
+        if let Err(err) = JavaClient::encode_packet(packet, &mut packet_buf) {
             error!("Failed to write packet: {err:?}");
             return false;
         }

@@ -39,7 +39,7 @@ impl ClientPacket for CAddResourcePack<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_uuid(self.uuid)?;
         write.write_string(self.url)?;
@@ -47,7 +47,7 @@ impl ClientPacket for CAddResourcePack<'_> {
         write.write_bool(self.forced)?;
         if let Some(prompt) = &self.prompt_message {
             write.write_bool(true)?;
-            write.write_component(prompt, version)?;
+            write.write_component(prompt)?;
         } else {
             write.write_bool(false)?;
         }

@@ -322,7 +322,7 @@ mod tests {
         buf
     }
 
-    fn assert_armor_attribute_payload(bytes: &[u8], _version: JavaMinecraftVersion) {
+    fn assert_armor_attribute_payload(bytes: &[u8]) {
         let mut cursor = bytes;
         let entity_id = cursor.get_var_int().unwrap();
         assert_eq!(entity_id, VarInt(1));
@@ -353,7 +353,7 @@ mod tests {
     fn update_attributes_packet_id_for_26_3() {
         assert_eq!(
             CUpdateAttributes::to_id(pumpkin_data::packet::CURRENT_MC_VERSION),
-            UPDATE_ATTRIBUTES.to_id(pumpkin_data::packet::CURRENT_MC_VERSION)
+            UPDATE_ATTRIBUTES.to_id()
         );
         assert_eq!(
             CUpdateAttributes::to_id(pumpkin_data::packet::CURRENT_MC_VERSION),
@@ -364,6 +364,6 @@ mod tests {
     #[test]
     fn armor_attribute_encodes() {
         let version = pumpkin_data::packet::CURRENT_MC_VERSION;
-        assert_armor_attribute_payload(&encoded_armor_attributes(version), version);
+        assert_armor_attribute_payload(&encoded_armor_attributes(version));
     }
 }

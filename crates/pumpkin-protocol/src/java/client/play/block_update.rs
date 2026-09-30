@@ -33,10 +33,10 @@ impl ClientPacket for CBlockUpdate {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
-        write.write_block_pos(&self.location, version)?;
+        write.write_block_pos(&self.location)?;
         write.write_var_int(&self.state_id)?;
 
         Ok(())

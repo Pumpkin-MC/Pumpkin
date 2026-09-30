@@ -34,9 +34,9 @@ impl ClientPacket for COpenSignEditor {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_block_pos(&self.location, version)?;
+        write.write_block_pos(&self.location)?;
 
         write.write_bool(self.is_front_text)?;
         Ok(())
@@ -46,10 +46,10 @@ impl ClientPacket for COpenSignEditor {
 impl<'a> crate::ServerPacket<'a> for COpenSignEditor {
     fn read(
         bytebuf: &mut &'a [u8],
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<Self, crate::ser::ReadingError> {
         use crate::ser::NetworkReadExt;
-        let location = bytebuf.get_block_pos(version)?;
+        let location = bytebuf.get_block_pos()?;
 
         let is_front_text = bytebuf.get_bool()?;
 

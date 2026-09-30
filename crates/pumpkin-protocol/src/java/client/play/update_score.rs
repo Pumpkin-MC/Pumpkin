@@ -63,12 +63,12 @@ impl ClientPacket for CUpdateScore {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &pumpkin_util::version::JavaMinecraftVersion,
+        _version: &pumpkin_util::version::JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_string(&self.entity_name)?;
         write.write_string(&self.objective_name)?;
         write.write_var_int(&self.value)?;
-        write.write_option(&self.display_name, |w, t| w.write_component(t, version))?;
+        write.write_option(&self.display_name, |w, t| w.write_component(t))?;
         write.write_option(&self.number_format, |w, n| n.write(w))
     }
 }

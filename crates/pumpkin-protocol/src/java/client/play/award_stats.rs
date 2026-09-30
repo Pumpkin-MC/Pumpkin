@@ -18,15 +18,7 @@ pub struct Statistic {
 }
 
 impl Statistic {
-    pub fn write(&self, write: impl std::io::Write) -> Result<(), crate::ser::WritingError> {
-        self.write_with_version(write, &pumpkin_data::packet::CURRENT_MC_VERSION)
-    }
-
-    pub fn write_with_version(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), crate::ser::WritingError> {
+    pub fn write(&self, mut write: impl std::io::Write) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.category_id)?;
         write.write_var_int(&self.statistic_id)?;
         write.write_var_int(&self.value)?;
@@ -38,11 +30,11 @@ impl ClientPacket for CAwardStats<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&VarInt(self.stats.len() as i32))?;
         for stat in self.stats {
-            stat.write_with_version(&mut write, version)?;
+            stat.write(&mut write)?;
         }
         Ok(())
     }

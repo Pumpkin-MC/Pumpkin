@@ -36,12 +36,11 @@ impl crate::ClientPacket for SSetCreativeSlot {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_i16_be(self.slot)?;
-        self.clicked_item
-            .write_length_prefixed_with_version(&mut write, version)?;
+        self.clicked_item.write_length_prefixed(&mut write)?;
         Ok(())
     }
 }

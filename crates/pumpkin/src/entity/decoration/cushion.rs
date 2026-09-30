@@ -6,7 +6,6 @@ use std::sync::{
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -127,7 +126,7 @@ impl EntityBase for CushionEntity {
             pumpkin_data::tracked_data::cushion::COLOR,
             VarInt(i32::from(self.color())),
         )
-        .write(&mut metadata, &CURRENT_MC_VERSION)
+        .write(&mut metadata)
         .ok()?;
         metadata.push(255);
         Some(metadata.into_boxed_slice())

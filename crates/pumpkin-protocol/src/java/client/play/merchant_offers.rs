@@ -40,17 +40,10 @@ impl MerchantOffer {
         self.uses = 0;
     }
 
-    pub fn write(
-        &self,
-        mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), crate::ser::WritingError> {
-        self.base_cost_a
-            .write_item_cost_with_version(&mut write, version)?;
-        self.output.write_with_version(&mut write, version)?;
-        write.write_option(&self.cost_b, |w, cost_b| {
-            cost_b.write_item_cost_with_version(w, version)
-        })?;
+    pub fn write(&self, mut write: impl std::io::Write) -> Result<(), crate::ser::WritingError> {
+        self.base_cost_a.write_item_cost(&mut write)?;
+        self.output.write(&mut write)?;
+        write.write_option(&self.cost_b, |w, cost_b| cost_b.write_item_cost(w))?;
         write.write_bool(self.reward_exp)?;
         write.write_i32_be(self.uses)?;
         write.write_i32_be(self.max_uses)?;
@@ -97,12 +90,12 @@ impl ClientPacket for CMerchantOffers {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.window_id)?;
         write.write_var_int(&VarInt(self.offers.len() as i32))?;
         for offer in &self.offers {
-            offer.write(&mut write, version)?;
+            offer.write(&mut write)?;
         }
         write.write_var_int(&self.villager_level)?;
         write.write_var_int(&self.experience)?;
@@ -115,7 +108,7 @@ impl ClientPacket for CMerchantOffers {
 impl<'a> crate::ServerPacket<'a> for CMerchantOffers {
     fn read(
         bytebuf: &mut &'a [u8],
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<Self, crate::ser::ReadingError> {
         use crate::ser::NetworkReadExt;
         let window_id = bytebuf.get_var_int()?;
@@ -135,7 +128,7 @@ impl<'a> crate::ServerPacket<'a> for CMerchantOffers {
                 let base_cost_a = ItemStackSerializer(std::borrow::Cow::Owned(
                     pumpkin_data::item_stack::ItemStack::new(count, item),
                 ));
-                let output = ItemStackSerializer::read_with_version(bytebuf, version)?;
+                let output = ItemStackSerializer::read(bytebuf)?;
                 let has_cost_b = bytebuf.get_bool()?;
                 let cost_b = if has_cost_b {
                     let item_id_b = bytebuf.get_var_int()?.0 as u16;

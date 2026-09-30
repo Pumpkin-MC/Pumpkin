@@ -38,14 +38,14 @@ impl ClientPacket for CUpdateObjectives {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_string(&self.objective_name)?;
         write.write_u8(self.mode)?;
         if self.mode == 0 || self.mode == 2 {
-            write.write_component(&self.display_name, version)?;
+            write.write_component(&self.display_name)?;
             write.write_var_int(&self.render_type)?;
             write.write_option(&self.number_format, |p, v| {
                 match v {
@@ -59,7 +59,7 @@ impl ClientPacket for CUpdateObjectives {
                     }
                     NumberFormat::Fixed(text_component) => {
                         p.write_var_int(&VarInt(2))?;
-                        p.write_component(text_component, version)
+                        p.write_component(text_component)
                     }
                 }
             })?;

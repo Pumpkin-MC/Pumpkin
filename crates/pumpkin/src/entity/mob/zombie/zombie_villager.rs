@@ -7,7 +7,6 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
@@ -275,13 +274,13 @@ impl Mob for ZombieVillagerEntity {
             tracked_data::zombie_villager::VILLAGER_DATA,
             self.get_villager_data(),
         )
-        .write(&mut metadata, &CURRENT_MC_VERSION)
+        .write(&mut metadata)
         .ok()?;
         Metadata::new(
             tracked_data::zombie_villager::DATA_CONVERTING_ID,
             self.is_converting(),
         )
-        .write(&mut metadata, &CURRENT_MC_VERSION)
+        .write(&mut metadata)
         .ok()?;
         metadata.push(255);
         Some(metadata.into_boxed_slice())

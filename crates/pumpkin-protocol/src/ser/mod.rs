@@ -179,16 +179,13 @@ pub trait NetworkReadExt {
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError>;
 
     #[inline]
-    fn get_block_pos(&mut self, _version: &JavaMinecraftVersion) -> Result<BlockPos, ReadingError> {
+    fn get_block_pos(&mut self) -> Result<BlockPos, ReadingError> {
         let val = self.get_i64_be()?;
         Ok(BlockPos::from_i64(val))
     }
 
     #[inline]
-    fn get_container_id(
-        &mut self,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<VarInt, ReadingError> {
+    fn get_container_id(&mut self) -> Result<VarInt, ReadingError> {
         self.get_var_int()
     }
 
@@ -224,10 +221,7 @@ pub trait NetworkReadExt {
         Ok(list)
     }
 
-    fn get_nbt_with_version(
-        &mut self,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Option<NbtTag>, ReadingError> {
+    fn get_nbt_owned(&mut self) -> Result<Option<NbtTag>, ReadingError> {
         {
             let tag_id = self.get_u8()?;
             if tag_id == pumpkin_nbt::END_ID {
@@ -250,11 +244,8 @@ pub trait NetworkReadExt {
     }
 
     #[inline]
-    fn get_compound_nbt_with_version(
-        &mut self,
-        version: &JavaMinecraftVersion,
-    ) -> Result<Option<NbtCompound>, ReadingError> {
-        match self.get_nbt_with_version(version)? {
+    fn get_compound_nbt_owned(&mut self) -> Result<Option<NbtCompound>, ReadingError> {
+        match self.get_nbt_owned()? {
             Some(NbtTag::Compound(comp)) => Ok(Some(comp)),
             Some(NbtTag::End) | None => Ok(None),
             Some(other) => Err(ReadingError::Message(format!(
@@ -266,38 +257,26 @@ pub trait NetworkReadExt {
 }
 
 pub trait NetworkReadSliceExt<'a> {
-    fn get_component_borrowed(
-        &mut self,
-        version: &JavaMinecraftVersion,
-    ) -> Result<TextComponent, ReadingError>;
+    fn get_component_borrowed(&mut self) -> Result<TextComponent, ReadingError>;
     #[inline]
-    fn get_component(
-        &mut self,
-        version: &JavaMinecraftVersion,
-    ) -> Result<TextComponent, ReadingError> {
-        self.get_component_borrowed(version)
+    fn get_component(&mut self) -> Result<TextComponent, ReadingError> {
+        self.get_component_borrowed()
     }
     fn get_str_borrowed(&mut self) -> Result<&'a str, ReadingError>;
     fn get_str_bounded_borrowed(&mut self, bound: usize) -> Result<&'a str, ReadingError>;
     fn read_slice_borrowed(&mut self, count: usize) -> Result<&'a [u8], ReadingError>;
     fn read_remaining_slice_borrowed(&mut self, bound: usize) -> Result<&'a [u8], ReadingError>;
 
-    fn get_nbt_borrowed(
-        &mut self,
-        version: &JavaMinecraftVersion,
-    ) -> Result<Option<NbtTag>, ReadingError>;
+    fn get_nbt_borrowed(&mut self) -> Result<Option<NbtTag>, ReadingError>;
 
     #[inline]
-    fn get_nbt(&mut self, version: &JavaMinecraftVersion) -> Result<Option<NbtTag>, ReadingError> {
-        self.get_nbt_borrowed(version)
+    fn get_nbt(&mut self) -> Result<Option<NbtTag>, ReadingError> {
+        self.get_nbt_borrowed()
     }
 
     #[inline]
-    fn get_compound_nbt_borrowed(
-        &mut self,
-        version: &JavaMinecraftVersion,
-    ) -> Result<Option<NbtCompound>, ReadingError> {
-        match self.get_nbt_borrowed(version)? {
+    fn get_compound_nbt_borrowed(&mut self) -> Result<Option<NbtCompound>, ReadingError> {
+        match self.get_nbt_borrowed()? {
             Some(NbtTag::Compound(comp)) => Ok(Some(comp)),
             Some(NbtTag::End) | None => Ok(None),
             Some(other) => Err(ReadingError::Message(format!(
@@ -308,11 +287,8 @@ pub trait NetworkReadSliceExt<'a> {
     }
 
     #[inline]
-    fn get_compound_nbt(
-        &mut self,
-        version: &JavaMinecraftVersion,
-    ) -> Result<Option<NbtCompound>, ReadingError> {
-        self.get_compound_nbt_borrowed(version)
+    fn get_compound_nbt(&mut self) -> Result<Option<NbtCompound>, ReadingError> {
+        self.get_compound_nbt_borrowed()
     }
 
     #[inline]
@@ -395,10 +371,7 @@ impl<'a> NetworkReadSliceExt<'a> for &'a [u8] {
     }
 
     #[inline]
-    fn get_component_borrowed(
-        &mut self,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<TextComponent, ReadingError> {
+    fn get_component_borrowed(&mut self) -> Result<TextComponent, ReadingError> {
         {
             let mut cursor = std::io::Cursor::new(*self);
             let mut nbt_reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
@@ -413,10 +386,7 @@ impl<'a> NetworkReadSliceExt<'a> for &'a [u8] {
         }
     }
 
-    fn get_nbt_borrowed(
-        &mut self,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Option<NbtTag>, ReadingError> {
+    fn get_nbt_borrowed(&mut self) -> Result<Option<NbtTag>, ReadingError> {
         {
             if self.is_empty() {
                 return Ok(None);
@@ -454,11 +424,8 @@ impl<'a> NetworkReadSliceExt<'a> for &'a [u8] {
 
 impl<'a, R: NetworkReadSliceExt<'a> + ?Sized> NetworkReadSliceExt<'a> for &mut R {
     #[inline]
-    fn get_component_borrowed(
-        &mut self,
-        version: &JavaMinecraftVersion,
-    ) -> Result<TextComponent, ReadingError> {
-        (**self).get_component_borrowed(version)
+    fn get_component_borrowed(&mut self) -> Result<TextComponent, ReadingError> {
+        (**self).get_component_borrowed()
     }
     #[inline]
     fn get_str_borrowed(&mut self) -> Result<&'a str, ReadingError> {
@@ -477,11 +444,8 @@ impl<'a, R: NetworkReadSliceExt<'a> + ?Sized> NetworkReadSliceExt<'a> for &mut R
         (**self).read_remaining_slice_borrowed(bound)
     }
     #[inline]
-    fn get_nbt_borrowed(
-        &mut self,
-        version: &JavaMinecraftVersion,
-    ) -> Result<Option<NbtTag>, ReadingError> {
-        (**self).get_nbt_borrowed(version)
+    fn get_nbt_borrowed(&mut self) -> Result<Option<NbtTag>, ReadingError> {
+        (**self).get_nbt_borrowed()
     }
 }
 
@@ -703,11 +667,7 @@ pub fn nbt_tag_to_json_ext(tag: &NbtTag, parse_byte_as_bool: bool) -> serde_json
     }
 }
 
-pub fn write_nbt_payload(
-    mut write: impl Write,
-    nbt_data: &[u8],
-    _version: &JavaMinecraftVersion,
-) -> Result<(), WritingError> {
+pub fn write_nbt_payload(mut write: impl Write, nbt_data: &[u8]) -> Result<(), WritingError> {
     if nbt_data.is_empty() || nbt_data == [0] {
         write.write_u8(0)?;
     } else {
@@ -716,10 +676,7 @@ pub fn write_nbt_payload(
     Ok(())
 }
 
-pub fn read_nbt_payload(
-    bytebuf: &mut &[u8],
-    _version: &JavaMinecraftVersion,
-) -> Result<Box<[u8]>, ReadingError> {
+pub fn read_nbt_payload(bytebuf: &mut &[u8]) -> Result<Box<[u8]>, ReadingError> {
     if bytebuf.is_empty() || bytebuf[0] == 0 {
         if !bytebuf.is_empty() {
             let _ = bytebuf.get_u8()?;
@@ -752,11 +709,7 @@ pub fn read_remaining_bytes(
 }
 
 pub trait NetworkWriteExt {
-    fn write_component(
-        &mut self,
-        component: &TextComponent,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_component(&mut self, component: &TextComponent) -> Result<(), WritingError> {
         self.write_slice(&component.encode())
     }
 
@@ -821,18 +774,10 @@ pub trait NetworkWriteExt {
     fn write_var_long(&mut self, data: &VarLong) -> Result<(), WritingError>;
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError>;
     fn write_string(&mut self, data: &str) -> Result<(), WritingError>;
-    fn write_block_pos(
-        &mut self,
-        pos: &BlockPos,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError>;
+    fn write_block_pos(&mut self, pos: &BlockPos) -> Result<(), WritingError>;
 
     #[inline]
-    fn write_container_id(
-        &mut self,
-        container_id: &VarInt,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_container_id(&mut self, container_id: &VarInt) -> Result<(), WritingError> {
         self.write_var_int(container_id)
     }
 
@@ -868,25 +813,11 @@ pub trait NetworkWriteExt {
 
         Ok(())
     }
-    fn write_nbt_with_version(
-        &mut self,
-        data: Option<&NbtTag>,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError>;
+    fn write_nbt(&mut self, data: &NbtTag) -> Result<(), WritingError>;
 
     #[inline]
-    fn write_compound_nbt_with_version(
-        &mut self,
-        data: Option<&NbtCompound>,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        let tag = data.cloned().map(NbtTag::Compound);
-        self.write_nbt_with_version(tag.as_ref(), version)
-    }
-
-    #[inline]
-    fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError> {
-        self.write_nbt_with_version(Some(&data), &pumpkin_data::packet::CURRENT_MC_VERSION)
+    fn write_compound_nbt(&mut self, data: &NbtCompound) -> Result<(), WritingError> {
+        self.write_nbt(&NbtTag::Compound(data.clone()))
     }
 }
 
@@ -979,11 +910,7 @@ impl<W: Write> NetworkWriteExt for W {
         self.write_string_bounded(data, i16::MAX as usize)
     }
 
-    fn write_block_pos(
-        &mut self,
-        pos: &BlockPos,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_block_pos(&mut self, pos: &BlockPos) -> Result<(), WritingError> {
         self.write_i64_be(pos.as_long())
     }
 
@@ -1014,22 +941,14 @@ impl<W: Write> NetworkWriteExt for W {
         Ok(())
     }
 
-    fn write_nbt_with_version(
-        &mut self,
-        data: Option<&NbtTag>,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        if let Some(tag) = data
-            && !matches!(tag, NbtTag::End)
-        {
-            {
-                let mut write_adaptor = NbtWriteHelperJava::new(self);
-                tag.clone()
-                    .serialize(&mut write_adaptor)
-                    .map_err(|e| WritingError::Message(e.to_string()))?;
-            }
-        } else {
+    fn write_nbt(&mut self, data: &NbtTag) -> Result<(), WritingError> {
+        if matches!(data, NbtTag::End) {
             self.write_u8(pumpkin_nbt::END_ID)?;
+        } else {
+            let mut write_adaptor = NbtWriteHelperJava::new(self);
+            data.clone()
+                .serialize(&mut write_adaptor)
+                .map_err(|e| WritingError::Message(e.to_string()))?;
         }
         Ok(())
     }

@@ -7,7 +7,6 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::painting_variant::PaintingVariant;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
@@ -250,7 +249,7 @@ impl EntityBase for PaintingEntity {
             pumpkin_data::tracked_data::painting::DATA_PAINTING_VARIANT_ID,
             VarInt(self.variant().id() as i32),
         )
-        .write(&mut metadata, &CURRENT_MC_VERSION)
+        .write(&mut metadata)
         .ok()?;
         metadata.push(255);
         Some(metadata.into_boxed_slice())

@@ -22,9 +22,9 @@ impl ClientPacket for CServerData<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_component(self.motd, version)?;
+        write.write_component(self.motd)?;
         if let Some(icon) = self.icon_base64 {
             write.write_bool(true)?;
             let raw_b64 = icon.strip_prefix("data:image/png;base64,").unwrap_or(icon);

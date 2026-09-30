@@ -30,9 +30,9 @@ impl ClientPacket for CGameTestHighlightPos<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        write.write_block_pos(&self.pos, version)?;
+        write.write_block_pos(&self.pos)?;
         write.write_i32_be(self.color)?;
         write.write_string(self.label)?;
         write.write_i32_be(self.duration_ms)?;
@@ -41,9 +41,9 @@ impl ClientPacket for CGameTestHighlightPos<'_> {
 }
 
 impl<'a> ServerPacket<'a> for CGameTestHighlightPos<'a> {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
-            pos: bytebuf.get_block_pos(version)?,
+            pos: bytebuf.get_block_pos()?,
             color: bytebuf.get_i32_be()?,
             label: bytebuf.get_str_borrowed()?,
             duration_ms: bytebuf.get_i32_be()?,

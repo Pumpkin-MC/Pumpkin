@@ -25,8 +25,8 @@ impl<'a> CSystemChatMessage<'a> {
 }
 
 impl MultiVersionJavaPacket for CSystemChatMessage<'_> {
-    fn to_id(version: JavaMinecraftVersion) -> i32 {
-        SYSTEM_CHAT.to_id(version)
+    fn to_id(_version: JavaMinecraftVersion) -> i32 {
+        SYSTEM_CHAT.to_id()
     }
 }
 
@@ -34,9 +34,9 @@ impl ClientPacket for CSystemChatMessage<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_component(self.content, version)?;
+        write.write_component(self.content)?;
 
         write.write_bool(self.overlay)?;
         // In 1.7.2 - 1.7.10: only component was present in the chat packet

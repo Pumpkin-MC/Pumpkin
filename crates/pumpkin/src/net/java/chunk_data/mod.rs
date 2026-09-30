@@ -20,8 +20,8 @@ use std::io::Write;
 pub struct CChunkData<'a>(pub &'a ChunkData);
 
 impl MultiVersionJavaPacket for CChunkData<'_> {
-    fn to_id(version: JavaMinecraftVersion) -> i32 {
-        LEVEL_CHUNK_WITH_LIGHT.to_id(version)
+    fn to_id(_version: JavaMinecraftVersion) -> i32 {
+        LEVEL_CHUNK_WITH_LIGHT.to_id()
     }
 }
 

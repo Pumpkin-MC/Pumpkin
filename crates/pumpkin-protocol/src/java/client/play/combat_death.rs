@@ -29,10 +29,10 @@ impl ClientPacket for CCombatDeath<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.player_id)?;
-        write.write_component(self.message, version)?;
+        write.write_component(self.message)?;
         Ok(())
     }
 }

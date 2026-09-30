@@ -23,8 +23,8 @@ impl ClientPacket for CSetCursorItem<'_> {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        self.stack.write_with_version(&mut write, version)
+        self.stack.write(&mut write)
     }
 }

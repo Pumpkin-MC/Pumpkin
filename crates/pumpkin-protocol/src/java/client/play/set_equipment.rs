@@ -33,7 +33,7 @@ impl ClientPacket for CSetEquipment {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_var_int(&self.entity_id)?;
 
@@ -44,7 +44,7 @@ impl ClientPacket for CSetEquipment {
                 let last = i == size - 1;
                 let slot_byte = if last { slot } else { slot | -128 };
                 write.write_i8(slot_byte)?;
-                equipment.1.write_with_version(&mut write, version)?;
+                equipment.1.write(&mut write)?;
             }
         }
 
@@ -53,7 +53,7 @@ impl ClientPacket for CSetEquipment {
 }
 
 impl<'a> ServerPacket<'a> for CSetEquipment {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let entity_id = bytebuf.get_var_int()?;
 
         let equipment = {
@@ -61,7 +61,7 @@ impl<'a> ServerPacket<'a> for CSetEquipment {
             loop {
                 let value = bytebuf.get_u8()?;
                 let slot = (value & 0x7F) as i8;
-                let item = ItemStackSerializer::read_with_version(bytebuf, version)?;
+                let item = ItemStackSerializer::read(bytebuf)?;
                 equipment.push((slot, item));
                 if (value & 0x80) == 0 {
                     break;
@@ -100,7 +100,7 @@ mod tests {
         buf
     }
 
-    fn assert_armor_payload(bytes: &[u8], version: JavaMinecraftVersion) {
+    fn assert_armor_payload(bytes: &[u8]) {
         let mut cursor = bytes;
         let entity_id = cursor.get_var_int().unwrap();
         assert_eq!(entity_id, VarInt(42));
@@ -111,7 +111,7 @@ mod tests {
             4i8 | -128,
             "chest must set the continuation bit"
         );
-        let first_item = ItemStackSerializer::read_with_version(&mut cursor, &version).unwrap();
+        let first_item = ItemStackSerializer::read(&mut cursor).unwrap();
         assert_eq!(first_item.0.item.id, Item::DIAMOND_CHESTPLATE.id);
         assert_eq!(first_item.0.item_count, 1);
 
@@ -120,7 +120,7 @@ mod tests {
             second_slot, 3,
             "legs is the last entry and must not set 0x80"
         );
-        let second_item = ItemStackSerializer::read_with_version(&mut cursor, &version).unwrap();
+        let second_item = ItemStackSerializer::read(&mut cursor).unwrap();
         assert_eq!(second_item.0.item.id, Item::DIAMOND_LEGGINGS.id);
         assert!(cursor.is_empty());
     }
@@ -129,7 +129,7 @@ mod tests {
     fn set_equipment_packet_id_for_26_3() {
         assert_eq!(
             CSetEquipment::to_id(pumpkin_data::packet::CURRENT_MC_VERSION),
-            SET_EQUIPMENT.to_id(pumpkin_data::packet::CURRENT_MC_VERSION)
+            SET_EQUIPMENT.to_id()
         );
         assert_eq!(
             CSetEquipment::to_id(pumpkin_data::packet::CURRENT_MC_VERSION),
@@ -140,6 +140,6 @@ mod tests {
     #[test]
     fn armour_slots_encode() {
         let version = pumpkin_data::packet::CURRENT_MC_VERSION;
-        assert_armor_payload(&encoded_armor(version), version);
+        assert_armor_payload(&encoded_armor(version));
     }
 }

@@ -30,7 +30,7 @@ impl ClientPacket for CBossEvent<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 
@@ -45,7 +45,7 @@ impl ClientPacket for CBossEvent<'_> {
                 flags,
             } => {
                 write.write_var_int(&0.into())?;
-                write.write_component(title, version)?;
+                write.write_component(title)?;
                 write.write_f32_be(*health)?;
                 write.write_var_int(color)?;
                 write.write_var_int(division)?;
@@ -58,7 +58,7 @@ impl ClientPacket for CBossEvent<'_> {
             }
             BosseventAction::UpdateTile(title) => {
                 write.write_var_int(&3.into())?;
-                write.write_component(title, version)
+                write.write_component(title)
             }
             BosseventAction::UpdateStyle { color, dividers } => {
                 write.write_var_int(&4.into())?;

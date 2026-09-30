@@ -11,7 +11,6 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::item::{Item, JavaToBedrockItemMapping};
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{Enchantment as EnchantmentTag, Taggable};
 use pumpkin_data::tracked_data;
@@ -2190,7 +2189,7 @@ impl Mob for VillagerEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         )
-        .write(&mut metadata, &CURRENT_MC_VERSION)
+        .write(&mut metadata)
         .ok()?;
         metadata.push(255);
         Some(metadata.into_boxed_slice())
@@ -2380,9 +2379,7 @@ mod tests {
         let metadata = Metadata::new(tracked_data::villager::VILLAGER_DATA, data);
         let mut bytes = Vec::new();
 
-        metadata
-            .write(&mut bytes, &pumpkin_data::packet::CURRENT_MC_VERSION)
-            .unwrap();
+        metadata.write(&mut bytes).unwrap();
 
         assert_eq!(bytes, [19, 18, 2, 9, 1]);
     }
@@ -2421,9 +2418,7 @@ mod tests {
         let metadata = Metadata::new(tracked_data::villager::UNHAPPY_COUNTER, VarInt(40));
         let mut bytes = Vec::new();
 
-        metadata
-            .write(&mut bytes, &pumpkin_data::packet::CURRENT_MC_VERSION)
-            .unwrap();
+        metadata.write(&mut bytes).unwrap();
 
         assert_eq!(bytes, [18, 1, 40]);
     }

@@ -66,7 +66,7 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 
@@ -112,7 +112,7 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
                     PlayerAction::UpdateLatency(latency) => p.write_var_int(latency)?,
                     PlayerAction::UpdateDisplayName(display_name) => {
                         p.write_option(display_name, |w, text_component| {
-                            w.write_component(text_component, version)
+                            w.write_component(text_component)
                         })?;
                     }
                     PlayerAction::UpdateListOrder(order) => {

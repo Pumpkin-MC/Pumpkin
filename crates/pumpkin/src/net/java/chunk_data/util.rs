@@ -1,4 +1,3 @@
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::ser::NetworkWriteExt;
 use pumpkin_protocol::ser::WritingError;
 use pumpkin_world::chunk::format::LightContainer;
@@ -9,7 +8,7 @@ pub fn write_compound_nbt(
     mut write: impl Write,
     comp: &pumpkin_nbt::compound::NbtCompound,
 ) -> Result<(), WritingError> {
-    write.write_compound_nbt_with_version(Some(comp), &CURRENT_MC_VERSION)
+    write.write_compound_nbt(comp)
 }
 
 /// Retrieves the 2048-byte nibble array from a light container, filling with `default_val` if empty.

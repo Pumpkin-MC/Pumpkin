@@ -26,20 +26,20 @@ impl ClientPacket for CUpdateTags<'_> {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let valid_keys: Vec<_> = self
             .tags
             .iter()
             .copied()
-            .filter(|key| key.is_valid_for_version(*version))
+            .filter(RegistryKey::is_network_synced)
             .collect();
 
         write.write_list(&valid_keys, |p, &registry_key| {
             p.write_string(&format!("minecraft:{}", registry_key.identifier_string()))?;
 
-            let Some(values) = get_registry_key_tags(*version, registry_key) else {
-                // no tags defined for that registry key in this version
+            let Some(values) = get_registry_key_tags(registry_key) else {
+                // no tags defined for that registry key
                 // write an empty list and continue
                 p.write_var_int(&VarInt::from(0))?;
                 return Ok(());

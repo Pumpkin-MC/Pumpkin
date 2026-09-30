@@ -2,7 +2,6 @@ use crate::block::entities::{BlockEntity, block_entity_from_nbt};
 use dashmap::DashMap;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemData};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
 use pumpkin_protocol::bedrock::client::{
@@ -1219,7 +1218,7 @@ impl World {
                 skin_parts,
             ),
         ] {
-            let _ = meta.write(&mut buf, &CURRENT_MC_VERSION);
+            let _ = meta.write(&mut buf);
         }
         buf.put_u8(255);
         let packet = CSetEntityMetadata::new(entity_id.into(), buf.into());
@@ -3455,14 +3454,14 @@ impl World {
                     pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
                     config.skin_parts,
                 );
-                let _ = meta.write(&mut buf, &CURRENT_MC_VERSION);
+                let _ = meta.write(&mut buf);
             };
             {
                 let meta = Metadata::new(
                     pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
                     config.skin_parts,
                 );
-                let _ = meta.write(&mut buf, &CURRENT_MC_VERSION);
+                let _ = meta.write(&mut buf);
             };
             drop(config);
             // END

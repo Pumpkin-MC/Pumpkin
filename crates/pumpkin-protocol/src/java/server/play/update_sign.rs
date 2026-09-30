@@ -21,8 +21,8 @@ pub struct SUpdateSign<'a> {
 const MAX_LINE_LENGTH: usize = 384;
 
 impl<'a> ServerPacket<'a> for SUpdateSign<'a> {
-    fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let location = read.get_block_pos(version)?;
+    fn read(read: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let location = read.get_block_pos()?;
         let line_1 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
         let line_2 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
         let line_3 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
@@ -45,10 +45,10 @@ impl crate::ClientPacket for SUpdateSign<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_block_pos(&self.location, version)?;
+        write.write_block_pos(&self.location)?;
 
         write.write_string_bounded(self.line_1, MAX_LINE_LENGTH)?;
         write.write_string_bounded(self.line_2, MAX_LINE_LENGTH)?;

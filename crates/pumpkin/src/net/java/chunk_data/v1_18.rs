@@ -1,5 +1,4 @@
 use super::util::write_compound_nbt;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::codec::bit_set::BitSet;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::ser::NetworkWriteExt;
@@ -197,17 +196,13 @@ pub fn write_chunk_data(chunk: &ChunkData, mut write: impl Write) -> Result<(), 
         block_light_empty_mask |= 1 << (num_sections + 1);
 
         // Write Sky Light Mask
-        BitSet(Box::new([sky_light_mask as i64]))
-            .encode_with_version(&mut write, &CURRENT_MC_VERSION)?;
+        BitSet(Box::new([sky_light_mask as i64])).encode(&mut write)?;
         // Write Block Light Mask
-        BitSet(Box::new([block_light_mask as i64]))
-            .encode_with_version(&mut write, &CURRENT_MC_VERSION)?;
+        BitSet(Box::new([block_light_mask as i64])).encode(&mut write)?;
         // Write Empty Sky Light Mask
-        BitSet(Box::new([sky_light_empty_mask as i64]))
-            .encode_with_version(&mut write, &CURRENT_MC_VERSION)?;
+        BitSet(Box::new([sky_light_empty_mask as i64])).encode(&mut write)?;
         // Write Empty Block Light Mask
-        BitSet(Box::new([block_light_empty_mask as i64]))
-            .encode_with_version(&mut write, &CURRENT_MC_VERSION)?;
+        BitSet(Box::new([block_light_empty_mask as i64])).encode(&mut write)?;
 
         let light_data_size: VarInt = VarInt(LightContainer::ARRAY_SIZE as i32);
 

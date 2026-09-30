@@ -10,8 +10,8 @@ pub struct SSwingArm {
 
 /// 26.3 replaced the swing packet with punch, which no longer tells us the hand.
 impl crate::packet::MultiVersionJavaPacket for SSwingArm {
-    fn to_id(version: JavaMinecraftVersion) -> i32 {
-        PUNCH.to_id(version)
+    fn to_id(_version: JavaMinecraftVersion) -> i32 {
+        PUNCH.to_id()
     }
 }
 

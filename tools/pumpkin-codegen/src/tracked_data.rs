@@ -7,11 +7,6 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 
-use crate::version::JavaMinecraftVersion;
-
-/// The newest protocol version used as the fallback for unknown versions in `TrackedId::get`.
-const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_3;
-
 #[derive(Deserialize)]
 struct RawTrackedField {
     id: u8,
@@ -20,64 +15,23 @@ struct RawTrackedField {
     type_id: u8,
 }
 
+/// Entity name -> tracked field name -> field.
+type Entities = BTreeMap<String, BTreeMap<String, RawTrackedField>>;
+
 /// Generates the `TokenStream` for `TrackedId`, `TrackedData`, and all per-entity tracking modules.
 pub(crate) fn build() -> TokenStream {
-    let assets = [(JavaMinecraftVersion::V_26_3, "26_3_tracked_data.json")];
-
-    let mut raw_versions = BTreeMap::new();
-    for (ver, file) in assets {
-        let path = "../../assets/tracked_data.json".to_string();
-        if let Ok(content) = fs::read_to_string(&path) {
-            if let Ok(parsed) = serde_json::from_str::<
-                BTreeMap<String, BTreeMap<String, RawTrackedField>>,
-            >(&content)
-            {
-                raw_versions.insert(ver, parsed);
-            }
-        }
-    }
-
-    if raw_versions.is_empty() {
-        panic!("No tracked data asset files found in assets/tracked_data");
-    }
-
-    let mojang_names: BTreeSet<String> = raw_versions
-        .get(&LATEST_VERSION)
-        .or_else(|| raw_versions.values().next_back())
-        .map(|entities| entities.keys().cloned().collect())
-        .unwrap_or_default();
-
-    let mut versions = BTreeMap::new();
-    let mut entity_aliases: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    for (ver, parsed) in raw_versions {
-        let mut merged = BTreeMap::new();
-        for (entity, fields) in parsed {
-            let canonical = canonicalize_entity_name(&entity, &mojang_names);
-            if canonical != entity {
-                entity_aliases
-                    .entry(canonical.clone())
-                    .or_default()
-                    .insert(entity);
-            }
-            let dest: &mut BTreeMap<String, RawTrackedField> = merged.entry(canonical).or_default();
-            for (name, info) in fields {
-                dest.insert(name, info);
-            }
-        }
-        versions.insert(ver, merged);
-    }
-
-    if versions.is_empty() {
-        panic!("No tracked data asset files found in assets/tracked_data");
-    }
+    let path = "../../assets/tracked_data.json";
+    let content = fs::read_to_string(path)
+        .unwrap_or_else(|_| panic!("Failed to read tracked data file: {path}"));
+    let entities: Entities =
+        serde_json::from_str(&content).unwrap_or_else(|e| panic!("Failed to parse {path}: {e}"));
 
     let tracked_id_struct = generate_tracked_id_struct();
     let tracked_data_struct = generate_tracked_data_struct();
-    let entity_modules = generate_entity_modules(&versions, &entity_aliases);
+    let entity_modules = generate_entity_modules(&entities);
 
     quote! {
         use crate::meta_data_type::MetaDataType;
-        use pumpkin_util::version::JavaMinecraftVersion;
 
         #tracked_id_struct
 
@@ -95,7 +49,7 @@ fn generate_tracked_id_struct() -> TokenStream {
 
         impl TrackedId {
             #[must_use]
-            pub const fn get(&self, _version: &JavaMinecraftVersion) -> u8 {
+            pub const fn get(&self) -> u8 {
                 self.0
             }
         }
@@ -124,7 +78,7 @@ fn generate_tracked_data_struct() -> TokenStream {
             }
 
             #[must_use]
-            pub const fn get(&self, _version: &JavaMinecraftVersion) -> u8 {
+            pub const fn get(&self) -> u8 {
                 self.id.0
             }
         }
@@ -132,25 +86,15 @@ fn generate_tracked_data_struct() -> TokenStream {
 }
 
 /// Generates entity-specific modules containing constants for all tracked fields.
-fn generate_entity_modules(
-    versions: &BTreeMap<JavaMinecraftVersion, BTreeMap<String, BTreeMap<String, RawTrackedField>>>,
-    entity_aliases: &BTreeMap<String, BTreeSet<String>>,
-) -> TokenStream {
+fn generate_entity_modules(entities: &Entities) -> TokenStream {
     let mut modules = TokenStream::new();
 
-    let all_entities: BTreeSet<String> = versions
-        .values()
-        .flat_map(|entities| entities.keys().cloned())
-        .collect();
-
-    for entity in &all_entities {
+    for (entity, fields) in entities {
         let entity_ident = format_ident!("{}", entity);
 
-        let all_fields: BTreeSet<String> = versions
-            .values()
-            .filter_map(|entities| entities.get(entity))
-            .flat_map(|fields| fields.keys().cloned())
-            .map(|name| canonicalize_tracked_field_name(&name))
+        let all_fields: BTreeSet<String> = fields
+            .keys()
+            .map(|name| canonicalize_tracked_field_name(name))
             .collect();
 
         let mut field_consts = TokenStream::new();
@@ -162,11 +106,7 @@ fn generate_entity_modules(
             let field_ident = format_ident!("{}", field_upper);
             defined_idents.insert(field_upper.clone());
 
-            let field_info = versions
-                .get(&LATEST_VERSION)
-                .or_else(|| versions.values().next_back())
-                .and_then(|entities| entities.get(entity))
-                .and_then(|f| lookup_tracked_field(f, field));
+            let field_info = lookup_tracked_field(fields, field);
             let id = field_info.map_or(255u8, |info| info.id);
             let latest_type = field_info.map_or_else(
                 || "byte".to_string(),
@@ -226,76 +166,7 @@ fn generate_entity_modules(
         });
     }
 
-    for (canonical, aliases) in entity_aliases {
-        if !all_entities.contains(canonical) {
-            continue;
-        }
-        let canonical_ident = format_ident!("{canonical}");
-        for alias in aliases {
-            if all_entities.contains(alias) || !is_valid_ident(alias) {
-                continue;
-            }
-            let alias_ident = format_ident!("{alias}");
-            modules.extend(quote! {
-                pub mod #alias_ident {
-                    pub use super::#canonical_ident::*;
-                }
-            });
-        }
-    }
-
     modules
-}
-
-fn canonicalize_entity_name(name: &str, mojang_names: &BTreeSet<String>) -> String {
-    if mojang_names.contains(name) {
-        return name.to_string();
-    }
-    let mapped = match name.strip_suffix("_entity") {
-        None => return name.to_string(),
-        Some("tameable") => "tamable_animal".to_string(),
-        Some("tameable_shoulder") => "shoulder_riding_entity".to_string(),
-        Some("mooshroom") => "mushroom_cow".to_string(),
-        Some("enderman") => "ender_man".to_string(),
-        Some("fishing_bobber") => "fishing_hook".to_string(),
-        Some("leash_knot") => "leash_fence_knot_entity".to_string(),
-        Some("water_creature") => "water_animal".to_string(),
-        Some("hostile") => "monster".to_string(),
-        Some("illager") => "abstract_illager".to_string(),
-        Some("spellcasting_illager") => "spellcaster_illager".to_string(),
-        Some("merchant") => "abstract_villager".to_string(),
-        Some("golem") => "abstract_golem".to_string(),
-        Some("fish") => "abstract_fish".to_string(),
-        Some("schooling_fish") => "abstract_schooling_fish".to_string(),
-        Some("abstract_donkey") => "abstract_chested_horse".to_string(),
-        Some("ambient") => "ambient_creature".to_string(),
-        Some("path_aware") => "pathfinder_mob".to_string(),
-        Some("patrol") => "patrolling_monster".to_string(),
-        Some("abstract_decoration") => "hanging_entity".to_string(),
-        Some("player_like") => "avatar".to_string(),
-        Some("passive") => "ageable_mob".to_string(),
-        Some("lightning") => "lightning_bolt".to_string(),
-        Some("thrown_item") => "throwable_item_projectile".to_string(),
-        Some("thrown") => "throwable_projectile".to_string(),
-        Some("egg") => "thrown_egg".to_string(),
-        Some("ender_pearl") => "thrown_enderpearl".to_string(),
-        Some("experience_bottle") => "thrown_experience_bottle".to_string(),
-        Some("lingering_potion") => "thrown_lingering_potion".to_string(),
-        Some("splash_potion") => "thrown_splash_potion".to_string(),
-        Some("trident") => "thrown_trident".to_string(),
-        Some("potion") => "abstract_thrown_potion".to_string(),
-        Some("explosive_projectile" | "abstract_fireball") => {
-            "abstract_hurting_projectile".to_string()
-        }
-        Some("persistent_projectile") => "abstract_arrow".to_string(),
-        Some("storage_minecart") => "abstract_minecart_container".to_string(),
-        Some(other) => other.to_string(),
-    };
-    if mojang_names.contains(&mapped) {
-        mapped
-    } else {
-        name.to_string()
-    }
 }
 
 fn canonicalize_field_type(ty: &str) -> String {

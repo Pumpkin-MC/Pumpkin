@@ -38,10 +38,10 @@ impl ClientPacket for CSetBlockDestroyStage {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
-        write.write_block_pos(&self.location, version)?;
+        write.write_block_pos(&self.location)?;
         write.write_i8(self.destroy_stage)?;
         Ok(())
     }

@@ -41,8 +41,8 @@ impl<'a> CLoginSuccess<'a> {
 }
 
 impl MultiVersionJavaPacket for CLoginSuccess<'_> {
-    fn to_id(version: JavaMinecraftVersion) -> i32 {
-        LOGIN_FINISHED.to_id(version)
+    fn to_id(_version: JavaMinecraftVersion) -> i32 {
+        LOGIN_FINISHED.to_id()
     }
 }
 

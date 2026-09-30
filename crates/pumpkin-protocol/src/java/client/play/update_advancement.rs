@@ -44,7 +44,7 @@ impl ClientPacket for CUpdateAdvancements {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_bool(self.reset)?;
 
@@ -61,12 +61,11 @@ impl ClientPacket for CUpdateAdvancements {
             let has_display = adv.display.is_some();
             write.write_bool(has_display)?;
             if let Some(display) = adv.display {
-                write.write_component(&display.get_title(), version)?;
-                write.write_component(&display.get_description(), version)?;
+                write.write_component(&display.get_title())?;
+                write.write_component(&display.get_description())?;
 
                 // Item icon
-                ItemStackTemplateSerializer::from(display.item_icon.clone())
-                    .write_with_version(&mut write, version)?;
+                ItemStackTemplateSerializer::from(display.item_icon.clone()).write(&mut write)?;
 
                 write.write_var_int(&VarInt(display.frame_type as i32))?;
                 let flags = (display.has_background() as i32)

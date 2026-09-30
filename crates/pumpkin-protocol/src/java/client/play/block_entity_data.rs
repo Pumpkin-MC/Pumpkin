@@ -35,11 +35,7 @@ impl CBlockEntityData {
     }
 }
 
-pub fn write_nbt_payload(
-    mut write: impl Write,
-    nbt_data: &[u8],
-    _version: &JavaMinecraftVersion,
-) -> Result<(), WritingError> {
+pub fn write_nbt_payload(mut write: impl Write, nbt_data: &[u8]) -> Result<(), WritingError> {
     if nbt_data.is_empty() || nbt_data == [0] {
         write.write_u8(0)?;
     } else {
@@ -49,10 +45,7 @@ pub fn write_nbt_payload(
     Ok(())
 }
 
-pub fn read_nbt_payload(
-    bytebuf: &mut &[u8],
-    _version: &JavaMinecraftVersion,
-) -> Result<Box<[u8]>, ReadingError> {
+pub fn read_nbt_payload(bytebuf: &mut &[u8]) -> Result<Box<[u8]>, ReadingError> {
     if bytebuf.is_empty() || bytebuf[0] == 0 {
         if !bytebuf.is_empty() {
             let _ = bytebuf.get_u8()?;
@@ -69,21 +62,21 @@ impl ClientPacket for CBlockEntityData {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        write.write_block_pos(&self.location, version)?;
+        write.write_block_pos(&self.location)?;
 
         write.write_var_int(&self.r#type)?;
 
-        write_nbt_payload(&mut write, &self.nbt_data, version)
+        write_nbt_payload(&mut write, &self.nbt_data)
     }
 }
 
 impl<'a> ServerPacket<'a> for CBlockEntityData {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let location = bytebuf.get_block_pos(version)?;
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let location = bytebuf.get_block_pos()?;
         let r#type = bytebuf.get_var_int()?;
-        let nbt_data = read_nbt_payload(bytebuf, version)?;
+        let nbt_data = read_nbt_payload(bytebuf)?;
         Ok(Self {
             location,
             r#type,

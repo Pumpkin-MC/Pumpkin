@@ -19,11 +19,7 @@ pub struct ChunkHeightmaps {
 }
 
 impl ChunkHeightmaps {
-    pub fn write_to(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    pub fn write_to(&self, mut write: impl Write) -> Result<(), WritingError> {
         {
             write.write_var_int(&VarInt(3))?; // Map size
 
@@ -85,8 +81,8 @@ pub struct CChunkData<'a> {
 }
 
 impl MultiVersionJavaPacket for CChunkData<'_> {
-    fn to_id(version: JavaMinecraftVersion) -> i32 {
-        LEVEL_CHUNK_WITH_LIGHT.to_id(version)
+    fn to_id(_version: JavaMinecraftVersion) -> i32 {
+        LEVEL_CHUNK_WITH_LIGHT.to_id()
     }
 }
 
@@ -115,12 +111,12 @@ impl ClientPacket for CChunkData<'_> {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_i32_be(self.chunk_x)?;
         write.write_i32_be(self.chunk_z)?;
 
-        self.heightmaps.write_to(&mut write, version)?;
+        self.heightmaps.write_to(&mut write)?;
 
         write.write_var_int(&VarInt(self.data.len() as i32))?;
         write.write_slice(self.data)?;
@@ -130,10 +126,10 @@ impl ClientPacket for CChunkData<'_> {
             write.write_u8(be.packed_xz)?;
             write.write_i16_be(be.y)?;
             write.write_var_int(&be.type_id)?;
-            write.write_compound_nbt_with_version(Some(&be.data), version)?;
+            write.write_compound_nbt(&be.data)?;
         }
 
-        self.light_data.write(&mut write, version)?;
+        self.light_data.write(&mut write)?;
 
         Ok(())
     }

@@ -45,11 +45,11 @@ impl ClientPacket for CPlayerSpawnPosition {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_string(&self.dimension_name)?;
 
-        write.write_block_pos(&self.location, version)?;
+        write.write_block_pos(&self.location)?;
 
         write.write_f32_be(self.yaw)?;
 
@@ -60,10 +60,10 @@ impl ClientPacket for CPlayerSpawnPosition {
 }
 
 impl<'a> ServerPacket<'a> for CPlayerSpawnPosition {
-    fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(read: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let dimension_name = read.get_str()?.into_string();
 
-        let location = read.get_block_pos(version)?;
+        let location = read.get_block_pos()?;
 
         let yaw = read.get_f32_be()?;
 

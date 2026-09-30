@@ -20,7 +20,6 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
@@ -385,7 +384,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                         pumpkin_data::tracked_data::entity::DATA_SHARED_FLAGS_ID,
                         shared_flags,
                     )
-                    .write(&mut buf, &CURRENT_MC_VERSION);
+                    .write(&mut buf);
                     buf.put_u8(255);
                     buf.into_boxed_slice()
                 })
@@ -2894,7 +2893,7 @@ impl Entity {
 
         let mut buf = Vec::new();
         for m in meta {
-            let _ = m.write(&mut buf, &CURRENT_MC_VERSION);
+            let _ = m.write(&mut buf);
         }
         if !buf.is_empty() {
             buf.put_u8(255);

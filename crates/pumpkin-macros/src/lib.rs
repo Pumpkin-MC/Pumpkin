@@ -305,8 +305,8 @@ pub fn java_packet(args: TokenStream, item: TokenStream) -> TokenStream {
         impl #impl_generics crate::packet::MultiVersionJavaPacket for #name #ty_generics #where_clause {
             #[must_use]
             #[inline]
-            fn to_id(version: pumpkin_util::version::JavaMinecraftVersion) -> i32 {
-                #packet_id_expr.to_id(version)
+            fn to_id(_version: pumpkin_util::version::JavaMinecraftVersion) -> i32 {
+                #packet_id_expr.to_id()
             }
         }
     }

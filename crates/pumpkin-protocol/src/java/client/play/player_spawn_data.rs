@@ -28,10 +28,7 @@ pub(super) fn write_game_modes(
 }
 
 /// Reads the current and previous game mode written by [`write_game_modes`].
-pub(super) fn read_game_modes(
-    read: &mut &[u8],
-    _version: JavaMinecraftVersion,
-) -> Result<(u8, i8), ReadingError> {
+pub(super) fn read_game_modes(read: &mut &[u8]) -> Result<(u8, i8), ReadingError> {
     {
         let game_mode = read.get_var_int()?.0 as u8;
         let previous = read.get_var_int()?.0;
@@ -105,7 +102,7 @@ impl PlayerSpawnData {
         write.write_bool(self.is_flat)?;
         write.write_option(&self.death_dimension_name, |write, (dim, pos)| {
             write.write_string(dim)?;
-            write.write_block_pos(pos, version)?;
+            write.write_block_pos(pos)?;
             Ok(())
         })?;
         write.write_var_int(&self.portal_cooldown)?;
@@ -113,7 +110,7 @@ impl PlayerSpawnData {
         Ok(())
     }
 
-    pub fn read(read: &mut &[u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    pub fn read(read: &mut &[u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let dimension = {
             let id = read.get_var_int()?.0 as u8;
             match id {
@@ -126,13 +123,13 @@ impl PlayerSpawnData {
 
         let _world_name = read.get_str()?;
         let hashed_seed = read.get_i64_be()?;
-        let (game_mode, previous_gamemode) = read_game_modes(read, *version)?;
+        let (game_mode, previous_gamemode) = read_game_modes(read)?;
         let debug = read.get_bool()?;
         let is_flat = read.get_bool()?;
 
         let death_dimension_name = if read.get_bool()? {
             let dim = read.get_str()?.into();
-            let pos = read.get_block_pos(version)?;
+            let pos = read.get_block_pos()?;
             Some((dim, pos))
         } else {
             None

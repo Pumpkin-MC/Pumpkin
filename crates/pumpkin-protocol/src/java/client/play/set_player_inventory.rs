@@ -25,10 +25,10 @@ impl ClientPacket for CSetPlayerInventory<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_var_int(&self.slot)?;
-        self.item.write_with_version(&mut write, version)
+        self.item.write(&mut write)
     }
 }

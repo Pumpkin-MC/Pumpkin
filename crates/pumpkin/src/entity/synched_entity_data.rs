@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use bytes::BufMut;
 use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::tracked_data::{TrackedData, TrackedId};
 use pumpkin_protocol::java::client::play::{Metadata, MetadataSerializer};
 use pumpkin_protocol::ser::WritingError;
@@ -34,13 +33,13 @@ impl<T: MetadataSerializer + Clone + Send + Sync + 'static> ErasedSerializer
         writer: &mut dyn std::io::Write,
     ) -> Result<(), WritingError> {
         let meta = Metadata::new_raw(index, r#type, &self.value);
-        meta.write(writer, &CURRENT_MC_VERSION)
+        meta.write(writer)
     }
 
     fn write_canonical(&self, index: TrackedId, r#type: MetaDataType) -> Vec<u8> {
         let mut buf = Vec::new();
         let meta = Metadata::new_raw(index, r#type, &self.value);
-        let _ = meta.write(&mut buf, &CURRENT_MC_VERSION);
+        let _ = meta.write(&mut buf);
         buf
     }
 }

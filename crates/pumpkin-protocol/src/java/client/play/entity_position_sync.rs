@@ -52,8 +52,8 @@ impl CEntityPositionSync {
 }
 
 impl MultiVersionJavaPacket for CEntityPositionSync {
-    fn to_id(version: JavaMinecraftVersion) -> i32 {
-        ENTITY_POSITION_SYNC.to_id(version)
+    fn to_id(_version: JavaMinecraftVersion) -> i32 {
+        ENTITY_POSITION_SYNC.to_id()
     }
 }
 

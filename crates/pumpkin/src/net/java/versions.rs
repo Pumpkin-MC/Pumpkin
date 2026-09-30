@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use pumpkin_data::packet::{CURRENT_MC_VERSION, LOWEST_SUPPORTED_MC_VERSION};
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Java versions the server admits: its own, plus the ones plugins registered to translate.
@@ -35,11 +35,6 @@ impl JavaVersions {
     }
 
     #[must_use]
-    pub fn is_native(version: JavaMinecraftVersion) -> bool {
-        (LOWEST_SUPPORTED_MC_VERSION..=CURRENT_MC_VERSION).contains(&version)
-    }
-
-    #[must_use]
     pub fn is_translated(&self, version: JavaMinecraftVersion) -> bool {
         self.registered
             .load()
@@ -49,7 +44,7 @@ impl JavaVersions {
 
     #[must_use]
     pub fn admits(&self, version: JavaMinecraftVersion) -> bool {
-        Self::is_native(version) || self.is_translated(version)
+        version == CURRENT_MC_VERSION || self.is_translated(version)
     }
 
     /// The oldest admitted version.
@@ -59,7 +54,7 @@ impl JavaVersions {
             .load()
             .values()
             .flat_map(|versions| versions.iter().copied())
-            .fold(LOWEST_SUPPORTED_MC_VERSION, Ord::min)
+            .fold(CURRENT_MC_VERSION, Ord::min)
     }
 }
 
@@ -72,7 +67,7 @@ mod tests {
         let versions = JavaVersions::default();
         assert!(versions.admits(CURRENT_MC_VERSION));
         assert!(!versions.admits(JavaMinecraftVersion::V_1_8));
-        assert_eq!(versions.oldest(), LOWEST_SUPPORTED_MC_VERSION);
+        assert_eq!(versions.oldest(), CURRENT_MC_VERSION);
 
         versions.register(
             "multiversion",

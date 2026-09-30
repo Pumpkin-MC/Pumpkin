@@ -9,7 +9,6 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::version::JavaMinecraftVersion;
 use std::borrow::Cow;
 use std::io::Cursor;
 
@@ -34,7 +33,6 @@ fn item_component_counts(stack: &ItemStack) -> (u8, u8) {
 fn serialize_item_stack_with_id(
     stack: &ItemStack,
     item_id: u16,
-    _version: JavaMinecraftVersion,
     write: &mut impl NetworkWriteExt,
 ) -> Result<(), WritingError> {
     if stack.is_empty() {
@@ -66,7 +64,6 @@ fn serialize_item_stack_with_id(
 fn serialize_length_prefixed_item_stack_with_id(
     stack: &ItemStack,
     item_id: u16,
-    _version: JavaMinecraftVersion,
     write: &mut impl NetworkWriteExt,
 ) -> Result<(), WritingError> {
     if stack.is_empty() {
@@ -101,7 +98,6 @@ fn serialize_length_prefixed_item_stack_with_id(
 fn serialize_item_cost_with_id(
     stack: &ItemStack,
     item_id: u16,
-    _version: JavaMinecraftVersion,
     write: &mut impl NetworkWriteExt,
 ) -> Result<(), WritingError> {
     let component_count = stack
@@ -280,44 +276,24 @@ impl ItemStackSerializer<'_> {
         )))
     }
 
-    pub fn read_with_version(
+    pub fn read_untrusted(
         read: &mut impl NetworkReadExt,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<ItemStackSerializer<'static>, ReadingError> {
-        {
-            let serializer = Self::read(read)?;
-            Ok(serializer)
-        }
-    }
-
-    pub fn read_untrusted_with_version(
-        read: &mut impl NetworkReadExt,
-        _version: &JavaMinecraftVersion,
     ) -> Result<ItemStackSerializer<'static>, ReadingError> {
         Self::read_length_prefixed_optional(read)
     }
 
-    pub fn read_template_with_version(
+    pub fn read_optional_template(
         read: &mut impl NetworkReadExt,
-        version: &JavaMinecraftVersion,
-    ) -> Result<ItemStackSerializer<'static>, ReadingError> {
-        Self::read_template0(read, version)
-    }
-
-    pub fn read_optional_template_with_version(
-        read: &mut impl NetworkReadExt,
-        version: &JavaMinecraftVersion,
     ) -> Result<ItemStackSerializer<'static>, ReadingError> {
         if read.get_bool()? {
-            Self::read_template0(read, version)
+            Self::read_template(read)
         } else {
             Ok(ItemStackSerializer(Cow::Borrowed(ItemStack::EMPTY)))
         }
     }
 
-    pub fn read_template0(
+    pub fn read_template(
         read: &mut impl NetworkReadExt,
-        _version: &JavaMinecraftVersion,
     ) -> Result<ItemStackSerializer<'static>, ReadingError> {
         const MAX_COMPONENTS: i32 = 256;
 
@@ -384,10 +360,6 @@ impl ItemStackSerializer<'_> {
         Ok(ItemStackSerializer(Cow::Owned(stack)))
     }
 
-    pub fn write(&self, write: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        self.write_with_version(write, &pumpkin_data::packet::CURRENT_MC_VERSION)
-    }
-
     pub fn read_length_prefixed_optional(
         read: &mut impl NetworkReadExt,
     ) -> Result<ItemStackSerializer<'static>, ReadingError> {
@@ -445,69 +417,38 @@ impl ItemStackSerializer<'_> {
         )))
     }
 
-    pub fn write_with_version(
-        &self,
-        write: &mut impl NetworkWriteExt,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        serialize_item_stack_with_id(self.0.as_ref(), self.0.item.id, *version, write)
+    pub fn write(&self, write: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        serialize_item_stack_with_id(self.0.as_ref(), self.0.item.id, write)
     }
 
-    pub fn write_length_prefixed_with_version(
+    pub fn write_length_prefixed(
         &self,
         write: &mut impl NetworkWriteExt,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        serialize_length_prefixed_item_stack_with_id(
-            self.0.as_ref(),
-            self.0.item.id,
-            *version,
-            write,
-        )
+        serialize_length_prefixed_item_stack_with_id(self.0.as_ref(), self.0.item.id, write)
     }
 
-    pub fn write_item_cost_with_version(
-        &self,
-        write: &mut impl NetworkWriteExt,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        serialize_item_cost_with_id(self.0.as_ref(), self.0.item.id, *version, write)
+    pub fn write_item_cost(&self, write: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        serialize_item_cost_with_id(self.0.as_ref(), self.0.item.id, write)
     }
 
-    pub fn write_untrusted_with_version(
-        &self,
-        write: &mut impl NetworkWriteExt,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        self.write_length_prefixed_with_version(write, version)
+    pub fn write_untrusted(&self, write: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        self.write_length_prefixed(write)
     }
 
-    pub fn write_template_with_version(
+    pub fn write_optional_template(
         &self,
         write: &mut impl NetworkWriteExt,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        self.write_template0(write, version)
-    }
-
-    pub fn write_optional_template_with_version(
-        &self,
-        write: &mut impl NetworkWriteExt,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         if self.0.is_empty() {
             write.write_bool(false)
         } else {
             write.write_bool(true)?;
-            self.write_template0(write, version)
+            self.write_template(write)
         }
     }
 
-    pub fn write_template0(
-        &self,
-        write: &mut impl NetworkWriteExt,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    pub fn write_template(&self, write: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         if self.0.is_empty() {
             return Err(WritingError::Message(
                 "Can't write empty item stack template".into(),
@@ -537,11 +478,6 @@ impl ItemStackSerializer<'_> {
 
     #[must_use]
     pub fn to_stack(self) -> ItemStack {
-        self.0.into_owned()
-    }
-
-    #[must_use]
-    pub fn to_stack_for_version(self, _version: &JavaMinecraftVersion) -> ItemStack {
         self.0.into_owned()
     }
 }
@@ -702,17 +638,9 @@ impl OptionalItemStackHash {
 pub struct ItemStackTemplateSerializer<'a>(pub Cow<'a, ItemStack>);
 
 impl ItemStackTemplateSerializer<'_> {
-    pub fn write_with_version(
-        &self,
-        write: &mut impl NetworkWriteExt,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        let serializer = ItemStackSerializer(Cow::Borrowed(self.0.as_ref()));
-        serializer.write_template_with_version(write, version)
-    }
-
     pub fn write(&self, write: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        self.write_with_version(write, &pumpkin_data::packet::CURRENT_MC_VERSION)
+        let serializer = ItemStackSerializer(Cow::Borrowed(self.0.as_ref()));
+        serializer.write_template(write)
     }
 }
 
@@ -725,17 +653,9 @@ impl From<ItemStack> for ItemStackTemplateSerializer<'_> {
 pub struct ItemStackOptionalTemplateSerializer<'a>(pub Cow<'a, ItemStack>);
 
 impl ItemStackOptionalTemplateSerializer<'_> {
-    pub fn write_with_version(
-        &self,
-        write: &mut impl NetworkWriteExt,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        let serializer = ItemStackSerializer(Cow::Borrowed(self.0.as_ref()));
-        serializer.write_optional_template_with_version(write, version)
-    }
-
     pub fn write(&self, write: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        self.write_with_version(write, &pumpkin_data::packet::CURRENT_MC_VERSION)
+        let serializer = ItemStackSerializer(Cow::Borrowed(self.0.as_ref()));
+        serializer.write_optional_template(write)
     }
 }
 

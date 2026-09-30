@@ -61,7 +61,7 @@ impl ClientPacket for CSetPlayerTeam<'_> {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_string(&self.team_name)?;
 
@@ -74,9 +74,9 @@ impl ClientPacket for CSetPlayerTeam<'_> {
                 ));
             };
 
-            write.write_component(params.display_name, version)?;
-            write.write_component(params.player_prefix, version)?;
-            write.write_component(params.player_suffix, version)?;
+            write.write_component(params.display_name)?;
+            write.write_component(params.player_prefix)?;
+            write.write_component(params.player_suffix)?;
             write.write_var_int(&VarInt(nametag_visibility_to_id(params.nametag_visibility)))?;
             write.write_var_int(&VarInt(collision_rule_to_id(params.collision_rule)))?;
             if params.color >= 0 && params.color != 21 {

@@ -66,22 +66,14 @@ impl LightData {
         }
     }
 
-    pub fn write(
-        &self,
-        mut write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    pub fn write(&self, mut write: impl Write) -> Result<(), WritingError> {
         // Trust edges (1.16 - 1.19.4; added in 1.16, removed in 1.20)
 
         // Chunk bitmasks
-        self.sky_light_mask
-            .encode_with_version(&mut write, version)?;
-        self.block_light_mask
-            .encode_with_version(&mut write, version)?;
-        self.empty_sky_light_mask
-            .encode_with_version(&mut write, version)?;
-        self.empty_block_light_mask
-            .encode_with_version(&mut write, version)?;
+        self.sky_light_mask.encode(&mut write)?;
+        self.block_light_mask.encode(&mut write)?;
+        self.empty_sky_light_mask.encode(&mut write)?;
+        self.empty_block_light_mask.encode(&mut write)?;
 
         // Sky light arrays
         write.write_var_int(&VarInt(self.sky_light_arrays.len() as i32))?;
@@ -100,14 +92,17 @@ impl LightData {
         Ok(())
     }
 
-    pub fn read(bytebuf: &mut &[u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    pub fn read(
+        bytebuf: &mut &[u8],
+        _version: &JavaMinecraftVersion,
+    ) -> Result<Self, ReadingError> {
         let trust_edges = false;
 
         let (sky_light_mask, block_light_mask, empty_sky_light_mask, empty_block_light_mask) = (
-            BitSet::decode_with_version(bytebuf, version)?,
-            BitSet::decode_with_version(bytebuf, version)?,
-            BitSet::decode_with_version(bytebuf, version)?,
-            BitSet::decode_with_version(bytebuf, version)?,
+            BitSet::decode(bytebuf)?,
+            BitSet::decode(bytebuf)?,
+            BitSet::decode(bytebuf)?,
+            BitSet::decode(bytebuf)?,
         );
 
         let sky_light_arrays = {
@@ -150,11 +145,11 @@ impl ClientPacket for CLightUpdate {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_var_int(&self.chunk_x)?;
         write.write_var_int(&self.chunk_z)?;
-        self.light_data.write(&mut write, version)
+        self.light_data.write(&mut write)
     }
 }
 

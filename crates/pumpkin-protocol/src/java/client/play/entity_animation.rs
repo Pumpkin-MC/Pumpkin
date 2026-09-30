@@ -67,8 +67,8 @@ impl CSwingArm {
 }
 
 impl crate::packet::MultiVersionJavaPacket for CSwingArm {
-    fn to_id(version: JavaMinecraftVersion) -> i32 {
-        SWING_ANIMATION.to_id(version)
+    fn to_id(_version: JavaMinecraftVersion) -> i32 {
+        SWING_ANIMATION.to_id()
     }
 }
 

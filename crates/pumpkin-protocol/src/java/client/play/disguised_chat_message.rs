@@ -46,14 +46,14 @@ impl ClientPacket for CDisguisedChatMessage<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_component(self.message, version)?;
+        write.write_component(self.message)?;
         write.write_var_int(&self.chat_type)?;
-        write.write_component(self.sender_name, version)?;
+        write.write_component(self.sender_name)?;
         if let Some(target) = self.target_name {
             write.write_bool(true)?;
-            write.write_component(target, version)?;
+            write.write_component(target)?;
         } else {
             write.write_bool(false)?;
         }

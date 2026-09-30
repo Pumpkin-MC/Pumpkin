@@ -34,9 +34,9 @@ impl SClickSlot {
 impl<'a> ServerPacket<'a> for SClickSlot {
     fn read(
         mut bytebuf: &mut &'a [u8],
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
-        let sync_id = bytebuf.get_container_id(version)?;
+        let sync_id = bytebuf.get_container_id()?;
         let revision = bytebuf.get_var_int()?;
         let slot = bytebuf.get_i16_be()?;
         let button = bytebuf.get_i8()?;
@@ -75,10 +75,10 @@ impl crate::ClientPacket for SClickSlot {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_container_id(&self.sync_id, version)?;
+        write.write_container_id(&self.sync_id)?;
         write.write_var_int(&self.revision)?;
         write.write_i16_be(self.slot)?;
         write.write_i8(self.button)?;

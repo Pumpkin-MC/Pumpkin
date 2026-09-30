@@ -38,11 +38,11 @@ impl ClientPacket for CSetContainerContent<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 
-        write.write_container_id(&self.window_id, version)?;
+        write.write_container_id(&self.window_id)?;
         write.write_var_int(&self.state_id)?;
         {
             let slot_count = i32::try_from(self.slot_data.len()).map_err(|_| {
@@ -54,17 +54,17 @@ impl ClientPacket for CSetContainerContent<'_> {
             write.write_var_int(&VarInt(slot_count))?;
         };
         for stack in self.slot_data {
-            stack.write_with_version(&mut write, version)?;
+            stack.write(&mut write)?;
         }
-        self.carried_item.write_with_version(&mut write, version)?;
+        self.carried_item.write(&mut write)?;
 
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CSetContainerContent<'a> {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let window_id = bytebuf.get_container_id(version)?;
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let window_id = bytebuf.get_container_id()?;
         let state_id = bytebuf.get_var_int()?;
         let count = bytebuf.get_var_int()?.0;
         if !(0..=4096).contains(&count) {
@@ -72,9 +72,9 @@ impl<'a> ServerPacket<'a> for CSetContainerContent<'a> {
         }
         let mut slot_data = Vec::with_capacity(count as usize);
         for _ in 0..count {
-            slot_data.push(ItemStackSerializer::read_with_version(bytebuf, version)?);
+            slot_data.push(ItemStackSerializer::read(bytebuf)?);
         }
-        let carried_item = ItemStackSerializer::read_with_version(bytebuf, version)?;
+        let carried_item = ItemStackSerializer::read(bytebuf)?;
         Ok(Self {
             window_id,
             state_id,

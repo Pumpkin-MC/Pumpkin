@@ -257,21 +257,20 @@ impl VehicleEntity {
 
 #[cfg(test)]
 mod tests {
-    use pumpkin_data::packet::CURRENT_MC_VERSION;
+
     use pumpkin_protocol::codec::var_int::VarInt;
     use pumpkin_protocol::java::client::play::Metadata;
 
     fn wobble_metadata() -> Vec<u8> {
-        let version = CURRENT_MC_VERSION;
         let mut bytes = Vec::new();
         Metadata::new(pumpkin_data::tracked_data::boat::ID_HURT, VarInt(10))
-            .write(&mut bytes, &version)
+            .write(&mut bytes)
             .unwrap();
         Metadata::new(pumpkin_data::tracked_data::boat::ID_HURTDIR, VarInt(-1))
-            .write(&mut bytes, &version)
+            .write(&mut bytes)
             .unwrap();
         Metadata::new(pumpkin_data::tracked_data::boat::ID_DAMAGE, 10.0f32)
-            .write(&mut bytes, &version)
+            .write(&mut bytes)
             .unwrap();
         bytes
     }

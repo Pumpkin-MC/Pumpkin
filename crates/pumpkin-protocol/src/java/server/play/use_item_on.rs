@@ -21,10 +21,10 @@ pub struct SUseItemOn {
 }
 
 impl<'a> ServerPacket<'a> for SUseItemOn {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         {
             let hand = bytebuf.get_var_int()?;
-            let position = bytebuf.get_block_pos(version)?;
+            let position = bytebuf.get_block_pos()?;
             let face = bytebuf.get_var_int()?;
             let cursor_pos = Vector3::new(
                 bytebuf.get_f32_be()?,
@@ -55,11 +55,11 @@ impl crate::ClientPacket for SUseItemOn {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_var_int(&self.hand)?;
-        write.write_block_pos(&self.position, version)?;
+        write.write_block_pos(&self.position)?;
         write.write_var_int(&self.face)?;
         write.write_f32_be(self.cursor_pos.x)?;
         write.write_f32_be(self.cursor_pos.y)?;

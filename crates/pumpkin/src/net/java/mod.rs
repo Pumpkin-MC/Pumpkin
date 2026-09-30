@@ -650,23 +650,15 @@ impl JavaClient {
         }
     }
 
-    pub fn write_packet_for_version<P: ClientPacket>(
+    pub fn encode_packet<P: ClientPacket>(
         packet: &P,
-        version: JavaMinecraftVersion,
         write: impl Write,
     ) -> Result<(), WritingError> {
-        pumpkin_protocol::java::packet_encoder::write_packet(packet, &version, write)
-    }
-
-    pub fn serialize_packet_for_version<P: ClientPacket>(
-        packet: &P,
-        version: JavaMinecraftVersion,
-    ) -> Result<Bytes, WritingError> {
-        pumpkin_protocol::java::packet_encoder::serialize_packet(packet, &version)
+        pumpkin_protocol::java::packet_encoder::write_packet(packet, &CURRENT_MC_VERSION, write)
     }
 
     pub fn serialize_packet<P: ClientPacket>(&self, packet: &P) -> Result<Bytes, WritingError> {
-        Self::serialize_packet_for_version(packet, CURRENT_MC_VERSION)
+        pumpkin_protocol::java::packet_encoder::serialize_packet(packet, &CURRENT_MC_VERSION)
     }
 
     pub fn try_send_packet<P: ClientPacket>(&self, packet: &P) {
@@ -692,7 +684,7 @@ impl JavaClient {
         packet: &P,
         write: impl Write,
     ) -> Result<(), WritingError> {
-        Self::write_packet_for_version(packet, CURRENT_MC_VERSION, write)
+        Self::encode_packet(packet, write)
     }
 
     /// Handles an incoming packet, routing it to the appropriate handler based on the current connection state.

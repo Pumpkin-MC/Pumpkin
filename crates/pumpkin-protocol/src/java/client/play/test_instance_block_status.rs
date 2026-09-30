@@ -28,9 +28,9 @@ impl ClientPacket for CTestInstanceBlockStatus<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        write.write_block_pos(&self.pos, version)?;
+        write.write_block_pos(&self.pos)?;
         write.write_var_int(&self.status)?;
         write.write_option(&self.message, |p, v| p.write_string(v))?;
         Ok(())
@@ -38,9 +38,9 @@ impl ClientPacket for CTestInstanceBlockStatus<'_> {
 }
 
 impl<'a> ServerPacket<'a> for CTestInstanceBlockStatus<'a> {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
-            pos: bytebuf.get_block_pos(version)?,
+            pos: bytebuf.get_block_pos()?,
             status: bytebuf.get_var_int()?,
             message: bytebuf.get_option(NetworkReadSliceExt::get_str_borrowed)?,
         })

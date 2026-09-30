@@ -52,11 +52,11 @@ impl ClientPacket for CWorldEvent {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_i32_be(self.event)?;
-        write.write_block_pos(&self.location, version)?;
+        write.write_block_pos(&self.location)?;
         write.write_i32_be(self.data)?;
         write.write_bool(self.disable_relative_volume)?;
 

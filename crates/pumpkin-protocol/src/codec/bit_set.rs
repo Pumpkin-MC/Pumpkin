@@ -5,7 +5,6 @@ use crate::ReadingError;
 use crate::WritingError;
 use crate::ser::NetworkReadExt;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct BitSet(pub Box<[i64]>);
@@ -76,11 +75,7 @@ impl BitSet {
 
     /// Since 26.3 bit sets are sent as a little endian byte array without its trailing zero bytes
     /// instead of a long array.
-    pub fn encode_with_version(
-        &self,
-        write: &mut impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut bytes = Vec::with_capacity(self.0.len() * 8);
         for word in &self.0 {
             bytes.extend_from_slice(&word.to_le_bytes());
@@ -95,10 +90,7 @@ impl BitSet {
         write.write_slice(&bytes)
     }
 
-    pub fn decode_with_version(
-        read: &mut impl Read,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, ReadingError> {
+    pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let length = Self::checked_len(read.get_var_int()?.0)?;
         let mut bytes = vec![0u8; length];
         read.read_bytes_to_buf(&mut bytes)?;
@@ -125,18 +117,12 @@ mod tests {
         bitset.set_bit(70, true);
 
         let mut bytes = Vec::new();
-        bitset
-            .encode_with_version(&mut bytes, &pumpkin_data::packet::CURRENT_MC_VERSION)
-            .expect("encoding failed");
+        bitset.encode(&mut bytes).expect("encoding failed");
 
         // A var int length followed by the little endian bytes, trailing zero bytes trimmed
         assert_eq!(bytes, vec![9, 0x01, 0x01, 0, 0, 0, 0, 0, 0, 0x40]);
 
-        let decoded = BitSet::decode_with_version(
-            &mut bytes.as_slice(),
-            &pumpkin_data::packet::CURRENT_MC_VERSION,
-        )
-        .expect("decoding failed");
+        let decoded = BitSet::decode(&mut bytes.as_slice()).expect("decoding failed");
         assert!(decoded.get_bit(0));
         assert!(decoded.get_bit(8));
         assert!(decoded.get_bit(70));
@@ -147,16 +133,12 @@ mod tests {
     fn bitset_26_3_empty_encodes_as_an_empty_byte_array() {
         let mut bytes = Vec::new();
         BitSet::default()
-            .encode_with_version(&mut bytes, &pumpkin_data::packet::CURRENT_MC_VERSION)
+            .encode(&mut bytes)
             .expect("encoding failed");
 
         assert_eq!(bytes, vec![0]);
 
-        let decoded = BitSet::decode_with_version(
-            &mut bytes.as_slice(),
-            &pumpkin_data::packet::CURRENT_MC_VERSION,
-        )
-        .expect("decoding failed");
+        let decoded = BitSet::decode(&mut bytes.as_slice()).expect("decoding failed");
         assert!(!decoded.get_bit(0));
     }
 
@@ -166,8 +148,7 @@ mod tests {
         let negative = [0xFF, 0xFF, 0xFF, 0xFF, 0x0F];
 
         {
-            let version = pumpkin_data::packet::CURRENT_MC_VERSION;
-            let err = BitSet::decode_with_version(&mut negative.as_slice(), &version)
+            let err = BitSet::decode(&mut negative.as_slice())
                 .expect_err("a negative length should be rejected");
             assert!(matches!(err, ReadingError::TooLarge(_)), "got {err:?}");
         }
