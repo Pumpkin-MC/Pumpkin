@@ -59,6 +59,10 @@ impl EntityBase for FallingEntity {
 
         entity.move_entity(caller, velo);
         entity.tick_block_collisions(caller);
+
+        // Preserve collision and block-interaction velocity changes (for example,
+        // cobweb slowdown) instead of overwriting them with the pre-move velocity.
+        let velo = entity.velocity.load();
         if entity.on_ground.load(Ordering::Relaxed) {
             entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
             let world = entity.world.load();
