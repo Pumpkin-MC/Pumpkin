@@ -452,6 +452,50 @@ pub struct BlockEvent {
     pub data: u8,
 }
 
+/// Rolls the block's loot table and fires `BlockDropItemEvent`, without spawning anything.
+pub fn collect_loot(
+    world: &Arc<World>,
+    block: &Block,
+    pos: &BlockPos,
+    params: &LootContextParameters,
+) -> Vec<ItemStack> {
+    let key = format!("minecraft:blocks/{}", block.name);
+    let Some(loot_table) = world.get_loot_table(&key) else {
+        return Vec::new();
+    };
+    // TODO: vanilla rolls from the loot table's `random_sequence`, which is seeded per world.
+    let seed: i64 = rand::random();
+    let items = crate::world::loot::generate_loot_from_handle(&loot_table, seed, params);
+    if items.is_empty() {
+        return items;
+    }
+
+    let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
+        block_pos: *pos,
+        world: world.clone(),
+        player: None,
+        items,
+        cancelled: false,
+    };
+    if let Some(server) = world.server.upgrade() {
+        server.plugin_manager.fire_blocking(&server, &mut event);
+    }
+    if event.cancelled {
+        return Vec::new();
+    }
+
+    let block_entity = world.get_block_entity(pos);
+    let mut items = event.items;
+    if let Some(block_entity) = &block_entity {
+        for stack in &mut items {
+            if Block::from_item_id(stack.item.id) == Some(block) {
+                block_entity.collect_item_components(stack);
+            }
+        }
+    }
+    items
+}
+
 pub fn drop_loot(
     world: &Arc<World>,
     block: &Block,
@@ -459,33 +503,8 @@ pub fn drop_loot(
     experience: bool,
     params: &LootContextParameters,
 ) {
-    let key = format!("minecraft:blocks/{}", block.name);
-    if let Some(loot_table) = world.get_loot_table(&key) {
-        let seed: i64 = rand::random();
-        let items = crate::world::loot::generate_loot_from_handle(&loot_table, seed, params);
-        if !items.is_empty() {
-            let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
-                block_pos: *pos,
-                world: world.clone(),
-                player: None,
-                items,
-                cancelled: false,
-            };
-            if let Some(server) = world.server.upgrade() {
-                server.plugin_manager.fire_blocking(&server, &mut event);
-            }
-            if !event.cancelled {
-                let block_entity = world.get_block_entity(pos);
-                for mut stack in event.items {
-                    if let Some(block_entity) = &block_entity
-                        && Block::from_item_id(stack.item.id) == Some(block)
-                    {
-                        block_entity.collect_item_components(&mut stack);
-                    }
-                    world.drop_stack(pos, stack);
-                }
-            }
-        }
+    for stack in collect_loot(world, block, pos, params) {
+        world.drop_stack(pos, stack);
     }
 
     let has_silk_touch = params.tool.as_ref().is_some_and(|tool| {

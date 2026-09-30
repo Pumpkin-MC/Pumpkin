@@ -96,6 +96,7 @@ impl EntityBase for TNTEntity {
 
         let mut velo = entity.velocity.load();
         velo.y -= self.get_gravity();
+        entity.velocity.store(velo);
 
         entity.move_entity(caller, velo);
         entity.tick_block_collisions(caller);
