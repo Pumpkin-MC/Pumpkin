@@ -123,6 +123,32 @@ lto = true
 strip = "debuginfo"
 codegen-units = 1
 
+# The big library crates are mostly LLVM work before LTO. Fat LTO re-optimizes everything at the
+# final link, so splitting their own codegen here only speeds up the build.
+[profile.release.package.pumpkin-data]
+codegen-units = 16
+
+[profile.release.package.pumpkin-core]
+codegen-units = 16
+
+[profile.release.package.pumpkin-world]
+codegen-units = 16
+
+[profile.release.package.pumpkin-protocol]
+codegen-units = 16
+
+[profile.release.package.pumpkin-wasm-host]
+codegen-units = 16
+
+[profile.release.package.pumpkin-wasm-host-common]
+codegen-units = 16
+
+[profile.release.package.pumpkin-wasm-host-v0_1]
+codegen-units = 16
+
+[profile.release.package.pumpkin-wasm-host-v0_2]
+codegen-units = 16
+
 [profile.bench]
 debug = true
 
