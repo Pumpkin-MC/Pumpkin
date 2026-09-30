@@ -93,6 +93,10 @@ impl EntityBase for LeashKnotEntity {
         None
     }
 
+    fn can_hit(&self) -> bool {
+        !self.entity.is_removed()
+    }
+
     fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
         let world = self.entity.world.load();
         let block = world.get_block(&self.pos);

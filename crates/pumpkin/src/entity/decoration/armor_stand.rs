@@ -302,6 +302,10 @@ impl EntityBase for ArmorStandEntity {
         Some(&self.living_entity)
     }
 
+    fn can_hit(&self) -> bool {
+        !self.is_marker() && !self.get_entity().is_removed()
+    }
+
     fn kill(&self, _caller: &dyn EntityBase) {
         self.get_entity().remove();
         // TODO: emit GameEvent::ENTITY_DIE
