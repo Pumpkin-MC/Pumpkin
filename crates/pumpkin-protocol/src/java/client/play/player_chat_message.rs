@@ -107,7 +107,7 @@ impl ClientPacket for CPlayerChatMessage {
             }
             Ok(())
         })?;
-        write.write_option(&self.unsigned_content, |p, v| p.write_component(v))?;
+        write.write_option(&self.unsigned_content, NetworkWriteExt::write_component)?;
         match &self.filter_type {
             FilterType::PassThrough => write.write_var_int(&VarInt(0))?,
             FilterType::FullyFiltered => write.write_var_int(&VarInt(1))?,
@@ -118,7 +118,7 @@ impl ClientPacket for CPlayerChatMessage {
         }
         write.write_var_int(&self.chat_type)?;
         write.write_component(&self.sender_name)?;
-        write.write_option(&self.target_name, |p, v| p.write_component(v))?;
+        write.write_option(&self.target_name, NetworkWriteExt::write_component)?;
         Ok(())
     }
 }

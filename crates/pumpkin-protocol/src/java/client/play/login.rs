@@ -80,7 +80,7 @@ impl ClientPacket for CLogin<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_i32_be(self.entity_id)?;
 
@@ -107,7 +107,6 @@ impl ClientPacket for CLogin<'_> {
             &mut write,
             self.spawn_data.game_mode,
             self.spawn_data.previous_gamemode,
-            *version,
         )?;
         write.write_bool(self.spawn_data.debug)?;
         write.write_bool(self.spawn_data.is_flat)?;
