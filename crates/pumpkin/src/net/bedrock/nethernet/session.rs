@@ -135,33 +135,38 @@ impl NetherNetSession {
 
         let session = self.clone();
         tokio::spawn(async move {
-            let mut opened = false;
-            while let Some(event) = channel.poll().await {
-                match event {
-                    DataChannelEvent::OnOpen => {
-                        opened = true;
-                        session.channel_opened(bit).await;
-                    }
-                    DataChannelEvent::OnMessage(msg) => {
-                        if !opened {
-                            opened = true;
-                            session.channel_opened(bit).await;
+            tokio::select! {
+                () = session.closed.cancelled() => {},
+                () = async {
+                    let mut opened = false;
+                    while let Some(event) = channel.poll().await {
+                        match event {
+                            DataChannelEvent::OnOpen => {
+                                opened = true;
+                                session.channel_opened(bit).await;
+                            }
+                            DataChannelEvent::OnMessage(msg) => {
+                                if !opened {
+                                    opened = true;
+                                    session.channel_opened(bit).await;
+                                }
+                                if let Err(error) = session.receive_segment(bit, msg.data.into()).await {
+                                    warn!(
+                                        "Invalid NetherNet message from {}: {error}",
+                                        session.address
+                                    );
+                                    break;
+                                }
+                            }
+                            DataChannelEvent::OnClose => break,
+                            DataChannelEvent::OnError => {
+                                warn!(address = %session.address, "Failed to read NetherNet data channel");
+                                break;
+                            }
+                            _ => {}
                         }
-                        if let Err(error) = session.receive_segment(bit, msg.data.into()).await {
-                            warn!(
-                                "Invalid NetherNet message from {}: {error}",
-                                session.address
-                            );
-                            break;
-                        }
                     }
-                    DataChannelEvent::OnClose => break,
-                    DataChannelEvent::OnError => {
-                        warn!(address = %session.address, "Failed to read NetherNet data channel");
-                        break;
-                    }
-                    _ => {}
-                }
+                } => {},
             }
             session.close().await;
         });
@@ -169,7 +174,7 @@ impl NetherNetSession {
         Ok(())
     }
 
-    async fn channel_opened(self: &Arc<Self>, bit: u8) {
+    pub(super) async fn channel_opened(self: &Arc<Self>, bit: u8) {
         let open = self.open_channels.fetch_or(bit, Ordering::AcqRel) | bit;
         if open == 3 && !self.accepted.swap(true, Ordering::AcqRel) {
             debug!(
@@ -316,6 +321,23 @@ impl NetherNetSession {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .take();
         }
+    }
+
+    /// Keeps accepted sessions alive, but bounds negotiations that never open their channels.
+    pub(super) async fn wait_until_closed_or_abandoned(&self) {
+        if tokio::time::timeout(Duration::from_secs(30), self.closed.cancelled())
+            .await
+            .is_err()
+            && self.accepted.load(Ordering::Acquire)
+        {
+            self.closed.cancelled().await;
+        }
+        self.mark_closed();
+    }
+
+    /// Closes the transport even when a peer callback has already marked the session closed.
+    pub(super) async fn close_transport(&self) {
+        let _ = self.peer.close().await;
     }
 
     pub async fn close(&self) {
