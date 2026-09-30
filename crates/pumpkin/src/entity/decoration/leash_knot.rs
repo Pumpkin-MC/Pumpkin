@@ -1,6 +1,7 @@
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, living::LivingEntity};
 use crate::world::World;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -121,12 +122,7 @@ impl EntityBase for LeashKnotEntity {
                     .unwrap_or(false);
 
                 if is_attached_to_knot {
-                    ent.unleash();
-                    let lead_item = pumpkin_data::item_stack::ItemStack::new(
-                        1,
-                        &pumpkin_data::item::Item::LEAD,
-                    );
-                    world.drop_stack(&ent.block_pos.load(), lead_item);
+                    ent.drop_leash_with_item();
                 }
             }
 
@@ -192,5 +188,38 @@ impl EntityBase for LeashKnotEntity {
     }
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
+        _amount: f32,
+        damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        // Vanilla `BlockAttachedEntity.hurtServer` checks `isInvulnerableToBase` first, and a
+        // creative player bypasses invulnerability there.
+        let creative_player = source.is_some_and(|source| {
+            source
+                .cast_any()
+                .downcast_ref::<Player>()
+                .is_some_and(Player::is_creative)
+        });
+        if self.entity.is_removed()
+            || (!creative_player && self.entity.is_invulnerable_to(&damage_type))
+        {
+            return false;
+        }
+        // Hitting the knot destroys it. The mobs leashed to it drop their lead on their next tick,
+        // once they see the holder is gone.
+        self.entity.world.load().play_sound(
+            Sound::ItemLeadUntied,
+            SoundCategory::Neutral,
+            &self.entity.pos.load(),
+        );
+        self.entity.remove();
+        true
     }
 }

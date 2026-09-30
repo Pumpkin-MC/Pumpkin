@@ -3379,9 +3379,16 @@ impl Entity {
         if let Some(holder) = holder {
             let holder_entity = holder.get_entity();
 
-            // Drop leash if entity or holder is removed or dead
-            if !self.is_alive() || !holder_entity.is_alive() {
+            // The mob itself is gone: just clear the link, without refunding a lead.
+            if !self.is_alive() {
                 self.unleash();
+                return;
+            }
+
+            // Vanilla `Leashable.dropLeash`: the holder is gone (for example the knot was broken),
+            // so the mob is released and drops its lead.
+            if !holder_entity.is_alive() {
+                self.drop_leash_with_item();
                 return;
             }
 
@@ -3392,12 +3399,7 @@ impl Entity {
 
             if distance > Self::LEASH_SNAP_DISTANCE {
                 // Too far: snap/break leash and drop lead item
-                self.unleash();
-                let lead_item =
-                    pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
-                self.world
-                    .load()
-                    .drop_stack(&self.block_pos.load(), lead_item);
+                self.drop_leash_with_item();
             } else if distance > Self::LEASH_ELASTIC_DISTANCE {
                 // Elastic pull force towards leash holder
                 let dir = (holder_pos - self_pos).normalize();
@@ -3407,6 +3409,25 @@ impl Entity {
                 self.velocity_dirty.store(true, Relaxed);
             }
         }
+    }
+
+    /// Vanilla `Leashable.dropLeash(true)`: release the holder and drop a lead item.
+    fn drop_leash_with_item(&self) {
+        // `unleash` fires a cancellable `EntityUnleashEvent` and leaves the holder in place when a
+        // plugin cancels it, and it is a no-op when there is no leash. Only refund a lead when a
+        // leash was present and actually released, otherwise every tick would drop another one.
+        if !self.is_leashed() {
+            return;
+        }
+        self.unleash();
+        if self.is_leashed() {
+            return;
+        }
+        let lead_item =
+            pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
+        self.world
+            .load()
+            .drop_stack(&self.block_pos.load(), lead_item);
     }
 
     pub fn has_passengers(&self) -> bool {
