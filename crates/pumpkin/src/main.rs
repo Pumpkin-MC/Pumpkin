@@ -220,13 +220,17 @@ fn print_banner() {
             .to_pretty_console()
     };
     let info = [
+        // Use true color ANSI to preserve #fa8213 without colored's palette fallback.
         format!(
-            "{} {}",
-            colored("Pumpkin", NamedColor::Gold),
+            "\x1b[38;2;250;130;19mPumpkin\x1b[0m {}",
             colored(CARGO_PKG_VERSION, NamedColor::Green)
         ),
+        String::new(),
         format!(
-            "Java    {} (Protocol {})",
+            "{}    {} (Protocol {})",
+            TextComponent::text("Java")
+                .color_named(NamedColor::Yellow)
+                .to_pretty_console(),
             colored(&CURRENT_MC_VERSION.to_string(), NamedColor::Green),
             colored(
                 &CURRENT_MC_VERSION.protocol_version().to_string(),
@@ -234,7 +238,10 @@ fn print_banner() {
             ),
         ),
         format!(
-            "Bedrock {} (Protocol {})",
+            "{} {} (Protocol {})",
+            TextComponent::text("Bedrock")
+                .color_named(NamedColor::Gold)
+                .to_pretty_console(),
             colored(CURRENT_BEDROCK_MC_VERSION, NamedColor::Green),
             colored(
                 &CURRENT_BEDROCK_MC_PROTOCOL.to_string(),
