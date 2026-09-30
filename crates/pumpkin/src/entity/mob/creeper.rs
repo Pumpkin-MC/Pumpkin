@@ -125,7 +125,46 @@ impl CreeperEntity {
             radius * multiplier,
             crate::world::ExplosionInteraction::Mob,
         );
-        // TODO: spawn area effect cloud with potion effects
+
+        let effects = self
+            .mob_entity
+            .living_entity
+            .active_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .map(|effect| {
+                (
+                    effect.effect_type,
+                    effect.duration,
+                    effect.amplifier,
+                    effect.ambient,
+                    effect.show_particles,
+                    effect.show_icon,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        if !effects.is_empty() {
+            let cloud_entity = Entity::new(
+                world.clone(),
+                entity.pos.load(),
+                &EntityType::AREA_EFFECT_CLOUD,
+            );
+            let cloud = crate::entity::area_effect_cloud::AreaEffectCloudEntity::create(
+                cloud_entity,
+                ItemStack::new(0, &Item::GLASS_BOTTLE),
+                effects,
+                300,
+                2.5,
+                20,
+                10,
+                -0.5,
+                0,
+            );
+            world.spawn_entity(cloud);
+        }
+
         entity.remove();
     }
 }
