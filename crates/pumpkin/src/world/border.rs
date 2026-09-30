@@ -151,13 +151,25 @@ impl Worldborder {
     #[must_use]
     pub fn clamp_block(&self, x: i32, z: i32) -> (i32, i32) {
         let half = self.new_diameter / 2.0;
-        // A border narrower than one block spans no block boundary, leaving `max`
-        // below `min`. `Ord::clamp` panics on an inverted range, so collapse the
-        // range onto the single block that holds the centre instead.
         let min_x = (self.center_x - half).floor() as i32;
-        let max_x = ((self.center_x + half).floor() as i32 - 1).max(min_x);
+        let max_x = (self.center_x + half).floor() as i32 - 1;
         let min_z = (self.center_z - half).floor() as i32;
-        let max_z = ((self.center_z + half).floor() as i32 - 1).max(min_z);
+        let max_z = (self.center_z + half).floor() as i32 - 1;
+
+        let center_x = self.center_x.floor() as i32;
+        let center_z = self.center_z.floor() as i32;
+
+        let (min_x, max_x) = if max_x <= min_x {
+            (center_x, center_x)
+        } else {
+            (min_x, max_x)
+        };
+        let (min_z, max_z) = if max_z <= min_z {
+            (center_z, center_z)
+        } else {
+            (min_z, max_z)
+        };
+
         (x.clamp(min_x, max_x), z.clamp(min_z, max_z))
     }
 }
@@ -199,6 +211,20 @@ mod tests {
     #[test]
     fn clamp_block_handles_a_border_narrower_than_one_block() {
         let border = Worldborder::new(0.5, 0.5, 0.5, 0, 5, 300);
+
+        assert_eq!(border.clamp_block(100, -100), (0, 0));
+    }
+
+    #[test]
+    fn clamp_block_uses_center_block_for_collapsed_off_grid_range() {
+        let border = Worldborder::new(0.1, 0.1, 0.5, 0, 5, 300);
+
+        assert_eq!(border.clamp_block(100, -100), (0, 0));
+    }
+
+    #[test]
+    fn clamp_block_uses_center_block_when_wider_border_still_collapses() {
+        let border = Worldborder::new(0.1, 0.1, 1.2, 0, 5, 300);
 
         assert_eq!(border.clamp_block(100, -100), (0, 0));
     }
