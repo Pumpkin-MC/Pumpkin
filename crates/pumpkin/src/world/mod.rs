@@ -3236,11 +3236,7 @@ impl World {
             }
         }
         client.send_chunks(&[chunk]).await;
-        player
-            .chunk_sender
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .mark_sent_out_of_band(center_chunk);
+        self.mark_chunks_held(player, &[center_chunk]);
 
         let velocity = player.living_entity.entity.velocity.load();
 
@@ -4651,13 +4647,21 @@ impl World {
         )
         .await;
         java_client.send_chunks(&chunks).await;
-        let mut sender = player
-            .chunk_sender
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        for pos in positions {
-            sender.mark_sent_out_of_band(pos);
+        self.mark_chunks_held(player, &positions);
+    }
+
+    /// Records chunks sent outside the batch path as held and pairs the entities in them.
+    fn mark_chunks_held(&self, player: &Player, positions: &[Vector2<i32>]) {
+        {
+            let mut sender = player
+                .chunk_sender
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for &pos in positions {
+                sender.mark_sent_out_of_band(pos);
+            }
         }
+        player.pair_entities_in_chunks(self, positions);
     }
 
     /// Must only be called after the player's own `CLogin` packet has been sent.

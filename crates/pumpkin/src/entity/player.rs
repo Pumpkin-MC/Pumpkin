@@ -1068,7 +1068,7 @@ impl Player {
     }
 
     /// Pairs tracked entities in chunks that were just queued for a player.
-    fn pair_entities_in_chunks(
+    pub fn pair_entities_in_chunks(
         &self,
         world: &crate::world::World,
         chunks: &[pumpkin_util::math::vector2::Vector2<i32>],
