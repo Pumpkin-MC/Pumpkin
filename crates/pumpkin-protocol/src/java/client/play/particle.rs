@@ -6,7 +6,8 @@ use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
 use crate::{
     ClientPacket, ServerPacket, VarInt,
-    ser::{NetworkReadExt, NetworkReadSliceExt, NetworkWriteExt, ReadingError, WritingError},
+    codec::particle::ParticleOptionsLayout,
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
 };
 
 /// Spawns a cluster of particles at a specific location.
@@ -102,11 +103,11 @@ impl ClientPacket for CParticle<'_> {
 
 impl<'a> ServerPacket<'a> for CParticle<'a> {
     fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let (_particle_id, important, force_spawn) = {
-            let important = bytebuf.get_bool()?;
-            let force_spawn = bytebuf.get_bool()?;
-            (VarInt(0), important, force_spawn)
-        };
+        let particle_id = bytebuf.get_var_int()?;
+        let data = ParticleOptionsLayout::read_bytes(bytebuf, particle_id)?;
+
+        let important = bytebuf.get_bool()?;
+        let force_spawn = bytebuf.get_bool()?;
 
         let position = Vector3::new(
             bytebuf.get_f64_be()?,
@@ -120,13 +121,10 @@ impl<'a> ServerPacket<'a> for CParticle<'a> {
             bytebuf.get_f32_be()?,
         );
         let max_speed = bytebuf.get_f32_be()?;
-        let particle_count = bytebuf.get_i32_be()?;
-
-        let (particle_id, data) = {
-            let id = bytebuf.get_var_int()?;
-            let remaining = bytebuf.read_remaining_slice_borrowed(usize::MAX)?;
-            (id, remaining)
-        };
+        bytebuf.get_f32_be()?;
+        bytebuf.get_f32_be()?;
+        let particle_count = bytebuf.get_var_int()?.0;
+        bytebuf.get_var_int()?;
 
         Ok(Self {
             force_spawn,
@@ -142,4 +140,75 @@ impl<'a> ServerPacket<'a> for CParticle<'a> {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use pumpkin_data::{packet::CURRENT_MC_VERSION, particle::Particle};
+    use pumpkin_util::math::vector3::Vector3;
+
+    use crate::{ClientPacket, ServerPacket, VarInt, ser::NetworkWriteExt};
+
+    use super::CParticle;
+
+    fn assert_roundtrip(packet: &CParticle<'_>) {
+        let mut buf = Vec::new();
+        packet
+            .write_packet_data(&mut buf, &CURRENT_MC_VERSION)
+            .unwrap();
+        let mut slice = buf.as_slice();
+        let read = CParticle::read(&mut slice, &CURRENT_MC_VERSION).unwrap();
+        assert!(slice.is_empty());
+        assert_eq!(&read, packet);
+    }
+
+    #[test]
+    fn read_matches_26_3_write_layout() {
+        let packet = CParticle::new(
+            true,
+            false,
+            Vector3::new(1.0, 2.0, 3.0),
+            Vector3::new(0.1, 0.2, 0.3),
+            0.5,
+            10,
+            VarInt(i32::from(Particle::Flame.to_id())),
+            &[],
+        );
+        assert_roundtrip(&packet);
+    }
+
+    #[test]
+    fn read_stops_particle_data_before_flags() {
+        let mut data = Vec::new();
+        data.write_i32_be(0x00FF_0000).unwrap();
+        data.write_f32_be(2.0).unwrap();
+        let packet = CParticle::new(
+            false,
+            true,
+            Vector3::new(4.0, 5.0, 6.0),
+            Vector3::new(0.0, 0.0, 0.0),
+            1.25,
+            1,
+            VarInt(i32::from(Particle::Dust.to_id())),
+            &data,
+        );
+        assert_roundtrip(&packet);
+    }
+
+    #[test]
+    fn read_item_particle_uses_stack_template() {
+        let mut data = Vec::new();
+        data.write_var_int(&VarInt(1)).unwrap();
+        data.write_var_int(&VarInt(1)).unwrap();
+        data.write_var_int(&VarInt(0)).unwrap();
+        data.write_var_int(&VarInt(0)).unwrap();
+        let packet = CParticle::new(
+            false,
+            false,
+            Vector3::new(0.0, 64.0, 0.0),
+            Vector3::new(0.0, 0.0, 0.0),
+            0.0,
+            1,
+            VarInt(i32::from(Particle::Item.to_id())),
+            &data,
+        );
+        assert_roundtrip(&packet);
+    }
+}
