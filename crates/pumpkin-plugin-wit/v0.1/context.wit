@@ -37,7 +37,24 @@ interface context {
         /// * `event-type`: The type of event to listen for.
         /// * `event-priority`: When this handler should be called relative to others.
         /// * `blocking`: Whether the event should wait for this handler to finish.
+        /// Use `register-event-with-handle` when individual removal is needed.
         register-event: func(handler-id: u32, event-type: event-type, event-priority: event-priority, blocking: bool);
+
+        /// Registers an event handler and returns an opaque, host-owned registration ID.
+        ///
+        /// `handler-id` identifies the plugin callback; the returned `registration-id`
+        /// identifies this specific registration. The registration belongs to this
+        /// plugin and can be removed with `unregister-event`.
+        register-event-with-handle: func(handler-id: u32, event-type: event-type, event-priority: event-priority, blocking: bool) -> u64;
+
+        /// Removes one of this plugin's event registrations.
+        ///
+        /// Returns `true` if the registration was removed, or `false` if the ID is
+        /// unknown, belongs to another plugin, or was already removed. Dispatches
+        /// started after successful removal do not include this registration.
+        /// Dispatches already in progress may still invoke or finish its callback.
+        /// The ID becomes invalid on plugin unload.
+        unregister-event: func(registration-id: u64) -> bool;
 
         /// Registers a new command.
         ///

@@ -17,7 +17,9 @@ use tracing::Level;
 
 use crate::{
     entity::player::Player,
-    plugin::{EventHandler, HandlerMap, PluginManager, TypedEventHandler},
+    plugin::{
+        EventHandler, HandlerMap, PluginManager, TypedEventHandler, unregister_event_handler,
+    },
     server::Server,
 };
 
@@ -324,11 +326,25 @@ impl Context {
     ) where
         H: EventHandler<E> + 'static,
     {
+        self.register_event_with_id(handler, priority, blocking, None);
+    }
+
+    /// Registers an event handler with an optional host-owned identity.
+    pub fn register_event_with_id<E: Payload + 'static, H>(
+        &self,
+        handler: Arc<H>,
+        priority: EventPriority,
+        blocking: bool,
+        registration_id: Option<u64>,
+    ) where
+        H: EventHandler<E> + 'static,
+    {
         let typed_handler = Arc::new(TypedEventHandler {
             handler,
             priority,
             blocking,
             source: Some(self.metadata.name.clone()),
+            registration_id,
             _phantom: std::marker::PhantomData,
         });
 
@@ -340,6 +356,12 @@ impl Context {
                 .push(typed_handler.clone());
             Arc::new(new_handlers)
         });
+    }
+
+    /// Removes one host-issued registration owned by this plugin.
+    #[must_use]
+    pub fn unregister_event(&self, registration_id: u64) -> bool {
+        unregister_event_handler(&self.handlers, &self.metadata.name, registration_id)
     }
 
     /// Registers a custom plugin loader that can load additional plugin types.

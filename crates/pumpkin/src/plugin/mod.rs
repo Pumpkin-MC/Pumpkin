@@ -78,6 +78,11 @@ pub trait DynEventHandler: Send + Sync {
     fn source(&self) -> Option<&str> {
         None
     }
+
+    /// Host-issued identity for a removable event registration.
+    fn registration_id(&self) -> Option<u64> {
+        None
+    }
 }
 
 /// A trait for handling specific events.
@@ -117,6 +122,7 @@ where
     pub priority: EventPriority,
     pub blocking: bool,
     pub source: Option<String>,
+    pub registration_id: Option<u64>,
     pub _phantom: std::marker::PhantomData<E>,
 }
 
@@ -166,11 +172,45 @@ where
     fn source(&self) -> Option<&str> {
         self.source.as_deref()
     }
+
+    fn registration_id(&self) -> Option<u64> {
+        self.registration_id
+    }
 }
 
 /// A type alias for a map of event handlers, where the key is a static string
 /// and the value is a vector of dynamic event handlers.
 pub type HandlerMap = HashMap<&'static str, Vec<Arc<dyn DynEventHandler>>>;
+
+/// Removes a plugin-owned event registration from the published handler map.
+/// An older snapshot can finish dispatching, but new snapshots exclude it.
+pub(crate) fn unregister_event_handler(
+    handlers: &ArcSwap<HandlerMap>,
+    source: &str,
+    registration_id: u64,
+) -> bool {
+    loop {
+        let current = handlers.load_full();
+        let mut next = (*current).clone();
+        let mut removed = false;
+        next.retain(|_, event_handlers| {
+            event_handlers.retain(|handler| {
+                let matches = handler.source() == Some(source)
+                    && handler.registration_id() == Some(registration_id);
+                removed |= matches;
+                !matches
+            });
+            !event_handlers.is_empty()
+        });
+        if !removed {
+            return false;
+        }
+        let previous = handlers.compare_and_swap(&current, Arc::new(next));
+        if Arc::ptr_eq(&current, &*previous) {
+            return true;
+        }
+    }
+}
 
 /// Plugin loading state
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1183,6 +1223,7 @@ impl PluginManager {
             priority,
             blocking,
             source: None,
+            registration_id: None,
             _phantom: std::marker::PhantomData,
         });
 
@@ -1300,6 +1341,83 @@ impl PluginManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct RegistrationTestHandler {
+        source: Option<&'static str>,
+        registration_id: Option<u64>,
+    }
+
+    impl DynEventHandler for RegistrationTestHandler {
+        fn handle_dyn<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            _event: &'a (dyn Payload + Send + Sync),
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async {})
+        }
+
+        fn handle_blocking_dyn<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            _event: &'a mut (dyn Payload + Send + Sync),
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async {})
+        }
+
+        fn is_blocking(&self) -> bool {
+            false
+        }
+
+        fn get_priority(&self) -> &EventPriority {
+            &EventPriority::Normal
+        }
+
+        fn source(&self) -> Option<&str> {
+            self.source
+        }
+
+        fn registration_id(&self) -> Option<u64> {
+            self.registration_id
+        }
+    }
+
+    #[test]
+    fn unregister_event_handler_is_owned_and_idempotent() {
+        let make_handler = |source, registration_id| {
+            Arc::new(RegistrationTestHandler {
+                source,
+                registration_id,
+            }) as Arc<dyn DynEventHandler>
+        };
+        let map = HashMap::from([(
+            "example-event",
+            vec![
+                make_handler(Some("plugin-a"), Some(1)),
+                make_handler(Some("plugin-b"), Some(2)),
+                make_handler(Some("plugin-a"), None),
+            ],
+        )]);
+        let handlers = ArcSwap::from_pointee(map);
+
+        assert!(!unregister_event_handler(&handlers, "plugin-b", 1));
+        assert!(!unregister_event_handler(&handlers, "plugin-a", 0));
+        assert_eq!(handlers.load()["example-event"].len(), 3);
+
+        assert!(unregister_event_handler(&handlers, "plugin-a", 1));
+        assert!(!unregister_event_handler(&handlers, "plugin-a", 1));
+        let remaining = &handlers.load()["example-event"];
+        assert_eq!(remaining.len(), 2);
+        assert!(
+            remaining
+                .iter()
+                .any(|handler| handler.source() == Some("plugin-b"))
+        );
+        assert!(
+            remaining
+                .iter()
+                .any(|handler| handler.registration_id().is_none())
+        );
+    }
 
     #[tokio::test]
     async fn topological_sort() {
