@@ -54,8 +54,7 @@ impl BedrockClient {
             }
             SResourcePackClientResponse::STATUS_COMPLETED => {
                 debug!("Bedrock: SResourcePackResponse::STATUS_COMPLETED");
-                let player = self.player.load_full();
-                if let Some(player) = player.as_ref() {
+                if let Some(player) = self.player.load().upgrade() {
                     player
                         .world()
                         .spawn_bedrock_player(&server.basic_config, player.clone(), server)
