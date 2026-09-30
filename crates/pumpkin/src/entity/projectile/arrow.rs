@@ -748,8 +748,13 @@ impl EntityBase for ArrowEntity {
             }
         }
 
-        // Entity collisions
-        let candidates = world.get_entities_at_box(&search_box);
+        // Players are not in world.entities
+        let candidates = world.get_entities_at_box(&search_box).into_iter().chain(
+            world
+                .get_players_at_box(&search_box)
+                .into_iter()
+                .map(|player| player as Arc<dyn EntityBase>),
+        );
         for cand in candidates {
             if self.should_skip_collision(entity, &cand) {
                 continue;
@@ -1057,6 +1062,10 @@ impl ArrowEntity {
 
         // Don't collide with self
         if other_ent.entity_id == self_ent.entity_id {
+            return true;
+        }
+
+        if other_ent.is_spectator() {
             return true;
         }
 

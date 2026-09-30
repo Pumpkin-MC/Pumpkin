@@ -17,7 +17,7 @@ pub trait Behavior: Send + Sync {
         DEFAULT_DURATION
     }
 
-    fn check_extra_start_conditions(&mut self, _tick: &BrainTick<'_>) -> bool {
+    fn check_extra_start_conditions(&mut self, _tick: &mut BrainTick<'_>) -> bool {
         true
     }
 

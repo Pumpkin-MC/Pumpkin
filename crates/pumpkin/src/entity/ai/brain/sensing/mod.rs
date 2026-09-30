@@ -1,14 +1,29 @@
+use std::sync::Arc;
+
 use rand::{Rng, RngExt};
 
-use crate::entity::EntityBase;
 use crate::entity::ai::target_predicate::TargetPredicate;
+use crate::entity::{Entity, EntityBase};
+use crate::world::World;
 
 use super::memory::{MemoryModuleId, types};
 use super::{BrainTick, VisibilityContext};
 
 pub mod dummy;
+pub mod hurt_by;
+pub mod nearest_items;
+pub mod nearest_living_entities;
+pub mod nearest_players;
+pub mod piglin_brute_specific;
+pub mod piglin_specific;
 
 pub use dummy::DummySensor;
+pub use hurt_by::HurtBySensor;
+pub use nearest_items::NearestItemSensor;
+pub use nearest_living_entities::NearestLivingEntitySensor;
+pub use nearest_players::PlayerSensor;
+pub use piglin_brute_specific::PiglinBruteSpecificSensor;
+pub use piglin_specific::PiglinSpecificSensor;
 
 pub const DEFAULT_SCAN_RATE: i32 = 20;
 
@@ -20,6 +35,12 @@ pub trait Sensor: Send + Sync {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SensorType {
     Dummy,
+    NearestLivingEntities,
+    NearestPlayers,
+    NearestItems,
+    HurtBy,
+    PiglinSpecific,
+    PiglinBruteSpecific,
 }
 
 impl SensorType {
@@ -27,19 +48,37 @@ impl SensorType {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Dummy => "minecraft:dummy",
+            Self::NearestLivingEntities => "minecraft:nearest_living_entities",
+            Self::NearestPlayers => "minecraft:nearest_players",
+            Self::NearestItems => "minecraft:nearest_items",
+            Self::HurtBy => "minecraft:hurt_by",
+            Self::PiglinSpecific => "minecraft:piglin_specific_sensor",
+            Self::PiglinBruteSpecific => "minecraft:piglin_brute_specific_sensor",
         }
     }
 
     #[must_use]
     pub const fn scan_rate(self) -> i32 {
         match self {
-            Self::Dummy => DEFAULT_SCAN_RATE,
+            Self::Dummy
+            | Self::NearestLivingEntities
+            | Self::NearestPlayers
+            | Self::NearestItems
+            | Self::HurtBy
+            | Self::PiglinSpecific
+            | Self::PiglinBruteSpecific => DEFAULT_SCAN_RATE,
         }
     }
 
     fn create_sensor(self) -> Box<dyn Sensor> {
         match self {
             Self::Dummy => Box::new(DummySensor),
+            Self::NearestLivingEntities => Box::new(NearestLivingEntitySensor),
+            Self::NearestPlayers => Box::new(PlayerSensor),
+            Self::NearestItems => Box::new(NearestItemSensor),
+            Self::HurtBy => Box::new(HurtBySensor),
+            Self::PiglinSpecific => Box::new(PiglinSpecificSensor),
+            Self::PiglinBruteSpecific => Box::new(PiglinBruteSpecificSensor),
         }
     }
 
@@ -85,14 +124,57 @@ impl SensorEntry {
     }
 }
 
+/// Entities meeting `body`'s box inflated by the given extents, nearest first.
+fn entities_in_inflated_box(
+    world: &Arc<World>,
+    body: &Entity,
+    x: f64,
+    y: f64,
+    z: f64,
+    filter: impl Fn(&Arc<dyn EntityBase>) -> bool,
+) -> Vec<Arc<dyn EntityBase>> {
+    let bounds = body.bounding_box.load().expand(x, y, z);
+    let body_pos = body.pos.load();
+    let body_id = body.entity_id;
+
+    let entities = world.entities.load();
+    let players = world.players.load();
+    // Players are not in world.entities
+    let mut found: Vec<(f64, Arc<dyn EntityBase>)> = entities
+        .iter()
+        .map(Arc::clone)
+        .chain(
+            players
+                .iter()
+                .map(|player| Arc::clone(player) as Arc<dyn EntityBase>),
+        )
+        .filter(|entity| {
+            entity.get_entity().entity_id != body_id
+                && entity.get_entity().bounding_box.load().intersects(&bounds)
+                && filter(entity)
+        })
+        .map(|entity| {
+            (
+                entity
+                    .get_entity()
+                    .pos
+                    .load()
+                    .squared_distance_to_vec(&body_pos),
+                entity,
+            )
+        })
+        .collect();
+    found.sort_by(|a, b| a.0.total_cmp(&b.0));
+    found.into_iter().map(|(_, entity)| entity).collect()
+}
+
 fn is_current_attack_target(ctx: &VisibilityContext<'_>, target: &dyn EntityBase) -> bool {
     ctx.brain
         .get(types::ATTACK_TARGET)
         .is_some_and(|current| current.get_entity().entity_id == target.get_entity().entity_id)
 }
 
-// Vanilla's `ignoreInvisibilityTesting` drops the visibility-percent range scaling, which is
-// `use_distance_scaling_factor` here, not the line of sight check.
+// ignoreInvisibilityTesting drops the range scaling, not line of sight
 fn targeting_predicate(
     ctx: &VisibilityContext<'_>,
     target: &dyn EntityBase,

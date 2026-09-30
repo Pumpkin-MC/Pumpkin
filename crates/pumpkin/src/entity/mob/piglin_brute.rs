@@ -1,5 +1,5 @@
 use std::sync::{
-    Arc, Weak,
+    Arc,
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
@@ -10,13 +10,11 @@ use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
+use pumpkin_data::data_component_impl::EquipmentSlot;
+
+use crate::entity::mob::{abstract_piglin, piglin_brute_ai};
 use crate::entity::{
     Entity, EntityBase,
-    ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, open_door::OpenDoorGoal,
-        revenge::RevengeGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
-    },
     mob::{Mob, MobEntity},
 };
 use crate::world::World;
@@ -39,52 +37,10 @@ impl PiglinBruteEntity {
             time_in_overworld: AtomicI32::new(0),
         };
         let mob_arc = Arc::new(piglin);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
-
-        {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(OpenDoorGoal::new(true)));
-            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, true)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
-            goal_selector.add_goal(
-                6,
-                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 8.0),
-            );
-            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
-
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(
-                    &mob_arc.mob_entity,
-                    &EntityType::WITHER_SKELETON,
-                    true,
-                ),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WITHER, true),
-            );
-        };
-
+        mob_arc.mob_entity.init_brain(mob_arc.as_ref());
+        mob_arc
+            .mob_entity
+            .with_brain(mob_arc.as_ref(), piglin_brute_ai::init_memories);
         mob_arc
     }
 
@@ -109,7 +65,18 @@ impl PiglinBruteEntity {
             && world.dimension.piglins_zombify
     }
 
-    #[must_use]
+    pub fn play_angry_sound(&self) {
+        self.play_sound(Sound::EntityPiglinBruteAngry);
+    }
+
+    fn play_sound(&self, sound: Sound) {
+        let entity = &self.mob_entity.living_entity.entity;
+        entity
+            .world
+            .load()
+            .play_sound(sound, SoundCategory::Hostile, &entity.pos.load());
+    }
+
     pub fn check_piglin_brute_spawn_rules(world: &World, pos: &BlockPos) -> bool {
         let below = BlockPos::new(pos.0.x, pos.0.y - 1, pos.0.z);
         let state = world.get_block_state(&below);
@@ -120,14 +87,6 @@ impl PiglinBruteEntity {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
         let pos = entity.pos.load();
-
-        if world.level_info.load().difficulty != pumpkin_util::Difficulty::Peaceful {
-            world.play_sound(
-                Sound::EntityPiglinBruteConvertedToZombified,
-                SoundCategory::Hostile,
-                &pos,
-            );
-        }
 
         let zombified = crate::entity::r#type::from_type(
             &EntityType::ZOMBIFIED_PIGLIN,
@@ -172,6 +131,49 @@ impl PiglinBruteEntity {
     }
 }
 
+impl abstract_piglin::AbstractPiglin for PiglinBruteEntity {
+    fn is_adult(&self) -> bool {
+        true
+    }
+
+    fn can_hunt(&self) -> bool {
+        true
+    }
+
+    fn is_converting(&self, world: &World) -> bool {
+        Self::is_converting(self, world)
+    }
+
+    fn is_immune_to_zombification(&self) -> bool {
+        Self::is_immune_to_zombification(self)
+    }
+
+    fn arm_pose(&self) -> abstract_piglin::PiglinArmPose {
+        let holding_melee_weapon = self
+            .mob_entity
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&EquipmentSlot::MAIN_HAND)
+            .get_data_component::<pumpkin_data::data_component_impl::ToolImpl>()
+            .is_some();
+        if self.mob_entity.is_attacking() && holding_melee_weapon {
+            abstract_piglin::PiglinArmPose::AttackingWithMeleeWeapon
+        } else {
+            abstract_piglin::PiglinArmPose::Default
+        }
+    }
+
+    fn play_converted_sound(&self) {
+        self.play_sound(Sound::EntityPiglinBruteConvertedToZombified);
+    }
+
+    fn finish_conversion(&self) {
+        self.convert_to_zombified();
+    }
+}
+
 impl Mob for PiglinBruteEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
@@ -207,21 +209,49 @@ impl Mob for PiglinBruteEntity {
         }
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
+    fn make_brain(
+        &self,
+        packed: &crate::entity::ai::brain::memory::PackedMemories,
+    ) -> crate::entity::ai::brain::Brain {
+        piglin_brute_ai::PIGLIN_BRUTE_PROVIDER.make_brain(self, packed)
+    }
+
+    fn after_brain_tick(&self, tick: &mut crate::entity::ai::brain::BrainTick<'_>) {
+        piglin_brute_ai::update_activity(tick);
+        piglin_brute_ai::maybe_play_activity_sound(tick);
+    }
+
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
-        if !entity.is_alive() {
+        if !crate::entity::ai::brain::behavior::utils::is_alive(self) {
+            // No AI while dying, but still drain the inbox
+            self.mob_entity.apply_brain_inbox(self);
             return;
         }
-
+        self.mob_entity.tick_brain(self);
         let world = entity.world.load();
-        if self.is_converting(&world) {
-            let time = self.time_in_overworld.fetch_add(1, Ordering::Relaxed) + 1;
-            if time > Self::CONVERSION_TIME {
-                self.convert_to_zombified();
-            }
-        } else {
-            self.time_in_overworld.store(0, Ordering::Relaxed);
-        }
+        abstract_piglin::tick_conversion(self, &world, &self.time_in_overworld);
+    }
+
+    fn on_damage(
+        &self,
+        _damage_type: pumpkin_data::damage::DamageType,
+        source: Option<&dyn EntityBase>,
+    ) {
+        let Some(attacker) = source else {
+            return;
+        };
+        let world = self.mob_entity.living_entity.entity.world.load_full();
+        let Some(attacker) = world
+            .get_entity_by_id(attacker.get_entity().entity_id)
+            .filter(|attacker| attacker.get_living_entity().is_some())
+        else {
+            return;
+        };
+        // Queued, see PiglinEntity::on_damage
+        self.mob_entity.post_to_brain(Box::new(move |tick| {
+            piglin_brute_ai::was_hurt_by(tick, &attacker);
+        }));
     }
 
     fn get_base_experience_reward(&self) -> u32 {

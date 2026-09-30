@@ -36,7 +36,7 @@ pub struct RangedCrossbowAttackGoal {
 
 impl RangedCrossbowAttackGoal {
     /// Vanilla crossbow charge duration (ticks).
-    const CHARGE_DURATION: i32 = 25;
+    pub const CHARGE_DURATION: i32 = 25;
     /// Vanilla arrow speed for crossbow shots.
     const ARROW_SPEED: f64 = 1.6;
 
@@ -66,7 +66,7 @@ impl RangedCrossbowAttackGoal {
         })
     }
 
-    fn shoot(mob: &dyn Mob, target: &Arc<dyn EntityBase>) {
+    pub fn shoot(mob: &dyn Mob, target: &Arc<dyn EntityBase>) {
         let entity = mob.get_entity();
         let world = entity.world.load();
         let world_full = entity.world.load_full();
