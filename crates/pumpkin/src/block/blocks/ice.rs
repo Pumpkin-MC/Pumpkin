@@ -64,6 +64,10 @@ impl BlockMetadata for IceBlock {
 
 impl BlockBehaviour for IceBlock {
     fn broken(&self, args: BrokenArgs<'_>) {
+        // Vanilla only calls `playerDestroy` when the player doesn't prevent block drops.
+        if args.player.is_creative() {
+            return;
+        }
         {
             let held_item = args.player.inventory().held_item();
             let has_silk_touch = held_item.get_enchantment_level(&Enchantment::SILK_TOUCH) > 0;
