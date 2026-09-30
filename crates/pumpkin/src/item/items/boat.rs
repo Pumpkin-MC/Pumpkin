@@ -5,15 +5,10 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::entity::vehicle::boat::BoatEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
-use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
-use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-
-use crate::world::World;
 
 pub struct BoatItem;
 
@@ -96,36 +91,9 @@ impl ItemBehaviour for BoatItem {
         let world = player.world();
         let (start_pos, end_pos) = self.get_start_and_end_pos(player);
 
-        // Vanilla: raycast with FluidHandling.ANY - stops on water/lava surface or solid blocks
-        let checker = |pos: &BlockPos, world_inner: &Arc<World>| {
-            let state_id = world_inner.get_block_state_id(pos);
-
-            // Air doesn't stop the raycast
-            if state_id == Block::AIR.default_state.id {
-                return false;
-            }
-
-            // Check if it's a fluid - stop on any fluid (FluidHandling.ANY in vanilla)
-            if Fluid::from_state_id(state_id).is_some() {
-                return true;
-            }
-
-            // Stop on solid blocks
-            true
-        };
-
-        let Some((hit_pos, _direction)) = world.raycast(start_pos, end_pos, checker) else {
+        let Some((_, _, hit_vec)) = world.ray_trace_block(start_pos, end_pos, true) else {
             return;
         };
-
-        // Calculate hit position - center of the block top or water surface
-        // TODO: Vanilla uses exact raycast intersection point (hitResult.getPos()),
-        // Pumpkin's raycast only returns block positions.
-        let hit_vec = Vector3::new(
-            f64::from(hit_pos.0.x) + 0.5,
-            f64::from(hit_pos.0.y) + 1.0,
-            f64::from(hit_pos.0.z) + 0.5,
-        );
 
         // Vanilla: Check for entities in the path that would block placement
         // Get player's rotation vector stretched by 5.0 and expanded by 1.0
