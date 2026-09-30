@@ -48,13 +48,9 @@ impl SPlayerAbilities {
 }
 
 impl<'a> ServerPacket<'a> for SPlayerAbilities {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let flags = bytebuf.get_i8()?;
-        let (fly_speed, walk_speed) = if *version < JavaMinecraftVersion::V_1_16 {
-            (Some(bytebuf.get_f32_be()?), Some(bytebuf.get_f32_be()?))
-        } else {
-            (None, None)
-        };
+        let (fly_speed, walk_speed) = (None, None);
         Ok(Self {
             flags,
             fly_speed,
@@ -67,14 +63,11 @@ impl crate::ClientPacket for SPlayerAbilities {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_i8(self.flags)?;
-        if *version < JavaMinecraftVersion::V_1_16 {
-            write.write_f32_be(self.fly_speed.unwrap_or(0.05))?;
-            write.write_f32_be(self.walk_speed.unwrap_or(0.1))?;
-        }
+
         Ok(())
     }
 }

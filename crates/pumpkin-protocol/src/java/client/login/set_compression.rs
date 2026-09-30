@@ -58,7 +58,7 @@ mod tests {
     fn set_compression_roundtrip() {
         let packet = CSetCompression::new(crate::VarInt(256));
         let mut buf = Vec::new();
-        let version = JavaMinecraftVersion::V_1_21_4;
+        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
         packet.write_packet_data(&mut buf, &version).unwrap();
 
         let mut slice = buf.as_slice();

@@ -36,34 +36,20 @@ impl ClientPacket for CChangeDifficulty {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         // Difficulty enum serialized as VarInt in 1.21.6+, and unsigned byte before
-        if *version >= JavaMinecraftVersion::V_1_21_6 {
-            write.write_var_int(&VarInt(i32::from(self.difficulty)))?;
-        } else {
-            write.write_u8(self.difficulty)?;
-        }
+        write.write_var_int(&VarInt(i32::from(self.difficulty)))?;
         // Added in 1.14: locked boolean
-        if *version >= JavaMinecraftVersion::V_1_14 {
-            write.write_bool(self.locked)?;
-        }
+        write.write_bool(self.locked)?;
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CChangeDifficulty {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let difficulty = if *version >= JavaMinecraftVersion::V_1_21_6 {
-            bytebuf.get_var_int()?.0 as u8
-        } else {
-            bytebuf.get_u8()?
-        };
-        let locked = if *version >= JavaMinecraftVersion::V_1_14 {
-            bytebuf.get_bool()?
-        } else {
-            false
-        };
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let difficulty = bytebuf.get_var_int()?.0 as u8;
+        let locked = bytebuf.get_bool()?;
         Ok(Self { difficulty, locked })
     }
 }

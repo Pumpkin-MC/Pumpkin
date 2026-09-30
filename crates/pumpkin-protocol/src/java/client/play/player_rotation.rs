@@ -21,16 +21,12 @@ impl ClientPacket for CPlayerRotation {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_f32_be(self.yaw)?;
-        if *version >= JavaMinecraftVersion::V_1_21_9 {
-            write.write_bool(false)?;
-        }
+        write.write_bool(false)?;
         write.write_f32_be(self.pitch)?;
-        if *version >= JavaMinecraftVersion::V_1_21_9 {
-            write.write_bool(false)?;
-        }
+        write.write_bool(false)?;
         Ok(())
     }
 }

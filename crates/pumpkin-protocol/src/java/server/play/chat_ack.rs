@@ -14,12 +14,8 @@ pub struct SChatAck {
 }
 
 impl<'a> ServerPacket<'a> for SChatAck {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let offset = if *version >= JavaMinecraftVersion::V_1_19_3 {
-            bytebuf.get_var_int()?
-        } else {
-            VarInt(0)
-        };
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let offset = bytebuf.get_var_int()?;
 
         Ok(Self { offset })
     }
@@ -29,12 +25,10 @@ impl crate::ClientPacket for SChatAck {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        if *version >= JavaMinecraftVersion::V_1_19_3 {
-            write.write_var_int(&self.offset)?;
-        }
+        write.write_var_int(&self.offset)?;
         Ok(())
     }
 }

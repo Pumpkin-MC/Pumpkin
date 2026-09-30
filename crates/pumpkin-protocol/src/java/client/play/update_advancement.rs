@@ -76,17 +76,6 @@ impl ClientPacket for CUpdateAdvancements {
                 if let Some(bg) = display.background_texture {
                     write.write_string(bg)?;
                 }
-                if *version < JavaMinecraftVersion::V_26_3 {
-                    write.write_f32_be(display.x)?;
-                    write.write_f32_be(display.y)?;
-                }
-            }
-
-            if *version < JavaMinecraftVersion::V_1_20_2 {
-                write.write_var_int(&VarInt(adv.criteria.len() as i32))?;
-                for crit in adv.criteria {
-                    write.write_string(crit)?;
-                }
             }
 
             write.write_var_int(&VarInt(adv.requirements.len() as i32))?;
@@ -97,13 +86,11 @@ impl ClientPacket for CUpdateAdvancements {
                 }
             }
 
-            if *version >= JavaMinecraftVersion::V_1_20 {
-                write.write_bool(adv.send_telemetry)?;
-            }
+            write.write_bool(adv.send_telemetry)?;
 
             // Since 26.3 the position in the advancement tree is sent per advancement instead of
             // being part of its display.
-            if *version >= JavaMinecraftVersion::V_26_3 {
+            {
                 let (x, y) = adv.display.map_or((0.0, 0.0), |d| (d.x, d.y));
                 write.write_f32_be(x)?;
                 write.write_f32_be(y)?;
@@ -129,9 +116,7 @@ impl ClientPacket for CUpdateAdvancements {
             }
         }
 
-        if *version >= JavaMinecraftVersion::V_1_21_5 {
-            write.write_bool(self.show_advancements)?;
-        }
+        write.write_bool(self.show_advancements)?;
 
         Ok(())
     }

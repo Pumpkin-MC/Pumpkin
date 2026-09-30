@@ -60,13 +60,9 @@ impl ClientPacket for CSetEntityMetadata {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if *version < JavaMinecraftVersion::V_1_8 {
-            write.write_i32_be(self.entity_id.0)?;
-        } else {
-            write.write_var_int(&self.entity_id)?;
-        }
+        write.write_var_int(&self.entity_id)?;
 
         write.write_slice(&self.metadata)
     }
@@ -75,14 +71,10 @@ impl ClientPacket for CSetEntityMetadata {
 impl<'a> crate::ServerPacket<'a> for CSetEntityMetadata {
     fn read(
         bytebuf: &mut &'a [u8],
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<Self, crate::ser::ReadingError> {
         use crate::ser::{NetworkReadExt, NetworkReadSliceExt};
-        let entity_id = if *version <= JavaMinecraftVersion::V_1_7_6 {
-            VarInt(bytebuf.get_i32_be()?)
-        } else {
-            bytebuf.get_var_int()?
-        };
+        let entity_id = bytebuf.get_var_int()?;
         let metadata = bytebuf.read_remaining_slice_borrowed(usize::MAX)?;
         Ok(Self {
             entity_id,
@@ -140,18 +132,7 @@ impl<T> Metadata<T> {
         if self.r#type == MetaDataType::BLOCK_STATE
             || self.r#type == MetaDataType::OPTIONAL_BLOCK_STATE
         {
-            if *version >= JavaMinecraftVersion::V_1_9 {
-                self.value.write_metadata(&mut writer, version)?;
-            } else {
-                let mut serialized_value = Vec::new();
-                self.value.write_metadata(&mut serialized_value, version)?;
-
-                let mut cursor = Cursor::new(serialized_value);
-                let decoded_state = VarInt::decode(&mut cursor).map_err(|e| {
-                    WritingError::Message(format!("Failed to decode block state metadata: {e}"))
-                })?;
-                writer.write_i32(decoded_state.0)?;
-            }
+            self.value.write_metadata(&mut writer, version)?;
             return Ok(());
         }
 
@@ -263,13 +244,9 @@ impl MetadataSerializer for i32 {
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_9 {
-            writer.write_var_int(&VarInt(*self))
-        } else {
-            writer.write_i32(*self)
-        }
+        writer.write_var_int(&VarInt(*self))
     }
 }
 
@@ -277,13 +254,9 @@ impl MetadataSerializer for u32 {
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_9 {
-            writer.write_var_int(&VarInt(*self as i32))
-        } else {
-            writer.write_u32(*self)
-        }
+        writer.write_var_int(&VarInt(*self as i32))
     }
 }
 
@@ -291,13 +264,9 @@ impl MetadataSerializer for i64 {
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_9 {
-            writer.write_var_long(&VarLong(*self))
-        } else {
-            writer.write_i64_be(*self)
-        }
+        writer.write_var_long(&VarLong(*self))
     }
 }
 
@@ -305,13 +274,9 @@ impl MetadataSerializer for u64 {
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_9 {
-            writer.write_var_long(&VarLong(*self as i64))
-        } else {
-            writer.write_u64_be(*self)
-        }
+        writer.write_var_long(&VarLong(*self as i64))
     }
 }
 
@@ -319,13 +284,9 @@ impl MetadataSerializer for VarLong {
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_9 {
-            writer.write_var_long(self)
-        } else {
-            writer.write_i64_be(self.0)
-        }
+        writer.write_var_long(self)
     }
 }
 
@@ -365,12 +326,7 @@ impl MetadataSerializer for pumpkin_util::text::TextComponent {
         writer: &mut impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if *version < JavaMinecraftVersion::V_1_20_3 {
-            let json = self.to_json_for_version(version);
-            writer.write_string(&json)
-        } else {
-            writer.write_slice(&self.encode_for_version(version))
-        }
+        writer.write_slice(&self.encode_for_version(version))
     }
 }
 
@@ -447,13 +403,7 @@ impl MetadataSerializer for pumpkin_util::math::position::BlockPos {
         writer: &mut impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_9 {
-            writer.write_block_pos(self, version)
-        } else {
-            writer.write_i32(self.0.x)?;
-            writer.write_i32(self.0.y)?;
-            writer.write_i32(self.0.z)
-        }
+        writer.write_block_pos(self, version)
     }
 }
 
@@ -477,14 +427,10 @@ impl MetadataSerializer for crate::codec::optional_int::OptionalInt {
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let val = self.0.map_or(0, |id| id + 1);
-        if *version >= JavaMinecraftVersion::V_1_9 {
-            writer.write_var_int(&VarInt(val))
-        } else {
-            writer.write_i32(val)
-        }
+        writer.write_var_int(&VarInt(val))
     }
 }
 
@@ -571,43 +517,9 @@ mod tests {
 
     #[test]
     fn particle_metadata_id_stays_latest_for_26_3() {
-        let (particle_id, data) = encoded_particle(JavaMinecraftVersion::V_26_3);
+        let (particle_id, data) = encoded_particle(pumpkin_data::packet::CURRENT_MC_VERSION);
 
         assert_eq!(particle_id, VarInt(29));
         assert_eq!(data, [0x12, 0x34, 0x56, 0x78]);
-    }
-
-    #[test]
-    fn int_metadata_encodes_varint_for_1_9_plus_and_i32_for_legacy() {
-        let mut buf_modern = Vec::new();
-        (-1i32)
-            .write_metadata(&mut buf_modern, &JavaMinecraftVersion::V_1_21)
-            .unwrap();
-        // -1 as VarInt is 5 bytes: 0xFF, 0xFF, 0xFF, 0xFF, 0x0F
-        assert_eq!(buf_modern, vec![0xFF, 0xFF, 0xFF, 0xFF, 0x0F]);
-
-        let mut buf_legacy = Vec::new();
-        (-1i32)
-            .write_metadata(&mut buf_legacy, &JavaMinecraftVersion::V_1_8)
-            .unwrap();
-        // -1 as i32 BE is 4 bytes: 0xFF, 0xFF, 0xFF, 0xFF
-        assert_eq!(buf_legacy, vec![0xFF, 0xFF, 0xFF, 0xFF]);
-    }
-
-    #[test]
-    fn block_pos_metadata_encodes_packed_for_1_9_plus_and_three_ints_for_legacy() {
-        let pos = pumpkin_util::math::position::BlockPos(
-            pumpkin_util::math::vector3::Vector3::new(10, 20, 30),
-        );
-
-        let mut buf_modern = Vec::new();
-        pos.write_metadata(&mut buf_modern, &JavaMinecraftVersion::V_1_21)
-            .unwrap();
-        assert_eq!(buf_modern.len(), 8); // packed i64
-
-        let mut buf_legacy = Vec::new();
-        pos.write_metadata(&mut buf_legacy, &JavaMinecraftVersion::V_1_8)
-            .unwrap();
-        assert_eq!(buf_legacy.len(), 12); // 3 * i32 (12 bytes)
     }
 }

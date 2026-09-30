@@ -27,20 +27,11 @@ impl ClientPacket for CRemoveEntities<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        if *version == JavaMinecraftVersion::V_1_17 {
-            write.write_var_int(self.entity_ids.first().unwrap_or(&VarInt(0)))?;
-        } else if *version <= JavaMinecraftVersion::V_1_7_6 {
-            write.write_u8(self.entity_ids.len() as u8)?;
-            for id in self.entity_ids {
-                write.write_i32_be(id.0)?;
-            }
-        } else {
-            write.write_var_int(&VarInt(self.entity_ids.len() as i32))?;
-            for id in self.entity_ids {
-                write.write_var_int(id)?;
-            }
+        write.write_var_int(&VarInt(self.entity_ids.len() as i32))?;
+        for id in self.entity_ids {
+            write.write_var_int(id)?;
         }
         Ok(())
     }

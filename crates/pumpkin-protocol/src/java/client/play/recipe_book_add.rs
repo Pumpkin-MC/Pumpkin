@@ -956,7 +956,8 @@ mod tests {
             id: "minecraft:air",
             count: 1,
         };
-        for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
+        {
+            let version = pumpkin_data::packet::CURRENT_MC_VERSION;
             let mut bytes = Vec::new();
             write_result_slot_display(&mut bytes, &result, version).unwrap();
             assert_eq!(bytes, [SLOT_DISPLAY_EMPTY as u8]);
@@ -966,7 +967,8 @@ mod tests {
     #[test]
     fn vanilla_recipes_serialize_for_every_recipe_book_version() {
         let packet = CRecipeBookAdd::new(true, &[]);
-        for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
+        {
+            let version = pumpkin_data::packet::CURRENT_MC_VERSION;
             packet.write_packet_data(Vec::new(), &version).unwrap();
         }
     }

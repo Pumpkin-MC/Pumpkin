@@ -31,59 +31,29 @@ impl ClientPacket for CUpdateEntityPos {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if *version <= JavaMinecraftVersion::V_1_7_6 {
-            write.write_i32_be(self.entity_id.0)?;
-        } else {
-            write.write_var_int(&self.entity_id)?;
-        }
+        write.write_var_int(&self.entity_id)?;
         // Since 26.3 the on ground flag and the delta step count are packed into a var int in
         // front of the delta, 0 steps being a single linear delta.
-        if *version >= JavaMinecraftVersion::V_26_3 {
-            write.write_var_int(&VarInt(i32::from(self.on_ground)))?;
-        }
-        if *version >= JavaMinecraftVersion::V_1_9 {
-            write.write_i16_be(self.delta.x)?;
-            write.write_i16_be(self.delta.y)?;
-            write.write_i16_be(self.delta.z)?;
-        } else {
-            write.write_i8((self.delta.x / 128) as i8)?;
-            write.write_i8((self.delta.y / 128) as i8)?;
-            write.write_i8((self.delta.z / 128) as i8)?;
-        }
-        if *version >= JavaMinecraftVersion::V_1_8 && *version < JavaMinecraftVersion::V_26_3 {
-            write.write_bool(self.on_ground)?;
-        }
+        write.write_var_int(&VarInt(i32::from(self.on_ground)))?;
+        write.write_i16_be(self.delta.x)?;
+        write.write_i16_be(self.delta.y)?;
+        write.write_i16_be(self.delta.z)?;
+
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CUpdateEntityPos {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let entity_id = if *version <= JavaMinecraftVersion::V_1_7_6 {
-            VarInt(bytebuf.get_i32_be()?)
-        } else {
-            bytebuf.get_var_int()?
-        };
-        let delta = if *version >= JavaMinecraftVersion::V_1_9 {
-            Vector3::new(
-                bytebuf.get_i16_be()?,
-                bytebuf.get_i16_be()?,
-                bytebuf.get_i16_be()?,
-            )
-        } else {
-            Vector3::new(
-                i16::from(bytebuf.get_i8()?) * 128,
-                i16::from(bytebuf.get_i8()?) * 128,
-                i16::from(bytebuf.get_i8()?) * 128,
-            )
-        };
-        let on_ground = if *version >= JavaMinecraftVersion::V_1_8 {
-            bytebuf.get_bool()?
-        } else {
-            false
-        };
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let entity_id = bytebuf.get_var_int()?;
+        let delta = Vector3::new(
+            bytebuf.get_i16_be()?,
+            bytebuf.get_i16_be()?,
+            bytebuf.get_i16_be()?,
+        );
+        let on_ground = bytebuf.get_bool()?;
         Ok(Self {
             entity_id,
             delta,

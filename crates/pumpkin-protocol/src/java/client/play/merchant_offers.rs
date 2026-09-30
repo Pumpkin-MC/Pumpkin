@@ -45,22 +45,12 @@ impl MerchantOffer {
         mut write: impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_20_5 {
-            self.base_cost_a
-                .write_item_cost_with_version(&mut write, version)?;
-            self.output.write_with_version(&mut write, version)?;
-            write.write_option(&self.cost_b, |w, cost_b| {
-                cost_b.write_item_cost_with_version(w, version)
-            })?;
-        } else {
-            self.base_cost_a.write_with_version(&mut write, version)?;
-            self.output.write_with_version(&mut write, version)?;
-            if let Some(cost_b) = &self.cost_b {
-                cost_b.write_with_version(&mut write, version)?;
-            } else {
-                write.write_bool(false)?;
-            }
-        }
+        self.base_cost_a
+            .write_item_cost_with_version(&mut write, version)?;
+        self.output.write_with_version(&mut write, version)?;
+        write.write_option(&self.cost_b, |w, cost_b| {
+            cost_b.write_item_cost_with_version(w, version)
+        })?;
         write.write_bool(self.reward_exp)?;
         write.write_i32_be(self.uses)?;
         write.write_i32_be(self.max_uses)?;
@@ -110,11 +100,7 @@ impl ClientPacket for CMerchantOffers {
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.window_id)?;
-        if *version >= JavaMinecraftVersion::V_1_19 {
-            write.write_var_int(&VarInt(self.offers.len() as i32))?;
-        } else {
-            write.write_u8(self.offers.len() as u8)?;
-        }
+        write.write_var_int(&VarInt(self.offers.len() as i32))?;
         for offer in &self.offers {
             offer.write(&mut write, version)?;
         }
@@ -133,15 +119,11 @@ impl<'a> crate::ServerPacket<'a> for CMerchantOffers {
     ) -> Result<Self, crate::ser::ReadingError> {
         use crate::ser::NetworkReadExt;
         let window_id = bytebuf.get_var_int()?;
-        let offers_count = if *version >= JavaMinecraftVersion::V_1_19 {
-            bytebuf.get_var_int()?.0 as usize
-        } else {
-            bytebuf.get_u8()? as usize
-        };
+        let offers_count = bytebuf.get_var_int()?.0 as usize;
 
         let mut offers = Vec::with_capacity(offers_count);
         for _ in 0..offers_count {
-            let (base_cost_a, output, cost_b) = if *version >= JavaMinecraftVersion::V_1_20_5 {
+            let (base_cost_a, output, cost_b) = {
                 let item_id = bytebuf.get_var_int()?.0 as u16;
                 let count = bytebuf.get_var_int()?.0 as u8;
                 let comp_count = bytebuf.get_var_int()?.0 as usize;
@@ -169,16 +151,6 @@ impl<'a> crate::ServerPacket<'a> for CMerchantOffers {
                     )))
                 } else {
                     None
-                };
-                (base_cost_a, output, cost_b)
-            } else {
-                let base_cost_a = ItemStackSerializer::read_with_version(bytebuf, version)?;
-                let output = ItemStackSerializer::read_with_version(bytebuf, version)?;
-                let cost_b_stack = ItemStackSerializer::read_with_version(bytebuf, version)?;
-                let cost_b = if cost_b_stack.0.is_empty() {
-                    None
-                } else {
-                    Some(cost_b_stack)
                 };
                 (base_cost_a, output, cost_b)
             };
@@ -234,7 +206,6 @@ mod tests {
         item::Item,
         item_stack::ItemStack,
     };
-    use pumpkin_util::version::JavaMinecraftVersion;
 
     use crate::ser::NetworkReadExt;
 
@@ -257,7 +228,7 @@ mod tests {
 
     #[test]
     fn merchant_inputs_use_item_cost_encoding() {
-        let version = JavaMinecraftVersion::V_26_2;
+        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
         let packet =
             CMerchantOffers::new(VarInt(1), vec![offer()], VarInt(1), VarInt(0), true, true);
         let mut bytes = Vec::new();
@@ -342,7 +313,7 @@ mod tests {
                 true,
             );
             packet
-                .write_packet_data(&mut Vec::new(), &JavaMinecraftVersion::V_26_2)
+                .write_packet_data(&mut Vec::new(), &pumpkin_data::packet::CURRENT_MC_VERSION)
                 .unwrap();
         }
     }

@@ -43,10 +43,8 @@ impl ClientPacket for CSetContainerContent<'_> {
         let mut write = write;
 
         write.write_container_id(&self.window_id, version)?;
-        if *version >= JavaMinecraftVersion::V_1_17_1 {
-            write.write_var_int(&self.state_id)?;
-        }
-        if *version >= JavaMinecraftVersion::V_1_17_1 {
+        write.write_var_int(&self.state_id)?;
+        {
             let slot_count = i32::try_from(self.slot_data.len()).map_err(|_| {
                 WritingError::Message(format!(
                     "{} slot entries do not fit in VarInt",
@@ -54,21 +52,11 @@ impl ClientPacket for CSetContainerContent<'_> {
                 ))
             })?;
             write.write_var_int(&VarInt(slot_count))?;
-        } else {
-            let slot_count = i16::try_from(self.slot_data.len()).map_err(|_| {
-                WritingError::Message(format!(
-                    "{} slot entries do not fit in Short",
-                    self.slot_data.len()
-                ))
-            })?;
-            write.write_i16_be(slot_count)?;
-        }
+        };
         for stack in self.slot_data {
             stack.write_with_version(&mut write, version)?;
         }
-        if *version >= JavaMinecraftVersion::V_1_17_1 {
-            self.carried_item.write_with_version(&mut write, version)?;
-        }
+        self.carried_item.write_with_version(&mut write, version)?;
 
         Ok(())
     }
@@ -77,16 +65,8 @@ impl ClientPacket for CSetContainerContent<'_> {
 impl<'a> ServerPacket<'a> for CSetContainerContent<'a> {
     fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let window_id = bytebuf.get_container_id(version)?;
-        let state_id = if *version >= JavaMinecraftVersion::V_1_17_1 {
-            bytebuf.get_var_int()?
-        } else {
-            VarInt(0)
-        };
-        let count = if *version >= JavaMinecraftVersion::V_1_17_1 {
-            bytebuf.get_var_int()?.0
-        } else {
-            i32::from(bytebuf.get_i16_be()?)
-        };
+        let state_id = bytebuf.get_var_int()?;
+        let count = bytebuf.get_var_int()?.0;
         if !(0..=4096).contains(&count) {
             return Err(ReadingError::Message("Slot count out of bounds".into()));
         }
@@ -94,13 +74,7 @@ impl<'a> ServerPacket<'a> for CSetContainerContent<'a> {
         for _ in 0..count {
             slot_data.push(ItemStackSerializer::read_with_version(bytebuf, version)?);
         }
-        let carried_item = if *version >= JavaMinecraftVersion::V_1_17_1 {
-            ItemStackSerializer::read_with_version(bytebuf, version)?
-        } else {
-            ItemStackSerializer(std::borrow::Cow::Borrowed(
-                pumpkin_data::item_stack::ItemStack::EMPTY,
-            ))
-        };
+        let carried_item = ItemStackSerializer::read_with_version(bytebuf, version)?;
         Ok(Self {
             window_id,
             state_id,

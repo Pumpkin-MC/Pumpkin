@@ -72,97 +72,45 @@ impl LightData {
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         // Trust edges (1.16 - 1.19.4; added in 1.16, removed in 1.20)
-        if *version >= JavaMinecraftVersion::V_1_16 && *version <= JavaMinecraftVersion::V_1_19_4 {
-            write.write_bool(self.trust_edges)?;
-        }
 
         // Chunk bitmasks
-        if *version >= JavaMinecraftVersion::V_1_17 {
-            self.sky_light_mask
-                .encode_with_version(&mut write, version)?;
-            self.block_light_mask
-                .encode_with_version(&mut write, version)?;
-            self.empty_sky_light_mask
-                .encode_with_version(&mut write, version)?;
-            self.empty_block_light_mask
-                .encode_with_version(&mut write, version)?;
-        } else {
-            write.write_var_int(&VarInt(self.sky_light_mask.as_u64() as i32))?;
-            write.write_var_int(&VarInt(self.block_light_mask.as_u64() as i32))?;
-            write.write_var_int(&VarInt(self.empty_sky_light_mask.as_u64() as i32))?;
-            write.write_var_int(&VarInt(self.empty_block_light_mask.as_u64() as i32))?;
-        }
+        self.sky_light_mask
+            .encode_with_version(&mut write, version)?;
+        self.block_light_mask
+            .encode_with_version(&mut write, version)?;
+        self.empty_sky_light_mask
+            .encode_with_version(&mut write, version)?;
+        self.empty_block_light_mask
+            .encode_with_version(&mut write, version)?;
 
         // Sky light arrays
-        if *version >= JavaMinecraftVersion::V_1_17 {
-            write.write_var_int(&VarInt(self.sky_light_arrays.len() as i32))?;
-            for array in &self.sky_light_arrays {
-                write.write_var_int(&VarInt(array.len() as i32))?;
-                write.write_slice(array)?;
-            }
-        } else {
-            let mut array_idx = 0;
-            for i in 0..18 {
-                if self.sky_light_mask.get_bit(i)
-                    && let Some(array) = self.sky_light_arrays.get(array_idx)
-                {
-                    write.write_var_int(&VarInt(array.len() as i32))?;
-                    write.write_slice(array)?;
-                    array_idx += 1;
-                }
-            }
+        write.write_var_int(&VarInt(self.sky_light_arrays.len() as i32))?;
+        for array in &self.sky_light_arrays {
+            write.write_var_int(&VarInt(array.len() as i32))?;
+            write.write_slice(array)?;
         }
 
         // Block light arrays
-        if *version >= JavaMinecraftVersion::V_1_17 {
-            write.write_var_int(&VarInt(self.block_light_arrays.len() as i32))?;
-            for array in &self.block_light_arrays {
-                write.write_var_int(&VarInt(array.len() as i32))?;
-                write.write_slice(array)?;
-            }
-        } else {
-            let mut array_idx = 0;
-            for i in 0..18 {
-                if self.block_light_mask.get_bit(i)
-                    && let Some(array) = self.block_light_arrays.get(array_idx)
-                {
-                    write.write_var_int(&VarInt(array.len() as i32))?;
-                    write.write_slice(array)?;
-                    array_idx += 1;
-                }
-            }
+        write.write_var_int(&VarInt(self.block_light_arrays.len() as i32))?;
+        for array in &self.block_light_arrays {
+            write.write_var_int(&VarInt(array.len() as i32))?;
+            write.write_slice(array)?;
         }
 
         Ok(())
     }
 
     pub fn read(bytebuf: &mut &[u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let trust_edges = if *version >= JavaMinecraftVersion::V_1_16
-            && *version <= JavaMinecraftVersion::V_1_19_4
-        {
-            bytebuf.get_bool()?
-        } else {
-            false
-        };
+        let trust_edges = false;
 
-        let (sky_light_mask, block_light_mask, empty_sky_light_mask, empty_block_light_mask) =
-            if *version >= JavaMinecraftVersion::V_1_17 {
-                (
-                    BitSet::decode_with_version(bytebuf, version)?,
-                    BitSet::decode_with_version(bytebuf, version)?,
-                    BitSet::decode_with_version(bytebuf, version)?,
-                    BitSet::decode_with_version(bytebuf, version)?,
-                )
-            } else {
-                (
-                    BitSet::from_u64(bytebuf.get_var_int()?.0 as u64),
-                    BitSet::from_u64(bytebuf.get_var_int()?.0 as u64),
-                    BitSet::from_u64(bytebuf.get_var_int()?.0 as u64),
-                    BitSet::from_u64(bytebuf.get_var_int()?.0 as u64),
-                )
-            };
+        let (sky_light_mask, block_light_mask, empty_sky_light_mask, empty_block_light_mask) = (
+            BitSet::decode_with_version(bytebuf, version)?,
+            BitSet::decode_with_version(bytebuf, version)?,
+            BitSet::decode_with_version(bytebuf, version)?,
+            BitSet::decode_with_version(bytebuf, version)?,
+        );
 
-        let sky_light_arrays = if *version >= JavaMinecraftVersion::V_1_17 {
+        let sky_light_arrays = {
             let count = bytebuf.get_var_int()?.0 as usize;
             let mut arrays = Vec::with_capacity(count);
             for _ in 0..count {
@@ -172,20 +120,9 @@ impl LightData {
                 arrays.push(buf);
             }
             arrays
-        } else {
-            let mut arrays = Vec::new();
-            for i in 0..18 {
-                if sky_light_mask.get_bit(i) {
-                    let len = bytebuf.get_var_int()?.0 as usize;
-                    let mut buf = vec![0u8; len];
-                    bytebuf.read_bytes_to_buf(&mut buf)?;
-                    arrays.push(buf);
-                }
-            }
-            arrays
         };
 
-        let block_light_arrays = if *version >= JavaMinecraftVersion::V_1_17 {
+        let block_light_arrays = {
             let count = bytebuf.get_var_int()?.0 as usize;
             let mut arrays = Vec::with_capacity(count);
             for _ in 0..count {
@@ -193,17 +130,6 @@ impl LightData {
                 let mut buf = vec![0u8; len];
                 bytebuf.read_bytes_to_buf(&mut buf)?;
                 arrays.push(buf);
-            }
-            arrays
-        } else {
-            let mut arrays = Vec::new();
-            for i in 0..18 {
-                if block_light_mask.get_bit(i) {
-                    let len = bytebuf.get_var_int()?.0 as usize;
-                    let mut buf = vec![0u8; len];
-                    bytebuf.read_bytes_to_buf(&mut buf)?;
-                    arrays.push(buf);
-                }
             }
             arrays
         };

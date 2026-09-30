@@ -42,7 +42,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Cursor;
 use tokio::runtime::Runtime;
 
-const TARGET_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_1;
+const TARGET_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_3;
 
 // ---------------------------------------------------------------------------
 // Helper: run every known ServerPacket::read against the same payload.

@@ -26,12 +26,8 @@ impl SClientCommand {
 }
 
 impl<'a> ServerPacket<'a> for SClientCommand {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let action_id = if *version >= JavaMinecraftVersion::V_1_8 {
-            bytebuf.get_var_int()?
-        } else {
-            VarInt(i32::from(bytebuf.get_u8()?))
-        };
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let action_id = bytebuf.get_var_int()?;
         Ok(Self { action_id })
     }
 }
@@ -40,13 +36,9 @@ impl ClientPacket for SClientCommand {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_8 {
-            write.write_var_int(&self.action_id)?;
-        } else {
-            write.write_u8(self.action_id.0 as u8)?;
-        }
+        write.write_var_int(&self.action_id)?;
         Ok(())
     }
 }

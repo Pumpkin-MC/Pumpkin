@@ -47,25 +47,13 @@ impl ClientPacket for CPlayerSpawnPosition {
         mut write: impl Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_21_9 {
-            write.write_string(&self.dimension_name)?;
-        }
+        write.write_string(&self.dimension_name)?;
 
-        if *version >= JavaMinecraftVersion::V_1_8 {
-            write.write_block_pos(&self.location, version)?;
-        } else {
-            write.write_i32_be(self.location.0.x)?;
-            write.write_i32_be(self.location.0.y)?;
-            write.write_i32_be(self.location.0.z)?;
-        }
+        write.write_block_pos(&self.location, version)?;
 
-        if *version >= JavaMinecraftVersion::V_1_17 {
-            write.write_f32_be(self.yaw)?;
-        }
+        write.write_f32_be(self.yaw)?;
 
-        if *version >= JavaMinecraftVersion::V_1_21_9 {
-            write.write_f32_be(self.pitch)?;
-        }
+        write.write_f32_be(self.pitch)?;
 
         Ok(())
     }
@@ -73,25 +61,13 @@ impl ClientPacket for CPlayerSpawnPosition {
 
 impl<'a> ServerPacket<'a> for CPlayerSpawnPosition {
     fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let dimension_name = if *version >= JavaMinecraftVersion::V_1_21_9 {
-            read.get_str()?.into_string()
-        } else {
-            String::new()
-        };
+        let dimension_name = read.get_str()?.into_string();
 
         let location = read.get_block_pos(version)?;
 
-        let yaw = if *version >= JavaMinecraftVersion::V_1_17 {
-            read.get_f32_be()?
-        } else {
-            0.0
-        };
+        let yaw = read.get_f32_be()?;
 
-        let pitch = if *version >= JavaMinecraftVersion::V_1_21_9 {
-            read.get_f32_be()?
-        } else {
-            0.0
-        };
+        let pitch = read.get_f32_be()?;
 
         Ok(Self {
             dimension_name,

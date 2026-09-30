@@ -10,7 +10,7 @@ use pumpkin_protocol::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::runtime::Runtime;
 
-const TARGET_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_1_21_4;
+const TARGET_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_3;
 
 fuzz_target!(|data: &[u8]| {
     if data.len() < 20 {

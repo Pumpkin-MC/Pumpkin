@@ -72,13 +72,7 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
 
         // UPDATE_LIST_PRIORITY was added in 1.21.2 and UPDATE_HAT in 1.21.4.
         // Mask unsupported bits and omit their data so older clients can parse the packet.
-        let mut effective_actions = self.actions;
-        if *version < JavaMinecraftVersion::V_1_21_2 {
-            effective_actions &= !PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits();
-        }
-        if *version < JavaMinecraftVersion::V_1_21_4 {
-            effective_actions &= !PlayerInfoFlags::UPDATE_HAT.bits();
-        }
+        let effective_actions = self.actions;
 
         write.write_u8(effective_actions)?;
         write.write_list::<Player>(self.players, |p, v| {

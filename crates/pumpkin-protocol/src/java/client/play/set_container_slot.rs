@@ -43,9 +43,7 @@ impl ClientPacket for CSetContainerSlot<'_> {
         let mut write = write;
 
         write.write_container_id(&VarInt(i32::from(self.window_id)), version)?;
-        if *version >= JavaMinecraftVersion::V_1_17_1 {
-            write.write_var_int(&self.state_id)?;
-        }
+        write.write_var_int(&self.state_id)?;
         write.write_i16_be(self.slot)?;
         self.slot_data.write_with_version(&mut write, version)?;
 
@@ -56,11 +54,7 @@ impl ClientPacket for CSetContainerSlot<'_> {
 impl<'a> ServerPacket<'a> for CSetContainerSlot<'a> {
     fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let window_id = bytebuf.get_container_id(version)?.0 as i8;
-        let state_id = if *version >= JavaMinecraftVersion::V_1_17_1 {
-            bytebuf.get_var_int()?
-        } else {
-            VarInt(0)
-        };
+        let state_id = bytebuf.get_var_int()?;
         let slot = bytebuf.get_i16_be()?;
         let slot_data = ItemStackSerializer::read_with_version(bytebuf, version)?;
         Ok(Self {

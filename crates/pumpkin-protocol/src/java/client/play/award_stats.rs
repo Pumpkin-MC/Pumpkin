@@ -19,7 +19,7 @@ pub struct Statistic {
 
 impl Statistic {
     pub fn write(&self, write: impl std::io::Write) -> Result<(), crate::ser::WritingError> {
-        self.write_with_version(write, &JavaMinecraftVersion::V_26_3)
+        self.write_with_version(write, &pumpkin_data::packet::CURRENT_MC_VERSION)
     }
 
     pub fn write_with_version(

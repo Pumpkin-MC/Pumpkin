@@ -36,17 +36,9 @@ impl ClientPacket for COpenSignEditor {
         mut write: impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        if *version <= JavaMinecraftVersion::V_1_7_6 {
-            write.write_i32_be(self.location.0.x)?;
-            write.write_i32_be(self.location.0.y)?;
-            write.write_i32_be(self.location.0.z)?;
-        } else {
-            write.write_block_pos(&self.location, version)?;
-        }
+        write.write_block_pos(&self.location, version)?;
 
-        if *version >= JavaMinecraftVersion::V_1_20 {
-            write.write_bool(self.is_front_text)?;
-        }
+        write.write_bool(self.is_front_text)?;
         Ok(())
     }
 }
@@ -57,20 +49,9 @@ impl<'a> crate::ServerPacket<'a> for COpenSignEditor {
         version: &JavaMinecraftVersion,
     ) -> Result<Self, crate::ser::ReadingError> {
         use crate::ser::NetworkReadExt;
-        let location = if *version <= JavaMinecraftVersion::V_1_7_6 {
-            let x = bytebuf.get_i32_be()?;
-            let y = bytebuf.get_i32_be()?;
-            let z = bytebuf.get_i32_be()?;
-            BlockPos::new(x, y, z)
-        } else {
-            bytebuf.get_block_pos(version)?
-        };
+        let location = bytebuf.get_block_pos(version)?;
 
-        let is_front_text = if *version >= JavaMinecraftVersion::V_1_20 {
-            bytebuf.get_bool()?
-        } else {
-            true
-        };
+        let is_front_text = bytebuf.get_bool()?;
 
         Ok(Self {
             location,

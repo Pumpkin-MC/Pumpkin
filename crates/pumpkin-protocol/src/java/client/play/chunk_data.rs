@@ -6,7 +6,6 @@ use crate::packet::MultiVersionJavaPacket;
 use crate::ser::{NetworkWriteExt, WritingError};
 use pumpkin_data::packet::clientbound::play::LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use super::light_update::LightData;
@@ -23,9 +22,9 @@ impl ChunkHeightmaps {
     pub fn write_to(
         &self,
         mut write: impl Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_21_5 {
+        {
             write.write_var_int(&VarInt(3))?; // Map size
 
             let mut write_heightmap = |index: i32, data: &[i64]| -> Result<(), WritingError> {
@@ -45,19 +44,7 @@ impl ChunkHeightmaps {
                     .as_deref()
                     .unwrap_or(&[0; 37]),
             )?;
-        } else {
-            let mut comp = NbtCompound::new();
-            if let Some(ref ws) = self.world_surface {
-                comp.put("WORLD_SURFACE", NbtTag::LongArray(ws.clone()));
-            }
-            if let Some(ref mb) = self.motion_blocking {
-                comp.put("MOTION_BLOCKING", NbtTag::LongArray(mb.clone()));
-            }
-            if let Some(ref mbnl) = self.motion_blocking_no_leaves {
-                comp.put("MOTION_BLOCKING_NO_LEAVES", NbtTag::LongArray(mbnl.clone()));
-            }
-            write.write_compound_nbt_with_version(Some(&comp), version)?;
-        }
+        };
         Ok(())
     }
 }

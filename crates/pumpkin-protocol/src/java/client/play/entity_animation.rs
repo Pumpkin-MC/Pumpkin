@@ -32,19 +32,15 @@ impl ClientPacket for CEntityAnimation {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
         // 26.3 moved the swings into their own packet and renumbered the remaining animations
-        let animation = if *version >= JavaMinecraftVersion::V_26_3 {
-            match self.animation {
-                2 => 0, // Leave bed
-                4 => 1, // Critical effect
-                5 => 2, // Magic critical effect
-                other => other,
-            }
-        } else {
-            self.animation
+        let animation = match self.animation {
+            2 => 0, // Leave bed
+            4 => 1, // Critical effect
+            5 => 2, // Magic critical effect
+            other => other,
         };
         write.write_u8(animation)?;
         Ok(())
@@ -72,11 +68,7 @@ impl CSwingArm {
 
 impl crate::packet::MultiVersionJavaPacket for CSwingArm {
     fn to_id(version: JavaMinecraftVersion) -> i32 {
-        if version >= JavaMinecraftVersion::V_26_3 {
-            SWING_ANIMATION.to_id(version)
-        } else {
-            ANIMATE.to_id(version)
-        }
+        SWING_ANIMATION.to_id(version)
     }
 }
 
@@ -84,19 +76,13 @@ impl ClientPacket for CSwingArm {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
-        if *version >= JavaMinecraftVersion::V_26_3 {
-            write.write_var_int(&VarInt(i32::from(self.off_hand)))?;
-            // The swing animation of the held item, whacking for 6 ticks is the default one
-            write.write_var_int(&VarInt(1))?;
-            write.write_var_int(&VarInt(6))?;
-        } else if self.off_hand {
-            write.write_u8(Animation::SwingOffhand as u8)?;
-        } else {
-            write.write_u8(Animation::SwingMainArm as u8)?;
-        }
+        write.write_var_int(&VarInt(i32::from(self.off_hand)))?;
+        // The swing animation of the held item, whacking for 6 ticks is the default one
+        write.write_var_int(&VarInt(1))?;
+        write.write_var_int(&VarInt(6))?;
         Ok(())
     }
 }

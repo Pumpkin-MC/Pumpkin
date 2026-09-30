@@ -19,19 +19,11 @@ pub struct SPlayerAction {
 
 impl<'a> ServerPacket<'a> for SPlayerAction {
     fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let status = if version >= &JavaMinecraftVersion::V_1_9 {
-            bytebuf.get_var_int()?
-        } else {
-            VarInt(i32::from(bytebuf.get_u8()?))
-        };
-        let status = status_from_version(status, *version);
+        let status = bytebuf.get_var_int()?;
+        let status = status_from_wire(status);
         let position = bytebuf.get_block_pos(version)?;
         let face = bytebuf.get_u8()?;
-        let sequence = if version >= &JavaMinecraftVersion::V_1_19 {
-            bytebuf.get_var_int()?
-        } else {
-            VarInt(0)
-        };
+        let sequence = bytebuf.get_var_int()?;
 
         Ok(Self {
             status,
@@ -49,25 +41,19 @@ impl crate::ClientPacket for SPlayerAction {
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        let status = status_to_version(self.status, *version);
-        if version >= &JavaMinecraftVersion::V_1_9 {
-            write.write_var_int(&status)?;
-        } else {
-            write.write_u8(status.0 as u8)?;
-        }
+        let status = status_to_wire(self.status);
+        write.write_var_int(&status)?;
         write.write_block_pos(&self.position, version)?;
         write.write_u8(self.face)?;
-        if version >= &JavaMinecraftVersion::V_1_19 {
-            write.write_var_int(&self.sequence)?;
-        }
+        write.write_var_int(&self.sequence)?;
         Ok(())
     }
 }
 
 /// 26.3 added change destroy direction as action 1, shifting every later action by one. We keep
 /// the older numbering internally and give the new action the id after the last one.
-fn status_from_version(status: VarInt, version: JavaMinecraftVersion) -> VarInt {
-    if version < JavaMinecraftVersion::V_26_3 || status.0 < 1 {
+const fn status_from_wire(status: VarInt) -> VarInt {
+    if status.0 < 1 {
         return status;
     }
     if status.0 == 1 {
@@ -77,8 +63,8 @@ fn status_from_version(status: VarInt, version: JavaMinecraftVersion) -> VarInt 
     }
 }
 
-fn status_to_version(status: VarInt, version: JavaMinecraftVersion) -> VarInt {
-    if version < JavaMinecraftVersion::V_26_3 || status.0 < 1 {
+const fn status_to_wire(status: VarInt) -> VarInt {
+    if status.0 < 1 {
         return status;
     }
     if status.0 == Status::ChangeDestroyDirection as i32 {

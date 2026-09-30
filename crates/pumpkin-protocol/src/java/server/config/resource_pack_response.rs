@@ -3,7 +3,7 @@ use pumpkin_macros::java_packet;
 
 use crate::{
     ServerPacket,
-    ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
+    ser::{NetworkReadExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -34,15 +34,9 @@ pub struct SConfigResourcePack {
 }
 
 impl<'a> ServerPacket<'a> for SConfigResourcePack {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let uuid = if *version >= JavaMinecraftVersion::V_1_20_3 {
-            bytebuf.get_uuid()?
-        } else {
-            uuid::Uuid::nil()
-        };
-        if *version < JavaMinecraftVersion::V_1_10 {
-            let _hash = bytebuf.get_str_bounded_borrowed(40)?;
-        }
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let uuid = bytebuf.get_uuid()?;
+
         let result = bytebuf.get_var_int()?;
         Ok(Self { uuid, result })
     }

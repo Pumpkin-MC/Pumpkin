@@ -62,7 +62,7 @@ mod tests {
     /// Encodes the body of a handshake packet, as a client or a proxy sends it.
     fn encode_handshake(server_address: &str, next_state: i32) -> Vec<u8> {
         let mut buf = Vec::new();
-        let protocol_version = JavaMinecraftVersion::V_1_21_11.protocol_version();
+        let protocol_version = pumpkin_data::packet::CURRENT_MC_VERSION.protocol_version();
         buf.write_var_int(&VarInt(protocol_version))
             .expect("write protocol version");
         // Bound by the input itself so that this helper can also build the
@@ -93,7 +93,7 @@ mod tests {
         let address = bungeecord_forwarded_address();
         let buf = encode_handshake(&address, 2);
 
-        let packet = SHandShake::read(&mut &buf[..], &JavaMinecraftVersion::V_1_21_11)
+        let packet = SHandShake::read(&mut &buf[..], &pumpkin_data::packet::CURRENT_MC_VERSION)
             .expect("a BungeeCord-forwarded address should be readable");
 
         assert_eq!(&*packet.server_address, address.as_str());
@@ -105,7 +105,7 @@ mod tests {
     fn reads_plain_server_address() {
         let buf = encode_handshake("localhost", 1);
 
-        let packet = SHandShake::read(&mut &buf[..], &JavaMinecraftVersion::V_1_21_11)
+        let packet = SHandShake::read(&mut &buf[..], &pumpkin_data::packet::CURRENT_MC_VERSION)
             .expect("a plain address should be readable");
 
         assert_eq!(&*packet.server_address, "localhost");
@@ -117,7 +117,7 @@ mod tests {
         let address = "a".repeat(i16::MAX as usize + 1);
         let buf = encode_handshake(&address, 2);
 
-        let result = SHandShake::read(&mut &buf[..], &JavaMinecraftVersion::V_1_21_11);
+        let result = SHandShake::read(&mut &buf[..], &pumpkin_data::packet::CURRENT_MC_VERSION);
 
         assert!(matches!(result, Err(ReadingError::TooLarge(_))));
     }

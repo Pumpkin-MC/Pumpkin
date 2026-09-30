@@ -30,26 +30,20 @@ impl ClientPacket for CSetEntityLink {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_i32_be(self.attached_entity_id)?;
         write.write_i32_be(self.holding_entity_id)?;
-        if *version <= JavaMinecraftVersion::V_1_8 {
-            write.write_bool(self.leash)?;
-        }
+
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CSetEntityLink {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let attached_entity_id = bytebuf.get_i32_be()?;
         let holding_entity_id = bytebuf.get_i32_be()?;
-        let leash = if *version <= JavaMinecraftVersion::V_1_8 {
-            bytebuf.get_u8()? == 1
-        } else {
-            true
-        };
+        let leash = true;
         Ok(Self {
             attached_entity_id,
             holding_entity_id,

@@ -37,36 +37,20 @@ impl ClientPacket for CDisplayObjective {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_20_2 {
-            write.write_var_int(&self.position)?;
-        } else {
-            write.write_i8(self.position.0 as i8)?;
-        }
+        write.write_var_int(&self.position)?;
 
-        if *version >= JavaMinecraftVersion::V_1_18 {
-            write.write_string(&self.score_name)?;
-        } else {
-            write.write_string_bounded(&self.score_name, 16)?;
-        }
+        write.write_string(&self.score_name)?;
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CDisplayObjective {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let position = if *version >= JavaMinecraftVersion::V_1_20_2 {
-            bytebuf.get_var_int()?
-        } else {
-            VarInt(i32::from(bytebuf.get_i8()?))
-        };
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let position = bytebuf.get_var_int()?;
 
-        let score_name = if *version >= JavaMinecraftVersion::V_1_18 {
-            bytebuf.get_str()?.into()
-        } else {
-            bytebuf.get_str_bounded(16)?.into()
-        };
+        let score_name = bytebuf.get_str()?.into();
 
         Ok(Self {
             position,

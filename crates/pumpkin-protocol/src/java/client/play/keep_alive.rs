@@ -2,7 +2,6 @@ use pumpkin_data::packet::clientbound::play::KEEP_ALIVE;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
-use crate::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -30,15 +29,9 @@ impl ClientPacket for CKeepAlive {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        if version >= &JavaMinecraftVersion::V_1_12_2 {
-            write.write_i64_be(self.keep_alive_id)?;
-        } else if version >= &JavaMinecraftVersion::V_1_8 {
-            write.write_var_int(&VarInt(self.keep_alive_id as i32))?;
-        } else {
-            write.write_i32_be(self.keep_alive_id as i32)?;
-        }
+        write.write_i64_be(self.keep_alive_id)?;
         Ok(())
     }
 }
@@ -46,16 +39,10 @@ impl ClientPacket for CKeepAlive {
 impl<'a> crate::ServerPacket<'a> for CKeepAlive {
     fn read(
         read: &mut &'a [u8],
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<Self, crate::ReadingError> {
         use crate::ser::NetworkReadExt;
-        let keep_alive_id = if version >= &JavaMinecraftVersion::V_1_12_2 {
-            read.get_i64_be()?
-        } else if version >= &JavaMinecraftVersion::V_1_8 {
-            i64::from(read.get_var_int()?.0)
-        } else {
-            i64::from(read.get_i32_be()?)
-        };
+        let keep_alive_id = read.get_i64_be()?;
         Ok(Self { keep_alive_id })
     }
 }
@@ -66,38 +53,14 @@ mod tests {
     use crate::ServerPacket;
 
     #[test]
-    fn keep_alive_roundtrip_modern() {
+    fn keep_alive_roundtrip() {
         let packet = CKeepAlive::new(1234567890123456789);
         let mut buf = Vec::new();
-        let version = JavaMinecraftVersion::V_1_21_4;
+        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
         packet.write_packet_data(&mut buf, &version).unwrap();
 
         let mut slice = buf.as_slice();
         let read_packet = CKeepAlive::read(&mut slice, &version).unwrap();
         assert_eq!(read_packet.keep_alive_id, 1234567890123456789);
-    }
-
-    #[test]
-    fn keep_alive_roundtrip_1_8() {
-        let packet = CKeepAlive::new(12345);
-        let mut buf = Vec::new();
-        let version = JavaMinecraftVersion::V_1_8;
-        packet.write_packet_data(&mut buf, &version).unwrap();
-
-        let mut slice = buf.as_slice();
-        let read_packet = CKeepAlive::read(&mut slice, &version).unwrap();
-        assert_eq!(read_packet.keep_alive_id, 12345);
-    }
-
-    #[test]
-    fn keep_alive_roundtrip_1_7() {
-        let packet = CKeepAlive::new(12345);
-        let mut buf = Vec::new();
-        let version = JavaMinecraftVersion::V_1_7_2;
-        packet.write_packet_data(&mut buf, &version).unwrap();
-
-        let mut slice = buf.as_slice();
-        let read_packet = CKeepAlive::read(&mut slice, &version).unwrap();
-        assert_eq!(read_packet.keep_alive_id, 12345);
     }
 }

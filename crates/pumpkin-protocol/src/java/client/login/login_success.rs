@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::login::{GAME_PROFILE, LOGIN_FINISHED};
+use pumpkin_data::packet::clientbound::login::LOGIN_FINISHED;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{ClientPacket, Property, packet::MultiVersionJavaPacket, ser::NetworkWriteExt};
@@ -42,11 +42,7 @@ impl<'a> CLoginSuccess<'a> {
 
 impl MultiVersionJavaPacket for CLoginSuccess<'_> {
     fn to_id(version: JavaMinecraftVersion) -> i32 {
-        if version >= JavaMinecraftVersion::V_1_21_2 {
-            LOGIN_FINISHED.to_id(version)
-        } else {
-            GAME_PROFILE.to_id(version)
-        }
+        LOGIN_FINISHED.to_id(version)
     }
 }
 
@@ -54,23 +50,13 @@ impl ClientPacket for CLoginSuccess<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        if version < &JavaMinecraftVersion::V_1_16 {
-            write.write_string(&self.uuid.to_string())?;
-        } else {
-            write.write_uuid(self.uuid)?;
-        }
+        write.write_uuid(self.uuid)?;
         write.write_string(self.username)?;
-        if version >= &JavaMinecraftVersion::V_1_19 {
-            write.write_list(self.properties, |write, property| property.write(write))?;
-        }
-        if version >= &JavaMinecraftVersion::V_26_2 {
-            write.write_uuid(&self.session_id)?;
-        }
-        if version >= &JavaMinecraftVersion::V_1_20_5 && version < &JavaMinecraftVersion::V_1_21_2 {
-            write.write_bool(self.strict_error_handling)?;
-        }
+        write.write_list(self.properties, |write, property| property.write(write))?;
+        write.write_uuid(&self.session_id)?;
+
         Ok(())
     }
 }

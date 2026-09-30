@@ -21,11 +21,9 @@ impl ClientPacket for CConfigPostEffects<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        if *version >= JavaMinecraftVersion::V_26_3 {
-            write.write_list(self.effects, |w, effect| w.write_string(effect))?;
-        }
+        write.write_list(self.effects, |w, effect| w.write_string(effect))?;
         Ok(())
     }
 }
