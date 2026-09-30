@@ -53,21 +53,20 @@ impl BlockBehaviour for RespawnAnchorBlock {
         let state_id = args.world.get_block_state_id(args.position);
         let props = RespawnAnchorLikeProperties::from_state_id(state_id);
 
+        // Vanilla checks the charge before anything else: using an uncharged
+        // anchor returns `InteractionResult::PASS` and does nothing, in any
+        // dimension. Only a charged anchor explodes when used in a dimension
+        // where respawn anchors do not work.
+        if props.charges == 0 {
+            return BlockActionResult::Pass;
+        }
+
         if !args.world.dimension.respawn_anchor_works {
             args.world
                 .break_block(args.position, None, BlockFlags::SKIP_DROPS);
             let center_pos = args.position.to_centered_f64();
             args.world
                 .explode(center_pos, 5.0, crate::world::ExplosionInteraction::Block);
-            return BlockActionResult::SuccessServer;
-        }
-
-        if props.charges == 0 {
-            args.player
-                .send_system_message(&pumpkin_macros::translate_cross!(
-                    translation::java::BLOCK_MINECRAFT_BED_NO_SLEEP,
-                    translation::bedrock::TILE_BED_NOSLEEP
-                ));
             return BlockActionResult::SuccessServer;
         }
 
