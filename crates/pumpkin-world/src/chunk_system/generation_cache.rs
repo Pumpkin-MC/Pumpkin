@@ -675,8 +675,8 @@ impl Cache {
                         &noise_gen.random_config,
                     );
                 }
-                generator::WorldGenerator::Flat(_) => {
-                    self.chunks[mid].get_proto_chunk_mut().stage = StagedChunkEnum::Features;
+                generator::WorldGenerator::Flat(flat_gen) => {
+                    ProtoChunk::generate_flat_features(self, block_registry, flat_gen);
                 }
                 generator::WorldGenerator::Custom(custom_gen) => {
                     custom_gen.step_to_features(self, block_registry);

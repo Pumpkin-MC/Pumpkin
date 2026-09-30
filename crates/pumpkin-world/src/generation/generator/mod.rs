@@ -25,6 +25,13 @@ use crate::generation::proto_chunk::ProtoChunk;
 
 pub mod flat;
 
+/// The `features` and `lakes` switches of flat world settings.
+#[derive(Clone, Copy, Default)]
+pub struct FlatDecoration {
+    pub features: bool,
+    pub lakes: bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct FlatLayer {
     pub block: String,
