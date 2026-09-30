@@ -1,5 +1,6 @@
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::HorizontalFacing;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, block_properties::CactusLikeProperties, tag};
 use pumpkin_macros::pumpkin_block;
@@ -75,15 +76,155 @@ fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> boo
 
     if block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE) {
         for direction in HorizontalFacing::all() {
-            let block = block_accessor.get_block(&block_pos.down().offset(direction.to_offset()));
-            // TODO: use fluid
-            if block.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
-                && block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
-            {
+            let neighbor_pos = block_pos.down().offset(direction.to_offset());
+            let block = block_accessor.get_block(&neighbor_pos);
+            let state = block_accessor.get_block_state(&neighbor_pos);
+
+            let is_water = state.is_waterlogged()
+                || Fluid::from_state_id(state.id).is_some_and(|fluid| {
+                    fluid.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
+                });
+            if is_water || block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY) {
                 return true;
             }
         }
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::BlockState;
+    use pumpkin_data::block_properties::WhiteWoolSlabLikeProperties;
+    use pumpkin_world::world::BlockAccessor;
+
+    #[derive(Default)]
+    struct TestWorld {
+        entries: Vec<(BlockPos, &'static Block, &'static BlockState)>,
+    }
+
+    impl TestWorld {
+        fn set_block(&mut self, pos: BlockPos, block: &'static Block) {
+            self.entries.push((pos, block, block.default_state));
+        }
+
+        fn set_state(&mut self, pos: BlockPos, block: &'static Block, state: &'static BlockState) {
+            self.entries.push((pos, block, state));
+        }
+    }
+
+    impl BlockAccessor for TestWorld {
+        fn get_block(&self, position: &BlockPos) -> &'static Block {
+            self.entries
+                .iter()
+                .find(|(pos, _, _)| pos == position)
+                .map_or(&Block::AIR, |(_, block, _)| *block)
+        }
+
+        fn get_block_state(&self, position: &BlockPos) -> &'static BlockState {
+            self.entries
+                .iter()
+                .find(|(pos, _, _)| pos == position)
+                .map_or(Block::AIR.default_state, |(_, _, state)| *state)
+        }
+
+        fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
+            self.get_block_state(position).id
+        }
+
+        fn get_block_and_state(
+            &self,
+            position: &BlockPos,
+        ) -> (&'static Block, &'static BlockState) {
+            self.entries
+                .iter()
+                .find(|(pos, _, _)| pos == position)
+                .map_or(
+                    (&Block::AIR, Block::AIR.default_state),
+                    |(_, block, state)| (*block, *state),
+                )
+        }
+    }
+
+    fn world_with_support() -> (BlockPos, TestWorld) {
+        let pos = BlockPos::new(0, 64, 0);
+        let mut world = TestWorld::default();
+        world.set_block(pos.down(), &Block::DIRT);
+        (pos, world)
+    }
+
+    #[test]
+    fn placeable_next_to_water() {
+        use pumpkin_data::block_properties::WaterLikeProperties;
+
+        let (pos, mut world) = world_with_support();
+        world.set_block(
+            pos.down().offset(HorizontalFacing::North.to_offset()),
+            &Block::WATER,
+        );
+        assert!(can_place_at(&world, &pos));
+
+        let (pos, mut world) = world_with_support();
+        let mut props = WaterLikeProperties::default(&Block::WATER);
+        props.r#level = 1;
+        let state = BlockState::from_id(props.to_state_id(&Block::WATER));
+        assert!(Fluid::from_state_id(state.id).is_some());
+        world.set_state(
+            pos.down().offset(HorizontalFacing::East.to_offset()),
+            &Block::WATER,
+            state,
+        );
+        assert!(can_place_at(&world, &pos));
+    }
+
+    #[test]
+    fn placeable_next_to_waterlogged_or_frosted_blocks() {
+        let (pos, mut world) = world_with_support();
+        let mut props = WhiteWoolSlabLikeProperties::default(&Block::OAK_SLAB);
+        props.waterlogged = true;
+        let state = BlockState::from_id(props.to_state_id(&Block::OAK_SLAB));
+        assert!(state.is_waterlogged());
+        world.set_state(
+            pos.down().offset(HorizontalFacing::South.to_offset()),
+            &Block::OAK_SLAB,
+            state,
+        );
+        assert!(can_place_at(&world, &pos));
+
+        let (pos, mut world) = world_with_support();
+        world.set_block(
+            pos.down().offset(HorizontalFacing::West.to_offset()),
+            &Block::FROSTED_ICE,
+        );
+        assert!(can_place_at(&world, &pos));
+    }
+
+    #[test]
+    fn needs_support_below_and_water_beside() {
+        let (pos, mut world) = world_with_support();
+        world.set_block(
+            pos.down().offset(HorizontalFacing::North.to_offset()),
+            &Block::STONE,
+        );
+        assert!(!can_place_at(&world, &pos));
+
+        let pos = BlockPos::new(0, 64, 0);
+        let mut world = TestWorld::default();
+        world.set_block(pos.down(), &Block::STONE);
+        world.set_block(
+            pos.down().offset(HorizontalFacing::North.to_offset()),
+            &Block::WATER,
+        );
+        assert!(!can_place_at(&world, &pos));
+    }
+
+    #[test]
+    fn placeable_on_existing_cane() {
+        let pos = BlockPos::new(0, 64, 0);
+        let mut world = TestWorld::default();
+        world.set_block(pos.down(), &Block::SUGAR_CANE);
+        assert!(can_place_at(&world, &pos));
+    }
 }
