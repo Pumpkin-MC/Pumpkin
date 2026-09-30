@@ -50,6 +50,7 @@ impl BedrockClient {
                 entity.yaw.store(new_yaw);
             }
 
+            // TODO: use `pumpkin_util::math::pack_degrees`.
             let je_yaw = (new_yaw * 256.0 / 360.0).rem_euclid(256.0);
             let je_pitch = (new_pitch * 256.0 / 360.0).rem_euclid(256.0);
 

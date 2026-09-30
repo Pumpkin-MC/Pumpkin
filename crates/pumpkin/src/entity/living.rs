@@ -181,6 +181,19 @@ impl EffectParticle {
     }
 }
 
+/// Vanilla `LivingEntity.canBeSeenAsEnemy`, with `Player`'s `abilities.invulnerable` override.
+#[must_use]
+pub fn can_be_seen_as_enemy(target: &dyn EntityBase) -> bool {
+    target.get_player().map_or_else(
+        || {
+            target
+                .get_living_entity()
+                .is_some_and(LivingEntity::can_take_damage)
+        },
+        crate::entity::player::Player::can_be_seen_as_enemy,
+    )
+}
+
 fn is_allowed_by_team_rules(
     own_team: Option<&crate::world::scoreboard::Team>,
     their_team: Option<&crate::world::scoreboard::Team>,
@@ -854,10 +867,10 @@ impl LivingEntity {
                 .find(|a| a.0.id == attribute.id)
                 .map_or_else(
                     || {
-                        tracing::warn!(
-                            "Entity type {:?} has no base value for attribute {:?}; falling back to default {}",
-                            self.entity.entity_type,
-                            attribute.id,
+                        tracing::debug!(
+                            "Entity type {} has no base value for attribute {}; falling back to default {}",
+                            self.entity.entity_type.resource_name,
+                            attribute.name,
                             attribute.default_value,
                         );
                         attribute.default_value
@@ -1392,9 +1405,16 @@ impl LivingEntity {
 
         let touching_water = self.entity.touching_water.load(SeqCst);
 
+        // Vanilla Mob.isEffectiveAi: NoAI mobs don't travel, so they neither move nor fall.
+        let effective_ai = caller
+            .get_mob()
+            .is_none_or(|mob| !mob.get_mob_entity().is_no_ai());
+
         // Strider is the only entity that has canWalkOnFluid = false
 
-        if (touching_water || self.entity.touching_lava.load(SeqCst))
+        if !effective_ai {
+            // No travel.
+        } else if (touching_water || self.entity.touching_lava.load(SeqCst))
             && should_swim_in_fluids
             && self.entity.entity_type != &EntityType::STRIDER
         {
@@ -2548,13 +2568,13 @@ impl LivingEntity {
         self.entity.is_alive() && self.health.load() > 0.0
     }
 
-    pub fn can_attack(&self, target: &Self) -> bool {
-        if target.entity.entity_type == &EntityType::PLAYER
+    pub fn can_attack(&self, target: &dyn EntityBase) -> bool {
+        if target.get_player().is_some()
             && self.entity.world.load().level_info.load().difficulty == Difficulty::Peaceful
         {
             return false;
         }
-        target.can_take_damage()
+        can_be_seen_as_enemy(target)
     }
 
     pub fn reset_state(&self) {
@@ -2688,7 +2708,13 @@ impl LivingEntity {
     }
 
     pub fn read_living_nbt_non_mut(&self, nbt: &NbtCompound) {
-        self.health.store(nbt.get_float("Health").unwrap_or(20.0));
+        // Vanilla LivingEntity.readAdditionalSaveData defaults to the mob's own max health,
+        // not a flat 20; a hoglin (40 max) or iron golem (100 max) with no saved Health would
+        // otherwise be silently reset to 20 here.
+        self.health.store(
+            nbt.get_float("Health")
+                .unwrap_or_else(|| self.get_max_health()),
+        );
 
         if let Some(equipment) = nbt.get_compound("equipment") {
             let mut guard = self
@@ -2860,7 +2886,6 @@ impl LivingEntity {
             return damage;
         }
 
-        let is_fire_damage = damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FIRE);
         let mut epf = 0.0f32;
         {
             let equipment_lock = self
@@ -2878,34 +2903,7 @@ impl LivingEntity {
                     && let Some(enchantments) = stack.get_data_component::<EnchantmentsImpl>()
                 {
                     for (enchantment, level) in enchantments.enchantment.iter() {
-                        let enc = *enchantment;
-                        let lvl = *level as f32;
-                        if enc == &Enchantment::PROTECTION {
-                            if !damage_type
-                                .has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY)
-                                && damage_type != &DamageType::STARVE
-                                && damage_type != &DamageType::GENERIC_KILL
-                                && damage_type != &DamageType::OUT_OF_WORLD
-                            {
-                                epf += lvl;
-                            }
-                        } else if enc == &Enchantment::FIRE_PROTECTION {
-                            if is_fire_damage {
-                                epf += lvl * 2.0;
-                            }
-                        } else if enc == &Enchantment::BLAST_PROTECTION {
-                            if damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION) {
-                                epf += lvl * 2.0;
-                            }
-                        } else if enc == &Enchantment::PROJECTILE_PROTECTION {
-                            if damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_PROJECTILE) {
-                                epf += lvl * 2.0;
-                            }
-                        } else if enc == &Enchantment::FEATHER_FALLING
-                            && damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FALL)
-                        {
-                            epf += lvl * 3.0;
-                        }
+                        enchantment.modify_damage_protection_against(*level, damage_type, &mut epf);
                     }
                 }
             }
@@ -3387,14 +3385,6 @@ impl EntityBase for LivingEntity {
         // Coalesce velocity sends to once per tick.
         if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
             self.entity.send_velocity();
-        }
-
-        // TODO
-        let player = caller.get_player();
-        let is_player = player.is_some();
-
-        if !is_player {
-            self.entity.send_pos_rot();
         }
 
         // Fetch supporting blocks for players or other entities

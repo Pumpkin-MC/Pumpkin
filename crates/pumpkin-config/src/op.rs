@@ -11,9 +11,15 @@ pub struct Op {
     pub uuid: Uuid,
     /// The name of the operator.
     pub name: String,
-    /// The permission level assigned to this operator.
+    /// The permission level assigned to this operator. Defaults to level 0.
+    #[serde(default)]
     pub level: PermissionLvl,
-    /// Whether this operator bypasses the server's player limit.
+    /// Whether this operator bypasses the server's player limit. Defaults to false.
+    #[serde(
+        default,
+        rename = "bypassesPlayerLimit",
+        alias = "bypasses_player_limit"
+    )]
     pub bypasses_player_limit: bool,
 }
 
