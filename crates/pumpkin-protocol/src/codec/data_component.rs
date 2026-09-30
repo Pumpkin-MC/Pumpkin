@@ -319,12 +319,7 @@ impl DataComponentCodec<Self> for ItemModelImpl {
 
 impl DataComponentCodec<Self> for CustomNameImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        let mut bytes = Vec::new();
-        NbtTag::String(self.name.clone().get_text().into_boxed_str())
-            .serialize(&mut NbtWriteHelperJava::new(&mut bytes))
-            .map_err(|e| WritingError::Message(e.to_string()))?;
-        seq.write_slice(&bytes)?;
-        Ok(())
+        seq.write_slice(&self.name.encode_for_version(&JavaMinecraftVersion::V_26_2))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
@@ -2827,6 +2822,53 @@ impl DataComponentCodec<Self> for BreakSoundImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_name_preserves_rgb_and_bold_on_wire() -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_util::text::{TextComponent, color::RGBColor};
+        use std::io::Cursor;
+
+        let mut name = TextComponent::text("Styled item")
+            .color_rgb(RGBColor {
+                red: 0xB5,
+                green: 0x8C,
+                blue: 0xFF,
+            })
+            .bold();
+        name.0.style.italic = Some(false);
+        let mut encoded = Vec::new();
+        let component = CustomNameImpl { name };
+        component.serialize(&mut encoded)?;
+
+        // Captured from Minecraft 26.3's component stream codec. Compound entry
+        // order is irrelevant, so compare decoded NBT rather than raw bytes.
+        let mut vanilla = b"\x0a\x08\x00\x05color\x00\x07#B58CFF\
+                            \x08\x00\x04text\x00\x0bStyled item\
+                            \x01\x00\x04bold\x01\
+                            \x01\x00\x06italic\x00\x00"
+            .as_slice();
+        let expected = vanilla.get_nbt_with_version(&JavaMinecraftVersion::V_26_3)?;
+        let mut cursor = Cursor::new(encoded.as_slice());
+        let actual = cursor.get_nbt_with_version(&JavaMinecraftVersion::V_26_3)?;
+        assert_eq!(actual, expected);
+        assert_eq!(cursor.position(), encoded.len() as u64);
+        let decoded = CustomNameImpl::deserialize(&mut encoded.as_slice())?;
+        assert_eq!(decoded.name.0.style, component.name.0.style);
+        assert_eq!(decoded.name.get_text(), "Styled item");
+        Ok(())
+    }
+
+    #[test]
+    fn plain_custom_name_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        let component = CustomNameImpl {
+            name: pumpkin_util::text::TextComponent::text("Plain name"),
+        };
+        let mut bytes = Vec::new();
+        component.serialize(&mut bytes)?;
+        let decoded = CustomNameImpl::deserialize(&mut bytes.as_slice())?;
+        assert_eq!(decoded.name.get_text(), "Plain name");
+        Ok(())
+    }
 
     fn textured_profile() -> ProfileImpl {
         ProfileImpl {
