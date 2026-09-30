@@ -81,12 +81,9 @@ impl Goal for TeleportTowardsPlayerGoal {
         if let Some(target) = &self.target_player
             && let Some(player) = target.get_player()
         {
-            if !player.living_entity.is_alive()
-                || (!self.enderman.is_player_staring(player) && !self.enderman.is_angry())
-            {
             let world = self.enderman.mob_entity.living_entity.entity.world.load();
-              
-            if !self.is_anger_inducing(player, &world) {
+
+            if !player.living_entity.is_alive() || !self.is_anger_inducing(player, &world) {
                 return false;
             }
             let player_pos = player.get_entity().pos.load();
