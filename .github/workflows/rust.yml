@@ -13,14 +13,14 @@ on:
         default: stable
         type: string
       release_lto:
-        description: LTO mode for the release builds (thin, fat or off)
+        description: LTO mode for the release builds (off, thin or fat)
         required: false
-        default: thin
+        default: "off"
         type: choice
         options:
+          - "off"
           - thin
           - fat
-          - "off"
       release_codegen_units:
         description: Codegen units for the release builds
         required: false
@@ -309,19 +309,24 @@ jobs:
         include:
           - name: Linux x64
             os: ubuntu-latest
+            asset: pumpkin-X64-Linux
           - name: Linux ARM64
             os: ubuntu-26.04-arm
+            asset: pumpkin-ARM64-Linux
           - name: Windows x64
             os: windows-latest
+            asset: pumpkin-X64-Windows.exe
           - name: Windows ARM64
             os: windows-11-arm
+            asset: pumpkin-ARM64-Windows.exe
           - name: macOS
             os: macos-latest
+            asset: pumpkin-ARM64-macOS
     env:
       # Full LTO with one codegen unit is too slow and memory hungry to run on every push, so these
-      # default to thin LTO and 16 codegen units. Manual runs can change them through the inputs.
+      # default to no LTO and 16 codegen units. Manual runs can change them through the inputs.
       # The nightly workflow builds the shipped binaries with the release profile as is.
-      CARGO_PROFILE_RELEASE_LTO: ${{ inputs.release_lto || 'thin' }}
+      CARGO_PROFILE_RELEASE_LTO: ${{ inputs.release_lto || 'off' }}
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ inputs.release_codegen_units || '16' }}
     steps:
       - uses: actions/checkout@v7
@@ -331,6 +336,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build release
         run: cargo build --verbose --release
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          mkdir -p dist
+          EXT=""
+          if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
+          cp "target/release/pumpkin$EXT" "dist/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset }}
+          compression-level: 9
+          path: dist/${{ matrix.asset }}
 
   build_release_musl:
     name: Build project in release with musl
@@ -344,11 +361,13 @@ jobs:
           - name: Linux x64
             os: ubuntu-latest
             target: x86_64-unknown-linux-musl
+            asset: pumpkin-X64-Linux-musl
           - name: Linux ARM64
             os: ubuntu-26.04-arm
             target: aarch64-unknown-linux-musl
+            asset: pumpkin-ARM64-Linux-musl
     env:
-      CARGO_PROFILE_RELEASE_LTO: ${{ inputs.release_lto || 'thin' }}
+      CARGO_PROFILE_RELEASE_LTO: ${{ inputs.release_lto || 'off' }}
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ inputs.release_codegen_units || '16' }}
     steps:
       - uses: actions/checkout@v7
@@ -363,6 +382,15 @@ jobs:
           sudo apt-get install -y musl-tools
       - name: Build release
         run: cargo build --verbose --release --target ${{ matrix.target }}
+      - name: Prepare artifact
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/pumpkin" "dist/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset }}
+          compression-level: 9
+          path: dist/${{ matrix.asset }}
 
   build_android_release:
     name: Build project in release for Android AArch64
@@ -370,7 +398,7 @@ jobs:
     if: needs.prepare.outputs.run_full == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
-      CARGO_PROFILE_RELEASE_LTO: ${{ inputs.release_lto || 'thin' }}
+      CARGO_PROFILE_RELEASE_LTO: ${{ inputs.release_lto || 'off' }}
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ inputs.release_codegen_units || '16' }}
     steps:
       - uses: actions/checkout@v7
@@ -387,3 +415,49 @@ jobs:
         env:
           CARGO_NDK_PLATFORM: 24
         run: cargo ndk -t arm64-v8a build --release --locked
+      - name: Prepare artifact
+        run: |
+          mkdir -p dist
+          cp target/aarch64-linux-android/release/pumpkin dist/pumpkin-aarch64-android
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pumpkin-aarch64-android
+          compression-level: 9
+          path: dist/pumpkin-aarch64-android
+
+  draft_canary_release:
+    name: Update canary release
+    permissions:
+      contents: write
+    needs: [build_release, build_release_musl, build_android_release]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download prebuilt binary artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "pumpkin-*"
+          path: dist/
+          merge-multiple: true
+      - name: Generate release notes
+        run: |
+          tree dist/
+          echo "From commit: $(git rev-parse --short HEAD)" > dist/RELEASE.md
+          echo "Generated on: $(date -u +"%Y-%m-%d %H:%M") UTC" >> dist/RELEASE.md
+          echo "" >> dist/RELEASE.md
+          echo "Canary build of master for testing, built without LTO. The fully optimized daily build is the Nightly Build release." >> dist/RELEASE.md
+          cat dist/RELEASE.md
+      - name: Update the canary tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag --force canary && git push --force origin tag canary
+      - name: Draft a canary GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          prerelease: true
+          files: dist/pumpkin*
+          tag_name: canary
+          name: Canary Build
+          body_path: dist/RELEASE.md
