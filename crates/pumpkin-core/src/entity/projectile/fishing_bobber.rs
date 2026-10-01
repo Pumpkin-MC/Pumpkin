@@ -329,13 +329,13 @@ impl FishingBobberEntity {
         }
 
         if entity.on_ground.load(Ordering::Relaxed) {
-            if self.life.fetch_add(1, Ordering::Relaxed) + 1 >= 1200 {
+            let life = self.life.fetch_add(1, Ordering::Relaxed) + 1;
+            if life >= 1200 {
                 self.discard(player);
-                return;
             }
-        } else {
-            self.life.store(0, Ordering::Relaxed);
+            return;
         }
+        self.life.store(0, Ordering::Relaxed);
 
         let block_pos = entity.block_pos.load();
         let (fluid, fluid_state) = world.get_fluid_and_fluid_state(&block_pos);
@@ -417,37 +417,38 @@ impl FishingBobberEntity {
             velocity.y -= Self::GRAVITY;
         }
 
-        velocity = velocity * Self::INERTIA;
-        entity.velocity.store(velocity);
+        // Vanilla moves the hook through the engine's collision resolution, so it comes to rest on
+        // block surfaces instead of hovering above them.
+        entity.move_entity(caller, velocity);
 
-        let new_pos = start_pos.add(&velocity);
-
-        let search_box = BoundingBox::new(
-            Vector3::new(
-                start_pos.x.min(new_pos.x),
-                start_pos.y.min(new_pos.y),
-                start_pos.z.min(new_pos.z),
-            ),
-            Vector3::new(
-                start_pos.x.max(new_pos.x),
-                start_pos.y.max(new_pos.y),
-                start_pos.z.max(new_pos.z),
-            ),
-        )
-        .expand(0.3, 0.3, 0.3);
-
-        // Simplified `FishingBobberEntity.checkCollision`: stop the bobber on the first block.
-        let (block_cols, _) = world.get_block_collisions(search_box, caller);
-        if !block_cols.is_empty() {
-            entity.on_ground.store(true, Ordering::Relaxed);
+        // Vanilla zeroes the hook's momentum when it comes to rest while flying.
+        if matches!(state, HookState::Flying)
+            && (entity.on_ground.load(Ordering::Relaxed)
+                || entity.horizontal_collision.load(Ordering::Relaxed))
+        {
             entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
-            return;
         }
-
-        entity.set_pos(new_pos);
+        entity
+            .velocity
+            .store(entity.velocity.load() * Self::INERTIA);
 
         // Vanilla `FishingBobberEntity.checkCollision` only hooks entities while flying.
         if matches!(state, HookState::Flying) {
+            let moved_pos = entity.pos.load();
+            let search_box = BoundingBox::new(
+                Vector3::new(
+                    start_pos.x.min(moved_pos.x),
+                    start_pos.y.min(moved_pos.y),
+                    start_pos.z.min(moved_pos.z),
+                ),
+                Vector3::new(
+                    start_pos.x.max(moved_pos.x),
+                    start_pos.y.max(moved_pos.y),
+                    start_pos.z.max(moved_pos.z),
+                ),
+            )
+            .expand(0.3, 0.3, 0.3);
+
             let candidates = world.get_entities_at_box(&search_box);
             for cand in candidates {
                 if cand.get_entity().entity_id == self.owner_id
