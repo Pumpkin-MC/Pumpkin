@@ -5,7 +5,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
-use crate::command::argument_types::block::BlockArgumentType;
+use crate::command::argument_types::block_state::BlockStateArgumentType;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
@@ -39,8 +39,7 @@ struct SetBlockExecutor(Mode);
 
 impl CommandExecutor for SetBlockExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let block = BlockArgumentType::get(context, "block")?;
-        let block_state_id = block.default_state.id;
+        let block_state_id = BlockStateArgumentType::get(context, "block")?;
         let mode = self.0;
         let world = context.source.world();
         let pos = BlockPosArgumentType::get_loaded_block_pos(context, "pos")?;
@@ -123,7 +122,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     dispatcher.register(
         command("setblock", DESCRIPTION).requires(PERMISSION).then(
             argument("pos", BlockPosArgumentType).then(
-                argument("block", BlockArgumentType)
+                argument("block", BlockStateArgumentType)
                     .executes(SetBlockExecutor(Mode::Replace))
                     .then(literal("destroy").executes(SetBlockExecutor(Mode::Destroy)))
                     .then(literal("keep").executes(SetBlockExecutor(Mode::Keep)))
