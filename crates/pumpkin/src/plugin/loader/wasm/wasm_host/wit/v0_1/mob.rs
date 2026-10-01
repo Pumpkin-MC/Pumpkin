@@ -5,6 +5,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::ai::goal::Goal;
 use crate::entity::mob::Mob as InternalMob;
+use crate::entity::mob::cube_mob::CubeMob;
 use crate::entity::passive::tamable::TamableAnimal;
 use crate::plugin::loader::wasm::wasm_host::{
     PluginInstance, WasmPlugin,
