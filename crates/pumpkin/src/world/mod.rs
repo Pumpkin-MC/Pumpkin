@@ -128,7 +128,7 @@ use pumpkin_protocol::{
         client::play::{
             CBlockEntityData, CDamageEvent, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
             CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSetSelectedSlot, CSoundEffect,
-            CSpawnEntity, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
+            GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
         },
         server::play::SChatMessage,
     },
@@ -3032,7 +3032,6 @@ impl World {
         // --- MULTIPLAYER BROADCASTING ---
 
         let gameprofile = &player.gameprofile;
-        let velocity = player.get_entity().velocity.load();
 
         // 1. Broadcast the new Bedrock player to everyone else (Java + Bedrock)
         let bedrock_player_list = CPlayerList {
@@ -3081,21 +3080,9 @@ impl World {
             &bedrock_player_list,
         );
 
-        // Bedrock gets `AddPlayer` from the tracker.
-        self.broadcast_packet_except(
-            &[gameprofile.id],
-            &CSpawnEntity::new(
-                (runtime_id as i32).into(),
-                gameprofile.id,
-                i32::from(EntityType::PLAYER.id).into(),
-                position,
-                pitch,
-                yaw,
-                yaw,
-                0.into(),
-                velocity,
-            ),
-        );
+        // Vanilla `level.addNewPlayer`: in-range viewers get the spawn from the tracker.
+        self.entity_tracker
+            .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
 
         self.send_player_equipment(&player);
         player
@@ -3220,94 +3207,9 @@ impl World {
             ))
             .await;
 
-        self.pair_new_player_with_tracked_entities(player);
-
-        // Send the current ticking state to the new player so they are in sync.
-        server.tick_rate_manager.update_joining_player(player).await;
-
-        // Permissions, i.e. the commands a player may use.
-        player.send_permission_lvl_update();
-
-        // Difficulty of the world
-        player.send_difficulty_update();
-        {
-            let command_dispatcher = server.command_dispatcher.load();
-
-            client_suggestions::send_c_commands_packet(player, server, &command_dispatcher);
-        };
-        if client.version.load() < JavaMinecraftVersion::V_1_20_2
-            && client.version.load() >= JavaMinecraftVersion::V_1_13
-        {
-            let version = client.version.load();
-            let mut tags = Vec::new();
-            for &key in pumpkin_data::tag::RegistryKey::NETWORK_KEYS {
-                if pumpkin_data::tag::get_registry_key_tags(version, key)
-                    .is_some_and(|map| !map.is_empty())
-                {
-                    tags.push(key);
-                }
-            }
-            let packet = pumpkin_protocol::java::client::play::CUpdateTagsPlay::new(&tags);
-            client.send_packet(&packet).await;
-        }
-
-        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
-            let position = player.position();
-            let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
-            let pitch = player.get_entity().pitch.load();
-
-            (position, yaw, pitch)
-        } else {
-            let info = &self.level_info.load();
-            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
-            let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let top = self.get_top_block(spawn_position);
-            let pos_y = if top > self.dimension.min_y {
-                top + 1
-            } else {
-                info.spawn_y
-            };
-
-            let position = Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(info.spawn_z) + 0.5,
-            );
-            (position, info.spawn_yaw, info.spawn_pitch)
-        };
-
-        // Load chunks around the real spawn position before teleporting the client there.
-        player.living_entity.entity.set_pos(position);
-        player.living_entity.entity.set_rotation(yaw, pitch);
-        player.living_entity.entity.last_pos.store(position);
-        chunker::update_position(player);
-
-        let center_chunk = player.living_entity.entity.chunk_pos.load();
-        let chunk = self
-            .level
-            .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
-            .await;
-        if let Some(server) = self.server.upgrade() {
-            let mut event =
-                crate::plugin::world::chunk_send::ChunkSend::new(player.world(), chunk.clone());
-            server.plugin_manager.fire(&server, &mut event).await;
-            if event.cancelled {
-                return;
-            }
-        }
-        client.send_chunks(&[chunk]).await;
-        player
-            .chunk_sender
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .mark_sent_out_of_band(center_chunk);
-
-        let velocity = player.living_entity.entity.velocity.load();
-
-        debug!("Sending player teleport to {}", player.gameprofile.name);
-        player.request_teleport(position, yaw, pitch);
-
+        // tab list before `level.addNewPlayer`.
+        // Java drops a player spawn whose info entry is missing and never retries,
+        // so this must precede entity tracking and the first chunks.
         let gameprofile = &player.gameprofile;
         let bedrock_player_list = CPlayerList {
             action: CPlayerList::ACTION_ADD,
@@ -3460,23 +3362,76 @@ impl World {
             }
         };
 
-        let gameprofile = &player.gameprofile;
+        self.pair_new_player_with_tracked_entities(player);
 
-        // Spawn the player for every Java client
-        // Bedrock gets `AddPlayer` from the tracker.
-        let spawn_entity = CSpawnEntity::new(
-            entity_id.into(),
-            gameprofile.id,
-            i32::from(EntityType::PLAYER.id).into(),
-            position,
-            pitch,
-            yaw,
-            yaw,
-            0.into(),
-            velocity,
-        );
+        // Send the current ticking state to the new player so they are in sync.
+        server.tick_rate_manager.update_joining_player(player).await;
 
-        self.broadcast_packet_except(&[player.gameprofile.id], &spawn_entity);
+        // Permissions
+        player.send_permission_lvl_update();
+
+        // Difficulty of the world
+        player.send_difficulty_update();
+        {
+            let command_dispatcher = server.command_dispatcher.load();
+
+            client_suggestions::send_c_commands_packet(player, server, &command_dispatcher);
+        };
+        if client.version.load() < JavaMinecraftVersion::V_1_20_2
+            && client.version.load() >= JavaMinecraftVersion::V_1_13
+        {
+            let version = client.version.load();
+            let mut tags = Vec::new();
+            for &key in pumpkin_data::tag::RegistryKey::NETWORK_KEYS {
+                if pumpkin_data::tag::get_registry_key_tags(version, key)
+                    .is_some_and(|map| !map.is_empty())
+                {
+                    tags.push(key);
+                }
+            }
+            let packet = pumpkin_protocol::java::client::play::CUpdateTagsPlay::new(&tags);
+            client.send_packet(&packet).await;
+        }
+
+        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
+            let position = player.position();
+            let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
+            let pitch = player.get_entity().pitch.load();
+
+            (position, yaw, pitch)
+        } else {
+            let info = &self.level_info.load();
+            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
+            let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
+            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
+            let top = self.get_top_block(spawn_position);
+            let pos_y = if top > self.dimension.min_y {
+                top + 1
+            } else {
+                info.spawn_y
+            };
+
+            let position = Vector3::new(
+                f64::from(info.spawn_x) + 0.5,
+                f64::from(pos_y),
+                f64::from(info.spawn_z) + 0.5,
+            );
+            (position, info.spawn_yaw, info.spawn_pitch)
+        };
+
+        // Load chunks around the real spawn position before teleporting the client there.
+        player.living_entity.entity.set_pos(position);
+        player.living_entity.entity.set_rotation(yaw, pitch);
+        player.living_entity.entity.last_pos.store(position);
+        chunker::update_position(player);
+        self.send_center_chunk(player).await;
+
+        debug!("Sending player teleport to {}", player.gameprofile.name);
+        player.request_teleport(position, yaw, pitch);
+
+        // Vanilla `level.addNewPlayer`: in-range viewers get the spawn from the tracker.
+        self.entity_tracker
+            .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
 
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
@@ -4645,8 +4600,7 @@ impl World {
             new_list.push(player.clone());
             new_list
         });
-        self.entity_tracker
-            .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
+        // Entity tracking starts in the spawn path, after the tab list reached viewers.
         Ok(())
     }
 
@@ -4709,12 +4663,18 @@ impl World {
             .level
             .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
             .await;
-        java_client.send_chunks(&[chunk]).await;
-        player
-            .chunk_sender
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .mark_sent_out_of_band(center_chunk);
+        // A cancelled `ChunkSend` keeps the chunk pending -> the batch path sends it later.
+        if java_client
+            .send_chunks(&[chunk])
+            .await
+            .contains(&center_chunk)
+        {
+            player
+                .chunk_sender
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .mark_sent_out_of_band(center_chunk);
+        }
     }
 
     /// Must only be called after the player's own `CLogin` packet has been sent.
