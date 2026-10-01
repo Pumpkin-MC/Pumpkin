@@ -121,7 +121,7 @@ impl ArrowEntity {
     ) -> Self {
         let mut owner_pos = shooter.pos.load();
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
-        entity.pos.store(owner_pos);
+        entity.set_pos(owner_pos);
         let mut launch_event =
             crate::plugin::api::events::entity::projectile_launch::ProjectileLaunchEvent::new(
                 entity.entity_id,
@@ -647,6 +647,11 @@ impl EntityBase for ArrowEntity {
             velocity.y.atan2(len) as f32 * 57.295_776,
         );
 
+        if !self.has_left_owner.load(Ordering::Relaxed) && self.check_left_owner(entity, &velocity)
+        {
+            self.has_left_owner.store(true, Ordering::Relaxed);
+        }
+
         // Move arrow
         let new_pos = start_pos.add(&velocity);
         entity.set_pos(new_pos);
@@ -749,11 +754,6 @@ impl EntityBase for ArrowEntity {
                     }
                 }
             }
-        }
-
-        if !self.has_left_owner.load(Ordering::Relaxed) && self.check_left_owner(entity, &velocity)
-        {
-            self.has_left_owner.store(true, Ordering::Relaxed);
         }
 
         // Entity collisions

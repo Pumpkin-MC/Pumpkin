@@ -83,7 +83,7 @@ impl ThrownItemEntity {
     pub fn new(entity: Entity, owner: &Entity, gravity: f64) -> Self {
         let mut owner_pos = owner.pos.load();
         owner_pos.y += owner.get_eye_height() - 0.1;
-        entity.pos.store(owner_pos);
+        entity.set_pos(owner_pos);
         Self {
             entity,
             owner_id: Some(owner.entity_id),
@@ -163,6 +163,10 @@ impl ThrownItemEntity {
         let start_pos = entity.pos.load();
         let delta = velocity;
 
+        if !self.has_left_owner.load(Ordering::Relaxed) && self.check_left_owner(entity, &delta) {
+            self.has_left_owner.store(true, Ordering::Relaxed);
+        }
+
         // Update position
         let new_pos = start_pos.add(&delta);
         entity.set_pos(new_pos);
@@ -211,9 +215,6 @@ impl ThrownItemEntity {
         }
 
         // Entity collisions
-        if !self.has_left_owner.load(Ordering::Relaxed) && self.check_left_owner(entity, &delta) {
-            self.has_left_owner.store(true, Ordering::Relaxed);
-        }
 
         let candidates = world.get_all_at_box(&search_box);
         for cand in candidates {

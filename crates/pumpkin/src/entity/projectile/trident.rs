@@ -63,7 +63,7 @@ impl TridentEntity {
     ) -> Self {
         let mut owner_pos = shooter.pos.load();
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
-        entity.pos.store(owner_pos);
+        entity.set_pos(owner_pos);
         entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
 
         Self {
@@ -227,6 +227,11 @@ impl EntityBase for TridentEntity {
             velocity.y.atan2(len) as f32 * 57.295_776,
         );
 
+        if !self.has_left_owner.load(Ordering::Relaxed) && self.check_left_owner(entity, &velocity)
+        {
+            self.has_left_owner.store(true, Ordering::Relaxed);
+        }
+
         // Move trident
         let new_pos = start_pos.add(&velocity);
         entity.set_pos(new_pos);
@@ -279,11 +284,6 @@ impl EntityBase for TridentEntity {
                     }
                 }
             }
-        }
-
-        if !self.has_left_owner.load(Ordering::Relaxed) && self.check_left_owner(entity, &velocity)
-        {
-            self.has_left_owner.store(true, Ordering::Relaxed);
         }
 
         // Entity collisions
