@@ -451,7 +451,7 @@ impl FishingBobberEntity {
 
         // Vanilla `FishingHook.checkCollision`: ray-cast the movement and hook the nearest entity.
         if matches!(state, HookState::Flying) {
-            self.check_collision(&world, &*owner, caller, start_pos, velocity);
+            self.check_collision(&world, &*owner, caller, start_pos, &mut velocity);
         }
 
         // Vanilla moves the hook through the engine's collision resolution, so it comes to rest on
@@ -470,16 +470,17 @@ impl FishingBobberEntity {
             .store(entity.velocity.load() * Self::INERTIA);
     }
 
-    /// Vanilla `FishingHook.checkCollision`: ray-cast the movement and hook the nearest entity.
+    /// Vanilla `FishingHook.checkCollision`: ray-cast the movement, hooking the nearest entity or
+    /// stopping at the nearest block.
     fn check_collision(
         &self,
         world: &World,
         owner: &dyn EntityBase,
         caller: &dyn EntityBase,
         start_pos: Vector3<f64>,
-        velocity: Vector3<f64>,
+        velocity: &mut Vector3<f64>,
     ) {
-        let new_pos = start_pos.add(&velocity);
+        let new_pos = start_pos.add(&*velocity);
         let search_box = BoundingBox::new(
             Vector3::new(
                 start_pos.x.min(new_pos.x),
@@ -496,15 +497,17 @@ impl FishingBobberEntity {
 
         let mut closest_t = 1.0;
         let mut hooked = None;
+        let mut hit_block = false;
 
         // A block in front of an entity stops the hook.
         let (block_cols, _) = world.get_block_collisions(search_box, caller);
         for shape in &block_cols {
-            if let Some(t) = calculate_ray_intersection(&start_pos, &velocity, shape)
+            if let Some(t) = calculate_ray_intersection(&start_pos, &*velocity, shape)
                 && t < closest_t
             {
                 closest_t = t;
                 hooked = None;
+                hit_block = true;
             }
         }
 
@@ -526,16 +529,21 @@ impl FishingBobberEntity {
             }
 
             let entity_box = candidate.bounding_box.load().expand(0.3, 0.3, 0.3);
-            if let Some(t) = calculate_ray_intersection(&start_pos, &velocity, &entity_box)
+            if let Some(t) = calculate_ray_intersection(&start_pos, &*velocity, &entity_box)
                 && t < closest_t
             {
                 closest_t = t;
                 hooked = Some(candidate.entity_id);
+                hit_block = false;
             }
         }
 
         if let Some(id) = hooked {
             self.set_hooked_entity(Some(id));
+        } else if hit_block {
+            // Vanilla `FishingHook.onHitBlock`: stop the hook at the block face instead of carrying
+            // its tangential motion to the edge.
+            *velocity = *velocity * closest_t;
         }
     }
 
