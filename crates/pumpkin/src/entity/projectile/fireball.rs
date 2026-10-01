@@ -223,7 +223,7 @@ impl EntityBase for FireballEntity {
             entity.velocity.store(velocity);
         }
 
-        self.thrown.process_tick(caller);
+        self.thrown.process_move_and_collision(caller);
     }
 
     fn get_entity(&self) -> &Entity {

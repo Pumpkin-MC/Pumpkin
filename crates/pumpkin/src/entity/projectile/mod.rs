@@ -1,7 +1,6 @@
 use super::{Entity, EntityBase, living::LivingEntity};
 use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
-use pumpkin_protocol::java::client::play::CEntityVelocity;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use std::{
@@ -134,38 +133,20 @@ impl ThrownItemEntity {
 }
 
 impl ThrownItemEntity {
-    /// Process a tick for projectile movement and collisions
-    pub fn process_tick(&self, caller: &dyn EntityBase) {
+    /// Move projectile by its current velocity and check for collisions
+    pub fn process_move_and_collision(&self, caller: &dyn EntityBase) {
         let entity = self.get_entity();
         let world = entity.world.load();
 
         entity.update_last_pos();
 
-        // Apply gravity and inertia
-        let mut velocity = entity.velocity.load();
-        velocity.y -= self.get_gravity();
-
-        let inertia = if entity.touching_water.load(Ordering::Relaxed) {
-            0.8
-        } else {
-            0.99
-        };
-        velocity = velocity.multiply(inertia, inertia, inertia);
-
-        // Store velocity
-        entity.velocity.store(velocity);
-
+        let velocity = entity.velocity.load();
         let start_pos = entity.pos.load();
         let delta = velocity;
 
         // Update position
         let new_pos = start_pos.add(&delta);
         entity.set_pos(new_pos);
-
-        // Send updated velocity to clients
-        let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
-        let chunk_pos = entity.chunk_pos.load();
-        world.broadcast_to_chunk(chunk_pos, &packet);
 
         // Calculate search box for collisions
         let search_box = BoundingBox::new(
@@ -180,7 +161,7 @@ impl ThrownItemEntity {
                 start_pos.z.max(new_pos.z),
             ),
         )
-        .expand(0.3, 0.3, 0.3);
+        .expand(1.0, 1.0, 1.0);
 
         let mut closest_t = 1.0f64;
         let mut hit = None;
@@ -211,13 +192,13 @@ impl ThrownItemEntity {
         }
 
         // Entity collisions
-        let candidates = world.get_entities_at_box(&search_box);
+        let candidates = world.get_all_at_box(&search_box);
         for cand in candidates {
             if self.should_skip_collision(entity, &cand) {
                 continue;
             }
 
-            let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
+            let ebb = cand.get_entity().bounding_box.load().expand(1.0, 1.0, 1.0);
             if let Some(t) = calculate_ray_intersection(&start_pos, &delta, &ebb)
                 && t < closest_t
             {
@@ -254,6 +235,27 @@ impl ThrownItemEntity {
         }
     }
 
+    /// Process a tick for ballistic projectile movement and collisions (gravity + drag)
+    pub fn process_tick(&self, caller: &dyn EntityBase) {
+        let entity = self.get_entity();
+
+        // Apply gravity and inertia
+        let mut velocity = entity.velocity.load();
+        velocity.y -= self.get_gravity();
+
+        let inertia = if entity.touching_water.load(Ordering::Relaxed) {
+            0.8
+        } else {
+            0.99
+        };
+        velocity = velocity.multiply(inertia, inertia, inertia);
+
+        // Store velocity
+        entity.velocity.store(velocity);
+
+        self.process_move_and_collision(caller);
+    }
+
     /// Returns if collision should be skipped (e.g. owner or projectile vs projectile)
     fn should_skip_collision(&self, self_ent: &Entity, other: &Arc<dyn EntityBase>) -> bool {
         let other_ent = other.get_entity();
@@ -261,8 +263,8 @@ impl ThrownItemEntity {
             return true;
         }
 
-        // Skip owner for initial frames
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+        // Projectiles should never collide with their own shooter
+        if Some(other_ent.entity_id) == self.owner_id {
             return true;
         }
 
