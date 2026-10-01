@@ -29,6 +29,7 @@ pub struct TridentEntity {
     pub shake_time: AtomicU8,
     pub has_hit: AtomicBool,
     pub last_block_pos: Arc<std::sync::RwLock<Option<BlockPos>>>,
+    pub has_left_owner: AtomicBool,
 }
 
 impl TridentEntity {
@@ -50,6 +51,7 @@ impl TridentEntity {
             shake_time: AtomicU8::new(0),
             has_hit: AtomicBool::new(false),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
+            has_left_owner: AtomicBool::new(owner_id.is_none()),
         }
     }
 
@@ -75,6 +77,7 @@ impl TridentEntity {
             shake_time: AtomicU8::new(0),
             has_hit: AtomicBool::new(false),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
+            has_left_owner: AtomicBool::new(false),
         }
     }
 
@@ -130,6 +133,22 @@ impl TridentEntity {
         );
     }
 
+    fn check_left_owner(&self, entity: &Entity, velocity: &Vector3<f64>) -> bool {
+        let Some(owner_id) = self.owner_id else {
+            return true;
+        };
+        let world = entity.world.load();
+        let Some(owner) = world.get_entity_by_id(owner_id) else {
+            return true;
+        };
+        let box_to_check = entity
+            .bounding_box
+            .load()
+            .expand_towards(velocity.x, velocity.y, velocity.z)
+            .expand_all(1.0);
+        !box_to_check.intersects(&owner.get_entity().bounding_box.load())
+    }
+
     fn should_skip_collision(&self, self_ent: &Entity, other: &Arc<dyn EntityBase>) -> bool {
         let other_ent = other.get_entity();
 
@@ -138,8 +157,10 @@ impl TridentEntity {
             return true;
         }
 
-        // Skip owner for initial frames (5 ticks)
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+        // Skip owner until trident has left the owner's bounding box
+        if Some(other_ent.entity_id) == self.owner_id
+            && !self.has_left_owner.load(Ordering::Relaxed)
+        {
             return true;
         }
 
@@ -258,6 +279,11 @@ impl EntityBase for TridentEntity {
                     }
                 }
             }
+        }
+
+        if !self.has_left_owner.load(Ordering::Relaxed) && self.check_left_owner(entity, &velocity)
+        {
+            self.has_left_owner.store(true, Ordering::Relaxed);
         }
 
         // Entity collisions

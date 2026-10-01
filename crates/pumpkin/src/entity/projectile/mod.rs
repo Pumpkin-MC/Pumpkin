@@ -75,6 +75,7 @@ pub struct ThrownItemEntity {
     pub owner_id: Option<i32>,
     pub collides_with_projectiles: bool,
     pub has_hit: AtomicBool,
+    pub has_left_owner: AtomicBool,
     pub gravity: f64,
 }
 
@@ -88,6 +89,7 @@ impl ThrownItemEntity {
             owner_id: Some(owner.entity_id),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
+            has_left_owner: AtomicBool::new(false),
             gravity,
         }
     }
@@ -130,8 +132,25 @@ impl ThrownItemEntity {
             velocity.y.atan2(len) as f32 * 57.295_776,
         );
     }
+    /// Checks whether the projectile has cleared its owner's bounding box,
+    /// matching vanilla `Projectile.checkLeftOwner()`.
+    #[must_use]
+    pub fn check_left_owner(&self, entity: &Entity, velocity: &Vector3<f64>) -> bool {
+        let Some(owner_id) = self.owner_id else {
+            return true;
+        };
+        let world = entity.world.load();
+        let Some(owner) = world.get_entity_by_id(owner_id) else {
+            return true;
+        };
+        let box_to_check = entity
+            .bounding_box
+            .load()
+            .expand_towards(velocity.x, velocity.y, velocity.z)
+            .expand_all(1.0);
+        !box_to_check.intersects(&owner.get_entity().bounding_box.load())
+    }
 }
-
 impl ThrownItemEntity {
     /// Move projectile by its current velocity and check for collisions
     pub fn process_move_and_collision(&self, caller: &dyn EntityBase) {
@@ -192,6 +211,10 @@ impl ThrownItemEntity {
         }
 
         // Entity collisions
+        if !self.has_left_owner.load(Ordering::Relaxed) && self.check_left_owner(entity, &delta) {
+            self.has_left_owner.store(true, Ordering::Relaxed);
+        }
+
         let candidates = world.get_all_at_box(&search_box);
         for cand in candidates {
             if self.should_skip_collision(entity, &cand) {
@@ -263,8 +286,10 @@ impl ThrownItemEntity {
             return true;
         }
 
-        // Projectiles should never collide with their own shooter
-        if Some(other_ent.entity_id) == self.owner_id {
+        // Projectiles should not collide with their own shooter until leaving the shooter's bounding box
+        if Some(other_ent.entity_id) == self.owner_id
+            && !self.has_left_owner.load(Ordering::Relaxed)
+        {
             return true;
         }
 
