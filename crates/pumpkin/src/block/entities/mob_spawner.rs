@@ -8,7 +8,10 @@ use pumpkin_data::{entity::EntityType, world::WorldEvent};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use crate::{block::entities::BlockEntity, entity::EntityBase, world::World};
+use crate::{
+    block::entities::BlockEntity, entity::EntityBase, entity::mob::spawn::finalize_spawn,
+    world::World,
+};
 
 pub struct MobSpawnerBlockEntity {
     pub position: BlockPos,
@@ -190,6 +193,8 @@ impl BlockEntity for MobSpawnerBlockEntity {
                     continue;
                 }
 
+                // TODO: support SpawnData NBT (`entity` tag, custom_spawn_rules, equipment).
+                finalize_spawn(&entity, world, None);
                 world.spawn_entity(entity);
                 world.sync_world_event(WorldEvent::ParticlesMobblockSpawn, self.position, 0);
                 spawned_any = true;

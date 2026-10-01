@@ -417,7 +417,7 @@ impl Scoreboard {
         let entity_s = entity_name.into();
         let obj_s = objective_name.into();
         let current_val = self.get_score_value(&entity_s, &obj_s).unwrap_or(0);
-        let new_val = current_val + delta;
+        let new_val = current_val.wrapping_add(delta);
         self.set_score_value(target, entity_s, obj_s, new_val);
         new_val
     }

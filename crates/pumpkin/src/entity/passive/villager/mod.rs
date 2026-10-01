@@ -652,8 +652,9 @@ impl VillagerEntity {
         Some(stack)
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn add_trades(&self, profession: VillagerProfession, level: i32) {
-        use pumpkin_data::villager::VillagerTradeModifier;
+        use crate::data::datapack::trade_loader::{DynamicTradeModifier, DynamicVillagerTradeSet};
         use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
         use rand::seq::IndexedRandom;
         use rand::{RngExt, SeedableRng, rngs::StdRng};
@@ -666,9 +667,26 @@ impl VillagerEntity {
             .type_enum();
         let mut new_offers = Vec::new();
 
-        if let Some(trade_set) = profession.trade_set(level) {
+        let trade_set = self
+            .get_entity()
+            .world
+            .load()
+            .server
+            .upgrade()
+            .and_then(|server| {
+                server
+                    .datapack_manager
+                    .get_villager_trade_set(profession.to_name(), level)
+            })
+            .or_else(|| {
+                profession
+                    .trade_set(level)
+                    .map(DynamicVillagerTradeSet::from)
+            });
+
+        if let Some(trade_set) = trade_set {
             let mut rng = StdRng::from_rng(&mut rand::rng());
-            let mut remaining_trades = trade_set.trades.iter().collect::<Vec<_>>();
+            let mut remaining_trades = trade_set.trades.clone();
             let mut added = 0;
             while added < trade_set.amount && !remaining_trades.is_empty() {
                 let index = rng.random_range(0..remaining_trades.len());
@@ -684,17 +702,17 @@ impl VillagerEntity {
                     .as_ref()
                     .map(|b| ItemStack::new(b.count as u8, b.item));
 
-                match trade.modifier {
-                    VillagerTradeModifier::None => {}
-                    VillagerTradeModifier::EnchantRandomly => {
+                match &trade.modifier {
+                    DynamicTradeModifier::None => {}
+                    DynamicTradeModifier::EnchantRandomly => {
                         let Some(items) = enchanted_book_offer_items(&mut rng) else {
                             continue;
                         };
                         (base_cost_a, output, cost_b) = items;
                     }
-                    VillagerTradeModifier::EnchantWithLevels { min, max } => {
+                    DynamicTradeModifier::EnchantWithLevels { min, max } => {
                         let Some((enchanted, additional_cost)) =
-                            enchant_trade_item(&mut rng, trade.gives.item, min, max)
+                            enchant_trade_item(&mut rng, trade.gives.item, *min, *max)
                         else {
                             continue;
                         };
@@ -707,14 +725,14 @@ impl VillagerEntity {
                         }
                         base_cost_a.set_count(count as u8);
                     }
-                    VillagerTradeModifier::ExplorationMap { destination } => {
+                    DynamicTradeModifier::ExplorationMap { destination } => {
                         let Some(map) = self.create_explorer_map(destination, &output) else {
                             continue;
                         };
                         output = map;
                     }
-                    VillagerTradeModifier::RandomDyes => apply_random_dye(&mut rng, &mut output),
-                    VillagerTradeModifier::RandomPotion => {
+                    DynamicTradeModifier::RandomDyes => apply_random_dye(&mut rng, &mut output),
+                    DynamicTradeModifier::RandomPotion => {
                         let Some(potion_name) = pumpkin_data::tag::Potion::MINECRAFT_TRADEABLE
                             .0
                             .choose(&mut rng)
@@ -723,10 +741,10 @@ impl VillagerEntity {
                         };
                         apply_potion(&mut output, potion_name);
                     }
-                    VillagerTradeModifier::SuspiciousStew => {
+                    DynamicTradeModifier::SuspiciousStew => {
                         apply_random_stew_effect(&mut rng, &mut output);
                     }
-                    VillagerTradeModifier::Potion(potion) => apply_potion(&mut output, potion),
+                    DynamicTradeModifier::Potion(potion) => apply_potion(&mut output, potion),
                 }
                 new_offers.push(pumpkin_protocol::java::client::play::MerchantOffer {
                     base_cost_a: ItemStackSerializer(Cow::Owned(base_cost_a)),

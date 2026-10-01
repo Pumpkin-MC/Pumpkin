@@ -30,6 +30,10 @@ impl Mob for ZombieEntity {
         &self.entity.mob_entity
     }
 
+    fn spawn_as_baby(&self) -> bool {
+        self.entity.spawn_as_baby()
+    }
+
     fn populate_default_equipment_slots(
         &self,
         world: &Arc<World>,
@@ -69,27 +73,10 @@ impl ZombieEntity {
 
     #[must_use]
     pub fn is_baby(&self) -> bool {
-        self.entity
-            .mob_entity
-            .living_entity
-            .entity
-            .age
-            .load(std::sync::atomic::Ordering::Relaxed)
-            < 0
+        self.entity.is_baby()
     }
 
     pub fn set_baby(&self, baby: bool) {
-        let age = if baby { -24000 } else { 0 };
-        self.entity
-            .mob_entity
-            .living_entity
-            .entity
-            .age
-            .store(age, std::sync::atomic::Ordering::Relaxed);
-        self.entity
-            .mob_entity
-            .living_entity
-            .entity
-            .set_synced_data(pumpkin_data::tracked_data::zombie::BABY, baby);
+        self.entity.set_baby(baby);
     }
 }
