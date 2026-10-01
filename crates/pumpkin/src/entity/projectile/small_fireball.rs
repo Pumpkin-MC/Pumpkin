@@ -91,28 +91,36 @@ impl EntityBase for SmallFireballEntity {
 
     fn on_hit(&self, hit: ProjectileHit) {
         match hit {
-            ProjectileHit::Entity { ref entity, .. } => {
+            ProjectileHit::Entity {
+                ref entity,
+                hit_pos,
+                ..
+            } => {
                 let world = self.get_entity().world.load();
                 let shooter = self
                     .thrown
                     .owner_id
                     .and_then(|id| world.get_entity_by_id(id));
 
-                if !entity
-                    .get_entity()
-                    .is_invulnerable_to(&pumpkin_data::damage::DamageType::FIREBALL)
-                {
-                    entity.get_entity().set_on_fire_for(5.0);
+                let target_ent = entity.get_entity();
+                let prior_fire_ticks = target_ent.fire_ticks.load(Ordering::Relaxed);
+                if !target_ent.is_invulnerable_to(&pumpkin_data::damage::DamageType::FIREBALL) {
+                    target_ent.set_on_fire_for(5.0);
                 }
 
-                let _ = entity.damage_with_context(
+                let damaged = entity.damage_with_context(
                     entity.as_ref(),
                     5.0,
                     pumpkin_data::damage::DamageType::FIREBALL,
-                    None,
+                    Some(hit_pos),
                     Some(self),
                     shooter.as_deref(),
                 );
+                if !damaged {
+                    target_ent
+                        .fire_ticks
+                        .store(prior_fire_ticks, Ordering::Relaxed);
+                }
             }
             ProjectileHit::Block { pos, face, .. } => {
                 // Try to place fire

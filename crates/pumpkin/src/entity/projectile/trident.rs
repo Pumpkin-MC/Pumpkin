@@ -133,6 +133,8 @@ impl TridentEntity {
         );
     }
 
+    /// Checks whether the projectile has cleared its owner's bounding box,
+    /// matching vanilla `Projectile.checkLeftOwner()`.
     fn check_left_owner(&self, entity: &Entity, velocity: &Vector3<f64>) -> bool {
         let Some(owner_id) = self.owner_id else {
             return true;
@@ -146,9 +148,19 @@ impl TridentEntity {
             .load()
             .expand_towards(velocity.x, velocity.y, velocity.z)
             .expand_all(1.0);
-        !box_to_check.intersects(&owner.get_entity().bounding_box.load())
+        let owner_ent = owner.get_entity();
+        if box_to_check.intersects(&owner_ent.bounding_box.load()) {
+            return false;
+        }
+        if let Some(vehicle) = owner_ent.get_vehicle()
+            && box_to_check.intersects(&vehicle.get_entity().bounding_box.load())
+        {
+            return false;
+        }
+        true
     }
 
+    /// Determines if collision with another entity should be skipped.
     fn should_skip_collision(&self, self_ent: &Entity, other: &Arc<dyn EntityBase>) -> bool {
         let other_ent = other.get_entity();
 
@@ -289,7 +301,7 @@ impl EntityBase for TridentEntity {
         // Entity collisions
         let candidates = world.get_all_at_box(&search_box);
         for cand in candidates {
-            if self.should_skip_collision(entity, &cand) {
+            if cand.is_spectator() || self.should_skip_collision(entity, &cand) {
                 continue;
             }
 
@@ -395,8 +407,8 @@ impl EntityBase for TridentEntity {
                     damage_val,
                     DamageType::TRIDENT,
                     Some(hit_pos),
+                    Some(self),
                     owner_entity.as_deref().or(Some(self)),
-                    owner_entity.as_deref(),
                 );
                 // Play hit sound
                 let sound_packet = CSoundEffect::new(

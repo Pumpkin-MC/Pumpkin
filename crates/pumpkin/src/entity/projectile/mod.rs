@@ -148,7 +148,16 @@ impl ThrownItemEntity {
             .load()
             .expand_towards(velocity.x, velocity.y, velocity.z)
             .expand_all(1.0);
-        !box_to_check.intersects(&owner.get_entity().bounding_box.load())
+        let owner_ent = owner.get_entity();
+        if box_to_check.intersects(&owner_ent.bounding_box.load()) {
+            return false;
+        }
+        if let Some(vehicle) = owner_ent.get_vehicle()
+            && box_to_check.intersects(&vehicle.get_entity().bounding_box.load())
+        {
+            return false;
+        }
+        true
     }
 }
 impl ThrownItemEntity {
@@ -218,11 +227,11 @@ impl ThrownItemEntity {
 
         let candidates = world.get_all_at_box(&search_box);
         for cand in candidates {
-            if self.should_skip_collision(entity, &cand) {
+            if cand.is_spectator() || self.should_skip_collision(entity, &cand) {
                 continue;
             }
 
-            let ebb = cand.get_entity().bounding_box.load().expand(1.0, 1.0, 1.0);
+            let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
             if let Some(t) = calculate_ray_intersection(&start_pos, &delta, &ebb)
                 && t < closest_t
             {

@@ -56,7 +56,7 @@ impl EntityBase for EvokerFangsEntity {
 
                 for cand in candidates {
                     let cand_ent = cand.get_entity();
-                    if Some(cand_ent.entity_id) == self.owner_id {
+                    if cand.is_spectator() || Some(cand_ent.entity_id) == self.owner_id {
                         continue;
                     }
 
