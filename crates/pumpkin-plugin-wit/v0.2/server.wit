@@ -1,0 +1,286 @@
+interface server {
+    use player.{player, ban-player-options, ban-ip-options, server-link, known-server-link, server-link-label};
+    use common.{game-mode};
+    use %world.{%world};
+    use text.{text-component};
+    use uuid.{uuid};
+    use recipe.{recipe-manager};
+    use enchantments.{enchantment-manager, custom-enchantment};
+    use permission.{permission-level};
+    use advancement.{advancement-info};
+    use datapack.{datapack-manager, datapack-info};
+
+    /// Represents an operator entry in the ops configuration.
+    record op-entry {
+        uuid: uuid,
+        name: string,
+        level: permission-level,
+        bypasses-player-limit: bool,
+    }
+
+    /// Interface for querying and managing server operators.
+    resource op-manager {
+        /// Checks if a player UUID is currently an operator.
+        is-op: func(id: uuid) -> bool;
+
+        /// Retrieves the operator entry for a player UUID, if present.
+        get-op: func(id: uuid) -> option<op-entry>;
+
+        /// Gets the effective permission level for a player UUID (returns zero if not op).
+        get-permission-level: func(id: uuid) -> permission-level;
+
+        /// Grants operator status to a player (online or offline) with the specified level and bypass setting.
+        op-player: func(name: string, id: uuid, level: permission-level, bypasses-player-limit: bool);
+
+        /// Revokes operator status from a player (online or offline). Returns true if the player was previously op.
+        deop-player: func(id: uuid) -> bool;
+
+        /// Returns a list of all operator entries on the server.
+        list-ops: func() -> list<op-entry>;
+    }
+
+    /// Represents a banned player entry in the ban list.
+    record banned-player-entry {
+        uuid: uuid,
+        name: string,
+        created: string,
+        source: string,
+        expires: option<string>,
+        reason: string,
+    }
+
+    /// Represents a banned IP entry in the IP ban list.
+    record banned-ip-entry {
+        ip: string,
+        created: string,
+        source: string,
+        expires: option<string>,
+        reason: string,
+    }
+
+    /// Global manager for player and IP bans.
+    resource ban-manager {
+        /// Checks if a player UUID is currently banned.
+        is-player-banned: func(id: uuid) -> bool;
+
+        /// Retrieves the ban entry for a player UUID, if banned.
+        get-player-ban: func(id: uuid) -> option<banned-player-entry>;
+
+        /// Bans a player by name and UUID with the specified options (works for online and offline players).
+        ban-player: func(name: string, id: uuid, options: ban-player-options);
+
+        /// Removes a player ban by UUID. Returns true if the player was banned.
+        unban-player: func(id: uuid) -> bool;
+
+        /// Returns all currently active player bans.
+        list-player-bans: func() -> list<banned-player-entry>;
+
+        /// Checks if an IP address is currently banned.
+        is-ip-banned: func(ip: string) -> bool;
+
+        /// Retrieves the ban entry for an IP address, if banned.
+        get-ip-ban: func(ip: string) -> option<banned-ip-entry>;
+
+        /// Bans an IP address with the specified options.
+        ban-ip: func(ip: string, options: ban-ip-options);
+
+        /// Removes an IP ban. Returns true if the IP was banned.
+        unban-ip: func(ip: string) -> bool;
+
+        /// Returns all currently active IP bans.
+        list-ip-bans: func() -> list<banned-ip-entry>;
+    }
+
+    /// Represents a player entry in the server whitelist.
+    record whitelist-entry {
+        uuid: uuid,
+        name: string,
+    }
+
+    /// Global manager for the server whitelist.
+    resource whitelist-manager {
+        /// Returns whether the whitelist is currently enabled.
+        is-enabled: func() -> bool;
+
+        /// Enables or disables the server whitelist. If enabled and enforce-whitelist is set, kicks non-whitelisted players.
+        set-enabled: func(enabled: bool);
+
+        /// Checks if a player UUID is on the whitelist.
+        is-whitelisted: func(id: uuid) -> bool;
+
+        /// Adds a player to the whitelist (online or offline). Returns true if newly added.
+        add-player: func(name: string, id: uuid) -> bool;
+
+        /// Removes a player from the whitelist. Returns true if the player was on the whitelist.
+        remove-player: func(id: uuid) -> bool;
+
+        /// Returns all whitelisted player entries.
+        list-entries: func() -> list<whitelist-entry>;
+    }
+
+    /// Represents the difficulty setting of a Minecraft server.
+    enum difficulty {
+        /// Hostile mobs do not spawn. Players regain health automatically.
+        peaceful,
+        /// Hostile mobs deal less damage.
+        easy,
+        /// Standard Minecraft difficulty.
+        normal,
+        /// Hostile mobs deal more damage.
+        hard,
+    }
+
+    /// Represents the three main Minecraft dimensions.
+    enum dimension {
+        overworld,
+        nether,
+        end,
+    }
+
+    record sys-info {
+        cpu-count: option<u32>,
+        total-memory: option<u64>,
+        used-memory: option<u64>,
+        os-name: option<string>,
+        os-version: option<string>,
+        pumpkin-version: string,
+    }
+
+    variant command-sender {
+        console,
+        player(player),
+    }
+
+    /// Represents the global server instance.
+    resource server {
+        /// Returns system information (CPU, Memory, OS).
+        /// Fields are returned only if the plugin has the corresponding permissions.
+        get-sys-info: func() -> sys-info;
+
+        /// Returns the current difficulty level of the server.
+        get-difficulty: func() -> difficulty;
+
+        /// Returns the total number of players currently connected to the server.
+        get-player-count: func() -> u32;
+
+        /// Returns the rolling average Milliseconds Per Tick (MSPT).
+        /// A value below 50.0 is required for a stable 20 TPS.
+        get-mspt: func() -> f64;
+
+        /// Returns the effective Ticks Per Second (TPS).
+        /// Ideal value is 20.0.
+        get-tps: func() -> f64;
+
+        /// Returns a list of all online players across all worlds.
+        get-all-players: func() -> list<player>;
+
+        /// Searches for a player by their exact name.
+        get-player-by-name: func(name: string) -> option<player>;
+
+        /// Searches for a player by their UUID string.
+        get-player-by-uuid: func(id: uuid) -> option<player>;
+
+        /// Returns a list of all worlds on this server.
+        get-all-worlds: func() -> list<%world>;
+
+        /// Gets a world by its dimension name (e.g., "minecraft:overworld") or custom world name (e.g., "world", "arena_1").
+        get-world-by-name: func(name: string) -> option<%world>;
+
+        /// Checks if a world exists by name or dimension.
+        has-world: func(name: string) -> bool;
+
+        execute-command: func(command: string, sender: command-sender);
+
+        /// Creates or loads a world by its name and dimension.
+        /// If a world with the given name already exists, it will be returned.
+        create-world: func(name: string, dimension: dimension) -> %world;
+
+        /// Unloads and saves a world by its name or dimension.
+        /// Returns an error if the world cannot be found, is the primary/default world, or still has players inside.
+        unload-world: func(name: string) -> result<_, string>;
+
+        /// Saves all players, player advancements, and loaded worlds to disk.
+        save-all: func() -> result<_, string>;
+
+        /// Returns a list of all online players in a specific world.
+        get-players-in-world: func(world-ref: %world) -> list<player>;
+
+        /// Returns the number of online players in a specific world.
+        get-player-count-in-world: func(world-ref: %world) -> u32;
+
+        /// Broadcasts a system chat message to all players.
+        broadcast: func(message: string);
+
+        /// Deletes a signed chat message from all players' chat windows using its 256-byte signature.
+        delete-message-by-signature: func(signature: list<u8>);
+
+        /// Deletes a signed chat message from all players' chat windows using its signature cache ID.
+        delete-message-by-id: func(signature-id: s32);
+
+        /// Broadcasts a tab list header and footer to all players.
+        broadcast-tab-list-header-footer: func(header: text-component, footer: text-component);
+
+        /// Returns the maximum number of players allowed on the server.
+        get-max-players: func() -> u32;
+
+        /// Returns whether the server is in hardcore mode.
+        is-hardcore: func() -> bool;
+
+        /// Returns whether the server is in online mode (authenticates with Mojang).
+        is-online-mode: func() -> bool;
+
+        /// Returns the server's Message of the Day (MOTD).
+        get-motd: func() -> string;
+
+        /// Returns whether the server has a whitelist enabled.
+        has-whitelist: func() -> bool;
+
+        /// Returns whether the server allows the Nether dimension.
+        get-allow-nether: func() -> bool;
+
+        /// Returns whether the server allows the End dimension.
+        get-allow-end: func() -> bool;
+
+        /// Returns the server's maximum view distance.
+        get-view-distance: func() -> u8;
+
+        /// Returns the server's maximum simulation distance.
+        get-simulation-distance: func() -> u8;
+
+        /// Returns the server's default gamemode.
+        get-default-gamemode: func() -> game-mode;
+
+        /// Returns the recipe manager to register custom recipes.
+        get-recipe-manager: func() -> recipe-manager;
+
+        /// Returns the operator manager to query or modify server operators.
+        get-op-manager: func() -> op-manager;
+
+        /// Returns the global ban manager for querying and modifying player and IP bans.
+        get-ban-manager: func() -> ban-manager;
+
+        /// Returns the global whitelist manager for querying and modifying the server whitelist.
+        get-whitelist-manager: func() -> whitelist-manager;
+
+        /// Returns detailed information about an advancement by its ID (e.g., "minecraft:story/mine_stone" or "story/mine_stone").
+        get-advancement: func(id: string) -> option<advancement-info>;
+
+        /// Returns a list of all registered advancement IDs on the server.
+        get-all-advancement-ids: func() -> list<string>;
+
+        /// Returns the global enchantment manager for registering and querying custom enchantments.
+        get-enchantment-manager: func() -> enchantment-manager;
+
+        /// Returns information about an enchantment by its ID (vanilla or custom).
+        get-enchantment: func(id: string) -> option<custom-enchantment>;
+
+        /// Returns a list of all registered enchantment IDs (custom and vanilla) on the server.
+        get-all-enchantment-ids: func() -> list<string>;
+
+        /// Returns the global datapack manager for inspecting, enabling, disabling, and reloading datapacks.
+        get-datapack-manager: func() -> datapack-manager;
+
+        /// Broadcasts custom server links to all connected players (displayed in the client Esc pause menu in 1.21+).
+        set-server-links: func(links: list<server-link>);
+    }
+}

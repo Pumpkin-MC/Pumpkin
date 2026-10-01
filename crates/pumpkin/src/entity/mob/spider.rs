@@ -1,17 +1,32 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::potion::Effect;
+use pumpkin_util::difficulty::Difficulty;
+use rand::RngExt;
+use uuid::Uuid;
 
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        active_target::{ActiveTargetGoal, TargetCondition},
+        look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal,
+        revenge::RevengeGoal,
+        spider_attack::SpiderAttackGoal,
+        swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{
+        Mob, MobEntity,
+        equipment::RegionalDifficulty,
+        spawn::{SpawnGroupData, finalize_spawn},
+    },
+    r#type::from_type,
 };
+use crate::world::World;
 
 pub struct SpiderEntity {
     pub mob_entity: MobEntity,
@@ -44,7 +59,7 @@ impl SpiderEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.0, false)));
+            goal_selector.add_goal(3, SpiderAttackGoal::new(1.0, false));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(
                 6,
@@ -55,11 +70,13 @@ impl SpiderEntity {
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(
                 2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true)
+                    .when(TargetCondition::NoDaylight),
             );
             target_selector.add_goal(
                 3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true)
+                    .when(TargetCondition::NoDaylight),
             );
         };
 
@@ -81,7 +98,62 @@ impl SpiderEntity {
     }
 }
 
+/// Vanilla `Spider.finalizeSpawn` (also used by the cave spider): a skeleton jockey,
+/// and on hard difficulty a random effect shared by the whole spawn group.
+pub fn finalize_spider_spawn(
+    mob: &MobEntity,
+    world: &Arc<World>,
+    group_data: Option<SpawnGroupData>,
+) -> Option<SpawnGroupData> {
+    mob.finalize_spawn_base();
+    let mut rng = rand::rng();
+    let entity = &mob.living_entity.entity;
+    let pos = entity.pos.load();
+
+    if rng.random_range(0..100) == 0 {
+        let skeleton = from_type(&EntityType::SKELETON, pos, world, Uuid::new_v4());
+        skeleton.get_entity().set_rotation(entity.yaw.load(), 0.0);
+        finalize_spawn(&skeleton, world, None);
+        mob.add_pending_rider(skeleton);
+    }
+
+    let group_data = group_data.unwrap_or_else(|| {
+        let difficulty = RegionalDifficulty::at(world, pos);
+        let effect = (difficulty.base_difficulty == Difficulty::Hard
+            && rng.random::<f32>() < 0.1 * difficulty.special_multiplier)
+            .then(|| match rng.random_range(0..5) {
+                0 | 1 => &StatusEffect::SPEED,
+                2 => &StatusEffect::STRENGTH,
+                3 => &StatusEffect::REGENERATION,
+                _ => &StatusEffect::INVISIBILITY,
+            });
+        SpawnGroupData::SpiderEffects(effect)
+    });
+
+    let SpawnGroupData::SpiderEffects(effect) = &group_data;
+    if let Some(effect_type) = effect {
+        mob.living_entity.add_effect(Effect {
+            effect_type,
+            duration: -1,
+            amplifier: 0,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: false,
+        });
+    }
+    Some(group_data)
+}
+
 impl Mob for SpiderEntity {
+    fn finalize_spawn(
+        &self,
+        world: &Arc<World>,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        finalize_spider_spawn(&self.mob_entity, world, group_data)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

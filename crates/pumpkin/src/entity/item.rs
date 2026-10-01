@@ -14,7 +14,6 @@ use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_util::math::atomic_f32::AtomicF32;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::version::JavaMinecraftVersion;
 use std::sync::atomic::Ordering::{AcqRel, Relaxed};
 
 use std::sync::{
@@ -755,24 +754,24 @@ impl EntityBase for ItemEntity {
             client.try_enqueue_packet(data);
         }
 
-        if client.version.load() >= JavaMinecraftVersion::V_1_21 {
-            let metadata = Metadata::new(
-                pumpkin_data::tracked_data::item::ITEM,
-                ItemStackSerializer::from(
-                    self.item_stack
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clone(),
-                ),
-            );
-            let mut data = Vec::new();
-            if metadata.write(&mut data, &client.version.load()).is_ok() {
-                data.push(255);
-                let meta_packet =
-                    CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
-                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                    client.try_enqueue_packet(meta_data);
-                }
+        let metadata = Metadata::new(
+            pumpkin_data::tracked_data::item::ITEM,
+            ItemStackSerializer::from(
+                self.item_stack
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone(),
+            ),
+        );
+        let mut data = Vec::new();
+        if metadata
+            .write(&mut data, &pumpkin_data::packet::CURRENT_MC_VERSION)
+            .is_ok()
+        {
+            data.push(255);
+            let meta_packet = CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
+            if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                client.try_enqueue_packet(meta_data);
             }
         }
     }

@@ -1,10 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
-fn may_omit_verify_token(version: JavaMinecraftVersion) -> bool {
-    (JavaMinecraftVersion::V_1_19_3..JavaMinecraftVersion::V_1_20_2).contains(&version)
-}
-
 impl PendingConnection {
     async fn verify_encryption_token(
         &mut self,
@@ -14,10 +10,6 @@ impl PendingConnection {
         let Some(expected) = self.verify_token.take() else {
             return Err(EncryptionError::NoPendingVerifyToken);
         };
-
-        if token.is_empty() && may_omit_verify_token(self.version.load()) {
-            return Ok(());
-        }
 
         let decrypted = server.decrypt(token).await?;
         if decrypted.as_slice() == expected.as_slice() {
@@ -127,9 +119,6 @@ impl PendingConnection {
     }
 
     pub(super) async fn enable_compression(&mut self, server: &Server) {
-        if self.version.load() < JavaMinecraftVersion::V_1_8 {
-            return;
-        }
         let compression = server
             .advanced_config
             .networking
@@ -175,17 +164,7 @@ impl PendingConnection {
             uuid::Uuid::new_v4(),
         );
         self.send_packet_now(&packet).await;
-        if self.version.load().supports_configuration_state() {
-            return None;
-        }
-
-        self.connection_state.store(ConnectionState::Play);
-        let config = self.config.clone().unwrap_or_default();
-        if let Some(reason) = can_not_join(profile, &self.address, server).await {
-            self.kick(reason).await;
-            return Some(PacketHandlerResult::Stop);
-        }
-        Some(PacketHandlerResult::ReadyToPlay(profile.clone(), config))
+        None
     }
 
     async fn authenticate(
@@ -245,24 +224,5 @@ impl PendingConnection {
             .map_err(AuthError::TextureError)?;
         }
         Ok(profile)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use pumpkin_util::version::JavaMinecraftVersion;
-
-    use super::may_omit_verify_token;
-
-    #[test]
-    fn only_profile_key_versions_may_omit_the_verify_token() {
-        assert!(!may_omit_verify_token(JavaMinecraftVersion::V_1_19_1));
-        assert!(may_omit_verify_token(JavaMinecraftVersion::V_1_19_3));
-        assert!(may_omit_verify_token(JavaMinecraftVersion::V_1_19_4));
-        assert!(may_omit_verify_token(JavaMinecraftVersion::V_1_20));
-        assert!(!may_omit_verify_token(JavaMinecraftVersion::V_1_20_2));
-        assert!(!may_omit_verify_token(
-            pumpkin_data::packet::CURRENT_MC_VERSION
-        ));
     }
 }
