@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::play::SET_ENTITY_MOTION;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     ClientPacket, VarInt, WritingError, codec::lp_vector_3d::LpVector3d, ser::NetworkWriteExt,
@@ -31,11 +31,7 @@ impl CEntityVelocity {
 }
 
 impl ClientPacket for CEntityVelocity {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_var_int(&self.entity_id)?;

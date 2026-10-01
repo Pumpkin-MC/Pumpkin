@@ -1,7 +1,6 @@
 use pumpkin_data::packet::clientbound::login::LOGIN_FINISHED;
-use pumpkin_util::version::JavaMinecraftVersion;
 
-use crate::{ClientPacket, Property, packet::MultiVersionJavaPacket, ser::NetworkWriteExt};
+use crate::{ClientPacket, Property, packet::JavaPacket, ser::NetworkWriteExt};
 
 /// Sent by the server to signal a successful login and transition to the configuration phase
 ///
@@ -40,17 +39,14 @@ impl<'a> CLoginSuccess<'a> {
     }
 }
 
-impl MultiVersionJavaPacket for CLoginSuccess<'_> {
-    fn to_id(_version: JavaMinecraftVersion) -> i32 {
-        LOGIN_FINISHED.to_id()
-    }
+impl JavaPacket for CLoginSuccess<'_> {
+    const PACKET_ID: i32 = LOGIN_FINISHED.to_id();
 }
 
 impl ClientPacket for CLoginSuccess<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_uuid(self.uuid)?;
         write.write_string(self.username)?;

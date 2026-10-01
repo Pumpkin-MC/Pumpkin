@@ -5,7 +5,6 @@ use crate::{
     ClientPacket, ServerPacket, VarInt,
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(MOVE_ENTITY_ROT)]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -32,7 +31,6 @@ impl ClientPacket for CUpdateEntityRot {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
         // The on ground flag moved in front of the rotation in 26.3
@@ -45,7 +43,7 @@ impl ClientPacket for CUpdateEntityRot {
 }
 
 impl<'a> ServerPacket<'a> for CUpdateEntityRot {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let entity_id = bytebuf.get_var_int()?;
         let on_ground = bytebuf.get_bool()?;
         let yaw = bytebuf.get_u8()?;

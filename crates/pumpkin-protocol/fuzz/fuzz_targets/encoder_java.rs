@@ -5,12 +5,9 @@ use pumpkin_protocol::ServerPacket;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::CPlayerPosition;
 use pumpkin_protocol::java::packet_encoder::TCPNetworkEncoder;
-use pumpkin_protocol::packet::MultiVersionJavaPacket;
+use pumpkin_protocol::packet::JavaPacket;
 use pumpkin_protocol::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::runtime::Runtime;
-
-const TARGET_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_3;
 
 fuzz_target!(|data: &[u8]| {
     if data.len() < 20 {
@@ -49,11 +46,11 @@ fuzz_target!(|data: &[u8]| {
 
         // 2. Fuzz with actual packets if they can be partially read
         let mut slice = packet_data;
-        if let Ok(packet) = CPlayerPosition::read(&mut slice, &TARGET_VERSION) {
+        if let Ok(packet) = CPlayerPosition::read(&mut slice) {
             let mut packet_buf = Vec::new();
-            let id = CPlayerPosition::to_id(TARGET_VERSION);
+            let id = CPlayerPosition::PACKET_ID;
             let _ = packet_buf.write_var_int(&VarInt(id));
-            let _ = packet.write_packet_data(&mut packet_buf, &TARGET_VERSION);
+            let _ = packet.write_packet_data(&mut packet_buf);
             let _ = encoder.write_packet(packet_buf.into()).await;
         }
 

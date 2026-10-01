@@ -6,7 +6,6 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[derive(Debug)]
 #[java_packet(CONTAINER_BUTTON_CLICK)]
@@ -16,7 +15,7 @@ pub struct SContainerButtonClick {
 }
 
 impl<'a> ServerPacket<'a> for SContainerButtonClick {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let window_id = bytebuf.get_container_id()?;
         let button_id = bytebuf.get_var_int()?;
         Ok(Self {
@@ -30,7 +29,6 @@ impl crate::ClientPacket for SContainerButtonClick {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_container_id(&self.window_id)?;

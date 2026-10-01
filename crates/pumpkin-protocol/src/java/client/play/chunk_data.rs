@@ -2,11 +2,10 @@ use std::io::Write;
 
 use crate::ClientPacket;
 use crate::codec::var_int::VarInt;
-use crate::packet::MultiVersionJavaPacket;
+use crate::packet::JavaPacket;
 use crate::ser::{NetworkWriteExt, WritingError};
 use pumpkin_data::packet::clientbound::play::LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use super::light_update::LightData;
 
@@ -80,10 +79,8 @@ pub struct CChunkData<'a> {
     pub light_data: LightData,
 }
 
-impl MultiVersionJavaPacket for CChunkData<'_> {
-    fn to_id(_version: JavaMinecraftVersion) -> i32 {
-        LEVEL_CHUNK_WITH_LIGHT.to_id()
-    }
+impl JavaPacket for CChunkData<'_> {
+    const PACKET_ID: i32 = LEVEL_CHUNK_WITH_LIGHT.to_id();
 }
 
 impl<'a> CChunkData<'a> {
@@ -108,11 +105,7 @@ impl<'a> CChunkData<'a> {
 }
 
 impl ClientPacket for CChunkData<'_> {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_i32_be(self.chunk_x)?;
         write.write_i32_be(self.chunk_z)?;
 

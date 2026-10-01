@@ -5,7 +5,6 @@ use crate::ClientPacket;
 use crate::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Triggers a physical block animation or sound effect.
 ///
@@ -45,7 +44,6 @@ impl ClientPacket for CBlockEvent {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_block_pos(&self.location)?;
         write.write_u8(self.action_id)?;

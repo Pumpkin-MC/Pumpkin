@@ -1,6 +1,6 @@
 use pumpkin_data::packet::serverbound::play::INTERACT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     ServerPacket,
@@ -19,10 +19,7 @@ pub struct SInteract {
 
 // Great job Mojang ;D
 impl<'a> ServerPacket<'a> for SInteract {
-    fn read(
-        mut read: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, ReadingError> {
+    fn read(mut read: &mut &'a [u8]) -> Result<Self, ReadingError> {
         // 26.1+ removes the 'type' field and uses doubles for location
         let entity_id = read.get_var_int()?;
         let hand = Some(read.get_var_int()?);
@@ -43,7 +40,6 @@ impl crate::ClientPacket for SInteract {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_var_int(&self.entity_id)?;

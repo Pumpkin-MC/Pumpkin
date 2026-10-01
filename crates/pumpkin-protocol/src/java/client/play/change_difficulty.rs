@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::clientbound::play::CHANGE_DIFFICULTY;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Notifies the client of a change in the world's difficulty level or lock status.
 ///
@@ -33,11 +32,7 @@ impl CChangeDifficulty {
 }
 
 impl ClientPacket for CChangeDifficulty {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         // Difficulty enum serialized as VarInt in 1.21.6+, and unsigned byte before
         write.write_var_int(&VarInt(i32::from(self.difficulty)))?;
         // Added in 1.14: locked boolean
@@ -47,7 +42,7 @@ impl ClientPacket for CChangeDifficulty {
 }
 
 impl<'a> ServerPacket<'a> for CChangeDifficulty {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let difficulty = bytebuf.get_var_int()?.0 as u8;
         let locked = bytebuf.get_bool()?;
         Ok(Self { difficulty, locked })

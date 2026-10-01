@@ -3,7 +3,6 @@ use std::io::Write;
 use bitflags::bitflags;
 use pumpkin_data::packet::clientbound::play::PLAYER_INFO_UPDATE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{ClientPacket, Property, WritingError, ser::NetworkWriteExt};
 
@@ -63,11 +62,7 @@ impl<'a> CPlayerInfoUpdate<'a> {
 
 // TODO: Check if we need this custom impl
 impl ClientPacket for CPlayerInfoUpdate<'_> {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         // UPDATE_LIST_PRIORITY was added in 1.21.2 and UPDATE_HAT in 1.21.4.

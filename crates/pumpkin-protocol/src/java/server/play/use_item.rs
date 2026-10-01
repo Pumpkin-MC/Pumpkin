@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::serverbound::play::USE_ITEM;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
@@ -18,7 +17,7 @@ pub struct SUseItem {
 }
 
 impl<'a> ServerPacket<'a> for SUseItem {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let hand = bytebuf.get_var_int()?;
         let sequence = bytebuf.get_var_int()?;
         let (yaw, pitch) = (bytebuf.get_f32_be()?, bytebuf.get_f32_be()?);
@@ -36,7 +35,6 @@ impl crate::ClientPacket for SUseItem {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_var_int(&self.hand)?;

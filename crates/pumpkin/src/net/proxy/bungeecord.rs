@@ -169,7 +169,7 @@ mod tests {
         buf.write_u16_be(25565).expect("write server port");
         buf.write_var_int(&VarInt(2)).expect("write next state");
 
-        let handshake = SHandShake::read(&mut &buf[..], &CURRENT_MC_VERSION)
+        let handshake = SHandShake::read(&mut &buf[..])
             .expect("a handshake sent by BungeeCord should be readable");
 
         let client_address = SocketAddr::from(([10, 0, 0, 1], 51234));

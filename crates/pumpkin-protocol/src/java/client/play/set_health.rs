@@ -5,7 +5,6 @@ use crate::{
     ClientPacket, ServerPacket, VarInt,
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(SET_HEALTH)]
 #[derive(Clone, Debug, PartialEq)]
@@ -27,11 +26,7 @@ impl CSetHealth {
 }
 
 impl ClientPacket for CSetHealth {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_f32_be(self.health)?;
         write.write_var_int(&self.food)?;
         write.write_f32_be(self.food_saturation)?;
@@ -40,7 +35,7 @@ impl ClientPacket for CSetHealth {
 }
 
 impl<'a> ServerPacket<'a> for CSetHealth {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let health = bytebuf.get_f32_be()?;
         let food = bytebuf.get_var_int()?;
         let food_saturation = bytebuf.get_f32_be()?;

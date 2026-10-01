@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::serverbound::play::CLIENT_COMMAND;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(CLIENT_COMMAND)]
 pub struct SClientCommand {
@@ -26,18 +25,14 @@ impl SClientCommand {
 }
 
 impl<'a> ServerPacket<'a> for SClientCommand {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let action_id = bytebuf.get_var_int()?;
         Ok(Self { action_id })
     }
 }
 
 impl ClientPacket for SClientCommand {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_var_int(&self.action_id)?;
         Ok(())
     }

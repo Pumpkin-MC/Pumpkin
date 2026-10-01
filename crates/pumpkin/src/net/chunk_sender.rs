@@ -5,11 +5,10 @@ use std::num::NonZero;
 use std::sync::{Arc, Weak};
 
 use crate::net::java::chunk_data::CChunkData;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CChunkBatchEnd, CChunkBatchStart, CUnloadChunk};
 use pumpkin_protocol::ser::NetworkWriteExt;
-use pumpkin_protocol::{ClientPacket, MultiVersionJavaPacket};
+use pumpkin_protocol::{ClientPacket, JavaPacket};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
@@ -289,15 +288,12 @@ impl ChunkSender {
                 let chunk = &candidate.chunk;
                 let mut chunk_buf = Vec::with_capacity(32 * 1024);
                 if chunk_buf
-                    .write_var_int(&VarInt(CChunkData::to_id(CURRENT_MC_VERSION)))
+                    .write_var_int(&VarInt(CChunkData::PACKET_ID))
                     .is_err()
                 {
                     return None;
                 }
-                if CChunkData(chunk)
-                    .write_packet_data(&mut chunk_buf, &CURRENT_MC_VERSION)
-                    .is_err()
-                {
+                if CChunkData(chunk).write_packet_data(&mut chunk_buf).is_err() {
                     return None;
                 }
 

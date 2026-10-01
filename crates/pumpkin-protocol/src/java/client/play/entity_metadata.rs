@@ -6,7 +6,6 @@ use pumpkin_data::{
     tracked_data::{TrackedData, TrackedId},
 };
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ClientPacket, VarInt,
@@ -49,11 +48,7 @@ impl CSetEntityMetadata {
 }
 
 impl ClientPacket for CSetEntityMetadata {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_var_int(&self.entity_id)?;
 
         write.write_slice(&self.metadata)
@@ -61,10 +56,7 @@ impl ClientPacket for CSetEntityMetadata {
 }
 
 impl<'a> crate::ServerPacket<'a> for CSetEntityMetadata {
-    fn read(
-        bytebuf: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, crate::ser::ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, crate::ser::ReadingError> {
         use crate::ser::{NetworkReadExt, NetworkReadSliceExt};
         let entity_id = bytebuf.get_var_int()?;
         let metadata = bytebuf.read_remaining_slice_borrowed(usize::MAX)?;

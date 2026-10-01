@@ -4,7 +4,6 @@ use pumpkin_macros::java_packet;
 use crate::ClientPacket;
 use crate::codec::var_long::VarLong;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(SET_BORDER_LERP_SIZE)]
 pub struct CSetBorderLerpSize {
@@ -28,7 +27,6 @@ impl ClientPacket for CSetBorderLerpSize {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_f64_be(self.old_diameter)?;
         write.write_f64_be(self.new_diameter)?;

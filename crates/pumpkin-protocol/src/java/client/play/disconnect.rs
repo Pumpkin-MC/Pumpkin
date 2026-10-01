@@ -4,7 +4,6 @@ use pumpkin_util::text::TextComponent;
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Forces the client to disconnect from the server while in the "Play" state.
 ///
@@ -29,7 +28,6 @@ impl ClientPacket for CPlayDisconnect<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_component(self.reason)
     }

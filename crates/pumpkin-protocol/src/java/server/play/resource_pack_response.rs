@@ -6,7 +6,6 @@ use crate::{
     codec::var_int::VarInt,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PlayResourcePackResult {
@@ -45,7 +44,7 @@ impl SPlayResourcePack {
 }
 
 impl<'a> ServerPacket<'a> for SPlayResourcePack {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let uuid = bytebuf.get_uuid()?;
 
         let result = bytebuf.get_var_int()?;
@@ -57,7 +56,6 @@ impl crate::ClientPacket for SPlayResourcePack {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_uuid(&self.uuid)?;

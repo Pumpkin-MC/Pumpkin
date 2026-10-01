@@ -2,7 +2,6 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::play::FORGET_LEVEL_CHUNK;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ClientPacket, ServerPacket,
@@ -23,11 +22,7 @@ impl CUnloadChunk {
 }
 
 impl ClientPacket for CUnloadChunk {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         {
             let chunk_key = ((self.z as i64) << 32) | ((self.x as u32) as i64);
             write.write_i64_be(chunk_key)?;
@@ -37,7 +32,7 @@ impl ClientPacket for CUnloadChunk {
 }
 
 impl<'a> ServerPacket<'a> for CUnloadChunk {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let (x, z) = {
             let chunk_key = bytebuf.get_i64_be()?;
             let x = chunk_key as i32;

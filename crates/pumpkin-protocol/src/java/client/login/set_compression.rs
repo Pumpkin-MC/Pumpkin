@@ -4,7 +4,6 @@ use pumpkin_macros::java_packet;
 use crate::ClientPacket;
 use crate::VarInt;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Sent by the server to enable network compression for all subsequent packets.
 ///
@@ -30,7 +29,6 @@ impl ClientPacket for CSetCompression {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.threshold)?;
         Ok(())
@@ -38,10 +36,7 @@ impl ClientPacket for CSetCompression {
 }
 
 impl<'a> crate::ServerPacket<'a> for CSetCompression {
-    fn read(
-        read: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, crate::ReadingError> {
+    fn read(read: &mut &'a [u8]) -> Result<Self, crate::ReadingError> {
         use crate::ser::NetworkReadExt;
         Ok(Self {
             threshold: read.get_var_int()?,
@@ -58,11 +53,10 @@ mod tests {
     fn set_compression_roundtrip() {
         let packet = CSetCompression::new(crate::VarInt(256));
         let mut buf = Vec::new();
-        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
-        packet.write_packet_data(&mut buf, &version).unwrap();
+        packet.write_packet_data(&mut buf).unwrap();
 
         let mut slice = buf.as_slice();
-        let read_packet = CSetCompression::read(&mut slice, &version).unwrap();
+        let read_packet = CSetCompression::read(&mut slice).unwrap();
         assert_eq!(read_packet.threshold.0, 256);
     }
 }

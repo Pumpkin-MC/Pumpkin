@@ -7,7 +7,6 @@ use crate::{
 };
 use pumpkin_data::packet::clientbound::play::SET_EQUIPMENT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(SET_EQUIPMENT)]
 #[derive(Clone)]
@@ -30,11 +29,7 @@ impl CSetEquipment {
 }
 
 impl ClientPacket for CSetEquipment {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_var_int(&self.entity_id)?;
 
         {
@@ -53,7 +48,7 @@ impl ClientPacket for CSetEquipment {
 }
 
 impl<'a> ServerPacket<'a> for CSetEquipment {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let entity_id = bytebuf.get_var_int()?;
 
         let equipment = {
@@ -85,18 +80,18 @@ mod tests {
     use pumpkin_util::version::JavaMinecraftVersion;
 
     use crate::{
-        ClientPacket, VarInt, codec::item_stack_seralizer::ItemStackSerializer,
-        packet::MultiVersionJavaPacket, ser::NetworkReadExt,
+        ClientPacket, VarInt, codec::item_stack_seralizer::ItemStackSerializer, packet::JavaPacket,
+        ser::NetworkReadExt,
     };
 
     use super::CSetEquipment;
 
-    fn encoded_armor(version: JavaMinecraftVersion) -> Vec<u8> {
+    fn encoded_armor(_version: JavaMinecraftVersion) -> Vec<u8> {
         let chest = ItemStackSerializer::from(ItemStack::new(1, &Item::DIAMOND_CHESTPLATE));
         let legs = ItemStackSerializer::from(ItemStack::new(1, &Item::DIAMOND_LEGGINGS));
         let packet = CSetEquipment::new(VarInt(42), vec![(4, chest), (3, legs)]);
         let mut buf = Vec::new();
-        packet.write_packet_data(&mut buf, &version).unwrap();
+        packet.write_packet_data(&mut buf).unwrap();
         buf
     }
 
@@ -127,14 +122,8 @@ mod tests {
 
     #[test]
     fn set_equipment_packet_id_for_26_3() {
-        assert_eq!(
-            CSetEquipment::to_id(pumpkin_data::packet::CURRENT_MC_VERSION),
-            SET_EQUIPMENT.to_id()
-        );
-        assert_eq!(
-            CSetEquipment::to_id(pumpkin_data::packet::CURRENT_MC_VERSION),
-            104
-        );
+        assert_eq!(CSetEquipment::PACKET_ID, SET_EQUIPMENT.to_id());
+        assert_eq!(CSetEquipment::PACKET_ID, 104);
     }
 
     #[test]

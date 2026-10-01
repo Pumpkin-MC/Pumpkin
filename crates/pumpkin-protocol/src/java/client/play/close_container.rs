@@ -3,7 +3,6 @@ use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 use crate::{ClientPacket, ServerPacket};
 use pumpkin_data::packet::clientbound::play::CONTAINER_CLOSE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Notifies the client that a container (inventory, chest, etc.) has been closed.
 ///
@@ -26,18 +25,14 @@ impl CCloseContainer {
 }
 
 impl ClientPacket for CCloseContainer {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_container_id(&self.sync_id)?;
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CCloseContainer {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let sync_id = bytebuf.get_container_id()?;
         Ok(Self { sync_id })
     }

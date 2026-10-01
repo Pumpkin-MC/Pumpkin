@@ -5,7 +5,6 @@ use crate::ClientPacket;
 use crate::VarInt;
 use crate::codec::item_stack_seralizer::ItemStackSerializer;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[derive(Clone)]
 pub struct MerchantOffer {
@@ -90,7 +89,6 @@ impl ClientPacket for CMerchantOffers {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.window_id)?;
         write.write_var_int(&VarInt(self.offers.len() as i32))?;
@@ -106,10 +104,7 @@ impl ClientPacket for CMerchantOffers {
 }
 
 impl<'a> crate::ServerPacket<'a> for CMerchantOffers {
-    fn read(
-        bytebuf: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, crate::ser::ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, crate::ser::ReadingError> {
         use crate::ser::NetworkReadExt;
         let window_id = bytebuf.get_var_int()?;
         let offers_count = bytebuf.get_var_int()?.0 as usize;
@@ -221,11 +216,10 @@ mod tests {
 
     #[test]
     fn merchant_inputs_use_item_cost_encoding() {
-        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
         let packet =
             CMerchantOffers::new(VarInt(1), vec![offer()], VarInt(1), VarInt(0), true, true);
         let mut bytes = Vec::new();
-        packet.write_packet_data(&mut bytes, &version).unwrap();
+        packet.write_packet_data(&mut bytes).unwrap();
         let mut cursor = Cursor::new(&bytes);
 
         assert_eq!(cursor.get_var_int().unwrap(), VarInt(1));
@@ -305,9 +299,7 @@ mod tests {
                 true,
                 true,
             );
-            packet
-                .write_packet_data(&mut Vec::new(), &pumpkin_data::packet::CURRENT_MC_VERSION)
-                .unwrap();
+            packet.write_packet_data(&mut Vec::new()).unwrap();
         }
     }
 }

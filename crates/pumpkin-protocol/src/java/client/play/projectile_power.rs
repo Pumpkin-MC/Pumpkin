@@ -2,7 +2,6 @@ use pumpkin_data::packet::clientbound::play::PROJECTILE_POWER;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(PROJECTILE_POWER)]
 pub struct CProjectilePower {
@@ -28,7 +27,6 @@ impl ClientPacket for CProjectilePower {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
         write.write_f64_be(self.x_power)?;

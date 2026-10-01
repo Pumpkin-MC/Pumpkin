@@ -5,7 +5,6 @@ use crate::{
 use pumpkin_data::packet::serverbound::play::SET_JIGSAW_BLOCK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::codec::var_int::VarInt;
 
@@ -22,7 +21,7 @@ pub struct SSetJigsawBlock<'a> {
 }
 
 impl<'a> ServerPacket<'a> for SSetJigsawBlock<'a> {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let pos = bytebuf.get_block_pos()?;
         let name = bytebuf.get_str_bounded_borrowed(32767)?;
         let target = bytebuf.get_str_bounded_borrowed(32767)?;
@@ -49,7 +48,6 @@ impl crate::ClientPacket for SSetJigsawBlock<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_block_pos(&self.pos)?;

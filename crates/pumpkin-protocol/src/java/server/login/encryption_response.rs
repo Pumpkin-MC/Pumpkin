@@ -1,6 +1,4 @@
-use pumpkin_util::version::JavaMinecraftVersion;
-
-use crate::{MultiVersionJavaPacket, ReadingError, ServerPacket, ser::NetworkReadExt};
+use crate::{JavaPacket, ReadingError, ServerPacket, ser::NetworkReadExt};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 //#[java_packet(KEY)]
@@ -9,17 +7,12 @@ pub struct SEncryptionResponse {
     pub verify_token: Box<[u8]>,
 }
 
-impl MultiVersionJavaPacket for SEncryptionResponse {
-    fn to_id(_version: JavaMinecraftVersion) -> i32 {
-        1
-    }
+impl JavaPacket for SEncryptionResponse {
+    const PACKET_ID: i32 = 1;
 }
 
 impl<'a> ServerPacket<'a> for SEncryptionResponse {
-    fn read(
-        mut read: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, ReadingError> {
+    fn read(mut read: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let shared_secret = read_encryption_buffer(&mut read)?;
         let verify_token = read_encryption_buffer(&mut read)?;
         Ok(Self {
@@ -33,7 +26,6 @@ impl crate::ClientPacket for SEncryptionResponse {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
 

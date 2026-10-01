@@ -1,6 +1,5 @@
 use pumpkin_data::packet::clientbound::play::RESPAWN;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ClientPacket, ServerPacket,
@@ -32,21 +31,16 @@ impl CRespawn {
 }
 
 impl ClientPacket for CRespawn {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        self.player_spawn_info
-            .write_packet_data(&mut write, version)?;
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
+        self.player_spawn_info.write_packet_data(&mut write)?;
         write.write_u8(self.data_kept)?;
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CRespawn {
-    fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let player_spawn_info = PlayerSpawnData::read(read, version)?;
+    fn read(read: &mut &'a [u8]) -> Result<Self, ReadingError> {
+        let player_spawn_info = PlayerSpawnData::read(read)?;
         let data_kept = read.get_u8()?;
         Ok(Self::new(player_spawn_info, data_kept))
     }

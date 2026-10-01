@@ -2,7 +2,6 @@ use std::io::Write;
 
 use pumpkin_data::{packet::clientbound::play::SOUND_ENTITY, sound::SoundCategory};
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{ClientPacket, IdOr, SoundEvent, VarInt, WritingError, ser::NetworkWriteExt};
 
@@ -52,11 +51,7 @@ impl CEntitySoundEffect {
 }
 
 impl ClientPacket for CEntitySoundEffect {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         crate::IdOr::<crate::SoundEvent>::write(&self.sound_event, &mut write, |w, e| {
             w.write_string(&e.sound_name)?;
             w.write_option(&e.range, |w2, r| w2.write_f32(*r))
@@ -103,9 +98,7 @@ mod tests {
         );
         let mut bytes = Vec::new();
 
-        packet
-            .write_packet_data(&mut bytes, &pumpkin_data::packet::CURRENT_MC_VERSION)
-            .unwrap();
+        packet.write_packet_data(&mut bytes).unwrap();
 
         assert_eq!(first_var_int(bytes), VarInt::from(0));
     }

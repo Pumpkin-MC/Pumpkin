@@ -1,6 +1,6 @@
 use pumpkin_data::packet::serverbound::play::CHANGE_DIFFICULTY;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{difficulty::Difficulty, version::JavaMinecraftVersion};
+use pumpkin_util::difficulty::Difficulty;
 
 use crate::{
     ClientPacket, ServerPacket, VarInt,
@@ -20,7 +20,7 @@ impl SChangeDifficulty {
 }
 
 impl<'a> ServerPacket<'a> for SChangeDifficulty {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let id = bytebuf.get_var_int()?.0 as u8;
         let difficulty = match id {
             0 => Difficulty::Peaceful,
@@ -38,11 +38,7 @@ impl<'a> ServerPacket<'a> for SChangeDifficulty {
 }
 
 impl ClientPacket for SChangeDifficulty {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_var_int(&VarInt(self.difficulty as i32))?;
         Ok(())
     }

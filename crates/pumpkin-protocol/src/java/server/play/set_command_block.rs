@@ -5,7 +5,6 @@ use crate::{
 use pumpkin_data::packet::serverbound::play::SET_COMMAND_BLOCK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::codec::var_int::VarInt;
 
@@ -44,7 +43,7 @@ impl SSetCommandBlock<'_> {
 }
 
 impl<'a> ServerPacket<'a> for SSetCommandBlock<'a> {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
             pos: bytebuf.get_block_pos()?,
             command: bytebuf.get_str_bounded_borrowed(32767)?,
@@ -58,7 +57,6 @@ impl crate::ClientPacket for SSetCommandBlock<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_block_pos(&self.pos)?;

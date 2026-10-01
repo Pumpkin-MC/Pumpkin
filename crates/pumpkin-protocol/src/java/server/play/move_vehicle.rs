@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::serverbound::play::MOVE_VEHICLE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(MOVE_VEHICLE)]
 pub struct SMoveVehicle {
@@ -17,7 +16,7 @@ pub struct SMoveVehicle {
 }
 
 impl<'a> ServerPacket<'a> for SMoveVehicle {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let x = bytebuf.get_f64_be()?;
         let y = bytebuf.get_f64_be()?;
         let z = bytebuf.get_f64_be()?;
@@ -40,7 +39,6 @@ impl crate::ClientPacket for SMoveVehicle {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_f64_be(self.x)?;

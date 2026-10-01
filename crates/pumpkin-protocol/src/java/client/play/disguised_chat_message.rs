@@ -5,7 +5,6 @@ use pumpkin_util::text::TextComponent;
 use crate::ClientPacket;
 use crate::VarInt;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Sends a chat message that is not cryptographically signed by a player.
 ///
@@ -46,7 +45,6 @@ impl ClientPacket for CDisguisedChatMessage<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_component(self.message)?;
         write.write_var_int(&self.chat_type)?;

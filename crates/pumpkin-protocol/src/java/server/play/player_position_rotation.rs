@@ -6,7 +6,6 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 pub const FLAG_ON_GROUND: u8 = 0x01;
 pub const FLAG_IN_WALL: u8 = 0x02;
@@ -21,7 +20,7 @@ pub struct SPlayerPositionRotation {
 }
 
 impl<'a> ServerPacket<'a> for SPlayerPositionRotation {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let x = bytebuf.get_f64_be()?;
         let y = bytebuf.get_f64_be()?;
 
@@ -42,7 +41,6 @@ impl crate::ClientPacket for SPlayerPositionRotation {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_f64_be(self.position.x)?;

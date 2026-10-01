@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::play::PLAYER_POSITION;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     ClientPacket, PositionFlag, ServerPacket, VarInt, WritingError, ser::NetworkReadExt,
@@ -54,11 +54,7 @@ impl CPlayerPosition {
 
 // TODO: Do we need a custom impl?
 impl ClientPacket for CPlayerPosition {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         // Reordered and added delta/int flags in 1.21.2
         write.write_var_int(&self.teleport_id)?;
         write.write_f64_be(self.position.x)?;
@@ -75,10 +71,7 @@ impl ClientPacket for CPlayerPosition {
 }
 
 impl<'a> ServerPacket<'a> for CPlayerPosition {
-    fn read(
-        read: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, crate::ser::ReadingError> {
+    fn read(read: &mut &'a [u8]) -> Result<Self, crate::ser::ReadingError> {
         {
             let teleport_id = read.get_var_int()?;
             let x = read.get_f64_be()?;

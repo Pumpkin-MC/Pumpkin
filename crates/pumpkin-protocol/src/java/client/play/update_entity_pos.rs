@@ -6,7 +6,6 @@ use crate::{
     ClientPacket, ServerPacket, VarInt,
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// 26.3 packs `on_ground` in bit 0 of a `VarInt` ahead of the delta. Remaining bits are the
 /// `VecDelta` step count; Pumpkin only writes 0 (one linear i16 triple).
@@ -50,11 +49,7 @@ impl CUpdateEntityPos {
 }
 
 impl ClientPacket for CUpdateEntityPos {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_var_int(&self.entity_id)?;
         // Since 26.3 the on ground flag and the delta step count are packed into a var int in
         // front of the delta, 0 steps being a single linear delta.
@@ -68,7 +63,7 @@ impl ClientPacket for CUpdateEntityPos {
 }
 
 impl<'a> ServerPacket<'a> for CUpdateEntityPos {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let entity_id = bytebuf.get_var_int()?;
         let (on_ground, delta) = read_on_ground_and_linear_delta(bytebuf)?;
         Ok(Self {

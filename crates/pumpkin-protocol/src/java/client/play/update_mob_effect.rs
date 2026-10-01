@@ -4,7 +4,6 @@ use pumpkin_macros::java_packet;
 use crate::ClientPacket;
 use crate::codec::var_int::VarInt;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(UPDATE_MOB_EFFECT)]
 pub struct CUpdateMobEffect {
@@ -38,7 +37,6 @@ impl ClientPacket for CUpdateMobEffect {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
 

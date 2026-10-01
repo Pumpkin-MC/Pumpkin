@@ -7,7 +7,6 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(PLAYER_ABILITIES)]
 pub struct SPlayerAbilities {
@@ -48,7 +47,7 @@ impl SPlayerAbilities {
 }
 
 impl<'a> ServerPacket<'a> for SPlayerAbilities {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let flags = bytebuf.get_i8()?;
         let (fly_speed, walk_speed) = (None, None);
         Ok(Self {
@@ -63,7 +62,6 @@ impl crate::ClientPacket for SPlayerAbilities {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_i8(self.flags)?;

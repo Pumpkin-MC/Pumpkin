@@ -5,7 +5,6 @@ use crate::{
 use pumpkin_data::packet::serverbound::play::USE_ITEM_ON;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
@@ -21,7 +20,7 @@ pub struct SUseItemOn {
 }
 
 impl<'a> ServerPacket<'a> for SUseItemOn {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         {
             let hand = bytebuf.get_var_int()?;
             let position = bytebuf.get_block_pos()?;
@@ -55,7 +54,6 @@ impl crate::ClientPacket for SUseItemOn {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_var_int(&self.hand)?;

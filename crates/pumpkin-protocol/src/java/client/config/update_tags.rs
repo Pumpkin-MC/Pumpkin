@@ -8,7 +8,6 @@ use pumpkin_data::{
     tag::{RegistryKey, get_registry_key_tags},
 };
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(UPDATE_TAGS)]
 pub struct CUpdateTags<'a> {
@@ -23,11 +22,7 @@ impl<'a> CUpdateTags<'a> {
 }
 
 impl ClientPacket for CUpdateTags<'_> {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         let valid_keys: Vec<_> = self
             .tags
             .iter()

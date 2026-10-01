@@ -1,6 +1,6 @@
 use pumpkin_data::packet::clientbound::play::MOVE_ENTITY_POS_ROT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     ClientPacket, ServerPacket, VarInt,
@@ -39,11 +39,7 @@ impl CUpdateEntityPosRot {
 }
 
 impl ClientPacket for CUpdateEntityPosRot {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_var_int(&self.entity_id)?;
         // Since 26.3 the on ground flag and the delta step count are packed into a var int in
         // front of the delta, 0 steps being a single linear delta.
@@ -59,7 +55,7 @@ impl ClientPacket for CUpdateEntityPosRot {
 }
 
 impl<'a> ServerPacket<'a> for CUpdateEntityPosRot {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let entity_id = bytebuf.get_var_int()?;
         let (on_ground, delta) = read_on_ground_and_linear_delta(bytebuf)?;
         let yaw = bytebuf.get_u8()?;

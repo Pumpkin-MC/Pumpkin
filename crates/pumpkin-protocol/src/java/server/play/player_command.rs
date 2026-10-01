@@ -1,6 +1,5 @@
 use pumpkin_data::packet::serverbound::play::PLAYER_COMMAND;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ServerPacket,
@@ -33,7 +32,7 @@ pub enum Action {
 pub struct InvalidAction;
 
 impl<'a> ServerPacket<'a> for SPlayerCommand {
-    fn read(read: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(read: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let (entity_id, action_id, jump_boost) = (
             read.get_var_int()?,
             read.get_var_int()?,
@@ -62,7 +61,6 @@ impl crate::ClientPacket for SPlayerCommand {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         let action_id = match self.action {

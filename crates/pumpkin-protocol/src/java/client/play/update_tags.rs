@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::packet::MultiVersionJavaPacket;
+use crate::packet::JavaPacket;
 use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 
 use crate::codec::var_int::VarInt;
@@ -8,16 +8,13 @@ use pumpkin_data::{
     packet::clientbound::play::UPDATE_TAGS,
     tag::{RegistryKey, get_registry_key_tags},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 pub struct CUpdateTagsPlay<'a> {
     pub tags: &'a [pumpkin_data::tag::RegistryKey],
 }
 
-impl MultiVersionJavaPacket for CUpdateTagsPlay<'_> {
-    fn to_id(_version: JavaMinecraftVersion) -> i32 {
-        UPDATE_TAGS.to_id()
-    }
+impl JavaPacket for CUpdateTagsPlay<'_> {
+    const PACKET_ID: i32 = UPDATE_TAGS.to_id();
 }
 
 impl<'a> CUpdateTagsPlay<'a> {
@@ -28,11 +25,7 @@ impl<'a> CUpdateTagsPlay<'a> {
 }
 
 impl ClientPacket for CUpdateTagsPlay<'_> {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         let valid_keys: Vec<_> = self
             .tags
             .iter()

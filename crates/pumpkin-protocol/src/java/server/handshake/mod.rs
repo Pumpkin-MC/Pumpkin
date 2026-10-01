@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::serverbound::handshake::INTENTION;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// The very first packet sent by the client to initiate a connection
 ///
@@ -23,7 +22,7 @@ pub struct SHandShake {
 }
 
 impl<'a> ServerPacket<'a> for SHandShake {
-    fn read(read: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(read: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
             protocol_version: read.get_var_int()?,
             // A vanilla client never sends more than 255 characters here, but
@@ -45,7 +44,6 @@ impl ClientPacket for SHandShake {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.protocol_version)?;
         write.write_string(&self.server_address)?;
@@ -93,7 +91,7 @@ mod tests {
         let address = bungeecord_forwarded_address();
         let buf = encode_handshake(&address, 2);
 
-        let packet = SHandShake::read(&mut &buf[..], &pumpkin_data::packet::CURRENT_MC_VERSION)
+        let packet = SHandShake::read(&mut &buf[..])
             .expect("a BungeeCord-forwarded address should be readable");
 
         assert_eq!(&*packet.server_address, address.as_str());
@@ -105,8 +103,7 @@ mod tests {
     fn reads_plain_server_address() {
         let buf = encode_handshake("localhost", 1);
 
-        let packet = SHandShake::read(&mut &buf[..], &pumpkin_data::packet::CURRENT_MC_VERSION)
-            .expect("a plain address should be readable");
+        let packet = SHandShake::read(&mut &buf[..]).expect("a plain address should be readable");
 
         assert_eq!(&*packet.server_address, "localhost");
         assert_eq!(packet.next_state, ConnectionState::Status);
@@ -117,7 +114,7 @@ mod tests {
         let address = "a".repeat(i16::MAX as usize + 1);
         let buf = encode_handshake(&address, 2);
 
-        let result = SHandShake::read(&mut &buf[..], &pumpkin_data::packet::CURRENT_MC_VERSION);
+        let result = SHandShake::read(&mut &buf[..]);
 
         assert!(matches!(result, Err(ReadingError::TooLarge(_))));
     }

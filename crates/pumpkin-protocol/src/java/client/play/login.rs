@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::play::LOGIN;
-use pumpkin_util::{resource_location::ResourceLocation, version::JavaMinecraftVersion};
+use pumpkin_util::resource_location::ResourceLocation;
 
 use pumpkin_macros::java_packet;
 
@@ -77,11 +77,7 @@ impl<'a> CLogin<'a> {
 }
 
 impl ClientPacket for CLogin<'_> {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_i32_be(self.entity_id)?;
 
         // Hardcore & GameMode

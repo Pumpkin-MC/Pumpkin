@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::serverbound::play::CONTAINER_CLOSE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
@@ -14,7 +13,7 @@ pub struct SCloseContainer {
 }
 
 impl<'a> ServerPacket<'a> for SCloseContainer {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let window_id = bytebuf.get_container_id()?;
 
         Ok(Self { window_id })
@@ -25,7 +24,6 @@ impl crate::ClientPacket for SCloseContainer {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
 

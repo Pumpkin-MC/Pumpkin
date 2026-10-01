@@ -14,14 +14,13 @@ use hybrid_array::{Array, sizes::U1};
 use pumpkin_util::{
     resource_location::ResourceLocation,
     text::{TextComponent, style::Style},
-    version::JavaMinecraftVersion,
 };
 use ser::{ReadingError, WritingError};
 
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-pub use crate::packet::{MultiVersionJavaPacket, Packet};
+pub use crate::packet::{JavaPacket, Packet};
 
 pub mod bedrock;
 pub mod codec;
@@ -249,28 +248,20 @@ pub struct RawPacket {
     pub payload: Bytes,
 }
 
-pub trait ClientPacket: MultiVersionJavaPacket {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError>;
+pub trait ClientPacket: JavaPacket {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError>;
 
-    fn write_packet(
-        &self,
-        version: &JavaMinecraftVersion,
-        write: impl Write,
-    ) -> Result<(), WritingError> {
-        crate::java::packet_encoder::write_packet(self, version, write)
+    fn write_packet(&self, write: impl Write) -> Result<(), WritingError> {
+        crate::java::packet_encoder::write_packet(self, write)
     }
 
-    fn serialize_packet(&self, version: &JavaMinecraftVersion) -> Result<Bytes, WritingError> {
-        crate::java::packet_encoder::serialize_packet(self, version)
+    fn serialize_packet(&self) -> Result<Bytes, WritingError> {
+        crate::java::packet_encoder::serialize_packet(self)
     }
 }
 
-pub trait ServerPacket<'a>: MultiVersionJavaPacket + Sized {
-    fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError>;
+pub trait ServerPacket<'a>: JavaPacket + Sized {
+    fn read(read: &mut &'a [u8]) -> Result<Self, ReadingError>;
 }
 
 pub trait BClientPacket: Packet {

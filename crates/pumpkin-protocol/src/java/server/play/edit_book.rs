@@ -1,6 +1,5 @@
 use pumpkin_data::packet::serverbound::play::EDIT_BOOK;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ServerPacket, VarInt,
@@ -16,7 +15,7 @@ pub struct SEditBook<'a> {
 }
 
 impl<'a> ServerPacket<'a> for SEditBook<'a> {
-    fn read(read: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(read: &mut &'a [u8]) -> Result<Self, ReadingError> {
         {
             let slot = read.get_var_int()?;
             let count = read.get_var_int()?.0 as usize;
@@ -43,7 +42,6 @@ impl crate::ClientPacket for SEditBook<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_var_int(&self.slot)?;

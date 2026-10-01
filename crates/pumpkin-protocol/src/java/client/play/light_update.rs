@@ -6,7 +6,6 @@ use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 use crate::{ClientPacket, ServerPacket};
 use pumpkin_data::packet::clientbound::play::LIGHT_UPDATE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Sent by the server to update light levels (block light and sky light) for a chunk.
 ///
@@ -92,10 +91,7 @@ impl LightData {
         Ok(())
     }
 
-    pub fn read(
-        bytebuf: &mut &[u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, ReadingError> {
+    pub fn read(bytebuf: &mut &[u8]) -> Result<Self, ReadingError> {
         let trust_edges = false;
 
         let (sky_light_mask, block_light_mask, empty_sky_light_mask, empty_block_light_mask) = (
@@ -142,11 +138,7 @@ impl LightData {
 }
 
 impl ClientPacket for CLightUpdate {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_var_int(&self.chunk_x)?;
         write.write_var_int(&self.chunk_z)?;
         self.light_data.write(&mut write)
@@ -154,10 +146,10 @@ impl ClientPacket for CLightUpdate {
 }
 
 impl<'a> ServerPacket<'a> for CLightUpdate {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let chunk_x = bytebuf.get_var_int()?;
         let chunk_z = bytebuf.get_var_int()?;
-        let light_data = LightData::read(bytebuf, version)?;
+        let light_data = LightData::read(bytebuf)?;
         Ok(Self {
             chunk_x,
             chunk_z,

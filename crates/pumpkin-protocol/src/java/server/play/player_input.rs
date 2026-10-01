@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::serverbound::play::PLAYER_INPUT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(PLAYER_INPUT)]
 pub struct SPlayerInput {
@@ -23,7 +22,7 @@ impl SPlayerInput {
 }
 
 impl<'a> ServerPacket<'a> for SPlayerInput {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
             input: bytebuf.get_i8()?,
         })
@@ -34,7 +33,6 @@ impl crate::ClientPacket for SPlayerInput {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_i8(self.input)?;

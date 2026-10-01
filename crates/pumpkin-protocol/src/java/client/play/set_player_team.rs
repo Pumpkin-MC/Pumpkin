@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::play::SET_PLAYER_TEAM;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
+use pumpkin_util::text::TextComponent;
 
 use crate::{
     ClientPacket,
@@ -58,11 +58,7 @@ fn collision_rule_to_id(s: &str) -> i32 {
 }
 
 impl ClientPacket for CSetPlayerTeam<'_> {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_string(&self.team_name)?;
 
         write.write_i8(self.method as i8)?;

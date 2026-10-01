@@ -1,6 +1,6 @@
 use pumpkin_data::packet::clientbound::play::EXPLODE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::ser::NetworkWriteExt;
 use crate::{ClientPacket, IdOr, SoundEvent, codec::var_int::VarInt};
@@ -57,7 +57,6 @@ impl ClientPacket for CExplosion {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_f64_be(self.center.x)?;
         write.write_f64_be(self.center.y)?;
@@ -100,7 +99,7 @@ mod tests {
 
     use super::CExplosion;
 
-    fn encoded_particle_id(version: JavaMinecraftVersion) -> VarInt {
+    fn encoded_particle_id(_version: JavaMinecraftVersion) -> VarInt {
         let packet = CExplosion::new(
             Vector3::new(0.0, 0.0, 0.0),
             4.0,
@@ -110,7 +109,7 @@ mod tests {
             IdOr::Id(0),
         );
         let mut bytes = Vec::new();
-        packet.write_packet_data(&mut bytes, &version).unwrap();
+        packet.write_packet_data(&mut bytes).unwrap();
 
         let mut cursor = Cursor::new(bytes);
         cursor.seek(SeekFrom::Start(33)).unwrap();

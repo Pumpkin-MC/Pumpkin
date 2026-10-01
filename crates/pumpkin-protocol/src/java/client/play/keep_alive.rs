@@ -3,7 +3,6 @@ use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Maintains the connection and measures latency (ping) between client and server.
 ///
@@ -29,7 +28,6 @@ impl ClientPacket for CKeepAlive {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_i64_be(self.keep_alive_id)?;
         Ok(())
@@ -37,10 +35,7 @@ impl ClientPacket for CKeepAlive {
 }
 
 impl<'a> crate::ServerPacket<'a> for CKeepAlive {
-    fn read(
-        read: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, crate::ReadingError> {
+    fn read(read: &mut &'a [u8]) -> Result<Self, crate::ReadingError> {
         use crate::ser::NetworkReadExt;
         let keep_alive_id = read.get_i64_be()?;
         Ok(Self { keep_alive_id })
@@ -56,11 +51,10 @@ mod tests {
     fn keep_alive_roundtrip() {
         let packet = CKeepAlive::new(1234567890123456789);
         let mut buf = Vec::new();
-        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
-        packet.write_packet_data(&mut buf, &version).unwrap();
+        packet.write_packet_data(&mut buf).unwrap();
 
         let mut slice = buf.as_slice();
-        let read_packet = CKeepAlive::read(&mut slice, &version).unwrap();
+        let read_packet = CKeepAlive::read(&mut slice).unwrap();
         assert_eq!(read_packet.keep_alive_id, 1234567890123456789);
     }
 }

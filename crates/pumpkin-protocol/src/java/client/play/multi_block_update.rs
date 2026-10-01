@@ -3,7 +3,6 @@ use pumpkin_data::packet::clientbound::play::SECTION_BLOCKS_UPDATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::{BlockPos, chunk_section_from_pos, pack_local_chunk_section};
 use pumpkin_util::math::vector3::{self, Vector3};
-use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Write;
 
 use crate::{
@@ -57,11 +56,7 @@ impl CMultiBlockUpdate {
 }
 
 impl ClientPacket for CMultiBlockUpdate {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         {
             let chunk_section = vector3::packed_chunk_pos(&self.chunk_section);
             write.write_i64_be(chunk_section)?;
@@ -81,7 +76,7 @@ impl ClientPacket for CMultiBlockUpdate {
 }
 
 impl<'a> ServerPacket<'a> for CMultiBlockUpdate {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         {
             let encoded_pos = bytebuf.get_i64_be()?;
             let chunk_section = vector3::unpacked_chunk_pos(encoded_pos);

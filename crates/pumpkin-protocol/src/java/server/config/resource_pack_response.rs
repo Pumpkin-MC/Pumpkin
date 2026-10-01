@@ -5,7 +5,6 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
@@ -34,7 +33,7 @@ pub struct SConfigResourcePack {
 }
 
 impl<'a> ServerPacket<'a> for SConfigResourcePack {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let uuid = bytebuf.get_uuid()?;
 
         let result = bytebuf.get_var_int()?;
@@ -46,7 +45,6 @@ impl crate::ClientPacket for SConfigResourcePack {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_uuid(&self.uuid)?;

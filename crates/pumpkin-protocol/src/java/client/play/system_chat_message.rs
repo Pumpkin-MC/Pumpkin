@@ -1,9 +1,8 @@
 use pumpkin_data::packet::clientbound::play::SYSTEM_CHAT;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::ClientPacket;
-use crate::packet::MultiVersionJavaPacket;
+use crate::packet::JavaPacket;
 use crate::ser::NetworkWriteExt;
 
 /// Sends a system chat message to the client.
@@ -24,17 +23,14 @@ impl<'a> CSystemChatMessage<'a> {
     }
 }
 
-impl MultiVersionJavaPacket for CSystemChatMessage<'_> {
-    fn to_id(_version: JavaMinecraftVersion) -> i32 {
-        SYSTEM_CHAT.to_id()
-    }
+impl JavaPacket for CSystemChatMessage<'_> {
+    const PACKET_ID: i32 = SYSTEM_CHAT.to_id();
 }
 
 impl ClientPacket for CSystemChatMessage<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_component(self.content)?;
 

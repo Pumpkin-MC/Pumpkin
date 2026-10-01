@@ -6,7 +6,7 @@ use crate::{
     codec::{var_int::VarInt, var_long::VarLong},
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
-use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+use pumpkin_util::math::position::BlockPos;
 
 #[java_packet(SET_STRUCTURE_BLOCK)]
 pub struct SSetStructureBlock<'a> {
@@ -60,7 +60,7 @@ impl SSetStructureBlock<'_> {
 }
 
 impl<'a> ServerPacket<'a> for SSetStructureBlock<'a> {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
             location: bytebuf.get_block_pos()?,
             action: bytebuf.get_var_int()?,
@@ -86,7 +86,6 @@ impl crate::ClientPacket for SSetStructureBlock<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_block_pos(&self.location)?;

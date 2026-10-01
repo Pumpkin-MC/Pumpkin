@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::play::LEVEL_PARTICLES;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     ClientPacket, ServerPacket, VarInt,
@@ -67,11 +67,7 @@ impl<'a> CParticle<'a> {
 }
 
 impl ClientPacket for CParticle<'_> {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         // The particle moved back to the front of the packet in 26.3
@@ -102,7 +98,7 @@ impl ClientPacket for CParticle<'_> {
 }
 
 impl<'a> ServerPacket<'a> for CParticle<'a> {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let particle_id = bytebuf.get_var_int()?;
         let data = ParticleOptionsLayout::read_bytes(bytebuf, particle_id)?;
 
@@ -141,7 +137,7 @@ impl<'a> ServerPacket<'a> for CParticle<'a> {
 
 #[cfg(test)]
 mod tests {
-    use pumpkin_data::{packet::CURRENT_MC_VERSION, particle::Particle};
+    use pumpkin_data::particle::Particle;
     use pumpkin_util::math::vector3::Vector3;
 
     use crate::{ClientPacket, ServerPacket, VarInt, ser::NetworkWriteExt};
@@ -150,11 +146,9 @@ mod tests {
 
     fn assert_roundtrip(packet: &CParticle<'_>) {
         let mut buf = Vec::new();
-        packet
-            .write_packet_data(&mut buf, &CURRENT_MC_VERSION)
-            .unwrap();
+        packet.write_packet_data(&mut buf).unwrap();
         let mut slice = buf.as_slice();
-        let read = CParticle::read(&mut slice, &CURRENT_MC_VERSION).unwrap();
+        let read = CParticle::read(&mut slice).unwrap();
         assert!(slice.is_empty());
         assert_eq!(&read, packet);
     }

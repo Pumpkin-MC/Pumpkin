@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::play::SET_DEFAULT_SPAWN_POSITION;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+use pumpkin_util::math::position::BlockPos;
 
 use crate::{
     ClientPacket, ServerPacket,
@@ -42,11 +42,7 @@ impl CPlayerSpawnPosition {
 }
 
 impl ClientPacket for CPlayerSpawnPosition {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_string(&self.dimension_name)?;
 
         write.write_block_pos(&self.location)?;
@@ -60,7 +56,7 @@ impl ClientPacket for CPlayerSpawnPosition {
 }
 
 impl<'a> ServerPacket<'a> for CPlayerSpawnPosition {
-    fn read(read: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(read: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let dimension_name = read.get_str()?.into_string();
 
         let location = read.get_block_pos()?;

@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::clientbound::play::TAKE_ITEM_ENTITY;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(TAKE_ITEM_ENTITY)]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -32,7 +31,6 @@ impl ClientPacket for CTakeItemEntity {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
         write.write_var_int(&self.collector_entity_id)?;
@@ -42,7 +40,7 @@ impl ClientPacket for CTakeItemEntity {
 }
 
 impl<'a> ServerPacket<'a> for CTakeItemEntity {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let (entity_id, collector_entity_id) = (bytebuf.get_var_int()?, bytebuf.get_var_int()?);
         let stack_amount = bytebuf.get_var_int()?;
         Ok(Self {

@@ -6,7 +6,6 @@ use crate::{
 };
 use pumpkin_data::packet::serverbound::play::CONTAINER_CLICK;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Read;
 
 #[derive(Debug)]
@@ -32,10 +31,7 @@ impl SClickSlot {
 }
 
 impl<'a> ServerPacket<'a> for SClickSlot {
-    fn read(
-        mut bytebuf: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, ReadingError> {
+    fn read(mut bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let sync_id = bytebuf.get_container_id()?;
         let revision = bytebuf.get_var_int()?;
         let slot = bytebuf.get_i16_be()?;
@@ -75,7 +71,6 @@ impl crate::ClientPacket for SClickSlot {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_container_id(&self.sync_id)?;

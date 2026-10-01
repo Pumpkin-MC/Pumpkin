@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::serverbound::play::PLACE_RECIPE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
@@ -16,7 +15,7 @@ pub struct SPlaceRecipe {
 }
 
 impl<'a> ServerPacket<'a> for SPlaceRecipe {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         {
             let container_id = bytebuf.get_container_id()?.0 as i8;
             let recipe_display_id = bytebuf.get_var_int()?;
@@ -34,7 +33,6 @@ impl crate::ClientPacket for SPlaceRecipe {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_i8(self.container_id)?;

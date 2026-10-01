@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::play::SET_OBJECTIVE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
+use pumpkin_util::text::TextComponent;
 
 use crate::{ClientPacket, NumberFormat, VarInt, WritingError, ser::NetworkWriteExt};
 
@@ -35,11 +35,7 @@ impl CUpdateObjectives {
 }
 
 impl ClientPacket for CUpdateObjectives {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_string(&self.objective_name)?;

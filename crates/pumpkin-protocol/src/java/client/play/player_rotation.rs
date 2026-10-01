@@ -2,7 +2,6 @@ use pumpkin_data::packet::clientbound::play::PLAYER_ROTATION;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, ser::NetworkWriteExt};
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(PLAYER_ROTATION)]
 pub struct CPlayerRotation {
@@ -21,7 +20,6 @@ impl ClientPacket for CPlayerRotation {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_f32_be(self.yaw)?;
         write.write_bool(false)?;

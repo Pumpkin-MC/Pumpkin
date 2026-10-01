@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::play::BLOCK_ENTITY_DATA;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+use pumpkin_util::math::position::BlockPos;
 
 use crate::{
     ClientPacket, ServerPacket, VarInt,
@@ -59,11 +59,7 @@ pub fn read_nbt_payload(bytebuf: &mut &[u8]) -> Result<Box<[u8]>, ReadingError> 
 }
 
 impl ClientPacket for CBlockEntityData {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_block_pos(&self.location)?;
 
         write.write_var_int(&self.r#type)?;
@@ -73,7 +69,7 @@ impl ClientPacket for CBlockEntityData {
 }
 
 impl<'a> ServerPacket<'a> for CBlockEntityData {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let location = bytebuf.get_block_pos()?;
         let r#type = bytebuf.get_var_int()?;
         let nbt_data = read_nbt_payload(bytebuf)?;

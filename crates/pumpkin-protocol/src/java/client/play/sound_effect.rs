@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::{packet::clientbound::play::SOUND, sound::SoundCategory};
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{ClientPacket, IdOr, SoundEvent, VarInt, WritingError, ser::NetworkWriteExt};
 
@@ -42,11 +42,7 @@ impl CSoundEffect {
 }
 
 impl ClientPacket for CSoundEffect {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         crate::IdOr::<crate::SoundEvent>::write(&self.sound_event, &mut write, |w, e| {
             w.write_string(&e.sound_name)?;
             w.write_option(&e.range, |w2, r| w2.write_f32_be(*r))
@@ -97,9 +93,7 @@ mod tests {
         );
         let mut bytes = Vec::new();
 
-        packet
-            .write_packet_data(&mut bytes, &pumpkin_data::packet::CURRENT_MC_VERSION)
-            .unwrap();
+        packet.write_packet_data(&mut bytes).unwrap();
 
         assert_eq!(first_var_int(bytes), VarInt::from(0));
     }
@@ -116,9 +110,7 @@ mod tests {
         );
         let mut bytes = Vec::new();
 
-        packet
-            .write_packet_data(&mut bytes, &pumpkin_data::packet::CURRENT_MC_VERSION)
-            .unwrap();
+        packet.write_packet_data(&mut bytes).unwrap();
 
         let mut cursor = Cursor::new(bytes);
         // skip sound ID varint

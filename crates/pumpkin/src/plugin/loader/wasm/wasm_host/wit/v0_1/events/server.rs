@@ -39,7 +39,6 @@ impl ToFromWasmEvent for PacketReceivedEvent {
                     generated_packets::deserialize_java_serverbound_packet(
                         self.packet_id,
                         &self.payload,
-                        CURRENT_MC_VERSION,
                     )
                     .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java)
                 } else {

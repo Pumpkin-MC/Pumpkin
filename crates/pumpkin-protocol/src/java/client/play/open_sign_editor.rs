@@ -4,7 +4,6 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Opens the sign text input screen for the client.
 ///
@@ -34,7 +33,6 @@ impl ClientPacket for COpenSignEditor {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_block_pos(&self.location)?;
 
@@ -44,10 +42,7 @@ impl ClientPacket for COpenSignEditor {
 }
 
 impl<'a> crate::ServerPacket<'a> for COpenSignEditor {
-    fn read(
-        bytebuf: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, crate::ser::ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, crate::ser::ReadingError> {
         use crate::ser::NetworkReadExt;
         let location = bytebuf.get_block_pos()?;
 

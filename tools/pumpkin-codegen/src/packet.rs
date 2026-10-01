@@ -52,7 +52,7 @@ fn canonicalize_packet_name(name: String) -> String {
     }
 }
 
-fn parse_packets(path: &str, content: &str) -> Packets {
+pub(crate) fn parse_packets(path: &str, content: &str) -> Packets {
     if let Ok(parsed) = serde_json::from_str::<Packets>(content) {
         return parsed;
     }
@@ -186,7 +186,51 @@ fn generate_phase_modules(Packets(phases): &Packets, is_serverbound: bool) -> To
         }
     }
 
-    // Define aliases per phase for backwards compatibility and PacketEvents parity
+    let aliases = aliases(is_serverbound);
+    let mut output = TokenStream::new();
+    let expected_phases = vec!["handshake", "status", "login", "config", "play"];
+
+    for phase_name in expected_phases {
+        let phase_ident = format_ident!("{}", phase_name);
+        let mut consts_ts = TokenStream::new();
+        let empty_map = BTreeMap::new();
+        let packets_in_phase = phase_packets.get(phase_name).unwrap_or(&empty_map);
+
+        for (name, id) in packets_in_phase {
+            let const_name = format_ident!("{}", name);
+            consts_ts.extend(quote! {
+                pub const #const_name: super::super::PacketId = super::super::PacketId(#id);
+            });
+        }
+
+        // Add aliases for this phase
+        if let Some(alias_list) = aliases.get(phase_name) {
+            for (alias, target) in alias_list {
+                let alias_ident = format_ident!("{}", alias);
+                let target_ident = format_ident!("{}", target);
+                if packets_in_phase.contains_key(*target) && !packets_in_phase.contains_key(*alias)
+                {
+                    consts_ts.extend(quote! {
+                        pub const #alias_ident: super::super::PacketId = #target_ident;
+                    });
+                }
+            }
+        }
+
+        output.extend(quote! {
+            pub mod #phase_ident {
+                #consts_ts
+            }
+        });
+    }
+
+    output
+}
+
+/// Older and PacketEvents names per phase, as `(alias, packet)`.
+pub(crate) fn aliases(
+    is_serverbound: bool,
+) -> BTreeMap<&'static str, Vec<(&'static str, &'static str)>> {
     let mut aliases: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
     if is_serverbound {
         aliases.insert(
@@ -329,43 +373,5 @@ fn generate_phase_modules(Packets(phases): &Packets, is_serverbound: bool) -> To
             ],
         );
     }
-
-    let mut output = TokenStream::new();
-    let expected_phases = vec!["handshake", "status", "login", "config", "play"];
-
-    for phase_name in expected_phases {
-        let phase_ident = format_ident!("{}", phase_name);
-        let mut consts_ts = TokenStream::new();
-        let empty_map = BTreeMap::new();
-        let packets_in_phase = phase_packets.get(phase_name).unwrap_or(&empty_map);
-
-        for (name, id) in packets_in_phase {
-            let const_name = format_ident!("{}", name);
-            consts_ts.extend(quote! {
-                pub const #const_name: super::super::PacketId = super::super::PacketId(#id);
-            });
-        }
-
-        // Add aliases for this phase
-        if let Some(alias_list) = aliases.get(phase_name) {
-            for (alias, target) in alias_list {
-                let alias_ident = format_ident!("{}", alias);
-                let target_ident = format_ident!("{}", target);
-                if packets_in_phase.contains_key(*target) && !packets_in_phase.contains_key(*alias)
-                {
-                    consts_ts.extend(quote! {
-                        pub const #alias_ident: super::super::PacketId = #target_ident;
-                    });
-                }
-            }
-        }
-
-        output.extend(quote! {
-            pub mod #phase_ident {
-                #consts_ts
-            }
-        });
-    }
-
-    output
+    aliases
 }

@@ -4,7 +4,6 @@ use pumpkin_macros::java_packet;
 use crate::VarInt;
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 use crate::{ClientPacket, ServerPacket};
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(CONTAINER_SET_DATA)]
 pub struct CSetContainerProperty {
@@ -25,11 +24,7 @@ impl CSetContainerProperty {
 }
 
 impl ClientPacket for CSetContainerProperty {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_container_id(&self.window_id)?;
         write.write_i16_be(self.property)?;
         write.write_i16_be(self.value)?;
@@ -38,7 +33,7 @@ impl ClientPacket for CSetContainerProperty {
 }
 
 impl<'a> ServerPacket<'a> for CSetContainerProperty {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let window_id = bytebuf.get_container_id()?;
         let property = bytebuf.get_i16_be()?;
         let value = bytebuf.get_i16_be()?;

@@ -7,7 +7,6 @@ use crate::{
 use pumpkin_data::packet::clientbound::play::LEVEL_EVENT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Triggers a specific sound or particle effect at a world location.
 ///
@@ -48,11 +47,7 @@ impl CLevelEvent {
 }
 
 impl ClientPacket for CLevelEvent {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
         write.write_i32_be(self.event)?;
         write.write_block_pos(&self.location)?;

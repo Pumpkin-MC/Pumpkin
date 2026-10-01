@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::play::PLAYER_CHAT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
+use pumpkin_util::text::TextComponent;
 
 use crate::{
     ClientPacket, WritingError,
@@ -88,11 +88,7 @@ impl CPlayerChatMessage {
 
 //TODO: Check if we need this custom impl
 impl ClientPacket for CPlayerChatMessage {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_var_int(&self.global_index)?;
         write.write_uuid(&self.sender)?;
         write.write_var_int(&self.index)?;

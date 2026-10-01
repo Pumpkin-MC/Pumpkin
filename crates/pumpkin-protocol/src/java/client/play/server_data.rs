@@ -3,7 +3,6 @@ use pumpkin_macros::java_packet;
 use pumpkin_util::text::TextComponent;
 
 use crate::{ClientPacket, ser::NetworkWriteExt};
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(SERVER_DATA)]
 pub struct CServerData<'a> {
@@ -22,7 +21,6 @@ impl ClientPacket for CServerData<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_component(self.motd)?;
         if let Some(icon) = self.icon_base64 {

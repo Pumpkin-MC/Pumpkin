@@ -1,10 +1,9 @@
 use crate::ClientPacket;
 use crate::VarInt;
-use crate::packet::MultiVersionJavaPacket;
+use crate::packet::JavaPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_data::packet::clientbound::play::ENTITY_POSITION_SYNC;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Updates the exact position, rotation, and velocity of an entity.
 ///
@@ -51,17 +50,14 @@ impl CEntityPositionSync {
     }
 }
 
-impl MultiVersionJavaPacket for CEntityPositionSync {
-    fn to_id(_version: JavaMinecraftVersion) -> i32 {
-        ENTITY_POSITION_SYNC.to_id()
-    }
+impl JavaPacket for CEntityPositionSync {
+    const PACKET_ID: i32 = ENTITY_POSITION_SYNC.to_id();
 }
 
 impl ClientPacket for CEntityPositionSync {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
         // Since 26.3 the position is a path. 0 is a linear path, which is just the end position.

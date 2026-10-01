@@ -6,7 +6,6 @@ use pumpkin_data::{
     packet::clientbound::play::SET_DISPLAY_OBJECTIVE, scoreboard::ScoreboardDisplaySlot,
 };
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Instructs the client to display a specific scoreboard objective in a given slot.
 ///
@@ -34,11 +33,7 @@ impl CDisplayObjective {
 }
 
 impl ClientPacket for CDisplayObjective {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_var_int(&self.position)?;
 
         write.write_string(&self.score_name)?;
@@ -47,7 +42,7 @@ impl ClientPacket for CDisplayObjective {
 }
 
 impl<'a> ServerPacket<'a> for CDisplayObjective {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let position = bytebuf.get_var_int()?;
 
         let score_name = bytebuf.get_str()?.into();

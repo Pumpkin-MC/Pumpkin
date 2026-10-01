@@ -6,7 +6,6 @@ use pumpkin_data::recipes::{
     RecipeIngredientTypes, RecipeResultStruct,
 };
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 use std::borrow::Cow;
 use std::{collections::HashMap, io::Write};
 
@@ -461,11 +460,7 @@ fn write_entry(
 
 #[allow(clippy::too_many_lines)]
 impl ClientPacket for CRecipeBookAdd<'_> {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         // Station items (these IDs are stable across all versions we support)
@@ -941,8 +936,7 @@ mod tests {
     fn vanilla_recipes_serialize_for_every_recipe_book_version() {
         let packet = CRecipeBookAdd::new(true, &[]);
         {
-            let version = pumpkin_data::packet::CURRENT_MC_VERSION;
-            packet.write_packet_data(Vec::new(), &version).unwrap();
+            packet.write_packet_data(Vec::new()).unwrap();
         }
     }
 }

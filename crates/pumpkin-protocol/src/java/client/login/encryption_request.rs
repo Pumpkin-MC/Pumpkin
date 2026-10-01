@@ -1,6 +1,5 @@
 use crate::ser::NetworkWriteExt;
-use crate::{ClientPacket, MultiVersionJavaPacket};
-use pumpkin_util::version::JavaMinecraftVersion;
+use crate::{ClientPacket, JavaPacket};
 
 /// Sent by the server to initiate the encryption handshake.
 ///
@@ -22,10 +21,8 @@ pub struct CEncryptionRequest<'a> {
     pub should_authenticate: bool,
 }
 
-impl MultiVersionJavaPacket for CEncryptionRequest<'_> {
-    fn to_id(_version: JavaMinecraftVersion) -> i32 {
-        1
-    }
+impl JavaPacket for CEncryptionRequest<'_> {
+    const PACKET_ID: i32 = 1;
 }
 
 impl<'a> CEncryptionRequest<'a> {
@@ -49,7 +46,6 @@ impl ClientPacket for CEncryptionRequest<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_string(self.server_id)?;
         write.write_var_int(&crate::VarInt(self.public_key.len() as i32))?;
@@ -62,10 +58,7 @@ impl ClientPacket for CEncryptionRequest<'_> {
 }
 
 impl<'a> crate::ServerPacket<'a> for CEncryptionRequest<'a> {
-    fn read(
-        read: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, crate::ReadingError> {
+    fn read(read: &mut &'a [u8]) -> Result<Self, crate::ReadingError> {
         use crate::ser::{NetworkReadExt, NetworkReadSliceExt};
         let server_id = read.get_str_bounded_borrowed(20)?;
         let public_key_len = read.get_var_int()?.0 as usize;
@@ -94,11 +87,10 @@ mod tests {
         let packet =
             CEncryptionRequest::new("test_server", b"public_key_bytes", b"verify_1234", true);
         let mut buf = Vec::new();
-        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
-        packet.write_packet_data(&mut buf, &version).unwrap();
+        packet.write_packet_data(&mut buf).unwrap();
 
         let mut slice = buf.as_slice();
-        let read_packet = CEncryptionRequest::read(&mut slice, &version).unwrap();
+        let read_packet = CEncryptionRequest::read(&mut slice).unwrap();
         assert_eq!(read_packet.server_id, packet.server_id);
         assert_eq!(read_packet.public_key, packet.public_key);
         assert_eq!(read_packet.verify_token, packet.verify_token);

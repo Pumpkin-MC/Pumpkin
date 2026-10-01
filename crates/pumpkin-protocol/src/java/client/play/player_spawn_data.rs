@@ -1,7 +1,5 @@
 use pumpkin_data::dimension::Dimension;
-use pumpkin_util::{
-    math::position::BlockPos, resource_location::ResourceLocation, version::JavaMinecraftVersion,
-};
+use pumpkin_util::{math::position::BlockPos, resource_location::ResourceLocation};
 
 use crate::{
     codec::var_int::VarInt,
@@ -88,11 +86,7 @@ impl PlayerSpawnData {
         }
     }
 
-    pub fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    pub fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_var_int(&VarInt(self.dimension.id as i32))?;
         write.write_string(self.dimension.minecraft_name)?;
         write.write_i64_be(self.hashed_seed)?;
@@ -109,7 +103,7 @@ impl PlayerSpawnData {
         Ok(())
     }
 
-    pub fn read(read: &mut &[u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    pub fn read(read: &mut &[u8]) -> Result<Self, ReadingError> {
         let dimension = {
             let id = read.get_var_int()?.0 as u8;
             match id {

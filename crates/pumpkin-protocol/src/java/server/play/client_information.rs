@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::serverbound::play::CLIENT_INFORMATION;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
@@ -21,7 +20,7 @@ pub struct SClientInformationPlay<'a> {
 }
 
 impl<'a> ServerPacket<'a> for SClientInformationPlay<'a> {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let locale = bytebuf.get_str_borrowed()?;
         let view_distance = bytebuf.get_i8()?;
         let chat_mode = bytebuf.get_var_int()?;
@@ -48,7 +47,6 @@ impl crate::ClientPacket for SClientInformationPlay<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_string(self.locale)?;

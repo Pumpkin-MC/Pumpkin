@@ -3,7 +3,6 @@ use crate::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_data::packet::clientbound::play::{ANIMATE, SWING_ANIMATION};
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Triggers a specific animation for an entity that is visible to the client.
 ///
@@ -32,7 +31,6 @@ impl ClientPacket for CEntityAnimation {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
         // 26.3 moved the swings into their own packet and renumbered the remaining animations
@@ -66,17 +64,14 @@ impl CSwingArm {
     }
 }
 
-impl crate::packet::MultiVersionJavaPacket for CSwingArm {
-    fn to_id(_version: JavaMinecraftVersion) -> i32 {
-        SWING_ANIMATION.to_id()
-    }
+impl crate::packet::JavaPacket for CSwingArm {
+    const PACKET_ID: i32 = SWING_ANIMATION.to_id();
 }
 
 impl ClientPacket for CSwingArm {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
         write.write_var_int(&VarInt(i32::from(self.off_hand)))?;

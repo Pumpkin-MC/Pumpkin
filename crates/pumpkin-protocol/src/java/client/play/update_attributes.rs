@@ -3,7 +3,6 @@ use std::io::Write;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::packet::clientbound::play::UPDATE_ATTRIBUTES;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::codec::var_int::VarInt;
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
@@ -236,11 +235,7 @@ pub fn attribute_name_to_id(name: &str) -> Option<u8> {
 }
 
 impl ClientPacket for CUpdateAttributes {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_var_int(&self.entity_id)?;
 
         write.write_var_int(&VarInt(self.properties.len() as i32))?;
@@ -263,7 +258,7 @@ impl ClientPacket for CUpdateAttributes {
 }
 
 impl<'a> ServerPacket<'a> for CUpdateAttributes {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let entity_id = bytebuf.get_var_int()?;
 
         let property_count = bytebuf.get_var_int()?.0 as usize;
@@ -300,11 +295,11 @@ mod tests {
     use pumpkin_data::packet::clientbound::play::UPDATE_ATTRIBUTES;
     use pumpkin_util::version::JavaMinecraftVersion;
 
-    use crate::{ClientPacket, VarInt, packet::MultiVersionJavaPacket, ser::NetworkReadExt};
+    use crate::{ClientPacket, VarInt, packet::JavaPacket, ser::NetworkReadExt};
 
     use super::{AttributeModifier, CUpdateAttributes, Property};
 
-    fn encoded_armor_attributes(version: JavaMinecraftVersion) -> Vec<u8> {
+    fn encoded_armor_attributes(_version: JavaMinecraftVersion) -> Vec<u8> {
         let packet = CUpdateAttributes::new(
             VarInt(1),
             vec![Property::new(
@@ -318,7 +313,7 @@ mod tests {
             )],
         );
         let mut buf = Vec::new();
-        packet.write_packet_data(&mut buf, &version).unwrap();
+        packet.write_packet_data(&mut buf).unwrap();
         buf
     }
 
@@ -351,14 +346,8 @@ mod tests {
 
     #[test]
     fn update_attributes_packet_id_for_26_3() {
-        assert_eq!(
-            CUpdateAttributes::to_id(pumpkin_data::packet::CURRENT_MC_VERSION),
-            UPDATE_ATTRIBUTES.to_id()
-        );
-        assert_eq!(
-            CUpdateAttributes::to_id(pumpkin_data::packet::CURRENT_MC_VERSION),
-            134
-        );
+        assert_eq!(CUpdateAttributes::PACKET_ID, UPDATE_ATTRIBUTES.to_id());
+        assert_eq!(CUpdateAttributes::PACKET_ID, 134);
     }
 
     #[test]

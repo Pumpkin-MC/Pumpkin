@@ -4,7 +4,6 @@ use pumpkin_util::text::TextComponent;
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(SET_TITLE_TEXT)]
 pub struct CTitleText<'a> {
@@ -22,7 +21,6 @@ impl ClientPacket for CTitleText<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_component(self.title)
     }

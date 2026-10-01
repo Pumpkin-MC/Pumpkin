@@ -6,9 +6,8 @@ pub use light::ChunkLightExt;
 
 use pumpkin_data::packet::clientbound::play::LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_protocol::ClientPacket;
-use pumpkin_protocol::packet::MultiVersionJavaPacket;
+use pumpkin_protocol::packet::JavaPacket;
 use pumpkin_protocol::ser::WritingError;
-use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
 use std::io::Write;
 
@@ -19,10 +18,8 @@ use std::io::Write;
 /// sky and block light.
 pub struct CChunkData<'a>(pub &'a ChunkData);
 
-impl MultiVersionJavaPacket for CChunkData<'_> {
-    fn to_id(_version: JavaMinecraftVersion) -> i32 {
-        LEVEL_CHUNK_WITH_LIGHT.to_id()
-    }
+impl JavaPacket for CChunkData<'_> {
+    const PACKET_ID: i32 = LEVEL_CHUNK_WITH_LIGHT.to_id();
 }
 
 impl<'a> CChunkData<'a> {
@@ -33,11 +30,7 @@ impl<'a> CChunkData<'a> {
 }
 
 impl ClientPacket for CChunkData<'_> {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         v1_18::write_chunk_data(self.0, write)
     }
 }
@@ -45,7 +38,7 @@ impl ClientPacket for CChunkData<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_data::packet::CURRENT_MC_VERSION;
+
     use pumpkin_world::chunk::ChunkData;
 
     #[test]
@@ -54,11 +47,9 @@ mod tests {
         let packet = CChunkData(&chunk);
 
         let mut buf = Vec::new();
-        assert_ne!(CChunkData::to_id(CURRENT_MC_VERSION), -1);
+        assert_ne!(CChunkData::PACKET_ID, -1);
         assert!(
-            packet
-                .write_packet_data(&mut buf, &CURRENT_MC_VERSION)
-                .is_ok(),
+            packet.write_packet_data(&mut buf).is_ok(),
             "Failed to serialize chunk data"
         );
         assert!(!buf.is_empty());
@@ -86,11 +77,9 @@ mod tests {
         let packet = CChunkData(&chunk);
 
         let mut buf = Vec::new();
-        assert_ne!(CChunkData::to_id(CURRENT_MC_VERSION), -1);
+        assert_ne!(CChunkData::PACKET_ID, -1);
         assert!(
-            packet
-                .write_packet_data(&mut buf, &CURRENT_MC_VERSION)
-                .is_ok(),
+            packet.write_packet_data(&mut buf).is_ok(),
             "Failed to serialize populated chunk data"
         );
         assert!(!buf.is_empty());

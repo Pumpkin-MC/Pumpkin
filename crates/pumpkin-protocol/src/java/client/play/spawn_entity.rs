@@ -2,10 +2,7 @@ use std::io::{Read, Write};
 
 use pumpkin_data::packet::clientbound::play::ADD_ENTITY;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{
-    math::{pack_degrees, vector3::Vector3},
-    version::JavaMinecraftVersion,
-};
+use pumpkin_util::math::{pack_degrees, vector3::Vector3};
 
 use crate::{
     ClientPacket, VarInt,
@@ -131,11 +128,7 @@ impl CSpawnEntity {
 }
 
 impl ClientPacket for CSpawnEntity {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_var_int(&self.entity_id)?;
 
         write.write_uuid(&self.entity_uuid)?;
