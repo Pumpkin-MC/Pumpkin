@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicI32, Ordering};
 
 use crossbeam::atomic::AtomicCell;
 
@@ -27,13 +27,29 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::plugin::api::events::player::fish::{PlayerFishEvent, PlayerFishState};
+use pumpkin_util::random::RandomImpl;
+use pumpkin_util::random::legacy_rand::LegacyRand;
+
+/// Vanilla `FishingHook.FishHookState`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum HookState {
+    Flying,
+    HookedIn(i32),
+    Bobbing { out_of_water_time: u8 },
+}
+
+impl HookState {
+    /// Vanilla `FishingHook.MAX_OUT_OF_WATER_TIME`.
+    const MAX_OUT_OF_WATER_TIME: u8 = 10;
+}
+
 pub struct FishingBobberEntity {
     pub entity: Entity,
     pub owner_id: i32,
-    pub hooked_entity_id: AtomicI32,
-    pub in_ground: AtomicBool,
+    pub owner_uuid: uuid::Uuid,
+    pub state: AtomicCell<HookState>,
     pub life: AtomicI32,
-    pub bobbing: AtomicBool,
     pub wait_countdown: AtomicI32,
     pub bite_countdown: AtomicI32,
     pub hook_countdown: AtomicI32,
@@ -58,12 +74,14 @@ impl FishingBobberEntity {
         let owner_id = owner.living_entity.entity.entity_id;
         let owner_entity = &owner.living_entity.entity;
 
-        let (origin, velocity) = throw_setup(
-            yaw,
-            pitch,
-            // Vanilla `RandomSource.triangle(0.5, 0.0103365)`.
-            rand::rng().triangle(0.5, 0.010_336_5),
+        // Vanilla draws `RandomSource.triangle(0.5, 0.0103365)` once per axis.
+        let mut rng = rand::rng();
+        let triangle = Vector3::new(
+            rng.triangle(0.5, 0.010_336_5),
+            rng.triangle(0.5, 0.010_336_5),
+            rng.triangle(0.5, 0.010_336_5),
         );
+        let (origin, velocity) = throw_setup(yaw, pitch, triangle);
 
         let owner_pos = owner_entity.pos.load();
         entity.pos.store(Vector3::new(
@@ -87,10 +105,9 @@ impl FishingBobberEntity {
         Self {
             entity,
             owner_id,
-            hooked_entity_id: AtomicI32::new(0),
-            in_ground: AtomicBool::new(false),
+            owner_uuid: owner.gameprofile.id,
+            state: AtomicCell::new(HookState::Flying),
             life: AtomicI32::new(0),
-            bobbing: AtomicBool::new(false),
             wait_countdown: AtomicI32::new(wait_countdown),
             bite_countdown: AtomicI32::new(0),
             hook_countdown: AtomicI32::new(0),
@@ -101,18 +118,37 @@ impl FishingBobberEntity {
     }
 
     /// Matches vanilla `FishingBobberEntity.use(ItemStack usedItem)`.
-    pub fn reel_in(&self, player: &Player, used_item: &ItemStack) -> i32 {
+    #[expect(clippy::too_many_lines)]
+    pub fn reel_in(&self, player: &Player, used_item: &ItemStack, hand: Hand) -> i32 {
+        // Vanilla `FishingHook.retrieve`: a hook whose owner stopped fishing yields nothing.
+        if self.should_stop_fishing(player) {
+            return 0;
+        }
+
         let world = self.entity.world.load();
         let mut damage = 0;
-        let hooked_id = self.hooked_entity_id.load(Ordering::Relaxed);
 
-        if hooked_id != 0
+        if let HookState::HookedIn(hooked_id) = self.state.load()
             && let Some(hooked) = world.get_entity_by_id(hooked_id)
         {
+            // Bukkit `PlayerFishEvent`: reeling in a hooked entity is the `CAUGHT_ENTITY` outcome.
+            if self
+                .fire_fish_event(
+                    &world,
+                    PlayerFishState::CaughtEntity,
+                    Some(&*hooked),
+                    hand,
+                    0,
+                )
+                .is_none()
+            {
+                return 0;
+            }
+
             let player_pos = player.get_entity().pos.load();
             let bobber_pos = self.entity.pos.load();
             let delta = player_pos - bobber_pos;
-            let motion = delta.multiply(0.1, 0.1, 0.1);
+            let motion = delta * 0.1;
             hooked.get_entity().add_velocity(motion);
             world.send_entity_status(&self.entity, EntityStatus::FishingRodReelIn, None);
 
@@ -160,6 +196,18 @@ impl FishingBobberEntity {
                 );
 
                 let entity = Entity::new(world.clone(), bobber_pos, &EntityType::ITEM);
+
+                // Bukkit `PlayerFishEvent`: each caught item is a `CAUGHT_FISH` outcome.
+                let Some(xp) = self.fire_fish_event(
+                    &world,
+                    PlayerFishState::CaughtFish,
+                    Some(&entity as &dyn EntityBase),
+                    hand,
+                    rand::random_range(1..=6),
+                ) else {
+                    continue;
+                };
+
                 let mut item_event =
                     crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
                         entity.entity_id,
@@ -181,11 +229,10 @@ impl FishingBobberEntity {
                     world.spawn_entity(item_entity);
                 }
 
-                let xp = rand::random_range(1..=6);
                 let mut xp_pos = player_pos;
                 xp_pos.y += 0.5;
                 xp_pos.z += 0.5;
-                ExperienceOrbEntity::spawn(&world, xp_pos, xp);
+                ExperienceOrbEntity::spawn(&world, xp_pos, xp.max(0) as u32);
 
                 if item_stack.item.has_tag(&tag::Item::MINECRAFT_FISHES) {
                     player.increment_stat(
@@ -205,11 +252,60 @@ impl FishingBobberEntity {
             damage = 1;
         }
 
-        if self.in_ground.load(Ordering::Relaxed) {
+        if self.entity.on_ground.load(Ordering::Relaxed) {
             damage = 2;
         }
 
         damage
+    }
+
+    /// Vanilla `FishingHook.tick`: the bite motion uses a random reseeded from the hook UUID and
+    /// game time, so the client predicts the same motion instead of jittering.
+    fn synced_random(&self, world: &World) -> LegacyRand {
+        let (_, uuid_low) = self.entity.entity_uuid.as_u64_pair();
+        let game_time = world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .world_age;
+        LegacyRand::from_seed(uuid_low ^ game_time as u64)
+    }
+
+    /// Fires the Bukkit `PlayerFishEvent` for `state`. Returns `None` when a plugin cancelled it,
+    /// otherwise the experience to drop.
+    fn fire_fish_event(
+        &self,
+        world: &World,
+        state: PlayerFishState,
+        caught: Option<&dyn EntityBase>,
+        hand: Hand,
+        exp_to_drop: i32,
+    ) -> Option<i32> {
+        let Some(owner) = world.get_player_by_uuid(self.owner_uuid) else {
+            return Some(exp_to_drop);
+        };
+        let Some(server) = world.server.upgrade() else {
+            return Some(exp_to_drop);
+        };
+
+        let mut event = PlayerFishEvent::new(
+            owner,
+            caught.map(|entity| entity.get_entity().entity_uuid),
+            self.entity.entity_uuid,
+            caught.map_or_else(String::new, |entity| {
+                entity.get_entity().entity_type.registry_key().to_string()
+            }),
+            state,
+            hand,
+            exp_to_drop,
+        );
+        server.plugin_manager.fire_blocking(&server, &mut event);
+
+        if event.cancelled {
+            None
+        } else {
+            Some(event.exp_to_drop)
+        }
     }
 
     /// Advances the bobber a tick, moving it and running the fishing cycle.
@@ -232,35 +328,19 @@ impl FishingBobberEntity {
             return;
         }
 
-        if self.in_ground.load(Ordering::Relaxed) {
-            let life = self.life.fetch_add(1, Ordering::Relaxed) + 1;
-            if life >= 1200 {
+        if entity.on_ground.load(Ordering::Relaxed) {
+            if self.life.fetch_add(1, Ordering::Relaxed) + 1 >= 1200 {
                 self.discard(player);
+                return;
             }
-            return;
-        }
-        self.life.store(0, Ordering::Relaxed);
-
-        let hooked_id = self.hooked_entity_id.load(Ordering::Relaxed);
-        if hooked_id != 0 {
-            if let Some(hooked) = world.get_entity_by_id(hooked_id) {
-                if hooked.get_entity().removed.load(Ordering::Relaxed) {
-                    self.hooked_entity_id.store(0, Ordering::Relaxed);
-                } else {
-                    let mut hooked_pos = hooked.get_entity().pos.load();
-                    hooked_pos.y += f64::from(hooked.get_entity().height()) * 0.8;
-                    entity.set_pos(hooked_pos);
-                    return;
-                }
-            } else {
-                self.hooked_entity_id.store(0, Ordering::Relaxed);
-            }
+        } else {
+            self.life.store(0, Ordering::Relaxed);
         }
 
         let block_pos = entity.block_pos.load();
-        let (fluid, state) = world.get_fluid_and_fluid_state(&block_pos);
+        let (fluid, fluid_state) = world.get_fluid_and_fluid_state(&block_pos);
         let water_height = if fluid.matches_type(&Fluid::WATER) {
-            f64::from(world.get_fluid_height(&block_pos, fluid, &state))
+            f64::from(world.get_fluid_height(&block_pos, fluid, &fluid_state))
         } else {
             0.0
         };
@@ -269,34 +349,75 @@ impl FishingBobberEntity {
         let mut velocity = entity.velocity.load();
         let start_pos = entity.pos.load();
 
-        // Vanilla `FishingBobberEntity.tick`: entering water turns the flying bobber
-        // into a bobbing one and kills most of its momentum.
-        if in_water && !self.bobbing.swap(true, Ordering::Relaxed) {
-            entity.velocity.store(velocity.multiply(0.3, 0.2, 0.3));
-            return;
-        }
-
-        if in_water {
-            velocity = bob_velocity(
-                velocity,
-                start_pos.y,
-                block_pos.0.y,
-                water_height,
-                rand::random::<f64>(),
-            );
-
-            // Vanilla `FishingBobberEntity.tick`: a biting bobber is pulled down every tick.
-            if self.bite_countdown.load(Ordering::Relaxed) > 0 {
-                velocity.y -= 0.1 * rand::random::<f64>() * rand::random::<f64>();
+        let mut state = self.state.load();
+        match state {
+            HookState::HookedIn(hooked_id) => {
+                if let Some(hooked) = world.get_entity_by_id(hooked_id)
+                    && can_interact_with_level(&*hooked)
+                    && hooked.get_entity().world.load().dimension
+                        == self.entity.world.load().dimension
+                {
+                    let mut hooked_pos = hooked.get_entity().pos.load();
+                    hooked_pos.y += f64::from(hooked.get_entity().height()) * 0.8;
+                    entity.set_pos(hooked_pos);
+                } else {
+                    self.set_hooked_entity(None);
+                }
+                return;
             }
+            // Vanilla `FishingBobberEntity.tick`: entering water turns the flying
+            // bobber into a bobbing one and kills most of its momentum.
+            HookState::Flying if in_water => {
+                entity
+                    .velocity
+                    .store(velocity * Vector3::new(0.3, 0.2, 0.3));
+                self.state.store(HookState::Bobbing {
+                    out_of_water_time: 0,
+                });
+                return;
+            }
+            HookState::Bobbing { out_of_water_time } => {
+                velocity = bob_velocity(
+                    velocity,
+                    start_pos.y,
+                    block_pos.0.y,
+                    water_height,
+                    rand::random::<f64>(),
+                );
 
-            self.catching_fish(&world, &block_pos, &mut velocity);
-        } else {
-            self.bobbing.store(false, Ordering::Relaxed);
+                if in_water {
+                    // Vanilla `FishingBobberEntity.tick`: a biting bobber is pulled down every tick.
+                    if self.bite_countdown.load(Ordering::Relaxed) > 0 {
+                        let mut synced = self.synced_random(&world);
+                        velocity.y -= 0.1 * f64::from(synced.next_f32() * synced.next_f32());
+                    }
+                    self.catching_fish(
+                        &world,
+                        &block_pos,
+                        &mut velocity,
+                        crate::item::hand_holding(player, &Item::FISHING_ROD),
+                    );
+                    state = HookState::Bobbing {
+                        out_of_water_time: out_of_water_time.saturating_sub(1),
+                    };
+                } else {
+                    state = HookState::Bobbing {
+                        out_of_water_time: out_of_water_time
+                            .saturating_add(1)
+                            .min(HookState::MAX_OUT_OF_WATER_TIME),
+                    };
+                }
+            }
+            HookState::Flying => {}
+        }
+        self.state.store(state);
+
+        // Vanilla `FishingBobberEntity.tick`: gravity while airborne and unhooked.
+        if !in_water && !entity.on_ground.load(Ordering::Relaxed) {
             velocity.y -= Self::GRAVITY;
         }
 
-        velocity = velocity.multiply(Self::INERTIA, Self::INERTIA, Self::INERTIA);
+        velocity = velocity * Self::INERTIA;
         entity.velocity.store(velocity);
 
         let new_pos = start_pos.add(&velocity);
@@ -318,47 +439,51 @@ impl FishingBobberEntity {
         // Simplified `FishingBobberEntity.checkCollision`: stop the bobber on the first block.
         let (block_cols, _) = world.get_block_collisions(search_box, caller);
         if !block_cols.is_empty() {
-            self.in_ground.store(true, Ordering::Relaxed);
+            entity.on_ground.store(true, Ordering::Relaxed);
             entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
             return;
         }
 
         entity.set_pos(new_pos);
 
-        // Vanilla `FishingBobberEntity.checkCollision` hooks the first entity it hits.
-        let candidates = world.get_entities_at_box(&search_box);
-        for cand in candidates {
-            if cand.get_entity().entity_id == self.owner_id
-                || cand.get_entity().entity_id == entity.entity_id
-            {
-                continue;
-            }
+        // Vanilla `FishingBobberEntity.checkCollision` only hooks entities while flying.
+        if matches!(state, HookState::Flying) {
+            let candidates = world.get_entities_at_box(&search_box);
+            for cand in candidates {
+                if cand.get_entity().entity_id == self.owner_id
+                    || cand.get_entity().entity_id == entity.entity_id
+                {
+                    continue;
+                }
 
-            if is_projectile(cand.get_entity().entity_type) {
-                continue;
-            }
+                if is_projectile(cand.get_entity().entity_type) {
+                    continue;
+                }
 
-            let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
-            if ebb.intersects(&search_box) {
-                self.hooked_entity_id
-                    .store(cand.get_entity().entity_id, Ordering::Relaxed);
-                entity.set_synced_data(
-                    pumpkin_data::tracked_data::fishing_bobber::HOOKED_ENTITY,
-                    cand.get_entity().entity_id + 1,
-                );
-                return;
+                let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
+                if ebb.intersects(&search_box) {
+                    self.set_hooked_entity(Some(cand.get_entity().entity_id));
+                    return;
+                }
             }
         }
+    }
+
+    /// Vanilla `FishingHook.setHookedEntity`: records the hooked entity and syncs it to the client.
+    fn set_hooked_entity(&self, hooked_id: Option<i32>) {
+        self.state
+            .store(hooked_id.map_or(HookState::Flying, HookState::HookedIn));
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::fishing_bobber::HOOKED_ENTITY,
+            hooked_id.map_or(0, |id| id + 1),
+        );
     }
 
     /// Vanilla `FishingBobberEntity.shouldStopFishing(Player)`.
     fn should_stop_fishing(&self, player: &Player) -> bool {
         let owner = player.get_entity();
         // Vanilla `Entity.canInteractWithLevel` gates the checks below.
-        let can_interact = player.living_entity.health.load() > 0.0
-            && !owner.removed.load(Ordering::Relaxed)
-            && !player.is_spectator();
-        if can_interact {
+        if can_interact_with_level(player) {
             let inventory = player.inventory();
             let holding_rod = inventory.held_item().item.id == Item::FISHING_ROD.id
                 || inventory.get_stack_in_hand(Hand::Left).item.id == Item::FISHING_ROD.id;
@@ -379,7 +504,13 @@ impl FishingBobberEntity {
 
     /// Matches vanilla `FishingBobberEntity.catchingFish(BlockPos)`.
     #[expect(clippy::too_many_lines)]
-    fn catching_fish(&self, world: &World, block_pos: &BlockPos, velocity: &mut Vector3<f64>) {
+    fn catching_fish(
+        &self,
+        world: &World,
+        block_pos: &BlockPos,
+        velocity: &mut Vector3<f64>,
+        hand: Hand,
+    ) {
         let entity = self.get_entity();
         let pos = entity.pos.load();
 
@@ -403,6 +534,8 @@ impl FishingBobberEntity {
                     pumpkin_data::tracked_data::fishing_bobber::DATA_BITING,
                     false,
                 );
+                // Bukkit `PlayerFishEvent`: the bite window closed without a reel.
+                self.fire_fish_event(world, PlayerFishState::FailedAttempt, None, hand, 0);
             }
         } else if self.hook_countdown.load(Ordering::Relaxed) > 0 {
             let hooked = self.hook_countdown.load(Ordering::Relaxed) - fishing_speed;
@@ -468,8 +601,11 @@ impl FishingBobberEntity {
                     pumpkin_data::tracked_data::fishing_bobber::DATA_BITING,
                     true,
                 );
+                // Bukkit `PlayerFishEvent`: a fish bit the hook.
+                self.fire_fish_event(world, PlayerFishState::Bite, None, hand, 0);
                 // Vanilla applies the bite's downward kick in `onSyncedDataUpdated`.
-                velocity.y = -0.4 * (rand::random::<f64>() * 0.4 + 0.6);
+                let mut synced = self.synced_random(world);
+                velocity.y = -0.4 * (f64::from(synced.next_f32()) * 0.4 + 0.6);
             }
         } else if self.wait_countdown.load(Ordering::Relaxed) > 0 {
             let wait = self.wait_countdown.load(Ordering::Relaxed) - fishing_speed;
@@ -513,6 +649,15 @@ impl FishingBobberEntity {
     }
 }
 
+/// Vanilla `Entity.canInteractWithLevel`: alive, not removed and not a spectator.
+fn can_interact_with_level(entity: &dyn EntityBase) -> bool {
+    entity.get_entity().is_alive()
+        && !entity.is_spectator()
+        && entity
+            .get_living_entity()
+            .is_none_or(|living| living.health.load() > 0.0)
+}
+
 /// Vanilla `FishHookState.BOBBING`: damp the bobber toward the water surface.
 fn bob_velocity(
     velocity: Vector3<f64>,
@@ -534,7 +679,7 @@ fn bob_velocity(
 
 /// Vanilla `FishingBobberEntity(Player, Level, int, int)`: the throw origin offset (X/Z,
 /// relative to the owner) and launch velocity for the owner's yaw and pitch.
-fn throw_setup(yaw: f32, pitch: f32, random_triangle: f64) -> (Vector3<f64>, Vector3<f64>) {
+fn throw_setup(yaw: f32, pitch: f32, triangle: Vector3<f64>) -> (Vector3<f64>, Vector3<f64>) {
     let yaw_rad = f64::from(yaw).to_radians();
     let pitch_rad = f64::from(pitch).to_radians();
     let y_sin = (-yaw_rad - std::f64::consts::PI).sin();
@@ -545,9 +690,8 @@ fn throw_setup(yaw: f32, pitch: f32, random_triangle: f64) -> (Vector3<f64>, Vec
     let origin = Vector3::new(-y_sin * 0.3, 0.0, -y_cos * 0.3);
 
     let mut movement = Vector3::new(-y_sin, (-(x_sin / x_cos)).clamp(-5.0, 5.0), -y_cos);
-    let distance = movement.length();
-    let scale = 0.6 / distance + random_triangle;
-    movement = movement.multiply(scale, scale, scale);
+    let scale = 0.6 / movement.length();
+    movement = movement * triangle.add_raw(scale, scale, scale);
     (origin, movement)
 }
 
@@ -590,11 +734,7 @@ mod tests {
             let mut velocity = Vector3::new(0.0, 0.0, 0.0);
             for _ in 0..200 {
                 velocity = bob_velocity(velocity, y, block_y, water_height, 0.5);
-                velocity = velocity.multiply(
-                    FishingBobberEntity::INERTIA,
-                    FishingBobberEntity::INERTIA,
-                    FishingBobberEntity::INERTIA,
-                );
+                velocity = velocity * FishingBobberEntity::INERTIA;
                 y += velocity.y;
                 assert!(
                     y - surface < 2.1,
@@ -612,7 +752,7 @@ mod tests {
     #[test]
     fn throw_uses_the_look_direction() {
         // Due +Z at the default rotation, spawned 0.3 blocks in front of the eye.
-        let (origin, forward) = throw_setup(0.0, 0.0, 0.5);
+        let (origin, forward) = throw_setup(0.0, 0.0, Vector3::new(0.5, 0.5, 0.5));
         assert!((origin.z - 0.3).abs() < 1e-9 && origin.x.abs() < 1e-9);
         assert!(
             forward.x.abs() < 1e-9 && (forward.z - 1.1).abs() < 1e-9 && forward.y.abs() < 1e-9,
@@ -620,7 +760,7 @@ mod tests {
         );
 
         // Looking east throws east and offsets the origin to -X.
-        let (origin, east) = throw_setup(90.0, 0.0, 0.5);
+        let (origin, east) = throw_setup(90.0, 0.0, Vector3::new(0.5, 0.5, 0.5));
         assert!((origin.x + 0.3).abs() < 1e-9 && origin.z.abs() < 1e-9);
         assert!(
             (east.x + 1.1).abs() < 1e-9 && east.z.abs() < 1e-9,
@@ -630,18 +770,35 @@ mod tests {
 
     #[test]
     fn throw_clamps_steep_pitch() {
-        let (_, down) = throw_setup(0.0, 90.0, 0.0);
+        let (_, down) = throw_setup(0.0, 90.0, Vector3::new(0.0, 0.0, 0.0));
         assert!(down.y < 0.0 && down.z > 0.0);
         assert!(
             (down.y / down.z + 5.0).abs() < 1e-9,
             "expected the -Y clamp, got {down:?}"
         );
 
-        let (_, up) = throw_setup(0.0, -90.0, 0.0);
+        let (_, up) = throw_setup(0.0, -90.0, Vector3::new(0.0, 0.0, 0.0));
         assert!(up.y > 0.0 && up.z > 0.0);
         assert!(
             (up.y / up.z - 5.0).abs() < 1e-9,
             "expected the +Y clamp, got {up:?}"
         );
+    }
+
+    #[test]
+    fn throw_scales_each_axis_independently() {
+        // A yaw/pitch where every base component is non-zero, so a per-axis scale is visible.
+        let (yaw, pitch) = (45.0, 30.0);
+        let (_, uniform) = throw_setup(yaw, pitch, Vector3::new(0.0, 0.0, 0.0));
+        let (_, varied) = throw_setup(yaw, pitch, Vector3::new(0.1, 0.2, 0.3));
+
+        // Vanilla multiplies each axis by its own `0.6 / dist + triangle` value; a single shared
+        // scale would leave these ratios equal.
+        let ratio_x = varied.x / uniform.x;
+        let ratio_y = varied.y / uniform.y;
+        let ratio_z = varied.z / uniform.z;
+        assert!((ratio_x - ratio_y).abs() > 1e-6);
+        assert!((ratio_y - ratio_z).abs() > 1e-6);
+        assert!((ratio_x - ratio_z).abs() > 1e-6);
     }
 }

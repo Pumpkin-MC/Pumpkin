@@ -159,6 +159,11 @@ impl JavaClient {
             return true;
         }
 
+        // Reeling in is reported by the hook itself (`CAUGHT_ENTITY`/`CAUGHT_FISH`).
+        if player.fishing_bobber.load(Ordering::Relaxed) != -1 {
+            return true;
+        }
+
         // TODO: Apply fishing rod durability on retrieval based on catch type.
         let mut fish_event = PlayerFishEvent::new(
             player.clone(),
