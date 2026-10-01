@@ -5,7 +5,7 @@ use std::sync::atomic::Ordering;
 use crate::entity::combat;
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase};
-use crate::item::{ItemBehaviour, ItemMetadata};
+use crate::item::{ItemBehaviour, ItemMetadata, hand_holding};
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::attributes::Attributes;
@@ -47,11 +47,7 @@ impl ItemBehaviour for SpearItem {
         }
 
         let inventory = player.inventory();
-        let hand = if inventory.held_item().item.id == item.id {
-            Hand::Right
-        } else {
-            Hand::Left
-        };
+        let hand = hand_holding(player, item);
         let stack = inventory.get_stack_in_hand(hand);
         let sound = stack
             .get_data_component::<KineticWeaponImpl>()

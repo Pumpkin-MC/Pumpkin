@@ -6,7 +6,7 @@ use crate::enchantment::EnchantmentHelper;
 use crate::entity::Entity;
 use crate::entity::player::Player;
 use crate::entity::projectile::fishing_bobber::FishingBobberEntity;
-use crate::item::{ItemBehaviour, ItemMetadata};
+use crate::item::{ItemBehaviour, ItemMetadata, hand_holding};
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -25,15 +25,6 @@ impl ItemMetadata for FishingRodItem {
 /// `0.4 / (random * 0.4 + 0.8)`, so the throw and retrieve sounds vary around 0.4.
 fn bobber_sound_pitch(random: f32) -> f32 {
     0.4 / (random * 0.4 + 0.8)
-}
-
-/// The hand holding `item`, used when the caller did not report one.
-fn hand_holding(player: &Player, item: &Item) -> Hand {
-    if player.inventory().held_item().item.id == item.id {
-        Hand::Right
-    } else {
-        Hand::Left
-    }
 }
 
 impl ItemBehaviour for FishingRodItem {
