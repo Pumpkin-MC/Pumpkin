@@ -8,7 +8,7 @@ impl BedrockClient {
         &self,
         player: &Arc<Player>,
         server: &Server,
-        packet: SPlayerAction,
+        packet: &SPlayerAction,
     ) {
         if !player.has_client_loaded()
             || ((player.living_entity.dead.load(Ordering::Relaxed)
@@ -205,10 +205,7 @@ impl BedrockClient {
                         }
                     } else {
                         let runtime_id = pumpkin_data::BlockState::to_be_network_id(state.id);
-                        self.try_enqueue_client_packet(&CUpdateBlock::new(
-                            location,
-                            runtime_id as u32,
-                        ));
+                        self.try_enqueue_client_packet(&CUpdateBlock::new(location, runtime_id));
                         if matches!(action, PlayerAction::StopDestroyBlock) {
                             player.stop_mining();
                         } else {

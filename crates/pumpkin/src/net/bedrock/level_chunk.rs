@@ -16,7 +16,7 @@ const VERSION: u8 = 9;
 
 fn write_block_storage(
     writer: &mut Vec<u8>,
-    network_repr: BeNetworkSerialization<u16>,
+    network_repr: BeNetworkSerialization<u32>,
 ) -> Result<(), Error> {
     (network_repr.bits_per_entry << 1 | 1).write(writer)?;
 
@@ -24,12 +24,13 @@ fn write_block_storage(
         data.write(writer)?;
     }
 
+    // Palette entries are block network IDs, which Bedrock serializes as signed varints.
     match network_repr.palette {
-        NetworkPalette::Single(id) => VarInt(i32::from(id)).write(writer)?,
+        NetworkPalette::Single(id) => VarInt(id as i32).write(writer)?,
         NetworkPalette::Indirect(palette) => {
             VarInt(palette.len() as i32).write(writer)?;
             for id in palette {
-                VarInt(i32::from(id)).write(writer)?;
+                VarInt(id as i32).write(writer)?;
             }
         }
         NetworkPalette::Direct => {}
@@ -339,8 +340,8 @@ mod tests {
         assert_eq!(
             water_palette,
             [
-                u32::from(BlockState::to_be_network_id(Block::AIR.default_state.id)),
-                u32::from(BlockState::to_be_network_id(Block::WATER.default_state.id)),
+                BlockState::to_be_network_id(Block::AIR.default_state.id),
+                BlockState::to_be_network_id(Block::WATER.default_state.id),
             ]
         );
     }

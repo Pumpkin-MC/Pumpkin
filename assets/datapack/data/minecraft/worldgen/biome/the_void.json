@@ -1,0 +1,43 @@
+{
+  "attributes": {
+    "minecraft:gameplay/natural_mob_spawns": {
+      "argument": {
+        "spawn_costs": {},
+        "spawns_by_category": {
+          "ambient": [],
+          "axolotls": [],
+          "creature": [],
+          "misc": [],
+          "monster": [],
+          "underground_water_creature": [],
+          "water_ambient": [],
+          "water_creature": []
+        }
+      },
+      "modifier": "overlay"
+    },
+    "minecraft:visual/sky_color": "#7ba4ff"
+  },
+  "carvers": [],
+  "downfall": 0.5,
+  "effects": {
+    "water_color": "#3f76e4"
+  },
+  "features": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+      "minecraft:void_start_platform"
+    ]
+  ],
+  "has_precipitation": false,
+  "temperature": 0.5
+}

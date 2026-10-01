@@ -1,0 +1,53 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "modifier": [
+            {
+              "type": "minecraft:set_count",
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:lime_candle",
+                "state": {
+                  "candles": "2"
+                }
+              },
+              "count": 2
+            },
+            {
+              "type": "minecraft:set_count",
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:lime_candle",
+                "state": {
+                  "candles": "3"
+                }
+              },
+              "count": 3
+            },
+            {
+              "type": "minecraft:set_count",
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:lime_candle",
+                "state": {
+                  "candles": "4"
+                }
+              },
+              "count": 4
+            },
+            {
+              "type": "minecraft:explosion_decay"
+            }
+          ],
+          "name": "minecraft:lime_candle"
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:blocks/lime_candle"
+}

@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block,
-    block_properties::{HorizontalFacing, OakFenceLikeProperties, OakStairsLikeProperties},
+    block_properties::{HorizontalFacing, OakFenceLikeProperties, WhiteWoolStairsLikeProperties},
 };
 use pumpkin_util::{BlockDirection, math::block_box::BlockBox, random::RandomGenerator};
 
@@ -96,7 +96,7 @@ impl StructurePieceBase for CorridorStairsPiece {
         let air = Block::AIR.default_state;
 
         // Stair block facing south (going deeper into the structure)
-        let mut stair_props = OakStairsLikeProperties::default(&Block::NETHER_BRICK_STAIRS);
+        let mut stair_props = WhiteWoolStairsLikeProperties::default(&Block::NETHER_BRICK_STAIRS);
         stair_props.facing = HorizontalFacing::South;
         let stair =
             pumpkin_data::BlockState::from_id(stair_props.to_state_id(&Block::NETHER_BRICK_STAIRS));

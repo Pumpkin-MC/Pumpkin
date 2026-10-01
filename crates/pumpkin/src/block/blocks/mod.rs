@@ -63,6 +63,7 @@ pub mod lectern;
 pub mod shelf;
 pub mod signs;
 pub mod skull_block;
+pub mod straw_bed;
 pub mod wither_skull;
 
 // Lighting, heat & fire

@@ -1,0 +1,79 @@
+{
+  "type": "minecraft:simple_random_selector",
+  "features": [
+    {
+      "feature": {
+        "type": "minecraft:speleothem",
+        "base_block": "minecraft:sulfur",
+        "pointed_block": "minecraft:sulfur_spike",
+        "replaceable_blocks": "#minecraft:sulfur_spike_replaceable_blocks"
+      },
+      "placement": [
+        {
+          "type": "minecraft:environment_scan",
+          "allowed_search_condition": {
+            "type": "minecraft:any_of",
+            "predicates": [
+              {
+                "type": "minecraft:matching_block_tag",
+                "tag": "minecraft:air"
+              },
+              {
+                "type": "minecraft:matching_blocks",
+                "blocks": "minecraft:water"
+              }
+            ]
+          },
+          "direction_of_search": "down",
+          "max_steps": 12,
+          "target_condition": {
+            "type": "minecraft:solid"
+          }
+        },
+        {
+          "type": "minecraft:offset",
+          "x": 0,
+          "y": 1,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "feature": {
+        "type": "minecraft:speleothem",
+        "base_block": "minecraft:sulfur",
+        "pointed_block": "minecraft:sulfur_spike",
+        "replaceable_blocks": "#minecraft:sulfur_spike_replaceable_blocks"
+      },
+      "placement": [
+        {
+          "type": "minecraft:environment_scan",
+          "allowed_search_condition": {
+            "type": "minecraft:any_of",
+            "predicates": [
+              {
+                "type": "minecraft:matching_block_tag",
+                "tag": "minecraft:air"
+              },
+              {
+                "type": "minecraft:matching_blocks",
+                "blocks": "minecraft:water"
+              }
+            ]
+          },
+          "direction_of_search": "up",
+          "max_steps": 12,
+          "target_condition": {
+            "type": "minecraft:solid"
+          }
+        },
+        {
+          "type": "minecraft:offset",
+          "x": 0,
+          "y": -1,
+          "z": 0
+        }
+      ]
+    }
+  ]
+}

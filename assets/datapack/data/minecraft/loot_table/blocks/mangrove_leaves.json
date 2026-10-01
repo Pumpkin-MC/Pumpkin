@@ -1,0 +1,55 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:alternatives",
+          "children": [
+            {
+              "type": "minecraft:item",
+              "condition": {
+                "type": "minecraft:any_of",
+                "terms": [
+                  "minecraft:tool/can_shear",
+                  "minecraft:tool/can_silk_touch"
+                ]
+              },
+              "name": "minecraft:mangrove_leaves"
+            },
+            {
+              "type": "minecraft:item",
+              "condition": {
+                "type": "minecraft:table_bonus",
+                "chances": [
+                  0.02,
+                  0.022222223,
+                  0.025,
+                  0.033333335,
+                  0.1
+                ],
+                "enchantment": "minecraft:fortune"
+              },
+              "modifier": [
+                {
+                  "type": "minecraft:set_count",
+                  "count": {
+                    "type": "minecraft:uniform",
+                    "max": 2,
+                    "min": 1
+                  }
+                },
+                {
+                  "type": "minecraft:explosion_decay"
+                }
+              ],
+              "name": "minecraft:stick"
+            }
+          ]
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:blocks/mangrove_leaves"
+}

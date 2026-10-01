@@ -1,0 +1,72 @@
+{
+  "values": [
+    {
+      "id": "#minecraft:enchantable/armor",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/equippable",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/sharp_weapon",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/weapon",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/sweeping",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/mining",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/mining_loot",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/fishing",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/trident",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/bow",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/crossbow",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/mace",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/fire_aspect",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/durability",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/vanishing",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/lunge",
+      "required": false
+    },
+    {
+      "id": "#minecraft:enchantable/melee_weapon",
+      "required": false
+    }
+  ]
+}

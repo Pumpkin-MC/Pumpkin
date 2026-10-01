@@ -7,13 +7,35 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::block_properties::WaterCauldronLikeProperties;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::PotionContentsImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::potion::Potion;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
+
+/// A potion holding water; the contents component is what names it and makes it
+/// brewable.
+#[must_use]
+pub fn water_bottle() -> ItemStack {
+    ItemStack::new_with_component(
+        1,
+        &Item::POTION,
+        vec![(
+            DataComponent::PotionContents,
+            Some(Box::new(PotionContentsImpl {
+                potion_id: Some(i32::from(Potion::WATER.id)),
+                custom_color: None,
+                custom_effects: Vec::new(),
+                custom_name: None,
+            }) as Box<_>),
+        )],
+    )
+}
 
 pub struct GlassBottleItem;
 
@@ -43,7 +65,7 @@ impl ItemBehaviour for GlassBottleItem {
                 &hit_pos.to_f64(),
             );
 
-            let water_bottle = ItemStack::new(1, &Item::POTION);
+            let water_bottle = water_bottle();
             let mut held = player.inventory().held_item();
             let mut is_main = true;
             if held.is_empty() || held.item.id != Item::GLASS_BOTTLE.id {
@@ -128,7 +150,7 @@ impl ItemBehaviour for GlassBottleItem {
             &check_pos.to_f64(),
         );
 
-        let mut water_bottle = ItemStack::new(1, &Item::POTION);
+        let mut water_bottle = water_bottle();
         if item.item_count == 1 && player.gamemode.load() != pumpkin_util::GameMode::Creative {
             *item = water_bottle;
         } else {

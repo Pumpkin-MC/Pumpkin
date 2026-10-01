@@ -1,9 +1,0 @@
-{
-  "replace": false,
-  "values": [
-    "#minecraft:small_flowers",
-    "#minecraft:tall_flowers",
-    "minecraft:flowering_azalea_leaves",
-    "minecraft:flowering_azalea"
-  ]
-}

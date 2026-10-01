@@ -4,7 +4,7 @@ use pumpkin_data::block_properties::{
     ChestLikeProperties, ChestType, CopperBulbLikeProperties, CopperGolemStatueLikeProperties,
     DoubleBlockHalf, EnumVariants, IronChainLikeProperties, LanternLikeProperties,
     MangroveRootsLikeProperties, OakDoorLikeProperties, OakFenceLikeProperties,
-    OakStairsLikeProperties, OakTrapdoorLikeProperties, ResinBrickSlabLikeProperties,
+    OakTrapdoorLikeProperties, WhiteWoolSlabLikeProperties, WhiteWoolStairsLikeProperties,
 };
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, Mirror, Rotation};
@@ -327,13 +327,13 @@ pub fn with_properties_of(
 
     // 2. Stairs
     if from_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_STAIRS) {
-        let props = OakStairsLikeProperties::from_state_id(from_state_id);
+        let props = WhiteWoolStairsLikeProperties::from_state_id(from_state_id);
         return props.to_state_id(to_block);
     }
 
     // 3. Slabs
     if from_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SLABS) {
-        let props = ResinBrickSlabLikeProperties::from_state_id(from_state_id);
+        let props = WhiteWoolSlabLikeProperties::from_state_id(from_state_id);
         return props.to_state_id(to_block);
     }
 

@@ -386,18 +386,14 @@ macro_rules! impl_block_entity_for_cooking {
                 let bottom_items_is_empty = bottom_item.is_empty();
                 if self.is_burning() || !bottom_items_is_empty && !is_top_items_empty {
                     if !self.is_burning() && can_accept_output {
-                        let base_fuel_ticks =
-                            pumpkin_data::fuels::get_item_burn_ticks(bottom_item.item.id)
-                                .unwrap_or(0);
-
-                        let adjusted_fuel_ticks = if matches!(
+                        let is_fast = matches!(
                             $recipe_kind,
                             CookingRecipeKind::Blasting | CookingRecipeKind::Smoking
-                        ) {
-                            base_fuel_ticks / 2
-                        } else {
-                            base_fuel_ticks
-                        };
+                        );
+                        let fuel_component = bottom_item
+                            .get_data_component::<pumpkin_data::data_component_impl::CookingFuelImpl>();
+                        let adjusted_fuel_ticks = fuel_component
+                            .map_or(0, |fuel| fuel.get_burn_ticks(is_fast));
 
                         let mut burn_ticks = adjusted_fuel_ticks;
                         let mut burn_cancelled = false;
@@ -422,16 +418,32 @@ macro_rules! impl_block_entity_for_cooking {
                                 is_dirty = true;
                                 if let Ok(mut items_guard) = self.items.try_write() {
                                     if !items_guard[1].is_empty() {
+                                        let remainder = items_guard[1]
+                                            .get_data_component::<
+                                                pumpkin_data::data_component_impl::UseRemainderImpl,
+                                            >()
+                                            .and_then(|component| component.remainder.as_deref())
+                                            .and_then(pumpkin_data::item::Item::from_registry_key);
                                         items_guard[1].decrement(1);
-                                        if let Some(remainder_id) =
-                                            pumpkin_data::recipe_remainder::get_recipe_remainder_id(
-                                                items_guard[1].item.id,
-                                            )
-                                            && items_guard[1].is_empty()
-                                            && let Some(remainder_item) =
-                                                pumpkin_data::item::Item::from_id(remainder_id)
+                                        if let Some(remainder_item) = remainder
                                         {
-                                            items_guard[1] = ItemStack::new(1, remainder_item);
+                                            let remainder_stack = ItemStack::new(1, remainder_item);
+                                            if items_guard[1].is_empty() {
+                                                items_guard[1] = remainder_stack;
+                                            } else {
+                                                let pos = self.position.to_centered_f64();
+                                                let entity = $crate::entity::Entity::new(
+                                                    world.clone(),
+                                                    pos,
+                                                    &pumpkin_data::entity::EntityType::ITEM,
+                                                );
+                                                world.spawn_entity(std::sync::Arc::new(
+                                                    $crate::entity::item::ItemEntity::new(
+                                                        entity,
+                                                        remainder_stack,
+                                                    ),
+                                                ));
+                                            }
                                         }
                                     }
                                 }

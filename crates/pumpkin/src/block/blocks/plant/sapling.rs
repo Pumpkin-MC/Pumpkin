@@ -33,6 +33,7 @@ impl SaplingBlock {
             "cherry_sapling" => TreeType::Cherry,
             "azalea" | "flowering_azalea" => TreeType::Azalea,
             "mangrove_propagule" => TreeType::Mangrove,
+            "poplar_sapling" => TreeType::Poplar,
             _ => TreeType::Custom,
         }
     }

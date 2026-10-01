@@ -14,6 +14,7 @@ mod banlist;
 mod bossbar;
 mod clear;
 mod clone;
+mod compute;
 mod damage;
 mod data;
 mod datapack;
@@ -51,6 +52,7 @@ mod place;
 mod playsound;
 mod plugin;
 mod plugins;
+mod posteffect;
 mod pumpkin;
 mod raid;
 mod random;
@@ -76,6 +78,7 @@ mod stop;
 mod stopsound;
 mod stopwatch;
 mod summon;
+mod swing;
 mod tag;
 mod team;
 mod teammsg;
@@ -172,6 +175,9 @@ pub fn default_dispatcher(
     enchant::register(&mut dispatcher, registry);
     effect::register(&mut dispatcher, registry);
     summon::register(&mut dispatcher, registry);
+    swing::register(&mut dispatcher, registry);
+    compute::register(&mut dispatcher, registry);
+    posteffect::register(&mut dispatcher, registry);
     damage::register(&mut dispatcher, registry);
     rotate::register(&mut dispatcher, registry);
     tellraw::register(&mut dispatcher, registry);
@@ -297,6 +303,14 @@ fn register_permissions(registry: &PermissionRegistry) {
             "minecraft:command.selector",
             "Allows a player to use selector variables",
             PermissionDefault::Allow,
+        ))
+        .unwrap_or_else(|e| tracing::warn!("{e}"));
+    // Checked with vanilla's isOp mapped to level One, see `NBT_PLACE_PERMISSION`.
+    registry
+        .register_permission(Permission::new(
+            crate::item::items::spawn_egg::NBT_PLACE_PERMISSION,
+            "Allows a player to place op-only entity data from spawn eggs",
+            PermissionDefault::Op(PermissionLvl::One),
         ))
         .unwrap_or_else(|e| tracing::warn!("{e}"));
 }

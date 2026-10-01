@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{ResinBrickSlabLikeProperties, SlabType},
+    block_properties::{SlabType, WhiteWoolSlabLikeProperties},
 };
 use pumpkin_util::{
     BlockDirection,
@@ -299,7 +299,7 @@ impl StructurePieceBase for FiveWayCrossingPiece {
         inner.fill_with_outline(chunk, &box_limit, false, 4, 5, 7, 4, 5, 9, slab, slab);
         inner.fill_with_outline(chunk, &box_limit, false, 8, 5, 7, 8, 5, 9, slab, slab);
 
-        let mut props = ResinBrickSlabLikeProperties::default(&Block::SMOOTH_STONE_SLAB);
+        let mut props = WhiteWoolSlabLikeProperties::default(&Block::SMOOTH_STONE_SLAB);
         props.r#type = SlabType::Double;
         let double_slab = BlockState::from_id(props.to_state_id(&Block::SMOOTH_STONE_SLAB));
         inner.fill_with_outline(

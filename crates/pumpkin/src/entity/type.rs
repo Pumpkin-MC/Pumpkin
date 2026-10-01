@@ -10,6 +10,7 @@ use crate::entity::boss::ender_dragon::EnderDragonEntity;
 use crate::entity::boss::wither::WitherEntity;
 use crate::entity::decoration::{
     armor_stand::ArmorStandEntity,
+    cushion::CushionEntity,
     display::{BlockDisplayEntity, ItemDisplayEntity, TextDisplayEntity},
     end_crystal::EndCrystalEntity,
     item_frame::ItemFrameEntity,
@@ -235,6 +236,7 @@ pub fn from_type(
             crate::entity::area_effect_cloud::AreaEffectCloudEntity::new(entity)
         }
         id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),
+        id if id == EntityType::CUSHION.id => Arc::new(CushionEntity::new(entity, 0)),
         id if id == EntityType::BLOCK_DISPLAY.id => BlockDisplayEntity::new(entity),
         id if id == EntityType::ITEM_DISPLAY.id => ItemDisplayEntity::new(entity),
         id if id == EntityType::TEXT_DISPLAY.id => TextDisplayEntity::new(entity),
@@ -263,7 +265,11 @@ pub fn from_type(
             Arc::new(falling)
         }
         id if id == EntityType::EXPERIENCE_ORB.id => Arc::new(ExperienceOrbEntity::new(entity, 1)),
-        id if id == EntityType::TNT.id => Arc::new(TNTEntity::new(entity, 4.0, 80)),
+        id if id == EntityType::TNT.id => Arc::new(TNTEntity::new(
+            entity,
+            TNTEntity::DEFAULT_POWER,
+            TNTEntity::DEFAULT_FUSE,
+        )),
         id if id == EntityType::ITEM.id => Arc::new(ItemEntity::new_empty(entity)),
         id if id == EntityType::ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
         id if id == EntityType::SPECTRAL_ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
@@ -328,7 +334,9 @@ pub fn from_type(
             || id == EntityType::BAMBOO_RAFT.id
             || id == EntityType::BAMBOO_CHEST_RAFT.id
             || id == EntityType::CHERRY_BOAT.id
-            || id == EntityType::CHERRY_CHEST_BOAT.id =>
+            || id == EntityType::CHERRY_CHEST_BOAT.id
+            || id == EntityType::POPLAR_BOAT.id
+            || id == EntityType::POPLAR_CHEST_BOAT.id =>
         {
             Arc::new(BoatEntity::new(entity))
         }

@@ -39,6 +39,8 @@ impl BoatItem {
             val if val == Item::CHERRY_CHEST_BOAT.id => &EntityType::CHERRY_CHEST_BOAT,
             val if val == Item::PALE_OAK_BOAT.id => &EntityType::PALE_OAK_BOAT,
             val if val == Item::PALE_OAK_CHEST_BOAT.id => &EntityType::PALE_OAK_CHEST_BOAT,
+            val if val == Item::POPLAR_BOAT.id => &EntityType::POPLAR_BOAT,
+            val if val == Item::POPLAR_CHEST_BOAT.id => &EntityType::POPLAR_CHEST_BOAT,
             val if val == Item::BAMBOO_RAFT.id => &EntityType::BAMBOO_RAFT,
             val if val == Item::BAMBOO_CHEST_RAFT.id => &EntityType::BAMBOO_CHEST_RAFT,
             _ => {
@@ -79,6 +81,8 @@ impl ItemMetadata for BoatItem {
             Item::CHERRY_CHEST_BOAT.id,
             Item::PALE_OAK_BOAT.id,
             Item::PALE_OAK_CHEST_BOAT.id,
+            Item::POPLAR_BOAT.id,
+            Item::POPLAR_CHEST_BOAT.id,
             Item::BAMBOO_RAFT.id,
             Item::BAMBOO_CHEST_RAFT.id,
         ]

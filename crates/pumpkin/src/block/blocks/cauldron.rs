@@ -54,7 +54,14 @@ fn give_item_or_drop(
     world: &std::sync::Arc<crate::world::World>,
     item: &'static Item,
 ) {
-    let mut stack = ItemStack::new(1, item);
+    give_stack_or_drop(player, world, ItemStack::new(1, item));
+}
+
+fn give_stack_or_drop(
+    player: &crate::entity::player::Player,
+    world: &std::sync::Arc<crate::world::World>,
+    mut stack: ItemStack,
+) {
     let was_added = player.inventory.insert_stack_anywhere(&mut stack);
     if !was_added && !stack.is_empty() {
         world.drop_stack(&player.position().to_block_pos(), stack);
@@ -259,7 +266,11 @@ impl BlockBehaviour for CauldronBlock {
                         &args.position.to_f64(),
                     );
                     args.item_stack.decrement_unless_creative(gamemode, 1);
-                    give_item_or_drop(args.player, args.world, &Item::POTION);
+                    give_stack_or_drop(
+                        args.player,
+                        args.world,
+                        crate::item::items::glass_bottle::water_bottle(),
+                    );
                     args.player.increment_stat(
                         pumpkin_data::statistic::StatisticCategory::Custom,
                         pumpkin_data::statistic::CustomStatistic::UseCauldron as i32,

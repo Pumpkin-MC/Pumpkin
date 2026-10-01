@@ -7,60 +7,12 @@ use std::fs;
 use crate::version::JavaMinecraftVersion;
 
 /// The newest protocol version whose registry data is used as the fallback for unknown versions.
-const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
+const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_3;
 
 /// Generates the `TokenStream` for the `Registry` and `StaticRegistry` structs, version-keyed
 /// static registry data, and the `Registry::get_synced` method.
 pub(crate) fn build() -> TokenStream {
-    let versions = [
-        ("1_16", "V_1_16"),
-        ("1_16_2", "V_1_16_2"),
-        ("1_17", "V_1_17"),
-        ("1_18", "V_1_18"),
-        ("1_19", "V_1_19"),
-        ("1_20", "V_1_20"),
-        ("1_20_2", "V_1_20_2"),
-        ("1_21", "V_1_21"),
-        ("1_21_2", "V_1_21_2"),
-        ("1_21_4", "V_1_21_4"),
-        ("1_21_5", "V_1_21_5"),
-        ("1_21_6", "V_1_21_6"),
-        ("1_21_7", "V_1_21_7"),
-        ("1_21_9", "V_1_21_9"),
-        ("1_21_11", "V_1_21_11"),
-        ("26_1", "V_26_1"),
-        ("26_2", "V_26_2"),
-    ];
-
-    let version_mapping = [
-        (JavaMinecraftVersion::V_1_16, "V_1_16"),
-        (JavaMinecraftVersion::V_1_16_1, "V_1_16"),
-        (JavaMinecraftVersion::V_1_16_2, "V_1_16_2"),
-        (JavaMinecraftVersion::V_1_16_3, "V_1_16_2"),
-        (JavaMinecraftVersion::V_1_16_4, "V_1_16_2"),
-        (JavaMinecraftVersion::V_1_17, "V_1_17"),
-        (JavaMinecraftVersion::V_1_17_1, "V_1_17"),
-        (JavaMinecraftVersion::V_1_18, "V_1_18"),
-        (JavaMinecraftVersion::V_1_18_2, "V_1_18"),
-        (JavaMinecraftVersion::V_1_19, "V_1_19"),
-        (JavaMinecraftVersion::V_1_19_1, "V_1_19"),
-        (JavaMinecraftVersion::V_1_19_3, "V_1_19"),
-        (JavaMinecraftVersion::V_1_19_4, "V_1_20"),
-        (JavaMinecraftVersion::V_1_20, "V_1_20"),
-        (JavaMinecraftVersion::V_1_20_2, "V_1_20_2"),
-        (JavaMinecraftVersion::V_1_20_3, "V_1_20_2"),
-        (JavaMinecraftVersion::V_1_20_5, "V_1_21"),
-        (JavaMinecraftVersion::V_1_21, "V_1_21"),
-        (JavaMinecraftVersion::V_1_21_2, "V_1_21_2"),
-        (JavaMinecraftVersion::V_1_21_4, "V_1_21_4"),
-        (JavaMinecraftVersion::V_1_21_5, "V_1_21_5"),
-        (JavaMinecraftVersion::V_1_21_6, "V_1_21_6"),
-        (JavaMinecraftVersion::V_1_21_7, "V_1_21_7"),
-        (JavaMinecraftVersion::V_1_21_9, "V_1_21_9"),
-        (JavaMinecraftVersion::V_1_21_11, "V_1_21_11"),
-        (JavaMinecraftVersion::V_26_1, "V_26_1"),
-        (JavaMinecraftVersion::V_26_2, "V_26_2"),
-    ];
+    let versions = [("26_3", "V_26_3")];
 
     const SYNCED_REGISTRIES: &[&str] = &[
         "worldgen/biome",
@@ -92,12 +44,13 @@ pub(crate) fn build() -> TokenStream {
         "test_environment",
         "test_instance",
         "sulfur_cube_archetype",
+        "decorated_pot_pattern",
+        "block_transformer",
+        "worldgen/block_state_provider",
     ];
 
     let process_version = |ver_folder: &str| -> TokenStream {
-        let base_path = std::path::Path::new("../../assets/datapacks")
-            .join(ver_folder)
-            .join("data/minecraft");
+        let base_path = std::path::Path::new("../../assets/datapack/data/minecraft");
 
         let mut data: IndexMap<String, IndexMap<String, Value>> = IndexMap::new();
 
@@ -180,10 +133,17 @@ pub(crate) fn build() -> TokenStream {
                         }
 
                         let nbt_tag = json_to_nbt_tag(entry_data);
-                        let bytes = if let pumpkin_nbt::tag::NbtTag::Compound(compound) = nbt_tag {
-                            pumpkin_nbt::Nbt::from(compound).write_unnamed()
-                        } else {
-                            Vec::new().into()
+                        let bytes = match nbt_tag {
+                            pumpkin_nbt::tag::NbtTag::Compound(compound) => {
+                                pumpkin_nbt::Nbt::from(compound).write_unnamed()
+                            }
+                            other => {
+                                let mut bytes = Vec::new();
+                                let mut writer =
+                                    pumpkin_nbt::serializer::NbtWriteHelperJava::new(&mut bytes);
+                                let _ = other.serialize(&mut writer);
+                                bytes.into()
+                            }
                         };
                         let byte_literal = Literal::byte_string(&bytes);
 
@@ -218,16 +178,6 @@ pub(crate) fn build() -> TokenStream {
         });
     }
 
-    let mut match_arms = TokenStream::new();
-    for (ver, ident_str) in version_mapping {
-        let ident = format_ident!("REGISTRY_{ident_str}");
-        match_arms.extend(quote! {
-            #ver => #ident,
-        });
-    }
-
-    let latest_registry = format_ident!("REGISTRY_V_26_2");
-
     quote! {
         use pumpkin_util::resource_location::ResourceLocation;
         use pumpkin_util::version::JavaMinecraftVersion;
@@ -256,12 +206,8 @@ pub(crate) fn build() -> TokenStream {
 
         impl Registry {
             #[must_use]
-            pub fn get_synced(version: JavaMinecraftVersion) -> Vec<Self> {
-                #[allow(clippy::match_same_arms)]
-                let static_regs = match version {
-                    #match_arms
-                    _ => #latest_registry,
-                };
+            pub fn get_synced(_version: JavaMinecraftVersion) -> Vec<Self> {
+                let static_regs = REGISTRY_V_26_3;
 
                 static_regs.iter().map(|static_reg| {
                     let registry_id = if static_reg.registry_id.contains(':') {

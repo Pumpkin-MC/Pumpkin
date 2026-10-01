@@ -117,10 +117,8 @@ impl Player {
 
         let je_packet = CBossEvent::new(&bossbar.uuid, boss_action);
         let boss_id = bossbar_bedrock_id(&bossbar.uuid);
-        let player_id = VarLong(self.entity_id() as i64);
         let be_packet = BBossEvent::show(
             boss_id,
-            player_id,
             bossbar.title.clone().get_text(),
             bossbar.health,
             bossbar.color.to_bedrock(),
@@ -129,7 +127,7 @@ impl Player {
 
         self.try_enqueue_packet_editioned(&je_packet, &be_packet);
         if let ClientPlatform::Bedrock(bedrock) = self.client.as_ref() {
-            let register_packet = BBossEvent::register_player(boss_id, player_id);
+            let register_packet = BBossEvent::register_player(boss_id);
             if let Ok(data) = bedrock.serialize_packet(&register_packet) {
                 bedrock.try_enqueue_packet(data);
             }
@@ -140,8 +138,7 @@ impl Player {
         let boss_action = BosseventAction::Remove;
         let je_packet = CBossEvent::new(&uuid, boss_action);
         let boss_id = bossbar_bedrock_id(&uuid);
-        let player_id = VarLong(self.entity_id() as i64);
-        let unregister_packet = BBossEvent::unregister_player(boss_id, player_id);
+        let unregister_packet = BBossEvent::unregister_player(boss_id);
         let be_packet = BBossEvent::hide(boss_id);
 
         self.try_enqueue_packet_editioned(&je_packet, &be_packet);
