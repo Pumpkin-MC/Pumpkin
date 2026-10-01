@@ -1,11 +1,15 @@
+use std::cell::OnceCell;
+
+use pumpkin_data::Block;
 use pumpkin_data::BlockState;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{self, RegistryKey};
 pub use pumpkin_util::loot_table::{
-    DynamicLootCondition, DynamicLootEntry, DynamicLootPool, DynamicLootTable, LootBonusFormula,
-    LootCondition, LootEntry, LootPool, LootTable,
+    DynamicLootCondition, DynamicLootEntry, DynamicLootPool, DynamicLootTable, LootBlockCondition,
+    LootBonusFormula, LootCondition, LootEntry, LootPool, LootStateCount, LootTable,
 };
 use pumpkin_util::random::{RandomImpl, xoroshiro128::Xoroshiro};
 
@@ -278,12 +282,15 @@ pub fn generate_loot_with_context(
                         } else {
                             0
                         };
-
-                    let mut final_count = base_count;
-                    if let Some(bonus) = entry.bonus_formula {
-                        final_count =
-                            apply_bonus_formula(final_count, bonus, fortune_level, &mut rng);
-                    }
+                    let final_count = modify_count(
+                        base_count,
+                        entry.state_counts,
+                        entry.bonus_formula,
+                        entry.bonus_condition,
+                        fortune_level,
+                        params,
+                        &mut rng,
+                    );
 
                     if final_count > 0 {
                         let item_key = entry.item.strip_prefix("minecraft:").unwrap_or(entry.item);
@@ -383,6 +390,7 @@ pub fn generate_dynamic_loot_with_context(
             pool.empty_weight,
             &eligible_entries,
             fortune_level,
+            params,
             &mut rng,
             &mut items_to_place,
         );
@@ -391,11 +399,86 @@ pub fn generate_dynamic_loot_with_context(
     items_to_place
 }
 
+/// Applies the entry's `set_count` modifiers in order, with its bonus formula before the first
+/// one marked `after_bonus` (or last if there is none).
+fn modify_count(
+    mut count: i32,
+    state_counts: &[LootStateCount],
+    bonus_formula: Option<LootBonusFormula>,
+    bonus_condition: Option<&LootBlockCondition>,
+    fortune_level: i32,
+    params: &LootContextParameters,
+    rng: &mut Xoroshiro,
+) -> i32 {
+    let props = OnceCell::new();
+    let matches = |condition: &LootBlockCondition| state_matches(condition, params, &props);
+    let mut bonus = bonus_formula.filter(|_| bonus_condition.is_none_or(matches));
+    for modifier in state_counts {
+        if modifier.after_bonus
+            && let Some(formula) = bonus.take()
+        {
+            count = apply_bonus_formula(count, formula, fortune_level, rng);
+        }
+        if !modifier.condition.as_ref().is_none_or(matches) {
+            continue;
+        }
+        let (min, max) = (modifier.min_count, modifier.max_count);
+        let rolled = match modifier.binomial {
+            Some(p) => (0..max).map(|_| i32::from(rng.next_f32() < p)).sum(),
+            None if max > min => min + rng.next_bounded_i32(max - min + 1),
+            None => min,
+        };
+        count = if modifier.add { count + rolled } else { rolled };
+    }
+    if let Some(formula) = bonus {
+        count = apply_bonus_formula(count, formula, fortune_level, rng);
+    }
+    count
+}
+
+/// Whether the broken block matches `condition`'s block (or `#tag`) and state.
+fn state_matches(
+    condition: &LootBlockCondition,
+    params: &LootContextParameters,
+    props: &OnceCell<Vec<(&'static str, &'static str)>>,
+) -> bool {
+    let Some(state) = params.block_state else {
+        return false;
+    };
+    let block = Block::from_state_id(state.id);
+    let block_matches = condition.block.strip_prefix('#').map_or_else(
+        || {
+            condition
+                .block
+                .strip_prefix("minecraft:")
+                .unwrap_or(&condition.block)
+                == block.name
+        },
+        |tag| {
+            tag::get_tag_ids(RegistryKey::Block, tag)
+                .is_some_and(|ids| ids.contains(&block.id.as_u16()))
+        },
+    );
+    block_matches
+        && condition.properties.iter().all(|(key, value)| {
+            props
+                .get_or_init(|| {
+                    block
+                        .properties(state.id)
+                        .map(|p| p.to_props())
+                        .unwrap_or_default()
+                })
+                .iter()
+                .any(|&(k, v)| k == key.as_ref() && v == value.as_ref())
+        })
+}
+
 fn roll_dynamic_entries(
     rolls: i32,
     empty_weight: i32,
     eligible_entries: &[&DynamicLootEntry],
     fortune_level: i32,
+    params: &LootContextParameters,
     rng: &mut Xoroshiro,
     items_to_place: &mut Vec<ItemStack>,
 ) {
@@ -422,11 +505,15 @@ fn roll_dynamic_entries(
                     } else {
                         0
                     };
-
-                let mut final_count = base_count;
-                if let Some(bonus) = entry.bonus_formula {
-                    final_count = apply_bonus_formula(final_count, bonus, fortune_level, rng);
-                }
+                let final_count = modify_count(
+                    base_count,
+                    &entry.state_counts,
+                    entry.bonus_formula,
+                    entry.bonus_condition.as_ref(),
+                    fortune_level,
+                    params,
+                    rng,
+                );
 
                 if final_count > 0 {
                     let item_key = entry.item.strip_prefix("minecraft:").unwrap_or(&entry.item);
@@ -594,5 +681,101 @@ fn shuffle_and_split_items(
     for i in (1..n).rev() {
         let j = rng.next_bounded_i32((i + 1) as i32) as usize;
         result.swap(i, j);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::loot_table::{BLOCKS_ATTACHED_MELON_STEM, BLOCKS_GLOW_LICHEN};
+
+    use super::*;
+
+    #[test]
+    fn attached_stem_drops_binomial_seeds() {
+        let counts: Vec<u8> = (0..64)
+            .flat_map(|seed| generate_loot(&BLOCKS_ATTACHED_MELON_STEM, seed))
+            .map(|stack| stack.item_count)
+            .collect();
+        assert!(!counts.is_empty());
+        assert!(counts.iter().all(|count| (1..=3).contains(count)));
+    }
+
+    #[test]
+    fn glow_lichen_drops_one_per_face() {
+        let block = &Block::GLOW_LICHEN;
+        let state = block
+            .states
+            .iter()
+            .find(|state| {
+                let props = block
+                    .properties(state.id)
+                    .expect("glow lichen has properties");
+                let faces = props
+                    .to_props()
+                    .into_iter()
+                    .filter(|&(name, value)| name != "waterlogged" && value == "true");
+                faces.count() == 2
+            })
+            .expect("a two-faced glow lichen state");
+        let mut params = LootContextParameters {
+            block_state: Some(state),
+            ..Default::default()
+        };
+        assert!(generate_loot_with_context(&BLOCKS_GLOW_LICHEN, 0, &params).is_empty());
+
+        params.tool = Some(ItemStack::new(1, &Item::SHEARS));
+        let drops = generate_loot_with_context(&BLOCKS_GLOW_LICHEN, 0, &params);
+        assert_eq!(drops.len(), 1);
+        assert_eq!(drops[0].item_count, 2);
+    }
+
+    #[test]
+    fn set_counts_and_bonus_apply_in_order() {
+        let json = r#"{
+            "pools": [{
+                "rolls": 1,
+                "entries": [{
+                    "type": "minecraft:item",
+                    "name": "minecraft:stone",
+                    "modifier": [
+                        {
+                            "type": "minecraft:set_count",
+                            "count": 3,
+                            "condition": {"type": "minecraft:match_block", "blocks": "minecraft:stone"}
+                        },
+                        {"type": "minecraft:set_count", "count": 1}
+                    ]
+                }]
+            }, {
+                "rolls": 1,
+                "entries": [{
+                    "type": "minecraft:item",
+                    "name": "minecraft:diamond",
+                    "modifier": [
+                        {
+                            "type": "minecraft:apply_bonus",
+                            "formula": "minecraft:uniform_bonus_count",
+                            "parameters": {"bonusMultiplier": 10}
+                        },
+                        {"type": "minecraft:set_count", "count": 2}
+                    ]
+                }]
+            }]
+        }"#;
+        let table = crate::data::datapack::loot_table_loader::parse_loot_table(json)
+            .expect("valid loot table");
+        let fortune = pumpkin_data::Enchantment::from_name("fortune").expect("fortune");
+        let mut tool = ItemStack::new(1, &Item::DIAMOND_PICKAXE);
+        tool.add_enchantment(fortune, 3);
+        let params = LootContextParameters {
+            block_state: Some(Block::STONE.default_state),
+            tool: Some(tool),
+            ..Default::default()
+        };
+        for seed in 0..16 {
+            let drops = generate_dynamic_loot_with_context(&table, seed, &params);
+            let counts: Vec<_> = drops.iter().map(|s| s.item_count).collect();
+            assert_eq!(counts, [1, 2], "a later set_count replaces earlier counts");
+        }
     }
 }

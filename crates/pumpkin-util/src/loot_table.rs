@@ -1,3 +1,7 @@
+use std::borrow::Cow;
+
+use serde_json::Value;
+
 /// Conditions required for an entry or pool to be eligible for loot generation.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub enum LootCondition {
@@ -32,6 +36,163 @@ pub enum LootBonusFormula {
     BinomialWithBonusCount { extra: i32, probability: f32 },
 }
 
+#[derive(Clone, Debug)]
+pub struct LootBlockCondition {
+    pub block: Cow<'static, str>,
+    pub properties: Cow<'static, [(Cow<'static, str>, Cow<'static, str>)]>,
+}
+
+impl LootBlockCondition {
+    /// Parses a `match_block` condition. `None` for any other condition or one that can't be checked,
+    /// including one that also tests `nbt` or components.
+    #[must_use]
+    pub fn parse(condition: &Value) -> Option<Self> {
+        let kind = condition.get("type")?.as_str()?;
+        if kind.strip_prefix("minecraft:").unwrap_or(kind) != "match_block" {
+            return None;
+        }
+        if condition
+            .as_object()?
+            .keys()
+            .any(|key| !matches!(key.as_str(), "type" | "blocks" | "state"))
+        {
+            return None;
+        }
+        let block = condition.get("blocks")?.as_str()?;
+        let block = match block.strip_prefix('#') {
+            Some(tag) if !tag.contains(':') => format!("#minecraft:{tag}"),
+            _ => block.to_string(),
+        };
+        let properties = match condition.get("state") {
+            Some(state) => state
+                .as_object()?
+                .iter()
+                .map(|(name, value)| {
+                    Some((
+                        Cow::Owned(name.clone()),
+                        Cow::Owned(value.as_str()?.to_string()),
+                    ))
+                })
+                .collect::<Option<_>>()?,
+            None => Vec::new(),
+        };
+        Some(Self {
+            block: Cow::Owned(block),
+            properties: Cow::Owned(properties),
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LootStateCount {
+    pub condition: Option<LootBlockCondition>,
+    pub add: bool,
+    pub min_count: i32,
+    pub max_count: i32,
+    pub binomial: Option<f32>,
+    /// Applied after the bonus formula instead of before it.
+    pub after_bonus: bool,
+}
+
+impl LootStateCount {
+    /// Builds a modifier from a `set_count`. `None` for a plain count or a condition that can't be checked.
+    #[must_use]
+    pub fn parse(
+        condition: Option<&Value>,
+        add: bool,
+        min_count: i32,
+        max_count: i32,
+        binomial: Option<f32>,
+    ) -> Option<Self> {
+        let condition = match condition {
+            None if add || binomial.is_some() => None,
+            None => return None,
+            Some(condition) => Some(LootBlockCondition::parse(condition)?),
+        };
+        Some(Self {
+            condition,
+            add,
+            min_count,
+            max_count,
+            binomial,
+            after_bonus: false,
+        })
+    }
+}
+
+/// Collects an entry's `set_count` and bonus functions in source order.
+#[derive(Default)]
+pub struct LootCountBuilder {
+    base: Option<(i32, i32)>,
+    state_counts: Vec<LootStateCount>,
+    bonus: Option<(LootBonusFormula, Option<LootBlockCondition>)>,
+}
+
+impl LootCountBuilder {
+    /// Adds a `set_count`. One with a condition that can't be checked is skipped.
+    pub fn set_count(
+        &mut self,
+        condition: Option<&Value>,
+        add: bool,
+        min_count: i32,
+        max_count: i32,
+        binomial: Option<f32>,
+    ) {
+        let after_bonus = self.bonus.is_some();
+        match LootStateCount::parse(condition, add, min_count, max_count, binomial) {
+            Some(state_count) => self.state_counts.push(LootStateCount {
+                after_bonus,
+                ..state_count
+            }),
+            None if condition.is_some() => {}
+            // A plain count replaces the default count of 1 when nothing runs before it.
+            None if self.state_counts.is_empty() && !after_bonus => {
+                self.base = Some((min_count, max_count));
+            }
+            None => self.state_counts.push(LootStateCount {
+                condition: None,
+                add,
+                min_count,
+                max_count,
+                binomial,
+                after_bonus,
+            }),
+        }
+    }
+
+    /// Adds a bonus function. Only the first is kept, and one with a condition that can't be
+    /// checked is skipped.
+    pub fn bonus(&mut self, condition: Option<&Value>, formula: LootBonusFormula) {
+        if self.bonus.is_some() {
+            return;
+        }
+        let condition = match condition.map(LootBlockCondition::parse) {
+            Some(None) => return,
+            condition => condition.flatten(),
+        };
+        self.bonus = Some((formula, condition));
+    }
+
+    /// The base count range, the state counts, and the bonus with its block condition.
+    #[must_use]
+    pub fn build(
+        self,
+    ) -> (
+        (i32, i32),
+        Vec<LootStateCount>,
+        Option<LootBonusFormula>,
+        Option<LootBlockCondition>,
+    ) {
+        let (bonus_formula, bonus_condition) = self.bonus.unzip();
+        (
+            self.base.unwrap_or((1, 1)),
+            self.state_counts,
+            bonus_formula,
+            bonus_condition.flatten(),
+        )
+    }
+}
+
 /// A single item entry inside a loot pool.
 #[derive(Clone, Copy, Debug)]
 pub struct LootEntry {
@@ -43,10 +204,14 @@ pub struct LootEntry {
     pub min_count: i32,
     /// Maximum stack size (inclusive).
     pub max_count: i32,
+    /// Conditional counts applied when the broken block state matches.
+    pub state_counts: &'static [LootStateCount],
     /// Condition required for this entry to be eligible.
     pub condition: LootCondition,
     /// Bonus formula to apply with fortune / looting (if any).
     pub bonus_formula: Option<LootBonusFormula>,
+    /// Block state the bonus formula is gated on.
+    pub bonus_condition: Option<&'static LootBlockCondition>,
 }
 
 /// One roll pool inside a loot table.
@@ -151,10 +316,14 @@ pub struct DynamicLootEntry {
     pub min_count: i32,
     /// Maximum stack size (inclusive).
     pub max_count: i32,
+    /// Conditional `set_count` modifiers, applied in order when the block state matches.
+    pub state_counts: Vec<LootStateCount>,
     /// Condition required for this entry to be eligible.
     pub condition: DynamicLootCondition,
     /// Bonus formula to apply with fortune / looting (if any).
     pub bonus_formula: Option<LootBonusFormula>,
+    /// Block state the bonus formula is gated on.
+    pub bonus_condition: Option<LootBlockCondition>,
 }
 
 impl From<LootEntry> for DynamicLootEntry {
@@ -164,8 +333,10 @@ impl From<LootEntry> for DynamicLootEntry {
             weight: e.weight,
             min_count: e.min_count,
             max_count: e.max_count,
+            state_counts: e.state_counts.to_vec(),
             condition: DynamicLootCondition::from(e.condition),
             bonus_formula: e.bonus_formula,
+            bonus_condition: e.bonus_condition.cloned(),
         }
     }
 }
