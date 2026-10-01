@@ -40,6 +40,8 @@ impl MobEntity {
                     // Triangle distribution around 0.
                     amount: 0.114_85 * f64::from(rng.random::<f32>() - rng.random::<f32>()),
                     operation: ModifierOperation::MultiplyBase,
+                    // Vanilla `Mob.finalizeSpawn` adds this as a permanent modifier.
+                    permanent: true,
                 });
             }
         }

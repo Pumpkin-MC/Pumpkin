@@ -1393,19 +1393,8 @@ impl Player {
         // Modify the added damage based on the multiplier.
         let mut damage = base_damage * damage_multiplier;
         damage += extra_ench_damage * attack_cooldown_progress;
-
-        if let Some(strength) = self
-            .living_entity
-            .get_effect(&pumpkin_data::effect::StatusEffect::STRENGTH)
-        {
-            damage += 3.0 * (f64::from(strength.amplifier) + 1.0);
-        }
-        if let Some(weakness) = self
-            .living_entity
-            .get_effect(&pumpkin_data::effect::StatusEffect::WEAKNESS)
-        {
-            damage -= 4.0 * (f64::from(weakness.amplifier) + 1.0);
-        }
+        // Strength and Weakness are modifiers on ATTACK_DAMAGE, so
+        // `base_damage` already carries them, like vanilla `Player.attack`.
         damage = damage.max(0.0);
 
         let pos = victim_entity.pos.load();
@@ -4986,6 +4975,7 @@ impl Player {
                         id: Self::EFFICIENCY_ATTRIBUTE_MODIFIER_ID.to_string(),
                         amount: f64::from(level * level + 1),
                         operation: ModifierOperation::Add,
+                        permanent: false,
                     });
                 } else {
                     inst.remove_modifier(Self::EFFICIENCY_ATTRIBUTE_MODIFIER_ID);
