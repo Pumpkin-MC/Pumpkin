@@ -31,19 +31,9 @@ const ARG_OPERATION: &str = "operation";
 const ARG_SOURCE_TARGETS: &str = "source_targets";
 const ARG_SOURCE_OBJECTIVE: &str = "source_objective";
 
-const OBJECTIVE_READ_ONLY_ERROR: CommandErrorType<1> = CommandErrorType::new(
-    translation::java::ARGUMENTS_OBJECTIVE_READONLY,
-    translation::java::ARGUMENTS_OBJECTIVE_READONLY,
-);
-
 const NO_SCORE_ERROR: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_SCOREBOARD_PLAYERS_GET_NULL,
     translation::java::COMMANDS_SCOREBOARD_PLAYERS_GET_NULL,
-);
-
-const OBJECTIVE_NOT_FOUND_ERROR: CommandErrorType<1> = CommandErrorType::new(
-    translation::java::ARGUMENTS_OBJECTIVE_NOTFOUND,
-    translation::java::ARGUMENTS_OBJECTIVE_NOTFOUND,
 );
 
 const DUPLICATE_OBJECTIVE_ERROR: CommandErrorType<0> = CommandErrorType::new(
@@ -147,7 +137,7 @@ impl PlayersEnableExecutor {
         holders: &[ResolvedScoreHolder],
         objective_name: &str,
     ) -> Result<(i32, TextComponent), CommandSyntaxError> {
-        let objective = objective_or_error(scoreboard, objective_name)?;
+        let objective = ObjectiveArgumentType::objective_or_error(scoreboard, objective_name)?;
 
         if objective.criterion != "trigger" {
             return Err(INVALID_ENABLE_ERROR.create_without_context());
@@ -220,9 +210,10 @@ impl CommandExecutor for ObjectivesRemoveExecutor {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        let display_name = objective_or_error(&scoreboard, &objective_name_owned)?
-            .display_name
-            .clone();
+        let display_name =
+            ObjectiveArgumentType::objective_or_error(&scoreboard, &objective_name_owned)?
+                .display_name
+                .clone();
 
         scoreboard.remove_objective(&world, &objective_name_owned);
 
@@ -237,33 +228,6 @@ impl CommandExecutor for ObjectivesRemoveExecutor {
 
         Ok(1)
     }
-}
-
-fn objective_or_error<'a>(
-    scoreboard: &'a Scoreboard,
-    name: &str,
-) -> Result<&'a ScoreboardObjective, CommandSyntaxError> {
-    scoreboard.get_objective(name).ok_or_else(|| {
-        OBJECTIVE_NOT_FOUND_ERROR.create_without_context(TextComponent::text(name.to_string()))
-    })
-}
-
-fn writable_objective_or_error<'a>(
-    scoreboard: &'a Scoreboard,
-    name: &str,
-) -> Result<&'a ScoreboardObjective, CommandSyntaxError> {
-    let objective = objective_or_error(scoreboard, name)?;
-    // These are the six criteria registered as read-only by vanilla ObjectiveCriteria.
-    let read_only = matches!(
-        objective.criterion.as_str(),
-        "health" | "food" | "air" | "armor" | "xp" | "level"
-    );
-    if read_only {
-        return Err(
-            OBJECTIVE_READ_ONLY_ERROR.create_without_context(TextComponent::text(name.to_string()))
-        );
-    }
-    Ok(objective)
 }
 
 /// Vanilla prints the holder name for a single target and a count otherwise.
@@ -289,9 +253,10 @@ impl CommandExecutor for PlayersSetExecutor {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        let display_name = writable_objective_or_error(&scoreboard, &objective_name)?
-            .display_name
-            .clone();
+        let display_name =
+            ObjectiveArgumentType::writable_objective_or_error(&scoreboard, &objective_name)?
+                .display_name
+                .clone();
         for holder in &holders {
             scoreboard.set_score_value(&world, holder.name.clone(), objective_name.clone(), value);
         }
@@ -348,7 +313,7 @@ impl PlayersGetExecutor {
         holder: ResolvedScoreHolder,
         objective_name: &str,
     ) -> Result<(i32, TextComponent), CommandSyntaxError> {
-        let objective = objective_or_error(scoreboard, objective_name)?;
+        let objective = ObjectiveArgumentType::objective_or_error(scoreboard, objective_name)?;
         let Some(value) = scoreboard.get_score_value(&holder.name, objective_name) else {
             return Err(NO_SCORE_ERROR.create_without_context(
                 TextComponent::text(objective_name.to_string()),
@@ -392,9 +357,10 @@ impl CommandExecutor for PlayersAddRemoveExecutor {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        let display_name = writable_objective_or_error(&scoreboard, &objective_name)?
-            .display_name
-            .clone();
+        let display_name =
+            ObjectiveArgumentType::writable_objective_or_error(&scoreboard, &objective_name)?
+                .display_name
+                .clone();
         let mut result: i32 = 0;
         for holder in &holders {
             result = result.wrapping_add(scoreboard.add_score(
@@ -461,9 +427,10 @@ impl CommandExecutor for PlayersResetExecutor {
 
         if self.has_objective {
             let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?.to_string();
-            let display_name = objective_or_error(&scoreboard, &objective_name)?
-                .display_name
-                .clone();
+            let display_name =
+                ObjectiveArgumentType::objective_or_error(&scoreboard, &objective_name)?
+                    .display_name
+                    .clone();
             for holder in &holders {
                 scoreboard.remove_score(&world, &holder.name, &objective_name);
             }
@@ -530,10 +497,11 @@ impl CommandExecutor for PlayersOperationExecutor {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        let display_name = writable_objective_or_error(&scoreboard, &objective_name)?
-            .display_name
-            .clone();
-        objective_or_error(&scoreboard, &source_objective)?;
+        let display_name =
+            ObjectiveArgumentType::writable_objective_or_error(&scoreboard, &objective_name)?
+                .display_name
+                .clone();
+        ObjectiveArgumentType::objective_or_error(&scoreboard, &source_objective)?;
 
         let result = Self::apply(
             &mut scoreboard,
@@ -768,6 +736,9 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::command::argument_types::objective::{
+        OBJECTIVE_NOT_FOUND_ERROR, OBJECTIVE_READ_ONLY_ERROR,
+    };
     use crate::world::scoreboard::NoTarget;
 
     #[test]
@@ -1004,7 +975,7 @@ mod tests {
                     criterion,
                 ),
             );
-            let result = writable_objective_or_error(&scoreboard, "test");
+            let result = ObjectiveArgumentType::writable_objective_or_error(&scoreboard, "test");
             assert_eq!(result.is_ok(), writable, "{criterion}");
             if let Err(error) = result {
                 assert!(error.is(&OBJECTIVE_READ_ONLY_ERROR));
@@ -1015,7 +986,7 @@ mod tests {
             }
             scoreboard.remove_objective(&NoTarget, "test");
         }
-        let error = objective_or_error(&scoreboard, "missing").unwrap_err();
+        let error = ObjectiveArgumentType::objective_or_error(&scoreboard, "missing").unwrap_err();
         assert!(error.is(&OBJECTIVE_NOT_FOUND_ERROR));
         assert_eq!(
             serde_json::to_value(&error.message).unwrap()["translate"],
