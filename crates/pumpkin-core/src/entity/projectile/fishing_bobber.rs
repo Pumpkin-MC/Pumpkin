@@ -353,6 +353,7 @@ impl FishingBobberEntity {
         match state {
             HookState::HookedIn(hooked_id) => {
                 if let Some(hooked) = world.get_entity_by_id(hooked_id)
+                    && hooked.get_entity().entity_uuid != self.owner_uuid
                     && can_interact_with_level(&*hooked)
                     && hooked.get_entity().world.load().dimension
                         == self.entity.world.load().dimension
@@ -451,7 +452,10 @@ impl FishingBobberEntity {
 
             let candidates = world.get_entities_at_box(&search_box);
             for cand in candidates {
+                // Never hook the caster or the hook itself; compare the UUID too in case the
+                // entity id has been recycled.
                 if cand.get_entity().entity_id == self.owner_id
+                    || cand.get_entity().entity_uuid == self.owner_uuid
                     || cand.get_entity().entity_id == entity.entity_id
                 {
                     continue;
