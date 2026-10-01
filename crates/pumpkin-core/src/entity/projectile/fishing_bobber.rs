@@ -74,7 +74,8 @@ impl FishingBobberEntity {
         entity.yaw.store(yaw);
         entity.pitch.store(pitch);
         entity.head_yaw.store(yaw);
-        // The client reads the owner id from the spawn packet's data field to render the line.
+        // Vanilla `FishingHook.getAddEntityPacket` sends the owner id as the spawn data,
+        // which the client needs to render the line.
         entity.data.store(owner_id, Ordering::Relaxed);
         entity.velocity.store(velocity);
 
@@ -140,6 +141,8 @@ impl FishingBobberEntity {
                     table.generate_loot_with_context(seed, &params)
                 });
 
+            // Fallback while the shared loot engine can't resolve the nested
+            // `gameplay/fishing` subtables.
             let loot = if items.is_empty() {
                 vec![ItemStack::new(1, &Item::COD)]
             } else {
@@ -312,7 +315,7 @@ impl FishingBobberEntity {
         )
         .expand(0.3, 0.3, 0.3);
 
-        // Basic block collision to stop bobber
+        // Simplified `FishingBobberEntity.checkCollision`: stop the bobber on the first block.
         let (block_cols, _) = world.get_block_collisions(search_box, caller);
         if !block_cols.is_empty() {
             self.in_ground.store(true, Ordering::Relaxed);
@@ -322,6 +325,7 @@ impl FishingBobberEntity {
 
         entity.set_pos(new_pos);
 
+        // Vanilla `FishingBobberEntity.checkCollision` hooks the first entity it hits.
         let candidates = world.get_entities_at_box(&search_box);
         for cand in candidates {
             if cand.get_entity().entity_id == self.owner_id

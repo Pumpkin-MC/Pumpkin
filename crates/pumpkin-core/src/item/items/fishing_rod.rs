@@ -39,6 +39,7 @@ impl ItemBehaviour for FishingRodItem {
         self.normal_use_with_hand(item, player, yaw, pitch, hand);
     }
 
+    /// Vanilla `FishingRodItem.use`: cast when no bobber is out, otherwise reel the current one in.
     fn normal_use_with_hand(&self, item: &Item, player: &Player, yaw: f32, pitch: f32, hand: Hand) {
         let world = player.world();
         let inventory = player.inventory();
