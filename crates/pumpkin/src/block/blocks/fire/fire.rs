@@ -34,9 +34,6 @@ impl FireBlock {
         30 + rand::rng().random_range(0..10)
     }
 
-    const fn scheduled_extinguish_flags() -> BlockFlags {
-        BlockFlags::NOTIFY_ALL
-    }
 
     fn is_flammable(id: BlockStateId) -> bool {
         let block = id.to_block();
@@ -265,7 +262,7 @@ impl BlockBehaviour for FireBlock {
             world.set_block_state(
                 pos,
                 Block::AIR.default_state.id,
-                Self::scheduled_extinguish_flags(),
+                BlockFlags::NOTIFY_ALL,
             );
             return;
         }
@@ -297,7 +294,7 @@ impl BlockBehaviour for FireBlock {
                 world.set_block_state(
                     pos,
                     Block::AIR.default_state.id,
-                    Self::scheduled_extinguish_flags(),
+                    BlockFlags::NOTIFY_ALL,
                 );
                 return;
             }
@@ -320,7 +317,7 @@ impl BlockBehaviour for FireBlock {
                     world.set_block_state(
                         pos,
                         Block::AIR.default_state.id,
-                        Self::scheduled_extinguish_flags(),
+                        BlockFlags::NOTIFY_ALL,
                     );
                     return;
                 }
@@ -334,7 +331,7 @@ impl BlockBehaviour for FireBlock {
                 world.set_block_state(
                     pos,
                     Block::AIR.default_state.id,
-                    Self::scheduled_extinguish_flags(),
+                    BlockFlags::NOTIFY_ALL,
                 );
                 return;
             }
@@ -474,15 +471,3 @@ impl BlockBehaviour for FireBlock {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn scheduled_extinguish_notifies_listeners() {
-        assert_eq!(
-            FireBlock::scheduled_extinguish_flags(),
-            BlockFlags::NOTIFY_ALL
-        );
-    }
-}
