@@ -2,6 +2,7 @@ use crate::block::entities::{BlockEntity, block_entity_from_nbt};
 use dashmap::DashMap;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemData};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
 use pumpkin_protocol::bedrock::client::{
@@ -20,6 +21,7 @@ use std::{
 use tracing::{debug, error, info, trace, warn};
 
 mod active_chunks;
+pub mod brightness;
 pub mod chunker;
 pub mod explosion;
 pub mod generation_cache;
@@ -897,6 +899,14 @@ impl World {
             _ => {}
         }
         self.level_info.store(Arc::new(new_info));
+        if *rule == GameRule::AdvanceTime {
+            let level_time = self
+                .level_time
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            level_time.send_time(self);
+        }
     }
 
     pub fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) {
@@ -947,6 +957,9 @@ impl World {
         }
     }
 
+    /// Keyed by encode version: always `CURRENT_MC_VERSION`, older clients are converted
+    /// per connection on enqueue by the multiversion plugin.
+    // TODO: collapse to a plain recipient list with a single serialize.
     pub(crate) fn collect_java_recipients_by_version<'a>(
         players: impl Iterator<Item = &'a Arc<Player>>,
     ) -> BTreeMap<JavaMinecraftVersion, Vec<&'a JavaClient>> {
@@ -955,7 +968,7 @@ impl World {
         for player in players {
             if let ClientPlatform::Java(java_client) = player.client.as_ref() {
                 recipients_by_version
-                    .entry(java_client.version.load())
+                    .entry(CURRENT_MC_VERSION)
                     .or_default()
                     .push(java_client);
             }
@@ -971,7 +984,7 @@ impl World {
             BTreeMap::new();
         for client in recipients {
             recipients_by_version
-                .entry(client.version.load())
+                .entry(CURRENT_MC_VERSION)
                 .or_default()
                 .push(client);
         }
@@ -1231,9 +1244,6 @@ impl World {
             Self::collect_java_recipients_by_version(java_recipients.into_iter());
 
         for (version, recipients) in recipients_by_version {
-            if version < JavaMinecraftVersion::V_1_21 {
-                continue;
-            }
             let mut buf = Vec::new();
             for meta in [
                 Metadata::new(
@@ -1862,12 +1872,15 @@ impl World {
     }
 
     pub fn tick_environment(self: &Arc<Self>) {
-        let (world_age, is_night, time_of_day) = {
+        let (is_night, time_of_day) = {
             let mut level_time = self
                 .level_time
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let advance_time = self.level_info.load().game_rules.advance_time;
+            // Vanilla `ServerLevel.tickTime`. Periodic `CUpdateTime` is
+            // `forceGameTimeSynchronization` in `Server::tick_worlds`, *before*
+            // this increment.
             level_time.tick(advance_time);
 
             // Auto-save logic
@@ -1900,11 +1913,7 @@ impl World {
                     self.level.level_channel.notify();
                 }
             }
-            (
-                level_time.world_age,
-                level_time.is_night(),
-                level_time.time_of_day,
-            )
+            (level_time.is_night(), level_time.time_of_day)
         };
 
         let (should_reset_weather, weather_cycle_enabled) = {
@@ -1942,13 +1951,6 @@ impl World {
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 weather.reset_weather_cycle(self);
             }
-        } else if world_age % 20 == 0 {
-            let level_time = self
-                .level_time
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            level_time.send_time(self);
         }
     }
 
@@ -2491,6 +2493,23 @@ impl World {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .world_age
+    }
+
+    /// Vanilla `MinecraftServer.forceGameTimeSynchronization`.
+    ///
+    /// Broadcasts current overworld `getGameTime()` with an empty clock map.
+    /// Must run before [`crate::world::time::LevelTime::tick`]: the client
+    /// already advanced to this number in `ClientLevel.tickTime()`. Sending the
+    /// post-increment value, or a clock snapshot, makes `getGameTime()` hold
+    /// for two client ticks, so `Entity.limitPistonMovement` does not reset
+    /// `pistonDeltas` and clips the second honey/piston step at ±0.51.
+    pub fn force_game_time_synchronization(&self, server: &Server) {
+        let level_time = self
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        level_time.send_game_time_sync(server);
     }
 
     pub fn get_time_of_day(&self) -> i64 {
@@ -3229,9 +3248,7 @@ impl World {
                 }
             }
             let packet = pumpkin_protocol::java::client::play::CUpdateTagsPlay::new(&tags);
-            if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version) {
-                client.send_packet_now(packet_data).await;
-            }
+            client.send_packet(&packet).await;
         }
 
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
@@ -3491,33 +3508,31 @@ impl World {
                 player.client.try_enqueue_packet_editioned(java, bedrock);
             });
 
-            if client.version.load() >= JavaMinecraftVersion::V_1_21 {
-                let config = existing_player.config.load();
-                let mut buf = Vec::new();
-                {
-                    let meta = Metadata::new(
-                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
-                        config.skin_parts,
-                    );
-                    let _ = meta.write(&mut buf, &client.version.load());
-                };
-                {
-                    let meta = Metadata::new(
-                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
-                        config.skin_parts,
-                    );
-                    let _ = meta.write(&mut buf, &client.version.load());
-                };
-                drop(config);
-                // END
-                buf.put_u8(255);
-                client
-                    .enqueue_client_packet(&CSetEntityMetadata::new(
-                        existing_player.get_entity().entity_id.into(),
-                        buf.into(),
-                    ))
-                    .await;
-            }
+            let config = existing_player.config.load();
+            let mut buf = Vec::new();
+            {
+                let meta = Metadata::new(
+                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
+                    config.skin_parts,
+                );
+                let _ = meta.write(&mut buf, &CURRENT_MC_VERSION);
+            };
+            {
+                let meta = Metadata::new(
+                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
+                    config.skin_parts,
+                );
+                let _ = meta.write(&mut buf, &CURRENT_MC_VERSION);
+            };
+            drop(config);
+            // END
+            buf.put_u8(255);
+            client
+                .enqueue_client_packet(&CSetEntityMetadata::new(
+                    existing_player.get_entity().entity_id.into(),
+                    buf.into(),
+                ))
+                .await;
 
             {
                 let held_item = existing_player.inventory.held_item();
@@ -4810,9 +4825,25 @@ impl World {
             new_entities.push(entity.clone());
             new_entities
         });
+        self.add_pending_riders(&entity);
     }
 
-    pub fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) {
+    /// Adds the riders a mob queued while being finalized (vanilla `addFreshEntityWithPassengers`).
+    fn add_pending_riders(&self, vehicle: &Arc<dyn EntityBase>) {
+        let Some(mob) = vehicle.get_mob() else {
+            return;
+        };
+        for rider in mob.get_mob_entity().take_pending_riders() {
+            rider.init_data_tracker();
+            self.add_entity_silent(rider.clone());
+            vehicle.get_entity().add_passenger(vehicle.clone(), rider);
+        }
+    }
+
+    /// Returns `false` when a plugin cancels the [`EntitySpawnEvent`].
+    ///
+    /// [`EntitySpawnEvent`]: crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent
+    pub fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) -> bool {
         let mut event = crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent::new(
             entity.get_entity().entity_id,
             entity.get_entity().entity_type.id.to_string(),
@@ -4823,11 +4854,39 @@ impl World {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
         if event.cancelled {
-            return;
+            return false;
         }
 
         entity.init_data_tracker();
         self.add_entity_silent(entity);
+        true
+    }
+
+    /// Fires [`CreatureSpawnEvent`], then spawns the entity; `false` if either event is cancelled.
+    ///
+    /// [`CreatureSpawnEvent`]: crate::plugin::api::events::entity::creature_spawn::CreatureSpawnEvent
+    pub fn spawn_creature(
+        self: &Arc<Self>,
+        entity: Arc<dyn EntityBase>,
+        reason: crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason,
+        player: Option<Arc<Player>>,
+    ) -> bool {
+        let base = entity.get_entity();
+        let mut event = crate::plugin::api::events::entity::creature_spawn::CreatureSpawnEvent::new(
+            base.entity_id,
+            base.entity_type.resource_name.to_string(),
+            base.pos.load(),
+            self.clone(),
+            reason,
+            player,
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled {
+            return false;
+        }
+        self.spawn_entity(entity)
     }
 
     #[expect(clippy::needless_pass_by_value)]
@@ -4857,6 +4916,7 @@ impl World {
             new_entities.push(entity.clone());
             new_entities
         });
+        self.add_pending_riders(&entity);
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase) {
@@ -4976,7 +5036,6 @@ impl World {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -4986,25 +5045,66 @@ impl World {
         if !self.is_in_build_limit(*position) {
             return Block::AIR.default_state.id;
         }
-
-        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let replaced_block_state_id = self
-            .level
+            .write_block_state_if(position, block_state_id, |_| true)
+            .unwrap_or(Block::AIR.default_state.id);
+        self.on_block_state_set(position, replaced_block_state_id, block_state_id, flags)
+    }
+
+    /// `set_block_state`, but only when `condition` accepts the current state. The check and
+    /// the write are atomic, so a block another task placed in between is never overwritten.
+    /// Returns the replaced state, or `None` when nothing was written.
+    pub fn set_block_state_if(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        block_state_id: BlockStateId,
+        flags: BlockFlags,
+        condition: impl Fn(BlockStateId) -> bool,
+    ) -> Option<BlockStateId> {
+        if !self.is_in_build_limit(*position) {
+            return None;
+        }
+        let replaced_block_state_id =
+            self.write_block_state_if(position, block_state_id, condition)?;
+        Some(self.on_block_state_set(position, replaced_block_state_id, block_state_id, flags))
+    }
+
+    /// Writes the state into the loaded chunk
+    fn write_block_state_if(
+        &self,
+        position: &BlockPos,
+        block_state_id: BlockStateId,
+        condition: impl Fn(BlockStateId) -> bool,
+    ) -> Option<BlockStateId> {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        self.level
             .read_chunk_sync(&chunk_coordinate, |chunk| {
-                let replaced_block_state_id = chunk.set_block_absolute_y(
+                let replaced_block_state_id = chunk.set_block_absolute_y_if(
                     relative.x as usize,
                     relative.y,
                     relative.z as usize,
                     block_state_id,
-                );
+                    &condition,
+                )?;
                 // Mark chunk dirty if it isn't already
                 if replaced_block_state_id != block_state_id && !chunk.is_dirty() {
                     chunk.mark_dirty(true);
                 }
-                replaced_block_state_id
+                Some(replaced_block_state_id)
             })
-            .unwrap_or(Block::AIR.default_state.id);
+            .flatten()
+    }
 
+    /// Everything `set_block_state` does after the chunk write: callbacks, neighbour updates,
+    /// client sync, POI and lighting.
+    #[expect(clippy::too_many_lines)]
+    fn on_block_state_set(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        replaced_block_state_id: BlockStateId,
+        block_state_id: BlockStateId,
+        flags: BlockFlags,
+    ) -> BlockStateId {
         if !flags.contains(BlockFlags::FORCE_STATE) && replaced_block_state_id == block_state_id {
             return block_state_id;
         }
@@ -5296,8 +5396,11 @@ impl World {
 
     #[must_use]
     pub fn get_effective_sky_brightness(&self, pos: &BlockPos) -> i32 {
-        let sky_light = self.get_sky_light_level(pos) as i32;
-        sky_light - self.get_sky_darken()
+        self.effective_sky_brightness_from(self.get_sky_light_level(pos))
+    }
+
+    fn effective_sky_brightness_from(&self, sky_light: u8) -> i32 {
+        i32::from(sky_light) - self.get_sky_darken()
     }
 
     #[must_use]
@@ -5346,6 +5449,20 @@ impl World {
         self.get_raw_brightness(pos, self.get_sky_darken() as u8)
     }
 
+    /// local brightness through the dimension curve.
+    #[must_use]
+    pub fn get_light_level_dependent_magic_value(&self, pos: &BlockPos) -> f32 {
+        self.light_level_dependent_magic_value_with_sky(pos, self.get_sky_light_level(pos))
+    }
+
+    /// [`Self::get_light_level_dependent_magic_value`] for a sky light the caller already read.
+    #[must_use]
+    pub fn light_level_dependent_magic_value_with_sky(&self, pos: &BlockPos, sky_light: u8) -> f32 {
+        let sky_light = sky_light.saturating_sub(self.get_sky_darken() as u8);
+        let block_light = self.get_block_light_level(pos).unwrap_or(0);
+        brightness::light_level_curve(sky_light.max(block_light), self.dimension.ambient_light)
+    }
+
     pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
         self.level
             .light_engine
@@ -5360,9 +5477,19 @@ impl World {
 
     #[must_use]
     pub fn can_see_sky(&self, position: &BlockPos) -> bool {
+        self.is_within_build_height(position)
+            && self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
+    }
+
+    /// [`Self::can_see_sky`] for a sky light the caller already read.
+    #[must_use]
+    pub const fn can_see_sky_with_light(&self, position: &BlockPos, sky_light: u8) -> bool {
+        self.is_within_build_height(position) && sky_light >= MAX_LIGHT_LEVEL
+    }
+
+    const fn is_within_build_height(&self, position: &BlockPos) -> bool {
         position.0.y >= self.dimension.min_y
             && position.0.y < self.dimension.min_y + self.dimension.height
-            && self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
     }
 
     pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {

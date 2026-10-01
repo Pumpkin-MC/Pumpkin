@@ -5,7 +5,7 @@ use crate::plugin::{
         state::PluginHostState,
     },
 };
-use pumpkin_host_bindings::PluginPre;
+use pumpkin_host_bindings::v0_1::PluginPre;
 use wasmtime::component::{HasSelf, InstancePre, Linker};
 use wasmtime::{Engine, Store};
 
@@ -67,7 +67,7 @@ pub mod uuid;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod world;
 
-pub use pumpkin_host_bindings::{Plugin, pumpkin};
+pub use pumpkin_host_bindings::v0_1::{Plugin, pumpkin};
 
 mod resource_with {
     use super::pumpkin::plugin;

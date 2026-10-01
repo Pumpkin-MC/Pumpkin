@@ -834,50 +834,55 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     let mut data_cmd = command("data", DESCRIPTION).requires(PERMISSION);
 
     // Merge & Get & Remove
+    // Each verb literal is built once and shared across target kinds; `.then()` on `data_cmd`
+    // itself replaces same-named children instead of merging them, so building fresh
+    // `literal("get")` etc. per target kind would silently drop every kind but the last.
+    let mut merge_node = literal("merge");
+    let mut get_node = literal("get");
+    let mut remove_node = literal("remove");
     for &(target_kind, name) in &all_target_kinds {
         // data merge <target> <nbt>
-        data_cmd = data_cmd.then(literal("merge").then(literal(name).then(
+        merge_node = merge_node.then(literal(name).then(
             make_target_arg(target_kind, "target_target").then(
                 argument("nbt", NbtCompoundArgumentType).executes(MergeExecutor { target_kind }),
             ),
-        )));
+        ));
 
         // data get <target> [<path>] [<scale>]
-        data_cmd = data_cmd.then(
-            literal("get").then(
-                literal(name).then(
-                    make_target_arg(target_kind, "target_target")
-                        .executes(GetExecutor {
-                            target_kind,
-                            has_path: false,
-                            has_scale: false,
-                        })
-                        .then(
-                            argument("path", NbtPathArgumentType)
-                                .executes(GetExecutor {
+        get_node = get_node.then(
+            literal(name).then(
+                make_target_arg(target_kind, "target_target")
+                    .executes(GetExecutor {
+                        target_kind,
+                        has_path: false,
+                        has_scale: false,
+                    })
+                    .then(
+                        argument("path", NbtPathArgumentType)
+                            .executes(GetExecutor {
+                                target_kind,
+                                has_path: true,
+                                has_scale: false,
+                            })
+                            .then(argument("scale", DoubleArgumentType::any()).executes(
+                                GetExecutor {
                                     target_kind,
                                     has_path: true,
-                                    has_scale: false,
-                                })
-                                .then(argument("scale", DoubleArgumentType::any()).executes(
-                                    GetExecutor {
-                                        target_kind,
-                                        has_path: true,
-                                        has_scale: true,
-                                    },
-                                )),
-                        ),
-                ),
+                                    has_scale: true,
+                                },
+                            )),
+                    ),
             ),
         );
 
         // data remove <target> <path>
-        data_cmd = data_cmd.then(literal("remove").then(literal(name).then(
+        remove_node = remove_node.then(literal(name).then(
             make_target_arg(target_kind, "target_target").then(
                 argument("path", NbtPathArgumentType).executes(RemoveExecutor { target_kind }),
             ),
-        )));
+        ));
     }
+    data_cmd = data_cmd.then(merge_node).then(get_node).then(remove_node);
 
     // data modify <target> <targetPath> (insert <index> | prepend | append | set | merge) ...
     let modify_modes = [
@@ -888,6 +893,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         ("merge", ModifyMode::Merge),
     ];
 
+    let mut modify_node = literal("modify");
     for &(target_kind, target_name) in &all_target_kinds {
         let mut target_path_arg = argument("targetPath", NbtPathArgumentType);
 
@@ -995,13 +1001,12 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             target_path_arg = target_path_arg.then(mod_node);
         }
 
-        data_cmd = data_cmd.then(
-            literal("modify").then(
-                literal(target_name)
-                    .then(make_target_arg(target_kind, "target_target").then(target_path_arg)),
-            ),
+        modify_node = modify_node.then(
+            literal(target_name)
+                .then(make_target_arg(target_kind, "target_target").then(target_path_arg)),
         );
     }
+    data_cmd = data_cmd.then(modify_node);
 
     dispatcher.register(data_cmd);
 }

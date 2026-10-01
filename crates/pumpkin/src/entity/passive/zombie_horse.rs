@@ -125,6 +125,10 @@ impl Mob for ZombieHorseEntity {
         Some(self)
     }
 
+    fn sun_protection_slot(&self) -> pumpkin_data::data_component_impl::EquipmentSlot {
+        pumpkin_data::data_component_impl::EquipmentSlot::BODY
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }

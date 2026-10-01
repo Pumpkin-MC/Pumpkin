@@ -126,6 +126,7 @@ jobs:
           sparse-checkout: "crates/pumpkin-plugin-wit"
       - uses: bytecodealliance/actions/wit-bindgen/setup@v1
       - run: wit-bindgen rust crates/pumpkin-plugin-wit/v0.1
+      - run: wit-bindgen rust crates/pumpkin-plugin-wit/v0.2
 
   test:
     name: Test (${{ matrix.name }})
