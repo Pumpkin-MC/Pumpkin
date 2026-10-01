@@ -221,11 +221,7 @@ impl SpearItem {
         if target.get_living_entity().is_some()
             && let Some(weapon) = stack.get_data_component::<WeaponImpl>()
         {
-            let slot = if hand == Hand::Right {
-                EquipmentSlot::MAIN_HAND
-            } else {
-                EquipmentSlot::OFF_HAND
-            };
+            let slot = EquipmentSlot::from_hand(hand);
             player.damage_item_in_slot(&slot, weapon.item_damage_per_attack as i32);
         }
         player.add_exhaustion(0.1);

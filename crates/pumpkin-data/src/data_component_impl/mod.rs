@@ -10,6 +10,7 @@ use crc_fast::CrcAlgorithm::Crc32Iscsi;
 use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
+use pumpkin_util::Hand;
 use std::any::Any;
 use std::borrow::Cow;
 
@@ -432,6 +433,15 @@ impl EquipmentSlot {
             "body" => Some(&Self::BODY),
             "saddle" => Some(&Self::SADDLE),
             _ => None,
+        }
+    }
+
+    /// The slot that corresponds to `hand`.
+    #[must_use]
+    pub const fn from_hand(hand: Hand) -> Self {
+        match hand {
+            Hand::Right => Self::MAIN_HAND,
+            Hand::Left => Self::OFF_HAND,
         }
     }
 

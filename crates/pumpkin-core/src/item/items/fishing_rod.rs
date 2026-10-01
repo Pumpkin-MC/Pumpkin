@@ -40,25 +40,18 @@ impl ItemBehaviour for FishingRodItem {
     }
 
     /// Vanilla `FishingRodItem.use`: cast when no bobber is out, otherwise reel the current one in.
-    fn normal_use_with_hand(&self, item: &Item, player: &Player, yaw: f32, pitch: f32, hand: Hand) {
+    fn normal_use_with_hand(
+        &self,
+        _item: &Item,
+        player: &Player,
+        yaw: f32,
+        pitch: f32,
+        hand: Hand,
+    ) {
         let world = player.world();
         let inventory = player.inventory();
-        let (used_item, equipment_slot) = if inventory.get_stack_in_hand(hand).item.id == item.id {
-            (
-                inventory.get_stack_in_hand(hand),
-                match hand {
-                    Hand::Right => EquipmentSlot::MAIN_HAND,
-                    Hand::Left => EquipmentSlot::OFF_HAND,
-                },
-            )
-        } else if inventory.held_item().item.id == item.id {
-            (inventory.held_item(), EquipmentSlot::MAIN_HAND)
-        } else {
-            (
-                inventory.get_stack_in_hand(Hand::Left),
-                EquipmentSlot::OFF_HAND,
-            )
-        };
+        let used_item = inventory.get_stack_in_hand(hand);
+        let equipment_slot = EquipmentSlot::from_hand(hand);
 
         let bobber_id = player.fishing_bobber.load(Ordering::Relaxed);
 
