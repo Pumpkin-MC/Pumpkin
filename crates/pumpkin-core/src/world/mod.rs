@@ -4299,12 +4299,6 @@ impl World {
                         entity.read_nbt_non_mut(entity_nbt);
                         entity.init_data_tracker();
 
-                        let base_entity = entity.get_entity();
-                        // Clear velocity so the client does not replay the drop
-                        // animation; residual velocity from the original drop is
-                        // stale data.
-                        base_entity.velocity.store(Vector3::default());
-
                         // UUID-dedupes if another watcher already loaded this entity.
                         // Tracker owns pairing (spawn packets + vehicle restore).
                         world.add_entity_silent(entity.clone());
