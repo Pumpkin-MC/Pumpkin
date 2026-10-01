@@ -2194,6 +2194,9 @@ impl WasmChunkGenerator {
             crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(plugin) => {
                 plugin.func_handle_generate_phase()
             }
+            crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_2(_) => {
+                panic!("Unexpected plugin version in v0.1 path.")
+            }
         };
         let generator_id = self.generator_id;
         let run = async {

@@ -3,25 +3,30 @@ use std::sync::Arc;
 
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use crate::entity::EntityBase;
+use crate::entity::mob::spawn::finalize_spawn;
 use crate::entity::player::Player;
 use crate::entity::r#type::from_type;
 use crate::item::{ItemBehaviour, ItemMetadata};
+use crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason;
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::data_component_impl::{
-    AxolotlVariantImpl, CatVariantImpl, ChickenVariantImpl, CowVariantImpl, FoxVariantImpl,
-    FrogVariantImpl, HorseVariantImpl, LlamaVariantImpl, MooshroomVariantImpl, PigVariantImpl,
-    RabbitVariantImpl, SheepColorImpl, ShulkerColorImpl, VillagerVariantImpl, WolfVariantImpl,
-    ZombieNautilusVariantImpl,
+    AxolotlVariantImpl, CatVariantImpl, ChickenVariantImpl, CowVariantImpl, EntityDataImpl,
+    FoxVariantImpl, FrogVariantImpl, HorseVariantImpl, LlamaVariantImpl, MooshroomVariantImpl,
+    PigVariantImpl, RabbitVariantImpl, SheepColorImpl, ShulkerColorImpl, VillagerVariantImpl,
+    WolfVariantImpl, ZombieNautilusVariantImpl,
 };
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity::entity_from_egg;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
+use pumpkin_util::permission::PermissionLvl;
 use uuid::Uuid;
 
 pub struct SpawnEggItem;
@@ -32,40 +37,123 @@ impl ItemMetadata for SpawnEggItem {
     }
 }
 
-pub(crate) fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase) {
-    if let Some(comp) = item.get_data_component::<ChickenVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<FrogVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<WolfVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<CatVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<VillagerVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<FoxVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<MooshroomVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<RabbitVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<PigVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<CowVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<HorseVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<LlamaVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<AxolotlVariantImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<SheepColorImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<ShulkerColorImpl>() {
-        mob.set_variant_name(&comp.value);
-    } else if let Some(comp) = item.get_data_component::<ZombieNautilusVariantImpl>() {
-        mob.set_variant_name(&comp.value);
+/// Vanilla's `EntityTypes.OP_ONLY_CUSTOM_DATA`: types whose `entity_data` only a server
+/// operator may set. None of them has a spawn egg today, but a datapack-authored loot table
+/// can still hand out an item with this component, so the gate is checked here too.
+fn only_op_can_set_nbt(entity_type: &EntityType) -> bool {
+    std::ptr::eq(entity_type, &EntityType::FALLING_BLOCK)
+        || std::ptr::eq(entity_type, &EntityType::COMMAND_BLOCK_MINECART)
+        || std::ptr::eq(entity_type, &EntityType::SPAWNER_MINECART)
+}
+
+/// Permission node for op-only `entity_data`, so permission plugins can grant or deny it.
+pub const NBT_PLACE_PERMISSION: &str = "minecraft:nbt.place";
+
+/// Vanilla `PlayerList.isOp`: any ops list entry, whatever its level, passes the node's
+/// `Op(One)` default, so without plugins or attachments the result matches vanilla.
+fn can_place_op_nbt(player: &Player) -> bool {
+    let world = player.world();
+    let Some(server) = world.server.upgrade() else {
+        return false;
+    };
+    let Some(player) = world.get_player_by_uuid(player.gameprofile.id) else {
+        return false;
+    };
+    let is_op = server
+        .data
+        .operator_config
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_entry(&player.gameprofile.id)
+        .is_some();
+    let level = if is_op {
+        PermissionLvl::Four
+    } else {
+        PermissionLvl::Zero
+    };
+    player.has_permission_at_level(&server, NBT_PLACE_PERMISSION, level)
+}
+
+/// Loads the stack's `entity_data` NBT into the mob. Identity and placement stay as spawned.
+///
+/// `user` is the player who caused the spawn, matching vanilla's `updateCustomEntityTag` user
+/// argument; it is `None` for non-player sources such as a dispenser.
+fn apply_entity_data(item: &ItemStack, mob: &dyn EntityBase, user: Option<&Player>) {
+    let Some(nbt) = item
+        .get_data_component::<EntityDataImpl>()
+        .and_then(|comp| comp.nbt.as_ref())
+    else {
+        return;
+    };
+    let entity_type = mob.get_entity().entity_type;
+    // Vanilla EntityType.updateCustomEntityTag loads the data only into the type it names.
+    if let Some(id) = nbt.get_string("id")
+        && id.strip_prefix("minecraft:").unwrap_or(id) != entity_type.resource_name
+    {
+        return;
     }
+    if only_op_can_set_nbt(entity_type) && !user.is_some_and(can_place_op_nbt) {
+        return;
+    }
+    let mut nbt = nbt.clone();
+    for key in ["id", "UUID", "Pos"] {
+        nbt.child_tags.remove(key);
+    }
+    if !nbt.is_empty() {
+        // Vanilla TypedEntityData.loadInto merges into the mob's own save so unset keys keep their state.
+        let mut merged = NbtCompound::new();
+        mob.write_nbt(&mut merged);
+        merged.merge(&nbt);
+        mob.read_nbt_non_mut(&merged);
+    }
+}
+
+/// Vanilla `EntityType.appendDefaultStackConfig`: item components first, `entity_data` last.
+pub(crate) fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase, user: Option<&Player>) {
+    apply_variant(item, mob);
+    apply_entity_data(item, mob, user);
+}
+
+fn apply_variant(item: &ItemStack, mob: &dyn EntityBase) {
+    macro_rules! apply_variant {
+        ($($ty:ty),+ $(,)?) => {
+            $(
+                if let Some(comp) = item.get_data_component::<$ty>() {
+                    mob.set_variant_name(&comp.value);
+                    return;
+                }
+            )+
+        };
+    }
+    apply_variant!(
+        ChickenVariantImpl,
+        FrogVariantImpl,
+        WolfVariantImpl,
+        CatVariantImpl,
+        VillagerVariantImpl,
+        FoxVariantImpl,
+        MooshroomVariantImpl,
+        RabbitVariantImpl,
+        PigVariantImpl,
+        CowVariantImpl,
+        HorseVariantImpl,
+        LlamaVariantImpl,
+        AxolotlVariantImpl,
+        SheepColorImpl,
+        ShulkerColorImpl,
+        ZombieNautilusVariantImpl,
+    );
+}
+
+/// Finalizes a mob spawned by a spawn egg, then applies the egg's components (vanilla order).
+pub(crate) fn prepare_egg_mob(
+    item: &ItemStack,
+    mob: &Arc<dyn EntityBase>,
+    world: &Arc<World>,
+    user: Option<&Player>,
+) {
+    finalize_spawn(mob, world, None);
+    apply_entity_variant(item, mob.as_ref(), user);
 }
 
 impl ItemBehaviour for SpawnEggItem {
@@ -100,8 +188,14 @@ impl ItemBehaviour for SpawnEggItem {
             } else {
                 player.inventory.off_hand_item()
             };
-            apply_entity_variant(&stack, mob.as_ref());
-            world.spawn_entity(mob);
+            prepare_egg_mob(&stack, &mob, &world, Some(player));
+            if !world.spawn_creature(
+                mob,
+                CreatureSpawnReason::SpawnerEgg,
+                world.get_player_by_uuid(player.gameprofile.id),
+            ) {
+                return;
+            }
 
             let mut main_hand = player.inventory.held_item();
             let consumed = if !main_hand.is_empty() && main_hand.item.id == item.id {
@@ -179,10 +273,15 @@ impl ItemBehaviour for SpawnEggItem {
 
             mob.get_entity().set_rotation(yaw, 0.0);
 
-            apply_entity_variant(item, mob.as_ref());
+            prepare_egg_mob(item, &mob, &world, Some(player));
 
-            world.spawn_entity(mob);
-            item.decrement_unless_creative(player.gamemode.load(), 1);
+            if world.spawn_creature(
+                mob,
+                CreatureSpawnReason::SpawnerEgg,
+                world.get_player_by_uuid(player.gameprofile.id),
+            ) {
+                item.decrement_unless_creative(player.gamemode.load(), 1);
+            }
             BlockActionResult::Success
         } else {
             BlockActionResult::Pass
@@ -196,16 +295,23 @@ impl ItemBehaviour for SpawnEggItem {
             let world = player.world();
             let pos = entity.get_entity().pos.load();
             let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
+            // no baby form, no offspring.
+            if !mob
+                .get_mob()
+                .is_some_and(crate::entity::mob::Mob::spawn_as_baby)
+            {
+                return;
+            }
             mob.get_entity()
                 .set_rotation(rand::random::<f32>() * 360.0, 0.0);
-            mob.get_entity()
-                .age
-                .store(-24000, std::sync::atomic::Ordering::Relaxed);
-            mob.get_entity()
-                .set_synced_data(pumpkin_data::tracked_data::ageable_mob::DATA_BABY_ID, true);
-            apply_entity_variant(item, mob.as_ref());
-            world.spawn_entity(mob);
-            item.decrement_unless_creative(player.gamemode.load(), 1);
+            apply_entity_variant(item, mob.as_ref(), Some(player));
+            if world.spawn_creature(
+                mob,
+                CreatureSpawnReason::SpawnerEgg,
+                world.get_player_by_uuid(player.gameprofile.id),
+            ) {
+                item.decrement_unless_creative(player.gamemode.load(), 1);
+            }
         }
     }
 

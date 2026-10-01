@@ -305,6 +305,14 @@ fn register_permissions(registry: &PermissionRegistry) {
             PermissionDefault::Allow,
         ))
         .unwrap_or_else(|e| tracing::warn!("{e}"));
+    // Checked with vanilla's isOp mapped to level One, see `NBT_PLACE_PERMISSION`.
+    registry
+        .register_permission(Permission::new(
+            crate::item::items::spawn_egg::NBT_PLACE_PERMISSION,
+            "Allows a player to place op-only entity data from spawn eggs",
+            PermissionDefault::Op(PermissionLvl::One),
+        ))
+        .unwrap_or_else(|e| tracing::warn!("{e}"));
 }
 
 #[cfg(test)]
