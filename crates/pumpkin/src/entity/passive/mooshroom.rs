@@ -133,7 +133,6 @@ impl MooshroomEntity {
         );
     }
 
-    // Not sure if the below method should be added as a trait (akin to vanilla's method), where else is this used?
     /// Vanilla `Mob.convertTo`
     fn convert_to_cow(&self) -> Arc<CowEntity> {
         let entity = self.get_entity();
@@ -217,6 +216,14 @@ impl Shearable for MooshroomEntity {
         }
 
         let cow = self.convert_to_cow();
+        // Vanilla discards the mooshroom even if the cow fails to spawn, but here that only happens when a
+        // plugin cancels the conversion or the spawn. Keep the mooshroom then, so it neither vanishes nor
+        // drops free mushrooms.
+        if !self.transform(cow.get_entity().entity_id, "sheared".to_string())
+            || !world.spawn_entity(cow.clone())
+        {
+            return;
+        }
 
         let height = f64::from(entity.height());
         world.spawn_particle(
@@ -242,11 +249,9 @@ impl Shearable for MooshroomEntity {
             }
         }
 
-        let holder = entity
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
+        // These send packets about the cow, so they wait until clients know it exists.
+        let cow_living = &cow.mob_entity.living_entity;
+        cow_living.set_absorption(self.mob_entity.living_entity.get_absorption());
         let effects: Vec<_> = self
             .mob_entity
             .living_entity
@@ -256,17 +261,20 @@ impl Shearable for MooshroomEntity {
             .values()
             .cloned()
             .collect();
-
-        if world.spawn_entity(cow.clone()) {
-            // These send packets about the cow, so they wait until clients know it exists.
-            let cow_living = &cow.mob_entity.living_entity;
-            cow_living.set_absorption(self.mob_entity.living_entity.get_absorption());
-            for effect in effects {
-                cow_living.add_effect(effect);
-            }
-            if let Some(holder) = holder {
-                cow_living.entity.leash_to(holder);
-            }
+        for effect in effects {
+            cow_living.add_effect(effect);
+        }
+        // This is not vanilla: the leash should be removed on the first shear, only once
+        // the leash is removed does the mooshroom get sheared. I left this out because leashing
+        // is currently very broken
+        // TODO fix when leashing works properly
+        let holder = entity
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some(holder) = holder {
+            cow_living.entity.leash_to(holder);
         }
 
         entity.remove();
