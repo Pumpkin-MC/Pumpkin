@@ -342,6 +342,8 @@ fn send_callback(context: &CommandContext, drops: &[ItemStack], table_id: Option
 }
 
 impl CommandExecutor for LootExecutor {
+    /// Generates the requested loot with its source context and delivers it to the selected target.
+    /// Returns command errors for invalid sources, tools, tables, or targets.
     #[expect(clippy::too_many_lines)]
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let mut drops = Vec::new();
@@ -473,6 +475,9 @@ impl CommandExecutor for LootExecutor {
 
                 let params = LootContextParameters {
                     block_state: Some(block_state),
+                    block_entity: (block_state.block_entity_type != u16::MAX)
+                        .then(|| world.get_block_entity(&pos))
+                        .flatten(),
                     tool: tool_stack,
                     position: Some(Vector3::new(
                         f64::from(pos.0.x) + 0.5,

@@ -108,15 +108,19 @@ pub struct CustomNameImpl {
     pub name: TextComponent,
 }
 impl CustomNameImpl {
+    /// Reads a structured text component without flattening its styles or children.
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        data.extract_string().map(|name| Self {
-            name: TextComponent::text(name.to_string()),
-        })
+        TextComponent::try_from_nbt(data)
+            .ok()
+            .map(|name| Self { name })
     }
 }
 impl DataComponentImpl for CustomNameImpl {
+    /// Persists the untranslated text tree, including styles and child components.
     fn write_data(&self) -> NbtTag {
-        NbtTag::String(self.name.clone().get_text().into())
+        self.name
+            .0
+            .to_nbt_tag_for_version(&crate::packet::CURRENT_MC_VERSION)
     }
     fn get_hash(&self) -> i32 {
         get_str_hash(self.name.clone().get_text().as_str()) as i32
@@ -125,32 +129,57 @@ impl DataComponentImpl for CustomNameImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ItemNameImpl {
-    pub name: Cow<'static, str>,
+pub enum ItemNameImpl {
+    /// A generated item's constant translation key.
+    Translation(Cow<'static, str>),
+    /// A stored name with arbitrary text content, styles, and children.
+    Component(TextComponent),
 }
 impl ItemNameImpl {
+    /// Reads item names without flattening structured or literal text into a translation key.
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        let name = match data {
-            NbtTag::String(name) => name.to_string(),
-            NbtTag::Compound(component) => component
-                .get_string("translate")
-                .or_else(|| component.get_string("text"))?
-                .to_owned(),
-            _ => return None,
-        };
-        Some(Self {
-            name: Cow::Owned(name),
-        })
+        if let NbtTag::Compound(component) = data
+            && component.child_tags.len() == 1
+            && let Some(key) = component.get_string("translate")
+        {
+            return Some(Self::Translation(Cow::Owned(key.to_owned())));
+        }
+        TextComponent::try_from_nbt(data).ok().map(Self::Component)
+    }
+
+    /// Returns a display component while retaining translation and formatting semantics.
+    #[must_use]
+    #[allow(
+        deprecated,
+        reason = "Stored translation keys are supplied at runtime."
+    )]
+    pub fn to_text_component(&self) -> TextComponent {
+        match self {
+            Self::Translation(key) => TextComponent::translate(key.clone(), &[]),
+            Self::Component(component) => component.clone(),
+        }
     }
 }
 impl DataComponentImpl for ItemNameImpl {
+    /// Persists generated translation keys and stored text trees in the same NBT component format.
     fn write_data(&self) -> NbtTag {
-        let mut component = NbtCompound::new();
-        component.put_string("translate", self.name.to_string());
-        NbtTag::Compound(component)
+        match self {
+            Self::Translation(key) => {
+                let mut component = NbtCompound::new();
+                component.put_string("translate", key.to_string());
+                NbtTag::Compound(component)
+            }
+            Self::Component(component) => component
+                .0
+                .to_nbt_tag_for_version(&crate::packet::CURRENT_MC_VERSION),
+        }
     }
+    /// Hashes the translation key or displayed literal text using the existing string component hash.
     fn get_hash(&self) -> i32 {
-        get_str_hash(&self.name) as i32
+        match self {
+            Self::Translation(key) => get_str_hash(key) as i32,
+            Self::Component(component) => get_str_hash(&component.clone().get_text()) as i32,
+        }
     }
     default_impl!(ItemName);
 }
@@ -351,13 +380,57 @@ impl DataComponentImpl for CustomModelDataImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct TooltipDisplayImpl;
+pub struct TooltipDisplayImpl {
+    pub hide_tooltip: bool,
+    pub hidden_components: Vec<crate::data_component::DataComponent>,
+}
 impl TooltipDisplayImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub const DEFAULT: Self = Self {
+        hide_tooltip: false,
+        hidden_components: Vec::new(),
+    };
+
+    /// Reads tooltip visibility and its ordered set of hidden component registry names.
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let hide_tooltip = match compound.get("hide_tooltip") {
+            None => false,
+            Some(NbtTag::Byte(value)) => *value != 0,
+            _ => return None,
+        };
+        let mut hidden_components = Vec::new();
+        if let Some(tag) = compound.get("hidden_components") {
+            let NbtTag::List(list) = tag else {
+                return None;
+            };
+            for tag in list {
+                let component =
+                    crate::data_component::DataComponent::try_from_name(tag.extract_string()?)?;
+                if !hidden_components.contains(&component) {
+                    hidden_components.push(component);
+                }
+            }
+        }
+        Some(Self {
+            hide_tooltip,
+            hidden_components,
+        })
     }
 }
 impl DataComponentImpl for TooltipDisplayImpl {
+    /// Persists visibility and hidden registry names without coupling them to protocol IDs.
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_bool("hide_tooltip", self.hide_tooltip);
+        compound.put_list(
+            "hidden_components",
+            self.hidden_components
+                .iter()
+                .map(|component| NbtTag::String(component.to_name().into()))
+                .collect(),
+        );
+        NbtTag::Compound(compound)
+    }
     default_impl!(TooltipDisplay);
 }
 
@@ -523,14 +596,166 @@ impl DataComponentImpl for BannerPatternsImpl {
     default_impl!(BannerPatterns);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct PotDecorationsImpl;
+/// A pot face's item template, retaining its full wire count and component patch.
+#[derive(Clone)]
+pub struct PotDecoration {
+    pub item: &'static crate::item::Item,
+    pub count: i32,
+    pub patch: Vec<(
+        crate::data_component::DataComponent,
+        Option<Box<dyn DataComponentImpl>>,
+    )>,
+}
+
+impl PotDecoration {
+    /// Reads a registry name or item template, rejecting invalid counts and component patches.
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        if let NbtTag::String(name) = data {
+            let item = crate::item::Item::from_registry_key(name)?;
+            if item.id == crate::item::Item::AIR.id {
+                return None;
+            }
+            return Some(Self {
+                item,
+                count: 1,
+                patch: Vec::new(),
+            });
+        }
+        let compound = data.extract_compound()?;
+        let item = crate::item::Item::from_registry_key(compound.get_string("id")?)?;
+        if item.id == crate::item::Item::AIR.id {
+            return None;
+        }
+        let count = match compound.get("count") {
+            Some(count) => count.extract_int()?,
+            None => 1,
+        };
+        if !(1..=99).contains(&count) {
+            return None;
+        }
+        let mut patch = Vec::new();
+        if let Some(components) = compound.get("components") {
+            let components = components.extract_compound()?;
+            let mut seen = [false; 256];
+            for (name, value) in &components.child_tags {
+                let (name, removed) = name
+                    .strip_prefix('!')
+                    .map_or((name.as_ref(), false), |name| (name, true));
+                let id = crate::data_component::DataComponent::try_from_name(name)?;
+                if !Self::is_persistent_component(id) {
+                    return None;
+                }
+                if std::mem::replace(&mut seen[usize::from(id.to_id())], true) {
+                    return None;
+                }
+                let value = if removed {
+                    if !value.extract_compound()?.child_tags.is_empty() {
+                        return None;
+                    }
+                    None
+                } else {
+                    Some(crate::data_component_impl::read_data(id, value)?)
+                };
+                patch.push((id, value));
+            }
+        }
+        Some(Self { item, count, patch })
+    }
+
+    /// Persists a named item template, omitting default count and empty component fields.
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("id", format!("minecraft:{}", self.item.registry_key));
+        if self.count != 1 {
+            compound.put_int("count", self.count);
+        }
+        let mut components = NbtCompound::new();
+        for (id, value) in &self.patch {
+            if Self::is_persistent_component(*id) {
+                match value {
+                    Some(value) => components.put(id.to_name(), value.write_data()),
+                    None => components
+                        .put_compound(format!("!{}", id.to_name()).as_str(), NbtCompound::new()),
+                }
+            }
+        }
+        if !components.child_tags.is_empty() {
+            compound.put_compound("components", components);
+        }
+        NbtTag::Compound(compound)
+    }
+
+    /// Excludes network-only components from template NBT for both additions and removals.
+    const fn is_persistent_component(id: crate::data_component::DataComponent) -> bool {
+        !matches!(
+            id,
+            crate::data_component::DataComponent::CreativeSlotLock
+                | crate::data_component::DataComponent::AdditionalTradeCost
+                | crate::data_component::DataComponent::MapPostProcessing
+        )
+    }
+}
+
+impl std::fmt::Debug for PotDecoration {
+    /// Formats the complete persistent template without a runtime item-stack identifier.
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.write_data(), formatter)
+    }
+}
+
+impl PartialEq for PotDecoration {
+    /// Compares item, count, and component values independently of patch entry order.
+    fn eq(&self, other: &Self) -> bool {
+        self.item.id == other.item.id
+            && self.count == other.count
+            && self.patch.len() == other.patch.len()
+            && self.patch.iter().all(|(id, value)| {
+                other.patch.iter().any(|(other_id, other_value)| {
+                    id == other_id
+                        && match (value, other_value) {
+                            (Some(value), Some(other_value)) => value.equal(other_value.as_ref()),
+                            (None, None) => true,
+                            _ => false,
+                        }
+                })
+            })
+    }
+}
+
+/// The four optional decorated-pot faces, ordered back, left, right, then front.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PotDecorationsImpl {
+    pub decorations: [Option<PotDecoration>; 4],
+}
 impl PotDecorationsImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub const EMPTY: Self = Self {
+        decorations: [const { None }; 4],
+    };
+    const FACES: [&'static str; 4] = ["back", "left", "right", "front"];
+
+    /// Reads named optional templates; absent faces remain distinct from explicit bricks.
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let mut decorations = Self::EMPTY.decorations;
+        for (face, name) in decorations.iter_mut().zip(Self::FACES) {
+            if let Some(data) = compound.get(name) {
+                *face = Some(PotDecoration::read_data(data)?);
+            }
+        }
+        Some(Self { decorations })
     }
 }
 impl DataComponentImpl for PotDecorationsImpl {
+    /// Persists present faces as named complete item templates without filling missing faces.
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        for (face, name) in self.decorations.iter().zip(Self::FACES) {
+            if let Some(face) = face {
+                compound.put(name, face.write_data());
+            }
+        }
+        NbtTag::Compound(compound)
+    }
     default_impl!(PotDecorations);
 }
 
@@ -564,6 +789,219 @@ impl BreakSoundImpl {
 }
 impl DataComponentImpl for BreakSoundImpl {
     default_impl!(BreakSound);
+}
+
+#[cfg(test)]
+mod copy_component_tests {
+    use super::*;
+
+    /// Custom names retain formatting when persisted as item components.
+    #[test]
+    fn custom_name_preserves_style() {
+        let original = CustomNameImpl {
+            name: TextComponent::text("Stored name").bold(),
+        };
+        assert_eq!(
+            CustomNameImpl::read_data(&original.write_data()),
+            Some(original)
+        );
+    }
+
+    /// Vanilla colored names retain named colors and explicitly enabled or disabled styles.
+    #[test]
+    fn custom_name_reads_vanilla_colored_text() -> Result<(), Box<dyn std::error::Error>> {
+        for (text, color, style) in [
+            ("Archive", "gold", Some(("bold", true))),
+            ("Alex fixture", "green", None),
+            ("Stored shulker", "aqua", Some(("italic", false))),
+        ] {
+            let mut compound = NbtCompound::new();
+            compound.put_string("text", text.into());
+            compound.put_string("color", color.into());
+            if let Some((style, enabled)) = style {
+                compound.put_bool(style, enabled);
+            }
+            let original = NbtTag::Compound(compound);
+            let name = TextComponent::try_from_nbt(&original)?;
+            assert_eq!(CustomNameImpl { name }.write_data(), original);
+        }
+        Ok(())
+    }
+
+    /// Pot decorations preserve all four faces in back, left, right, front order.
+    #[test]
+    fn pot_decorations_preserve_faces() {
+        let mut faces = NbtCompound::new();
+        for (face, name) in [
+            ("back", "angler"),
+            ("left", "archer"),
+            ("right", "arms_up"),
+            ("front", "blade"),
+        ] {
+            let mut template = NbtCompound::new();
+            template.put_string("id", format!("minecraft:{name}_pottery_sherd"));
+            faces.put_compound(face, template);
+        }
+        let expected = NbtTag::Compound(faces);
+        assert_eq!(
+            PotDecorationsImpl::read_data(&expected).map(|value| value.write_data()),
+            Some(expected)
+        );
+    }
+
+    /// Named pot faces preserve complete item templates and distinguish absent faces from bricks.
+    #[test]
+    fn pot_decorations_read_named_item_templates() {
+        let mut patch = NbtCompound::new();
+        patch.put_int("minecraft:repair_cost", 7);
+        patch.put_compound("!minecraft:custom_name", NbtCompound::new());
+        let mut back = NbtCompound::new();
+        back.put_string("id", "minecraft:angler_pottery_sherd".into());
+        back.put_int("count", 3);
+        back.put_compound("components", patch);
+        let mut brick = NbtCompound::new();
+        brick.put_string("id", "minecraft:brick".into());
+        let mut faces = NbtCompound::new();
+        faces.put_compound("back", back);
+        faces.put_compound("front", brick);
+        let expected = NbtTag::Compound(faces);
+        assert_eq!(
+            PotDecorationsImpl::read_data(&expected).map(|value| value.write_data()),
+            Some(expected)
+        );
+    }
+
+    /// Bare registry names acquire the default count while an empty compound has no decoration faces.
+    #[test]
+    fn pot_decorations_read_bare_names_and_absent_faces() -> Result<(), Box<dyn std::error::Error>>
+    {
+        assert_eq!(
+            PotDecorationsImpl::EMPTY.write_data(),
+            NbtTag::Compound(NbtCompound::new())
+        );
+        let mut input = NbtCompound::new();
+        input.put_string("front", "minecraft:brick".into());
+        let decoded =
+            PotDecorationsImpl::read_data(&NbtTag::Compound(input)).ok_or("Missing pot faces")?;
+        assert!(decoded.decorations[..3].iter().all(Option::is_none));
+        let front = decoded.decorations[3].as_ref().ok_or("Missing brick")?;
+        assert_eq!(front.item.id, crate::item::Item::BRICK.id);
+        assert_eq!(front.count, 1);
+        assert!(front.patch.is_empty());
+        Ok(())
+    }
+
+    /// Invalid persistent counts, unknown items, and malformed component values reject the whole face.
+    #[test]
+    fn pot_decorations_reject_invalid_templates() {
+        for count in [-1, 0, 100, 256, i32::MAX] {
+            let mut template = NbtCompound::new();
+            template.put_string("id", "minecraft:brick".into());
+            template.put_int("count", count);
+            let mut faces = NbtCompound::new();
+            faces.put_compound("back", template);
+            assert!(PotDecorationsImpl::read_data(&NbtTag::Compound(faces)).is_none());
+        }
+        for value in [
+            NbtTag::String("minecraft:unknown_item".into()),
+            NbtTag::String("minecraft:air".into()),
+            NbtTag::Int(1),
+            NbtTag::List(Vec::new()),
+        ] {
+            let mut faces = NbtCompound::new();
+            faces.put("back", value);
+            assert!(PotDecorationsImpl::read_data(&NbtTag::Compound(faces)).is_none());
+        }
+        let mut air = NbtCompound::new();
+        air.put_string("id", "minecraft:air".into());
+        let mut faces = NbtCompound::new();
+        faces.put_compound("back", air);
+        assert!(PotDecorationsImpl::read_data(&NbtTag::Compound(faces)).is_none());
+        for (name, value) in [
+            ("minecraft:unknown_component", NbtTag::Int(1)),
+            ("minecraft:repair_cost", NbtTag::String("invalid".into())),
+            ("!minecraft:custom_name", NbtTag::Int(1)),
+        ] {
+            let mut patch = NbtCompound::new();
+            patch.put(name, value);
+            let mut template = NbtCompound::new();
+            template.put_string("id", "minecraft:brick".into());
+            template.put_compound("components", patch);
+            let mut faces = NbtCompound::new();
+            faces.put_compound("back", template);
+            assert!(PotDecorationsImpl::read_data(&NbtTag::Compound(faces)).is_none());
+        }
+    }
+
+    /// Transient component additions and removals are rejected in NBT and omitted from saved templates.
+    #[test]
+    fn pot_decorations_omit_transient_components_from_nbt() {
+        use crate::data_component::DataComponent;
+        for id in [
+            DataComponent::CreativeSlotLock,
+            DataComponent::AdditionalTradeCost,
+            DataComponent::MapPostProcessing,
+        ] {
+            for name in [id.to_name().to_owned(), format!("!{}", id.to_name())] {
+                let mut patch = NbtCompound::new();
+                patch.put_compound(&name, NbtCompound::new());
+                let mut template = NbtCompound::new();
+                template.put_string("id", "minecraft:brick".into());
+                template.put_compound("components", patch);
+                let mut faces = NbtCompound::new();
+                faces.put_compound("front", template);
+                assert!(PotDecorationsImpl::read_data(&NbtTag::Compound(faces)).is_none());
+            }
+        }
+        let face = PotDecoration {
+            item: &crate::item::Item::BRICK,
+            count: 1,
+            patch: vec![
+                (
+                    DataComponent::CreativeSlotLock,
+                    Some(Box::new(CreativeSlotLockImpl)),
+                ),
+                (DataComponent::AdditionalTradeCost, None),
+                (DataComponent::MapPostProcessing, None),
+            ],
+        };
+        let mut expected = NbtCompound::new();
+        expected.put_string("id", "minecraft:brick".into());
+        assert_eq!(face.write_data(), NbtTag::Compound(expected));
+    }
+
+    /// Banner tooltip visibility persists alongside the selected hidden component types.
+    #[test]
+    fn tooltip_display_preserves_hidden_components() {
+        let mut compound = NbtCompound::new();
+        compound.put_bool("hide_tooltip", true);
+        compound.put_list(
+            "hidden_components",
+            vec![
+                NbtTag::String("minecraft:banner_patterns".into()),
+                NbtTag::String("minecraft:rarity".into()),
+            ],
+        );
+        let expected = NbtTag::Compound(compound);
+        assert_eq!(
+            TooltipDisplayImpl::read_data(&expected).map(|value| value.write_data()),
+            Some(expected)
+        );
+    }
+
+    /// Stored item names retain styles and literal text independently of generated translation keys.
+    #[test]
+    fn item_name_preserves_structured_text() {
+        let original = ItemNameImpl::Component(TextComponent::text("Named banner").bold());
+        assert_eq!(
+            ItemNameImpl::read_data(&original.write_data()),
+            Some(original)
+        );
+        assert_eq!(
+            ItemNameImpl::read_data(&NbtTag::String("Literal name".into())),
+            Some(ItemNameImpl::Component(TextComponent::text("Literal name")))
+        );
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

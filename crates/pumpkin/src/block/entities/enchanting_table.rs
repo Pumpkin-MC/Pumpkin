@@ -1,51 +1,53 @@
-use super::BlockEntity;
+use super::{
+    BlockEntity,
+    components::{BlockEntityComponents, ComponentFields},
+};
+use pumpkin_data::data_component::DataComponent;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use std::sync::Mutex;
 
 pub struct EnchantingTableBlockEntity {
     pub position: BlockPos,
-    pub custom_name: Mutex<Option<String>>,
+    pub components: BlockEntityComponents,
 }
 
 impl BlockEntity for EnchantingTableBlockEntity {
+    /// Returns the registry identifier used for persistence and chunk updates.
     fn resource_location(&self) -> &'static str {
         Self::ID
     }
 
+    /// Returns the block position belonging to this entity.
     fn get_position(&self) -> BlockPos {
         self.position
     }
 
-    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
-    where
-        Self: Sized,
-    {
-        let custom_name = nbt.get_string("CustomName").map(ToString::to_string);
+    /// Loads implicit fields and retained item additions without flattening text.
+    fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self {
         Self {
             position,
-            custom_name: Mutex::new(custom_name),
+            components: BlockEntityComponents::from_nbt(nbt, Self::COMPONENT_FIELDS),
         }
     }
 
+    /// Saves implicit fields and retained additions in their vanilla NBT locations.
     fn write_nbt(&self, nbt: &mut NbtCompound) {
-        if let Ok(name) = self.custom_name.lock()
-            && let Some(name) = name.as_ref()
-        {
-            nbt.put_string("CustomName", name.clone());
-        }
+        self.components.write_nbt(nbt);
     }
 
+    /// Returns the owned component state used by placement and loot collection.
+    fn component_state(&self) -> Option<&BlockEntityComponents> {
+        Some(&self.components)
+    }
+
+    /// Sends the table's name without retained item additions.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        if let Ok(name) = self.custom_name.try_lock()
-            && let Some(ref name) = *name
-        {
-            nbt.put_string("CustomName", name.clone());
-        }
+        self.components.write_custom_nbt(&mut nbt);
         Some(nbt)
     }
 
+    /// Exposes the concrete entity for existing specialized block behavior.
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -53,11 +55,14 @@ impl BlockEntity for EnchantingTableBlockEntity {
 
 impl EnchantingTableBlockEntity {
     pub const ID: &'static str = "minecraft:enchanting_table";
+    const COMPONENT_FIELDS: ComponentFields = &[(DataComponent::CustomName, "CustomName")];
+
+    /// Creates an entity with empty component state at the supplied position.
     #[must_use]
     pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
-            custom_name: Mutex::new(None),
+            components: BlockEntityComponents::new(Self::COMPONENT_FIELDS),
         }
     }
 }

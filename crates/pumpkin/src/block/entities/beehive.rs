@@ -1,16 +1,24 @@
-use super::BlockEntity;
+use super::{
+    BlockEntity,
+    components::{BlockEntityComponents, ComponentFields},
+};
+use pumpkin_data::data_component::DataComponent;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Mutex;
 
 pub struct BeehiveBlockEntity {
     pub position: BlockPos,
-    pub bees: Mutex<Option<Vec<NbtTag>>>,
+    pub components: BlockEntityComponents,
     pub flower_pos: Mutex<Option<BlockPos>>,
 }
 
 impl BlockEntity for BeehiveBlockEntity {
+    /// Returns the owned bee payloads and retained component additions.
+    fn component_state(&self) -> Option<&BlockEntityComponents> {
+        Some(&self.components)
+    }
+
     fn resource_location(&self) -> &'static str {
         Self::ID
     }
@@ -19,14 +27,11 @@ impl BlockEntity for BeehiveBlockEntity {
         self.position
     }
 
+    /// Loads bee payloads and flower position without starting bee behavior.
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
     {
-        let bees = nbt
-            .get_list("bees")
-            .or_else(|| nbt.get_list("Bees"))
-            .map(<[_]>::to_vec);
         let flower_pos = nbt
             .get_int_array("flower_pos")
             .and_then(|arr| (arr.len() == 3).then(|| BlockPos::new(arr[0], arr[1], arr[2])))
@@ -43,17 +48,14 @@ impl BlockEntity for BeehiveBlockEntity {
             });
         Self {
             position,
-            bees: Mutex::new(bees),
+            components: BlockEntityComponents::from_nbt(nbt, Self::COMPONENT_FIELDS),
             flower_pos: Mutex::new(flower_pos),
         }
     }
 
+    /// Persists bee entity data, timers, and retained component additions.
     fn write_nbt(&self, nbt: &mut NbtCompound) {
-        if let Ok(b) = self.bees.lock()
-            && let Some(b) = b.as_ref()
-        {
-            nbt.put_list("bees", b.clone());
-        }
+        self.components.write_nbt(nbt);
         if let Ok(fp) = self.flower_pos.lock()
             && let Some(fp) = fp.as_ref()
         {
@@ -64,13 +66,10 @@ impl BlockEntity for BeehiveBlockEntity {
         }
     }
 
+    /// Encodes visible hive fields for chunk updates.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        if let Ok(bees) = self.bees.try_lock()
-            && let Some(ref b) = *bees
-        {
-            nbt.put_list("bees", b.clone());
-        }
+        self.components.write_client_nbt(&mut nbt);
         if let Ok(flower_pos) = self.flower_pos.try_lock()
             && let Some(ref fp) = *flower_pos
         {
@@ -88,12 +87,14 @@ impl BlockEntity for BeehiveBlockEntity {
 }
 
 impl BeehiveBlockEntity {
+    const COMPONENT_FIELDS: ComponentFields = &[(DataComponent::Bees, "bees")];
     pub const ID: &'static str = "minecraft:beehive";
+    /// Creates an empty hive at the supplied position.
     #[must_use]
     pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
-            bees: Mutex::new(None),
+            components: BlockEntityComponents::new(Self::COMPONENT_FIELDS),
             flower_pos: Mutex::new(None),
         }
     }

@@ -1,3 +1,4 @@
+use super::components::{BlockEntityComponents, CONTAINER_FIELDS};
 use pumpkin_data::data_component_impl::IDSetContent;
 use pumpkin_data::tag::Taggable;
 use std::any::Any;
@@ -23,8 +24,7 @@ pub struct BeaconBlockEntity {
     pub payment: Arc<Mutex<ItemStack>>,
 
     // Vanilla Parity Fields
-    pub custom_name: Mutex<Option<String>>,
-    pub lock_key: Mutex<Option<String>>,
+    pub components: BlockEntityComponents,
     pub last_check_y: AtomicI32,
 }
 
@@ -37,6 +37,7 @@ impl BeaconBlockEntity {
     pub const DATA_SECONDARY: usize = 2;
     pub const NUM_DATA_VALUES: usize = 3;
 
+    /// Creates an inactive beacon with empty component metadata.
     #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
@@ -46,8 +47,7 @@ impl BeaconBlockEntity {
             levels: AtomicI32::new(0),
             dirty: AtomicBool::new(false),
             payment: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
-            custom_name: Mutex::new(None),
-            lock_key: Mutex::new(None),
+            components: BlockEntityComponents::new(CONTAINER_FIELDS),
             last_check_y: AtomicI32::new(position.0.y - 1),
         }
     }
@@ -226,6 +226,11 @@ impl BeaconBlockEntity {
 }
 
 impl BlockEntity for BeaconBlockEntity {
+    /// Returns the beacon's name, lock, and retained item metadata.
+    fn component_state(&self) -> Option<&BlockEntityComponents> {
+        Some(&self.components)
+    }
+
     fn resource_location(&self) -> &'static str {
         Self::ID
     }
@@ -234,6 +239,7 @@ impl BlockEntity for BeaconBlockEntity {
         self.position
     }
 
+    /// Loads beacon effects, structured names, locks, and retained item metadata.
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
@@ -257,11 +263,6 @@ impl BlockEntity for BeaconBlockEntity {
             .or_else(|| nbt.get_int("secondary_effect"))
             .unwrap_or(-1);
         let levels = nbt.get_int("Levels").unwrap_or(0);
-        let custom_name = nbt
-            .get_string("CustomName")
-            .or_else(|| nbt.get_string("custom_name"))
-            .map(std::string::ToString::to_string);
-        let lock_key = nbt.get_string("Lock").map(std::string::ToString::to_string);
 
         Self {
             position,
@@ -270,12 +271,12 @@ impl BlockEntity for BeaconBlockEntity {
             levels: AtomicI32::new(levels),
             dirty: AtomicBool::new(false),
             payment: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
-            custom_name: Mutex::new(custom_name),
-            lock_key: Mutex::new(lock_key),
+            components: BlockEntityComponents::from_nbt(nbt, CONTAINER_FIELDS),
             last_check_y: AtomicI32::new(position.0.y - 1),
         }
     }
 
+    /// Persists beacon effects and its owned component state.
     fn write_nbt(&self, nbt: &mut NbtCompound) {
         let primary = self.primary_effect.load(Ordering::Relaxed);
         if primary >= 0 {
@@ -295,20 +296,7 @@ impl BlockEntity for BeaconBlockEntity {
         }
         nbt.put_int("Levels", self.levels.load(Ordering::Relaxed));
 
-        if let Some(name) = &*self
-            .custom_name
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-        {
-            nbt.put_string("CustomName", name.clone());
-        }
-        if let Some(lock) = &*self
-            .lock_key
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-        {
-            nbt.put_string("Lock", lock.clone());
-        }
+        self.components.write_nbt(nbt);
     }
 
     fn tick(&self, world: &Arc<World>) {
@@ -323,6 +311,7 @@ impl BlockEntity for BeaconBlockEntity {
         }
     }
 
+    /// Sends beacon effects, name, and lock without retained item additions.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
         let primary = self.primary_effect.load(Ordering::Relaxed);
@@ -342,16 +331,7 @@ impl BlockEntity for BeaconBlockEntity {
             }
         }
         nbt.put_int("Levels", self.levels.load(Ordering::Relaxed));
-        if let Ok(name) = self.custom_name.try_lock()
-            && let Some(ref name) = *name
-        {
-            nbt.put_string("CustomName", name.clone());
-        }
-        if let Ok(lock) = self.lock_key.try_lock()
-            && let Some(ref lock) = *lock
-        {
-            nbt.put_string("Lock", lock.clone());
-        }
+        self.components.write_custom_nbt(&mut nbt);
         Some(nbt)
     }
 

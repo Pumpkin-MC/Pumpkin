@@ -20,6 +20,7 @@ pub mod chest_like_block_entity;
 pub mod chiseled_bookshelf;
 pub mod command_block;
 pub mod comparator;
+pub mod components;
 pub mod daylight_detector;
 pub mod dropper;
 pub mod end_portal;
@@ -83,13 +84,14 @@ pub trait BlockEntity: Any + Send + Sync {
     /// process. Returns `None` for entities that do not support loot tables, or if the
     /// loot has already been generated.
     fn take_loot_table(&self) -> Option<(String, i64)> {
-        None
+        self.component_state()?.take_loot_table()
     }
 
     /// Returns `true` if this block entity has a pending deferred loot table that has
     /// not yet been unpacked. Does not consume the loot table.
     fn has_loot_table(&self) -> bool {
-        false
+        self.component_state()
+            .is_some_and(components::BlockEntityComponents::has_loot_table)
     }
 
     fn write_internal(&self, nbt: &mut NbtCompound) {
@@ -126,11 +128,38 @@ pub trait BlockEntity: Any + Send + Sync {
         None
     }
 
-    /// Copies the block entity's state on the item stack dropped for it.
-    fn collect_item_components(&self, _stack: &mut ItemStack) {}
+    /// Returns the entity's owned component storage when it supports component preservation.
+    fn component_state(&self) -> Option<&components::BlockEntityComponents> {
+        None
+    }
+
+    /// Lists dynamic implicit values restored outside the reusable component storage.
+    fn consumed_components(&self) -> &'static [pumpkin_data::data_component::DataComponent] {
+        &[]
+    }
+
+    /// Adds current implicit state after retained additions, so authoritative fields take precedence.
+    fn collect_implicit_components(&self, _components: &mut components::ComponentMap) {}
+
+    /// Snapshots typed components for loot without serializing the entity or generating loot.
+    fn collect_components(&self) -> components::ComponentMap {
+        let mut components = self
+            .component_state()
+            .map_or_else(Vec::new, components::BlockEntityComponents::collect);
+        self.collect_implicit_components(&mut components);
+        components
+    }
 
     /// Restores the state from the item stack the block was placed from.
-    fn apply_item_components(&self, _stack: &ItemStack) {}
+    fn apply_item_components(&self, stack: &ItemStack) {
+        if let Some(components) = self.component_state() {
+            components.apply(stack, self.consumed_components());
+        }
+        self.apply_implicit_components(stack);
+    }
+
+    /// Restores dynamic implicit fields after retained additions have been replaced.
+    fn apply_implicit_components(&self, _stack: &ItemStack) {}
 
     fn drops_for_creative_player(&self) -> bool {
         false
@@ -175,6 +204,7 @@ pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
     T::from_nbt(nbt, BlockPos::new(x, y, z))
 }
 
+/// Restores a supported block-entity type and position, returning `None` for missing or unknown identifiers.
 #[must_use]
 #[allow(clippy::too_many_lines)]
 pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> {
@@ -187,7 +217,9 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         barrel::BarrelBlockEntity::ID => {
             Some(Arc::new(barrel::BarrelBlockEntity::from_nbt(nbt, pos)))
         }
-        chest::ChestBlockEntity::ID => Some(Arc::new(chest::ChestBlockEntity::from_nbt(nbt, pos))),
+        chest::ChestBlockEntity::ID | "minecraft:copper_chest" => {
+            Some(Arc::new(chest::ChestBlockEntity::from_nbt(nbt, pos)))
+        }
         trapped_chest::TrappedChestBlockEntity::ID => Some(Arc::new(
             trapped_chest::TrappedChestBlockEntity::from_nbt(nbt, pos),
         )),
@@ -330,6 +362,7 @@ pub fn has_block_block_entity(block: &Block) -> bool {
     BLOCK_ENTITY_TYPES.contains(&block.name)
 }
 
+/// Creates the registered entity type at a position, preserving distinct copper chest identifiers.
 #[must_use]
 #[allow(clippy::too_many_lines)]
 pub fn create_block_entity(
@@ -344,6 +377,7 @@ pub fn create_block_entity(
     match *name {
         "furnace" => Some(Arc::new(furnace::FurnaceBlockEntity::new(position))),
         "chest" => Some(Arc::new(chest::ChestBlockEntity::new(position))),
+        "copper_chest" => Some(Arc::new(chest::ChestBlockEntity::new_copper(position))),
         "trapped_chest" => Some(Arc::new(trapped_chest::TrappedChestBlockEntity::new(
             position,
         ))),

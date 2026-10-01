@@ -356,6 +356,7 @@ macro_rules! impl_inventory_for_cooking {
 macro_rules! impl_block_entity_for_cooking {
     ($struct_name:ty,$recipe_kind:expr) => {
         impl $crate::block::entities::BlockEntity for $struct_name {
+            $crate::block::entities::components::impl_container_components!();
             #[expect(clippy::too_many_lines)]
             fn tick(
                 &self,
@@ -540,6 +541,7 @@ macro_rules! impl_block_entity_for_cooking {
                 self.position
             }
 
+            /// Loads persistent scalar components alongside timers, recipes, and inventory.
             fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
             where
                 Self: Sized,
@@ -572,6 +574,8 @@ macro_rules! impl_block_entity_for_cooking {
 
                 let mut furnace = Self {
                     position,
+                    components: $crate::block::entities::components::BlockEntityComponents::from_nbt(
+                        nbt, $crate::block::entities::components::CONTAINER_FIELDS),
                     dirty: AtomicBool::new(false),
                     comparator_dirty: AtomicBool::new(false),
                     items: std::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
@@ -586,7 +590,9 @@ macro_rules! impl_block_entity_for_cooking {
                 furnace
             }
 
+            /// Persists the furnace's components and current cooking and inventory state.
             fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+                self.components.write_nbt(nbt);
                 nbt.put_short("cooking_total_time", self.get_cooking_total_time() as i16);
                 nbt.put_short("cooking_time_spent", self.get_cooking_time_spent() as i16);
                 nbt.put_short("lit_total_time", self.get_lit_total_time() as i16);
