@@ -32,7 +32,7 @@ jobs:
           fi
 
   build:
-    name: Build ${{ matrix.asset }}
+    name: Build release
     needs: check
     if: needs.check.outputs.changed == 'true'
     runs-on: ${{ matrix.os }}

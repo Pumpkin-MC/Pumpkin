@@ -318,7 +318,7 @@ jobs:
         run: cargo build --verbose --release
 
   build_release_musl:
-    name: Build project in release (musl, ${{ matrix.name }})
+    name: Build project in release with musl
     needs: [prepare, clippy_release, test, test_android]
     if: needs.prepare.outputs.run_full == 'true' && github.event_name != 'pull_request'
     runs-on: ${{ matrix.os }}
