@@ -4,6 +4,7 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::cow_variant::CowVariant;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -25,8 +26,9 @@ use crate::entity::{
     },
     item::ItemEntity,
     mob::{Mob, MobEntity},
-    passive::animal::Animal,
+    passive::{animal::Animal, cow::CowEntity},
     player::Player,
+    shearable::{Shearable, shear_by_player, shearing_loot},
 };
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
@@ -130,6 +132,149 @@ impl MooshroomEntity {
             VarInt(variant.id()),
         );
     }
+
+    // Not sure if the below method should be added as a trait (akin to vanilla's method), where else is this used?
+    /// Vanilla `Mob.convertTo`
+    fn convert_to_cow(&self) -> Arc<CowEntity> {
+        let entity = self.get_entity();
+        let cow = CowEntity::new(Entity::new(
+            entity.world.load_full(),
+            entity.pos.load(),
+            &EntityType::COW,
+        ));
+        // No cow.finalize_spawn(...), vanilla omits this likely to stop a 'biomed' cow being created
+        cow.set_variant(CowVariant::default());
+
+        let cow_entity = cow.get_entity();
+        cow_entity.set_rotation(entity.yaw.load(), entity.pitch.load());
+        cow_entity.head_yaw.store(entity.head_yaw.load());
+        cow_entity.body_yaw.store(entity.body_yaw.load());
+        cow_entity.velocity.store(entity.velocity.load());
+        cow_entity
+            .on_ground
+            .store(entity.on_ground.load(Ordering::Relaxed), Ordering::Relaxed);
+        cow.mob_entity
+            .living_entity
+            .fall_distance
+            .store(self.mob_entity.living_entity.fall_distance.load());
+
+        cow.set_age(self.get_age());
+        let (data, cow_data) = (self.get_ageable_data(), cow.get_ageable_data());
+        cow_data
+            .forced_age
+            .store(data.forced_age.load(Ordering::Relaxed), Ordering::Relaxed);
+        cow_data.forced_age_timer.store(
+            data.forced_age_timer.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+
+        cow.mob_entity.set_no_ai(self.mob_entity.is_no_ai());
+        cow.mob_entity.persistence_required.store(
+            self.mob_entity.persistence_required.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+
+        if let Some(custom_name) = &**entity.custom_name.load() {
+            cow_entity.set_custom_name(custom_name.clone());
+        }
+        cow_entity.set_custom_name_visible(entity.custom_name_visible.load(Ordering::Relaxed));
+        cow_entity.set_on_fire(entity.is_on_fire());
+        cow_entity.invulnerable.store(
+            entity.invulnerable.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        cow_entity.set_has_no_gravity(entity.has_no_gravity());
+        cow_entity.portal_cooldown.store(
+            entity.portal_cooldown.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        cow_entity.set_silent(entity.is_silent());
+        cow_entity
+            .scoreboard_tags
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone_from(
+                &entity
+                    .scoreboard_tags
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
+
+        cow
+    }
+}
+
+impl Shearable for MooshroomEntity {
+    /// Vanilla `MushroomCow.shear`: converts this mooshroom into a cow and drops its mushrooms.
+    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        world.play_sound(Sound::EntityMooshroomShear, sound_category, &pos);
+
+        if entity.is_removed() {
+            return;
+        }
+
+        let cow = self.convert_to_cow();
+
+        let height = f64::from(entity.height());
+        world.spawn_particle(
+            Vector3::new(pos.x, height.mul_add(0.5, pos.y), pos.z),
+            Vector3::new(0.0, 0.0, 0.0),
+            0.0,
+            1,
+            Particle::Explosion,
+        );
+
+        let loot_key = match self.get_variant() {
+            MooshroomVariant::Red => "minecraft:shearing/mooshroom/red",
+            MooshroomVariant::Brown => "minecraft:shearing/mooshroom/brown",
+        };
+        let drop_pos = Vector3::new(pos.x, pos.y + height, pos.z);
+        for drop in shearing_loot(entity, loot_key, tool) {
+            for _ in 0..drop.item_count {
+                let item_entity = Arc::new(ItemEntity::new(
+                    Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+                    drop.copy_with_count(1),
+                ));
+                world.spawn_entity(item_entity);
+            }
+        }
+
+        let holder = entity
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        let effects: Vec<_> = self
+            .mob_entity
+            .living_entity
+            .active_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .cloned()
+            .collect();
+
+        if world.spawn_entity(cow.clone()) {
+            // These send packets about the cow, so they wait until clients know it exists.
+            let cow_living = &cow.mob_entity.living_entity;
+            cow_living.set_absorption(self.mob_entity.living_entity.get_absorption());
+            for effect in effects {
+                cow_living.add_effect(effect);
+            }
+            if let Some(holder) = holder {
+                cow_living.entity.leash_to(holder);
+            }
+        }
+
+        entity.remove();
+    }
+
+    fn ready_for_shearing(&self) -> bool {
+        !self.is_baby()
+    }
 }
 
 impl AgeableMob for MooshroomEntity {
@@ -151,6 +296,10 @@ impl Mob for MooshroomEntity {
     }
 
     fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn as_shearable(&self) -> Option<&dyn Shearable> {
         Some(self)
     }
 
@@ -214,36 +363,8 @@ impl Mob for MooshroomEntity {
             return true;
         }
 
-        if item == &Item::SHEARS && !self.is_baby() {
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            let pos = entity.pos.load();
-            world.play_sound(Sound::EntityMooshroomShear, SoundCategory::Players, &pos);
-
-            let mushroom_item = if self.get_variant() == MooshroomVariant::Brown {
-                &Item::BROWN_MUSHROOM
-            } else {
-                &Item::RED_MUSHROOM
-            };
-
-            for _ in 0..5 {
-                let item_entity = Arc::new(ItemEntity::new(
-                    Entity::new(world.clone(), pos, &EntityType::ITEM),
-                    ItemStack::new(1, mushroom_item),
-                ));
-                world.spawn_entity(item_entity);
-            }
-
-            world.spawn_particle(
-                pos + Vector3::new(0.0, 0.5, 0.0),
-                Vector3::new(0.5, 0.5, 0.5),
-                0.0,
-                1,
-                Particle::Explosion,
-            );
-
-            player.damage_held_item(1);
-            return true;
+        if item == &Item::SHEARS && self.ready_for_shearing() {
+            return shear_by_player(self, player, item_stack);
         }
 
         if self.get_variant() == MooshroomVariant::Brown

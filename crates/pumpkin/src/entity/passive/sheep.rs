@@ -3,8 +3,11 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
+use pumpkin_data::dye_color::DyeColor;
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::Hand;
+use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::{
@@ -16,13 +19,15 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
+    item::ItemEntity,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
+    shearable::{Shearable, shear_by_player, shearing_loot},
 };
 
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::{Sound, SoundCategory};
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
@@ -105,6 +110,45 @@ impl SheepEntity {
     }
 }
 
+impl Shearable for SheepEntity {
+    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        world.play_sound(Sound::EntitySheepShear, sound_category, &pos);
+
+        let color = DyeColor::by_id(self.get_color()).unwrap_or(DyeColor::White);
+        let loot_key = format!("minecraft:shearing/sheep/{}", color.name()); // is there a better way to do this
+        let drop_pos = Vector3::new(pos.x, pos.y + 1.0, pos.z);
+        let mut rng = rand::rng();
+        for drop in shearing_loot(entity, &loot_key, tool) {
+            for _ in 0..drop.item_count {
+                let item_entity = ItemEntity::new(
+                    Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+                    drop.copy_with_count(1),
+                );
+                let item_base = item_entity.get_entity();
+                item_base.velocity.store(
+                    item_base.velocity.load()
+                        + Vector3::new(
+                            // magic numbers from vanilla
+                            f64::from((rng.random::<f32>() - rng.random::<f32>()) * 0.1),
+                            f64::from(rng.random::<f32>() * 0.05),
+                            f64::from((rng.random::<f32>() - rng.random::<f32>()) * 0.1),
+                        ),
+                );
+                world.spawn_entity(Arc::new(item_entity));
+            }
+        }
+
+        self.set_sheared(true);
+    }
+
+    fn ready_for_shearing(&self) -> bool {
+        !self.is_sheared() && !self.is_baby()
+    }
+}
+
 impl AgeableMob for SheepEntity {
     fn get_ageable_data(&self) -> &crate::entity::ageable::AgeableData {
         &self.ageable_data
@@ -127,6 +171,10 @@ impl Mob for SheepEntity {
     }
 
     fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn as_shearable(&self) -> Option<&dyn Shearable> {
         Some(self)
     }
 
@@ -154,29 +202,15 @@ impl Mob for SheepEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        use super::animal::{Animal, get_dye_color_from_item, get_wool_item_for_color};
+        use super::animal::{Animal, get_dye_color_from_item};
         let item = item_stack.get_item();
 
-        if item == &Item::SHEARS && !self.is_sheared() && !self.is_baby() {
-            self.set_sheared(true);
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            let pos = entity.pos.load();
-            world.play_sound(
-                Sound::EntitySheepShear,
-                pumpkin_data::sound::SoundCategory::Players,
-                &pos,
-            );
-
-            let wool_item = get_wool_item_for_color(self.get_color());
-            let mut rng = rand::rng();
-            let count = rng.random_range(1..=3);
-            let item_entity = Arc::new(crate::entity::item::ItemEntity::new(
-                Entity::new(world.clone(), pos, &EntityType::ITEM),
-                ItemStack::new(count, wool_item),
-            ));
-            world.spawn_entity(item_entity);
-            player.damage_held_item(1);
+        if item == &Item::SHEARS && self.ready_for_shearing() {
+            if !shear_by_player(self, player, item_stack) {
+                return false;
+            }
+            // Vanilla returns `SUCCESS_SERVER` here, so the client waits for the server to swing its arm.
+            player.swing_hand(Hand::Right, true);
             return true;
         }
 

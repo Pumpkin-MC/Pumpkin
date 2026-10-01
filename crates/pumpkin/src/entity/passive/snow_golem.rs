@@ -6,6 +6,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -18,6 +19,7 @@ use crate::entity::{
     mob::{Mob, MobEntity, RangedAttackMob},
     player::Player,
     projectile::snowball::SnowballEntity,
+    shearable::{Shearable, shear_by_player, shearing_loot},
 };
 
 pub struct SnowGolemEntity {
@@ -118,7 +120,34 @@ impl SnowGolemEntity {
     }
 }
 
+impl Shearable for SnowGolemEntity {
+    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        world.play_sound(Sound::EntitySnowGolemShear, sound_category, &pos);
+        self.set_has_pumpkin(false);
+
+        let eye_height = f64::from(entity.entity_dimension.load().eye_height);
+        let drop_pos = Vector3::new(pos.x, pos.y + eye_height, pos.z);
+        for drop in shearing_loot(entity, "minecraft:shearing/snow_golem", tool) {
+            world.spawn_entity(Arc::new(ItemEntity::new(
+                Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+                drop,
+            )));
+        }
+    }
+
+    fn ready_for_shearing(&self) -> bool {
+        self.has_pumpkin()
+    }
+}
+
 impl Mob for SnowGolemEntity {
+    fn as_shearable(&self) -> Option<&dyn Shearable> {
+        Some(self)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("Pumpkin", self.has_pumpkin());
     }
@@ -143,19 +172,8 @@ impl Mob for SnowGolemEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        if item_stack.get_item() == &Item::SHEARS && self.has_pumpkin() {
-            self.set_has_pumpkin(false);
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            let pos = entity.pos.load();
-            world.play_sound(Sound::EntitySnowGolemShear, SoundCategory::Players, &pos);
-            let item_entity = Arc::new(ItemEntity::new(
-                Entity::new(world.clone(), pos, &EntityType::ITEM),
-                ItemStack::new(1, &Item::CARVED_PUMPKIN),
-            ));
-            world.spawn_entity(item_entity);
-            player.damage_held_item(1);
-            return true;
+        if item_stack.get_item() == &Item::SHEARS && self.ready_for_shearing() {
+            return shear_by_player(self, player, item_stack);
         }
         false
     }

@@ -998,6 +998,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_shearable(&self) -> Option<&dyn crate::entity::shearable::Shearable> {
+        None
+    }
+
     /// How much this mob likes standing on `pos`, used to rank stroll candidates.
     fn get_walk_target_value(&self, pos: &BlockPos) -> f32 {
         self.as_animal()
