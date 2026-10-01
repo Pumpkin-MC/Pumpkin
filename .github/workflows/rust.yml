@@ -12,6 +12,20 @@ on:
         required: false
         default: stable
         type: string
+      release_lto:
+        description: LTO mode for the release builds (thin, fat or off)
+        required: false
+        default: thin
+        type: choice
+        options:
+          - thin
+          - fat
+          - "off"
+      release_codegen_units:
+        description: Codegen units for the release builds
+        required: false
+        default: "16"
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -304,10 +318,11 @@ jobs:
           - name: macOS
             os: macos-latest
     env:
-      # Full LTO with one codegen unit is too slow and memory hungry to run on every push.
+      # Full LTO with one codegen unit is too slow and memory hungry to run on every push, so these
+      # default to thin LTO and 16 codegen units. Manual runs can change them through the inputs.
       # The nightly workflow builds the shipped binaries with the release profile as is.
-      CARGO_PROFILE_RELEASE_LTO: thin
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
+      CARGO_PROFILE_RELEASE_LTO: ${{ inputs.release_lto || 'thin' }}
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ inputs.release_codegen_units || '16' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -333,8 +348,8 @@ jobs:
             os: ubuntu-26.04-arm
             target: aarch64-unknown-linux-musl
     env:
-      CARGO_PROFILE_RELEASE_LTO: thin
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
+      CARGO_PROFILE_RELEASE_LTO: ${{ inputs.release_lto || 'thin' }}
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ inputs.release_codegen_units || '16' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -355,8 +370,8 @@ jobs:
     if: needs.prepare.outputs.run_full == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
-      CARGO_PROFILE_RELEASE_LTO: thin
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
+      CARGO_PROFILE_RELEASE_LTO: ${{ inputs.release_lto || 'thin' }}
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ inputs.release_codegen_units || '16' }}
     steps:
       - uses: actions/checkout@v7
         with:
