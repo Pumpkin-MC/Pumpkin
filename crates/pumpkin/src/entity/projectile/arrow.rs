@@ -69,6 +69,7 @@ pub struct ArrowEntity {
     pub last_block_pos: Arc<std::sync::RwLock<Option<BlockPos>>>,
     pub pierced_entities: Arc<RwLock<Vec<i32>>>,
     pub weapon: RwLock<Option<ItemStack>>,
+    pub has_left_owner: AtomicBool,
 }
 
 impl ArrowEntity {
@@ -108,6 +109,7 @@ impl ArrowEntity {
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
             pierced_entities: Arc::new(RwLock::new(Vec::new())),
             weapon: RwLock::new(None),
+            has_left_owner: AtomicBool::new(owner_id.is_none()),
         }
     }
 
@@ -119,7 +121,7 @@ impl ArrowEntity {
     ) -> Self {
         let mut owner_pos = shooter.pos.load();
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
-        entity.pos.store(owner_pos);
+        entity.set_pos(owner_pos);
         let mut launch_event =
             crate::plugin::api::events::entity::projectile_launch::ProjectileLaunchEvent::new(
                 entity.entity_id,
@@ -150,6 +152,7 @@ impl ArrowEntity {
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
             pierced_entities: Arc::new(RwLock::new(Vec::new())),
             weapon: RwLock::new(None),
+            has_left_owner: AtomicBool::new(false),
         }
     }
 
@@ -644,6 +647,11 @@ impl EntityBase for ArrowEntity {
             velocity.y.atan2(len) as f32 * 57.295_776,
         );
 
+        if !self.has_left_owner.load(Ordering::Relaxed) && self.check_left_owner(entity, &velocity)
+        {
+            self.has_left_owner.store(true, Ordering::Relaxed);
+        }
+
         // Move arrow
         let new_pos = start_pos.add(&velocity);
         entity.set_pos(new_pos);
@@ -749,9 +757,9 @@ impl EntityBase for ArrowEntity {
         }
 
         // Entity collisions
-        let candidates = world.get_entities_at_box(&search_box);
+        let candidates = world.get_all_at_box(&search_box);
         for cand in candidates {
-            if self.should_skip_collision(entity, &cand) {
+            if cand.is_spectator() || self.should_skip_collision(entity, &cand) {
                 continue;
             }
 
@@ -1052,6 +1060,34 @@ impl EntityBase for ArrowEntity {
 }
 
 impl ArrowEntity {
+    /// Checks whether the arrow has cleared its owner's bounding box,
+    /// matching vanilla `Projectile.checkLeftOwner()`.
+    fn check_left_owner(&self, entity: &Entity, velocity: &Vector3<f64>) -> bool {
+        let Some(owner_id) = self.owner_id else {
+            return true;
+        };
+        let world = entity.world.load();
+        let Some(owner) = world.get_entity_by_id(owner_id) else {
+            return true;
+        };
+        let box_to_check = entity
+            .bounding_box
+            .load()
+            .expand_towards(velocity.x, velocity.y, velocity.z)
+            .expand_all(1.0);
+        let owner_ent = owner.get_entity();
+        if box_to_check.intersects(&owner_ent.bounding_box.load()) {
+            return false;
+        }
+        if let Some(vehicle) = owner_ent.get_vehicle()
+            && box_to_check.intersects(&vehicle.get_entity().bounding_box.load())
+        {
+            return false;
+        }
+        true
+    }
+
+    /// Determines if collision with another entity should be skipped.
     fn should_skip_collision(&self, self_ent: &Entity, other: &Arc<dyn EntityBase>) -> bool {
         let other_ent = other.get_entity();
 
@@ -1060,8 +1096,10 @@ impl ArrowEntity {
             return true;
         }
 
-        // Skip owner for initial frames (5 ticks)
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+        // Skip owner until arrow has left the owner's bounding box
+        if Some(other_ent.entity_id) == self.owner_id
+            && !self.has_left_owner.load(Ordering::Relaxed)
+        {
             return true;
         }
 

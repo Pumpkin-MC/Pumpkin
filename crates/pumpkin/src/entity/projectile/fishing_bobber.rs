@@ -187,9 +187,10 @@ impl FishingBobberEntity {
 
         entity.set_pos(new_pos);
 
-        let candidates = world.get_entities_at_box(&search_box);
+        let candidates = world.get_all_at_box(&search_box);
         for cand in candidates {
-            if cand.get_entity().entity_id == self.owner_id
+            if cand.is_spectator()
+                || cand.get_entity().entity_id == self.owner_id
                 || cand.get_entity().entity_id == entity.entity_id
             {
                 continue;

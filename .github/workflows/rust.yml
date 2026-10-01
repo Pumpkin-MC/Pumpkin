@@ -21,7 +21,7 @@ env:
   CARGO_TERM_COLOR: always
   CI_RUST_TOOLCHAIN_VER: ${{ inputs.rust_toolchain_version || 'stable' }}
   RUSTFLAGS: "-Dwarnings"
-
+  RUST_MIN_STACK: "67108864"
 jobs:
   prepare:
     name: Plan CI

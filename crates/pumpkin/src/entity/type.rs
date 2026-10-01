@@ -291,6 +291,7 @@ pub fn from_type(
                 owner_id: None,
                 collides_with_projectiles: false,
                 has_hit: AtomicBool::new(false),
+                has_left_owner: AtomicBool::new(true),
                 gravity: WIND_CHARGE_GRAVITY,
             };
             Arc::new(WindChargeEntity::new_normal(thrown))
@@ -301,6 +302,7 @@ pub fn from_type(
                 owner_id: None,
                 collides_with_projectiles: false,
                 has_hit: AtomicBool::new(false),
+                has_left_owner: AtomicBool::new(true),
                 gravity: WIND_CHARGE_GRAVITY,
             };
             Arc::new(WindChargeEntity::new_breeze(thrown))
