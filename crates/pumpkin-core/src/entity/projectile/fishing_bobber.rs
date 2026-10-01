@@ -1,11 +1,11 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use crossbeam::atomic::AtomicCell;
 
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::item::ItemEntity;
-use crate::entity::projectile::is_projectile;
+use crate::entity::projectile::{calculate_ray_intersection, is_projectile};
 use crate::entity::util::RandomExt;
 use crate::world::World;
 use crate::world::loot::LootContextParameters;
@@ -49,6 +49,7 @@ pub struct FishingBobberEntity {
     pub owner_id: i32,
     pub owner_uuid: uuid::Uuid,
     pub state: AtomicCell<HookState>,
+    pub left_owner: AtomicBool,
     pub life: AtomicI32,
     pub wait_countdown: AtomicI32,
     pub bite_countdown: AtomicI32,
@@ -84,14 +85,19 @@ impl FishingBobberEntity {
         let (origin, velocity) = throw_setup(yaw, pitch, triangle);
 
         let owner_pos = owner_entity.pos.load();
-        entity.pos.store(Vector3::new(
+        // Move the whole entity, so the bounding box follows the eye position; writing `pos`
+        // directly leaves the box behind and the next move resolves against the wrong place.
+        entity.set_pos(Vector3::new(
             owner_pos.x + origin.x,
             owner_pos.y + owner_entity.get_eye_height(),
             owner_pos.z + origin.z,
         ));
-        entity.yaw.store(yaw);
-        entity.pitch.store(pitch);
-        entity.head_yaw.store(yaw);
+        entity.update_last_pos();
+        // Vanilla derives the hook's rotation from its launch movement, not the player's look.
+        entity.set_rotation(
+            (velocity.x.atan2(velocity.z) as f32).to_degrees(),
+            (velocity.y.atan2(velocity.horizontal_length()) as f32).to_degrees(),
+        );
         // Vanilla `FishingHook.getAddEntityPacket` sends the owner id as the spawn data,
         // which the client needs to render the line.
         entity.data.store(owner_id, Ordering::Relaxed);
@@ -107,6 +113,7 @@ impl FishingBobberEntity {
             owner_id,
             owner_uuid: owner.gameprofile.id,
             state: AtomicCell::new(HookState::Flying),
+            left_owner: AtomicBool::new(false),
             life: AtomicI32::new(0),
             wait_countdown: AtomicI32::new(wait_countdown),
             bite_countdown: AtomicI32::new(0),
@@ -259,6 +266,30 @@ impl FishingBobberEntity {
         damage
     }
 
+    /// Vanilla `Projectile.tick`: the hook cannot hit the owner until it has left the owner's
+    /// vehicle, so it does not hook the caster at spawn.
+    fn update_left_owner(&self, world: &World, owner: &dyn EntityBase, velocity: Vector3<f64>) {
+        if self.left_owner.load(Ordering::Relaxed) {
+            return;
+        }
+
+        let owner_root = root_vehicle_uuid(owner);
+        let search = self
+            .entity
+            .bounding_box
+            .load()
+            .stretch(velocity)
+            .expand(1.0, 1.0, 1.0);
+        let still_riding = world
+            .get_entities_at_box(&search)
+            .iter()
+            .any(|found| root_vehicle_uuid(found.as_ref()) == owner_root);
+
+        if !still_riding {
+            self.left_owner.store(true, Ordering::Relaxed);
+        }
+    }
+
     /// Vanilla `FishingHook.tick`: the bite motion uses a random reseeded from the hook UUID and
     /// game time, so the client predicts the same motion instead of jittering.
     fn synced_random(&self, world: &World) -> LegacyRand {
@@ -319,6 +350,7 @@ impl FishingBobberEntity {
             entity.remove();
             return;
         };
+        self.update_left_owner(&world, &*owner, entity.velocity.load());
         let Some(player) = owner.cast_any().downcast_ref::<Player>() else {
             entity.remove();
             return;
@@ -353,7 +385,6 @@ impl FishingBobberEntity {
         match state {
             HookState::HookedIn(hooked_id) => {
                 if let Some(hooked) = world.get_entity_by_id(hooked_id)
-                    && hooked.get_entity().entity_uuid != self.owner_uuid
                     && can_interact_with_level(&*hooked)
                     && hooked.get_entity().world.load().dimension
                         == self.entity.world.load().dimension
@@ -418,6 +449,11 @@ impl FishingBobberEntity {
             velocity.y -= Self::GRAVITY;
         }
 
+        // Vanilla `FishingHook.checkCollision`: ray-cast the movement and hook the nearest entity.
+        if matches!(state, HookState::Flying) {
+            self.check_collision(&world, &*owner, caller, start_pos, velocity);
+        }
+
         // Vanilla moves the hook through the engine's collision resolution, so it comes to rest on
         // block surfaces instead of hovering above them.
         entity.move_entity(caller, velocity);
@@ -432,45 +468,74 @@ impl FishingBobberEntity {
         entity
             .velocity
             .store(entity.velocity.load() * Self::INERTIA);
+    }
 
-        // Vanilla `FishingBobberEntity.checkCollision` only hooks entities while flying.
-        if matches!(state, HookState::Flying) {
-            let moved_pos = entity.pos.load();
-            let search_box = BoundingBox::new(
-                Vector3::new(
-                    start_pos.x.min(moved_pos.x),
-                    start_pos.y.min(moved_pos.y),
-                    start_pos.z.min(moved_pos.z),
-                ),
-                Vector3::new(
-                    start_pos.x.max(moved_pos.x),
-                    start_pos.y.max(moved_pos.y),
-                    start_pos.z.max(moved_pos.z),
-                ),
-            )
-            .expand(0.3, 0.3, 0.3);
+    /// Vanilla `FishingHook.checkCollision`: ray-cast the movement and hook the nearest entity.
+    fn check_collision(
+        &self,
+        world: &World,
+        owner: &dyn EntityBase,
+        caller: &dyn EntityBase,
+        start_pos: Vector3<f64>,
+        velocity: Vector3<f64>,
+    ) {
+        let new_pos = start_pos.add(&velocity);
+        let search_box = BoundingBox::new(
+            Vector3::new(
+                start_pos.x.min(new_pos.x),
+                start_pos.y.min(new_pos.y),
+                start_pos.z.min(new_pos.z),
+            ),
+            Vector3::new(
+                start_pos.x.max(new_pos.x),
+                start_pos.y.max(new_pos.y),
+                start_pos.z.max(new_pos.z),
+            ),
+        )
+        .expand(0.3, 0.3, 0.3);
 
-            let candidates = world.get_entities_at_box(&search_box);
-            for cand in candidates {
-                // Never hook the caster or the hook itself; compare the UUID too in case the
-                // entity id has been recycled.
-                if cand.get_entity().entity_id == self.owner_id
-                    || cand.get_entity().entity_uuid == self.owner_uuid
-                    || cand.get_entity().entity_id == entity.entity_id
-                {
-                    continue;
-                }
+        let mut closest_t = 1.0;
+        let mut hooked = None;
 
-                if is_projectile(cand.get_entity().entity_type) {
-                    continue;
-                }
-
-                let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
-                if ebb.intersects(&search_box) {
-                    self.set_hooked_entity(Some(cand.get_entity().entity_id));
-                    return;
-                }
+        // A block in front of an entity stops the hook.
+        let (block_cols, _) = world.get_block_collisions(search_box, caller);
+        for shape in &block_cols {
+            if let Some(t) = calculate_ray_intersection(&start_pos, &velocity, shape)
+                && t < closest_t
+            {
+                closest_t = t;
+                hooked = None;
             }
+        }
+
+        let left_owner = self.left_owner.load(Ordering::Relaxed);
+        let owner_root = root_vehicle_uuid(owner);
+        for cand in world.get_entities_at_box(&search_box) {
+            let candidate = cand.get_entity();
+            // Vanilla `Projectile.canHitEntity`: not the hook, not a spectator, not a projectile,
+            // alive, and not the owner's vehicle chain until the hook has left it.
+            if candidate.entity_id == self.entity.entity_id
+                || cand.is_spectator()
+                || is_projectile(candidate.entity_type)
+                || (!left_owner && root_vehicle_uuid(cand.as_ref()) == owner_root)
+                || cand
+                    .get_living_entity()
+                    .is_some_and(|living| living.health.load() <= 0.0)
+            {
+                continue;
+            }
+
+            let entity_box = candidate.bounding_box.load().expand(0.3, 0.3, 0.3);
+            if let Some(t) = calculate_ray_intersection(&start_pos, &velocity, &entity_box)
+                && t < closest_t
+            {
+                closest_t = t;
+                hooked = Some(candidate.entity_id);
+            }
+        }
+
+        if let Some(id) = hooked {
+            self.set_hooked_entity(Some(id));
         }
     }
 
@@ -652,6 +717,17 @@ impl FishingBobberEntity {
             self.wait_countdown.store(wait, Ordering::Relaxed);
         }
     }
+}
+
+/// Vanilla `Entity.getRootVehicle`: the UUID of the entity at the top of the vehicle chain.
+fn root_vehicle_uuid(entity: &dyn EntityBase) -> uuid::Uuid {
+    let mut uuid = entity.get_entity().entity_uuid;
+    let mut current = entity.get_entity().get_vehicle();
+    while let Some(vehicle) = current {
+        uuid = vehicle.get_entity().entity_uuid;
+        current = vehicle.get_entity().get_vehicle();
+    }
+    uuid
 }
 
 /// Vanilla `Entity.canInteractWithLevel`: alive, not removed and not a spectator.
