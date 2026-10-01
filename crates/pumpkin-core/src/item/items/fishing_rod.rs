@@ -9,6 +9,7 @@ use crate::entity::projectile::fishing_bobber::FishingBobberEntity;
 use crate::item::{ItemBehaviour, ItemMetadata, hand_holding};
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::Hand;
@@ -90,6 +91,9 @@ impl ItemBehaviour for FishingRodItem {
 
             let bobber_arc: Arc<FishingBobberEntity> = Arc::new(bobber);
             world.spawn_entity(bobber_arc);
+
+            // Vanilla `ItemStack.causeUseVibration(player, ITEM_INTERACT_START)`.
+            world.emit_game_event(GameEvent::ItemInteractStart.name(), player.position());
         } else {
             // Reel in
             if let Some(bobber_base) = world.get_entity_by_id(bobber_id) {
@@ -111,6 +115,9 @@ impl ItemBehaviour for FishingRodItem {
                 1.0,
                 sound_pitch,
             );
+
+            // Vanilla `ItemStack.causeUseVibration(player, ITEM_INTERACT_FINISH)`.
+            world.emit_game_event(GameEvent::ItemInteractFinish.name(), player.position());
         }
     }
 
