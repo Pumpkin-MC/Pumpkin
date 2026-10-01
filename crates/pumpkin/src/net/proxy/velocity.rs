@@ -121,7 +121,10 @@ pub fn receive_velocity_plugin_response(
         }
         let (signature, mut data_without_signature) = data.split_at(32);
 
-        if !check_integrity((signature, data_without_signature), &config.secret) {
+        let secret = config
+            .forwarding_secret()
+            .map_err(|_| VelocityError::FailedVerifyIntegrity)?;
+        if !check_integrity((signature, data_without_signature), secret) {
             return Err(VelocityError::FailedVerifyIntegrity);
         }
 
@@ -151,4 +154,44 @@ pub fn receive_velocity_plugin_response(
         return Ok((profile, socket_addr));
     }
     Err(VelocityError::NoData)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn signed_response(secret: &str) -> SLoginPluginResponse {
+        // Forwarding v1: loopback address, UUID, player name, empty property list.
+        let mut payload = b"\x01\x09127.0.0.1".to_vec();
+        payload.extend_from_slice(&[7; 16]);
+        payload.extend_from_slice(b"\x07Fixture\x00");
+        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(&payload);
+        let mut data = mac.finalize().into_bytes().to_vec();
+        data.extend_from_slice(&payload);
+        SLoginPluginResponse {
+            message_id: 0.into(),
+            data: Some(data.into_boxed_slice()),
+        }
+    }
+
+    #[test]
+    fn forwarding_uses_file_contents_not_the_path_or_an_empty_inline_key() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("forwarding.secret");
+        std::fs::write(&path, "fixture-hmac-key\r\n").unwrap();
+        let config: VelocityConfig =
+            serde_json::from_value(serde_json::json!({ "secret_file": path })).unwrap();
+        let (profile, address) =
+            receive_velocity_plugin_response(25565, &config, signed_response("fixture-hmac-key"))
+                .unwrap();
+        assert_eq!(profile.name, "Fixture");
+        assert_eq!(address, "127.0.0.1:25565".parse::<SocketAddr>().unwrap());
+        for wrong_key in ["wrong-key", path.to_str().unwrap(), ""] {
+            assert!(matches!(
+                receive_velocity_plugin_response(25565, &config, signed_response(wrong_key)),
+                Err(VelocityError::FailedVerifyIntegrity)
+            ));
+        }
+    }
 }

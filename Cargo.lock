@@ -3481,6 +3481,7 @@ version = "0.2.0+26.3-26.51"
 dependencies = [
  "pumpkin-util",
  "serde",
+ "tempfile",
  "toml",
  "tracing",
  "uuid",
