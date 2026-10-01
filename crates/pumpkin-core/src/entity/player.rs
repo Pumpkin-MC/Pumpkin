@@ -1538,12 +1538,15 @@ impl Player {
                         Vector3::new(pos.x - 1.0, pos.y - 0.5, pos.z - 1.0),
                         Vector3::new(pos.x + 1.0, pos.y + 0.5, pos.z + 1.0),
                     );
+                    let yaw = f64::from(attacker_entity.yaw.load().to_radians());
+                    let knockback_x = yaw.sin();
+                    let knockback_z = -yaw.cos();
                     let victims = world.get_all_at_box(&search_box);
                     for other_victim in victims {
                         if other_victim.get_entity().entity_id != victim_entity.entity_id
                             && other_victim.get_entity().entity_id != attacker_entity.entity_id
                         {
-                            other_victim.damage_with_context(
+                            let hurt = other_victim.damage_with_context(
                                 other_victim.as_ref(),
                                 sweep_damage,
                                 DamageType::PLAYER_ATTACK,
@@ -1551,6 +1554,17 @@ impl Player {
                                 Some(self),
                                 Some(self),
                             );
+                            // Vanilla `Player.doSweepAttack` knocks every hurt victim
+                            // back by 0.4 along the attacker's facing.
+                            if hurt && let Some(living) = other_victim.get_living_entity() {
+                                let resistance =
+                                    living.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
+                                other_victim.get_entity().apply_knockback(
+                                    combat::knockback_after_resistance(0.4, resistance),
+                                    knockback_x,
+                                    knockback_z,
+                                );
+                            }
                         }
                     }
                 }

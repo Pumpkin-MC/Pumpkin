@@ -957,7 +957,6 @@ impl LivingEntity {
         self.entity.entity_id
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn add_effect(&self, effect: Effect) {
         let mut effect_event =
             crate::plugin::api::events::entity::entity_potion_effect::EntityPotionEffectEvent::new(
@@ -1053,6 +1052,21 @@ impl LivingEntity {
         }
 
         // Broadcast effect to nearby players
+        self.broadcast_effect(&effect);
+        if effect.effect_type != &StatusEffect::INSTANT_HEALTH
+            && effect.effect_type != &StatusEffect::INSTANT_DAMAGE
+        {
+            self.active_effects
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(effect.effect_type, effect);
+        }
+        self.sync_effect_particles();
+    }
+
+    /// Sends an effect packet to every player tracking this entity, mirroring
+    /// vanilla `LivingEntity.sendEffectToPassengers`.
+    fn broadcast_effect(&self, effect: &Effect) {
         let mut flag: i8 = 0;
         if effect.ambient {
             flag |= 1;
@@ -1091,15 +1105,6 @@ impl LivingEntity {
             .world
             .load()
             .broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
-        if effect.effect_type != &StatusEffect::INSTANT_HEALTH
-            && effect.effect_type != &StatusEffect::INSTANT_DAMAGE
-        {
-            self.active_effects
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert(effect.effect_type, effect);
-        }
-        self.sync_effect_particles();
     }
 
     fn sync_effect_particles(&self) {
@@ -2314,6 +2319,7 @@ impl LivingEntity {
     fn tick_effects(&self) {
         let mut effects_to_remove = Vec::new();
         let mut effects_to_apply = Vec::new();
+        let mut effects_to_refresh = Vec::new();
 
         {
             let Ok(mut effects) = self.active_effects.try_lock() else {
@@ -2340,6 +2346,12 @@ impl LivingEntity {
 
                 if effect.duration != -1 {
                     effect.duration -= 1;
+                    // Vanilla `LivingEntity.tickEffects` re-sends the effect every 600
+                    // ticks via `onEffectUpdated(effect, false, null)`; the `false`
+                    // means the attribute modifiers are not reapplied.
+                    if effect.duration > 0 && effect.duration % 600 == 0 {
+                        effects_to_refresh.push(effect.clone());
+                    }
                 }
             }
         }
@@ -2351,6 +2363,10 @@ impl LivingEntity {
 
         for (mob_effect, amplifier) in effects_to_apply {
             mob_effect.apply_effect_tick(self, amplifier);
+        }
+
+        for effect in effects_to_refresh {
+            self.broadcast_effect(&effect);
         }
     }
 
