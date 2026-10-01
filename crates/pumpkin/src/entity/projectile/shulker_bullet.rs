@@ -8,7 +8,6 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_protocol::java::client::play::{CEntityPositionSync, CEntityVelocity};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -414,24 +413,6 @@ impl EntityBase for ShulkerBulletEntity {
         let old_pos = entity.pos.load();
         let new_pos = old_pos.add(&vel);
         entity.set_pos(new_pos);
-
-        // Broadcast position and velocity
-        let chunk_pos = entity.chunk_pos.load();
-        world.broadcast_to_chunk(
-            chunk_pos,
-            &CEntityPositionSync::new(
-                entity.entity_id.into(),
-                new_pos,
-                vel,
-                entity.yaw.load(),
-                entity.pitch.load(),
-                false,
-            ),
-        );
-        world.broadcast_to_chunk(
-            chunk_pos,
-            &CEntityVelocity::new(entity.entity_id.into(), vel),
-        );
 
         // Check for block collisions
         let new_bp = entity.block_pos.load();

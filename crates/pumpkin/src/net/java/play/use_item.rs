@@ -79,7 +79,7 @@ impl JavaClient {
             'after: {
                 server
                     .item_registry
-                    .on_use_with_rotation(&stack_for_use, player, use_yaw, use_pitch);
+                    .on_use_with_rotation(&stack_for_use, player, use_yaw, use_pitch, hand);
             }
         }}
     }
