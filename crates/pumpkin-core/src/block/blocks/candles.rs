@@ -65,8 +65,6 @@ impl BlockBehaviour for CandleBlock {
                         properties.to_state_id(args.block),
                         BlockFlags::NOTIFY_ALL,
                     );
-
-                    BlockActionResult::Consume
                 }
                 _ => {
                     if properties.lit {
@@ -80,10 +78,10 @@ impl BlockBehaviour for CandleBlock {
                         properties.to_state_id(args.block),
                         BlockFlags::NOTIFY_ALL,
                     );
-
-                    BlockActionResult::Consume
                 }
             }
+
+            BlockActionResult::Consume
         }
     }
 
