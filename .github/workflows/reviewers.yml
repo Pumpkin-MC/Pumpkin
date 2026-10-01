@@ -36,7 +36,10 @@ jobs:
               { pattern: 'crates/pumpkin-plugin-wit/', reviewers: ['vyPal', 'yunuservices', 'QuantumSegfault'] },
               { pattern: 'crates/pumpkin-api-macros/', reviewers: ['vyPal', 'yunuservices'] },
               { pattern: 'crates/pumpkin-core/src/plugin/', reviewers: ['vyPal', 'yunuservices', 'QuantumSegfault'] },
-              { pattern: 'crates/pumpkin-wasm-host', reviewers: ['vyPal', 'yunuservices', 'QuantumSegfault'] },
+              { pattern: 'crates/pumpkin-wasm-host/', reviewers: ['vyPal', 'yunuservices', 'QuantumSegfault'] },
+              { pattern: 'crates/pumpkin-wasm-host-common/', reviewers: ['vyPal', 'yunuservices', 'QuantumSegfault'] },
+              { pattern: 'crates/pumpkin-wasm-host-v0_1/', reviewers: ['vyPal', 'yunuservices', 'QuantumSegfault'] },
+              { pattern: 'crates/pumpkin-wasm-host-v0_2/', reviewers: ['vyPal', 'yunuservices', 'QuantumSegfault'] },
 
               { pattern: '*.md', reviewers: ['Q2297045667'] },
               { pattern: 'docs/', reviewers: ['Q2297045667'] },
