@@ -255,7 +255,7 @@ impl<P> ParentHandle<P> {
     ///
     /// # Example
     /// ```
-    /// use pumpkin::entity::ai::goal::ParentHandle;
+    /// use pumpkin_core::entity::ai::goal::ParentHandle;
     ///
     /// struct Parent {
     ///     child: Child,
