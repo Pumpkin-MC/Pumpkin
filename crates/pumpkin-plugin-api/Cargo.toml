@@ -5,7 +5,7 @@ edition.workspace = true
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-wit-bindgen = { workspace = true }
+wit-bindgen = { workspace = true, features = ["async"] }
 tracing = { workspace = true }
 postcard = { workspace = true }
 tracing-serde-structured = { workspace = true }
