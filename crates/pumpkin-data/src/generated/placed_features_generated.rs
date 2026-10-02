@@ -32,13 +32,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::ACACIA_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::ACACIA_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -53,13 +49,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::ACACIA_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::ACACIA_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -103,6 +95,22 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
+        },
+    );
+    map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::BambooInStructure,
+        PlacedFeature {
+            feature: Feature::Named(
+                pumpkin_data::configured_feature::ConfiguredFeature::BambooNoPodzol,
+            ),
+            placement: vec![PlacementModifier::BlockPredicateFilter(
+                BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                },
+            )],
         },
     );
     map.insert(
@@ -195,6 +203,26 @@ fn build_placed_features()
                         max_inclusive: YOffset::BelowTop(BelowTop { below_top: 0i8 }),
                     }),
                 }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::Not(NotBlockPredicate {
+                                predicate: Box::new(BlockPredicate::MatchingBlockTag(
+                                    MatchingBlockTagPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(0i32, 1i32, 0i32)),
+                                        },
+                                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                                    },
+                                )),
+                            }),
+                        ],
+                    }),
+                }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
         },
@@ -209,13 +237,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::BIRCH_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::BIRCH_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -232,13 +256,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::BIRCH_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::BIRCH_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -255,13 +275,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::BIRCH_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::BIRCH_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -276,13 +292,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::BIRCH_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::BIRCH_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -299,13 +311,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::BIRCH_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::BIRCH_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -386,6 +394,47 @@ fn build_placed_features()
                     }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+            ],
+        },
+    );
+    map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::BrownMushroomDappledForest,
+        PlacedFeature {
+            feature: Feature::Named(
+                pumpkin_data::configured_feature::ConfiguredFeature::BrownMushroom,
+            ),
+            placement: vec![
+                PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 2u32 }),
+                PlacementModifier::InSquare(SquarePlacementModifier),
+                PlacementModifier::Heightmap(HeightmapPlacementModifier {
+                    heightmap: HeightMap::MotionBlocking,
+                }),
+                PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -649,13 +698,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::CHERRY_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::CHERRY_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -670,13 +715,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::CHERRY_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::CHERRY_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -734,6 +775,39 @@ fn build_placed_features()
                     count: IntProvider::Constant(6i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate {
+                            offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                        },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_NYLIUM,
+                    }),
+                }),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -782,13 +856,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::DARK_OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::DARK_OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -805,13 +875,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::DARK_OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::DARK_OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -841,6 +907,21 @@ fn build_placed_features()
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::MotionBlocking,
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Constant(0i32),
+                    y_spread: IntProvider::Constant(-1i32),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                blocks: MatchingBlocksWrapper::Single("minecraft:sand".to_string()),
+                            }),
+                            BlockPredicate::AlwaysTrue,
+                        ],
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -1043,13 +1124,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::BIRCH_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::BIRCH_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -1066,13 +1143,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::JUNGLE_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::JUNGLE_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -1089,13 +1162,28 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
+                        },
+                    }),
+                },
+            )],
+        },
+    );
+    map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::FallenPoplarTree,
+        PlacedFeature {
+            feature: Feature::Named(
+                pumpkin_data::configured_feature::ConfiguredFeature::FallenPoplarTree,
+            ),
+            placement: vec![PlacementModifier::BlockPredicateFilter(
+                BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::POPLAR_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -1112,13 +1200,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::SPRUCE_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::SPRUCE_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -1135,13 +1219,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::BIRCH_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::BIRCH_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -1158,13 +1238,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -1181,13 +1257,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -1204,13 +1276,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -1225,13 +1293,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -1248,13 +1312,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -1779,6 +1839,26 @@ fn build_placed_features()
                         max_inclusive: YOffset::BelowTop(BelowTop { below_top: 0i8 }),
                     }),
                 }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, 1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Multiple(vec![
+                                    "minecraft:netherrack".to_string(),
+                                    "minecraft:basalt".to_string(),
+                                    "minecraft:blackstone".to_string(),
+                                ]),
+                            }),
+                        ],
+                    }),
+                }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
         },
@@ -1803,6 +1883,26 @@ fn build_placed_features()
                     height: HeightProvider::Uniform(UniformHeightProvider {
                         min_inclusive: YOffset::AboveBottom(AboveBottom { above_bottom: 4i8 }),
                         max_inclusive: YOffset::BelowTop(BelowTop { below_top: 4i8 }),
+                    }),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, 1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Multiple(vec![
+                                    "minecraft:netherrack".to_string(),
+                                    "minecraft:basalt".to_string(),
+                                    "minecraft:blackstone".to_string(),
+                                ]),
+                            }),
+                        ],
                     }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
@@ -1901,13 +2001,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -1924,13 +2020,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::JUNGLE_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::JUNGLE_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -1949,7 +2041,44 @@ fn build_placed_features()
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
-                    heightmap: HeightMap::OceanFloorWg,
+                    heightmap: HeightMap::OceanFloor,
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                blocks: MatchingBlocksWrapper::Single(
+                                    "minecraft:water".to_string(),
+                                ),
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, 1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Single(
+                                    "minecraft:water".to_string(),
+                                ),
+                            }),
+                            BlockPredicate::HasSturdyFace(HasSturdyFacePredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                },
+                                direction: BlockDirection::Up,
+                            }),
+                            BlockPredicate::Not(NotBlockPredicate {
+                                predicate: Box::new(BlockPredicate::MatchingBlockTag(
+                                    MatchingBlockTagPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                        },
+                                        tag:
+                                            pumpkin_data::tag::Block::MINECRAFT_CANNOT_SUPPORT_KELP,
+                                    },
+                                )),
+                            }),
+                        ],
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -1967,7 +2096,44 @@ fn build_placed_features()
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
-                    heightmap: HeightMap::OceanFloorWg,
+                    heightmap: HeightMap::OceanFloor,
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                blocks: MatchingBlocksWrapper::Single(
+                                    "minecraft:water".to_string(),
+                                ),
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, 1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Single(
+                                    "minecraft:water".to_string(),
+                                ),
+                            }),
+                            BlockPredicate::HasSturdyFace(HasSturdyFacePredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                },
+                                direction: BlockDirection::Up,
+                            }),
+                            BlockPredicate::Not(NotBlockPredicate {
+                                predicate: Box::new(BlockPredicate::MatchingBlockTag(
+                                    MatchingBlockTagPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                        },
+                                        tag:
+                                            pumpkin_data::tag::Block::MINECRAFT_CANNOT_SUPPORT_KELP,
+                                    },
+                                )),
+                            }),
+                        ],
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -2189,16 +2355,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("age".to_string(), "0".to_string());
-                            props.insert("hanging".to_string(), "false".to_string());
-                            props.insert("stage".to_string(), "0".to_string());
-                            props.insert("waterlogged".to_string(), "false".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::MANGROVE_PROPAGULE,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::MANGROVE_PROPAGULE,
+                            properties: None,
                         },
                     }),
                 },
@@ -2215,13 +2374,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::JUNGLE_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::JUNGLE_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -2236,13 +2391,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::SPRUCE_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::SPRUCE_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -2259,13 +2410,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::SPRUCE_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::SPRUCE_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -2340,6 +2487,39 @@ fn build_placed_features()
                     count: IntProvider::Constant(4i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate {
+                            offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                        },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_NYLIUM,
+                    }),
+                }),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -2351,13 +2531,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -2374,13 +2550,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -2397,13 +2569,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -2418,13 +2586,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -2441,13 +2605,47 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
+                        },
+                    }),
+                },
+            )],
+        },
+    );
+    map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::OrangePoplar,
+        PlacedFeature {
+            feature: Feature::Named(
+                pumpkin_data::configured_feature::ConfiguredFeature::OrangePoplar,
+            ),
+            placement: vec![PlacementModifier::BlockPredicateFilter(
+                BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::POPLAR_SAPLING,
+                            properties: None,
+                        },
+                    }),
+                },
+            )],
+        },
+    );
+    map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::OrangePoplarLeafLitter,
+        PlacedFeature {
+            feature: Feature::Named(
+                pumpkin_data::configured_feature::ConfiguredFeature::OrangePoplarLeafLitter,
+            ),
+            placement: vec![PlacementModifier::BlockPredicateFilter(
+                BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::POPLAR_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -3370,13 +3568,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::PALE_OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::PALE_OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -3393,13 +3587,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::PALE_OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::PALE_OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -3625,13 +3815,9 @@ fn build_placed_features()
                             }),
                             BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                                 offset: OffsetBlocksBlockPredicate { offset: None },
-                                state: {
-                                    let mut props = std::collections::HashMap::new();
-                                    props.insert("age".to_string(), "0".to_string());
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::CACTUS,
-                                        properties: Some(props),
-                                    }
+                                state: BlockStateCodec {
+                                    name: &pumpkin_data::Block::CACTUS,
+                                    properties: None,
                                 },
                             }),
                         ],
@@ -3679,13 +3865,9 @@ fn build_placed_features()
                             }),
                             BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                                 offset: OffsetBlocksBlockPredicate { offset: None },
-                                state: {
-                                    let mut props = std::collections::HashMap::new();
-                                    props.insert("age".to_string(), "0".to_string());
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::CACTUS,
-                                        properties: Some(props),
-                                    }
+                                state: BlockStateCodec {
+                                    name: &pumpkin_data::Block::CACTUS,
+                                    properties: None,
                                 },
                             }),
                         ],
@@ -3733,13 +3915,9 @@ fn build_placed_features()
                             }),
                             BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                                 offset: OffsetBlocksBlockPredicate { offset: None },
-                                state: {
-                                    let mut props = std::collections::HashMap::new();
-                                    props.insert("age".to_string(), "0".to_string());
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::CACTUS,
-                                        properties: Some(props),
-                                    }
+                                state: BlockStateCodec {
+                                    name: &pumpkin_data::Block::CACTUS,
+                                    properties: None,
                                 },
                             }),
                         ],
@@ -4935,6 +5113,44 @@ fn build_placed_features()
         },
     );
     map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::PatchRedShrub,
+        PlacedFeature {
+            feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::RedShrub),
+            placement: vec![
+                PlacementModifier::InSquare(SquarePlacementModifier),
+                PlacementModifier::Heightmap(HeightmapPlacementModifier {
+                    heightmap: HeightMap::WorldSurfaceWg,
+                }),
+                PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(8i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
+            ],
+        },
+    );
+    map.insert(
         pumpkin_data::placed_feature::PlacedFeature::PatchSoulFire,
         PlacedFeature {
             feature: Feature::Named(
@@ -5034,13 +5250,9 @@ fn build_placed_features()
                             }),
                             BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                                 offset: OffsetBlocksBlockPredicate { offset: None },
-                                state: {
-                                    let mut props = std::collections::HashMap::new();
-                                    props.insert("age".to_string(), "0".to_string());
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::SUGAR_CANE,
-                                        properties: Some(props),
-                                    }
+                                state: BlockStateCodec {
+                                    name: &pumpkin_data::Block::SUGAR_CANE,
+                                    properties: None,
                                 },
                             }),
                             BlockPredicate::AnyOf(AnyOfBlockPredicate {
@@ -5128,13 +5340,9 @@ fn build_placed_features()
                             }),
                             BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                                 offset: OffsetBlocksBlockPredicate { offset: None },
-                                state: {
-                                    let mut props = std::collections::HashMap::new();
-                                    props.insert("age".to_string(), "0".to_string());
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::SUGAR_CANE,
-                                        properties: Some(props),
-                                    }
+                                state: BlockStateCodec {
+                                    name: &pumpkin_data::Block::SUGAR_CANE,
+                                    properties: None,
                                 },
                             }),
                             BlockPredicate::AnyOf(AnyOfBlockPredicate {
@@ -5221,13 +5429,9 @@ fn build_placed_features()
                             }),
                             BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                                 offset: OffsetBlocksBlockPredicate { offset: None },
-                                state: {
-                                    let mut props = std::collections::HashMap::new();
-                                    props.insert("age".to_string(), "0".to_string());
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::SUGAR_CANE,
-                                        properties: Some(props),
-                                    }
+                                state: BlockStateCodec {
+                                    name: &pumpkin_data::Block::SUGAR_CANE,
+                                    properties: None,
                                 },
                             }),
                             BlockPredicate::AnyOf(AnyOfBlockPredicate {
@@ -5315,13 +5519,9 @@ fn build_placed_features()
                             }),
                             BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                                 offset: OffsetBlocksBlockPredicate { offset: None },
-                                state: {
-                                    let mut props = std::collections::HashMap::new();
-                                    props.insert("age".to_string(), "0".to_string());
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::SUGAR_CANE,
-                                        properties: Some(props),
-                                    }
+                                state: BlockStateCodec {
+                                    name: &pumpkin_data::Block::SUGAR_CANE,
+                                    properties: None,
                                 },
                             }),
                             BlockPredicate::AnyOf(AnyOfBlockPredicate {
@@ -5613,13 +5813,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::SPRUCE_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::SPRUCE_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -5634,13 +5830,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::SPRUCE_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::SPRUCE_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -5938,6 +6130,42 @@ fn build_placed_features()
         },
     );
     map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::RedPoplar,
+        PlacedFeature {
+            feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::RedPoplar),
+            placement: vec![PlacementModifier::BlockPredicateFilter(
+                BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::POPLAR_SAPLING,
+                            properties: None,
+                        },
+                    }),
+                },
+            )],
+        },
+    );
+    map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::RedPoplarLeafLitter,
+        PlacedFeature {
+            feature: Feature::Named(
+                pumpkin_data::configured_feature::ConfiguredFeature::RedPoplarLeafLitter,
+            ),
+            placement: vec![PlacementModifier::BlockPredicateFilter(
+                BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::POPLAR_SAPLING,
+                            properties: None,
+                        },
+                    }),
+                },
+            )],
+        },
+    );
+    map.insert(
         pumpkin_data::placed_feature::PlacedFeature::RootedAzaleaTree,
         PlacedFeature {
             feature: Feature::Named(
@@ -6078,8 +6306,33 @@ fn build_placed_features()
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 16u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(20i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: 0i32,
+                            max_inclusive: 0i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
-                    heightmap: HeightMap::OceanFloorWg,
+                    heightmap: HeightMap::OceanFloor,
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        blocks: MatchingBlocksWrapper::Single("minecraft:water".to_string()),
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6093,11 +6346,33 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::InSquare(SquarePlacementModifier),
-                PlacementModifier::Heightmap(HeightmapPlacementModifier {
-                    heightmap: HeightMap::OceanFloorWg,
-                }),
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(32i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: 0i32,
+                            max_inclusive: 0i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::Heightmap(HeightmapPlacementModifier {
+                    heightmap: HeightMap::OceanFloor,
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        blocks: MatchingBlocksWrapper::Single("minecraft:water".to_string()),
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6111,11 +6386,33 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::InSquare(SquarePlacementModifier),
-                PlacementModifier::Heightmap(HeightmapPlacementModifier {
-                    heightmap: HeightMap::OceanFloorWg,
-                }),
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(48i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: 0i32,
+                            max_inclusive: 0i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::Heightmap(HeightmapPlacementModifier {
+                    heightmap: HeightMap::OceanFloor,
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        blocks: MatchingBlocksWrapper::Single("minecraft:water".to_string()),
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6129,11 +6426,33 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::InSquare(SquarePlacementModifier),
-                PlacementModifier::Heightmap(HeightmapPlacementModifier {
-                    heightmap: HeightMap::OceanFloorWg,
-                }),
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(40i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: 0i32,
+                            max_inclusive: 0i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::Heightmap(HeightmapPlacementModifier {
+                    heightmap: HeightMap::OceanFloor,
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        blocks: MatchingBlocksWrapper::Single("minecraft:water".to_string()),
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6147,11 +6466,33 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::InSquare(SquarePlacementModifier),
-                PlacementModifier::Heightmap(HeightmapPlacementModifier {
-                    heightmap: HeightMap::OceanFloorWg,
-                }),
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(80i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: 0i32,
+                            max_inclusive: 0i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::Heightmap(HeightmapPlacementModifier {
+                    heightmap: HeightMap::OceanFloor,
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        blocks: MatchingBlocksWrapper::Single("minecraft:water".to_string()),
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6165,11 +6506,33 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::InSquare(SquarePlacementModifier),
-                PlacementModifier::Heightmap(HeightmapPlacementModifier {
-                    heightmap: HeightMap::OceanFloorWg,
-                }),
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(48i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: 0i32,
+                            max_inclusive: 0i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::Heightmap(HeightmapPlacementModifier {
+                    heightmap: HeightMap::OceanFloor,
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        blocks: MatchingBlocksWrapper::Single("minecraft:water".to_string()),
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6183,11 +6546,33 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::InSquare(SquarePlacementModifier),
-                PlacementModifier::Heightmap(HeightmapPlacementModifier {
-                    heightmap: HeightMap::OceanFloorWg,
-                }),
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(48i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: 0i32,
+                            max_inclusive: 0i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::Heightmap(HeightmapPlacementModifier {
+                    heightmap: HeightMap::OceanFloor,
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        blocks: MatchingBlocksWrapper::Single("minecraft:water".to_string()),
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6201,11 +6586,33 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::InSquare(SquarePlacementModifier),
-                PlacementModifier::Heightmap(HeightmapPlacementModifier {
-                    heightmap: HeightMap::OceanFloorWg,
-                }),
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: 0i32,
+                            max_inclusive: 0i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::Heightmap(HeightmapPlacementModifier {
+                    heightmap: HeightMap::OceanFloor,
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        blocks: MatchingBlocksWrapper::Single("minecraft:water".to_string()),
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6219,11 +6626,33 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::InSquare(SquarePlacementModifier),
-                PlacementModifier::Heightmap(HeightmapPlacementModifier {
-                    heightmap: HeightMap::OceanFloorWg,
-                }),
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(80i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: 0i32,
+                            max_inclusive: 0i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::Heightmap(HeightmapPlacementModifier {
+                    heightmap: HeightMap::OceanFloor,
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        blocks: MatchingBlocksWrapper::Single("minecraft:water".to_string()),
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6438,13 +6867,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::SPRUCE_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::SPRUCE_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -6459,13 +6884,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::SPRUCE_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::SPRUCE_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -6633,13 +7054,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::BIRCH_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::BIRCH_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -6656,13 +7073,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::BIRCH_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::BIRCH_SAPLING,
+                            properties: None,
                         },
                     }),
                 },
@@ -6679,16 +7092,9 @@ fn build_placed_features()
                 BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("age".to_string(), "0".to_string());
-                            props.insert("hanging".to_string(), "false".to_string());
-                            props.insert("stage".to_string(), "0".to_string());
-                            props.insert("waterlogged".to_string(), "false".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::MANGROVE_PROPAGULE,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::MANGROVE_PROPAGULE,
+                            properties: None,
                         },
                     }),
                 },
@@ -6731,13 +7137,9 @@ fn build_placed_features()
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 }),
@@ -6780,13 +7182,9 @@ fn build_placed_features()
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::BIRCH_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::BIRCH_SAPLING,
+                            properties: None,
                         },
                     }),
                 }),
@@ -6865,16 +7263,35 @@ fn build_placed_features()
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::CHERRY_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::CHERRY_SAPLING,
+                            properties: None,
                         },
                     }),
                 }),
+            ],
+        },
+    );
+    map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::TreesDappledForest,
+        PlacedFeature {
+            feature: Feature::Named(
+                pumpkin_data::configured_feature::ConfiguredFeature::TreesDappledForest,
+            ),
+            placement: vec![
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(6i32),
+                }),
+                PlacementModifier::InSquare(SquarePlacementModifier),
+                PlacementModifier::SurfaceWaterDepthFilter(
+                    SurfaceWaterDepthFilterPlacementModifier {
+                        max_water_depth: 0i32,
+                    },
+                ),
+                PlacementModifier::Heightmap(HeightmapPlacementModifier {
+                    heightmap: HeightMap::OceanFloor,
+                }),
+                PlacementModifier::Biome(BiomePlacementModifier),
             ],
         },
     );
@@ -7137,13 +7554,9 @@ fn build_placed_features()
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 }),
@@ -7223,13 +7636,9 @@ fn build_placed_features()
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::SPRUCE_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::SPRUCE_SAPLING,
+                            properties: None,
                         },
                     }),
                 }),
@@ -7306,13 +7715,9 @@ fn build_placed_features()
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        state: {
-                            let mut props = std::collections::HashMap::new();
-                            props.insert("stage".to_string(), "0".to_string());
-                            BlockStateCodec {
-                                name: &pumpkin_data::Block::OAK_SAPLING,
-                                properties: Some(props),
-                            }
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::OAK_SAPLING,
+                            properties: None,
                         },
                     }),
                 }),
@@ -7517,6 +7922,82 @@ fn build_placed_features()
                     }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Multiple(vec![
+                                    "minecraft:netherrack".to_string(),
+                                    "minecraft:warped_nylium".to_string(),
+                                    "minecraft:warped_wart_block".to_string(),
+                                ]),
+                            }),
+                        ],
+                    }),
+                }),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Uniform(
+                        UniformIntProvider {
+                            min_inclusive: -8i32,
+                            max_inclusive: 8i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                    })),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Constant(0i32),
+                    y_spread: IntProvider::Constant(-1i32),
+                }),
+                PlacementModifier::EnvironmentScan(EnvironmentScanPlacementModifier {
+                    direction_of_search: BlockDirection::Down,
+                    target_condition: BlockPredicate::Not(NotBlockPredicate {
+                        predicate: Box::new(BlockPredicate::MatchingBlockTag(
+                            MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            },
+                        )),
+                    }),
+                    allowed_search_condition: None,
+                    max_steps: 32i32,
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Constant(0i32),
+                    y_spread: IntProvider::Constant(1i32),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Multiple(vec![
+                                    "minecraft:netherrack".to_string(),
+                                    "minecraft:warped_nylium".to_string(),
+                                    "minecraft:warped_wart_block".to_string(),
+                                ]),
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
@@ -7610,6 +8091,39 @@ fn build_placed_features()
                     count: IntProvider::Constant(5i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate {
+                            offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                        },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_NYLIUM,
+                    }),
+                }),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -7645,6 +8159,25 @@ fn build_placed_features()
                     }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, 1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Multiple(vec![
+                                    "minecraft:netherrack".to_string(),
+                                    "minecraft:nether_wart_block".to_string(),
+                                ]),
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
@@ -7735,6 +8268,44 @@ fn build_placed_features()
                     }),
                 }),
             ],
+        },
+    );
+    map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::YellowPoplar,
+        PlacedFeature {
+            feature: Feature::Named(
+                pumpkin_data::configured_feature::ConfiguredFeature::YellowPoplar,
+            ),
+            placement: vec![PlacementModifier::BlockPredicateFilter(
+                BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::POPLAR_SAPLING,
+                            properties: None,
+                        },
+                    }),
+                },
+            )],
+        },
+    );
+    map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::YellowPoplarLeafLitter,
+        PlacedFeature {
+            feature: Feature::Named(
+                pumpkin_data::configured_feature::ConfiguredFeature::YellowPoplarLeafLitter,
+            ),
+            placement: vec![PlacementModifier::BlockPredicateFilter(
+                BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::POPLAR_SAPLING,
+                            properties: None,
+                        },
+                    }),
+                },
+            )],
         },
     );
     map

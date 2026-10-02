@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "conditions": {
+        "recipes": "minecraft:yellow_cushion"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    },
+    "has_yellow_wool_slab": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:yellow_wool_slab"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_yellow_wool_slab"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:yellow_cushion"
+    ]
+  }
+}

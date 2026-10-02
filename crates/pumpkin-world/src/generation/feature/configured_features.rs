@@ -71,6 +71,7 @@ use super::features::{
     waterlogged_vegetation_patch,
     waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature,
     weeping_vines::WeepingVinesFeature,
+    weighted_random_selector::WeightedRandomFeature,
 };
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::WorldPortalExt;
@@ -151,6 +152,7 @@ pub enum ConfiguredFeature {
     ScatteredOre(ScatteredOreFeature),
     RandomSelector(RandomFeature),
     SimpleRandomSelector(SimpleRandomFeature),
+    WeightedRandomSelector(WeightedRandomFeature),
     RandomBooleanSelector(RandomBooleanFeature),
     Geode(Box<GeodeFeature>),
     DripstoneCluster(DripstoneClusterFeature),
@@ -307,6 +309,15 @@ impl ConfiguredFeature {
                 pos,
             ),
             Self::SimpleRandomSelector(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::WeightedRandomSelector(feature) => feature.generate(
                 chunk,
                 block_registry,
                 min_y,

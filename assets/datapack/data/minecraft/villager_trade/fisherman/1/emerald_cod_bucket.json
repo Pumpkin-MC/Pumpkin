@@ -1,0 +1,11 @@
+{
+  "gives": {
+    "id": "minecraft:cod_bucket"
+  },
+  "max_uses": 16,
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 3,
+    "id": "minecraft:emerald"
+  }
+}

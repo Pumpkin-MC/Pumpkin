@@ -154,6 +154,9 @@ interface java-packets {
   }
   record s-confirm-teleport {
     teleport-id: s32,
+    position: tuple<f64, f64, f64>,
+    yaw: f32,
+    pitch: f32,
   }
   record s-container-button-click {
     window-id: s32,
@@ -262,6 +265,7 @@ interface java-packets {
     release-item-in-use,
     swap-item,
     spear-jab,
+    change-destroy-direction,
   }
   record s-player-command {
     entity-id: s32,
@@ -515,6 +519,9 @@ interface java-packets {
     channel: string,
     data: list<u8>,
   }
+  record config-c-config-post-effects {
+    effects: list<string>,
+  }
   record config-c-registry-data {
     registry-id: string,
     entries: list<string>,
@@ -640,6 +647,25 @@ interface java-packets {
   }
   record c-chunk-batch-end {
     batch-size: s32,
+  }
+  record chunk-heightmaps {
+    world-surface: option<list<s64>>,
+    motion-blocking: option<list<s64>>,
+    motion-blocking-no-leaves: option<list<s64>>,
+  }
+  record chunk-block-entity {
+    packed-xz: u8,
+    y: s32,
+    type-id: s32,
+    data: string,
+  }
+  record c-chunk-data {
+    chunk-x: s32,
+    chunk-z: s32,
+    heightmaps: chunk-heightmaps,
+    data: list<u8>,
+    block-entities: list<chunk-block-entity>,
+    light-data: light-data,
   }
   record chunk-biome-entry {
     chunk-x: s32,
@@ -870,6 +896,10 @@ interface java-packets {
   record c-entity-animation {
     entity-id: s32,
     animation: u8,
+  }
+  record c-swing-arm {
+    entity-id: s32,
+    off-hand: bool,
   }
   enum animation {
     swing-main-arm,
@@ -1201,6 +1231,9 @@ interface java-packets {
     yaw: f32,
     pitch: f32,
   }
+  record c-post-effects {
+    effects: list<string>,
+  }
   record c-projectile-power {
     entity-id: s32,
     x-power: f64,
@@ -1371,7 +1404,7 @@ interface java-packets {
     position: tuple<f64, f64, f64>,
     volume: f32,
     pitch: f32,
-    seed: f64,
+    seed: s64,
   }
   record c-spawn-entity {
     entity-id: s32,
@@ -1383,25 +1416,6 @@ interface java-packets {
     yaw: u8,
     head-yaw: u8,
     data: s32,
-  }
-  record c-spawn-living-entity {
-    entity-id: s32,
-    entity-uuid: uuid,
-    r-type: s32,
-    position: tuple<f64, f64, f64>,
-    yaw: u8,
-    pitch: u8,
-    head-yaw: u8,
-    velocity: string,
-    metadata: option<list<u8>>,
-  }
-  record c-spawn-painting {
-    entity-id: s32,
-    uuid: uuid,
-    title: string,
-    %variant: s32,
-    location: tuple<s32, s32, s32>,
-    direction: u8,
   }
   record c-stop-sound {
     sound-id: option<string>,
@@ -1535,10 +1549,6 @@ interface java-packets {
   record c-update-tags-play {
     tags: list<string>,
   }
-  record c-use-bed {
-    entity-id: s32,
-    location: tuple<s32, s32, s32>,
-  }
   enum waypoint-operation {
     track,
     untrack,
@@ -1657,7 +1667,6 @@ interface java-packets {
     s-set-structure-block(s-set-structure-block),
     s-set-test-block(s-set-test-block),
     s-spectate-entity(s-spectate-entity),
-    s-swing-arm(s-swing-arm),
     s-teleport-to-entity(s-teleport-to-entity),
     s-test-instance-block-action(s-test-instance-block-action),
     s-update-sign(s-update-sign),
@@ -1679,6 +1688,7 @@ interface java-packets {
     config-c-known-packs(config-c-known-packs),
     config-c-config-ping(config-c-config-ping),
     config-c-plugin-message(config-c-plugin-message),
+    config-c-config-post-effects(config-c-config-post-effects),
     config-c-registry-data(config-c-registry-data),
     config-c-config-remove-resource-pack(config-c-config-remove-resource-pack),
     config-c-config-reset-chat,
@@ -1767,6 +1777,7 @@ interface java-packets {
     c-remove-player-info(c-remove-player-info),
     c-player-rotation(c-player-rotation),
     c-player-spawn-position(c-player-spawn-position),
+    c-post-effects(c-post-effects),
     c-projectile-power(c-projectile-power),
     c-recipe-book-add(c-recipe-book-add),
     c-recipe-book-remove(c-recipe-book-remove),
@@ -1804,8 +1815,6 @@ interface java-packets {
     c-play-show-dialog(c-play-show-dialog),
     c-sound-effect(c-sound-effect),
     c-spawn-entity(c-spawn-entity),
-    c-spawn-living-entity(c-spawn-living-entity),
-    c-spawn-painting(c-spawn-painting),
     c-start-configuration,
     c-stop-sound(c-stop-sound),
     c-store-cookie(c-store-cookie),
@@ -1828,7 +1837,6 @@ interface java-packets {
     c-update-objectives(c-update-objectives),
     c-update-recipes(c-update-recipes),
     c-update-score(c-update-score),
-    c-use-bed(c-use-bed),
     c-waypoint(c-waypoint),
     c-world-event(c-world-event),
     status-c-ping-response(status-c-ping-response),

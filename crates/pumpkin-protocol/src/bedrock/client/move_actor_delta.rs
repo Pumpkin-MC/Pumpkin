@@ -25,6 +25,7 @@ pub struct CMoveActorDelta {
     pub pitch: u8,
     pub yaw: u8,
     pub head_yaw: u8,
+    pub tick: VarULong,
 }
 
 impl CMoveActorDelta {
@@ -49,6 +50,7 @@ impl CMoveActorDelta {
             pitch,
             yaw,
             head_yaw,
+            tick: VarULong(1),
         }
     }
 }
@@ -90,6 +92,22 @@ impl PacketWrite for CMoveActorDelta {
         (self.flags & MOVE_ACTOR_DELTA_FLAG_FORCE_MOVE != 0).write(writer)?;
         (self.flags & MOVE_ACTOR_DELTA_FLAG_FORCE_MOVE_LOCAL_ENTITY != 0).write(writer)?;
         (self.flags & MOVE_ACTOR_DELTA_FLAG_FORCE_COMPLETION != 0).write(writer)?;
+        self.tick.write(writer)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn move_actor_delta_appends_tick_after_flags() {
+        let mut packet = CMoveActorDelta::new(VarULong(1), 0, 0.0, 0.0, 0.0, 0, 0, 0);
+        assert_eq!(packet.tick.0, 1);
+        packet.tick = VarULong(300);
+        let mut bytes = Vec::new();
+        packet.write(&mut bytes).unwrap();
+        assert_eq!(bytes, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 172, 2]);
     }
 }
