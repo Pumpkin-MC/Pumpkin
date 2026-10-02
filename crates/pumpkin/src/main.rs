@@ -22,7 +22,7 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 
 use pumpkin_core::{
-    CRASH_REPORT, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
+    CRASH_REPORT, GIT_HASH, GIT_HASH_FULL, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
     crash::{CrashReport, FullBacktrace},
     data::VanillaData,
     stop_or_exit_server,
@@ -33,6 +33,7 @@ use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_core::plugin::loader::PluginLoader;
 use pumpkin_util::text::{
     TextComponent,
+    click::ClickEvent,
     color::{Color, NamedColor},
 };
 use pumpkin_wasm_host::WasmPluginLoader;
@@ -244,8 +245,16 @@ fn print_banner() {
     let info = [
         // Use true color ANSI to preserve #fa8213 without colored's palette fallback.
         format!(
-            "\x1b[38;2;250;130;19mPumpkin\x1b[0m {}",
-            colored(CARGO_PKG_VERSION, NamedColor::Green)
+            "\x1b[38;2;250;130;19mPumpkin\x1b[0m v{} ({})",
+            colored(CARGO_PKG_VERSION, NamedColor::Green),
+            TextComponent::text(GIT_HASH)
+                .color_named(NamedColor::Blue)
+                .underlined()
+                .click_event(ClickEvent::OpenUrl {
+                    url: format!("https://github.com/Pumpkin-MC/Pumpkin/commit/{GIT_HASH_FULL}")
+                        .into(),
+                })
+                .to_pretty_console(),
         ),
         String::new(),
         format!(
