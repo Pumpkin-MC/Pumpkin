@@ -10,7 +10,7 @@ use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 use std::{
     backtrace::{Backtrace, BacktraceStatus},
-    io::{self},
+    io::{self, IsTerminal},
     panic::PanicHookInfo,
     process::exit,
     sync::{OnceLock, atomic::Ordering},
@@ -22,7 +22,7 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 
 use pumpkin_core::{
-    CRASH_REPORT, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
+    CRASH_REPORT, GIT_HASH, GIT_HASH_FULL, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
     crash::{CrashReport, FullBacktrace},
     data::VanillaData,
     stop_or_exit_server,
@@ -33,6 +33,7 @@ use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_core::plugin::loader::PluginLoader;
 use pumpkin_util::text::{
     TextComponent,
+    click::ClickEvent,
     color::{Color, NamedColor},
 };
 use pumpkin_wasm_host::WasmPluginLoader;
@@ -41,6 +42,8 @@ use std::time::Instant;
 use tracing::{debug, info, warn};
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+// 24-bit ANSI art of the Pumpkin logo, printed on startup when stdout is a terminal.
+const BANNER: &str = include_str!("../../../assets/banner.ans");
 
 static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 
@@ -75,6 +78,14 @@ async fn main() {
     let vanilla_data = VanillaData::load();
 
     pumpkin_core::init_logger(&config.advanced);
+
+    let show_banner = config.advanced.logging.show_banner
+        && config.advanced.logging.color
+        && io::stdout().is_terminal()
+        && enable_ansi();
+    if show_banner {
+        print_banner();
+    }
 
     info!(
         "{}",
@@ -115,7 +126,9 @@ async fn main() {
             "Pumpkin is running an unoptimized debug build. Do not use this build for performance testing; run `cargo run --release` or use a release binary."
         );
     }
-    print_support_links_and_warning();
+    if !show_banner {
+        print_support_links_and_warning();
+    }
 
     tokio::spawn(async {
         if let Err(err) = setup_sighandler().await {
@@ -199,6 +212,112 @@ async fn main() {
 
     exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
 }
+
+#[cfg(not(windows))]
+const fn enable_ansi() -> bool {
+    true
+}
+
+#[cfg(windows)]
+fn enable_ansi() -> bool {
+    use windows_sys::Win32::System::Console::{
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode, GetStdHandle, STD_OUTPUT_HANDLE,
+        SetConsoleMode,
+    };
+
+    let mut mode = 0;
+    // SAFETY: GetConsoleMode validates the stdout handle before SetConsoleMode uses it.
+    unsafe {
+        let handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        GetConsoleMode(handle, &raw mut mode) != 0
+            && SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0
+    }
+}
+
+// Prints the logo with the version and support links beside it.
+#[allow(clippy::print_stdout)]
+fn print_banner() {
+    let colored = |text: &str, color: NamedColor| {
+        TextComponent::text(text.to_string())
+            .color_named(color)
+            .to_pretty_console()
+    };
+    let info = [
+        // Use true color ANSI to preserve #fa8213 without colored's palette fallback.
+        format!(
+            "\x1b[38;2;250;130;19mPumpkin\x1b[0m v{} ({})",
+            colored(CARGO_PKG_VERSION, NamedColor::Green),
+            TextComponent::text(GIT_HASH)
+                .color_named(NamedColor::Blue)
+                .underlined()
+                .click_event(ClickEvent::OpenUrl {
+                    url: format!("https://github.com/Pumpkin-MC/Pumpkin/commit/{GIT_HASH_FULL}")
+                        .into(),
+                })
+                .to_pretty_console(),
+        ),
+        String::new(),
+        format!(
+            "{}    {} (Protocol {})",
+            TextComponent::text("Java")
+                .color_named(NamedColor::Yellow)
+                .to_pretty_console(),
+            colored(&CURRENT_MC_VERSION.to_string(), NamedColor::Green),
+            colored(
+                &CURRENT_MC_VERSION.protocol_version().to_string(),
+                NamedColor::DarkBlue
+            ),
+        ),
+        format!(
+            "{} {} (Protocol {})",
+            TextComponent::text("Bedrock")
+                .color_named(NamedColor::Gold)
+                .to_pretty_console(),
+            colored(CURRENT_BEDROCK_MC_VERSION, NamedColor::Green),
+            colored(
+                &CURRENT_BEDROCK_MC_PROTOCOL.to_string(),
+                NamedColor::DarkBlue
+            ),
+        ),
+        String::new(),
+        colored(
+            "Pumpkin is currently under heavy development!",
+            NamedColor::DarkRed,
+        ),
+        String::new(),
+        format!(
+            "{}   {}",
+            colored("Issues", NamedColor::DarkAqua),
+            "https://github.com/Pumpkin-MC/Pumpkin/issues"
+        ),
+        format!(
+            "{}  {}",
+            colored("Discord", NamedColor::DarkBlue),
+            "https://discord.gg/wT8XjrjKkf"
+        ),
+        format!(
+            "{}   {}",
+            colored("Donate", NamedColor::DarkPurple),
+            "https://pumpkinmc.org/donate/"
+        ),
+    ];
+
+    let logo: Vec<&str> = BANNER.lines().collect();
+    // Vertically center the text block next to the logo.
+    let offset = logo.len().saturating_sub(info.len()) / 2;
+    let mut out = String::from("\n");
+    for (i, line) in logo.iter().enumerate() {
+        out.push_str(line);
+        if let Some(text) = i.checked_sub(offset).and_then(|j| info.get(j)) {
+            out.push_str("   ");
+            out.push_str(text);
+        }
+        out.push('\n');
+    }
+    out.push('\n');
+    print!("{out}");
+}
+
 fn print_support_links_and_warning() {
     warn!(
         "{}",
