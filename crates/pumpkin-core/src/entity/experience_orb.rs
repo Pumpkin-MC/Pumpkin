@@ -18,6 +18,10 @@ pub struct ExperienceOrbEntity {
 }
 
 impl ExperienceOrbEntity {
+    const fn get_air_drag() -> f32 {
+        0.98
+    }
+
     pub fn new(entity: Entity, amount: u32) -> Self {
         entity.yaw.store(rand::random::<f32>() * 360.0);
         Self {
@@ -28,11 +32,36 @@ impl ExperienceOrbEntity {
     }
 
     pub fn spawn(world: &Arc<World>, position: Vector3<f64>, amount: u32) {
+        Self::spawn_with_direction(world, position, Vector3::new(0.0, 0.0, 0.0), amount);
+    }
+
+    pub fn spawn_with_direction(
+        world: &Arc<World>,
+        position: Vector3<f64>,
+        direction: Vector3<f64>,
+        amount: u32,
+    ) {
         let mut amount = amount;
         while amount > 0 {
             let i = Self::round_to_orb_size(amount);
             amount -= i;
             let entity = Entity::new(world.clone(), position, &EntityType::EXPERIENCE_ORB);
+            if direction.length_squared() > 0.0 {
+                let mut velocity = Vector3::new(
+                    (rand::random::<f64>() * 0.2 - 0.1) * 2.0,
+                    rand::random::<f64>() * 0.2 * 2.0,
+                    (rand::random::<f64>() * 0.2 - 0.1) * 2.0,
+                );
+                if direction.dot(&velocity) < 0.0 {
+                    velocity = velocity.multiply(-1.0, -1.0, -1.0);
+                }
+                let size = entity.bounding_box.load().get_average_side_length();
+                let offset = direction
+                    .normalize()
+                    .multiply(size * 0.5, size * 0.5, size * 0.5);
+                entity.set_pos(position.add(&offset));
+                entity.set_velocity(velocity);
+            }
             let orb = Arc::new(Self::new(entity, i));
             world.spawn_entity(orb);
         }
@@ -91,6 +120,18 @@ impl EntityBase for ExperienceOrbEntity {
         entity.move_entity(caller, velo);
 
         entity.tick_block_collisions(caller);
+
+        let on_ground = entity.on_ground.load(Ordering::Relaxed);
+        let mut friction = Self::get_air_drag();
+        if on_ground {
+            let block = entity.get_block_with_y_offset(f64::from(0.999_999f32)).1;
+            friction *= block.slipperiness;
+        }
+        let mut velocity = entity.velocity.load() * f64::from(friction);
+        if on_ground && velo.y < -self.get_gravity() {
+            velocity.y = -velo.y * 0.4;
+        }
+        entity.velocity.store(velocity);
 
         let age = self.orb_age.fetch_add(1, Ordering::Relaxed);
         if age >= 6000 {
