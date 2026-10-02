@@ -1,6 +1,6 @@
 use std::sync::{
     Arc,
-    atomic::{AtomicU8, Ordering},
+    atomic::{AtomicU8, AtomicU32, Ordering},
 };
 
 use pumpkin_data::block_properties::blocks_movement;
@@ -24,6 +24,7 @@ use crate::world::World;
 pub struct CushionEntity {
     pub entity: Entity,
     color: AtomicU8,
+    ticks_since_last_check: AtomicU32,
 }
 
 impl CushionEntity {
@@ -112,6 +113,7 @@ impl CushionEntity {
         Self {
             entity,
             color: AtomicU8::new(color),
+            ticks_since_last_check: AtomicU32::new(0),
         }
     }
 
@@ -177,6 +179,19 @@ impl CushionEntity {
 
     fn drop_and_remove(&self) {
         let entity = &self.entity;
+        let passengers = entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        for passenger in passengers {
+            entity.remove_passenger(passenger.get_entity().entity_id);
+        }
+        // A cancelled dismount must not leave a rider attached to a removed cushion.
+        if entity.has_passengers() {
+            return;
+        }
+
         let world = entity.world.load();
         world.play_sound(
             Sound::EntityCushionBreak,
@@ -269,7 +284,19 @@ impl EntityBase for CushionEntity {
         Some(metadata.into_boxed_slice())
     }
 
-    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {}
+    /// Vanilla BlockAttachedEntity.tick: drops the cushion once nothing holds it up.
+    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
+        if self.ticks_since_last_check.fetch_add(1, Ordering::Relaxed) < 100 {
+            return;
+        }
+        self.ticks_since_last_check.store(0, Ordering::Relaxed);
+        let world = self.entity.world.load();
+        if self.entity.is_alive()
+            && !Self::would_survive_at(&world, &self.entity.bounding_box.load())
+        {
+            self.drop_and_remove();
+        }
+    }
 
     fn can_hit(&self) -> bool {
         self.entity.is_alive()
@@ -342,5 +369,60 @@ impl EntityBase for CushionEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arc_swap::ArcSwap;
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_world::level::Level;
+    use pumpkin_world::world_info::LevelData;
+    use std::sync::Weak;
+
+    #[tokio::test]
+    async fn breaking_an_occupied_cushion_detaches_its_passenger() {
+        let directory = tempfile::tempdir().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            directory.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let world = Arc::new(World::load(
+            level.clone(),
+            Arc::new(ArcSwap::from_pointee(LevelData::default(
+                pumpkin_util::world_seed::Seed(0),
+            ))),
+            Dimension::OVERWORLD,
+            crate::block::registry::default_registry(),
+            Weak::new(),
+        ));
+        let position = Vector3::new(0.5, 64.0, 0.5);
+        let cushion = Arc::new(CushionEntity::new(
+            Entity::new(world.clone(), position, &EntityType::CUSHION),
+            0,
+        ));
+        let passenger = Arc::new(Entity::new(world.clone(), position, &EntityType::PIG));
+        world.spawn_entity(cushion.clone());
+        cushion
+            .entity
+            .add_passenger(cushion.clone(), passenger.clone());
+
+        cushion.drop_and_remove();
+        let passenger_detached = !passenger.has_vehicle();
+        let cushion_empty = !cushion.entity.has_passengers();
+        let cushion_removed = world.get_entity_by_id(cushion.entity.entity_id).is_none();
+        level.shutdown().await;
+
+        assert!(
+            passenger_detached,
+            "passenger still references the removed cushion"
+        );
+        assert!(cushion_empty, "removed cushion still owns its passenger");
+        assert!(cushion_removed);
     }
 }
