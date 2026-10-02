@@ -709,7 +709,6 @@ version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
  "pumpkin-protocol",
- "pumpkin-util",
  "tokio",
 ]
 
