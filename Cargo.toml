@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/pumpkin",
+    "crates/pumpkin-core",
     "crates/pumpkin-api-macros",
     "crates/pumpkin-auth",
     "crates/pumpkin-codecs",
@@ -18,7 +19,10 @@ members = [
     "crates/pumpkin-plugin-utils",
     "crates/pumpkin-protocol",
     "crates/pumpkin-util",
-    "crates/pumpkin-host-bindings",
+    "crates/pumpkin-wasm-host",
+    "crates/pumpkin-wasm-host-common",
+    "crates/pumpkin-wasm-host-v0_1",
+    "crates/pumpkin-wasm-host-v0_2",
     "crates/pumpkin-world",
     "tools/pumpkin-codegen",
     "tools/pumpkin-fuzzer",
@@ -107,6 +111,7 @@ missing_errors_doc = "allow"
 module_name_repetitions = "allow"
 struct_excessive_bools = "allow"
 unused_async_trait_impl = "allow"
+assert_is_empty = "allow"
 
 [workspace.package]
 version = "0.2.0+26.3-26.51"
@@ -118,6 +123,32 @@ license = "GPL-3.0"
 lto = true
 strip = "debuginfo"
 codegen-units = 1
+
+# The big library crates are mostly LLVM work before LTO. Fat LTO re-optimizes everything at the
+# final link, so splitting their own codegen here only speeds up the build.
+[profile.release.package.pumpkin-data]
+codegen-units = 16
+
+[profile.release.package.pumpkin-core]
+codegen-units = 16
+
+[profile.release.package.pumpkin-world]
+codegen-units = 16
+
+[profile.release.package.pumpkin-protocol]
+codegen-units = 16
+
+[profile.release.package.pumpkin-wasm-host]
+codegen-units = 16
+
+[profile.release.package.pumpkin-wasm-host-common]
+codegen-units = 16
+
+[profile.release.package.pumpkin-wasm-host-v0_1]
+codegen-units = 16
+
+[profile.release.package.pumpkin-wasm-host-v0_2]
+codegen-units = 16
 
 [profile.bench]
 debug = true
@@ -184,6 +215,7 @@ pumpkin-auth = { path = "crates/pumpkin-auth", default-features = false }
 pumpkin-codecs = { path = "crates/pumpkin-codecs", default-features = false }
 pumpkin-command = { path = "crates/pumpkin-command", default-features = false }
 pumpkin-config = { path = "crates/pumpkin-config", default-features = false }
+pumpkin-core = { path = "crates/pumpkin-core", default-features = false }
 pumpkin-data = { path = "crates/pumpkin-data", default-features = false }
 pumpkin-inventory = { path = "crates/pumpkin-inventory", default-features = false }
 pumpkin-macros = { path = "crates/pumpkin-macros", default-features = false }
@@ -193,7 +225,10 @@ pumpkin-plugin-runtime = { path = "crates/pumpkin-plugin-runtime", default-featu
 pumpkin-plugin-utils = { path = "crates/pumpkin-plugin-utils", default-features = false }
 pumpkin-protocol = { path = "crates/pumpkin-protocol", default-features = false }
 pumpkin-util = { path = "crates/pumpkin-util", default-features = false }
-pumpkin-host-bindings = { path = "crates/pumpkin-host-bindings", default-features = false }
+pumpkin-wasm-host = { path = "crates/pumpkin-wasm-host", default-features = false }
+pumpkin-wasm-host-common = { path = "crates/pumpkin-wasm-host-common", default-features = false }
+pumpkin-wasm-host-v0_1 = { path = "crates/pumpkin-wasm-host-v0_1", default-features = false }
+pumpkin-wasm-host-v0_2 = { path = "crates/pumpkin-wasm-host-v0_2", default-features = false }
 pumpkin-world = { path = "crates/pumpkin-world", default-features = false }
 quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
 rand = { version = "0.10.3", default-features = false, features = ["std", "std_rng", "thread_rng"] }
