@@ -682,6 +682,8 @@ impl Server {
                     && let Some(player) = weak_player.upgrade()
                 {
                     player.bedrock_skin.store(Arc::new(skin));
+                    // Bedrock players already online were sent this player with the fallback skin.
+                    player.world().update_java_player_skin_for_bedrock(&player);
                 }
             });
         }
