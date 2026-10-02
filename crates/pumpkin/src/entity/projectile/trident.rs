@@ -169,11 +169,18 @@ impl TridentEntity {
             return true;
         }
 
-        // Skip owner until trident has left the owner's bounding box
-        if Some(other_ent.entity_id) == self.owner_id
-            && !self.has_left_owner.load(Ordering::Relaxed)
+        // Skip owner and fellow passengers until trident has left the owner's bounding box
+        if !self.has_left_owner.load(Ordering::Relaxed)
+            && let Some(owner_id) = self.owner_id
         {
-            return true;
+            if other_ent.entity_id == owner_id {
+                return true;
+            }
+            if let Some(owner) = self_ent.world.load().get_entity_by_id(owner_id)
+                && super::is_passenger_of_same_vehicle(owner.get_entity(), other_ent)
+            {
+                return true;
+            }
         }
 
         // Skip other projectiles and item entities
@@ -422,6 +429,8 @@ impl EntityBase for TridentEntity {
                 let chunk_pos = entity.chunk_pos.load();
                 world.broadcast_to_chunk(chunk_pos, &sound_packet);
 
+                // Re-anchor trident at the exact hit point on the entity
+                entity.set_pos(hit_pos);
                 // Standard bounce/fall-back behavior
                 entity.velocity.store(Vector3::new(0.0, -0.1, 0.0));
                 self.has_hit.store(false, Ordering::Relaxed); // Let it hit the ground

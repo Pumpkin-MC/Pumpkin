@@ -117,12 +117,28 @@ impl EntityBase for WitherSkullEntity {
     fn on_hit(&self, hit: ProjectileHit) {
         let world = self.get_entity().world.load();
 
-        if let ProjectileHit::Entity { ref entity, .. } = hit {
+        if let ProjectileHit::Entity {
+            ref entity,
+            hit_pos,
+            ..
+        } = hit
+        {
             let difficulty = world.level_info.load().difficulty;
+            let shooter = self
+                .thrown
+                .owner_id
+                .and_then(|id| world.get_entity_by_id(id));
 
-            let _ = entity.damage(entity.as_ref(), 8.0, DamageType::WITHER_SKULL);
+            let damaged = entity.damage_with_context(
+                entity.as_ref(),
+                8.0,
+                DamageType::WITHER_SKULL,
+                Some(hit_pos),
+                Some(self),
+                shooter.as_deref(),
+            );
 
-            if let Some(living) = entity.get_living_entity() {
+            if damaged && let Some(living) = entity.get_living_entity() {
                 let duration = match difficulty {
                     Difficulty::Hard => 800,   // 40 seconds
                     Difficulty::Normal => 200, // 10 seconds

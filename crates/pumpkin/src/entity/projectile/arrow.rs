@@ -916,8 +916,10 @@ impl EntityBase for ArrowEntity {
                 let is_enderman =
                     target.get_entity().entity_type == &pumpkin_data::entity::EntityType::ENDERMAN;
                 let is_on_fire = entity.is_on_fire() || self.is_flame.load(Ordering::Relaxed);
+                let target_ent = target.get_entity();
+                let prior_fire_ticks = target_ent.fire_ticks.load(Ordering::Relaxed);
                 if is_on_fire && !is_enderman {
-                    target.get_entity().set_on_fire_for(5.0);
+                    target_ent.set_on_fire_for(5.0);
                 }
 
                 let punch = self.punch_level.load(Ordering::Relaxed);
@@ -936,8 +938,14 @@ impl EntityBase for ArrowEntity {
                     None,
                 );
 
+                if !damage_succeeded && is_on_fire && !is_enderman {
+                    target_ent
+                        .fire_ticks
+                        .store(prior_fire_ticks, Ordering::Relaxed);
+                }
+
                 if let Some(living) = target.get_living_entity() {
-                    if punch > 0 {
+                    if punch > 0 && damage_succeeded {
                         let norm = Vector3::new(velocity.x, 0.0, velocity.z).normalize();
                         let push_scale = f64::from(punch) * 0.6;
                         target.get_entity().velocity.store(
@@ -1096,11 +1104,18 @@ impl ArrowEntity {
             return true;
         }
 
-        // Skip owner until arrow has left the owner's bounding box
-        if Some(other_ent.entity_id) == self.owner_id
-            && !self.has_left_owner.load(Ordering::Relaxed)
+        // Skip owner and fellow passengers until arrow has left the owner's bounding box
+        if !self.has_left_owner.load(Ordering::Relaxed)
+            && let Some(owner_id) = self.owner_id
         {
-            return true;
+            if other_ent.entity_id == owner_id {
+                return true;
+            }
+            if let Some(owner) = self_ent.world.load().get_entity_by_id(owner_id)
+                && super::is_passenger_of_same_vehicle(owner.get_entity(), other_ent)
+            {
+                return true;
+            }
         }
 
         // Skip already pierced entities

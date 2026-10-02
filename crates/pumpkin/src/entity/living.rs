@@ -3192,10 +3192,17 @@ impl LivingEntity {
             );
 
             if let Some(source) = source {
-                let source_pos = source.get_entity().pos.load();
-                let target_pos = self.entity.pos.load();
-                let dx = source_pos.x - target_pos.x;
-                let dz = source_pos.z - target_pos.z;
+                let source_ent = source.get_entity();
+                let source_vel = source_ent.velocity.load();
+                let (dx, dz) = if crate::entity::projectile::is_projectile(source_ent.entity_type)
+                    && source_vel.horizontal_length_squared() > 1e-6
+                {
+                    (-source_vel.x, -source_vel.z)
+                } else {
+                    let source_pos = source_ent.pos.load();
+                    let target_pos = self.entity.pos.load();
+                    (source_pos.x - target_pos.x, source_pos.z - target_pos.z)
+                };
                 let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
                 self.entity
                     .apply_knockback(knockback_after_resistance(0.4, resistance), dx, dz);

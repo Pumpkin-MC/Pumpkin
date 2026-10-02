@@ -46,6 +46,31 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::LLAMA_SPIT
 }
 
+/// Returns whether two entities ride the same vehicle or are in each other's passenger hierarchy,
+/// matching vanilla `Entity.isPassengerOfSameVehicle`.
+#[must_use]
+pub fn is_passenger_of_same_vehicle(owner: &Entity, other: &Entity) -> bool {
+    if owner.entity_id == other.entity_id {
+        return true;
+    }
+    if let Some(vehicle) = owner.get_vehicle() {
+        if vehicle.get_entity().entity_id == other.entity_id {
+            return true;
+        }
+        if let Some(other_vehicle) = other.get_vehicle()
+            && vehicle.get_entity().entity_id == other_vehicle.get_entity().entity_id
+        {
+            return true;
+        }
+    }
+    if let Some(other_vehicle) = other.get_vehicle()
+        && other_vehicle.get_entity().entity_id == owner.entity_id
+    {
+        return true;
+    }
+    owner.has_passenger(other.entity_id) || other.has_passenger(owner.entity_id)
+}
+
 /// Helper to apply projectile spawned enchantment effects matching vanilla `Projectile::applyOnProjectileSpawned`.
 pub fn apply_on_projectile_spawned(
     projectile_entity: &Entity,
@@ -296,11 +321,18 @@ impl ThrownItemEntity {
             return true;
         }
 
-        // Projectiles should not collide with their own shooter until leaving the shooter's bounding box
-        if Some(other_ent.entity_id) == self.owner_id
-            && !self.has_left_owner.load(Ordering::Relaxed)
+        // Projectiles should not collide with their own shooter or fellow passengers until leaving the vehicle group
+        if !self.has_left_owner.load(Ordering::Relaxed)
+            && let Some(owner_id) = self.owner_id
         {
-            return true;
+            if other_ent.entity_id == owner_id {
+                return true;
+            }
+            if let Some(owner) = self_ent.world.load().get_entity_by_id(owner_id)
+                && is_passenger_of_same_vehicle(owner.get_entity(), other_ent)
+            {
+                return true;
+            }
         }
 
         // Projectiles should pass through lingering clouds
