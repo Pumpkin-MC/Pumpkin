@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
-use crate::entity::EntityBase;
 use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -27,27 +26,6 @@ pub struct ShearsItem;
 impl ItemMetadata for ShearsItem {
     fn ids() -> Box<[u16]> {
         Box::new([Item::SHEARS.id])
-    }
-}
-
-const fn get_wool_item_for_color(color: u8) -> &'static Item {
-    match color {
-        0 => &Item::WHITE_WOOL,
-        1 => &Item::ORANGE_WOOL,
-        2 => &Item::MAGENTA_WOOL,
-        3 => &Item::LIGHT_BLUE_WOOL,
-        4 => &Item::YELLOW_WOOL,
-        5 => &Item::LIME_WOOL,
-        6 => &Item::PINK_WOOL,
-        7 => &Item::GRAY_WOOL,
-        8 => &Item::LIGHT_GRAY_WOOL,
-        9 => &Item::CYAN_WOOL,
-        10 => &Item::PURPLE_WOOL,
-        11 => &Item::BLUE_WOOL,
-        12 => &Item::BROWN_WOOL,
-        13 => &Item::GREEN_WOOL,
-        14 => &Item::RED_WOOL,
-        _ => &Item::BLACK_WOOL,
     }
 }
 
@@ -77,42 +55,6 @@ impl ItemBehaviour for ShearsItem {
             BlockActionResult::Success
         } else {
             BlockActionResult::Pass
-        }
-    }
-
-    fn use_on_entity(&self, _item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
-        if let Some(sheep) = entity
-            .cast_any()
-            .downcast_ref::<crate::entity::passive::sheep::SheepEntity>()
-            && !sheep.is_sheared()
-        {
-            if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
-                && let Some(server) = player.world().server.upgrade()
-            {
-                let mut event = crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
-                    player: player_arc,
-                    entity_id: sheep.mob_entity.living_entity.entity.entity_id,
-                    hand: 0,
-                    cancelled: false,
-                };
-                server.plugin_manager.fire_blocking(&server, &mut event);
-                if event.cancelled {
-                    return;
-                }
-            }
-            sheep.set_sheared(true);
-            let world = player.world();
-            let pos = sheep.mob_entity.living_entity.entity.pos.load();
-            world.play_sound(Sound::EntitySheepShear, SoundCategory::Players, &pos);
-
-            let wool_count = (rand::random::<u8>() % 3 + 1) as u8;
-            let wool_item = get_wool_item_for_color(sheep.get_color());
-            let item_entity = Arc::new(ItemEntity::new(
-                Entity::new(world.clone(), pos, &EntityType::ITEM),
-                ItemStack::new(wool_count, wool_item),
-            ));
-            world.spawn_entity(item_entity);
-            player.damage_held_item(1);
         }
     }
 
