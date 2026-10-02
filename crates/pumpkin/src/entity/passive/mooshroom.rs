@@ -306,6 +306,16 @@ impl Shearable for MooshroomEntity {
                 .add_passenger(vehicle.clone(), cow_base);
         }
 
+        // Vanilla `convertCommon` moves the team over to the cow.
+        if let Some(team_name) = self.get_team_name() {
+            let mut scoreboard = world
+                .scoreboard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            scoreboard.add_player_to_team(&*world, &team_name, cow.get_scoreboard_name());
+            scoreboard.remove_player_from_team(&*world, &team_name, &self.get_scoreboard_name());
+        }
+
         mooshroom_entity.remove();
         true
     }
