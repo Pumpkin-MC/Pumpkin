@@ -190,8 +190,8 @@ impl IglooPiece {
             &mut context_rng,
         );
 
-        for block in &self.template.blocks {
-            let palette_entry = &self.template.palette[block.state as usize];
+        for block in self.template.blocks() {
+            let palette_entry = &block.state;
 
             let local_pos =
                 StructureTemplate::transform_block_pos(block.pos, mirror, rotation, pivot);

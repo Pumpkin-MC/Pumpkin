@@ -293,8 +293,8 @@ impl RuinedPortalPiece {
             &mut context_rng,
         );
 
-        for block in &self.template.blocks {
-            let palette_entry = &self.template.palette[block.state as usize];
+        for block in self.template.blocks() {
+            let palette_entry = &block.state;
 
             let mut block_entity_nbt = block.nbt.clone();
             let placed_entry = palette_entry.clone();

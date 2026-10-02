@@ -98,8 +98,8 @@ impl EndCityTemplatePiece {
         random: &mut RandomGenerator,
         chunk_box: &BlockBox,
     ) {
-        for block in &self.descriptor.template.blocks {
-            let palette = &self.descriptor.template.palette[block.state as usize];
+        for block in self.descriptor.template.blocks() {
+            let palette = &block.state;
             if matches!(
                 palette.name.as_str(),
                 "minecraft:structure_void" | "minecraft:structure_block"
@@ -120,8 +120,8 @@ impl EndCityTemplatePiece {
             Self::place_block_entity(chunk, palette, block.nbt.as_ref(), position, random);
         }
 
-        for block in &self.descriptor.template.blocks {
-            let palette = &self.descriptor.template.palette[block.state as usize];
+        for block in self.descriptor.template.blocks() {
+            let palette = &block.state;
             if palette.name != "minecraft:structure_block" {
                 continue;
             }
@@ -421,9 +421,14 @@ mod tests {
     #[test]
     fn ship_dragon_head_uses_the_skull_block_entity() {
         let ship = get_template("end_city/ship").unwrap();
-        assert!(ship.palette.iter().any(|palette| {
-            palette.name == "minecraft:dragon_wall_head"
-                && get_block_entity_id(&palette.name) == Some("minecraft:skull")
-        }));
+        assert!(
+            ship.blocks()
+                .iter()
+                .map(|block| &block.state)
+                .any(|palette| {
+                    palette.name == "minecraft:dragon_wall_head"
+                        && get_block_entity_id(&palette.name) == Some("minecraft:skull")
+                })
+        );
     }
 }

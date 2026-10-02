@@ -276,8 +276,8 @@ impl MansionTemplatePiece {
         random: &mut RandomGenerator,
         chunk_box: &BlockBox,
     ) {
-        for template_block in &self.template.blocks {
-            let palette = &self.template.palette[template_block.state as usize];
+        for template_block in self.template.blocks() {
+            let palette = &template_block.state;
             let position = self.world_position(template_block.pos);
             if !chunk_box.contains_pos(&position) {
                 continue;
@@ -296,7 +296,7 @@ impl MansionTemplatePiece {
                 continue;
             }
 
-            let mut placed_entry = palette.clone();
+            let mut placed_entry = PaletteEntry::clone(palette);
             if chunk.get_block_state(&position).to_block_id() == Block::WATER.id
                 && property(&placed_entry, "waterlogged").is_some()
             {

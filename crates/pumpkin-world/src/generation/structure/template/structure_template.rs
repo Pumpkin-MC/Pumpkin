@@ -4,7 +4,7 @@
 //! into a runtime representation with palettes, entities, block info, and transformations.
 
 use std::io::Cursor;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use pumpkin_data::{Mirror, Rotation};
 use pumpkin_nbt::{compound::NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag};
@@ -211,16 +211,11 @@ pub struct StructureTemplate {
     pub author: String,
     pub name: Option<String>,
 
-    // Backward-compatible fields
-    // TODO: make these fields private with accessors. They are public now, so a
-    // caller can change them after the jigsaw cache is filled. The cache then
-    // goes stale. `load()` resets the cache, but a direct mutation does not.
-    pub palette: Vec<PaletteEntry>,
-    pub blocks: Vec<TemplateBlock>,
+    // Backward-compatible field
     pub entities: Vec<TemplateEntity>,
 
-    /// Jigsaw blocks parsed from the flat `blocks`/`palette` view, computed lazily
-    /// on first use so placement never rescans the template's block list.
+    /// Jigsaw blocks parsed from the first palette, computed lazily on first use so
+    /// placement never rescans the template's block list.
     jigsaw_blocks_cache: OnceLock<JigsawBlockCache>,
 }
 
@@ -354,13 +349,19 @@ impl PaletteEntry {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructureBlockInfo {
     pub pos: Vector3<i32>,
-    pub state: PaletteEntry,
+    /// Shared by every block of the palette with the same state, like vanilla's
+    /// interned `BlockState`.
+    pub state: Arc<PaletteEntry>,
     pub nbt: Option<NbtCompound>,
 }
 
 impl StructureBlockInfo {
     #[must_use]
-    pub const fn new(pos: Vector3<i32>, state: PaletteEntry, nbt: Option<NbtCompound>) -> Self {
+    pub const fn new(
+        pos: Vector3<i32>,
+        state: Arc<PaletteEntry>,
+        nbt: Option<NbtCompound>,
+    ) -> Self {
         Self { pos, state, nbt }
     }
 }
@@ -532,14 +533,6 @@ impl SimplePalette {
     }
 }
 
-/// A single block placement in the template (legacy format).
-#[derive(Debug, Clone)]
-pub struct TemplateBlock {
-    pub pos: Vector3<i32>,
-    pub state: u32,
-    pub nbt: Option<NbtCompound>,
-}
-
 /// An entity to spawn when placing the template (legacy format).
 #[derive(Debug, Clone)]
 pub struct TemplateEntity {
@@ -580,14 +573,20 @@ impl StructureTemplate {
         &self.palettes
     }
 
+    /// The blocks of the first palette, which is what the `blocks` tag of the file lists.
+    #[must_use]
+    pub fn blocks(&self) -> &[StructureBlockInfo] {
+        self.palettes.first().map_or(&[], Palette::blocks)
+    }
+
     pub const fn palettes_mut(&mut self) -> &mut Vec<Palette> {
         &mut self.palettes
     }
 
     /// Returns the template's jigsaw blocks in template-local coordinates.
     ///
-    /// Parsed once from the flat `blocks`/`palette` view and cached, rather than
-    /// being re-scanned and re-parsed on every placement attempt.
+    /// Parsed once from the first palette and cached, rather than being re-scanned and
+    /// re-parsed on every placement attempt.
     #[must_use]
     pub fn jigsaw_blocks(&self) -> &[JigsawBlock] {
         &self
@@ -601,14 +600,9 @@ impl StructureTemplate {
                 }
 
                 JigsawBlockCache(
-                    self.blocks
+                    self.blocks()
                         .iter()
-                        .filter_map(|block| {
-                            JigsawBlock::from_template_block(
-                                block,
-                                &self.palette[block.state as usize],
-                            )
-                        })
+                        .filter_map(JigsawBlock::from_template_block)
                         .collect(),
                 )
             })
@@ -853,7 +847,7 @@ impl StructureTemplate {
             let rel_pos = Self::calculate_relative_position(&settings, block_info.pos) + position;
             let rotated_info = StructureBlockInfo::new(
                 rel_pos,
-                block_info.state.rotate(settings.get_rotation()),
+                Arc::new(block_info.state.rotate(settings.get_rotation())),
                 block_info.nbt.clone(),
             );
             result.push(jigsaw.with_info(rotated_info));
@@ -898,7 +892,7 @@ impl StructureTemplate {
                 if bounding_box.is_none_or(|bb| bb.contains_pos(&block_pos)) {
                     result.push(StructureBlockInfo::new(
                         block_pos,
-                        block_info.state.rotate(settings.get_rotation()),
+                        Arc::new(block_info.state.rotate(settings.get_rotation())),
                         block_info.nbt.clone(),
                     ));
                 }
@@ -1019,7 +1013,7 @@ impl StructureTemplate {
             }
         }
 
-        self.sync_legacy_fields();
+        self.sync_legacy_entities();
 
         Ok(())
     }
@@ -1037,6 +1031,10 @@ impl StructureTemplate {
             let entry = PaletteEntry::from_nbt_compound(entry_compound)?;
             palette.add_mapping(entry, i);
         }
+        // One shared entry per palette index; every block points at it instead of
+        // carrying its own copy of the name and properties.
+        let states: Vec<Arc<PaletteEntry>> = palette.entries.into_iter().map(Arc::new).collect();
+        let air = Arc::new(PaletteEntry::new("minecraft:air".to_string()));
 
         let mut full_block_list = Vec::new();
         let mut block_entities_list = Vec::new();
@@ -1066,10 +1064,7 @@ impl StructureTemplate {
                 .ok_or(TemplateError::MissingField("blocks.state"))?
                 as usize;
 
-            let state = palette
-                .state_for(state_idx)
-                .cloned()
-                .unwrap_or_else(|| PaletteEntry::new("minecraft:air".to_string()));
+            let state = states.get(state_idx).unwrap_or(&air).clone();
 
             let nbt = block_compound.get_compound(Self::BLOCK_TAG_NBT).cloned();
 
@@ -1149,25 +1144,7 @@ impl StructureTemplate {
         result
     }
 
-    fn sync_legacy_fields(&mut self) {
-        if let Some(main_palette) = self.palettes.first() {
-            let mut simple_palette = SimplePalette::new();
-            let mut blocks = Vec::with_capacity(main_palette.blocks().len());
-            for b in main_palette.blocks() {
-                let state_id = simple_palette.id_for(b.state.clone());
-                blocks.push(TemplateBlock {
-                    pos: b.pos,
-                    state: state_id,
-                    nbt: b.nbt.clone(),
-                });
-            }
-            self.palette = simple_palette.entries;
-            self.blocks = blocks;
-        } else {
-            self.palette.clear();
-            self.blocks.clear();
-        }
-
+    fn sync_legacy_entities(&mut self) {
         self.entities = self
             .entity_info_list
             .iter()
@@ -1207,7 +1184,7 @@ impl StructureTemplate {
                 ];
                 block_tag.put_list(Self::BLOCK_TAG_POS, pos_tags);
 
-                let id = palettes[0].id_for(block_info.state.clone());
+                let id = palettes[0].id_for(PaletteEntry::clone(&block_info.state));
                 block_tag.put_int(Self::BLOCK_TAG_STATE, id as i32);
 
                 if let Some(nbt) = &block_info.nbt {
@@ -1217,7 +1194,7 @@ impl StructureTemplate {
                 block_list.push(NbtTag::Compound(block_tag));
 
                 for p in 1..self.palettes.len() {
-                    let state = self.palettes[p].blocks()[i].state.clone();
+                    let state = PaletteEntry::clone(&self.palettes[p].blocks()[i].state);
                     palettes[p].add_mapping(state, id as usize);
                 }
             }
@@ -1321,13 +1298,13 @@ impl StructureTemplate {
     }
 
     #[must_use]
-    pub const fn block_count(&self) -> usize {
-        self.blocks.len()
+    pub fn block_count(&self) -> usize {
+        self.blocks().len()
     }
 
     #[must_use]
     pub fn has_block_entities(&self) -> bool {
-        self.blocks.iter().any(|b| b.nbt.is_some())
+        self.blocks().iter().any(|b| b.nbt.is_some())
     }
 
     #[must_use]
@@ -1365,7 +1342,11 @@ mod tests {
         );
         let template = StructureTemplate::from_nbt_bytes(bytes).expect("failed to load template");
 
-        let palette = &template.palette;
+        let palette: Vec<&PaletteEntry> = template
+            .blocks()
+            .iter()
+            .map(|block| &*block.state)
+            .collect();
         assert!(!palette.is_empty(), "the palette must not be empty");
         assert!(
             palette.iter().any(|entry| entry.name == "minecraft:ice"),
