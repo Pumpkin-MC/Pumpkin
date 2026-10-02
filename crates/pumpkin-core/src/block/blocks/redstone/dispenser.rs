@@ -20,6 +20,7 @@ use crate::entity::passive::sheep::SheepEntity;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
 use crate::entity::projectile::egg::EggEntity;
+use crate::entity::projectile::experience_bottle::ExperienceBottleEntity;
 use crate::entity::projectile::firework_rocket::FireworkRocketEntity;
 use crate::entity::projectile::lingering_potion::LingeringPotionEntity;
 use crate::entity::projectile::small_fireball::SmallFireballEntity;
@@ -1117,7 +1118,7 @@ impl DispenserBlock {
             Self::projectile_spawn_position(ctx),
             &EntityType::EXPERIENCE_BOTTLE,
         );
-        let bottle = SplashPotionEntity::new(entity);
+        let bottle = ExperienceBottleEntity::new(entity);
         bottle.set_item_stack(projectile);
         Self::launch_thrown(
             ctx,
