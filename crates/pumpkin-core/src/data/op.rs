@@ -36,7 +36,7 @@ impl LoadJSONConfiguration for OperatorConfig {
                 tracing::warn!("Duplicate operator UUID: {}", op.uuid);
             }
 
-            if op.name.is_empty() {
+            if op.name.trim().is_empty() {
                 tracing::warn!("Operator entry has empty name: {}", op.uuid);
             } else if !seen_names.insert(op.name.to_lowercase()) {
                 tracing::warn!("Duplicate operator name (case-insensitive): {}", op.name);
