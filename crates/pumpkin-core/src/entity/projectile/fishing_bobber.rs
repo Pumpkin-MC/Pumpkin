@@ -548,6 +548,8 @@ impl FishingBobberEntity {
 
         if let Some(id) = hooked {
             self.set_hooked_entity(Some(id));
+            // Clear the momentum so if the hooked entity is removed the hook doesn't carry on moving.
+            *velocity = Vector3::new(0.0, 0.0, 0.0);
         } else if hit_block {
             // Vanilla `FishingHook.onHitBlock`: stop the hook at the block face instead of carrying
             // its tangential motion to the edge.
@@ -557,11 +559,6 @@ impl FishingBobberEntity {
 
     /// Vanilla `FishingHook.setHookedEntity`: records the hooked entity and syncs it to the client.
     fn set_hooked_entity(&self, hooked_id: Option<i32>) {
-        // Vanilla `FishingHook.tick` zeroes the velocity on the `FLYING` to `HOOKED_IN_ENTITY`
-        // transition, so a hook that loses its target does not resume its old flight.
-        if hooked_id.is_some() && matches!(self.state.load(), HookState::Flying) {
-            self.entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
-        }
         self.state
             .store(hooked_id.map_or(HookState::Flying, HookState::HookedIn));
         self.entity.set_synced_data(
@@ -1018,5 +1015,54 @@ mod tests {
             &mut velocity,
         );
         assert_eq!(bobber.state.load(), HookState::HookedIn(other.entity_id));
+    }
+
+    /// `process_tick` hands this velocity to `move_entity`, which stores it back on the hook, so
+    /// hooking has to clear the throw motion before the move or the hook keeps flying once the
+    /// hooked entity is removed.
+    #[tokio::test]
+    async fn hook_then_detach_does_not_resume_the_flight() {
+        let world = test_world();
+        let owner = Arc::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, -4.0),
+            &EntityType::PLAYER,
+        ));
+        let hooked = Arc::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 1.0),
+            &EntityType::PLAYER,
+        ));
+        world.entities.store(Arc::new(vec![
+            owner.clone() as Arc<dyn EntityBase>,
+            hooked.clone() as Arc<dyn EntityBase>,
+        ]));
+
+        let bobber = bobber_for(&world, Vector3::new(0.0, 65.62, 0.0), &owner);
+        let mut velocity = Vector3::new(0.0, 0.0, 1.0);
+        bobber.check_collision(
+            &world,
+            owner.as_ref(),
+            &bobber,
+            bobber.entity.pos.load(),
+            &mut velocity,
+        );
+        assert_eq!(bobber.state.load(), HookState::HookedIn(hooked.entity_id));
+
+        bobber.entity.move_entity(&bobber, velocity);
+        assert_eq!(
+            bobber.entity.velocity.load(),
+            Vector3::new(0.0, 0.0, 0.0),
+            "the hook kept the throw motion after hooking"
+        );
+
+        // The hooked entity is gone, so the next tick detaches the hook.
+        bobber.set_hooked_entity(None);
+        assert_eq!(bobber.state.load(), HookState::Flying);
+        assert_eq!(
+            bobber.entity.velocity.load(),
+            Vector3::new(0.0, 0.0, 0.0),
+            "the detached hook resumed its old flight"
+        );
     }
 }
