@@ -7,6 +7,7 @@ use pumpkin_data::{
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
     BlockDirection,
+    HeightMap,
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
@@ -51,6 +52,68 @@ impl MineshaftType {
             Self::Normal => Block::OAK_FENCE.default_state,
             Self::Mesa => Block::DARK_OAK_FENCE.default_state,
         }
+    }
+}
+
+fn can_place_mineshaft_block(chunk: &ProtoChunk, pos: &Vector3<i32>) -> bool {
+    chunk.get_top_y(&HeightMap::WorldSurfaceWg, pos.x, pos.z) > pos.y
+}
+
+fn add_mineshaft_block(
+    piece: &StructurePiece,
+    chunk: &mut ProtoChunk,
+    block: &BlockState,
+    x: i32,
+    y: i32,
+    z: i32,
+    chunk_box: &BlockBox,
+) {
+    let pos = piece.offset_pos(x, y, z);
+    if chunk_box.contains_pos(&pos) && can_place_mineshaft_block(chunk, &pos) {
+        piece.add_block(chunk, block, x, y, z, chunk_box);
+    }
+}
+
+fn fill_mineshaft(
+    piece: &StructurePiece,
+    chunk: &mut ProtoChunk,
+    chunk_box: &BlockBox,
+    min_x: i32,
+    min_y: i32,
+    min_z: i32,
+    max_x: i32,
+    max_y: i32,
+    max_z: i32,
+    block: &BlockState,
+) {
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
+            for z in min_z..=max_z {
+                add_mineshaft_block(piece, chunk, block, x, y, z, chunk_box);
+            }
+        }
+    }
+}
+
+fn set_mineshaft_block(chunk: &mut ProtoChunk, pos: &Vector3<i32>, block: &'static BlockState) {
+    if can_place_mineshaft_block(chunk, pos) {
+        chunk.set_block_state(pos.x, pos.y, pos.z, block);
+    }
+}
+
+fn add_mineshaft_chest(
+    piece: &StructurePiece,
+    chunk: &mut ProtoChunk,
+    chunk_box: &BlockBox,
+    random: &mut RandomGenerator,
+    x: i32,
+    y: i32,
+    z: i32,
+    loot_table: &str,
+) {
+    let pos = piece.offset_pos(x, y, z);
+    if chunk_box.contains_pos(&pos) && can_place_mineshaft_block(chunk, &pos) {
+        piece.add_chest(chunk, chunk_box, random, x, y, z, loot_table);
     }
 }
 
@@ -494,7 +557,7 @@ impl StructurePieceBase for MineShaftRoom {
             for x in bb.min.x..=bb.max.x {
                 for z in bb.min.z..=bb.max.z {
                     if chunk_box.contains(x, y, z) {
-                        chunk.set_block_state(x, y, z, air);
+                        set_mineshaft_block(chunk, &Vector3::new(x, y, z), air);
                     }
                 }
             }
@@ -505,7 +568,7 @@ impl StructurePieceBase for MineShaftRoom {
                 for x in entrance.min.x..=entrance.max.x {
                     for z in entrance.min.z..=entrance.max.z {
                         if chunk_box.contains(x, y, z) {
-                            chunk.set_block_state(x, y, z, air);
+                            set_mineshaft_block(chunk, &Vector3::new(x, y, z), air);
                         }
                     }
                 }
@@ -527,7 +590,7 @@ impl StructurePieceBase for MineShaftRoom {
                     for z in bb.min.z..=bb.max.z {
                         let nz = (z as f32 - cz) / (diag_z * 0.5);
                         if nx * nx + ny * ny + nz * nz <= 1.05 && chunk_box.contains(x, y, z) {
-                            chunk.set_block_state(x, y, z, air);
+                            set_mineshaft_block(chunk, &Vector3::new(x, y, z), air);
                         }
                     }
                 }
@@ -878,19 +941,36 @@ impl MineShaftCorridor {
         let planks = self.shaft_type.planks();
         let fence = self.shaft_type.fence();
 
-        self.piece
-            .fill(chunk, chunk_box, x0, y0, z, x0, y1 - 1, z, fence);
-        self.piece
-            .fill(chunk, chunk_box, x1, y0, z, x1, y1 - 1, z, fence);
+        fill_mineshaft(
+            &self.piece,
+            chunk,
+            chunk_box,
+            x0,
+            y0,
+            z,
+            x0,
+            y1 - 1,
+            z,
+            fence,
+        );
+        fill_mineshaft(
+            &self.piece,
+            chunk,
+            chunk_box,
+            x1,
+            y0,
+            z,
+            x1,
+            y1 - 1,
+            z,
+            fence,
+        );
 
         if random.next_bounded_i32(4) == 0 {
-            self.piece
-                .fill(chunk, chunk_box, x0, y1, z, x0, y1, z, planks);
-            self.piece
-                .fill(chunk, chunk_box, x1, y1, z, x1, y1, z, planks);
+            fill_mineshaft(&self.piece, chunk, chunk_box, x0, y1, z, x0, y1, z, planks);
+            fill_mineshaft(&self.piece, chunk, chunk_box, x1, y1, z, x1, y1, z, planks);
         } else {
-            self.piece
-                .fill(chunk, chunk_box, x0, y1, z, x1, y1, z, planks);
+            fill_mineshaft(&self.piece, chunk, chunk_box, x0, y1, z, x1, y1, z, planks);
 
             let mut props_s = WallTorchLikeProperties::default(&Block::WALL_TORCH);
             props_s.facing = HorizontalFacing::South;
@@ -901,12 +981,10 @@ impl MineShaftCorridor {
             let torch_n = BlockState::from_id(props_n.to_state_id(&Block::WALL_TORCH));
 
             if random.next_f32() < 0.05 {
-                self.piece
-                    .add_block(chunk, torch_s, x0 + 1, y1, z - 1, chunk_box);
+                add_mineshaft_block(&self.piece, chunk, torch_s, x0 + 1, y1, z - 1, chunk_box);
             }
             if random.next_f32() < 0.05 {
-                self.piece
-                    .add_block(chunk, torch_n, x0 + 1, y1, z + 1, chunk_box);
+                add_mineshaft_block(&self.piece, chunk, torch_n, x0 + 1, y1, z + 1, chunk_box);
             }
         }
     }
@@ -938,7 +1016,11 @@ impl MineShaftCorridor {
                     state_below.to_state().is_air() || state_below.to_block_id() == Block::WATER.id;
                 if !empty_below && state_below.to_block_id() != Block::LAVA.id {
                     for py in (below_y + 1)..=world_y {
-                        chunk.set_block_state(world_pos.x, py, world_pos.z, self.shaft_type.wood());
+                        set_mineshaft_block(
+                            chunk,
+                            &Vector3::new(world_pos.x, py, world_pos.z),
+                            self.shaft_type.wood(),
+                        );
                     }
                     return;
                 }
@@ -951,17 +1033,15 @@ impl MineShaftCorridor {
                     chunk.get_block_state(&Vector3::new(world_pos.x, above_y, world_pos.z));
                 let empty_above = state_above.to_state().is_air();
                 if !empty_above {
-                    chunk.set_block_state(
-                        world_pos.x,
-                        world_y + 1,
-                        world_pos.z,
+                    set_mineshaft_block(
+                        chunk,
+                        &Vector3::new(world_pos.x, world_y + 1, world_pos.z),
                         self.shaft_type.fence(),
                     );
                     for py in (world_y + 2)..=above_y {
-                        chunk.set_block_state(
-                            world_pos.x,
-                            py,
-                            world_pos.z,
+                        set_mineshaft_block(
+                            chunk,
+                            &Vector3::new(world_pos.x, py, world_pos.z),
                             Block::IRON_CHAIN.default_state,
                         );
                     }
@@ -1001,17 +1081,23 @@ impl StructurePieceBase for MineShaftCorridor {
         let length = self.num_sections * 5 - 1;
         let planks = self.shaft_type.planks();
 
-        self.piece
-            .fill(chunk, chunk_box, 0, 0, 0, 2, 1, length, air);
+        fill_mineshaft(&self.piece, chunk, chunk_box, 0, 0, 0, 2, 1, length, air);
 
         for z in 0..=length {
             for x in 0..=2 {
                 if random.next_f32() < 0.8 {
-                    self.piece.add_block(chunk, air, x, 2, z, chunk_box);
+                    add_mineshaft_block(&self.piece, chunk, air, x, 2, z, chunk_box);
                 }
                 if self.spider_corridor && random.next_f32() < 0.6 {
-                    self.piece
-                        .add_block(chunk, Block::COBWEB.default_state, x, 0, z, chunk_box);
+                    add_mineshaft_block(
+                        &self.piece,
+                        chunk,
+                        Block::COBWEB.default_state,
+                        x,
+                        0,
+                        z,
+                        chunk_box,
+                    );
                 }
             }
         }
@@ -1031,13 +1117,21 @@ impl StructurePieceBase for MineShaftCorridor {
                 (2, 2, z + 2, 0.05),
             ] {
                 if random.next_f32() < prob {
-                    self.piece
-                        .add_block(chunk, Block::COBWEB.default_state, cx, cy, cz, chunk_box);
+                    add_mineshaft_block(
+                        &self.piece,
+                        chunk,
+                        Block::COBWEB.default_state,
+                        cx,
+                        cy,
+                        cz,
+                        chunk_box,
+                    );
                 }
             }
 
             if random.next_bounded_i32(100) == 0 {
-                self.piece.add_chest(
+                add_mineshaft_chest(
+                    &self.piece,
                     chunk,
                     chunk_box,
                     random,
@@ -1048,7 +1142,8 @@ impl StructurePieceBase for MineShaftCorridor {
                 );
             }
             if random.next_bounded_i32(100) == 0 {
-                self.piece.add_chest(
+                add_mineshaft_chest(
+                    &self.piece,
                     chunk,
                     chunk_box,
                     random,
@@ -1062,14 +1157,11 @@ impl StructurePieceBase for MineShaftCorridor {
             if self.spider_corridor && !self.has_placed_spider {
                 let spawner_z = z - 1 + random.next_bounded_i32(3);
                 let spawner_pos = self.piece.offset_pos(1, 0, spawner_z);
-                if chunk_box.contains_pos(&spawner_pos) {
+                if chunk_box.contains_pos(&spawner_pos)
+                    && can_place_mineshaft_block(chunk, &spawner_pos)
+                {
                     self.has_placed_spider = true;
-                    chunk.set_block_state(
-                        spawner_pos.x,
-                        spawner_pos.y,
-                        spawner_pos.z,
-                        Block::SPAWNER.default_state,
-                    );
+                    set_mineshaft_block(chunk, &spawner_pos, Block::SPAWNER.default_state);
 
                     let mut nbt = NbtCompound::new();
                     nbt.put_string("id", "minecraft:mob_spawner".to_string());
@@ -1092,7 +1184,7 @@ impl StructurePieceBase for MineShaftCorridor {
                 if chunk_box.contains_pos(&world_pos) {
                     let below = chunk.get_block_state(&world_pos);
                     if below.to_state().is_air() {
-                        chunk.set_block_state(world_pos.x, world_pos.y, world_pos.z, planks);
+                        set_mineshaft_block(chunk, &world_pos, planks);
                     }
                 }
             }
@@ -1113,7 +1205,7 @@ impl StructurePieceBase for MineShaftCorridor {
                 if chunk_box.contains_pos(&floor_pos) {
                     let floor_state = chunk.get_block_state(&floor_pos);
                     if !floor_state.to_state().is_air() && random.next_f32() < 0.7 {
-                        self.piece.add_block(chunk, rail, 1, 0, z, chunk_box);
+                        add_mineshaft_block(&self.piece, chunk, rail, 1, 0, z, chunk_box);
                     }
                 }
             }
@@ -1438,14 +1530,14 @@ impl StructurePieceBase for MineShaftCrossing {
                 for x in (bb.min.x + 1)..bb.max.x {
                     for z in bb.min.z..=bb.max.z {
                         if chunk_box.contains(x, y, z) {
-                            chunk.set_block_state(x, y, z, air);
+                            set_mineshaft_block(chunk, &Vector3::new(x, y, z), air);
                         }
                     }
                 }
                 for x in bb.min.x..=bb.max.x {
                     for z in (bb.min.z + 1)..bb.max.z {
                         if chunk_box.contains(x, y, z) {
-                            chunk.set_block_state(x, y, z, air);
+                            set_mineshaft_block(chunk, &Vector3::new(x, y, z), air);
                         }
                     }
                 }
@@ -1454,14 +1546,14 @@ impl StructurePieceBase for MineShaftCrossing {
                 for x in (bb.min.x + 1)..bb.max.x {
                     for z in bb.min.z..=bb.max.z {
                         if chunk_box.contains(x, y, z) {
-                            chunk.set_block_state(x, y, z, air);
+                            set_mineshaft_block(chunk, &Vector3::new(x, y, z), air);
                         }
                     }
                 }
                 for x in bb.min.x..=bb.max.x {
                     for z in (bb.min.z + 1)..bb.max.z {
                         if chunk_box.contains(x, y, z) {
-                            chunk.set_block_state(x, y, z, air);
+                            set_mineshaft_block(chunk, &Vector3::new(x, y, z), air);
                         }
                     }
                 }
@@ -1470,7 +1562,7 @@ impl StructurePieceBase for MineShaftCrossing {
             for x in (bb.min.x + 1)..bb.max.x {
                 for z in (bb.min.z + 1)..bb.max.z {
                     if chunk_box.contains(x, mid_y, z) {
-                        chunk.set_block_state(x, mid_y, z, air);
+                        set_mineshaft_block(chunk, &Vector3::new(x, mid_y, z), air);
                     }
                 }
             }
@@ -1479,14 +1571,14 @@ impl StructurePieceBase for MineShaftCrossing {
                 for x in (bb.min.x + 1)..bb.max.x {
                     for z in bb.min.z..=bb.max.z {
                         if chunk_box.contains(x, y, z) {
-                            chunk.set_block_state(x, y, z, air);
+                            set_mineshaft_block(chunk, &Vector3::new(x, y, z), air);
                         }
                     }
                 }
                 for x in bb.min.x..=bb.max.x {
                     for z in (bb.min.z + 1)..bb.max.z {
                         if chunk_box.contains(x, y, z) {
-                            chunk.set_block_state(x, y, z, air);
+                            set_mineshaft_block(chunk, &Vector3::new(x, y, z), air);
                         }
                     }
                 }
@@ -1503,7 +1595,7 @@ impl StructurePieceBase for MineShaftCrossing {
             if !above.to_state().is_air() {
                 for py in bb.min.y..=bb.max.y {
                     if chunk_box.contains(cx, py, cz) {
-                        chunk.set_block_state(cx, py, cz, planks);
+                        set_mineshaft_block(chunk, &Vector3::new(cx, py, cz), planks);
                     }
                 }
             }
@@ -1515,7 +1607,7 @@ impl StructurePieceBase for MineShaftCrossing {
                 if chunk_box.contains(x, floor_y, z) {
                     let state = chunk.get_block_state(&Vector3::new(x, floor_y, z));
                     if state.to_state().is_air() {
-                        chunk.set_block_state(x, floor_y, z, planks);
+                        set_mineshaft_block(chunk, &Vector3::new(x, floor_y, z), planks);
                     }
                 }
             }
@@ -1659,15 +1751,14 @@ impl StructurePieceBase for MineShaftStairs {
         chunk_box: &BlockBox,
     ) {
         let air = Block::CAVE_AIR.default_state;
-        self.piece.fill(chunk, chunk_box, 0, 5, 0, 2, 7, 1, air);
-        self.piece.fill(chunk, chunk_box, 0, 0, 7, 2, 2, 8, air);
+        fill_mineshaft(&self.piece, chunk, chunk_box, 0, 5, 0, 2, 7, 1, air);
+        fill_mineshaft(&self.piece, chunk, chunk_box, 0, 0, 7, 2, 2, 8, air);
 
         for i in 0..5 {
             let y_min = 5 - i - i32::from(i < 4);
             let y_max = 7 - i;
             let z = 2 + i;
-            self.piece
-                .fill(chunk, chunk_box, 0, y_min, z, 2, y_max, z, air);
+            fill_mineshaft(&self.piece, chunk, chunk_box, 0, y_min, z, 2, y_max, z, air);
         }
     }
 }
