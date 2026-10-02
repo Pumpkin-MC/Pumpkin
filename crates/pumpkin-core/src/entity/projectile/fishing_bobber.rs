@@ -662,6 +662,16 @@ impl FishingBobberEntity {
                     );
                 }
             } else {
+                // Bukkit `PlayerFishEvent`: a fish bit the hook. A cancelled event cancels
+                // the whole bite, so fire it before opening the window or showing the bite.
+                if self
+                    .fire_fish_event(world, PlayerFishState::Bite, None, hand, 0)
+                    .is_none()
+                {
+                    self.hook_countdown.store(0, Ordering::Relaxed);
+                    return;
+                }
+
                 world.play_sound_fine(
                     Sound::EntityFishingBobberSplash,
                     SoundCategory::Neutral,
@@ -683,8 +693,6 @@ impl FishingBobberEntity {
                     pumpkin_data::tracked_data::fishing_bobber::DATA_BITING,
                     true,
                 );
-                // Bukkit `PlayerFishEvent`: a fish bit the hook.
-                self.fire_fish_event(world, PlayerFishState::Bite, None, hand, 0);
                 // Vanilla applies the bite's downward kick in `onSyncedDataUpdated`.
                 let mut synced = self.synced_random(world);
                 velocity.y = -0.4 * (f64::from(synced.next_f32()) * 0.4 + 0.6);
@@ -872,9 +880,10 @@ mod tests {
             let mut y = start;
             let mut velocity = Vector3::new(0.0, 0.0, 0.0);
             for _ in 0..200 {
+                // Mirror `process_tick`: move with the velocity, then damp it.
                 velocity = bob_velocity(velocity, y, block_y, water_height, 0.5);
-                velocity = velocity * FishingBobberEntity::INERTIA;
                 y += velocity.y;
+                velocity = velocity * FishingBobberEntity::INERTIA;
                 assert!(
                     y - surface < 2.1,
                     "bobber rose {:.3} above the surface from {start}",
