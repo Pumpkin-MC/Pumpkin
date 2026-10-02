@@ -52,6 +52,8 @@ use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
+const MAX_PENDING_TELEPORTS: usize = 32;
+
 #[derive(Clone, Debug)]
 pub enum CustomScoreboard {
     Java(Scoreboard),
@@ -459,8 +461,10 @@ pub struct Player {
     pub last_input: AtomicI8,
     /// A counter for teleport IDs used to track pending teleports.
     pub teleport_id_count: AtomicI32,
-    /// The pending teleport information, including the teleport ID and target location.
-    pub awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
+    /// Serializes teleport ID allocation, registration, and packet enqueueing.
+    pub teleport_send_lock: Mutex<()>,
+    /// Pending teleports, in the order they were sent to the client.
+    pub awaiting_teleports: Mutex<VecDeque<(VarInt, Vector3<f64>)>>,
     /// The coordinates of the chunk section the player is currently watching.
     pub watched_section: AtomicCell<Cylindrical>,
     /// The last time the player performed an action (for idle timeout).
@@ -732,7 +736,7 @@ impl Player {
             )),
             gameprofile,
             client,
-            awaiting_teleport: Mutex::new(None),
+            awaiting_teleports: Mutex::new(VecDeque::new()),
             breath_manager: BreathManager::default(),
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
@@ -749,6 +753,7 @@ impl Player {
             carried_item: Mutex::new(None),
             experience_pick_up_delay: Mutex::new(0),
             teleport_id_count: AtomicI32::new(0),
+            teleport_send_lock: Mutex::new(()),
             mining: AtomicBool::new(false),
             mining_pos: Mutex::new(BlockPos::ZERO),
             abilities: std::sync::Mutex::new(abilities),
@@ -4166,6 +4171,10 @@ impl Player {
             }
         }
 
+        let _teleport_send_guard = self
+            .teleport_send_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let i = self.teleport_id_count.fetch_add(1, Ordering::Relaxed);
         self.chunk_send_epoch.fetch_add(1, Ordering::Relaxed);
         let teleport_id = i + 1;
@@ -4174,11 +4183,7 @@ impl Player {
         entity.set_rotation(yaw, pitch);
         match self.client.as_ref() {
             ClientPlatform::Java(client) => {
-                *self
-                    .awaiting_teleport
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                    Some((teleport_id.into(), position));
+                self.register_pending_teleport(teleport_id.into(), position);
                 let packet = CPlayerPosition::new(
                     teleport_id.into(),
                     position,
@@ -4215,6 +4220,17 @@ impl Player {
                 }
             }
         }
+    }
+
+    pub(crate) fn register_pending_teleport(&self, teleport_id: VarInt, position: Vector3<f64>) {
+        let mut awaiting_teleports = self
+            .awaiting_teleports
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if awaiting_teleports.len() >= MAX_PENDING_TELEPORTS {
+            awaiting_teleports.pop_front();
+        }
+        awaiting_teleports.push_back((teleport_id, position));
     }
 
     pub fn block_interaction_range(&self) -> f64 {
