@@ -5,6 +5,19 @@ use pumpkin_config::lighting::LightingEngineConfig;
 
 use super::{Cache, Chunk, StagedChunkEnum};
 
+const STAGES: [StagedChunkEnum; 10] = [
+    StagedChunkEnum::Biomes,
+    StagedChunkEnum::StructureStart,
+    StagedChunkEnum::StructureReferences,
+    StagedChunkEnum::Noise,
+    StagedChunkEnum::Surface,
+    StagedChunkEnum::Carvers,
+    StagedChunkEnum::Features,
+    StagedChunkEnum::Lighting,
+    StagedChunkEnum::Spawn,
+    StagedChunkEnum::Full,
+];
+
 pub fn generate_single_chunk(
     generator: &WorldGenerator,
     block_registry: &dyn WorldPortalExt,
@@ -12,13 +25,21 @@ pub fn generate_single_chunk(
     chunk_z: i32,
     target_stage: StagedChunkEnum,
 ) -> Chunk {
+    // Every stage up to the target runs on this cache, so it has to fit the widest of them,
+    // not only the target's own radius.
+    let radius = STAGES
+        .iter()
+        .take_while(|&&stage| stage <= target_stage)
+        .map(|stage| stage.get_direct_radius())
+        .max()
+        .unwrap_or(0);
     generate_single_chunk_with_radius(
         generator,
         block_registry,
         chunk_x,
         chunk_z,
         target_stage,
-        target_stage.get_direct_radius(),
+        radius,
     )
 }
 
@@ -43,20 +64,7 @@ pub fn generate_single_chunk_with_radius(
         }
     }
 
-    let stages = [
-        StagedChunkEnum::Biomes,
-        StagedChunkEnum::StructureStart,
-        StagedChunkEnum::StructureReferences,
-        StagedChunkEnum::Noise,
-        StagedChunkEnum::Surface,
-        StagedChunkEnum::Carvers,
-        StagedChunkEnum::Features,
-        StagedChunkEnum::Lighting,
-        StagedChunkEnum::Spawn,
-        StagedChunkEnum::Full,
-    ];
-
-    for &stage in &stages {
+    for stage in STAGES {
         if stage as u8 > target_stage as u8 {
             break;
         }
@@ -181,6 +189,30 @@ mod tests {
             let top_section = &dumped[dumped.len() - 16 * 16 * 16..];
             assert!(top_section.iter().all(|&state| state == BlockStateId::AIR));
         }
+    }
+
+    #[test]
+    fn carvers_target_gets_the_cache_the_surface_stage_needs() {
+        let block_registry = Arc::new(BlockRegistry);
+        let world_gen = get_world_gen(
+            Seed(42),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+
+        let chunk = generate_single_chunk(
+            &world_gen,
+            block_registry.as_ref(),
+            0,
+            0,
+            StagedChunkEnum::Carvers,
+        );
+        let Chunk::Proto(chunk) = chunk else {
+            panic!("a carvers target must stay a proto chunk");
+        };
+        assert_eq!(chunk.stage, StagedChunkEnum::Carvers);
     }
 
     #[test]

@@ -51,7 +51,7 @@ pub use processor::{
 pub use pumpkin_data::{BlockState, Mirror as BlockMirror, Rotation as BlockRotation};
 pub use structure_template::{
     JigsawBlockInfo, Palette, PaletteEntry, SimplePalette, StructureBlockInfo, StructureEntityInfo,
-    StructurePlaceSettings, StructureTemplate, TemplateBlock, TemplateEntity,
+    StructurePlaceSettings, StructureTemplate, TemplateEntity,
 };
 pub use template_piece::TemplatePiece;
 
@@ -119,16 +119,16 @@ pub fn place_template_with_options(
     let mut context_rng = LegacyRand::from_seed(hash_block_pos(world_x, origin.y, world_z) as u64);
     let mut context = processor::ProcessorContext::new(origin, processors, &mut context_rng);
 
-    for block in &template.blocks {
-        let palette_entry = &template.palette[block.state as usize];
+    for block in template.blocks() {
+        let palette_entry = &block.state;
 
         // Structure blocks are data markers.
         if palette_entry.name == "minecraft:structure_block" {
             continue;
         }
 
-        let mut block_entity_nbt = block.nbt.clone();
-        let mut placed_entry = palette_entry.clone();
+        let mut block_entity_nbt = block.nbt.as_deref().cloned();
+        let mut placed_entry = PaletteEntry::clone(palette_entry);
 
         // Jigsaw blocks are replaced during template processing, before block entities are
         // collected. Keeping this in the placement pipeline avoids stale jigsaw entities.

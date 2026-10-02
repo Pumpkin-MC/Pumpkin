@@ -169,7 +169,7 @@ fn place_fossil_template<T: GenerationCache>(
     random: &mut RandomGenerator,
     placement_box: &BlockBox,
 ) {
-    for block in &template.blocks {
+    for block in template.blocks() {
         let local_pos = rotation.transform_pos(block.pos, template.size);
         let world_pos = origin + local_pos;
 
@@ -185,7 +185,7 @@ fn place_fossil_template<T: GenerationCache>(
             continue;
         }
 
-        let palette_entry = &template.palette[block.state as usize];
+        let palette_entry = &block.state;
         if palette_entry.name == "minecraft:structure_void" {
             continue;
         }

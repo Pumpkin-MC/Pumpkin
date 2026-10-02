@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::generation::structure::template::PaletteEntry;
 use pumpkin_data::{
     Block, BlockState, Mirror, Rotation,
     block_properties::{ChestLikeProperties, HorizontalFacing},
@@ -459,8 +460,8 @@ impl StructurePieceBase for OceanRuinPiece {
 
         let mut suspicious_count = 0;
 
-        for block in &self.template.blocks {
-            let palette_entry = &self.template.palette[block.state as usize];
+        for block in self.template.blocks() {
+            let palette_entry = &block.state;
 
             if palette_entry.name == "minecraft:structure_void"
                 || palette_entry.name == "structure_void"
@@ -611,7 +612,7 @@ impl StructurePieceBase for OceanRuinPiece {
             };
 
             if chunk.get_block_state(&world_pos).to_block_id() == Block::WATER.id {
-                let mut modified_entry = palette_entry.clone();
+                let mut modified_entry = PaletteEntry::clone(palette_entry);
                 if let Some((_, waterlogged)) = modified_entry
                     .properties
                     .iter_mut()

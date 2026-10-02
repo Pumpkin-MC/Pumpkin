@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::generation::structure::template::PaletteEntry;
 use pumpkin_data::{Mirror, Rotation};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
@@ -307,8 +308,8 @@ impl StructurePieceBase for ShipwreckPiece {
 
         // Place non-marker blocks
         let box_limit = self.piece.bounding_box;
-        for block in &self.template.blocks {
-            let palette_entry = &self.template.palette[block.state as usize];
+        for block in self.template.blocks() {
+            let palette_entry = &block.state;
 
             if palette_entry.name == "minecraft:structure_block"
                 || palette_entry.name == "minecraft:air"
@@ -337,7 +338,7 @@ impl StructurePieceBase for ShipwreckPiece {
             };
 
             if chunk.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id {
-                let mut modified_entry = palette_entry.clone();
+                let mut modified_entry = PaletteEntry::clone(palette_entry);
                 if let Some((_, waterlogged)) = modified_entry
                     .properties
                     .iter_mut()
@@ -393,8 +394,8 @@ impl StructurePieceBase for ShipwreckPiece {
         }
 
         // Process data markers
-        for block in &self.template.blocks {
-            let palette_entry = &self.template.palette[block.state as usize];
+        for block in self.template.blocks() {
+            let palette_entry = &block.state;
             if palette_entry.name == "minecraft:structure_block"
                 && let Some(nbt) = &block.nbt
             {

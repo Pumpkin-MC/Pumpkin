@@ -176,15 +176,15 @@ impl TemplatePiece {
             .get_bounding_box(&self.place_settings, self.template_position);
         let box_limit = self.piece.bounding_box;
 
-        for block in &self.template.blocks {
-            let palette_entry = &self.template.palette[block.state as usize];
+        for block in self.template.blocks() {
+            let palette_entry = &block.state;
 
             // Structure blocks are data markers
             if palette_entry.name == "minecraft:structure_block" {
                 continue;
             }
 
-            let mut placed_entry = palette_entry.clone();
+            let mut placed_entry = PaletteEntry::clone(palette_entry);
             let mut block_entity_nbt = block.nbt.clone();
 
             // Jigsaw blocks are replaced with final_state
