@@ -889,11 +889,11 @@ impl VillagerEntity {
                     .or_default();
                 *value = (*value + 2).min(GossipType::Trading.max_value());
             };
-            self.resend_offers_to_player(&player);
+            self.send_updated_trade_offers(&player);
         }
     }
 
-    fn resend_offers_to_player(&self, player: &Arc<Player>) {
+    fn send_updated_trade_offers(&self, player: &Arc<Player>) {
         let trading_player = *self
             .trading_player
             .lock()
@@ -914,30 +914,9 @@ impl VillagerEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        let ok = {
-            let screen = player
-                .current_screen_handler
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            let mut screen = screen
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if screen.sync_id() != sync_id {
-                false
-            } else if let Some(handler) =
-                screen.as_any_mut().downcast_mut::<MerchantScreenHandler>()
-            {
-                handler.offers.clone_from(&offers);
-                handler.update_result_slot();
-                true
-            } else {
-                false
-            }
-        };
-        if !ok {
-            return;
-        }
+        // The trade callback runs with the screen handler locked. The handler
+        // already increments its offer's uses and refreshes the result slot after
+        // the callback, so only send the updated offers to the client here.
         self.send_trade_offers(player, sync_id, &offers, villager_data);
     }
 
