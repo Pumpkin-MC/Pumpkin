@@ -113,6 +113,7 @@ use pumpkin_protocol::{
             },
             level_sound_event::CLevelSoundEvent,
             player_list::{CPlayerList, PlayerListEntry, Skin},
+            player_skin::CPlayerSkin,
             remove_actor::CRemoveActor,
             start_game::{Experiments, GamePublishSetting, LevelSettings},
             update_attributes::{AttributeData, CUpdateAttributes},
@@ -3888,6 +3889,30 @@ impl World {
                 client.send_packet(&add_player).await;
             }
         }
+    }
+
+    /// Sends the downloaded skin of a Java player to the Bedrock players that already have that
+    /// player in their tab list with the fallback skin.
+    pub(crate) fn update_java_player_skin_for_bedrock(&self, subject: &Player) {
+        if !matches!(subject.client.as_ref(), ClientPlatform::Java(_)) {
+            return;
+        }
+
+        let skin = subject.bedrock_skin.load_full();
+        let update = CPlayerSkin {
+            uuid: subject.gameprofile.id,
+            skin: &skin,
+            new_skin_name: &skin.skin_id,
+            old_skin_name: "",
+        };
+        let players = self.players.load();
+        let recipients = players
+            .iter()
+            .filter_map(|player| match player.client.as_ref() {
+                ClientPlatform::Bedrock(client) => Some(client),
+                ClientPlatform::Java(_) => None,
+            });
+        Self::broadcast_bedrock_grouped(&update, recipients);
     }
 
     #[allow(clippy::too_many_lines)]
