@@ -1,0 +1,159 @@
+name: Nightly Release
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-Dwarnings"
+
+jobs:
+  check:
+    name: Check for new commits
+    if: github.repository == 'Pumpkin-MC/Pumpkin'
+    runs-on: ubuntu-slim
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - name: Compare master with the nightly tag
+        id: check
+        run: |
+          LAST=$(git ls-remote "https://github.com/${{ github.repository }}" refs/tags/nightly | cut -f1)
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] || [ "$LAST" != "${{ github.sha }}" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build release
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: pumpkin-X64-Linux
+          - os: ubuntu-latest
+            asset: pumpkin-X64-Linux-musl
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-26.04-arm
+            asset: pumpkin-ARM64-Linux
+          - os: ubuntu-26.04-arm
+            asset: pumpkin-ARM64-Linux-musl
+            target: aarch64-unknown-linux-musl
+          - os: windows-latest
+            asset: pumpkin-X64-Windows.exe
+          - os: windows-11-arm
+            asset: pumpkin-ARM64-Windows.exe
+          - os: macos-latest
+            asset: pumpkin-ARM64-macOS
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - run: rustup update stable && rustup default stable
+      - name: Add musl target
+        if: matrix.target
+        run: |
+          rustup target add ${{ matrix.target }}
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.asset }}
+      - name: Build release
+        shell: bash
+        run: cargo build --verbose --release ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          mkdir -p dist
+          EXT=""
+          if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
+          DIR="target/release"
+          if [ -n "${{ matrix.target }}" ]; then DIR="target/${{ matrix.target }}/release"; fi
+          cp "$DIR/pumpkin$EXT" "dist/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset }}
+          compression-level: 9
+          path: dist/${{ matrix.asset }}
+
+  build_android:
+    name: Build pumpkin-aarch64-android
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - run: rustup update stable && rustup default stable
+      - run: rustup target add aarch64-linux-android
+      - uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android
+      - run: cargo install cargo-ndk
+      - name: Build release with cargo ndk
+        env:
+          CARGO_NDK_PLATFORM: 24
+        run: cargo ndk -t arm64-v8a build --release --locked
+      - name: Prepare artifact
+        run: |
+          mkdir -p dist
+          cp target/aarch64-linux-android/release/pumpkin dist/pumpkin-aarch64-android
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pumpkin-aarch64-android
+          compression-level: 9
+          path: dist/pumpkin-aarch64-android
+
+  draft_release:
+    name: Draft nightly release
+    permissions:
+      contents: write
+    needs: [build, build_android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Download prebuilt binary artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "pumpkin-*"
+          path: dist/
+          merge-multiple: true
+      - name: Generate release notes
+        run: |
+          tree dist/
+          echo "From commit: $(git rev-parse --short HEAD)" > dist/RELEASE.md
+          echo "Generated on: $(date -u +"%Y-%m-%d %H:%M") UTC" >> dist/RELEASE.md
+          cat dist/RELEASE.md
+      - name: Update the nightly tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag --force nightly && git push --force origin tag nightly
+      - name: Draft a nightly GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          prerelease: true
+          files: dist/pumpkin*
+          tag_name: nightly
+          name: Nightly Build
+          body_path: dist/RELEASE.md
