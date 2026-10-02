@@ -71,19 +71,13 @@ impl CommandExecutor for ForceloadAddExecutor {
             ));
         }
 
-        {
-            let mut forced = world
-                .forced_chunks
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            for x in min_x..=max_x {
-                for z in min_z..=max_z {
-                    forced.insert(Vector2::new(x, z));
-                }
+        let mut chunks = Vec::with_capacity(total_chunks as usize);
+        for x in min_x..=max_x {
+            for z in min_z..=max_z {
+                chunks.push(Vector2::new(x, z));
             }
         }
-
-        world.update_active_chunks();
+        world.set_chunks_forced(&chunks, true);
 
         let dimension_name = world.dimension.minecraft_name.to_string();
 
@@ -154,19 +148,13 @@ impl CommandExecutor for ForceloadRemoveExecutor {
             ));
         }
 
-        {
-            let mut forced = world
-                .forced_chunks
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            for x in min_x..=max_x {
-                for z in min_z..=max_z {
-                    forced.remove(&Vector2::new(x, z));
-                }
+        let mut chunks = Vec::with_capacity(total_chunks as usize);
+        for x in min_x..=max_x {
+            for z in min_z..=max_z {
+                chunks.push(Vector2::new(x, z));
             }
         }
-
-        world.update_active_chunks();
+        world.set_chunks_forced(&chunks, false);
 
         let dimension_name = world.dimension.minecraft_name.to_string();
 
@@ -207,17 +195,15 @@ impl CommandExecutor for ForceloadRemoveAllExecutor {
             .as_ref()
             .ok_or_else(|| ERROR_FAILED_REMOVE.create_without_context())?;
 
-        let removed_count = {
-            let mut forced = world
+        let forced_chunks: Vec<Vector2<i32>> = {
+            let forced = world
                 .forced_chunks
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let count = forced.len();
-            forced.clear();
-            count
+            forced.iter().copied().collect()
         };
-
-        world.update_active_chunks();
+        world.set_chunks_forced(&forced_chunks, false);
+        let removed_count = forced_chunks.len();
 
         let dimension_name = world.dimension.minecraft_name.to_string();
 
