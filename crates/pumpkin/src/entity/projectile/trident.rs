@@ -30,6 +30,7 @@ pub struct TridentEntity {
     pub has_hit: AtomicBool,
     pub last_block_pos: Arc<std::sync::RwLock<Option<BlockPos>>>,
     pub has_left_owner: AtomicBool,
+    pub dealt_damage: AtomicBool,
 }
 
 impl TridentEntity {
@@ -52,6 +53,7 @@ impl TridentEntity {
             has_hit: AtomicBool::new(false),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
             has_left_owner: AtomicBool::new(owner_id.is_none()),
+            dealt_damage: AtomicBool::new(false),
         }
     }
 
@@ -78,6 +80,7 @@ impl TridentEntity {
             has_hit: AtomicBool::new(false),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
             has_left_owner: AtomicBool::new(false),
+            dealt_damage: AtomicBool::new(false),
         }
     }
 
@@ -165,6 +168,11 @@ impl TridentEntity {
         let other_ent = other.get_entity();
 
         // Don't collide with self
+        // If the trident has already dealt damage to an entity, it cannot hit entities again
+        if self.dealt_damage.load(Ordering::Relaxed) {
+            return true;
+        }
+
         if other_ent.entity_id == self_ent.entity_id {
             return true;
         }
@@ -185,6 +193,7 @@ impl TridentEntity {
 
         // Skip other projectiles and item entities
         if other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
+            || other_ent.entity_type == &pumpkin_data::entity::EntityType::SPECTRAL_ARROW
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::TRIDENT
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::ITEM
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::FALLING_BLOCK
@@ -430,6 +439,8 @@ impl EntityBase for TridentEntity {
                 world.broadcast_to_chunk(chunk_pos, &sound_packet);
 
                 // Re-anchor trident at the exact hit point on the entity
+                // Mark that the trident has dealt damage to an entity, preventing repeated hits
+                self.dealt_damage.store(true, Ordering::Relaxed);
                 entity.set_pos(hit_pos);
                 // Standard bounce/fall-back behavior
                 entity.velocity.store(Vector3::new(0.0, -0.1, 0.0));
