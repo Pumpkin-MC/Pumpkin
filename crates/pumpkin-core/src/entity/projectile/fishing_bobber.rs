@@ -553,6 +553,11 @@ impl FishingBobberEntity {
 
     /// Vanilla `FishingHook.setHookedEntity`: records the hooked entity and syncs it to the client.
     fn set_hooked_entity(&self, hooked_id: Option<i32>) {
+        // Vanilla `FishingHook.tick` zeroes the velocity on the `FLYING` to `HOOKED_IN_ENTITY`
+        // transition, so a hook that loses its target does not resume its old flight.
+        if hooked_id.is_some() && matches!(self.state.load(), HookState::Flying) {
+            self.entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
+        }
         self.state
             .store(hooked_id.map_or(HookState::Flying, HookState::HookedIn));
         self.entity.set_synced_data(
