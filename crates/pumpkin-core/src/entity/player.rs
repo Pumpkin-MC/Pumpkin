@@ -8101,9 +8101,14 @@ mod tests {
             .await
             .expect("bind a local listener");
         let address = listener.local_addr().expect("listener address");
+        let (connected_tx, connected_rx) = tokio::sync::oneshot::channel();
         // Read the request, never answer it.
         tokio::spawn(async move {
+            let mut connected_tx = Some(connected_tx);
             while let Ok((mut stream, _)) = listener.accept().await {
+                if let Some(sender) = connected_tx.take() {
+                    let _ = sender.send(());
+                }
                 tokio::spawn(async move {
                     let mut buf = [0; 1024];
                     while stream.read(&mut buf).await.is_ok_and(|n| n > 0) {}
@@ -8134,6 +8139,13 @@ mod tests {
 
         assert!(skin.is_none());
         assert!(started.elapsed() < Duration::from_secs(5));
+        // A `None` without ever connecting would pass for the wrong reason.
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), connected_rx)
+                .await
+                .is_ok_and(|connected| connected.is_ok()),
+            "fetch_skin should have reached the silent host"
+        );
     }
 
     #[test]
