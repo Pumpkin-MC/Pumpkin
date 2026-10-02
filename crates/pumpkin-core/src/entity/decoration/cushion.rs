@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
+use pumpkin_data::block_properties::blocks_movement;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -10,12 +11,15 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
+use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, living::LivingEntity};
 use crate::server::Server;
+use crate::world::World;
 
 pub struct CushionEntity {
     pub entity: Entity,
@@ -23,6 +27,87 @@ pub struct CushionEntity {
 }
 
 impl CushionEntity {
+    const ANCHOR_DEPTH: f64 = 0.015_625;
+
+    /// Vanilla `Cushion.canBePlacedAt`.
+    pub fn can_be_placed_at(world: &World, bounding_box: &BoundingBox) -> bool {
+        Self::would_survive_at(world, bounding_box) && !Self::is_anchor_buried(world, bounding_box)
+    }
+
+    /// Vanilla `Cushion.wouldSurviveAt`.
+    pub fn would_survive_at(world: &World, bounding_box: &BoundingBox) -> bool {
+        Self::has_anchor_below(world, bounding_box)
+            && !Self::is_covered_by_suffocating_blocks(world, bounding_box)
+    }
+
+    fn has_anchor_below(world: &World, bounding_box: &BoundingBox) -> bool {
+        let anchor_box = BoundingBox::new(
+            Vector3::new(
+                bounding_box.min.x,
+                bounding_box.min.y - Self::ANCHOR_DEPTH,
+                bounding_box.min.z,
+            ),
+            Vector3::new(
+                bounding_box.max.x.next_down(),
+                bounding_box.min.y,
+                bounding_box.max.z.next_down(),
+            ),
+        );
+        let mut search_box = anchor_box;
+        search_box.min.y -= 0.125;
+
+        BlockPos::iterate(search_box.min_block_pos(), search_box.max_block_pos()).any(|pos| {
+            let state = world.get_block_state(&pos);
+            state
+                .get_block_outline_shapes_at(&pos)
+                .reduce(|bounds, shape| {
+                    BoundingBox::new(
+                        Vector3::new(
+                            bounds.min.x.min(shape.min.x),
+                            bounds.min.y.min(shape.min.y),
+                            bounds.min.z.min(shape.min.z),
+                        ),
+                        Vector3::new(
+                            bounds.max.x.max(shape.max.x),
+                            bounds.max.y.max(shape.max.y),
+                            bounds.max.z.max(shape.max.z),
+                        ),
+                    )
+                })
+                .is_some_and(|bounds| bounds.at_pos(pos).intersects(&anchor_box))
+        })
+    }
+
+    fn is_anchor_buried(world: &World, bounding_box: &BoundingBox) -> bool {
+        let mut resting_slice = *bounding_box;
+        resting_slice.max.y = resting_slice.min.y + Self::ANCHOR_DEPTH;
+        let resting_slice = resting_slice.contract_all(1.0e-7);
+
+        let mut exposed_surface = vec![resting_slice];
+        for pos in BlockPos::iterate(resting_slice.min_block_pos(), resting_slice.max_block_pos()) {
+            let state = world.get_block_state(&pos);
+            for collider in state.get_block_collision_shapes_at(&pos) {
+                let collider = collider.at_pos(pos);
+                exposed_surface = exposed_surface
+                    .into_iter()
+                    .flat_map(|part| subtract_box(part, &collider))
+                    .collect();
+                if exposed_surface.is_empty() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn is_covered_by_suffocating_blocks(world: &World, bounding_box: &BoundingBox) -> bool {
+        let inner = bounding_box.contract_all(1.0e-7);
+        BlockPos::iterate(inner.min_block_pos(), inner.max_block_pos()).all(|pos| {
+            let (block, state) = world.get_block_and_state(&pos);
+            blocks_movement(state, block.id) && state.is_full_cube()
+        })
+    }
+
     pub const fn new(entity: Entity, color: u8) -> Self {
         Self {
             entity,
@@ -104,6 +189,57 @@ impl CushionEntity {
         );
         entity.remove();
     }
+}
+
+/// The parts of `part` that `other` doesn't cover.
+fn subtract_box(part: BoundingBox, other: &BoundingBox) -> Vec<BoundingBox> {
+    if !part.intersects(other) {
+        return vec![part];
+    }
+    let mut pieces = Vec::new();
+    let mut rest = part;
+    if rest.min.x < other.min.x {
+        pieces.push(BoundingBox::new(
+            rest.min,
+            Vector3::new(other.min.x, rest.max.y, rest.max.z),
+        ));
+        rest.min.x = other.min.x;
+    }
+    if rest.max.x > other.max.x {
+        pieces.push(BoundingBox::new(
+            Vector3::new(other.max.x, rest.min.y, rest.min.z),
+            rest.max,
+        ));
+        rest.max.x = other.max.x;
+    }
+    if rest.min.y < other.min.y {
+        pieces.push(BoundingBox::new(
+            rest.min,
+            Vector3::new(rest.max.x, other.min.y, rest.max.z),
+        ));
+        rest.min.y = other.min.y;
+    }
+    if rest.max.y > other.max.y {
+        pieces.push(BoundingBox::new(
+            Vector3::new(rest.min.x, other.max.y, rest.min.z),
+            rest.max,
+        ));
+        rest.max.y = other.max.y;
+    }
+    if rest.min.z < other.min.z {
+        pieces.push(BoundingBox::new(
+            rest.min,
+            Vector3::new(rest.max.x, rest.max.y, other.min.z),
+        ));
+        rest.min.z = other.min.z;
+    }
+    if rest.max.z > other.max.z {
+        pieces.push(BoundingBox::new(
+            Vector3::new(rest.min.x, rest.min.y, other.max.z),
+            rest.max,
+        ));
+    }
+    pieces
 }
 
 impl EntityBase for CushionEntity {
