@@ -786,6 +786,10 @@ impl LightEngine {
 
         self.block_light.clear();
         self.sky_light.clear();
+
+        // Converting wrote 15 column by column into every section above the surface, which
+        // left them as full arrays of one value.
+        cache.get_center_chunk_mut().light.compact();
     }
 
     pub fn update_block_light(

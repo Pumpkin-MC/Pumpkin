@@ -23,7 +23,23 @@ impl ChunkLightExt for CLightUpdate {
     }
 }
 
-#[expect(clippy::too_many_lines)]
+/// Adds one section to the light masks, sending a uniform non-zero section as a full array.
+fn push_section(
+    container: Option<&LightContainer>,
+    bit: usize,
+    mask: &mut u64,
+    empty_mask: &mut u64,
+    arrays: &mut Vec<Vec<u8>>,
+) {
+    match container.and_then(LightContainer::nibbles) {
+        Some(data) => {
+            *mask |= 1 << bit;
+            arrays.push(data.to_vec());
+        }
+        None => *empty_mask |= 1 << bit,
+    }
+}
+
 pub fn light_data_from_chunk(
     chunk: &ChunkData,
     version: JavaMinecraftVersion,
@@ -33,183 +49,70 @@ pub fn light_data_from_chunk(
         .lock()
         .map_err(|_| WritingError::Message("light_engine lock poisoned".into()))?;
 
+    let mut sky_light_mask = 0u64;
+    let mut block_light_mask = 0u64;
+    let mut sky_light_empty_mask = 0u64;
+    let mut block_light_empty_mask = 0u64;
+    let mut sky_light_arrays = Vec::new();
+    let mut block_light_arrays = Vec::new();
+
     if version < JavaMinecraftVersion::V_1_18 {
         let base_section = (0 - chunk.section.min_y).max(0) as usize / 16;
-        let mut sky_light_mask = 0u64;
-        let mut block_light_mask = 0u64;
-        let mut sky_light_empty_mask = 0u64;
-        let mut block_light_empty_mask = 0u64;
-        let mut sky_light_arrays = Vec::new();
-        let mut block_light_arrays = Vec::new();
 
-        // Bit 0: Y = -1 (below world section 0)
-        if base_section > 0 && base_section - 1 < light_engine.sky_light.len() {
-            match &light_engine.sky_light[base_section - 1] {
-                LightContainer::Full(data) => {
-                    sky_light_mask |= 1 << 0;
-                    sky_light_arrays.push(data.to_vec());
-                }
-                LightContainer::Empty(val) if *val > 0 => {
-                    sky_light_mask |= 1 << 0;
-                    sky_light_arrays.push(vec![*val << 4 | *val; 2048]);
-                }
-                LightContainer::Empty(_) => {
-                    sky_light_empty_mask |= 1 << 0;
-                }
-            }
-        } else {
-            sky_light_empty_mask |= 1 << 0;
+        // Bit 0: Y = -1 (below world section 0), bits 1..=16: world sections (Y = 0..15),
+        // bit 17: Y = 16 (above world section 15).
+        for bit in 0..18 {
+            let section = (base_section + bit).checked_sub(1);
+            push_section(
+                section.and_then(|index| light_engine.sky_light.get(index)),
+                bit,
+                &mut sky_light_mask,
+                &mut sky_light_empty_mask,
+                &mut sky_light_arrays,
+            );
+            push_section(
+                section.and_then(|index| light_engine.block_light.get(index)),
+                bit,
+                &mut block_light_mask,
+                &mut block_light_empty_mask,
+                &mut block_light_arrays,
+            );
         }
-
-        if base_section > 0 && base_section - 1 < light_engine.block_light.len() {
-            match &light_engine.block_light[base_section - 1] {
-                LightContainer::Full(data) => {
-                    block_light_mask |= 1 << 0;
-                    block_light_arrays.push(data.to_vec());
-                }
-                LightContainer::Empty(val) if *val > 0 => {
-                    block_light_mask |= 1 << 0;
-                    block_light_arrays.push(vec![*val << 4 | *val; 2048]);
-                }
-                LightContainer::Empty(_) => {
-                    block_light_empty_mask |= 1 << 0;
-                }
-            }
-        } else {
-            block_light_empty_mask |= 1 << 0;
-        }
-
-        // Bits 1..=16: world sections (Y = 0..15)
-        for i in 0..16 {
-            let bit_index = i + 1;
-            let sec_idx = base_section + i;
-
-            if sec_idx < light_engine.sky_light.len() {
-                match &light_engine.sky_light[sec_idx] {
-                    LightContainer::Full(data) => {
-                        sky_light_mask |= 1 << bit_index;
-                        sky_light_arrays.push(data.to_vec());
-                    }
-                    LightContainer::Empty(val) if *val > 0 => {
-                        sky_light_mask |= 1 << bit_index;
-                        sky_light_arrays.push(vec![*val << 4 | *val; 2048]);
-                    }
-                    LightContainer::Empty(_) => {
-                        sky_light_empty_mask |= 1 << bit_index;
-                    }
-                }
-            } else {
-                sky_light_empty_mask |= 1 << bit_index;
-            }
-
-            if sec_idx < light_engine.block_light.len() {
-                match &light_engine.block_light[sec_idx] {
-                    LightContainer::Full(data) => {
-                        block_light_mask |= 1 << bit_index;
-                        block_light_arrays.push(data.to_vec());
-                    }
-                    LightContainer::Empty(val) if *val > 0 => {
-                        block_light_mask |= 1 << bit_index;
-                        block_light_arrays.push(vec![*val << 4 | *val; 2048]);
-                    }
-                    LightContainer::Empty(_) => {
-                        block_light_empty_mask |= 1 << bit_index;
-                    }
-                }
-            } else {
-                block_light_empty_mask |= 1 << bit_index;
-            }
-        }
-
-        // Bit 17: Y = 16 (above world section 15)
-        let top_sec = base_section + 16;
-        if top_sec < light_engine.sky_light.len() {
-            match &light_engine.sky_light[top_sec] {
-                LightContainer::Full(data) => {
-                    sky_light_mask |= 1 << 17;
-                    sky_light_arrays.push(data.to_vec());
-                }
-                LightContainer::Empty(val) if *val > 0 => {
-                    sky_light_mask |= 1 << 17;
-                    sky_light_arrays.push(vec![*val << 4 | *val; 2048]);
-                }
-                LightContainer::Empty(_) => {
-                    sky_light_empty_mask |= 1 << 17;
-                }
-            }
-        } else {
-            sky_light_empty_mask |= 1 << 17;
-        }
-
-        if top_sec < light_engine.block_light.len() {
-            match &light_engine.block_light[top_sec] {
-                LightContainer::Full(data) => {
-                    block_light_mask |= 1 << 17;
-                    block_light_arrays.push(data.to_vec());
-                }
-                LightContainer::Empty(val) if *val > 0 => {
-                    block_light_mask |= 1 << 17;
-                    block_light_arrays.push(vec![*val << 4 | *val; 2048]);
-                }
-                LightContainer::Empty(_) => {
-                    block_light_empty_mask |= 1 << 17;
-                }
-            }
-        } else {
-            block_light_empty_mask |= 1 << 17;
-        }
-
-        Ok(LightData {
-            trust_edges: true,
-            sky_light_mask: BitSet::from_u64(sky_light_mask),
-            block_light_mask: BitSet::from_u64(block_light_mask),
-            empty_sky_light_mask: BitSet::from_u64(sky_light_empty_mask),
-            empty_block_light_mask: BitSet::from_u64(block_light_empty_mask),
-            sky_light_arrays,
-            block_light_arrays,
-        })
     } else {
         let num_sections = light_engine.sky_light.len();
-        let mut sky_light_empty_mask = 0u64;
-        let mut block_light_empty_mask = 0u64;
-        let mut sky_light_mask = 0u64;
-        let mut block_light_mask = 0u64;
-
-        let mut sky_light_arrays = Vec::new();
-        let mut block_light_arrays = Vec::new();
 
         sky_light_empty_mask |= 1 << 0;
         block_light_empty_mask |= 1 << 0;
 
         for section_index in 0..num_sections {
             let bit_index = section_index + 1;
-
-            if let LightContainer::Full(data) = &light_engine.sky_light[section_index] {
-                sky_light_mask |= 1 << bit_index;
-                sky_light_arrays.push(data.to_vec());
-            } else {
-                sky_light_empty_mask |= 1 << bit_index;
-            }
-
-            if let LightContainer::Full(data) = &light_engine.block_light[section_index] {
-                block_light_mask |= 1 << bit_index;
-                block_light_arrays.push(data.to_vec());
-            } else {
-                block_light_empty_mask |= 1 << bit_index;
-            }
+            push_section(
+                light_engine.sky_light.get(section_index),
+                bit_index,
+                &mut sky_light_mask,
+                &mut sky_light_empty_mask,
+                &mut sky_light_arrays,
+            );
+            push_section(
+                light_engine.block_light.get(section_index),
+                bit_index,
+                &mut block_light_mask,
+                &mut block_light_empty_mask,
+                &mut block_light_arrays,
+            );
         }
 
         sky_light_empty_mask |= 1 << (num_sections + 1);
         block_light_empty_mask |= 1 << (num_sections + 1);
-
-        Ok(LightData {
-            trust_edges: true,
-            sky_light_mask: BitSet::from_u64(sky_light_mask),
-            block_light_mask: BitSet::from_u64(block_light_mask),
-            empty_sky_light_mask: BitSet::from_u64(sky_light_empty_mask),
-            empty_block_light_mask: BitSet::from_u64(block_light_empty_mask),
-            sky_light_arrays,
-            block_light_arrays,
-        })
     }
+
+    Ok(LightData {
+        trust_edges: true,
+        sky_light_mask: BitSet::from_u64(sky_light_mask),
+        block_light_mask: BitSet::from_u64(block_light_mask),
+        empty_sky_light_mask: BitSet::from_u64(sky_light_empty_mask),
+        empty_block_light_mask: BitSet::from_u64(block_light_empty_mask),
+        sky_light_arrays,
+        block_light_arrays,
+    })
 }
