@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:simple_block",
+  "to_place": {
+    "id": "minecraft:fire",
+    "properties": {
+      "age": "0",
+      "east": "false",
+      "north": "false",
+      "south": "false",
+      "up": "false",
+      "west": "false"
+    }
+  }
+}

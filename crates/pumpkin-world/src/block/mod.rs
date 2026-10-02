@@ -69,10 +69,11 @@ mod test {
 
     #[test]
     fn proper_network_bits_per_entry() {
-        let id_to_test = 1 << BLOCK_NETWORK_MAX_BITS;
+        let addressable = 1u32 << BLOCK_NETWORK_MAX_BITS;
         assert!(
-            BlockStateId::new_or_air(id_to_test) == BlockStateId::AIR,
-            "We need to update our constants!"
+            u32::from(BlockStateId::COUNT) <= addressable,
+            "We need to update our constants! {} states do not fit in {BLOCK_NETWORK_MAX_BITS} bits",
+            BlockStateId::COUNT
         );
     }
 }

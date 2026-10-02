@@ -1,0 +1,39 @@
+{
+  "type": "minecraft:block_column",
+  "allowed_placement": {
+    "type": "minecraft:matching_block_tag",
+    "tag": "minecraft:air"
+  },
+  "direction": "down",
+  "layers": [
+    {
+      "height": {
+        "type": "minecraft:weighted_list",
+        "distribution": [
+          {
+            "data": {
+              "type": "minecraft:uniform",
+              "max_inclusive": 3,
+              "min_inclusive": 0
+            },
+            "weight": 5
+          },
+          {
+            "data": {
+              "type": "minecraft:uniform",
+              "max_inclusive": 7,
+              "min_inclusive": 1
+            },
+            "weight": 1
+          }
+        ]
+      },
+      "provider": "minecraft:cave_vines_body"
+    },
+    {
+      "height": 1,
+      "provider": "minecraft:cave_vines_head"
+    }
+  ],
+  "prioritize_tip": true
+}

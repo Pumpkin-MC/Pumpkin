@@ -1,9 +1,0 @@
-{
-  "asset_id": "minecraft:water",
-  "title": {
-    "translate": "painting.minecraft.water.title",
-    "color": "yellow"
-  },
-  "width": 2,
-  "height": 2
-}

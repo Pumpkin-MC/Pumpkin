@@ -318,7 +318,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
+        experience_reward: 3u32,
         hurt_sound: Some(Sound::EntityArmadilloHurt),
         death_sound: Some(Sound::EntityArmadilloDeath),
         attackable: Some(true),
@@ -995,7 +995,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
+        experience_reward: 2u32,
         hurt_sound: Some(Sound::EntityCamelHuskHurt),
         death_sound: Some(Sound::EntityCamelHuskDeath),
         attackable: Some(true),
@@ -1561,8 +1561,34 @@ impl EntityType {
         },
         resource_name: "creeper",
     };
-    pub const DARK_OAK_BOAT: EntityType = EntityType {
+    pub const CUSHION: EntityType = EntityType {
         id: 33,
+        attributes: &[],
+        experience_reward: 0u32,
+        hurt_sound: None,
+        death_sound: None,
+        attackable: Some(true),
+        mob: false,
+        saveable: true,
+        limit_per_chunk: 0i32,
+        summonable: true,
+        fire_immune: false,
+        category: &MobCategory::MISC,
+        can_spawn_far_from_player: true,
+        client_tracking_range: 10u32,
+        update_interval: 2147483647u32,
+        track_deltas: false,
+        dimension: [1f32, 0.25f32],
+        eye_height: 0.2125f32,
+        spawn_dimensions_scale: 1f32,
+        spawn_restriction: SpawnRestriction {
+            location: SpawnLocation::Unrestricted,
+            heightmap: HeightMap::MotionBlockingNoLeaves,
+        },
+        resource_name: "cushion",
+    };
+    pub const DARK_OAK_BOAT: EntityType = EntityType {
+        id: 34,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -1588,7 +1614,7 @@ impl EntityType {
         resource_name: "dark_oak_boat",
     };
     pub const DARK_OAK_CHEST_BOAT: EntityType = EntityType {
-        id: 34,
+        id: 35,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -1614,7 +1640,7 @@ impl EntityType {
         resource_name: "dark_oak_chest_boat",
     };
     pub const DOLPHIN: EntityType = EntityType {
-        id: 35,
+        id: 36,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -1645,7 +1671,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
+        experience_reward: 2u32,
         hurt_sound: Some(Sound::EntityDolphinHurt),
         death_sound: Some(Sound::EntityDolphinDeath),
         attackable: Some(true),
@@ -1669,7 +1695,7 @@ impl EntityType {
         resource_name: "dolphin",
     };
     pub const DONKEY: EntityType = EntityType {
-        id: 36,
+        id: 37,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -1724,7 +1750,7 @@ impl EntityType {
         resource_name: "donkey",
     };
     pub const DRAGON_FIREBALL: EntityType = EntityType {
-        id: 37,
+        id: 38,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -1750,7 +1776,7 @@ impl EntityType {
         resource_name: "dragon_fireball",
     };
     pub const DROWNED: EntityType = EntityType {
-        id: 38,
+        id: 39,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 2f64),
@@ -1806,7 +1832,7 @@ impl EntityType {
         resource_name: "drowned",
     };
     pub const EGG: EntityType = EntityType {
-        id: 39,
+        id: 40,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -1832,7 +1858,7 @@ impl EntityType {
         resource_name: "egg",
     };
     pub const ELDER_GUARDIAN: EntityType = EntityType {
-        id: 40,
+        id: 41,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -1887,7 +1913,7 @@ impl EntityType {
         resource_name: "elder_guardian",
     };
     pub const END_CRYSTAL: EntityType = EntityType {
-        id: 45,
+        id: 46,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -1913,7 +1939,7 @@ impl EntityType {
         resource_name: "end_crystal",
     };
     pub const ENDER_DRAGON: EntityType = EntityType {
-        id: 43,
+        id: 44,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -1967,7 +1993,7 @@ impl EntityType {
         resource_name: "ender_dragon",
     };
     pub const ENDER_PEARL: EntityType = EntityType {
-        id: 44,
+        id: 45,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -1993,7 +2019,7 @@ impl EntityType {
         resource_name: "ender_pearl",
     };
     pub const ENDERMAN: EntityType = EntityType {
-        id: 41,
+        id: 42,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -2048,7 +2074,7 @@ impl EntityType {
         resource_name: "enderman",
     };
     pub const ENDERMITE: EntityType = EntityType {
-        id: 42,
+        id: 43,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -2103,7 +2129,7 @@ impl EntityType {
         resource_name: "endermite",
     };
     pub const EVOKER: EntityType = EntityType {
-        id: 46,
+        id: 47,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -2158,7 +2184,7 @@ impl EntityType {
         resource_name: "evoker",
     };
     pub const EVOKER_FANGS: EntityType = EntityType {
-        id: 47,
+        id: 48,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -2184,7 +2210,7 @@ impl EntityType {
         resource_name: "evoker_fangs",
     };
     pub const EXPERIENCE_BOTTLE: EntityType = EntityType {
-        id: 48,
+        id: 49,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -2210,7 +2236,7 @@ impl EntityType {
         resource_name: "experience_bottle",
     };
     pub const EXPERIENCE_ORB: EntityType = EntityType {
-        id: 49,
+        id: 50,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -2236,7 +2262,7 @@ impl EntityType {
         resource_name: "experience_orb",
     };
     pub const EYE_OF_ENDER: EntityType = EntityType {
-        id: 50,
+        id: 51,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -2262,7 +2288,7 @@ impl EntityType {
         resource_name: "eye_of_ender",
     };
     pub const FALLING_BLOCK: EntityType = EntityType {
-        id: 51,
+        id: 52,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -2288,7 +2314,7 @@ impl EntityType {
         resource_name: "falling_block",
     };
     pub const FIREBALL: EntityType = EntityType {
-        id: 52,
+        id: 53,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -2314,7 +2340,7 @@ impl EntityType {
         resource_name: "fireball",
     };
     pub const FIREWORK_ROCKET: EntityType = EntityType {
-        id: 53,
+        id: 54,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -2340,7 +2366,7 @@ impl EntityType {
         resource_name: "firework_rocket",
     };
     pub const FISHING_BOBBER: EntityType = EntityType {
-        id: 157,
+        id: 160,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -2366,7 +2392,7 @@ impl EntityType {
         resource_name: "fishing_bobber",
     };
     pub const FOX: EntityType = EntityType {
-        id: 54,
+        id: 55,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -2422,7 +2448,7 @@ impl EntityType {
         resource_name: "fox",
     };
     pub const FROG: EntityType = EntityType {
-        id: 55,
+        id: 56,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -2478,7 +2504,7 @@ impl EntityType {
         resource_name: "frog",
     };
     pub const FURNACE_MINECART: EntityType = EntityType {
-        id: 56,
+        id: 57,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -2504,7 +2530,7 @@ impl EntityType {
         resource_name: "furnace_minecart",
     };
     pub const GHAST: EntityType = EntityType {
-        id: 57,
+        id: 58,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -2559,7 +2585,7 @@ impl EntityType {
         resource_name: "ghast",
     };
     pub const GIANT: EntityType = EntityType {
-        id: 59,
+        id: 60,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -2614,7 +2640,7 @@ impl EntityType {
         resource_name: "giant",
     };
     pub const GLOW_ITEM_FRAME: EntityType = EntityType {
-        id: 60,
+        id: 61,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -2640,7 +2666,7 @@ impl EntityType {
         resource_name: "glow_item_frame",
     };
     pub const GLOW_SQUID: EntityType = EntityType {
-        id: 61,
+        id: 62,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -2670,7 +2696,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
+        experience_reward: 1u32,
         hurt_sound: Some(Sound::EntityGlowSquidHurt),
         death_sound: Some(Sound::EntityGlowSquidDeath),
         attackable: Some(true),
@@ -2694,7 +2720,7 @@ impl EntityType {
         resource_name: "glow_squid",
     };
     pub const GOAT: EntityType = EntityType {
-        id: 62,
+        id: 63,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -2750,7 +2776,7 @@ impl EntityType {
         resource_name: "goat",
     };
     pub const GUARDIAN: EntityType = EntityType {
-        id: 63,
+        id: 64,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -2805,7 +2831,7 @@ impl EntityType {
         resource_name: "guardian",
     };
     pub const HAPPY_GHAST: EntityType = EntityType {
-        id: 58,
+        id: 59,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -2837,7 +2863,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
+        experience_reward: 3u32,
         hurt_sound: Some(Sound::EntityHappyGhastHurt),
         death_sound: Some(Sound::EntityHappyGhastDeath),
         attackable: Some(true),
@@ -2861,7 +2887,7 @@ impl EntityType {
         resource_name: "happy_ghast",
     };
     pub const HOGLIN: EntityType = EntityType {
-        id: 64,
+        id: 65,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -2916,7 +2942,7 @@ impl EntityType {
         resource_name: "hoglin",
     };
     pub const HOPPER_MINECART: EntityType = EntityType {
-        id: 65,
+        id: 66,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -2942,7 +2968,7 @@ impl EntityType {
         resource_name: "hopper_minecart",
     };
     pub const HORSE: EntityType = EntityType {
-        id: 66,
+        id: 67,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -2973,7 +2999,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
+        experience_reward: 3u32,
         hurt_sound: Some(Sound::EntityHorseHurt),
         death_sound: Some(Sound::EntityHorseDeath),
         attackable: Some(true),
@@ -2997,7 +3023,7 @@ impl EntityType {
         resource_name: "horse",
     };
     pub const HUSK: EntityType = EntityType {
-        id: 67,
+        id: 68,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 2f64),
@@ -3053,7 +3079,7 @@ impl EntityType {
         resource_name: "husk",
     };
     pub const ILLUSIONER: EntityType = EntityType {
-        id: 68,
+        id: 69,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -3108,7 +3134,7 @@ impl EntityType {
         resource_name: "illusioner",
     };
     pub const INTERACTION: EntityType = EntityType {
-        id: 69,
+        id: 70,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3134,7 +3160,7 @@ impl EntityType {
         resource_name: "interaction",
     };
     pub const IRON_GOLEM: EntityType = EntityType {
-        id: 70,
+        id: 71,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -3189,7 +3215,7 @@ impl EntityType {
         resource_name: "iron_golem",
     };
     pub const ITEM: EntityType = EntityType {
-        id: 71,
+        id: 72,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3215,7 +3241,7 @@ impl EntityType {
         resource_name: "item",
     };
     pub const ITEM_DISPLAY: EntityType = EntityType {
-        id: 72,
+        id: 73,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3241,7 +3267,7 @@ impl EntityType {
         resource_name: "item_display",
     };
     pub const ITEM_FRAME: EntityType = EntityType {
-        id: 73,
+        id: 74,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3267,7 +3293,7 @@ impl EntityType {
         resource_name: "item_frame",
     };
     pub const JUNGLE_BOAT: EntityType = EntityType {
-        id: 74,
+        id: 75,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3293,7 +3319,7 @@ impl EntityType {
         resource_name: "jungle_boat",
     };
     pub const JUNGLE_CHEST_BOAT: EntityType = EntityType {
-        id: 75,
+        id: 76,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3319,7 +3345,7 @@ impl EntityType {
         resource_name: "jungle_chest_boat",
     };
     pub const LEASH_KNOT: EntityType = EntityType {
-        id: 76,
+        id: 77,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3345,7 +3371,7 @@ impl EntityType {
         resource_name: "leash_knot",
     };
     pub const LIGHTNING_BOLT: EntityType = EntityType {
-        id: 77,
+        id: 78,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3371,7 +3397,7 @@ impl EntityType {
         resource_name: "lightning_bolt",
     };
     pub const LINGERING_POTION: EntityType = EntityType {
-        id: 106,
+        id: 109,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3397,7 +3423,7 @@ impl EntityType {
         resource_name: "lingering_potion",
     };
     pub const LLAMA: EntityType = EntityType {
-        id: 78,
+        id: 79,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -3428,7 +3454,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
+        experience_reward: 3u32,
         hurt_sound: Some(Sound::EntityLlamaHurt),
         death_sound: Some(Sound::EntityLlamaDeath),
         attackable: Some(true),
@@ -3452,7 +3478,7 @@ impl EntityType {
         resource_name: "llama",
     };
     pub const LLAMA_SPIT: EntityType = EntityType {
-        id: 79,
+        id: 80,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3478,7 +3504,7 @@ impl EntityType {
         resource_name: "llama_spit",
     };
     pub const MAGMA_CUBE: EntityType = EntityType {
-        id: 80,
+        id: 81,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -3533,7 +3559,7 @@ impl EntityType {
         resource_name: "magma_cube",
     };
     pub const MANGROVE_BOAT: EntityType = EntityType {
-        id: 81,
+        id: 82,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3559,7 +3585,7 @@ impl EntityType {
         resource_name: "mangrove_boat",
     };
     pub const MANGROVE_CHEST_BOAT: EntityType = EntityType {
-        id: 82,
+        id: 83,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3585,7 +3611,7 @@ impl EntityType {
         resource_name: "mangrove_chest_boat",
     };
     pub const MANNEQUIN: EntityType = EntityType {
-        id: 83,
+        id: 84,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -3638,7 +3664,7 @@ impl EntityType {
         resource_name: "mannequin",
     };
     pub const MARKER: EntityType = EntityType {
-        id: 84,
+        id: 85,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3664,7 +3690,7 @@ impl EntityType {
         resource_name: "marker",
     };
     pub const MINECART: EntityType = EntityType {
-        id: 85,
+        id: 86,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3690,7 +3716,7 @@ impl EntityType {
         resource_name: "minecart",
     };
     pub const MOOSHROOM: EntityType = EntityType {
-        id: 86,
+        id: 87,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -3721,7 +3747,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
+        experience_reward: 2u32,
         hurt_sound: Some(Sound::EntityCowHurt),
         death_sound: Some(Sound::EntityCowDeath),
         attackable: Some(true),
@@ -3745,7 +3771,7 @@ impl EntityType {
         resource_name: "mooshroom",
     };
     pub const MULE: EntityType = EntityType {
-        id: 87,
+        id: 88,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -3776,7 +3802,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
+        experience_reward: 2u32,
         hurt_sound: Some(Sound::EntityMuleHurt),
         death_sound: Some(Sound::EntityMuleDeath),
         attackable: Some(true),
@@ -3800,7 +3826,7 @@ impl EntityType {
         resource_name: "mule",
     };
     pub const NAUTILUS: EntityType = EntityType {
-        id: 88,
+        id: 89,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -3832,7 +3858,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
+        experience_reward: 2u32,
         hurt_sound: Some(Sound::EntityNautilusHurtLand),
         death_sound: Some(Sound::EntityNautilusDeathLand),
         attackable: Some(true),
@@ -3856,7 +3882,7 @@ impl EntityType {
         resource_name: "nautilus",
     };
     pub const OAK_BOAT: EntityType = EntityType {
-        id: 89,
+        id: 90,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3882,7 +3908,7 @@ impl EntityType {
         resource_name: "oak_boat",
     };
     pub const OAK_CHEST_BOAT: EntityType = EntityType {
-        id: 90,
+        id: 91,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3908,7 +3934,7 @@ impl EntityType {
         resource_name: "oak_chest_boat",
     };
     pub const OCELOT: EntityType = EntityType {
-        id: 91,
+        id: 92,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -3964,7 +3990,7 @@ impl EntityType {
         resource_name: "ocelot",
     };
     pub const OMINOUS_ITEM_SPAWNER: EntityType = EntityType {
-        id: 92,
+        id: 93,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -3990,7 +4016,7 @@ impl EntityType {
         resource_name: "ominous_item_spawner",
     };
     pub const PAINTING: EntityType = EntityType {
-        id: 93,
+        id: 94,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -4016,7 +4042,7 @@ impl EntityType {
         resource_name: "painting",
     };
     pub const PALE_OAK_BOAT: EntityType = EntityType {
-        id: 94,
+        id: 95,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -4042,7 +4068,7 @@ impl EntityType {
         resource_name: "pale_oak_boat",
     };
     pub const PALE_OAK_CHEST_BOAT: EntityType = EntityType {
-        id: 95,
+        id: 96,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -4068,7 +4094,7 @@ impl EntityType {
         resource_name: "pale_oak_chest_boat",
     };
     pub const PANDA: EntityType = EntityType {
-        id: 96,
+        id: 97,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4124,7 +4150,7 @@ impl EntityType {
         resource_name: "panda",
     };
     pub const PARCHED: EntityType = EntityType {
-        id: 97,
+        id: 98,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4179,7 +4205,7 @@ impl EntityType {
         resource_name: "parched",
     };
     pub const PARROT: EntityType = EntityType {
-        id: 98,
+        id: 99,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4236,7 +4262,7 @@ impl EntityType {
         resource_name: "parrot",
     };
     pub const PHANTOM: EntityType = EntityType {
-        id: 99,
+        id: 100,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4291,7 +4317,7 @@ impl EntityType {
         resource_name: "phantom",
     };
     pub const PIG: EntityType = EntityType {
-        id: 100,
+        id: 101,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4346,7 +4372,7 @@ impl EntityType {
         resource_name: "pig",
     };
     pub const PIGLIN: EntityType = EntityType {
-        id: 101,
+        id: 102,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4401,7 +4427,7 @@ impl EntityType {
         resource_name: "piglin",
     };
     pub const PIGLIN_BRUTE: EntityType = EntityType {
-        id: 102,
+        id: 103,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4456,7 +4482,7 @@ impl EntityType {
         resource_name: "piglin_brute",
     };
     pub const PILLAGER: EntityType = EntityType {
-        id: 103,
+        id: 104,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4511,7 +4537,7 @@ impl EntityType {
         resource_name: "pillager",
     };
     pub const PLAYER: EntityType = EntityType {
-        id: 156,
+        id: 159,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4574,7 +4600,7 @@ impl EntityType {
         resource_name: "player",
     };
     pub const POLAR_BEAR: EntityType = EntityType {
-        id: 104,
+        id: 105,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4606,7 +4632,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
+        experience_reward: 3u32,
         hurt_sound: Some(Sound::EntityPolarBearHurt),
         death_sound: Some(Sound::EntityPolarBearDeath),
         attackable: Some(true),
@@ -4629,8 +4655,60 @@ impl EntityType {
         },
         resource_name: "polar_bear",
     };
-    pub const PUFFERFISH: EntityType = EntityType {
+    pub const POPLAR_BOAT: EntityType = EntityType {
+        id: 106,
+        attributes: &[],
+        experience_reward: 0u32,
+        hurt_sound: None,
+        death_sound: None,
+        attackable: Some(true),
+        mob: false,
+        saveable: true,
+        limit_per_chunk: 0i32,
+        summonable: true,
+        fire_immune: false,
+        category: &MobCategory::MISC,
+        can_spawn_far_from_player: true,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
+        dimension: [1.375f32, 0.5625f32],
+        eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
+        spawn_restriction: SpawnRestriction {
+            location: SpawnLocation::Unrestricted,
+            heightmap: HeightMap::MotionBlockingNoLeaves,
+        },
+        resource_name: "poplar_boat",
+    };
+    pub const POPLAR_CHEST_BOAT: EntityType = EntityType {
         id: 107,
+        attributes: &[],
+        experience_reward: 0u32,
+        hurt_sound: None,
+        death_sound: None,
+        attackable: Some(true),
+        mob: false,
+        saveable: true,
+        limit_per_chunk: 0i32,
+        summonable: true,
+        fire_immune: false,
+        category: &MobCategory::MISC,
+        can_spawn_far_from_player: true,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
+        dimension: [1.375f32, 0.5625f32],
+        eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
+        spawn_restriction: SpawnRestriction {
+            location: SpawnLocation::Unrestricted,
+            heightmap: HeightMap::MotionBlockingNoLeaves,
+        },
+        resource_name: "poplar_chest_boat",
+    };
+    pub const PUFFERFISH: EntityType = EntityType {
+        id: 110,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4684,7 +4762,7 @@ impl EntityType {
         resource_name: "pufferfish",
     };
     pub const RABBIT: EntityType = EntityType {
-        id: 108,
+        id: 111,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4716,7 +4794,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
+        experience_reward: 2u32,
         hurt_sound: Some(Sound::EntityRabbitHurt),
         death_sound: Some(Sound::EntityRabbitDeath),
         attackable: Some(true),
@@ -4740,7 +4818,7 @@ impl EntityType {
         resource_name: "rabbit",
     };
     pub const RAVAGER: EntityType = EntityType {
-        id: 109,
+        id: 112,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4795,7 +4873,7 @@ impl EntityType {
         resource_name: "ravager",
     };
     pub const SALMON: EntityType = EntityType {
-        id: 110,
+        id: 113,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4825,7 +4903,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
+        experience_reward: 1u32,
         hurt_sound: Some(Sound::EntitySalmonHurt),
         death_sound: Some(Sound::EntitySalmonDeath),
         attackable: Some(true),
@@ -4849,7 +4927,7 @@ impl EntityType {
         resource_name: "salmon",
     };
     pub const SHEEP: EntityType = EntityType {
-        id: 111,
+        id: 114,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4904,7 +4982,7 @@ impl EntityType {
         resource_name: "sheep",
     };
     pub const SHULKER: EntityType = EntityType {
-        id: 112,
+        id: 115,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -4958,7 +5036,7 @@ impl EntityType {
         resource_name: "shulker",
     };
     pub const SHULKER_BULLET: EntityType = EntityType {
-        id: 113,
+        id: 116,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -4984,7 +5062,7 @@ impl EntityType {
         resource_name: "shulker_bullet",
     };
     pub const SILVERFISH: EntityType = EntityType {
-        id: 114,
+        id: 117,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -5039,7 +5117,7 @@ impl EntityType {
         resource_name: "silverfish",
     };
     pub const SKELETON: EntityType = EntityType {
-        id: 115,
+        id: 118,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -5094,7 +5172,7 @@ impl EntityType {
         resource_name: "skeleton",
     };
     pub const SKELETON_HORSE: EntityType = EntityType {
-        id: 116,
+        id: 119,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -5125,7 +5203,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
+        experience_reward: 1u32,
         hurt_sound: Some(Sound::EntitySkeletonHorseHurt),
         death_sound: Some(Sound::EntitySkeletonHorseDeath),
         attackable: Some(true),
@@ -5149,7 +5227,7 @@ impl EntityType {
         resource_name: "skeleton_horse",
     };
     pub const SLIME: EntityType = EntityType {
-        id: 117,
+        id: 120,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -5204,7 +5282,7 @@ impl EntityType {
         resource_name: "slime",
     };
     pub const SMALL_FIREBALL: EntityType = EntityType {
-        id: 118,
+        id: 121,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -5230,7 +5308,7 @@ impl EntityType {
         resource_name: "small_fireball",
     };
     pub const SNIFFER: EntityType = EntityType {
-        id: 119,
+        id: 122,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -5261,7 +5339,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
+        experience_reward: 2u32,
         hurt_sound: Some(Sound::EntitySnifferHurt),
         death_sound: Some(Sound::EntitySnifferDeath),
         attackable: Some(true),
@@ -5285,7 +5363,7 @@ impl EntityType {
         resource_name: "sniffer",
     };
     pub const SNOW_GOLEM: EntityType = EntityType {
-        id: 121,
+        id: 124,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -5339,7 +5417,7 @@ impl EntityType {
         resource_name: "snow_golem",
     };
     pub const SNOWBALL: EntityType = EntityType {
-        id: 120,
+        id: 123,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -5365,7 +5443,7 @@ impl EntityType {
         resource_name: "snowball",
     };
     pub const SPAWNER_MINECART: EntityType = EntityType {
-        id: 122,
+        id: 125,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -5391,7 +5469,7 @@ impl EntityType {
         resource_name: "spawner_minecart",
     };
     pub const SPECTRAL_ARROW: EntityType = EntityType {
-        id: 123,
+        id: 126,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -5417,7 +5495,7 @@ impl EntityType {
         resource_name: "spectral_arrow",
     };
     pub const SPIDER: EntityType = EntityType {
-        id: 124,
+        id: 127,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -5472,7 +5550,7 @@ impl EntityType {
         resource_name: "spider",
     };
     pub const SPLASH_POTION: EntityType = EntityType {
-        id: 105,
+        id: 108,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -5498,7 +5576,7 @@ impl EntityType {
         resource_name: "splash_potion",
     };
     pub const SPRUCE_BOAT: EntityType = EntityType {
-        id: 125,
+        id: 128,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -5524,7 +5602,7 @@ impl EntityType {
         resource_name: "spruce_boat",
     };
     pub const SPRUCE_CHEST_BOAT: EntityType = EntityType {
-        id: 126,
+        id: 129,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -5550,7 +5628,7 @@ impl EntityType {
         resource_name: "spruce_chest_boat",
     };
     pub const SQUID: EntityType = EntityType {
-        id: 127,
+        id: 130,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -5604,7 +5682,7 @@ impl EntityType {
         resource_name: "squid",
     };
     pub const STRAY: EntityType = EntityType {
-        id: 128,
+        id: 131,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -5659,7 +5737,7 @@ impl EntityType {
         resource_name: "stray",
     };
     pub const STRIDER: EntityType = EntityType {
-        id: 129,
+        id: 132,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -5714,7 +5792,7 @@ impl EntityType {
         resource_name: "strider",
     };
     pub const SULFUR_CUBE: EntityType = EntityType {
-        id: 130,
+        id: 133,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -5769,7 +5847,7 @@ impl EntityType {
         resource_name: "sulfur_cube",
     };
     pub const TADPOLE: EntityType = EntityType {
-        id: 131,
+        id: 134,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -5800,7 +5878,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
+        experience_reward: 1u32,
         hurt_sound: Some(Sound::EntityTadpoleHurt),
         death_sound: Some(Sound::EntityTadpoleDeath),
         attackable: Some(true),
@@ -5824,7 +5902,7 @@ impl EntityType {
         resource_name: "tadpole",
     };
     pub const TEXT_DISPLAY: EntityType = EntityType {
-        id: 132,
+        id: 135,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -5850,7 +5928,7 @@ impl EntityType {
         resource_name: "text_display",
     };
     pub const TNT: EntityType = EntityType {
-        id: 133,
+        id: 136,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -5876,7 +5954,7 @@ impl EntityType {
         resource_name: "tnt",
     };
     pub const TNT_MINECART: EntityType = EntityType {
-        id: 134,
+        id: 137,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -5902,7 +5980,7 @@ impl EntityType {
         resource_name: "tnt_minecart",
     };
     pub const TRADER_LLAMA: EntityType = EntityType {
-        id: 135,
+        id: 138,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -5957,7 +6035,7 @@ impl EntityType {
         resource_name: "trader_llama",
     };
     pub const TRIDENT: EntityType = EntityType {
-        id: 136,
+        id: 139,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -5983,7 +6061,7 @@ impl EntityType {
         resource_name: "trident",
     };
     pub const TROPICAL_FISH: EntityType = EntityType {
-        id: 137,
+        id: 140,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -6013,7 +6091,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
+        experience_reward: 2u32,
         hurt_sound: Some(Sound::EntityTropicalFishHurt),
         death_sound: Some(Sound::EntityTropicalFishDeath),
         attackable: Some(true),
@@ -6037,7 +6115,7 @@ impl EntityType {
         resource_name: "tropical_fish",
     };
     pub const TURTLE: EntityType = EntityType {
-        id: 138,
+        id: 141,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -6092,7 +6170,7 @@ impl EntityType {
         resource_name: "turtle",
     };
     pub const VEX: EntityType = EntityType {
-        id: 139,
+        id: 142,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -6147,7 +6225,7 @@ impl EntityType {
         resource_name: "vex",
     };
     pub const VILLAGER: EntityType = EntityType {
-        id: 140,
+        id: 143,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -6201,7 +6279,7 @@ impl EntityType {
         resource_name: "villager",
     };
     pub const VINDICATOR: EntityType = EntityType {
-        id: 141,
+        id: 144,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -6256,7 +6334,7 @@ impl EntityType {
         resource_name: "vindicator",
     };
     pub const WANDERING_TRADER: EntityType = EntityType {
-        id: 142,
+        id: 145,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -6310,7 +6388,7 @@ impl EntityType {
         resource_name: "wandering_trader",
     };
     pub const WARDEN: EntityType = EntityType {
-        id: 143,
+        id: 146,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -6365,7 +6443,7 @@ impl EntityType {
         resource_name: "warden",
     };
     pub const WIND_CHARGE: EntityType = EntityType {
-        id: 144,
+        id: 147,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -6391,7 +6469,7 @@ impl EntityType {
         resource_name: "wind_charge",
     };
     pub const WITCH: EntityType = EntityType {
-        id: 145,
+        id: 148,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -6446,7 +6524,7 @@ impl EntityType {
         resource_name: "witch",
     };
     pub const WITHER: EntityType = EntityType {
-        id: 146,
+        id: 149,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 4f64),
@@ -6502,7 +6580,7 @@ impl EntityType {
         resource_name: "wither",
     };
     pub const WITHER_SKELETON: EntityType = EntityType {
-        id: 147,
+        id: 150,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -6557,7 +6635,7 @@ impl EntityType {
         resource_name: "wither_skeleton",
     };
     pub const WITHER_SKULL: EntityType = EntityType {
-        id: 148,
+        id: 151,
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
@@ -6583,7 +6661,7 @@ impl EntityType {
         resource_name: "wither_skull",
     };
     pub const WOLF: EntityType = EntityType {
-        id: 149,
+        id: 152,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -6615,7 +6693,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
+        experience_reward: 2u32,
         hurt_sound: Some(Sound::EntityWolfHurt),
         death_sound: Some(Sound::EntityWolfDeath),
         attackable: Some(true),
@@ -6639,7 +6717,7 @@ impl EntityType {
         resource_name: "wolf",
     };
     pub const ZOGLIN: EntityType = EntityType {
-        id: 150,
+        id: 153,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -6694,7 +6772,7 @@ impl EntityType {
         resource_name: "zoglin",
     };
     pub const ZOMBIE: EntityType = EntityType {
-        id: 151,
+        id: 154,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 2f64),
@@ -6750,7 +6828,7 @@ impl EntityType {
         resource_name: "zombie",
     };
     pub const ZOMBIE_HORSE: EntityType = EntityType {
-        id: 152,
+        id: 155,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -6805,7 +6883,7 @@ impl EntityType {
         resource_name: "zombie_horse",
     };
     pub const ZOMBIE_NAUTILUS: EntityType = EntityType {
-        id: 153,
+        id: 156,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 0f64),
@@ -6837,7 +6915,7 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
+        experience_reward: 2u32,
         hurt_sound: Some(Sound::EntityZombieNautilusHurtLand),
         death_sound: Some(Sound::EntityZombieNautilusDeathLand),
         attackable: Some(true),
@@ -6861,7 +6939,7 @@ impl EntityType {
         resource_name: "zombie_nautilus",
     };
     pub const ZOMBIE_VILLAGER: EntityType = EntityType {
-        id: 154,
+        id: 157,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 2f64),
@@ -6917,7 +6995,7 @@ impl EntityType {
         resource_name: "zombie_villager",
     };
     pub const ZOMBIFIED_PIGLIN: EntityType = EntityType {
-        id: 155,
+        id: 158,
         attributes: &[
             (Attributes::AIR_DRAG_MODIFIER, 1f64),
             (Attributes::ARMOR, 2f64),
@@ -7006,6 +7084,7 @@ impl EntityType {
         &Self::COW,
         &Self::CREAKING,
         &Self::CREEPER,
+        &Self::CUSHION,
         &Self::DARK_OAK_BOAT,
         &Self::DARK_OAK_CHEST_BOAT,
         &Self::DOLPHIN,
@@ -7081,6 +7160,8 @@ impl EntityType {
         &Self::PILLAGER,
         &Self::PLAYER,
         &Self::POLAR_BEAR,
+        &Self::POPLAR_BOAT,
+        &Self::POPLAR_CHEST_BOAT,
         &Self::PUFFERFISH,
         &Self::RABBIT,
         &Self::RAVAGER,
@@ -7167,131 +7248,134 @@ impl EntityType {
             30 => Some(&Self::COW),
             31 => Some(&Self::CREAKING),
             32 => Some(&Self::CREEPER),
-            33 => Some(&Self::DARK_OAK_BOAT),
-            34 => Some(&Self::DARK_OAK_CHEST_BOAT),
-            35 => Some(&Self::DOLPHIN),
-            36 => Some(&Self::DONKEY),
-            37 => Some(&Self::DRAGON_FIREBALL),
-            38 => Some(&Self::DROWNED),
-            39 => Some(&Self::EGG),
-            40 => Some(&Self::ELDER_GUARDIAN),
-            45 => Some(&Self::END_CRYSTAL),
-            43 => Some(&Self::ENDER_DRAGON),
-            44 => Some(&Self::ENDER_PEARL),
-            41 => Some(&Self::ENDERMAN),
-            42 => Some(&Self::ENDERMITE),
-            46 => Some(&Self::EVOKER),
-            47 => Some(&Self::EVOKER_FANGS),
-            48 => Some(&Self::EXPERIENCE_BOTTLE),
-            49 => Some(&Self::EXPERIENCE_ORB),
-            50 => Some(&Self::EYE_OF_ENDER),
-            51 => Some(&Self::FALLING_BLOCK),
-            52 => Some(&Self::FIREBALL),
-            53 => Some(&Self::FIREWORK_ROCKET),
-            157 => Some(&Self::FISHING_BOBBER),
-            54 => Some(&Self::FOX),
-            55 => Some(&Self::FROG),
-            56 => Some(&Self::FURNACE_MINECART),
-            57 => Some(&Self::GHAST),
-            59 => Some(&Self::GIANT),
-            60 => Some(&Self::GLOW_ITEM_FRAME),
-            61 => Some(&Self::GLOW_SQUID),
-            62 => Some(&Self::GOAT),
-            63 => Some(&Self::GUARDIAN),
-            58 => Some(&Self::HAPPY_GHAST),
-            64 => Some(&Self::HOGLIN),
-            65 => Some(&Self::HOPPER_MINECART),
-            66 => Some(&Self::HORSE),
-            67 => Some(&Self::HUSK),
-            68 => Some(&Self::ILLUSIONER),
-            69 => Some(&Self::INTERACTION),
-            70 => Some(&Self::IRON_GOLEM),
-            71 => Some(&Self::ITEM),
-            72 => Some(&Self::ITEM_DISPLAY),
-            73 => Some(&Self::ITEM_FRAME),
-            74 => Some(&Self::JUNGLE_BOAT),
-            75 => Some(&Self::JUNGLE_CHEST_BOAT),
-            76 => Some(&Self::LEASH_KNOT),
-            77 => Some(&Self::LIGHTNING_BOLT),
-            106 => Some(&Self::LINGERING_POTION),
-            78 => Some(&Self::LLAMA),
-            79 => Some(&Self::LLAMA_SPIT),
-            80 => Some(&Self::MAGMA_CUBE),
-            81 => Some(&Self::MANGROVE_BOAT),
-            82 => Some(&Self::MANGROVE_CHEST_BOAT),
-            83 => Some(&Self::MANNEQUIN),
-            84 => Some(&Self::MARKER),
-            85 => Some(&Self::MINECART),
-            86 => Some(&Self::MOOSHROOM),
-            87 => Some(&Self::MULE),
-            88 => Some(&Self::NAUTILUS),
-            89 => Some(&Self::OAK_BOAT),
-            90 => Some(&Self::OAK_CHEST_BOAT),
-            91 => Some(&Self::OCELOT),
-            92 => Some(&Self::OMINOUS_ITEM_SPAWNER),
-            93 => Some(&Self::PAINTING),
-            94 => Some(&Self::PALE_OAK_BOAT),
-            95 => Some(&Self::PALE_OAK_CHEST_BOAT),
-            96 => Some(&Self::PANDA),
-            97 => Some(&Self::PARCHED),
-            98 => Some(&Self::PARROT),
-            99 => Some(&Self::PHANTOM),
-            100 => Some(&Self::PIG),
-            101 => Some(&Self::PIGLIN),
-            102 => Some(&Self::PIGLIN_BRUTE),
-            103 => Some(&Self::PILLAGER),
-            156 => Some(&Self::PLAYER),
-            104 => Some(&Self::POLAR_BEAR),
-            107 => Some(&Self::PUFFERFISH),
-            108 => Some(&Self::RABBIT),
-            109 => Some(&Self::RAVAGER),
-            110 => Some(&Self::SALMON),
-            111 => Some(&Self::SHEEP),
-            112 => Some(&Self::SHULKER),
-            113 => Some(&Self::SHULKER_BULLET),
-            114 => Some(&Self::SILVERFISH),
-            115 => Some(&Self::SKELETON),
-            116 => Some(&Self::SKELETON_HORSE),
-            117 => Some(&Self::SLIME),
-            118 => Some(&Self::SMALL_FIREBALL),
-            119 => Some(&Self::SNIFFER),
-            121 => Some(&Self::SNOW_GOLEM),
-            120 => Some(&Self::SNOWBALL),
-            122 => Some(&Self::SPAWNER_MINECART),
-            123 => Some(&Self::SPECTRAL_ARROW),
-            124 => Some(&Self::SPIDER),
-            105 => Some(&Self::SPLASH_POTION),
-            125 => Some(&Self::SPRUCE_BOAT),
-            126 => Some(&Self::SPRUCE_CHEST_BOAT),
-            127 => Some(&Self::SQUID),
-            128 => Some(&Self::STRAY),
-            129 => Some(&Self::STRIDER),
-            130 => Some(&Self::SULFUR_CUBE),
-            131 => Some(&Self::TADPOLE),
-            132 => Some(&Self::TEXT_DISPLAY),
-            133 => Some(&Self::TNT),
-            134 => Some(&Self::TNT_MINECART),
-            135 => Some(&Self::TRADER_LLAMA),
-            136 => Some(&Self::TRIDENT),
-            137 => Some(&Self::TROPICAL_FISH),
-            138 => Some(&Self::TURTLE),
-            139 => Some(&Self::VEX),
-            140 => Some(&Self::VILLAGER),
-            141 => Some(&Self::VINDICATOR),
-            142 => Some(&Self::WANDERING_TRADER),
-            143 => Some(&Self::WARDEN),
-            144 => Some(&Self::WIND_CHARGE),
-            145 => Some(&Self::WITCH),
-            146 => Some(&Self::WITHER),
-            147 => Some(&Self::WITHER_SKELETON),
-            148 => Some(&Self::WITHER_SKULL),
-            149 => Some(&Self::WOLF),
-            150 => Some(&Self::ZOGLIN),
-            151 => Some(&Self::ZOMBIE),
-            152 => Some(&Self::ZOMBIE_HORSE),
-            153 => Some(&Self::ZOMBIE_NAUTILUS),
-            154 => Some(&Self::ZOMBIE_VILLAGER),
-            155 => Some(&Self::ZOMBIFIED_PIGLIN),
+            33 => Some(&Self::CUSHION),
+            34 => Some(&Self::DARK_OAK_BOAT),
+            35 => Some(&Self::DARK_OAK_CHEST_BOAT),
+            36 => Some(&Self::DOLPHIN),
+            37 => Some(&Self::DONKEY),
+            38 => Some(&Self::DRAGON_FIREBALL),
+            39 => Some(&Self::DROWNED),
+            40 => Some(&Self::EGG),
+            41 => Some(&Self::ELDER_GUARDIAN),
+            46 => Some(&Self::END_CRYSTAL),
+            44 => Some(&Self::ENDER_DRAGON),
+            45 => Some(&Self::ENDER_PEARL),
+            42 => Some(&Self::ENDERMAN),
+            43 => Some(&Self::ENDERMITE),
+            47 => Some(&Self::EVOKER),
+            48 => Some(&Self::EVOKER_FANGS),
+            49 => Some(&Self::EXPERIENCE_BOTTLE),
+            50 => Some(&Self::EXPERIENCE_ORB),
+            51 => Some(&Self::EYE_OF_ENDER),
+            52 => Some(&Self::FALLING_BLOCK),
+            53 => Some(&Self::FIREBALL),
+            54 => Some(&Self::FIREWORK_ROCKET),
+            160 => Some(&Self::FISHING_BOBBER),
+            55 => Some(&Self::FOX),
+            56 => Some(&Self::FROG),
+            57 => Some(&Self::FURNACE_MINECART),
+            58 => Some(&Self::GHAST),
+            60 => Some(&Self::GIANT),
+            61 => Some(&Self::GLOW_ITEM_FRAME),
+            62 => Some(&Self::GLOW_SQUID),
+            63 => Some(&Self::GOAT),
+            64 => Some(&Self::GUARDIAN),
+            59 => Some(&Self::HAPPY_GHAST),
+            65 => Some(&Self::HOGLIN),
+            66 => Some(&Self::HOPPER_MINECART),
+            67 => Some(&Self::HORSE),
+            68 => Some(&Self::HUSK),
+            69 => Some(&Self::ILLUSIONER),
+            70 => Some(&Self::INTERACTION),
+            71 => Some(&Self::IRON_GOLEM),
+            72 => Some(&Self::ITEM),
+            73 => Some(&Self::ITEM_DISPLAY),
+            74 => Some(&Self::ITEM_FRAME),
+            75 => Some(&Self::JUNGLE_BOAT),
+            76 => Some(&Self::JUNGLE_CHEST_BOAT),
+            77 => Some(&Self::LEASH_KNOT),
+            78 => Some(&Self::LIGHTNING_BOLT),
+            109 => Some(&Self::LINGERING_POTION),
+            79 => Some(&Self::LLAMA),
+            80 => Some(&Self::LLAMA_SPIT),
+            81 => Some(&Self::MAGMA_CUBE),
+            82 => Some(&Self::MANGROVE_BOAT),
+            83 => Some(&Self::MANGROVE_CHEST_BOAT),
+            84 => Some(&Self::MANNEQUIN),
+            85 => Some(&Self::MARKER),
+            86 => Some(&Self::MINECART),
+            87 => Some(&Self::MOOSHROOM),
+            88 => Some(&Self::MULE),
+            89 => Some(&Self::NAUTILUS),
+            90 => Some(&Self::OAK_BOAT),
+            91 => Some(&Self::OAK_CHEST_BOAT),
+            92 => Some(&Self::OCELOT),
+            93 => Some(&Self::OMINOUS_ITEM_SPAWNER),
+            94 => Some(&Self::PAINTING),
+            95 => Some(&Self::PALE_OAK_BOAT),
+            96 => Some(&Self::PALE_OAK_CHEST_BOAT),
+            97 => Some(&Self::PANDA),
+            98 => Some(&Self::PARCHED),
+            99 => Some(&Self::PARROT),
+            100 => Some(&Self::PHANTOM),
+            101 => Some(&Self::PIG),
+            102 => Some(&Self::PIGLIN),
+            103 => Some(&Self::PIGLIN_BRUTE),
+            104 => Some(&Self::PILLAGER),
+            159 => Some(&Self::PLAYER),
+            105 => Some(&Self::POLAR_BEAR),
+            106 => Some(&Self::POPLAR_BOAT),
+            107 => Some(&Self::POPLAR_CHEST_BOAT),
+            110 => Some(&Self::PUFFERFISH),
+            111 => Some(&Self::RABBIT),
+            112 => Some(&Self::RAVAGER),
+            113 => Some(&Self::SALMON),
+            114 => Some(&Self::SHEEP),
+            115 => Some(&Self::SHULKER),
+            116 => Some(&Self::SHULKER_BULLET),
+            117 => Some(&Self::SILVERFISH),
+            118 => Some(&Self::SKELETON),
+            119 => Some(&Self::SKELETON_HORSE),
+            120 => Some(&Self::SLIME),
+            121 => Some(&Self::SMALL_FIREBALL),
+            122 => Some(&Self::SNIFFER),
+            124 => Some(&Self::SNOW_GOLEM),
+            123 => Some(&Self::SNOWBALL),
+            125 => Some(&Self::SPAWNER_MINECART),
+            126 => Some(&Self::SPECTRAL_ARROW),
+            127 => Some(&Self::SPIDER),
+            108 => Some(&Self::SPLASH_POTION),
+            128 => Some(&Self::SPRUCE_BOAT),
+            129 => Some(&Self::SPRUCE_CHEST_BOAT),
+            130 => Some(&Self::SQUID),
+            131 => Some(&Self::STRAY),
+            132 => Some(&Self::STRIDER),
+            133 => Some(&Self::SULFUR_CUBE),
+            134 => Some(&Self::TADPOLE),
+            135 => Some(&Self::TEXT_DISPLAY),
+            136 => Some(&Self::TNT),
+            137 => Some(&Self::TNT_MINECART),
+            138 => Some(&Self::TRADER_LLAMA),
+            139 => Some(&Self::TRIDENT),
+            140 => Some(&Self::TROPICAL_FISH),
+            141 => Some(&Self::TURTLE),
+            142 => Some(&Self::VEX),
+            143 => Some(&Self::VILLAGER),
+            144 => Some(&Self::VINDICATOR),
+            145 => Some(&Self::WANDERING_TRADER),
+            146 => Some(&Self::WARDEN),
+            147 => Some(&Self::WIND_CHARGE),
+            148 => Some(&Self::WITCH),
+            149 => Some(&Self::WITHER),
+            150 => Some(&Self::WITHER_SKELETON),
+            151 => Some(&Self::WITHER_SKULL),
+            152 => Some(&Self::WOLF),
+            153 => Some(&Self::ZOGLIN),
+            154 => Some(&Self::ZOMBIE),
+            155 => Some(&Self::ZOMBIE_HORSE),
+            156 => Some(&Self::ZOMBIE_NAUTILUS),
+            157 => Some(&Self::ZOMBIE_VILLAGER),
+            158 => Some(&Self::ZOMBIFIED_PIGLIN),
             _ => None,
         }
     }
@@ -7331,6 +7415,7 @@ impl EntityType {
             "cow" => Some(&Self::COW),
             "creaking" => Some(&Self::CREAKING),
             "creeper" => Some(&Self::CREEPER),
+            "cushion" => Some(&Self::CUSHION),
             "dark_oak_boat" => Some(&Self::DARK_OAK_BOAT),
             "dark_oak_chest_boat" => Some(&Self::DARK_OAK_CHEST_BOAT),
             "dolphin" => Some(&Self::DOLPHIN),
@@ -7406,6 +7491,8 @@ impl EntityType {
             "pillager" => Some(&Self::PILLAGER),
             "player" => Some(&Self::PLAYER),
             "polar_bear" => Some(&Self::POLAR_BEAR),
+            "poplar_boat" => Some(&Self::POPLAR_BOAT),
+            "poplar_chest_boat" => Some(&Self::POPLAR_CHEST_BOAT),
             "pufferfish" => Some(&Self::PUFFERFISH),
             "rabbit" => Some(&Self::RABBIT),
             "ravager" => Some(&Self::RAVAGER),

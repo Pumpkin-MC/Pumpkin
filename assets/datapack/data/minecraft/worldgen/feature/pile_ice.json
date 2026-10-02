@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:block_pile",
+  "state_provider": {
+    "type": "minecraft:weighted",
+    "entries": [
+      {
+        "data": "minecraft:blue_ice",
+        "weight": 1
+      },
+      {
+        "data": "minecraft:packed_ice",
+        "weight": 5
+      }
+    ]
+  }
+}

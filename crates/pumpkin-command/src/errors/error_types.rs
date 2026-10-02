@@ -96,7 +96,7 @@ pub const LONG_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new(
     translation::java::ARGUMENT_LONG_BIG,
 );
 
-pub const DISPATCHER_UNKNOWN_COMMAND: CommandErrorType<0> = CommandErrorType::new(
+pub const DISPATCHER_UNKNOWN_COMMAND: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMAND_UNKNOWN_COMMAND,
     translation::bedrock::COMMANDS_GENERIC_UNKNOWN,
 );

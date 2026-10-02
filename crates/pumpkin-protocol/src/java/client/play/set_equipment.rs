@@ -183,13 +183,12 @@ mod tests {
     }
 
     #[test]
-    fn set_equipment_packet_id_for_1_21_and_26() {
+    fn set_equipment_packet_id_for_26_3() {
         assert_eq!(
-            CSetEquipment::to_id(JavaMinecraftVersion::V_1_21),
-            SET_EQUIPMENT.to_id(JavaMinecraftVersion::V_1_21)
+            CSetEquipment::to_id(JavaMinecraftVersion::V_26_3),
+            SET_EQUIPMENT.to_id(JavaMinecraftVersion::V_26_3)
         );
-        assert_eq!(CSetEquipment::to_id(JavaMinecraftVersion::V_1_21), 91);
-        assert_eq!(CSetEquipment::to_id(JavaMinecraftVersion::V_26_2), 102);
+        assert_eq!(CSetEquipment::to_id(JavaMinecraftVersion::V_26_3), 104);
     }
 
     #[test]

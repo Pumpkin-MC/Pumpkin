@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:block_pile",
+  "state_provider": {
+    "type": "minecraft:weighted",
+    "entries": [
+      {
+        "data": "minecraft:pumpkin",
+        "weight": 19
+      },
+      {
+        "data": "minecraft:jack_o_lantern",
+        "weight": 1
+      }
+    ]
+  }
+}

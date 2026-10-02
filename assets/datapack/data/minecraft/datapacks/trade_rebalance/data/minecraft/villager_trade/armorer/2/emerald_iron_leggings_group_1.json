@@ -1,0 +1,27 @@
+{
+  "gives": {
+    "id": "minecraft:iron_leggings"
+  },
+  "max_uses": 12,
+  "merchant_predicate": {
+    "type": "minecraft:entity_properties",
+    "entity": "this",
+    "predicate": {
+      "minecraft:predicates": {
+        "minecraft:villager/variant": [
+          "minecraft:desert",
+          "minecraft:plains",
+          "minecraft:savanna",
+          "minecraft:snow",
+          "minecraft:taiga"
+        ]
+      }
+    }
+  },
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 7,
+    "id": "minecraft:emerald"
+  },
+  "xp": 5
+}

@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:simple_block",
+  "to_place": {
+    "id": "minecraft:spore_blossom"
+  }
+}
