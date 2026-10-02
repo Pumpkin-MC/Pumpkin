@@ -13,14 +13,21 @@ use crate::world::loot::LootContextParameters;
 
 /// Vanilla `Shearable`: a mob that players and dispensers can shear.
 pub trait Shearable: Mob {
-    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack);
+    /// Shears this mob. Returns `false` if it was already sheared or a plugin stopped it.
+    ///
+    /// Vanilla's `shear` returns nothing, but because Pumpkin handles players' interactions in parallel, so
+    /// two of them can pass [`Self::ready_for_shearing`] at once.
+    /// IMPORTANT: Implementations must claim their shear state
+    /// with a single atomic swap so only one of them goes on to drop loot.
+    /// See [`SnowGolemEntity::shear`]
+    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) -> bool;
 
     fn ready_for_shearing(&self) -> bool;
 }
 
 /// The shears branch every shearable mob has in vanilla `mobInteract`.
 ///
-/// Returns `false` if a plugin cancels the shearing.
+/// Returns `false` if a plugin cancels the shearing or another shear got there first.
 pub fn shear_by_player(
     shearable: &dyn Shearable,
     player: &Arc<Player>,
@@ -42,7 +49,9 @@ pub fn shear_by_player(
     }
 
     let pos = entity.pos.load();
-    shearable.shear(SoundCategory::Players, tool);
+    if !shearable.shear(SoundCategory::Players, tool) {
+        return false;
+    }
     world.emit_game_event(GameEvent::Shear.name(), pos);
     if player.gamemode.load() != GameMode::Creative {
         let item: &pumpkin_data::item::Item = tool.item;

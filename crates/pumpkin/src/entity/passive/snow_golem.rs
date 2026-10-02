@@ -121,7 +121,11 @@ impl SnowGolemEntity {
 }
 
 impl Shearable for SnowGolemEntity {
-    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) {
+    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) -> bool {
+        if !self.has_pumpkin.swap(false, Ordering::Relaxed) {
+            return false;
+        }
+
         let entity = self.get_entity();
         let world = entity.world.load();
         let pos = entity.pos.load();
@@ -136,6 +140,7 @@ impl Shearable for SnowGolemEntity {
                 drop,
             )));
         }
+        true
     }
 
     fn ready_for_shearing(&self) -> bool {

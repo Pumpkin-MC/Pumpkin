@@ -992,7 +992,9 @@ impl DispenserBlock {
                 }
             }
 
-            shearable.shear(SoundCategory::Blocks, tool);
+            if !shearable.shear(SoundCategory::Blocks, tool) {
+                continue;
+            }
             ctx.world
                 .emit_game_event(GameEvent::Shear.name(), target.to_centered_f64());
             return true;

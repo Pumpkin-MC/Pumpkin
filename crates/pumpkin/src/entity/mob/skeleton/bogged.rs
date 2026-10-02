@@ -43,7 +43,11 @@ impl BoggedSkeletonEntity {
 }
 
 impl Shearable for BoggedSkeletonEntity {
-    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) {
+    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) -> bool {
+        if self.sheared.swap(true, Ordering::Relaxed) {
+            return false;
+        }
+
         let entity = self.get_entity();
         let world = entity.world.load();
         let pos = entity.pos.load();
@@ -57,6 +61,7 @@ impl Shearable for BoggedSkeletonEntity {
             )));
         }
         self.set_sheared(true);
+        true
     }
 
     fn ready_for_shearing(&self) -> bool {

@@ -1,6 +1,6 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicI32, Ordering},
+    atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
 use crossbeam::atomic::AtomicCell;
@@ -78,6 +78,8 @@ pub struct MooshroomEntity {
     pub variant: AtomicI32,
     pub stew_effect: AtomicCell<Option<u32>>,
     pub last_lightning_bolt_uuid: AtomicCell<Option<Uuid>>,
+    /// Claimed by the first shear, so two players shearing at once can't both convert this mooshroom.
+    converting: AtomicBool,
 }
 
 impl MooshroomEntity {
@@ -89,6 +91,7 @@ impl MooshroomEntity {
             variant: AtomicI32::new(MooshroomVariant::Red.id()),
             stew_effect: AtomicCell::new(None),
             last_lightning_bolt_uuid: AtomicCell::new(None),
+            converting: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(mooshroom);
         let mob_weak: Weak<dyn Mob> = {
@@ -205,14 +208,18 @@ impl MooshroomEntity {
 
 impl Shearable for MooshroomEntity {
     /// Vanilla `MushroomCow.shear`: converts this mooshroom into a cow and drops its mushrooms.
-    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) {
+    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) -> bool {
+        if self.converting.swap(true, Ordering::Relaxed) {
+            return false;
+        }
+
         let entity = self.get_entity();
         let world = entity.world.load();
         let pos = entity.pos.load();
         world.play_sound(Sound::EntityMooshroomShear, sound_category, &pos);
 
         if entity.is_removed() {
-            return;
+            return false;
         }
 
         let cow = self.convert_to_cow();
@@ -222,7 +229,8 @@ impl Shearable for MooshroomEntity {
         if !self.transform(cow.get_entity().entity_id, "sheared".to_string())
             || !world.spawn_entity(cow.clone())
         {
-            return;
+            self.converting.store(false, Ordering::Relaxed);
+            return false;
         }
 
         let height = f64::from(entity.height());
@@ -278,6 +286,7 @@ impl Shearable for MooshroomEntity {
         }
 
         entity.remove();
+        true
     }
 
     fn ready_for_shearing(&self) -> bool {

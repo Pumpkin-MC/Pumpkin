@@ -30,6 +30,8 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
+/// The sheared flag in vanilla's `DATA_WOOL_ID` byte.
+const SHEARED_BIT: u8 = 0x10;
 
 pub struct SheepEntity {
     pub mob_entity: MobEntity,
@@ -84,7 +86,7 @@ impl SheepEntity {
     }
 
     pub fn is_sheared(&self) -> bool {
-        (self.get_packed_byte() & 0x10) != 0
+        (self.get_packed_byte() & SHEARED_BIT) != 0
     }
 
     fn set_packed_and_sync(&self, byte: u8) {
@@ -102,16 +104,25 @@ impl SheepEntity {
 
     pub fn set_sheared(&self, sheared: bool) {
         let byte = if sheared {
-            self.get_packed_byte() | 0x10
+            self.get_packed_byte() | SHEARED_BIT
         } else {
-            self.get_packed_byte() & !0x10
+            self.get_packed_byte() & !SHEARED_BIT
         };
         self.set_packed_and_sync(byte);
     }
 }
 
 impl Shearable for SheepEntity {
-    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) {
+    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) -> bool {
+        if self
+            .color_and_sheared
+            .fetch_or(SHEARED_BIT, Ordering::Relaxed)
+            & SHEARED_BIT
+            != 0
+        {
+            return false;
+        }
+
         let entity = self.get_entity();
         let world = entity.world.load();
         let pos = entity.pos.load();
@@ -141,7 +152,9 @@ impl Shearable for SheepEntity {
             }
         }
 
+        // Bit is set, send change to clients
         self.set_sheared(true);
+        true
     }
 
     fn ready_for_shearing(&self) -> bool {
@@ -189,7 +202,7 @@ impl Mob for SheepEntity {
             .or_else(|| nbt.get_byte("Sheared").map(|b| b == 1))
             .unwrap_or(false);
         let color = nbt.get_byte("Color").unwrap_or(0) as u8;
-        let byte = (color & 0x0F) | if sheared { 0x10 } else { 0 };
+        let byte = (color & 0x0F) | if sheared { SHEARED_BIT } else { 0 };
         self.color_and_sheared.store(byte, Ordering::Relaxed);
     }
 
