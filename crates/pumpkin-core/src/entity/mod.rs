@@ -3803,11 +3803,7 @@ impl Entity {
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                 + 1;
             let placeholder = Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
-            player
-                .awaiting_teleports
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .push_back((id.into(), placeholder));
+            player.register_pending_teleport(id.into(), placeholder);
 
             let world = self.world.load();
             let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);

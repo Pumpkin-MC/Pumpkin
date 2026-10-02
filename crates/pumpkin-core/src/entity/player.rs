@@ -52,6 +52,8 @@ use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
+const MAX_PENDING_TELEPORTS: usize = 32;
+
 #[derive(Clone, Debug)]
 pub enum CustomScoreboard {
     Java(Scoreboard),
@@ -4181,10 +4183,7 @@ impl Player {
         entity.set_rotation(yaw, pitch);
         match self.client.as_ref() {
             ClientPlatform::Java(client) => {
-                self.awaiting_teleports
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .push_back((teleport_id.into(), position));
+                self.register_pending_teleport(teleport_id.into(), position);
                 let packet = CPlayerPosition::new(
                     teleport_id.into(),
                     position,
@@ -4221,6 +4220,17 @@ impl Player {
                 }
             }
         }
+    }
+
+    pub(crate) fn register_pending_teleport(&self, teleport_id: VarInt, position: Vector3<f64>) {
+        let mut awaiting_teleports = self
+            .awaiting_teleports
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if awaiting_teleports.len() >= MAX_PENDING_TELEPORTS {
+            awaiting_teleports.pop_front();
+        }
+        awaiting_teleports.push_back((teleport_id, position));
     }
 
     pub fn block_interaction_range(&self) -> f64 {

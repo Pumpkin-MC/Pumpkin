@@ -346,11 +346,7 @@ impl JavaClient {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let teleport_id = player.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
-        player
-            .awaiting_teleports
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push_back((teleport_id.into(), position));
+        player.register_pending_teleport(teleport_id.into(), position);
         player.try_send_client_packet(&CPlayerPosition::new(
             teleport_id.into(),
             player.get_entity().pos.load(),
