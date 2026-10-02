@@ -15,8 +15,7 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_world::chunk_system::chunk_loading::ChunkLoading;
-use pumpkin_world::chunk_system::generation::generate_single_chunk_with_radius;
-use pumpkin_world::chunk_system::{Chunk, StagedChunkEnum};
+use pumpkin_world::chunk_system::{Chunk, StagedChunkEnum, generate_single_chunk};
 use pumpkin_world::generation::get_world_gen;
 use pumpkin_world::generation::structure::template::StructureTemplate;
 use pumpkin_world::world::WorldPortalExt;
@@ -112,7 +111,7 @@ fn main() {
     let generate = |x: i32, z: i32| {
         let ring = (x.abs().max(z.abs()) - VIEW_DISTANCE).max(0) as i8;
         let stage = StagedChunkEnum::level_to_stage(ChunkLoading::FULL_CHUNK_LEVEL + ring);
-        generate_single_chunk_with_radius(&world_gen, &BlockRegistry, x, z, stage, 1)
+        generate_single_chunk(&world_gen, &BlockRegistry, x, z, stage)
     };
     let radius = VIEW_DISTANCE + StagedChunkEnum::FULL_RADIUS;
     let positions: Vec<(i32, i32)> = (-radius..=radius)
