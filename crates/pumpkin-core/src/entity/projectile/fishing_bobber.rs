@@ -362,14 +362,18 @@ impl FishingBobberEntity {
             return;
         }
 
+        // Vanilla `FishingHook.tick`: a grounded hook despawns after 1200 ticks, but only returns
+        // then. Until it expires the fluid and state checks below still run, so water placed
+        // around a resting hook can start it bobbing.
         if entity.on_ground.load(Ordering::Relaxed) {
             let life = self.life.fetch_add(1, Ordering::Relaxed) + 1;
             if life >= 1200 {
                 self.discard(player);
+                return;
             }
-            return;
+        } else {
+            self.life.store(0, Ordering::Relaxed);
         }
-        self.life.store(0, Ordering::Relaxed);
 
         let block_pos = entity.block_pos.load();
         let (fluid, fluid_state) = world.get_fluid_and_fluid_state(&block_pos);
