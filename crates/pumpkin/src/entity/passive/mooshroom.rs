@@ -213,12 +213,12 @@ impl Shearable for MooshroomEntity {
             return false;
         }
 
-        let entity = self.get_entity();
-        let world = entity.world.load();
-        let pos = entity.pos.load();
+        let mooshroom_entity = self.get_entity();
+        let world = mooshroom_entity.world.load();
+        let pos = mooshroom_entity.pos.load();
         world.play_sound(Sound::EntityMooshroomShear, sound_category, &pos);
 
-        if entity.is_removed() {
+        if mooshroom_entity.is_removed() {
             return false;
         }
 
@@ -233,7 +233,7 @@ impl Shearable for MooshroomEntity {
             return false;
         }
 
-        let height = f64::from(entity.height());
+        let height = f64::from(mooshroom_entity.height());
         world.spawn_particle(
             Vector3::new(pos.x, height.mul_add(0.5, pos.y), pos.z),
             Vector3::new(0.0, 0.0, 0.0),
@@ -247,7 +247,7 @@ impl Shearable for MooshroomEntity {
             MooshroomVariant::Brown => "minecraft:shearing/mooshroom/brown",
         };
         let drop_pos = Vector3::new(pos.x, pos.y + height, pos.z);
-        for drop in shearing_loot(entity, loot_key, tool) {
+        for drop in shearing_loot(mooshroom_entity, loot_key, tool) {
             for _ in 0..drop.item_count {
                 let item_entity = Arc::new(ItemEntity::new(
                     Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
@@ -276,7 +276,7 @@ impl Shearable for MooshroomEntity {
         // the leash is removed does the mooshroom get sheared. I left this out because leashing
         // is currently very broken
         // TODO fix when leashing works properly
-        let holder = entity
+        let holder = mooshroom_entity
             .leashed_to
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -285,7 +285,28 @@ impl Shearable for MooshroomEntity {
             cow_living.entity.leash_to(holder);
         }
 
-        entity.remove();
+        // Vanilla `ConversionType.SINGLE` moves the first passenger and the vehicle over to the cow.
+        let cow_base: Arc<dyn EntityBase> = cow.clone();
+        let passenger = mooshroom_entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .first()
+            .cloned();
+        if let Some(passenger) = passenger {
+            mooshroom_entity.remove_passenger_sync(passenger.get_entity().entity_id);
+            cow_living.entity.add_passenger(cow_base.clone(), passenger);
+        }
+        if let Some(vehicle) = mooshroom_entity.get_vehicle() {
+            vehicle
+                .get_entity()
+                .remove_passenger_sync(mooshroom_entity.entity_id);
+            vehicle
+                .get_entity()
+                .add_passenger(vehicle.clone(), cow_base);
+        }
+
+        mooshroom_entity.remove();
         true
     }
 
