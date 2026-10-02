@@ -986,13 +986,8 @@ impl TextComponentBase {
         let mut text = match *self.content {
             TextContent::Text { text } => text.into_owned(),
             TextContent::Translate {
-                translate,
-                bedrock_translate,
-                with,
-            } => {
-                let key = bedrock_translate.as_ref().unwrap_or(&translate);
-                translation_to_pretty(format!("minecraft:{key}"), Locale::EnUs, with)
-            }
+                translate, with, ..
+            } => translation_to_pretty(format!("minecraft:{translate}"), Locale::EnUs, with),
             TextContent::EntityNames {
                 selector,
                 separator: _,
@@ -2070,7 +2065,11 @@ pub enum TextContent {
 #[cfg(test)]
 mod test {
     use crate::text::click::ClickEvent;
-    use crate::text::{TextComponent, color::NamedColor, hover::HoverEvent};
+    use crate::text::{
+        TextComponent,
+        color::{Color, NamedColor},
+        hover::HoverEvent,
+    };
     use crate::version::JavaMinecraftVersion;
     use std::borrow::Cow;
 
@@ -2180,5 +2179,36 @@ mod test {
         let click = compound.get_compound("click_event").unwrap();
         assert_eq!(click.get_string("url"), Some("https://example.com"));
         assert!(click.get_string("value").is_none());
+    }
+
+    #[test]
+    fn styled_components_parse_from_nbt() {
+        let mut styled = pumpkin_nbt::compound::NbtCompound::new();
+        styled.put_string("text", "hi".to_string());
+        styled.put_string("color", "red".to_string());
+        let component = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(styled));
+        assert_eq!(component.0.style.color, Some(Color::Named(NamedColor::Red)));
+        assert_eq!(component.get_text(), "hi");
+    }
+}
+
+#[cfg(test)]
+mod custom_name_nbt_tests {
+    use super::TextComponent;
+    use pumpkin_nbt::tag::NbtTag;
+
+    #[test]
+    fn plain_string_tag_is_literal_text() {
+        let tag = NbtTag::String("Bob".into());
+        let component = TextComponent::from_nbt(&tag);
+        assert_eq!(component.get_text(), "Bob");
+    }
+
+    #[test]
+    fn plain_text_round_trips_as_string_tag() {
+        let tag = TextComponent::text("Bob")
+            .0
+            .to_nbt_tag_for_version(&crate::version::JavaMinecraftVersion::V_26_3);
+        assert!(matches!(tag, NbtTag::String(ref s) if &**s == "Bob"));
     }
 }

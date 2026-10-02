@@ -188,19 +188,15 @@ pub struct ExperimentToggle {
     pub enabled: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PacketWrite)]
+#[repr(i32)]
+#[serial(varint)]
 pub enum GamePublishSetting {
     NoMultiPlay = 0,
     InviteOnly = 1,
     FriendsOnly = 2,
     FriendsOfFriends = 3,
     Public = 4,
-}
-
-impl PacketWrite for GamePublishSetting {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        VarInt(*self as i32).write(writer)
-    }
 }
 
 #[derive(PacketWrite)]
