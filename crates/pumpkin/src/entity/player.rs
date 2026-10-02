@@ -1709,26 +1709,9 @@ impl Player {
 
         if let Some((result, updated_stack)) = updated {
             self.inventory.set_slot(slot_index, updated_stack.clone());
-            if let Some(server) = self.world().server.upgrade()
-                && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
-            {
-                let mut event = crate::plugin::api::events::player::player_item_damage::PlayerItemDamageEvent::new(
-                    player_arc,
-                    original_item.registry_key.to_string(),
-                    amount,
-                );
-                server.plugin_manager.fire_blocking(&server, &mut event);
-            }
-            if result == pumpkin_data::item_stack::DamageResult::Broken {
-                if let Some(server) = self.world().server.upgrade()
-                    && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
-                {
-                    let mut event = crate::plugin::api::events::player::player_item_break::PlayerItemBreakEvent::new(
-                        player_arc,
-                        original_item.registry_key.to_string(),
-                    );
-                    server.plugin_manager.fire_blocking(&server, &mut event);
-                }
+            let broken = result == pumpkin_data::item_stack::DamageResult::Broken;
+            self.fire_item_damage_events(original_item, amount, broken);
+            if broken {
                 self.increment_stat(
                     statistics::StatisticCategory::Broken,
                     original_item.id as i32,
@@ -1754,6 +1737,38 @@ impl Player {
         }
 
         false
+    }
+
+    /// Fires [`PlayerItemDamageEvent`], and [`PlayerItemBreakEvent`] when `broken`, for an item that took damage.
+    pub fn fire_item_damage_events(
+        &self,
+        item: &pumpkin_data::item::Item,
+        amount: i32,
+        broken: bool,
+    ) {
+        let world = self.world();
+        let Some(server) = world.server.upgrade() else {
+            return;
+        };
+        let Some(player_arc) = world.get_player_by_uuid(self.gameprofile.id) else {
+            return;
+        };
+
+        let mut event =
+            crate::plugin::api::events::player::player_item_damage::PlayerItemDamageEvent::new(
+                player_arc.clone(),
+                item.registry_key.to_string(),
+                amount,
+            );
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        if broken {
+            let mut event =
+                crate::plugin::api::events::player::player_item_break::PlayerItemBreakEvent::new(
+                    player_arc,
+                    item.registry_key.to_string(),
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
     }
 
     /// Checks and triggers location-based enchantments (e.g. Frost Walker) on the player's equipped armor.

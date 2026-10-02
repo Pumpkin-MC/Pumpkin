@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::game_event::GameEvent;
-use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_util::GameMode;
 
@@ -45,7 +45,12 @@ pub fn shear_by_player(
     shearable.shear(SoundCategory::Players, tool);
     world.emit_game_event(GameEvent::Shear.name(), pos);
     if player.gamemode.load() != GameMode::Creative {
-        let _ = tool.damage_item(1);
+        let item: &pumpkin_data::item::Item = tool.item;
+        let result = tool.damage_item(1);
+        if result != DamageResult::Untouched {
+            // Not `damage_item_in_slot`: the interact handler writes `tool` back to the hand and counts the break.
+            player.fire_item_damage_events(item, 1, result == DamageResult::Broken);
+        }
     }
     true
 }
