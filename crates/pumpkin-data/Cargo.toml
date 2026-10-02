@@ -182,3 +182,7 @@ ignored = ["phf"]
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "recipe_matching"
+harness = false
