@@ -362,13 +362,9 @@ impl ItemStack {
             return true;
         }
 
-        // `#minecraft:enchantable/armor` uses the armor formula; all others use the tool formula.
-        if is_armor {
-            let chance = 0.6 + (0.4 / (unbreaking_level as f32 + 1.0));
-            rand::random::<f32>() < chance
-        } else {
-            rand::random::<u32>().is_multiple_of(unbreaking_level as u32 + 1)
-        }
+        let mut damage = 1.0f32;
+        Enchantment::UNBREAKING.modify_durability_damage(unbreaking_level, is_armor, &mut damage);
+        damage > 0.0
     }
 
     /// Apply durability damage to this item and return the outcome.

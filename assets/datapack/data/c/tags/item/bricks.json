@@ -1,0 +1,16 @@
+{
+  "values": [
+    {
+      "id": "#c:bricks/normal",
+      "required": false
+    },
+    {
+      "id": "#c:bricks/nether",
+      "required": false
+    },
+    {
+      "id": "#c:bricks/resin",
+      "required": false
+    }
+  ]
+}

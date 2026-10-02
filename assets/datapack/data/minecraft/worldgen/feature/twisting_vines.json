@@ -1,0 +1,59 @@
+{
+  "type": "minecraft:block_column",
+  "allowed_placement": {
+    "type": "minecraft:matching_block_tag",
+    "tag": "minecraft:air"
+  },
+  "direction": "up",
+  "layers": [
+    {
+      "height": {
+        "type": "minecraft:weighted_list",
+        "distribution": [
+          {
+            "data": {
+              "type": "minecraft:uniform",
+              "max_inclusive": 7,
+              "min_inclusive": 0
+            },
+            "weight": 10
+          },
+          {
+            "data": {
+              "type": "minecraft:uniform",
+              "max_inclusive": 15,
+              "min_inclusive": 1
+            },
+            "weight": 2
+          },
+          {
+            "data": 0,
+            "weight": 3
+          }
+        ]
+      },
+      "provider": {
+        "id": "minecraft:twisting_vines_plant"
+      }
+    },
+    {
+      "height": 1,
+      "provider": {
+        "type": "minecraft:randomized_int",
+        "property": "age",
+        "source": {
+          "id": "minecraft:twisting_vines",
+          "properties": {
+            "age": "0"
+          }
+        },
+        "values": {
+          "type": "minecraft:uniform",
+          "max_inclusive": 25,
+          "min_inclusive": 17
+        }
+      }
+    }
+  ],
+  "prioritize_tip": true
+}

@@ -603,14 +603,18 @@ pub struct BlockState {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PistonBehavior {
     /// The block can be pushed and pulled normally.
+    #[serde(alias = "PUSH_PULL")]
     Normal,
     /// The block is destroyed when pushed.
+    #[serde(alias = "POPPED")]
     Destroy,
     /// The block prevents piston movement.
     Block,
     /// The piston ignores the block entirely.
+    #[serde(alias = "IMMOVEABLE")]
     Ignore,
     /// The block can only be pushed, not pulled.
+    #[serde(alias = "PUSH")]
     PushOnly,
 }
 
@@ -782,6 +786,8 @@ pub struct Block {
     pub experience: Option<Experience>,
     /// Position-derived shape offset applied by vanilla, if any.
     shape_offset: Option<BlockShapeOffset>,
+    /// Spawn floor predicate for this block, if any.
+    spawn_floor_predicate: Option<SpawnFloorPredicate>,
 }
 
 impl ToTokens for Block {
@@ -962,10 +968,6 @@ pub fn build() -> TokenStream {
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
-    let mut spawn_floor_predicates: BTreeMap<String, SpawnFloorPredicate> = serde_json::from_str(
-        &fs::read_to_string("../../assets/spawn_floor_predicates.json").unwrap(),
-    )
-    .expect("Failed to parse spawn_floor_predicates.json");
 
     let shape_offset_arms = blocks_assets
         .blocks
@@ -1089,7 +1091,7 @@ pub fn build() -> TokenStream {
         let item_id = block.item_id;
         let block_id = block.id;
 
-        if let Some(predicate) = spawn_floor_predicates.remove(&block.name) {
+        if let Some(predicate) = block.spawn_floor_predicate {
             spawn_floor_predicate_arms.push(quote! {
                 BlockId::#const_ident => #predicate,
             });
@@ -1171,12 +1173,6 @@ pub fn build() -> TokenStream {
             });
         }
     }
-
-    assert!(
-        spawn_floor_predicates.is_empty(),
-        "Unknown blocks in spawn_floor_predicates.json: {:?}",
-        spawn_floor_predicates.keys().collect::<Vec<_>>()
-    );
 
     let mut block_properties_from_state_and_block_id_arms = Vec::new();
     let mut block_properties_from_props_and_name_arms = Vec::new();

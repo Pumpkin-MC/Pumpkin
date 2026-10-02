@@ -747,7 +747,7 @@ impl BlockPalette {
                                 let z = ((current_idx + i) / Self::SIZE) % Self::SIZE;
                                 let x = (current_idx + i) % Self::SIZE;
                                 let value = data.get(x, y, z).as_u16();
-                                debug_assert!((1 << bits_per_entry) > value);
+                                debug_assert!((1u32 << bits_per_entry) > u32::from(value));
                                 acc |= (value as u64) << (bits_per_entry as u64 * i as u64);
                             }
                         }
@@ -994,7 +994,7 @@ pub type BlockPalette = PalettedContainer<BlockStateId, 16>;
 const BLOCK_DISK_MIN_BITS: u8 = 4;
 const BLOCK_NETWORK_MIN_MAP_BITS: u8 = 4;
 const BLOCK_NETWORK_MAX_MAP_BITS: u8 = 8;
-pub(crate) const BLOCK_NETWORK_MAX_BITS: u8 = 15;
+pub(crate) const BLOCK_NETWORK_MAX_BITS: u8 = 16;
 
 pub type BiomePalette = PalettedContainer<u8, 4>;
 const BIOME_DISK_MIN_BITS: u8 = 0;

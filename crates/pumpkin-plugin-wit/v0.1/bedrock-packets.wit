@@ -174,13 +174,17 @@ interface bedrock-packets {
     old-item: network-item-descriptor,
     new-item: network-item-descriptor,
   }
+  enum hand-slot {
+    mainhand,
+    offhand,
+  }
   record use-item-transaction-data {
     action-type: s32,
     trigger-type: u8,
     block-position: tuple<s32, s32, s32>,
     block-face: u8,
     hot-bar-slot: s32,
-    hand: u8,
+    hand: hand-slot,
     item-in-hand: network-item-descriptor,
     player-position: tuple<f64, f64, f64>,
     click-position: tuple<f64, f64, f64>,
@@ -511,7 +515,7 @@ interface bedrock-packets {
     client-cooldown-state: u8,
   }
   record player-block-action {
-    action: s32,
+    action: player-action-type,
     block-pos: tuple<s32, s32, s32>,
     face: s32,
   }
@@ -813,7 +817,7 @@ interface bedrock-packets {
     dedicated,
     tv-os,
     sony,
-    nx,
+    nintendo,
     xbox,
     windows-phone,
     linux,
@@ -877,9 +881,17 @@ interface bedrock-packets {
     on-ground: bool,
     tick: s64,
   }
-  record item-descriptor-count {
-    item-identifier: string,
+  record recipe-item-descriptor-item {
+    identifier: string,
     metadata-value: s32,
+  }
+  variant recipe-item-descriptor {
+    empty,
+    item(recipe-item-descriptor-item),
+    tag(string),
+  }
+  record item-descriptor-count {
+    descriptor: recipe-item-descriptor,
     count: s32,
   }
   record recipe-unlock-requirement {

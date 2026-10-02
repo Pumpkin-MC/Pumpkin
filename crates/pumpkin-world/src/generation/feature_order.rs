@@ -61,6 +61,7 @@ const OVERWORLD_BIOMES: &[&Biome] = &[
     &Biome::LUSH_CAVES,
     &Biome::SULFUR_CAVES,
     &Biome::DEEP_DARK,
+    &Biome::DAPPLED_FOREST,
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -208,12 +209,12 @@ mod tests {
         assert_eq!(
             step.iter()
                 .position(|feature| *feature == PlacedFeature::PatchDryGrassDesert),
-            Some(69)
+            Some(72)
         );
         assert_eq!(
             step.iter()
                 .position(|feature| *feature == PlacedFeature::PatchDryGrassBadlands),
-            Some(71)
+            Some(74)
         );
     }
 
@@ -221,7 +222,7 @@ mod tests {
     fn biome_selection_keeps_global_indices_and_order() {
         let selected = select_features(&[Biome::SAVANNA.id, Biome::DESERT.id], 9);
         assert!(selected.windows(2).all(|pair| pair[0].0 < pair[1].0));
-        assert!(selected.contains(&(69, PlacedFeature::PatchDryGrassDesert)));
+        assert!(selected.contains(&(72, PlacedFeature::PatchDryGrassDesert)));
         assert!(
             !selected
                 .iter()
@@ -232,7 +233,7 @@ mod tests {
             .iter()
             .find(|(_, feature)| *feature == PlacedFeature::PatchGrassSavanna)
             .expect("savanna grass must be selected");
-        assert_eq!(savanna_grass.0, 12);
+        assert_eq!(savanna_grass.0, 15);
     }
 
     #[test]

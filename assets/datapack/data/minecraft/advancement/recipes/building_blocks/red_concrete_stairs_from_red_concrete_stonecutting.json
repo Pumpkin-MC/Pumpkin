@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_red_concrete": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:red_concrete"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipes": "minecraft:red_concrete_stairs_from_red_concrete_stonecutting"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_red_concrete"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:red_concrete_stairs_from_red_concrete_stonecutting"
+    ]
+  }
+}

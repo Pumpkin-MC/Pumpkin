@@ -18,12 +18,6 @@ This repository contains data files, protocol mappings, and game assets necessar
 * **License**: MIT License (see `assets/bedrock/LICENSE-GEYSER`).
 * **Bedrock Dedicated Server (BDS) Data**: Portions of Bedrock state metadata are mined from BDS under standard Minecraft usage guidelines.
 
----
-
-### 3. Protocol Version Translation (ViaVersion / ViaBackwards / ViaRewind)
-* **Files**: `assets/viabackwards/`, `assets/viarewind/`
-* **Copyright**: © ViaVersion contributors (https://github.com/ViaVersion).
-* **License**: GPLv3 / MIT.
 
 ---
 

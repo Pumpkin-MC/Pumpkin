@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:random_neighbor_spread",
+  "accepted_neighbors": "minecraft:glowstone",
+  "attempts": 1500,
+  "block": {
+    "id": "minecraft:glowstone"
+  },
+  "can_replace": {
+    "type": "minecraft:matching_block_tag",
+    "tag": "minecraft:air"
+  },
+  "xz_offset": {
+    "type": "minecraft:trapezoid",
+    "max": 7,
+    "min": -7,
+    "plateau": 0
+  },
+  "y_offset": {
+    "type": "minecraft:uniform",
+    "max_inclusive": 0,
+    "min_inclusive": -11
+  }
+}

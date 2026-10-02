@@ -253,7 +253,7 @@ mod test {
         let Chunk::Level(chunk_data) = staged else {
             unreachable!()
         };
-        assert_eq!(chunk_data.status, pumpkin_data::chunk::ChunkStatus::Noise);
+        assert_eq!(chunk_data.status, pumpkin_data::chunk::ChunkStatus::Terrain);
 
         let mut resumed = ProtoChunk::from_chunk_data(&chunk_data, &world_gen);
         assert_eq!(resumed.stage, StagedChunkEnum::Noise);
