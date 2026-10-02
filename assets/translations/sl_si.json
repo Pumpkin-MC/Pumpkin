@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Omogočamo vsem, da gostimjo hitre \nin učinkovite Minecraft strežnike.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokol %s)\n",
+    "commands.pumpkin.github": "[Github Repository]",
+    "commands.pumpkin.website": "[Website]",
+    "commands.pumpkin.version.hover": "Kliknite za kopiranje različice.",
+    "commands.pumpkin.description.hover": "Kliknite za kopiranje opisa.",
+    "commands.pumpkin.minecraft_version.hover": "Kliknite za kopiranje minecraft verzije.",
+    "commands.pumpkin.github.hover": "Kliknite za odprtje repozitorija.",
+    "commands.pumpkin.website.hover": "Kliknite za odprtje spletne strani."
+}
