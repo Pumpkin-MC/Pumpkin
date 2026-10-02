@@ -124,7 +124,7 @@ use pumpkin_protocol::{
         client::play::{
             CBlockEntityData, CDamageEvent, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
             CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSetSelectedSlot, CSoundEffect,
-            CSpawnEntity, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
+            GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
         },
         server::play::SChatMessage,
     },
@@ -1196,32 +1196,15 @@ impl World {
         CSetEntityMetadata::new(entity_id.into(), buf.into())
     }
 
-    /// Broadcasts the skin layers of a player to Java and Bedrock clients.
-    fn broadcast_skin_parts<B: BClientPacket>(
-        &self,
-        except: &[uuid::Uuid],
-        entity_id: i32,
-        skin_parts: u8,
-        be_packet: &B,
-    ) {
+    /// Sends `packet` to every Bedrock player except `except`; Java viewers get the player's
+    /// spawn and metadata from the tracker.
+    fn broadcast_bedrock_except<B: BClientPacket>(&self, except: &[uuid::Uuid], packet: &B) {
         let players = self.players.load();
-        let mut java_recipients = Vec::new();
-        let mut bedrock_recipients = Vec::new();
-
-        for p in players.iter() {
-            if except.contains(&p.gameprofile.id) {
-                continue;
-            }
-            match p.client.as_ref() {
-                ClientPlatform::Java(_) => java_recipients.push(p),
-                ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
-            }
-        }
-
-        let packet = Self::skin_parts_metadata(entity_id, skin_parts);
-        Self::broadcast_java_players(&packet, java_recipients.into_iter());
-
-        Self::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
+        let recipients = players.iter().filter_map(|p| match p.client.as_ref() {
+            ClientPlatform::Bedrock(client) if !except.contains(&p.gameprofile.id) => Some(client),
+            _ => None,
+        });
+        Self::broadcast_bedrock_grouped(packet, recipients);
     }
 
     /// Broadcasts a packet to all connected players within the world, excluding the specified players.
@@ -2983,7 +2966,6 @@ impl World {
         // --- MULTIPLAYER BROADCASTING ---
 
         let gameprofile = &player.gameprofile;
-        let velocity = player.get_entity().velocity.load();
 
         // 1. Broadcast the new Bedrock player to everyone else (Java + Bedrock)
         let bedrock_player_list = CPlayerList {
@@ -3032,36 +3014,13 @@ impl World {
             &bedrock_player_list,
         );
 
-        // Bedrock gets `AddPlayer` from the tracker.
-        self.broadcast_packet_except(
-            &[gameprofile.id],
-            &CSpawnEntity::new(
-                (runtime_id as i32).into(),
-                gameprofile.id,
-                i32::from(EntityType::PLAYER.id).into(),
-                position,
-                pitch,
-                yaw,
-                yaw,
-                0.into(),
-                velocity,
-            ),
-        );
-
         self.send_player_equipment(&player);
         player
             .living_entity
             .send_current_equipment_attribute_modifiers();
 
-        // Broadcast metadata to Java players so they can correctly interact with the new player
-        let skin_parts = player.config.load().skin_parts;
-
-        self.broadcast_skin_parts(
-            &[gameprofile.id],
-            runtime_id as i32,
-            skin_parts,
-            &actor_data,
-        );
+        // Java and Bedrock viewers get the spawn from the tracker, after the tab-list info.
+        self.broadcast_bedrock_except(&[gameprofile.id], &actor_data);
 
         // 2. Spawn existing players for our new Bedrock client
         let players = self.players.load();
@@ -3393,36 +3352,15 @@ impl World {
             self.mark_chunks_held(player, &[center_chunk]);
         }
 
-        let velocity = player.living_entity.entity.velocity.load();
-
         debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch);
 
         let gameprofile = &player.gameprofile;
 
         // Spawn the player for every Java client
-        // Bedrock gets `AddPlayer` from the tracker.
-        let spawn_entity = CSpawnEntity::new(
-            entity_id.into(),
-            gameprofile.id,
-            i32::from(EntityType::PLAYER.id).into(),
-            position,
-            pitch,
-            yaw,
-            yaw,
-            0.into(),
-            velocity,
-        );
-
-        self.broadcast_packet_except(&[player.gameprofile.id], &spawn_entity);
-
-        // Broadcast metadata to Java players so they can correctly interact with the new player
-        let skin_parts = player.config.load().skin_parts;
-
-        self.broadcast_skin_parts(
+        // Java and Bedrock viewers get the spawn from the tracker, after the tab-list info.
+        self.broadcast_bedrock_except(
             &[gameprofile.id],
-            entity_id,
-            skin_parts,
             &CSetActorData {
                 target_runtime_id: VarULong(entity_id as u64),
                 actor_data: player.get_entity().bedrock_metadata(),
@@ -3923,6 +3861,9 @@ impl World {
             )
         };
 
+        // Chunks of the old world the client holds, forgotten after `CRespawn`.
+        let mut held_chunks = Vec::new();
+
         // Fire PlayerChangeWorldEvent (cancellable) before the transfer; it runs before
         // the non-cancellable PlayerRespawnEvent, which observes the resolved world.
         let (resolved_world, position, yaw, pitch) = if let Some(new_world) = candidate_world {
@@ -3956,7 +3897,7 @@ impl World {
                         // Detach from the old world before publishing into the new one, so no
                         // observer sees the player in a world whose chunk manager doesn't match.
                         self.remove_player(player, false).await;
-                        player.unload_watched_chunks(self).await;
+                        held_chunks = player.unload_watched_chunks(self).await;
                         player.change_world_chunks(&self.level, &destination);
                         player.living_entity.entity.set_world(destination.clone());
                         destination.players.rcu(|current_list| {
@@ -4025,6 +3966,7 @@ impl World {
                 data_kept,
             ))
             .await;
+        player.forget_chunks(&held_chunks).await;
 
         // Inform the client of the default spawn position so the client doesn't
         // fall back to (0, 2, 0) while the world reloads (fixes rubberbanding).

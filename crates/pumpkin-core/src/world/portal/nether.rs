@@ -199,7 +199,7 @@ impl PortalSearchResult {
             let mut cuts = vec![min, max];
             for bounds in blocked.iter().map(of) {
                 cuts.extend(
-                    [bounds.0, bounds.1]
+                    <[f64; 2]>::from(bounds)
                         .into_iter()
                         .filter(|c| *c > min && *c < max),
                 );

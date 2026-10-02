@@ -271,9 +271,9 @@ use pumpkin_protocol::java::client::play::{
     CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetCamera,
     CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
     CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
-    CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUpdateMobEffect, CUpdateTime,
-    GameEvent, MapIcon, MapPatch, PlayerAction, PlayerInfoFlags, PlayerSpawnData, PreviousMessage,
-    Statistic,
+    CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
+    CUpdateTime, GameEvent, MapIcon, MapPatch, PlayerAction, PlayerInfoFlags, PlayerSpawnData,
+    PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -3977,21 +3977,42 @@ impl Player {
         res.map(|(pos, _)| pos)
     }
 
-    pub async fn unload_watched_chunks(&self, world: &World) {
-        let radial_chunks = self.watched_section.load().all_chunks_within();
+    /// Stops watching the old world's chunks; returns the chunks the client holds, for
+    /// `forget_chunks` once `CRespawn` is sent.
+    pub async fn unload_watched_chunks(&self, world: &World) -> Vec<Vector2<i32>> {
+        let radial_chunks: Vec<_> = self.watched_section.load().all_chunks_within().collect();
+        let held = {
+            let sender = self
+                .chunk_sender
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            radial_chunks
+                .iter()
+                .copied()
+                .filter(|pos| sender.is_chunk_sent(pos))
+                .collect()
+        };
         let level = &world.level;
-        let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
+        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         if !chunks_to_clean.is_empty() {
             world.remove_entities_in_chunks(&chunks_to_clean).await;
             level.clean_entity_chunks(&chunks_to_clean);
         }
-        // No `CUnloadChunk`: the client drops the old level on `CRespawn` (vanilla sends none).
-        // Sent before the respawn, they removed the ground under the player still in the old world.
 
         self.watched_section.store(Cylindrical::new(
             Vector2::new(0, 0),
             NonZero::new(1).unwrap_or(NonZero::<u8>::MIN),
         ));
+        held
+    }
+
+    /// Vanilla `ChunkMap.dropChunk` after a world change: the client keeps its level when the
+    /// dimension key is unchanged, so the old world's chunks must be forgotten after `CRespawn`.
+    pub async fn forget_chunks(&self, chunks: &[Vector2<i32>]) {
+        for chunk in chunks {
+            self.send_client_packet(&CUnloadChunk::new(chunk.x, chunk.y))
+                .await;
+        }
     }
 
     /// Teleports the player to a different world or dimension with an optional position, yaw, and pitch.
@@ -4039,7 +4060,7 @@ impl Player {
                     new_list.push(player.clone());
                     new_list
                 });
-                self.unload_watched_chunks(&current_world).await;
+                let held_chunks = self.unload_watched_chunks(&current_world).await;
 
                 self.change_world_chunks(&current_world.level, &new_world);
                 self.living_entity.entity.set_world(new_world.clone());
@@ -4080,6 +4101,7 @@ impl Player {
                         if let Ok(data) = java.serialize_packet(&packet) {
                             java.send_packet_now(data).await;
                         }
+                        self.forget_chunks(&held_chunks).await;
                     }
                     ClientPlatform::Bedrock(bedrock) => {
                         let bedrock_dimension = if new_world.dimension == Dimension::OVERWORLD {
