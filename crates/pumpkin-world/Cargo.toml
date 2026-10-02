@@ -65,6 +65,10 @@ name = "chunk"
 harness = false
 
 [[bench]]
+name = "palette_packing"
+harness = false
+
+[[bench]]
 name = "chunk_io"
 harness = false
 

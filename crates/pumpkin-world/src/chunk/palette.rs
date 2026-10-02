@@ -266,26 +266,46 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                 debug_assert!(bits_per_entry >= encompassing_bits(data.counts.len()));
                 debug_assert!(bits_per_entry <= 15);
 
-                // Don't use HashMap's here, because its slow
                 let blocks_per_i64 = 64 / bits_per_entry;
 
                 let packed_indices: Box<[i64]> = match &data.storage {
-                    PaletteStorage::Dense(cube) => cube
-                        .as_flattened()
-                        .as_flattened()
-                        .chunks(blocks_per_i64 as usize)
-                        .map(|chunk| {
-                            chunk.iter().enumerate().fold(0, |acc, (index, key)| {
-                                let key_index =
-                                    data.palette.iter().position(|&x| x == *key).unwrap_or(0);
-                                debug_assert!((1 << bits_per_entry) > key_index);
+                    PaletteStorage::Dense(cube) => {
+                        // Large dense palettes otherwise scan up to thousands of
+                        // entries for every block. Small palettes avoid map setup.
+                        let palette_indices = (data.palette.len() > 256).then(|| {
+                            let mut indices = rustc_hash::FxHashMap::with_capacity_and_hasher(
+                                data.palette.len(),
+                                rustc_hash::FxBuildHasher,
+                            );
+                            for (index, value) in data.palette.iter().enumerate() {
+                                // Preserve the first match for duplicate disk entries.
+                                indices.entry(*value).or_insert(index);
+                            }
+                            indices
+                        });
+                        cube.as_flattened()
+                            .as_flattened()
+                            .chunks(blocks_per_i64 as usize)
+                            .map(|chunk| {
+                                chunk.iter().enumerate().fold(0, |acc, (index, key)| {
+                                    let key_index = palette_indices.as_ref().map_or_else(
+                                        || {
+                                            data.palette
+                                                .iter()
+                                                .position(|&x| x == *key)
+                                                .unwrap_or(0)
+                                        },
+                                        |indices| indices.get(key).copied().unwrap_or(0),
+                                    );
+                                    debug_assert!((1 << bits_per_entry) > key_index);
 
-                                let packed_offset_index =
-                                    (key_index as u64) << (bits_per_entry as u64 * index as u64);
-                                acc | packed_offset_index as i64
+                                    let packed_offset_index = (key_index as u64)
+                                        << (bits_per_entry as u64 * index as u64);
+                                    acc | packed_offset_index as i64
+                                })
                             })
-                        })
-                        .collect(),
+                            .collect()
+                    }
                     PaletteStorage::Indexed(indices) => indices
                         .as_flattened()
                         .as_flattened()
@@ -1006,6 +1026,40 @@ pub(crate) const BIOME_NETWORK_MAX_BITS: u8 = 7;
 mod tests {
     use super::{BlockPalette, NetworkPalette};
     use pumpkin_data::{Block, BlockStateId};
+
+    #[test]
+    fn packing_preserves_palette_order_and_partial_words() {
+        for size in [16usize, 256, 257, 1024, 4096] {
+            let palette: Vec<_> = (0..size as u16)
+                .rev()
+                .map(BlockStateId::new_or_air)
+                .collect();
+            let bits = pumpkin_util::encompassing_bits(size).max(4);
+            let per_word = 64 / bits as usize;
+            let mut packed = vec![0i64; 4096usize.div_ceil(per_word)];
+            for index in 0..4096 {
+                packed[index / per_word] |=
+                    ((index % size) as i64) << ((index % per_word) * bits as usize);
+            }
+            let container = BlockPalette::from_palette_and_packed_data(&palette, &packed, 4);
+            let (actual_palette, actual_packed) = container.to_palette_and_packed_data(bits);
+            assert_eq!(&*actual_palette, palette);
+            assert_eq!(&*actual_packed, packed);
+        }
+    }
+
+    #[test]
+    fn dense_packing_uses_first_index_for_duplicate_palette_values() {
+        let mut palette: Vec<_> = (0..257).map(BlockStateId::new_or_air).collect();
+        palette[256] = palette[0];
+        // Decode index 256 at the start of each word; packing canonicalizes
+        // duplicate values to their first palette entry, without reordering it.
+        let packed = vec![256i64; 4096usize.div_ceil(7)];
+        let container = BlockPalette::from_palette_and_packed_data(&palette, &packed, 4);
+        let (actual_palette, actual_packed) = container.to_palette_and_packed_data(9);
+        assert_eq!(&*actual_palette, palette);
+        assert!(actual_packed.iter().all(|&word| word == 0));
+    }
 
     fn network_palette_values(palette: NetworkPalette<u16>) -> Option<Box<[u16]>> {
         match palette {
