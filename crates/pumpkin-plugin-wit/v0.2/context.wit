@@ -4,6 +4,7 @@ interface context {
     use event.{event-type, event-priority};
     use command.{command};
     use permission.{permission};
+    use player.{java-minecraft-version};
 
     /// Verified marketplace metadata for signed plugins.
     record marketplace-metadata {
@@ -47,6 +48,11 @@ interface context {
 
         /// Registers a permission node with the server.
         register-permission: func(permission: permission) -> result<_, string>;
+
+        /// Admits Java clients on these versions besides the server's own. The plugin
+        /// translates their packets in the connection and packet events. Replaces this
+        /// plugin's earlier list; dropped when it unloads.
+        register-java-versions: func(versions: list<java-minecraft-version>);
 
         /// Returns the path to the plugin's private data folder.
         get-data-folder: func() -> string;

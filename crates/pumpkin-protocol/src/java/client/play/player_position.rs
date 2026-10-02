@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::play::PLAYER_POSITION;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     ClientPacket, PositionFlag, ServerPacket, VarInt, WritingError, ser::NetworkReadExt,
@@ -54,56 +54,25 @@ impl CPlayerPosition {
 
 // TODO: Do we need a custom impl?
 impl ClientPacket for CPlayerPosition {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        if version >= &JavaMinecraftVersion::V_1_21_2 {
-            // Reordered and added delta/int flags in 1.21.2
-            write.write_var_int(&self.teleport_id)?;
-            write.write_f64_be(self.position.x)?;
-            write.write_f64_be(self.position.y)?;
-            write.write_f64_be(self.position.z)?;
-            write.write_f64_be(self.delta.x)?;
-            write.write_f64_be(self.delta.y)?;
-            write.write_f64_be(self.delta.z)?;
-            write.write_f32_be(self.yaw)?;
-            write.write_f32_be(self.pitch)?;
-            write.write_i32_be(PositionFlag::get_bitfield(self.relatives.as_slice()))?;
-        } else {
-            write.write_f64_be(self.position.x)?;
-            write.write_f64_be(self.position.y)?;
-            write.write_f64_be(self.position.z)?;
-            write.write_f32_be(self.yaw)?;
-            write.write_f32_be(self.pitch)?;
-            if version >= &JavaMinecraftVersion::V_1_8 {
-                // Relative flags added in 1.8
-                write.write_u8(PositionFlag::get_bitfield(self.relatives.as_slice()) as u8)?;
-            } else {
-                // 1.7.x: on_ground boolean
-                write.write_bool(false)?;
-            }
-            if version >= &JavaMinecraftVersion::V_1_9 {
-                // Teleport confirmation ID added in 1.9
-                write.write_var_int(&self.teleport_id)?;
-            }
-            if *version >= JavaMinecraftVersion::V_1_17
-                && *version <= JavaMinecraftVersion::V_1_19_3
-            {
-                write.write_bool(false)?;
-            }
-        }
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
+        // Reordered and added delta/int flags in 1.21.2
+        write.write_var_int(&self.teleport_id)?;
+        write.write_f64_be(self.position.x)?;
+        write.write_f64_be(self.position.y)?;
+        write.write_f64_be(self.position.z)?;
+        write.write_f64_be(self.delta.x)?;
+        write.write_f64_be(self.delta.y)?;
+        write.write_f64_be(self.delta.z)?;
+        write.write_f32_be(self.yaw)?;
+        write.write_f32_be(self.pitch)?;
+        write.write_i32_be(PositionFlag::get_bitfield(self.relatives.as_slice()))?;
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CPlayerPosition {
-    fn read(
-        read: &mut &'a [u8],
-        version: &JavaMinecraftVersion,
-    ) -> Result<Self, crate::ser::ReadingError> {
-        if version >= &JavaMinecraftVersion::V_1_21_2 {
+    fn read(read: &mut &'a [u8]) -> Result<Self, crate::ser::ReadingError> {
+        {
             let teleport_id = read.get_var_int()?;
             let x = read.get_f64_be()?;
             let y = read.get_f64_be()?;
@@ -121,35 +90,6 @@ impl<'a> ServerPacket<'a> for CPlayerPosition {
                 yaw,
                 pitch,
                 relatives: PositionFlag::from_bitfield(relatives_bits),
-            })
-        } else {
-            let x = read.get_f64_be()?;
-            let y = read.get_f64_be()?;
-            let z = read.get_f64_be()?;
-            let yaw = read.get_f32_be()?;
-            let pitch = read.get_f32_be()?;
-            let relatives = if version >= &JavaMinecraftVersion::V_1_8 {
-                let relatives_bits = i32::from(read.get_u8()?);
-                PositionFlag::from_bitfield(relatives_bits)
-            } else {
-                let _on_ground = read.get_bool()?;
-                Vec::new()
-            };
-            let teleport_id = if version >= &JavaMinecraftVersion::V_1_9 {
-                read.get_var_int()?
-            } else {
-                VarInt(0)
-            };
-            if version >= &JavaMinecraftVersion::V_1_20_2 {
-                let _ = read.get_bool()?;
-            }
-            Ok(Self {
-                teleport_id,
-                position: Vector3::new(x, y, z),
-                delta: Vector3::new(0.0, 0.0, 0.0),
-                yaw,
-                pitch,
-                relatives,
             })
         }
     }

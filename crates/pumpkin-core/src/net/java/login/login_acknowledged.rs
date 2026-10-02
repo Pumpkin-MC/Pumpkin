@@ -100,6 +100,8 @@ impl PendingConnection {
         let version_str = CURRENT_MC_VERSION.to_string();
         let loaded_packs = server.datapack_manager.get_loaded_packs();
         let known_packs = server.get_known_packs(&version_str, &loaded_packs);
-        self.send_packet_now(&CKnownPacks::new(&known_packs)).await;
+        if !self.send_packet_now(&CKnownPacks::new(&known_packs)).await {
+            self.handle_known_packs(server).await;
+        }
     }
 }

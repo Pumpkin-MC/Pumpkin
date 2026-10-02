@@ -5,7 +5,6 @@ use crate::ser::NetworkWriteExt;
 use crate::{ClientPacket, WritingError};
 use pumpkin_data::packet::clientbound::play::BOSS_EVENT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Updates the "Boss Bar" displayed at the top of the player's screen.
 ///
@@ -27,11 +26,7 @@ impl<'a> CBossEvent<'a> {
 }
 
 impl ClientPacket for CBossEvent<'_> {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_uuid(self.uuid)?;
@@ -45,7 +40,7 @@ impl ClientPacket for CBossEvent<'_> {
                 flags,
             } => {
                 write.write_var_int(&0.into())?;
-                write.write_component(title, version)?;
+                write.write_component(title)?;
                 write.write_f32_be(*health)?;
                 write.write_var_int(color)?;
                 write.write_var_int(division)?;
@@ -58,7 +53,7 @@ impl ClientPacket for CBossEvent<'_> {
             }
             BosseventAction::UpdateTile(title) => {
                 write.write_var_int(&3.into())?;
-                write.write_component(title, version)
+                write.write_component(title)
             }
             BosseventAction::UpdateStyle { color, dividers } => {
                 write.write_var_int(&4.into())?;

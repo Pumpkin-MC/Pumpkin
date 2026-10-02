@@ -601,10 +601,6 @@ impl PumpkinServer {
                                      if let Some((player, world)) = server_clone
                                          .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
                                  {
-
-                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                         client.set_player(player.clone());
-                                     }
                                      world
                                          .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
                                          .await;

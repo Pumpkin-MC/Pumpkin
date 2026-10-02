@@ -764,10 +764,7 @@ impl EntityBase for ItemEntity {
             ),
         );
         let mut data = Vec::new();
-        if metadata
-            .write(&mut data, &pumpkin_data::packet::CURRENT_MC_VERSION)
-            .is_ok()
-        {
+        if metadata.write(&mut data).is_ok() {
             data.push(255);
             let meta_packet = CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
             if let Ok(meta_data) = client.serialize_packet(&meta_packet) {

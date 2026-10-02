@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::{packet::clientbound::play::SOUND, sound::SoundCategory};
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{ClientPacket, IdOr, SoundEvent, VarInt, WritingError, ser::NetworkWriteExt};
 
@@ -42,52 +42,22 @@ impl CSoundEffect {
 }
 
 impl ClientPacket for CSoundEffect {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_19_3 {
-            crate::IdOr::<crate::SoundEvent>::write(&self.sound_event, &mut write, |w, e| {
-                w.write_string(&e.sound_name)?;
-                w.write_option(&e.range, |w2, r| w2.write_f32_be(*r))
-            })?;
-        } else if *version >= JavaMinecraftVersion::V_1_9 {
-            let sound_id = match &self.sound_event {
-                IdOr::Id(id) => *id,
-                IdOr::Value(_) => 0,
-            };
-            write.write_var_int(&VarInt(i32::from(sound_id)))?;
-        } else {
-            let sound_name: &str = match &self.sound_event {
-                IdOr::Id(id) => pumpkin_data::sound::Sound::NAMES
-                    .get(usize::from(*id))
-                    .copied()
-                    .unwrap_or("ambient.cave"),
-                IdOr::Value(event) => &event.sound_name,
-            };
-            write.write_string(sound_name)?;
-        }
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
+        crate::IdOr::<crate::SoundEvent>::write(&self.sound_event, &mut write, |w, e| {
+            w.write_string(&e.sound_name)?;
+            w.write_option(&e.range, |w2, r| w2.write_f32_be(*r))
+        })?;
 
-        if *version >= JavaMinecraftVersion::V_1_9 {
-            write.write_var_int(&self.sound_category)?;
-        }
+        write.write_var_int(&self.sound_category)?;
 
         write.write_i32_be(self.position.x)?;
         write.write_i32_be(self.position.y)?;
         write.write_i32_be(self.position.z)?;
         write.write_f32_be(self.volume)?;
 
-        if *version >= JavaMinecraftVersion::V_1_10 {
-            write.write_f32_be(self.pitch)?;
-        } else {
-            let pitch_byte = (self.pitch * 63.0).round().clamp(0.0, 255.0) as u8;
-            write.write_u8(pitch_byte)?;
-        }
+        write.write_f32_be(self.pitch)?;
 
-        if *version >= JavaMinecraftVersion::V_1_19 {
-            write.write_i64_be(self.seed)?;
-        }
+        write.write_i64_be(self.seed)?;
 
         Ok(())
     }
@@ -98,7 +68,7 @@ mod tests {
     use std::io::Cursor;
 
     use pumpkin_data::sound::SoundCategory;
-    use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+    use pumpkin_util::math::vector3::Vector3;
 
     use crate::{ClientPacket, IdOr, SoundEvent, VarInt, ser::NetworkReadExt};
 
@@ -123,9 +93,7 @@ mod tests {
         );
         let mut bytes = Vec::new();
 
-        packet
-            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_1_21_11)
-            .unwrap();
+        packet.write_packet_data(&mut bytes).unwrap();
 
         assert_eq!(first_var_int(bytes), VarInt::from(0));
     }
@@ -142,9 +110,7 @@ mod tests {
         );
         let mut bytes = Vec::new();
 
-        packet
-            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_26_2)
-            .unwrap();
+        packet.write_packet_data(&mut bytes).unwrap();
 
         let mut cursor = Cursor::new(bytes);
         // skip sound ID varint

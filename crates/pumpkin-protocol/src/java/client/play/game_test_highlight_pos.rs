@@ -4,7 +4,7 @@ use crate::{
 };
 use pumpkin_data::packet::clientbound::play::GAME_TEST_HIGHLIGHT_POS;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+use pumpkin_util::math::position::BlockPos;
 
 #[java_packet(GAME_TEST_HIGHLIGHT_POS)]
 pub struct CGameTestHighlightPos<'a> {
@@ -27,12 +27,8 @@ impl<'a> CGameTestHighlightPos<'a> {
 }
 
 impl ClientPacket for CGameTestHighlightPos<'_> {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        write.write_block_pos(&self.pos, version)?;
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
+        write.write_block_pos(&self.pos)?;
         write.write_i32_be(self.color)?;
         write.write_string(self.label)?;
         write.write_i32_be(self.duration_ms)?;
@@ -41,9 +37,9 @@ impl ClientPacket for CGameTestHighlightPos<'_> {
 }
 
 impl<'a> ServerPacket<'a> for CGameTestHighlightPos<'a> {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
-            pos: bytebuf.get_block_pos(version)?,
+            pos: bytebuf.get_block_pos()?,
             color: bytebuf.get_i32_be()?,
             label: bytebuf.get_str_borrowed()?,
             duration_ms: bytebuf.get_i32_be()?,

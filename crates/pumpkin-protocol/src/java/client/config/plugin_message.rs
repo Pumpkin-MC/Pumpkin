@@ -2,7 +2,6 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::config::CUSTOM_PAYLOAD;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ClientPacket,
@@ -23,11 +22,7 @@ impl<'a> CPluginMessage<'a> {
 }
 
 impl ClientPacket for CPluginMessage<'_> {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_string(self.channel)?;

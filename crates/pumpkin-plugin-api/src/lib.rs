@@ -204,12 +204,12 @@ pub mod logging;
 pub mod wit {
     wit_bindgen::generate!({
         skip: ["init-plugin"],
-        path: "../pumpkin-plugin-wit/v0.1",
+        path: "../pumpkin-plugin-wit/v0.2",
         world: "plugin",
         chainable_methods: [
-            "pumpkin:plugin/command@0.1.0#command",
-            "pumpkin:plugin/command@0.1.0#command-node",
-            "pumpkin:plugin/text@0.1.0#text-component"
+            "pumpkin:plugin/command@0.2.0#command",
+            "pumpkin:plugin/command@0.2.0#command-node",
+            "pumpkin:plugin/text@0.2.0#text-component"
         ]
     });
 

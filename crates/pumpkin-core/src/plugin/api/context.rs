@@ -9,6 +9,7 @@ use crate::{
     plugin_log,
 };
 use arc_swap::ArcSwap;
+use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionManager},
@@ -272,6 +273,14 @@ impl Context {
         } else {
             client_suggestions::send_c_commands_packet(player, &self.server, &command_dispatcher);
         }
+    }
+
+    /// Admits Java clients on `versions` besides the server's own; this plugin translates
+    /// their packets. Replaces its earlier list.
+    pub fn register_java_versions(&self, versions: impl IntoIterator<Item = JavaMinecraftVersion>) {
+        self.plugin_manager
+            .java_versions
+            .register(&self.metadata.name, versions);
     }
 
     /// Register a permission for this plugin

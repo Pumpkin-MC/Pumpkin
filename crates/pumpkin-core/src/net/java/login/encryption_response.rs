@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use crate::net::can_not_join;
 
 impl PendingConnection {
     async fn verify_encryption_token(
@@ -10,6 +11,10 @@ impl PendingConnection {
         let Some(expected) = self.verify_token.take() else {
             return Err(EncryptionError::NoPendingVerifyToken);
         };
+
+        if token.is_empty() && self.features.load().optional_verify_token {
+            return Ok(());
+        }
 
         let decrypted = server.decrypt(token).await?;
         if decrypted.as_slice() == expected.as_slice() {
@@ -126,11 +131,14 @@ impl PendingConnection {
             .compression
             .info
             .clone();
-        self.send_packet_now(&CSetCompression::new(
-            pumpkin_protocol::codec::var_int::VarInt(compression.threshold as i32),
-        ))
-        .await;
-        self.set_compression(&compression);
+        if self
+            .send_packet_now(&CSetCompression::new(
+                pumpkin_protocol::codec::var_int::VarInt(compression.threshold as i32),
+            ))
+            .await
+        {
+            self.set_compression(&compression);
+        }
     }
 
     pub(super) async fn finish_login(
@@ -164,7 +172,17 @@ impl PendingConnection {
             uuid::Uuid::new_v4(),
         );
         self.send_packet_now(&packet).await;
-        None
+        if self.features.load().configuration_state {
+            return None;
+        }
+
+        self.connection_state.store(ConnectionState::Play);
+        let config = self.config.clone().unwrap_or_default();
+        if let Some(reason) = can_not_join(profile, &self.address, server).await {
+            self.kick(reason).await;
+            return Some(PacketHandlerResult::Stop);
+        }
+        Some(PacketHandlerResult::ReadyToPlay(profile.clone(), config))
     }
 
     async fn authenticate(

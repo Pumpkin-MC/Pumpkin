@@ -672,6 +672,10 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
+        // Joining already sends play packets (entity spawns), which must reach `PacketSentEvent`
+        if let ClientPlatform::Java(client) = player.client.as_ref() {
+            client.set_player(player.clone());
+        }
         {
             let mut advancements = player
                 .advancements
@@ -687,8 +691,8 @@ impl Server {
             self;
             &mut PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
-                player.screen_handler_sync_handler.store_player(player.clone());
-                world.add_player(&player).is_ok().then(|| {
+                if world.add_player(&player).is_ok() {
+                    player.screen_handler_sync_handler.store_player(player.clone());
                     {
                         let mut user_cache = self
                             .data
@@ -709,12 +713,20 @@ impl Server {
                         }
                     }
 
-                    (player, world)
-                })
+                    Some((player, world))
+                } else {
+                    if let ClientPlatform::Java(client) = player.client.as_ref() {
+                        client.clear_player();
+                    }
+                    None
+                }
             }
 
             'cancelled: {
                 player.kick(DisconnectReason::Kicked, &event.kick_message);
+                if let ClientPlatform::Java(client) = player.client.as_ref() {
+                    client.clear_player();
+                }
                 None
             }
         }}
