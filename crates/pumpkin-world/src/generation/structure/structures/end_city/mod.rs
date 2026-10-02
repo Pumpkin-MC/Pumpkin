@@ -117,7 +117,7 @@ impl EndCityTemplatePiece {
                 continue;
             };
             chunk.set_block_state(position.x, position.y, position.z, state);
-            Self::place_block_entity(chunk, palette, block.nbt.as_ref(), position, random);
+            Self::place_block_entity(chunk, palette, block.nbt.as_deref(), position, random);
         }
 
         for block in self.descriptor.template.blocks() {
@@ -127,7 +127,7 @@ impl EndCityTemplatePiece {
             }
             let Some(marker) = block
                 .nbt
-                .as_ref()
+                .as_deref()
                 .and_then(|nbt| nbt.get_string("metadata"))
             else {
                 continue;

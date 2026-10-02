@@ -352,7 +352,8 @@ pub struct StructureBlockInfo {
     /// Shared by every block of the palette with the same state, like vanilla's
     /// interned `BlockState`.
     pub state: Arc<PaletteEntry>,
-    pub nbt: Option<NbtCompound>,
+    /// Boxed because only block entities carry one and the compound is large.
+    pub nbt: Option<Box<NbtCompound>>,
 }
 
 impl StructureBlockInfo {
@@ -360,7 +361,7 @@ impl StructureBlockInfo {
     pub const fn new(
         pos: Vector3<i32>,
         state: Arc<PaletteEntry>,
-        nbt: Option<NbtCompound>,
+        nbt: Option<Box<NbtCompound>>,
     ) -> Self {
         Self { pos, state, nbt }
     }
@@ -400,7 +401,7 @@ pub struct JigsawBlockInfo {
 impl JigsawBlockInfo {
     #[must_use]
     pub fn of(info: StructureBlockInfo) -> Self {
-        let nbt = info.nbt.as_ref();
+        let nbt = info.nbt.as_deref();
         let joint_type = StructureTemplate::get_joint_type(nbt, &info.state);
         let name = nbt
             .and_then(|n| n.get_string("name"))
@@ -1066,7 +1067,10 @@ impl StructureTemplate {
 
             let state = states.get(state_idx).unwrap_or(&air).clone();
 
-            let nbt = block_compound.get_compound(Self::BLOCK_TAG_NBT).cloned();
+            let nbt = block_compound
+                .get_compound(Self::BLOCK_TAG_NBT)
+                .cloned()
+                .map(Box::new);
 
             let info = StructureBlockInfo::new(Vector3::new(x, y, z), state, nbt);
             Self::add_to_lists(
@@ -1188,7 +1192,7 @@ impl StructureTemplate {
                 block_tag.put_int(Self::BLOCK_TAG_STATE, id as i32);
 
                 if let Some(nbt) = &block_info.nbt {
-                    block_tag.put_compound(Self::BLOCK_TAG_NBT, nbt.clone());
+                    block_tag.put_compound(Self::BLOCK_TAG_NBT, NbtCompound::clone(nbt));
                 }
 
                 block_list.push(NbtTag::Compound(block_tag));

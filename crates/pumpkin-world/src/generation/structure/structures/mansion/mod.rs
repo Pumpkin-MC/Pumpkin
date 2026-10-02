@@ -288,7 +288,7 @@ impl MansionTemplatePiece {
             if palette.name == "minecraft:structure_block" {
                 if let Some(marker) = template_block
                     .nbt
-                    .as_ref()
+                    .as_deref()
                     .and_then(|nbt| nbt.get_string("metadata"))
                 {
                     self.handle_marker(chunk, random, marker, position);
@@ -313,7 +313,7 @@ impl MansionTemplatePiece {
             Self::place_block_entity(
                 chunk,
                 palette,
-                template_block.nbt.as_ref(),
+                template_block.nbt.as_deref(),
                 position,
                 random,
             );

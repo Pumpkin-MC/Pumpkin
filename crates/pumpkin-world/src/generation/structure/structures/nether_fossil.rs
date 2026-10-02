@@ -174,7 +174,7 @@ impl NetherFossilPiece {
         for block in self.template.blocks() {
             let palette_entry = &block.state;
 
-            let mut block_entity_nbt = block.nbt.clone();
+            let mut block_entity_nbt = block.nbt.as_deref().cloned();
             let placed_entry = palette_entry.clone();
 
             let Some(state) = BlockStateResolver::resolve(&placed_entry, rotation, mirror) else {

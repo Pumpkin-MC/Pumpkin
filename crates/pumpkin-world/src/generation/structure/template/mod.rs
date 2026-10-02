@@ -127,7 +127,7 @@ pub fn place_template_with_options(
             continue;
         }
 
-        let mut block_entity_nbt = block.nbt.clone();
+        let mut block_entity_nbt = block.nbt.as_deref().cloned();
         let mut placed_entry = PaletteEntry::clone(palette_entry);
 
         // Jigsaw blocks are replaced during template processing, before block entities are
