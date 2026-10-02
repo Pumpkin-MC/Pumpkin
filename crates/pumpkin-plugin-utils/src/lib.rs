@@ -6,6 +6,8 @@
 //! - **Online License Checks**: Verify active licenses with `https://market.pumpkinmc.org/api/v1/rest/check-license`.
 //! - **License Checks & Grace Periods**: Local lease management (`license_lease.json`) to prevent outages during marketplace downtime.
 //!
+//! Online license and update checks are available on native targets. Wasm plugins use host-provided metadata and offline license evaluation instead.
+//!
 //! # Quick Start
 //!
 //! ```rust,ignore
@@ -58,12 +60,14 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 /// HTTP client helpers for marketplace interaction.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod http;
 /// License checking, validation, and lease management.
 pub mod license;
 /// Data models for metadata, licenses, and updates.
 pub mod models;
 /// Non-blocking update checks against marketplace endpoints.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod updater;
 
 pub use license::{LicenseChecker, LicenseError};
@@ -71,6 +75,7 @@ pub use models::{
     CheckLicenseResponse, CheckUpdateResponse, DEFAULT_MARKETPLACE_URL, LicenseLease,
     LicenseStatus, PumpkinMetadata,
 };
+#[cfg(not(target_arch = "wasm32"))]
 pub use updater::{UpdateChecker, UpdateError};
 
 use std::{
@@ -157,6 +162,7 @@ pub fn get_data_folder() -> Option<&'static Path> {
 /// # Errors
 ///
 /// Returns `LicenseError` if querying the marketplace fails or if `init` was not called.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn check_license_online(
     license_key_override: Option<&str>,
 ) -> Result<CheckLicenseResponse, LicenseError> {
@@ -172,6 +178,7 @@ pub fn check_license_online(
 /// # Errors
 ///
 /// Returns `UpdateError` if querying the marketplace fails or if `init` was not called.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn check_for_updates() -> Result<CheckUpdateResponse, UpdateError> {
     let meta = metadata().map_err(|_| UpdateError::NotInitialized)?;
     UpdateChecker::new().check_for_updates(&meta.plugin_name, &meta.version, &meta.marketplace_url)
