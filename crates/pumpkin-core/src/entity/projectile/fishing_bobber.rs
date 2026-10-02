@@ -280,8 +280,10 @@ impl FishingBobberEntity {
             .load()
             .stretch(velocity)
             .expand(1.0, 1.0, 1.0);
+        // Vanilla `Projectile.hasLeftOwner` checks `owner.getRootVehicle().streamSelfAndPassengers()`,
+        // so the owner itself counts; players are only in `get_all_at_box`.
         let still_riding = world
-            .get_entities_at_box(&search)
+            .get_all_at_box(&search)
             .iter()
             .any(|found| root_vehicle_uuid(found.as_ref()) == owner_root);
 
@@ -513,7 +515,9 @@ impl FishingBobberEntity {
 
         let left_owner = self.left_owner.load(Ordering::Relaxed);
         let owner_root = root_vehicle_uuid(owner);
-        for cand in world.get_entities_at_box(&search_box) {
+        // Vanilla `ProjectileUtil.getEntityHitResult` filters with `Projectile.canHitEntity`, which
+        // only rejects the owner's vehicle chain; other players are valid targets.
+        for cand in world.get_all_at_box(&search_box) {
             let candidate = cand.get_entity();
             // Vanilla `Projectile.canHitEntity`: not the hook, not a spectator, not a projectile,
             // alive, and not the owner's vehicle chain until the hook has left it.
@@ -809,6 +813,52 @@ impl EntityBase for FishingBobberEntity {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::block::registry::BlockRegistry;
+    use crate::world::LevelData;
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::world_seed::Seed;
+    use pumpkin_world::dimension::into_level;
+    use std::sync::Weak;
+
+    /// A bare world with no loaded chunks, enough for the hook's entity queries.
+    ///
+    /// `World::players` is `Vec<Arc<Player>>`, and the test harness has no way to build a
+    /// `Player` (`Player::new` needs a live server and connection stack), so the tests below
+    /// stand in with player-type `Entity` values. `get_all_at_box` queries players the same
+    /// way; the real list is covered by the in-game check.
+    fn test_world() -> Arc<World> {
+        let path = tempfile::tempdir().expect("temp dir").keep();
+        let level = into_level(Dimension::OVERWORLD, &LevelConfig::default(), path, 0);
+        Arc::new(World::load(
+            level,
+            Arc::new(arc_swap::ArcSwap::from_pointee(LevelData::default(Seed(0)))),
+            Dimension::OVERWORLD,
+            Arc::new(BlockRegistry::default()),
+            Weak::new(),
+        ))
+    }
+
+    fn bobber_for(
+        world: &Arc<World>,
+        position: Vector3<f64>,
+        owner: &Entity,
+    ) -> FishingBobberEntity {
+        FishingBobberEntity {
+            entity: Entity::new(world.clone(), position, &EntityType::FISHING_BOBBER),
+            owner_id: owner.entity_id,
+            owner_uuid: owner.entity_uuid,
+            state: AtomicCell::new(HookState::Flying),
+            left_owner: AtomicBool::new(false),
+            life: AtomicI32::new(0),
+            wait_countdown: AtomicI32::new(0),
+            bite_countdown: AtomicI32::new(0),
+            hook_countdown: AtomicI32::new(0),
+            fish_angle: AtomicCell::new(0.0),
+            luck_bonus: 0,
+            wait_time_reduction_ticks: 0,
+        }
+    }
 
     #[test]
     fn bob_settles_at_the_water_surface() {
@@ -889,5 +939,66 @@ mod tests {
         assert!((ratio_x - ratio_y).abs() > 1e-6);
         assert!((ratio_y - ratio_z).abs() > 1e-6);
         assert!((ratio_x - ratio_z).abs() > 1e-6);
+    }
+
+    #[tokio::test]
+    async fn hook_does_not_target_the_owner_at_spawn() {
+        let world = test_world();
+        let owner = Arc::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::PLAYER,
+        ));
+        world
+            .entities
+            .store(Arc::new(vec![owner.clone() as Arc<dyn EntityBase>]));
+
+        // The hook leaves the eye 0.3 blocks in front and is thrown back over the owner.
+        let bobber = bobber_for(&world, Vector3::new(0.0, 65.62, -0.3), &owner);
+        let mut velocity = Vector3::new(0.0, 0.0, 0.6);
+        bobber.update_left_owner(&world, owner.as_ref(), velocity);
+        assert!(
+            !bobber.left_owner.load(Ordering::Relaxed),
+            "the owner is still within the hook's spawn box"
+        );
+
+        bobber.check_collision(
+            &world,
+            owner.as_ref(),
+            &bobber,
+            bobber.entity.pos.load(),
+            &mut velocity,
+        );
+        assert_eq!(bobber.state.load(), HookState::Flying);
+    }
+
+    #[tokio::test]
+    async fn hook_targets_another_player_in_the_ray() {
+        let world = test_world();
+        let owner = Arc::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, -4.0),
+            &EntityType::PLAYER,
+        ));
+        let other = Arc::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 1.0),
+            &EntityType::PLAYER,
+        ));
+        world.entities.store(Arc::new(vec![
+            owner.clone() as Arc<dyn EntityBase>,
+            other.clone() as Arc<dyn EntityBase>,
+        ]));
+
+        let bobber = bobber_for(&world, Vector3::new(0.0, 65.62, 0.0), &owner);
+        let mut velocity = Vector3::new(0.0, 0.0, 1.0);
+        bobber.check_collision(
+            &world,
+            owner.as_ref(),
+            &bobber,
+            bobber.entity.pos.load(),
+            &mut velocity,
+        );
+        assert_eq!(bobber.state.load(), HookState::HookedIn(other.entity_id));
     }
 }
