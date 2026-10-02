@@ -110,8 +110,15 @@ impl JavaClient {
 
         let sneaking = player.get_entity().is_sneaking();
 
+        let slot_index = if matches!(hand, Hand::Right) {
+            inventory.get_selected_slot() as usize
+        } else {
+            PlayerInventory::OFF_HAND_SLOT
+        };
+
         // Code based on the java class ServerPlayerInteractionManager
         if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {
+            let before = item.clone();
             let result = Self::call_use_item_on(
                 player,
                 &position,
@@ -126,18 +133,16 @@ impl JavaClient {
             if result.consumes_action() {
                 // TODO: Trigger ANY_BLOCK_USE Criteria
 
+                if !item.are_equal(&before) {
+                    player.sync_hand_slot(slot_index, item.clone());
+                    inventory.set_stack_in_hand(hand, item);
+                }
                 if matches!(result, BlockActionResult::SuccessServer) {
                     player.swing_hand(hand, true);
                 }
                 return Ok(());
             }
         }
-
-        let slot_index = if matches!(hand, Hand::Right) {
-            inventory.get_selected_slot() as usize
-        } else {
-            PlayerInventory::OFF_HAND_SLOT
-        };
 
         if item.is_empty() {
             // TODO item cool down
