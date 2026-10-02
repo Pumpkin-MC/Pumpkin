@@ -114,9 +114,12 @@ secret_file = "forwarding.secret"
 
 Set either `secret_file` or a nonempty inline `secret`, not both. Relative paths
 resolve against the server's working directory; absolute paths and symlinks work
-too. Files are limited to 1 MiB. Contents are trimmed and read once at startup,
-never written back into the configuration. Restart the server after rotating the file. Existing inline
-secrets, including those beginning with `@`, retain their literal meaning.
+too. Files are limited to 1 MiB and read once at startup. CR and LF line breaks
+are removed, but spaces and tabs are preserved, matching Velocity. The resolved
+secret is never written back into the configuration. Restart the server after
+rotating the file. Existing inline secrets, including those beginning with `@`,
+retain their literal meaning. Restrict access to the secret file and its parent
+directory using filesystem permissions.
 
 ## Contributions
 

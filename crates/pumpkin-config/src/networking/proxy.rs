@@ -52,7 +52,7 @@ pub struct VelocityConfig {
 
 impl VelocityConfig {
     /// Returns the forwarding secret, reading and caching a configured file on first use.
-    /// Files are limited to 1 MiB and trimmed; inline secrets are preserved verbatim.
+    /// Files are limited to 1 MiB. CR and LF are removed, matching Velocity; other whitespace is preserved.
     /// Restart the server to reload a changed file.
     ///
     /// # Errors
@@ -90,14 +90,15 @@ impl VelocityConfig {
                         "Velocity secret file exceeds 1 MiB",
                     ));
                 }
-                let secret = contents.trim();
-                if secret.is_empty() {
+                // Velocity joins Files.readAllLines with no separator; spaces are part of the key.
+                contents.retain(|character| character != '\r' && character != '\n');
+                if contents.is_empty() {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         "Velocity secret file must not be empty",
                     ));
                 }
-                Ok(secret.to_owned())
+                Ok(contents)
             })
             .as_deref()
     }
@@ -134,22 +135,22 @@ mod tests {
     }
 
     #[test]
-    fn file_secret_is_trimmed_cached_and_not_serialized() {
+    fn file_secret_preserves_spaces_and_is_cached_without_serializing_contents() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("forwarding.secret");
-        fs::write(&path, "  fixture-forwarding-key\r\n").unwrap();
+        fs::write(&path, " \tfixture-\r\nforwarding\r-key\n \t").unwrap();
         let config = VelocityConfig {
             secret_file: Some(path.clone()),
             ..Default::default()
         };
         assert_eq!(
             config.forwarding_secret().unwrap(),
-            "fixture-forwarding-key"
+            " \tfixture-forwarding-key \t"
         );
         fs::write(&path, "rotated-key").unwrap();
         assert_eq!(
             config.forwarding_secret().unwrap(),
-            "fixture-forwarding-key"
+            " \tfixture-forwarding-key \t"
         );
         let serialized = toml::to_string(&config).unwrap();
         assert!(!serialized.contains("fixture-forwarding-key"));
@@ -169,13 +170,15 @@ mod tests {
             config().forwarding_secret().unwrap_err().kind(),
             io::ErrorKind::NotFound
         );
-        for contents in [b"".as_slice(), b" \r\n", b"\xff"] {
+        for contents in [b"".as_slice(), b"\r\n", b"\xff"] {
             fs::write(&path, contents).unwrap();
             assert_eq!(
                 config().forwarding_secret().unwrap_err().kind(),
                 io::ErrorKind::InvalidData
             );
         }
+        fs::write(&path, " \t\r\n").unwrap();
+        assert_eq!(config().forwarding_secret().unwrap(), " \t");
         fs::write(&path, vec![b'x'; MAX_SECRET_FILE_BYTES + 1]).unwrap();
         assert_eq!(
             config().forwarding_secret().unwrap_err().kind(),
