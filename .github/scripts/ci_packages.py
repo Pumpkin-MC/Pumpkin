@@ -54,6 +54,7 @@ RUST_CI_IGNORED_FILES = {
     ".github/PULL_REQUEST_TEMPLATE.md",
     ".github/workflows/nix.yml",
     ".github/workflows/docker.yml",
+    ".github/workflows/nightly.yml",
     ".github/workflows/release.yml",
     ".github/workflows/reviewers.yml",
     ".github/workflows/sync-wit.yml",
