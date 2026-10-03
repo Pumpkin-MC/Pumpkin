@@ -1,0 +1,7 @@
+interface ipc {
+    type plugin-id = string;
+    type ipc-message = list<u8>;
+
+    // Sends a message to the specified plugin, synchronously receiving a response (or an error).
+    send-ipc-message: func(recipient: plugin-id, message: ipc-message) -> result<result<ipc-message, string>>;
+}
