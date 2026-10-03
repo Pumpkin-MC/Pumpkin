@@ -1,7 +1,6 @@
+use super::Digest;
 use crate::data_component_impl::combat::SwingAnimationImpl;
 use crate::data_component_impl::{DataComponentImpl, get_f32_hash, get_i32_hash, get_str_hash};
-use crc_fast::CrcAlgorithm::Crc32Iscsi;
-use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use std::borrow::Cow;
@@ -213,7 +212,7 @@ impl DataComponentImpl for CookingFuelImpl {
     }
 
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         match &self.burn_time {
             IntProvider::Id(id) => {
                 digest.update(&[1u8]);
@@ -632,7 +631,7 @@ impl DataComponentImpl for FireworkExplosionImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[2u8]);
         digest.update(&[self.shape.to_id() as u8]);
         for color in &self.colors {
@@ -692,7 +691,7 @@ impl DataComponentImpl for FireworksImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[2u8]);
         digest.update(&get_i32_hash(self.flight_duration).to_le_bytes());
         for explosion in &self.explosions {
@@ -807,7 +806,7 @@ impl DataComponentImpl for ProfileImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         if let Some(name) = &self.name {
             digest.update(&[1u8]);
             digest.update(&get_str_hash(name).to_le_bytes());
