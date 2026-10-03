@@ -3409,6 +3409,18 @@ impl Entity {
         }
     }
 
+    pub fn spawn_at_location(&self, stack: ItemStack) {
+        if stack.is_empty() {
+            return;
+        }
+        let world = self.world.load();
+        let item_entity = ItemEntity::new(
+            Self::new(world.clone(), self.pos.load(), &EntityType::ITEM),
+            stack,
+        );
+        world.spawn_entity(Arc::new(item_entity));
+    }
+
     pub fn has_passengers(&self) -> bool {
         !self
             .passengers
