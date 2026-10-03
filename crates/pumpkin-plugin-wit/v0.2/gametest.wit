@@ -1,6 +1,6 @@
 // API design inspired by the MIT-licensed @minecraft/server-gametest npm package:
-// https://www.npmjs.com/package/@minecraft/server-gametest
-// Copyright (c) Microsoft Corporation. MIT terms: ../LICENSE-MIT.
+// https://www.npmjs.com/package/@minecraft/server-gametest/v/1.0.0-beta.1.26.60-preview.23
+// Copyright (c) Microsoft Corporation. MIT terms: ../LICENSE-MIT-MICROSOFT.
 
 interface gametest {
     use common.{game-mode as server-game-mode, block-pos, position};
