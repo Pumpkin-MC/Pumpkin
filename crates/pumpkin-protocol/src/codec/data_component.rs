@@ -2279,8 +2279,7 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
         seq.write_var_int(&VarInt(0))?;
         seq.write_var_int(&VarInt::from(self.pages.len() as i32))?;
         for page in &self.pages {
-            let comp = pumpkin_util::text::TextComponent::text(page.clone());
-            seq.write_slice(&comp.encode_for_version(&JavaMinecraftVersion::V_26_2))?;
+            seq.write_slice(&page.encode_for_version(&JavaMinecraftVersion::V_26_2))?;
             seq.write_bool(false)?;
         }
         seq.write_bool(true)
@@ -2304,7 +2303,7 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
             if seq.get_bool()? {
                 let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
             }
-            pages.push(comp.get_text());
+            pages.push(comp);
         }
         let _resolved = seq.get_bool()?;
         Ok(Self {
@@ -2343,14 +2342,34 @@ impl DataComponentCodec<Self> for DebugStickStateImpl {
 
 impl DataComponentCodec<Self> for EntityDataImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))?;
-        seq.write_nbt(NbtTag::Compound(pumpkin_nbt::compound::NbtCompound::new()))
+        let mut nbt = self.nbt.clone().unwrap_or_default();
+        // Vanilla TypedEntityData always carries its type, there is no fallback.
+        let id = nbt
+            .get_string("id")
+            .ok_or_else(|| WritingError::Message("entity_data has no 'id'".into()))?;
+        let type_id = EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
+            .map(|entity_type| i32::from(entity_type.id))
+            .ok_or_else(|| WritingError::Message(format!("Unknown entity type {id}")))?;
+        nbt.child_tags.remove("id");
+        seq.write_var_int(&VarInt(type_id))?;
+        seq.write_nbt(NbtTag::Compound(nbt))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _type_id = seq.get_var_int()?;
-        let _nbt = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
-        Ok(Self)
+        let type_id = seq.get_var_int()?.0;
+        let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+        // Vanilla's TypedEntityData keeps the type apart from the tag.
+        //Pumpkin keeps it as "id" in the NBT.
+        let entity_type = u16::try_from(type_id)
+            .ok()
+            .and_then(EntityType::from_raw)
+            .ok_or_else(|| ReadingError::Message(format!("Unknown entity type id {type_id}")))?;
+        let mut nbt = match tag {
+            Some(NbtTag::Compound(c)) => c,
+            _ => pumpkin_nbt::compound::NbtCompound::new(),
+        };
+        nbt.put_string("id", format!("minecraft:{}", entity_type.resource_name));
+        Ok(Self { nbt: Some(nbt) })
     }
 }
 
