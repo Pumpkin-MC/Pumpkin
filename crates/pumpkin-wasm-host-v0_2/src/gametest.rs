@@ -105,9 +105,7 @@ impl gametest::HostSculkSpreader for PluginHostState {
     }
 
     async fn drop(&mut self, _res: Resource<SculkSpreader>) -> wasmtime::Result<()> {
-        Err(wasmtime::Error::msg(
-            "gametest.sculk-spreader.drop not implemented",
-        ))
+        Ok(())
     }
 }
 
@@ -224,9 +222,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
     }
 
     async fn drop(&mut self, _res: Resource<RegistrationBuilder>) -> wasmtime::Result<()> {
-        Err(wasmtime::Error::msg(
-            "gametest.registration-builder.drop not implemented",
-        ))
+        Ok(())
     }
 }
 
@@ -311,9 +307,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
     }
 
     async fn drop(&mut self, _res: Resource<GameTestSequence>) -> wasmtime::Result<()> {
-        Err(wasmtime::Error::msg(
-            "gametest.game-test-sequence.drop not implemented",
-        ))
+        Ok(())
     }
 }
 
@@ -349,7 +343,7 @@ impl gametest::HostTags for PluginHostState {
     }
 
     async fn drop(&mut self, _res: Resource<Tags>) -> wasmtime::Result<()> {
-        Err(wasmtime::Error::msg("gametest.tags.drop not implemented"))
+        Ok(())
     }
 }
 
@@ -777,9 +771,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
     }
 
     async fn drop(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<()> {
-        Err(wasmtime::Error::msg(
-            "gametest.simulated-player.drop not implemented",
-        ))
+        Ok(())
     }
 }
 
@@ -1485,6 +1477,6 @@ impl gametest::HostTest for PluginHostState {
     }
 
     async fn drop(&mut self, _res: Resource<Test>) -> wasmtime::Result<()> {
-        Err(wasmtime::Error::msg("gametest.test.drop not implemented"))
+        Ok(())
     }
 }
