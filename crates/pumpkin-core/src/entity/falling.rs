@@ -32,14 +32,18 @@ impl FallingEntity {
         }
     }
 
-    /// Replaced the current Block and Spawns a new Falling one (synchronous)
+    /// Replaces the current block with its fluid and spawns a falling one (synchronous)
     pub fn replace_spawn(world: &Arc<World>, position: BlockPos, block_state: BlockStateId) {
-        // Replace the original block, TODO: use fluid state
-        world.set_block_state(
-            &position,
-            Block::AIR.default_state.id,
-            BlockFlags::NOTIFY_ALL,
-        );
+        let replacement = if block_state.is_waterlogged() {
+            Block::WATER.default_state.id
+        } else {
+            Block::AIR.default_state.id
+        };
+        world.set_block_state(&position, replacement, BlockFlags::NOTIFY_ALL);
+        let block_state = block_state
+            .to_state()
+            .set_waterlogged(false)
+            .map_or(block_state, |state| state.id);
 
         let position = position.0.to_f64().add_raw(0.5, 0.0, 0.5);
         let entity = Entity::new(world.clone(), position, &EntityType::FALLING_BLOCK);
@@ -86,6 +90,11 @@ impl EntityBase for FallingEntity {
                 None,
                 None,
             ) {
+                if world.is_water_source(&landing_pos)
+                    && let Some(waterlogged) = state_id.to_state().set_waterlogged(true)
+                {
+                    state_id = waterlogged.id;
+                }
                 world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
                 // block updates to watchers before the despawn, else a invisible block gap until the tick flush.
                 let placed = world.get_block_state_id(&landing_pos);

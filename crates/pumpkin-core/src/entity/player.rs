@@ -5201,6 +5201,19 @@ impl Player {
         self.try_enqueue_packet_editioned(&je_packet, &be_packet);
     }
 
+    /// Vanilla `ServerPlayer.sendBuildLimitMessage(true, maxY)`.
+    pub fn send_build_too_high_message(&self, max_y: i32) {
+        self.send_system_message_raw(
+            &TextComponent::translate_cross(
+                translation::java::BUILD_TOOHIGH,
+                translation::bedrock::BUILD_TOOHIGH,
+                vec![TextComponent::text(max_y.to_string())],
+            )
+            .color_named(pumpkin_util::text::color::NamedColor::Red),
+            true,
+        );
+    }
+
     pub fn tick_experience(&self) {
         if !self.has_client_loaded() {
             return;

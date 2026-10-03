@@ -632,26 +632,6 @@ impl BlockRegistry {
 
         let clicked_block_pos = BlockPos(location.0);
         let world = entity.world.load_full();
-
-        if location.0.y + face.to_offset().y < world.get_bottom_y() {
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
-        if location.0.y + face.to_offset().y > world.get_top_y() {
-            player.send_system_message_raw(
-                &pumpkin_util::text::TextComponent::translate_cross(
-                    pumpkin_data::translation::java::BUILD_TOOHIGH,
-                    pumpkin_data::translation::bedrock::BUILD_TOOHIGH,
-                    vec![pumpkin_util::text::TextComponent::text(
-                        (world.get_top_y()).to_string(),
-                    )],
-                )
-                .color_named(pumpkin_util::text::color::NamedColor::Red),
-                true,
-            );
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
         let (clicked_block, clicked_block_state) = world.get_block_and_state(&clicked_block_pos);
 
         let replace_clicked_block = if clicked_block == placed_block {
@@ -733,6 +713,13 @@ impl BlockRegistry {
         let final_block_pos = context.position;
         let final_face = context.clicked_face.opposite();
         let replacing = context.replacing;
+
+        if !world.is_in_height_limit(final_block_pos.0.y) {
+            if final_block_pos.0.y > world.get_top_y() {
+                player.send_build_too_high_message(world.get_top_y());
+            }
+            return Err(BlockPlacingError::BlockOutOfWorld);
+        }
 
         if world.is_in_spawn_protection(player, &final_block_pos) {
             player.send_system_message(&pumpkin_util::text::TextComponent::translate_cross(
