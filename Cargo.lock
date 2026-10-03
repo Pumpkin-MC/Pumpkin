@@ -3332,74 +3332,17 @@ dependencies = [
 name = "pumpkin"
 version = "0.2.0+26.3-26.51"
 dependencies = [
- "aes 0.9.3",
- "arc-swap",
- "async-trait",
- "axum",
- "base64 0.23.1",
- "bitflags 2.13.2",
- "bytes",
- "colored",
  "console-subscriber",
- "crossbeam",
- "dashmap",
- "ed25519-dalek",
- "flate2",
- "futures",
- "hex",
- "hmac 0.13.0",
- "hyper",
- "image",
- "indexmap",
- "libc",
- "libloading",
- "notify",
- "num-bigint 0.5.1",
- "ordered-float",
- "postcard",
- "pumpkin-auth",
- "pumpkin-command",
  "pumpkin-config",
+ "pumpkin-core",
  "pumpkin-data",
- "pumpkin-gametest",
- "pumpkin-host-bindings",
- "pumpkin-inventory",
- "pumpkin-macros",
- "pumpkin-nbt",
- "pumpkin-plugin-runtime",
- "pumpkin-protocol",
  "pumpkin-util",
+ "pumpkin-wasm-host",
  "pumpkin-world",
- "rand",
  "rayon",
- "reqwest",
- "rsa",
- "rustc-hash",
- "rustc_version_runtime",
  "rustls",
- "rustyline",
- "serde",
- "serde_json",
- "serde_repr",
- "sha1 0.11.0",
- "sha2 0.11.0",
- "sysinfo",
- "tempfile",
- "thiserror 2.0.21",
- "time",
  "tokio",
- "tokio-util",
  "tracing",
- "tracing-serde-structured",
- "tracing-subscriber",
- "uuid",
- "wasm-encoder 0.259.0",
- "wasmparser 0.259.0",
- "wasmtime",
- "wasmtime-wasi",
- "wasmtime-wasi-http",
- "webrtc",
- "xxhash-rust",
 ]
 
 [[package]]
@@ -3487,6 +3430,69 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-core"
+version = "0.2.0+26.3-26.51"
+dependencies = [
+ "aes 0.9.3",
+ "arc-swap",
+ "async-trait",
+ "axum",
+ "base64 0.23.1",
+ "bitflags 2.13.2",
+ "bytes",
+ "colored",
+ "crossbeam",
+ "dashmap",
+ "ed25519-dalek",
+ "flate2",
+ "futures",
+ "hex",
+ "hmac 0.13.0",
+ "image",
+ "indexmap",
+ "libc",
+ "libloading",
+ "notify",
+ "num-bigint 0.5.1",
+ "ordered-float",
+ "pumpkin-auth",
+ "pumpkin-command",
+ "pumpkin-config",
+ "pumpkin-data",
+ "pumpkin-gametest",
+ "pumpkin-inventory",
+ "pumpkin-macros",
+ "pumpkin-nbt",
+ "pumpkin-protocol",
+ "pumpkin-util",
+ "pumpkin-world",
+ "rand",
+ "rayon",
+ "reqwest",
+ "rsa",
+ "rustc-hash",
+ "rustc_version_runtime",
+ "rustls",
+ "rustyline",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "sha1 0.11.0",
+ "sha2 0.11.0",
+ "sysinfo",
+ "tempfile",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "webrtc",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "pumpkin-data"
 version = "0.2.0+26.3-26.51"
 dependencies = [
@@ -3522,13 +3528,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pumpkin-host-bindings"
-version = "0.2.0+26.3-26.51"
-dependencies = [
- "wasmtime",
 ]
 
 [[package]]
@@ -3663,6 +3662,101 @@ dependencies = [
  "syn 3.0.6",
  "thiserror 2.0.21",
  "uuid",
+]
+
+[[package]]
+name = "pumpkin-wasm-host"
+version = "0.2.0+26.3-26.51"
+dependencies = [
+ "pumpkin-core",
+ "pumpkin-plugin-runtime",
+ "pumpkin-wasm-host-common",
+ "pumpkin-wasm-host-v0_1",
+ "pumpkin-wasm-host-v0_2",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wasmtime-wasi-http",
+]
+
+[[package]]
+name = "pumpkin-wasm-host-common"
+version = "0.2.0+26.3-26.51"
+dependencies = [
+ "ed25519-dalek",
+ "hex",
+ "hyper",
+ "postcard",
+ "pumpkin-auth",
+ "pumpkin-core",
+ "pumpkin-data",
+ "pumpkin-inventory",
+ "pumpkin-plugin-runtime",
+ "pumpkin-util",
+ "pumpkin-world",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "tracing-serde-structured",
+ "wasm-encoder 0.259.0",
+ "wasmparser 0.259.0",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wasmtime-wasi-http",
+]
+
+[[package]]
+name = "pumpkin-wasm-host-v0_1"
+version = "0.2.0+26.3-26.51"
+dependencies = [
+ "bytes",
+ "pumpkin-config",
+ "pumpkin-core",
+ "pumpkin-data",
+ "pumpkin-inventory",
+ "pumpkin-macros",
+ "pumpkin-nbt",
+ "pumpkin-protocol",
+ "pumpkin-util",
+ "pumpkin-wasm-host-common",
+ "pumpkin-world",
+ "rand",
+ "serde_json",
+ "sysinfo",
+ "time",
+ "tokio",
+ "tracing",
+ "uuid",
+ "wasmtime",
+]
+
+[[package]]
+name = "pumpkin-wasm-host-v0_2"
+version = "0.2.0+26.3-26.51"
+dependencies = [
+ "bytes",
+ "pumpkin-config",
+ "pumpkin-core",
+ "pumpkin-data",
+ "pumpkin-inventory",
+ "pumpkin-macros",
+ "pumpkin-nbt",
+ "pumpkin-protocol",
+ "pumpkin-util",
+ "pumpkin-wasm-host-common",
+ "pumpkin-world",
+ "rand",
+ "serde_json",
+ "sysinfo",
+ "time",
+ "tokio",
+ "tracing",
+ "uuid",
+ "wasmtime",
 ]
 
 [[package]]

@@ -6,6 +6,8 @@ on:
       - "*"
       - "!nightly"
       - "!nightly*"
+      - "!canary"
+      - "!canary*"
   workflow_dispatch:
     inputs:
       tag_name:
