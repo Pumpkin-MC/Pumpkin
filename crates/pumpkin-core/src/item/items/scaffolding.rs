@@ -49,6 +49,10 @@ impl ItemBehaviour for ScaffoldingBlockItem {
         let mut placement_pos = pos.offset(direction.to_offset());
         while horizontal_distance < STABILITY_MAX_DISTANCE {
             if !world.is_in_build_limit(placement_pos) {
+                let max_y = world.get_top_y();
+                if placement_pos.0.y > max_y {
+                    player.send_build_too_high_message(max_y);
+                }
                 break;
             }
 
