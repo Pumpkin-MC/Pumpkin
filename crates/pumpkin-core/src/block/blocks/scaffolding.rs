@@ -155,3 +155,54 @@ impl BlockBehaviour for ScaffoldingBlock {
         false
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    struct TestWorld(HashMap<BlockPos, BlockStateId>);
+
+    impl BlockAccessor for TestWorld {
+        fn get_block(&self, position: &BlockPos) -> &'static Block {
+            Block::from_state_id(self.get_block_state_id(position))
+        }
+
+        fn get_block_state(&self, position: &BlockPos) -> &'static BlockState {
+            BlockState::from_id(self.get_block_state_id(position))
+        }
+
+        fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
+            self.0
+                .get(position)
+                .copied()
+                .unwrap_or(Block::AIR.default_state.id)
+        }
+
+        fn get_block_and_state(
+            &self,
+            position: &BlockPos,
+        ) -> (&'static Block, &'static BlockState) {
+            (self.get_block(position), self.get_block_state(position))
+        }
+    }
+
+    fn scaffolding(distance: u8) -> BlockStateId {
+        let mut props = ScaffoldingLikeProperties::default(&Block::SCAFFOLDING);
+        props.distance = distance;
+        props.to_state_id(&Block::SCAFFOLDING)
+    }
+
+    #[test]
+    fn distance_prefers_closer_horizontal_support_over_scaffolding_below() {
+        let world = TestWorld(HashMap::from([
+            (BlockPos::new(0, 0, 0), scaffolding(5)),
+            (BlockPos::new(1, 1, 0), scaffolding(0)),
+        ]));
+        assert_eq!(
+            ScaffoldingBlock::get_distance(&world, &BlockPos::new(0, 1, 0)),
+            1
+        );
+    }
+}
