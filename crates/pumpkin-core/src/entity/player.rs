@@ -297,6 +297,7 @@ use crate::command::context::command_source::CommandSource;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::{CommandSender, client_suggestions};
 use crate::data::SaveJSONConfiguration;
+use crate::log_at_level;
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
@@ -2675,7 +2676,8 @@ impl Player {
                                 )));
                             }
                         }
-                        tracing::error!(
+                        log_at_level!(
+                            e.severity(),
                             "Failed to handle play packet id {} (payload {} bytes): {}",
                             packet.id,
                             packet.payload.len(),
