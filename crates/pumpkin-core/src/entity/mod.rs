@@ -1713,6 +1713,17 @@ impl Entity {
     // updateWaterState() in yarn
 
     fn update_fluid_state(&self, caller: &dyn EntityBase) {
+        let world = self.world.load();
+        for fluid in self.update_fluid_interaction(caller) {
+            world
+                .block_registry
+                .on_entity_collision_fluid(fluid, caller);
+        }
+    }
+
+    /// Vanilla `Entity.updateFluidInteraction`: fluid flags and current push only, without the
+    /// fluid's `entityInside` effects. Returns the fluids the entity is in.
+    fn update_fluid_interaction(&self, caller: &dyn EntityBase) -> Vec<&'static Fluid> {
         let is_pushed = caller.is_pushed_by_fluids();
         let mut fluids = BTreeMap::new();
 
@@ -1787,14 +1798,6 @@ impl Entity {
             }
         }
 
-        // BTreeMap auto-sorts water before lava as in vanilla
-
-        for (_, fluid) in fluids {
-            world
-                .block_registry
-                .on_entity_collision_fluid(fluid, caller);
-        }
-
         let lava_speed = if world.dimension.fast_lava {
             0.007
         } else {
@@ -1839,6 +1842,9 @@ impl Entity {
         self.lava_height.store(lava_height);
 
         self.touching_lava.store(in_lava, Ordering::SeqCst);
+
+        // BTreeMap auto-sorts water before lava as in vanilla
+        fluids.into_values().collect()
     }
 
     fn push_by_fluid(&self, speed: f64, mut push: Vector3<f64>, n: usize) {
