@@ -10,7 +10,6 @@ interface gametest {
         %world as dimension,
         entity,
         block-direction as server-direction,
-        block as server-block-type,
         block-state as server-block-permutation,
     };
 
@@ -32,9 +31,6 @@ interface gametest {
 
     /// @minecraft/server.GameMode.
     type game-mode = server-game-mode;
-
-    /// @minecraft/server.BlockType, mapped to Pumpkin's static block definition.
-    type block-type = server-block-type;
 
     /// @minecraft/server.BlockPermutation, mapped to Pumpkin's detailed block-state value.
     type block-permutation = server-block-permutation;
@@ -63,12 +59,6 @@ interface gametest {
         x: f64,
         y: f64,
         z: f64,
-    }
-
-    /// TypeScript union: `BlockType | string`.
-    variant block-type-or-id {
-        block-type(block-type),
-        id(string),
     }
 
     /// TypeScript union: `ItemType | string`.
@@ -228,7 +218,7 @@ interface gametest {
     resource test {
         assert: func(condition: bool, message: string);
         assert-block-present: func(
-            block-type: block-type-or-id,
+            block-type-id: string,
             block-location: vector3,
             is-present: option<bool>,
         );
@@ -326,7 +316,7 @@ interface gametest {
         run-at-tick-time: func(tick: f64, callback: void-callback-id);
         run-on-finish: func(callback: void-callback-id);
         set-block-permutation: func(block-data: block-permutation, block-location: vector3);
-        set-block-type: func(block-type: block-type-or-id, block-location: vector3);
+        set-block-type: func(block-type-id: string, block-location: vector3);
         set-fluid-container: func(location: vector3, %type: fluid-type);
         set-tnt-fuse: func(entity: borrow<entity>, fuse-length: f64);
         spawn: func(entity-type-identifier: string, block-location: vector3) -> entity;
@@ -354,7 +344,7 @@ interface gametest {
         succeed-on-tick-when: func(tick: f64, callback: void-callback-id);
         succeed-when: func(callback: void-callback-id);
         succeed-when-block-present: func(
-            block-type: block-type-or-id,
+            block-type-id: string,
             block-location: vector3,
             is-present: option<bool>,
         );

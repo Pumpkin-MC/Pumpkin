@@ -1,5 +1,5 @@
 use crate::pumpkin::plugin::gametest::{
-    self, AsyncTestCallbackId, BlockPermutation, BlockPredicateCallbackId, BlockTypeOrId,
+    self, AsyncTestCallbackId, BlockPermutation, BlockPredicateCallbackId,
     Dimension, DimensionLocation, DimensionTypeOrId, Direction, Entity, EntityPredicateCallbackId,
     FenceConnectivity, FluidType, GameMode, GameTestSequence, ItemStack, ItemTypeOrId,
     LookDuration, MoveToOptions, NavigationResult, Player, RegistrationBuilder, SculkSpreader,
@@ -788,7 +788,7 @@ impl gametest::HostTest for PluginHostState {
     async fn assert_block_present(
         &mut self,
         _res: Resource<Test>,
-        _block_type: BlockTypeOrId,
+        _block_type_id: String,
         _block_location: Vector3,
         _is_present: Option<bool>,
     ) -> wasmtime::Result<()> {
@@ -1216,7 +1216,7 @@ impl gametest::HostTest for PluginHostState {
     async fn set_block_type(
         &mut self,
         _res: Resource<Test>,
-        _block_type: BlockTypeOrId,
+        _block_type_id: String,
         _block_location: Vector3,
     ) -> wasmtime::Result<()> {
         Err(wasmtime::Error::msg(
@@ -1378,7 +1378,7 @@ impl gametest::HostTest for PluginHostState {
     async fn succeed_when_block_present(
         &mut self,
         _res: Resource<Test>,
-        _block_type: BlockTypeOrId,
+        _block_type_id: String,
         _block_location: Vector3,
         _is_present: Option<bool>,
     ) -> wasmtime::Result<()> {
