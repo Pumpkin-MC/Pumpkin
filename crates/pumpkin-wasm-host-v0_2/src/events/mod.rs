@@ -276,10 +276,7 @@ impl WasmPluginEventHandler {
         event: Box<dyn PendingWasmEvent>,
     ) -> wasmtime::Result<Box<dyn Any + Send>> {
         let handler_id = self.handler_id;
-        let function = self
-            .plugin
-            .instance::<crate::Plugin>()
-            .func_handle_event();
+        let function = self.plugin.instance::<crate::Plugin>().func_handle_event();
         self.plugin
             .store
             .call_guest(move |mut guest| {
