@@ -267,14 +267,13 @@ use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CAwardStats, CBlockUpdate, CChangeDifficulty,
     CCloseContainer, CCombatDeath, CCustomPayload, CDisguisedChatMessage, CEntityAnimation,
-    CEntityPositionSync, CEntityVelocity, CGameEvent, CHurtAnimation, CItemCooldown, CMapItemData,
-    COpenBook, COpenScreen, COpenSignEditor, CParticle, CPlayServerLinks, CPlayerAbilities,
-    CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetCamera,
-    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
-    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
-    CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
-    CUpdateTime, GameEvent, MapIcon, MapPatch, PlayerAction, PlayerInfoFlags, PlayerSpawnData,
-    PreviousMessage, Statistic,
+    CEntityPositionSync, CGameEvent, CHurtAnimation, CItemCooldown, CMapItemData, COpenBook,
+    COpenScreen, COpenSignEditor, CParticle, CPlayServerLinks, CPlayerAbilities, CPlayerInfoUpdate,
+    CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetCamera, CSetContainerContent,
+    CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience, CSetHealth,
+    CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage,
+    CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
+    MapIcon, MapPatch, PlayerAction, PlayerInfoFlags, PlayerSpawnData, PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -2559,37 +2558,6 @@ impl Player {
         self.try_send_client_packet(&packet);
     }
 
-    pub fn set_velocity(&self, mut velocity: Vector3<f64>) {
-        if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
-            && let Some(server) = self.world().server.upgrade()
-        {
-            let mut event =
-                crate::plugin::api::events::player::player_velocity::PlayerVelocityEvent {
-                    player: player_arc,
-                    velocity,
-                    cancelled: false,
-                };
-            server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return;
-            }
-            velocity = event.velocity;
-        }
-        self.living_entity.entity.set_velocity(velocity);
-        self.try_send_client_packet(&CEntityVelocity::new(self.entity_id().into(), velocity));
-    }
-
-    pub fn apply_knockback(&self, strength: f64, x: f64, z: f64) {
-        let current_vel = self.living_entity.entity.velocity.load();
-        let norm = x.hypot(z);
-        if norm > 0.0 {
-            let vx = current_vel.x / 2.0 - (x / norm) * strength;
-            let vz = current_vel.z / 2.0 - (z / norm) * strength;
-            let vy = (current_vel.y / 2.0 + strength).min(0.4);
-            self.set_velocity(Vector3::new(vx, vy, vz));
-        }
-    }
-
     pub fn set_movement_locked(&self, locked: bool) {
         self.is_movement_locked.store(locked, Ordering::Relaxed);
     }
@@ -3794,6 +3762,21 @@ impl Player {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .send_to_player(self);
             }
+        }
+    }
+
+    /// Runs `f` on the custom Java scoreboard this client sees, if a plugin set one.
+    pub fn with_java_scoreboard<R>(
+        &self,
+        f: impl FnOnce(&crate::world::scoreboard::Scoreboard) -> R,
+    ) -> Option<R> {
+        let guard = self
+            .custom_scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match guard.as_ref() {
+            Some(CustomScoreboard::Java(scoreboard)) => Some(f(scoreboard)),
+            _ => None,
         }
     }
 
@@ -6923,7 +6906,8 @@ impl EntityBase for Player {
     }
 
     fn is_pushable(&self) -> bool {
-        self.gamemode.load() != GameMode::Spectator && self.gamemode.load() != GameMode::Creative
+        // creative players get pushed too.
+        !self.is_spectator() && self.living_entity.is_pushable()
     }
 
     fn get_name(&self) -> TextComponent {

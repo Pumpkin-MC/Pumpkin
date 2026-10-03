@@ -997,6 +997,10 @@ impl EntityBase for ArrowEntity {
         None
     }
 
+    fn receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn on_player_collision(&self, player: &Arc<Player>) {
         // Only allow picking up grounded arrows
         if !self.in_ground.load(Ordering::Relaxed) {

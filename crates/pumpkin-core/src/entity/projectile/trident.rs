@@ -384,6 +384,10 @@ impl EntityBase for TridentEntity {
         }
     }
 
+    fn receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn on_player_collision(&self, player: &Arc<Player>) {
         // Can only pick up when on the ground
         if !self.in_ground.load(Ordering::Relaxed) {

@@ -154,12 +154,12 @@ impl HostEntity for PluginHostState {
         velocity: Position,
     ) -> wasmtime::Result<()> {
         let entity = self.get(&entity)?;
-        entity
-            .get_entity()
-            .velocity
-            .store(pumpkin_util::math::vector3::Vector3::new(
-                velocity.0, velocity.1, velocity.2,
-            ));
+        let velocity =
+            pumpkin_util::math::vector3::Vector3::new(velocity.0, velocity.1, velocity.2);
+        match entity.get_player() {
+            Some(player) => player.set_velocity(velocity),
+            None => entity.get_entity().set_velocity(velocity),
+        }
         Ok(())
     }
 
