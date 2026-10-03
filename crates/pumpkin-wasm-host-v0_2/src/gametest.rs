@@ -1,7 +1,7 @@
 use crate::pumpkin::plugin::common::{BlockPos, Position};
 use crate::pumpkin::plugin::gametest::{
-    self, AsyncTestCallbackId, BlockPermutation, BlockPredicateCallbackId,
-    Dimension, DimensionLocation, DimensionTypeOrId, Direction, Entity, EntityPredicateCallbackId,
+    self, AsyncTestCallbackId, BlockPermutation, BlockPredicateCallbackId, Dimension,
+    DimensionLocation, DimensionTypeOrId, Direction, Entity, EntityPredicateCallbackId,
     FenceConnectivity, FluidType, GameMode, GameTestSequence, ItemStack, ItemTypeOrId,
     LookDuration, MoveToOptions, NavigationResult, Player, RegistrationBuilder, SculkSpreader,
     SimulatedPlayer, Test, TestCallbackId, Vector2, Vector3, VoidCallbackId,
@@ -33,7 +33,9 @@ impl gametest::Host for PluginHostState {
         _batch_name: String,
         _batch_callback: VoidCallbackId,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.set-after-batch-callback not implemented".to_string()))
+        Ok(Err(
+            "gametest.set-after-batch-callback not implemented".to_string()
+        ))
     }
 
     async fn set_before_batch_callback(
@@ -41,7 +43,9 @@ impl gametest::Host for PluginHostState {
         _batch_name: String,
         _batch_callback: VoidCallbackId,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.set-before-batch-callback not implemented".to_string()))
+        Ok(Err(
+            "gametest.set-before-batch-callback not implemented".to_string()
+        ))
     }
 
     async fn spawn_simulated_player(
@@ -50,7 +54,9 @@ impl gametest::Host for PluginHostState {
         _name: String,
         _game_mode: GameMode,
     ) -> wasmtime::Result<Result<Resource<SimulatedPlayer>, String>> {
-        Ok(Err("gametest.spawn-simulated-player not implemented".to_string()))
+        Ok(Err(
+            "gametest.spawn-simulated-player not implemented".to_string()
+        ))
     }
 }
 
@@ -67,7 +73,9 @@ impl gametest::HostSculkSpreader for PluginHostState {
         _offset: Vector3,
         _charge: u32,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.sculk-spreader.add-cursors-with-offset not implemented".to_string()))
+        Ok(Err(
+            "gametest.sculk-spreader.add-cursors-with-offset not implemented".to_string(),
+        ))
     }
 
     async fn get_cursor_position(
@@ -75,7 +83,9 @@ impl gametest::HostSculkSpreader for PluginHostState {
         _res: Resource<SculkSpreader>,
         _index: u32,
     ) -> wasmtime::Result<Result<BlockPos, String>> {
-        Ok(Err("gametest.sculk-spreader.get-cursor-position not implemented".to_string()))
+        Ok(Err(
+            "gametest.sculk-spreader.get-cursor-position not implemented".to_string(),
+        ))
     }
 
     async fn get_number_of_cursors(
@@ -104,7 +114,9 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         _res: Resource<RegistrationBuilder>,
         _batch_name: String,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.registration-builder.batch not implemented".to_string()))
+        Ok(Err(
+            "gametest.registration-builder.batch not implemented".to_string()
+        ))
     }
 
     async fn max_attempts(
@@ -112,7 +124,9 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         _res: Resource<RegistrationBuilder>,
         _attempt_count: u32,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.registration-builder.max-attempts not implemented".to_string()))
+        Ok(Err(
+            "gametest.registration-builder.max-attempts not implemented".to_string(),
+        ))
     }
 
     async fn max_ticks(
@@ -120,7 +134,9 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         _res: Resource<RegistrationBuilder>,
         _tick_count: u32,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.registration-builder.max-ticks not implemented".to_string()))
+        Ok(Err(
+            "gametest.registration-builder.max-ticks not implemented".to_string(),
+        ))
     }
 
     async fn padding(
@@ -128,7 +144,9 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         _res: Resource<RegistrationBuilder>,
         _padding_blocks: u32,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.registration-builder.padding not implemented".to_string()))
+        Ok(Err(
+            "gametest.registration-builder.padding not implemented".to_string()
+        ))
     }
 
     async fn required(
@@ -136,7 +154,9 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         _res: Resource<RegistrationBuilder>,
         _is_required: bool,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.registration-builder.required not implemented".to_string()))
+        Ok(Err(
+            "gametest.registration-builder.required not implemented".to_string(),
+        ))
     }
 
     async fn required_successful_attempts(
@@ -144,7 +164,10 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         _res: Resource<RegistrationBuilder>,
         _attempt_count: u32,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.registration-builder.required-successful-attempts not implemented".to_string()))
+        Ok(Err(
+            "gametest.registration-builder.required-successful-attempts not implemented"
+                .to_string(),
+        ))
     }
 
     async fn rotate_test(
@@ -152,7 +175,9 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         _res: Resource<RegistrationBuilder>,
         _rotate: bool,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.registration-builder.rotate-test not implemented".to_string()))
+        Ok(Err(
+            "gametest.registration-builder.rotate-test not implemented".to_string(),
+        ))
     }
 
     async fn setup_ticks(
@@ -160,7 +185,9 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         _res: Resource<RegistrationBuilder>,
         _tick_count: u32,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.registration-builder.setup-ticks not implemented".to_string()))
+        Ok(Err(
+            "gametest.registration-builder.setup-ticks not implemented".to_string(),
+        ))
     }
 
     async fn structure_location(
@@ -169,7 +196,9 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         _structure_location: BlockPos,
         _structure_dimension: Option<DimensionTypeOrId>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.registration-builder.structure-location not implemented".to_string()))
+        Ok(Err(
+            "gametest.registration-builder.structure-location not implemented".to_string(),
+        ))
     }
 
     async fn structure_name(
@@ -177,7 +206,9 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         _res: Resource<RegistrationBuilder>,
         _structure_name: String,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.registration-builder.structure-name not implemented".to_string()))
+        Ok(Err(
+            "gametest.registration-builder.structure-name not implemented".to_string(),
+        ))
     }
 
     async fn tag(
@@ -185,7 +216,9 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         _res: Resource<RegistrationBuilder>,
         _tag: String,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.registration-builder.tag not implemented".to_string()))
+        Ok(Err(
+            "gametest.registration-builder.tag not implemented".to_string()
+        ))
     }
 
     async fn drop(&mut self, _res: Resource<RegistrationBuilder>) -> wasmtime::Result<()> {
@@ -199,7 +232,9 @@ impl gametest::HostGameTestSequence for PluginHostState {
         _res: Resource<GameTestSequence>,
         _callback: VoidCallbackId,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.game-test-sequence.then-execute not implemented".to_string()))
+        Ok(Err(
+            "gametest.game-test-sequence.then-execute not implemented".to_string(),
+        ))
     }
 
     async fn then_execute_after(
@@ -208,7 +243,9 @@ impl gametest::HostGameTestSequence for PluginHostState {
         _delay_ticks: u32,
         _callback: VoidCallbackId,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.game-test-sequence.then-execute-after not implemented".to_string()))
+        Ok(Err(
+            "gametest.game-test-sequence.then-execute-after not implemented".to_string(),
+        ))
     }
 
     async fn then_execute_for(
@@ -217,7 +254,9 @@ impl gametest::HostGameTestSequence for PluginHostState {
         _tick_count: u32,
         _callback: VoidCallbackId,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.game-test-sequence.then-execute-for not implemented".to_string()))
+        Ok(Err(
+            "gametest.game-test-sequence.then-execute-for not implemented".to_string(),
+        ))
     }
 
     async fn then_fail(
@@ -225,7 +264,9 @@ impl gametest::HostGameTestSequence for PluginHostState {
         _res: Resource<GameTestSequence>,
         _error_message: String,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.game-test-sequence.then-fail not implemented".to_string()))
+        Ok(Err(
+            "gametest.game-test-sequence.then-fail not implemented".to_string()
+        ))
     }
 
     async fn then_idle(
@@ -233,11 +274,18 @@ impl gametest::HostGameTestSequence for PluginHostState {
         _res: Resource<GameTestSequence>,
         _delay_ticks: u32,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.game-test-sequence.then-idle not implemented".to_string()))
+        Ok(Err(
+            "gametest.game-test-sequence.then-idle not implemented".to_string()
+        ))
     }
 
-    async fn then_succeed(&mut self, _res: Resource<GameTestSequence>) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.game-test-sequence.then-succeed not implemented".to_string()))
+    async fn then_succeed(
+        &mut self,
+        _res: Resource<GameTestSequence>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        Ok(Err(
+            "gametest.game-test-sequence.then-succeed not implemented".to_string(),
+        ))
     }
 
     async fn then_wait(
@@ -245,7 +293,9 @@ impl gametest::HostGameTestSequence for PluginHostState {
         _res: Resource<GameTestSequence>,
         _callback: VoidCallbackId,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.game-test-sequence.then-wait not implemented".to_string()))
+        Ok(Err(
+            "gametest.game-test-sequence.then-wait not implemented".to_string()
+        ))
     }
 
     async fn then_wait_after(
@@ -254,7 +304,9 @@ impl gametest::HostGameTestSequence for PluginHostState {
         _delay_ticks: u32,
         _callback: VoidCallbackId,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.game-test-sequence.then-wait-after not implemented".to_string()))
+        Ok(Err(
+            "gametest.game-test-sequence.then-wait-after not implemented".to_string(),
+        ))
     }
 
     async fn drop(&mut self, _res: Resource<GameTestSequence>) -> wasmtime::Result<()> {
@@ -267,7 +319,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<Resource<Player>, String>> {
-        Ok(Err("gametest.simulated-player.as-player not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.as-player not implemented".to_string()
+        ))
     }
 
     async fn get_head_rotation(
@@ -293,11 +347,18 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _res: Resource<SimulatedPlayer>,
         _value: bool,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.set-is-sprinting not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.set-is-sprinting not implemented".to_string(),
+        ))
     }
 
-    async fn attack(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.attack not implemented".to_string()))
+    async fn attack(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<bool, String>> {
+        Ok(Err(
+            "gametest.simulated-player.attack not implemented".to_string()
+        ))
     }
 
     async fn attack_entity(
@@ -305,7 +366,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _res: Resource<SimulatedPlayer>,
         _entity: Resource<Entity>,
     ) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.attack-entity not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.attack-entity not implemented".to_string(),
+        ))
     }
 
     async fn break_block(
@@ -314,7 +377,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _block_location: BlockPos,
         _direction: Option<Direction>,
     ) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.break-block not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.break-block not implemented".to_string()
+        ))
     }
 
     async fn chat(
@@ -322,22 +387,36 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _res: Resource<SimulatedPlayer>,
         _message: String,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.chat not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.chat not implemented".to_string()
+        ))
     }
 
-    async fn disconnect(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.disconnect not implemented".to_string()))
+    async fn disconnect(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        Ok(Err(
+            "gametest.simulated-player.disconnect not implemented".to_string()
+        ))
     }
 
     async fn drop_selected_item(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.drop-selected-item not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.drop-selected-item not implemented".to_string(),
+        ))
     }
 
-    async fn fly(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.fly not implemented".to_string()))
+    async fn fly(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        Ok(Err(
+            "gametest.simulated-player.fly not implemented".to_string()
+        ))
     }
 
     async fn give_item(
@@ -346,15 +425,27 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _item_stack: Resource<ItemStack>,
         _select_slot: Option<bool>,
     ) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.give-item not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.give-item not implemented".to_string()
+        ))
     }
 
-    async fn glide(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.glide not implemented".to_string()))
+    async fn glide(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<bool, String>> {
+        Ok(Err(
+            "gametest.simulated-player.glide not implemented".to_string()
+        ))
     }
 
-    async fn interact(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.interact not implemented".to_string()))
+    async fn interact(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<bool, String>> {
+        Ok(Err(
+            "gametest.simulated-player.interact not implemented".to_string()
+        ))
     }
 
     async fn interact_with_block(
@@ -363,7 +454,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _block_location: BlockPos,
         _direction: Option<Direction>,
     ) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.interact-with-block not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.interact-with-block not implemented".to_string(),
+        ))
     }
 
     async fn interact_with_entity(
@@ -371,11 +464,18 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _res: Resource<SimulatedPlayer>,
         _entity: Resource<Entity>,
     ) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.interact-with-entity not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.interact-with-entity not implemented".to_string(),
+        ))
     }
 
-    async fn jump(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.jump not implemented".to_string()))
+    async fn jump(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<bool, String>> {
+        Ok(Err(
+            "gametest.simulated-player.jump not implemented".to_string()
+        ))
     }
 
     async fn look_at_block(
@@ -384,7 +484,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _block_location: BlockPos,
         _duration: Option<LookDuration>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.look-at-block not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.look-at-block not implemented".to_string(),
+        ))
     }
 
     async fn look_at_entity(
@@ -393,7 +495,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _entity: Resource<Entity>,
         _duration: Option<LookDuration>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.look-at-entity not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.look-at-entity not implemented".to_string(),
+        ))
     }
 
     async fn look_at_location(
@@ -402,7 +506,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _location: Position,
         _duration: Option<LookDuration>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.look-at-location not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.look-at-location not implemented".to_string(),
+        ))
     }
 
     async fn move_(
@@ -412,7 +518,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _north_south: f64,
         _speed: Option<f64>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.move not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.move not implemented".to_string()
+        ))
     }
 
     async fn move_relative(
@@ -422,7 +530,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _backward_forward: f64,
         _speed: Option<f64>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.move-relative not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.move-relative not implemented".to_string(),
+        ))
     }
 
     async fn move_to_block(
@@ -431,7 +541,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _block_location: BlockPos,
         _options: Option<MoveToOptions>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.move-to-block not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.move-to-block not implemented".to_string(),
+        ))
     }
 
     async fn move_to_location(
@@ -440,7 +552,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _location: Position,
         _options: Option<MoveToOptions>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.move-to-location not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.move-to-location not implemented".to_string(),
+        ))
     }
 
     async fn navigate_to_block(
@@ -449,7 +563,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _block_location: BlockPos,
         _speed: Option<f64>,
     ) -> wasmtime::Result<Result<NavigationResult, String>> {
-        Ok(Err("gametest.simulated-player.navigate-to-block not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.navigate-to-block not implemented".to_string(),
+        ))
     }
 
     async fn navigate_to_entity(
@@ -458,7 +574,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _entity: Resource<Entity>,
         _speed: Option<f64>,
     ) -> wasmtime::Result<Result<NavigationResult, String>> {
-        Ok(Err("gametest.simulated-player.navigate-to-entity not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.navigate-to-entity not implemented".to_string(),
+        ))
     }
 
     async fn navigate_to_location(
@@ -467,7 +585,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _location: Position,
         _speed: Option<f64>,
     ) -> wasmtime::Result<Result<NavigationResult, String>> {
-        Ok(Err("gametest.simulated-player.navigate-to-location not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.navigate-to-location not implemented".to_string(),
+        ))
     }
 
     async fn navigate_to_locations(
@@ -476,11 +596,18 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _locations: Vec<Position>,
         _speed: Option<f64>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.navigate-to-locations not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.navigate-to-locations not implemented".to_string(),
+        ))
     }
 
-    async fn respawn(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.respawn not implemented".to_string()))
+    async fn respawn(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<bool, String>> {
+        Ok(Err(
+            "gametest.simulated-player.respawn not implemented".to_string()
+        ))
     }
 
     async fn rotate_body(
@@ -488,7 +615,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _res: Resource<SimulatedPlayer>,
         _angle_in_degrees: f64,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.rotate-body not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.rotate-body not implemented".to_string()
+        ))
     }
 
     async fn set_body_rotation(
@@ -496,7 +625,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _res: Resource<SimulatedPlayer>,
         _angle_in_degrees: f64,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.set-body-rotation not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.set-body-rotation not implemented".to_string(),
+        ))
     }
 
     async fn set_item(
@@ -506,7 +637,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _slot: u8,
         _select_slot: Option<bool>,
     ) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.set-item not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.set-item not implemented".to_string()
+        ))
     }
 
     async fn start_build(
@@ -514,49 +647,90 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _res: Resource<SimulatedPlayer>,
         _slot: Option<u8>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.start-build not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.start-build not implemented".to_string()
+        ))
     }
 
     async fn stop_breaking_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.stop-breaking-block not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.stop-breaking-block not implemented".to_string(),
+        ))
     }
 
-    async fn stop_build(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.stop-build not implemented".to_string()))
+    async fn stop_build(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        Ok(Err(
+            "gametest.simulated-player.stop-build not implemented".to_string()
+        ))
     }
 
-    async fn stop_flying(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.stop-flying not implemented".to_string()))
+    async fn stop_flying(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        Ok(Err(
+            "gametest.simulated-player.stop-flying not implemented".to_string()
+        ))
     }
 
-    async fn stop_gliding(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.stop-gliding not implemented".to_string()))
+    async fn stop_gliding(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        Ok(Err(
+            "gametest.simulated-player.stop-gliding not implemented".to_string(),
+        ))
     }
 
-    async fn stop_interacting(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.stop-interacting not implemented".to_string()))
+    async fn stop_interacting(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        Ok(Err(
+            "gametest.simulated-player.stop-interacting not implemented".to_string(),
+        ))
     }
 
-    async fn stop_moving(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.stop-moving not implemented".to_string()))
+    async fn stop_moving(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        Ok(Err(
+            "gametest.simulated-player.stop-moving not implemented".to_string()
+        ))
     }
 
-    async fn stop_swimming(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.stop-swimming not implemented".to_string()))
+    async fn stop_swimming(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        Ok(Err(
+            "gametest.simulated-player.stop-swimming not implemented".to_string(),
+        ))
     }
 
     async fn stop_using_item(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<Option<Resource<ItemStack>>, String>> {
-        Ok(Err("gametest.simulated-player.stop-using-item not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.stop-using-item not implemented".to_string(),
+        ))
     }
 
-    async fn swim(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.simulated-player.swim not implemented".to_string()))
+    async fn swim(
+        &mut self,
+        _res: Resource<SimulatedPlayer>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        Ok(Err(
+            "gametest.simulated-player.swim not implemented".to_string()
+        ))
     }
 
     async fn use_item(
@@ -564,7 +738,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _res: Resource<SimulatedPlayer>,
         _item_stack: Resource<ItemStack>,
     ) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.use-item not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.use-item not implemented".to_string()
+        ))
     }
 
     async fn use_item_in_slot(
@@ -572,7 +748,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _res: Resource<SimulatedPlayer>,
         _slot: u8,
     ) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.use-item-in-slot not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.use-item-in-slot not implemented".to_string(),
+        ))
     }
 
     async fn use_item_in_slot_on_block(
@@ -583,7 +761,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _direction: Option<Direction>,
         _face_location: Option<Position>,
     ) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.use-item-in-slot-on-block not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.use-item-in-slot-on-block not implemented".to_string(),
+        ))
     }
 
     async fn use_item_on_block(
@@ -594,7 +774,9 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         _direction: Option<Direction>,
         _face_location: Option<Position>,
     ) -> wasmtime::Result<Result<bool, String>> {
-        Ok(Err("gametest.simulated-player.use-item-on-block not implemented".to_string()))
+        Ok(Err(
+            "gametest.simulated-player.use-item-on-block not implemented".to_string(),
+        ))
     }
 
     async fn drop(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<()> {
@@ -619,7 +801,9 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
         _is_present: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-block-present not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-block-present not implemented".to_string()
+        ))
     }
 
     async fn assert_block_state(
@@ -628,7 +812,9 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
         _callback: BlockPredicateCallbackId,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-block-state not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-block-state not implemented".to_string()
+        ))
     }
 
     async fn assert_can_reach_location(
@@ -638,7 +824,9 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
         _can_reach: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-can-reach-location not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-can-reach-location not implemented".to_string(),
+        ))
     }
 
     async fn assert_container_contains(
@@ -647,7 +835,9 @@ impl gametest::HostTest for PluginHostState {
         _item_stack: Resource<ItemStack>,
         _block_location: BlockPos,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-container-contains not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-container-contains not implemented".to_string(),
+        ))
     }
 
     async fn assert_container_empty(
@@ -655,7 +845,9 @@ impl gametest::HostTest for PluginHostState {
         _res: Resource<Test>,
         _block_location: BlockPos,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-container-empty not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-container-empty not implemented".to_string()
+        ))
     }
 
     async fn assert_entity_has_armor(
@@ -668,7 +860,9 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
         _has_armor: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-entity-has-armor not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-entity-has-armor not implemented".to_string()
+        ))
     }
 
     async fn assert_entity_has_component(
@@ -679,7 +873,9 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
         _has_component: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-entity-has-component not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-entity-has-component not implemented".to_string(),
+        ))
     }
 
     async fn assert_entity_instance_present(
@@ -689,7 +885,9 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
         _is_present: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-entity-instance-present not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-entity-instance-present not implemented".to_string(),
+        ))
     }
 
     async fn assert_entity_instance_present_in_area(
@@ -698,7 +896,9 @@ impl gametest::HostTest for PluginHostState {
         _entity: Resource<Entity>,
         _is_present: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-entity-instance-present-in-area not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-entity-instance-present-in-area not implemented".to_string(),
+        ))
     }
 
     async fn assert_entity_present(
@@ -709,7 +909,9 @@ impl gametest::HostTest for PluginHostState {
         _search_distance: Option<f64>,
         _is_present: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-entity-present not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-entity-present not implemented".to_string()
+        ))
     }
 
     async fn assert_entity_present_in_area(
@@ -718,7 +920,9 @@ impl gametest::HostTest for PluginHostState {
         _entity_type_identifier: String,
         _is_present: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-entity-present-in-area not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-entity-present-in-area not implemented".to_string(),
+        ))
     }
 
     async fn assert_entity_state(
@@ -728,7 +932,9 @@ impl gametest::HostTest for PluginHostState {
         _entity_type_identifier: String,
         _callback: EntityPredicateCallbackId,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-entity-state not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-entity-state not implemented".to_string()
+        ))
     }
 
     async fn assert_entity_touching(
@@ -738,7 +944,9 @@ impl gametest::HostTest for PluginHostState {
         _location: Position,
         _is_touching: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-entity-touching not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-entity-touching not implemented".to_string()
+        ))
     }
 
     async fn assert_is_waterlogged(
@@ -747,7 +955,9 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
         _is_waterlogged: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-is-waterlogged not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-is-waterlogged not implemented".to_string()
+        ))
     }
 
     async fn assert_item_entity_count_is(
@@ -758,7 +968,9 @@ impl gametest::HostTest for PluginHostState {
         _search_distance: f64,
         _count: u32,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-item-entity-count-is not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-item-entity-count-is not implemented".to_string(),
+        ))
     }
 
     async fn assert_item_entity_present(
@@ -769,7 +981,9 @@ impl gametest::HostTest for PluginHostState {
         _search_distance: Option<f64>,
         _is_present: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-item-entity-present not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-item-entity-present not implemented".to_string(),
+        ))
     }
 
     async fn assert_redstone_power(
@@ -778,7 +992,9 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
         _power: u32,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.assert-redstone-power not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.assert-redstone-power not implemented".to_string()
+        ))
     }
 
     async fn destroy_block(
@@ -787,10 +1003,16 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
         _drop_resources: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.destroy-block not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.destroy-block not implemented".to_string()
+        ))
     }
 
-    async fn fail(&mut self, _res: Resource<Test>, _error_message: String) -> wasmtime::Result<Result<(), String>> {
+    async fn fail(
+        &mut self,
+        _res: Resource<Test>,
+        _error_message: String,
+    ) -> wasmtime::Result<Result<(), String>> {
         Ok(Err("gametest.test.fail not implemented".to_string()))
     }
 
@@ -817,7 +1039,7 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
     ) -> wasmtime::Result<Result<FenceConnectivity, String>> {
         Ok(Err(
-            "gametest.test.get-fence-connectivity not implemented".to_string(),
+            "gametest.test.get-fence-connectivity not implemented".to_string()
         ))
     }
 
@@ -827,7 +1049,7 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
     ) -> wasmtime::Result<Result<Option<Resource<SculkSpreader>>, String>> {
         Ok(Err(
-            "gametest.test.get-sculk-spreader not implemented".to_string(),
+            "gametest.test.get-sculk-spreader not implemented".to_string()
         ))
     }
 
@@ -857,8 +1079,13 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn kill_all_entities(&mut self, _res: Resource<Test>) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.kill-all-entities not implemented".to_string()))
+    async fn kill_all_entities(
+        &mut self,
+        _res: Resource<Test>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        Ok(Err(
+            "gametest.test.kill-all-entities not implemented".to_string()
+        ))
     }
 
     async fn on_player_jump(
@@ -867,7 +1094,9 @@ impl gametest::HostTest for PluginHostState {
         _mob: Resource<Entity>,
         _jump_amount: f64,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.on-player-jump not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.on-player-jump not implemented".to_string()
+        ))
     }
 
     async fn press_button(
@@ -878,7 +1107,11 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.press-button not implemented".to_string()))
     }
 
-    async fn print(&mut self, _res: Resource<Test>, _text: String) -> wasmtime::Result<Result<(), String>> {
+    async fn print(
+        &mut self,
+        _res: Resource<Test>,
+        _text: String,
+    ) -> wasmtime::Result<Result<(), String>> {
         Ok(Err("gametest.test.print not implemented".to_string()))
     }
 
@@ -896,7 +1129,9 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
         _duration: u32,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.pulse-redstone not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.pulse-redstone not implemented".to_string()
+        ))
     }
 
     async fn relative_block_location(
@@ -924,7 +1159,9 @@ impl gametest::HostTest for PluginHostState {
         _res: Resource<Test>,
         _simulated_player: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.remove-simulated-player not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.remove-simulated-player not implemented".to_string()
+        ))
     }
 
     async fn rotate_direction(
@@ -953,7 +1190,9 @@ impl gametest::HostTest for PluginHostState {
         _delay_ticks: u32,
         _callback: VoidCallbackId,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.run-after-delay not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.run-after-delay not implemented".to_string()
+        ))
     }
 
     async fn run_at_tick_time(
@@ -962,7 +1201,9 @@ impl gametest::HostTest for PluginHostState {
         _tick: u32,
         _callback: VoidCallbackId,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.run-at-tick-time not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.run-at-tick-time not implemented".to_string()
+        ))
     }
 
     async fn run_on_finish(
@@ -970,7 +1211,9 @@ impl gametest::HostTest for PluginHostState {
         _res: Resource<Test>,
         _callback: VoidCallbackId,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.run-on-finish not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.run-on-finish not implemented".to_string()
+        ))
     }
 
     async fn set_block_permutation(
@@ -980,7 +1223,7 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
     ) -> wasmtime::Result<Result<(), String>> {
         Ok(Err(
-            "gametest.test.set-block-permutation not implemented".to_string(),
+            "gametest.test.set-block-permutation not implemented".to_string()
         ))
     }
 
@@ -990,7 +1233,9 @@ impl gametest::HostTest for PluginHostState {
         _block_type_id: String,
         _block_location: BlockPos,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.set-block-type not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.set-block-type not implemented".to_string()
+        ))
     }
 
     async fn set_fluid_container(
@@ -1000,7 +1245,7 @@ impl gametest::HostTest for PluginHostState {
         _type: FluidType,
     ) -> wasmtime::Result<Result<(), String>> {
         Ok(Err(
-            "gametest.test.set-fluid-container not implemented".to_string(),
+            "gametest.test.set-fluid-container not implemented".to_string()
         ))
     }
 
@@ -1029,7 +1274,7 @@ impl gametest::HostTest for PluginHostState {
         _location: Position,
     ) -> wasmtime::Result<Result<Resource<Entity>, String>> {
         Ok(Err(
-            "gametest.test.spawn-at-location not implemented".to_string(),
+            "gametest.test.spawn-at-location not implemented".to_string()
         ))
     }
 
@@ -1050,7 +1295,7 @@ impl gametest::HostTest for PluginHostState {
         _game_mode: Option<GameMode>,
     ) -> wasmtime::Result<Result<Resource<SimulatedPlayer>, String>> {
         Ok(Err(
-            "gametest.test.spawn-simulated-player not implemented".to_string(),
+            "gametest.test.spawn-simulated-player not implemented".to_string()
         ))
     }
 
@@ -1061,7 +1306,7 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
     ) -> wasmtime::Result<Result<Resource<Entity>, String>> {
         Ok(Err(
-            "gametest.test.spawn-without-behaviors not implemented".to_string(),
+            "gametest.test.spawn-without-behaviors not implemented".to_string()
         ))
     }
 
@@ -1092,7 +1337,9 @@ impl gametest::HostTest for PluginHostState {
         &mut self,
         _res: Resource<Test>,
     ) -> wasmtime::Result<Result<Resource<GameTestSequence>, String>> {
-        Ok(Err("gametest.test.start-sequence not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.start-sequence not implemented".to_string()
+        ))
     }
 
     async fn succeed(&mut self, _res: Resource<Test>) -> wasmtime::Result<Result<(), String>> {
@@ -1107,8 +1354,14 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.succeed-if not implemented".to_string()))
     }
 
-    async fn succeed_on_tick(&mut self, _res: Resource<Test>, _tick: u32) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.succeed-on-tick not implemented".to_string()))
+    async fn succeed_on_tick(
+        &mut self,
+        _res: Resource<Test>,
+        _tick: u32,
+    ) -> wasmtime::Result<Result<(), String>> {
+        Ok(Err(
+            "gametest.test.succeed-on-tick not implemented".to_string()
+        ))
     }
 
     async fn succeed_on_tick_when(
@@ -1117,7 +1370,9 @@ impl gametest::HostTest for PluginHostState {
         _tick: u32,
         _callback: VoidCallbackId,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.succeed-on-tick-when not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.succeed-on-tick-when not implemented".to_string()
+        ))
     }
 
     async fn succeed_when(
@@ -1135,7 +1390,9 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
         _is_present: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.succeed-when-block-present not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.succeed-when-block-present not implemented".to_string(),
+        ))
     }
 
     async fn succeed_when_entity_has_component(
@@ -1146,7 +1403,9 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
         _has_component: bool,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.succeed-when-entity-has-component not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.succeed-when-entity-has-component not implemented".to_string(),
+        ))
     }
 
     async fn succeed_when_entity_present(
@@ -1156,7 +1415,9 @@ impl gametest::HostTest for PluginHostState {
         _block_location: BlockPos,
         _is_present: Option<bool>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.succeed-when-entity-present not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.succeed-when-entity-present not implemented".to_string(),
+        ))
     }
 
     async fn trigger_internal_block_event(
@@ -1196,7 +1457,9 @@ impl gametest::HostTest for PluginHostState {
         _location: Position,
         _speed_modifier: Option<f64>,
     ) -> wasmtime::Result<Result<(), String>> {
-        Ok(Err("gametest.test.walk-to-location not implemented".to_string()))
+        Ok(Err(
+            "gametest.test.walk-to-location not implemented".to_string()
+        ))
     }
 
     async fn world_block_location(

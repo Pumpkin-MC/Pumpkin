@@ -111,7 +111,6 @@ missing_errors_doc = "allow"
 module_name_repetitions = "allow"
 struct_excessive_bools = "allow"
 unused_async_trait_impl = "allow"
-assert_is_empty = "allow"
 
 [workspace.package]
 version = "0.2.0+26.3-26.51"
