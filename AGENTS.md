@@ -15,7 +15,7 @@ Things worth knowing before you start:
 
 ## Layout
 
-Crates live in `crates/` and are named after what they do (`pumpkin-world` for chunks and generation, `pumpkin-protocol` for packets, and so on). `crates/pumpkin` is the server itself. `assets/` holds the extracted vanilla data and `tools/pumpkin-codegen` turns it into `pumpkin-data`. The server is GPL-3.0; the plugin crates have their own licenses (see Plugin API below).
+Crates live in `crates/` and are named after what they do (`pumpkin-world` for chunks and generation, `pumpkin-protocol` for packets, and so on). `crates/pumpkin-core` is the server itself, `crates/pumpkin-wasm-host` (with `-common`, `-v0_1` and `-v0_2`) is the Wasm plugin host, and `crates/pumpkin` is the binary that wires them together. `assets/` holds the extracted vanilla data and `tools/pumpkin-codegen` turns it into `pumpkin-data`. The server is GPL-3.0; the plugin crates have their own licenses (see Plugin API below).
 
 Some directories have their own `AGENTS.md` with details for that area. Read it when you work there:
 
@@ -60,7 +60,7 @@ Regenerate with `cargo run --locked -p pumpkin-codegen` and never edit `crates/p
 
 ## Where things get wired up
 
-Paths are under `crates/pumpkin/src/`. Forgetting to register a new implementation is a common mistake, so copy the wiring of the closest existing example.
+Paths are under `crates/pumpkin-core/src/`. Forgetting to register a new implementation is a common mistake, so copy the wiring of the closest existing example.
 
 | Adding | Example to follow | Register in |
 |:--|:--|:--|
@@ -83,7 +83,7 @@ This section covers changes to the plugin API inside this repo. How to write a p
 
 - **Mind the licenses.** The server is GPL-3.0, but `pumpkin-plugin-api`, `pumpkin-plugin-wit` and `pumpkin-plugin-utils` are MIT OR Apache-2.0. Don't move or copy server code into those crates. Plugin authors depend on them under the permissive license.
 - **The WIT is public.** `crates/pumpkin-plugin-wit` is mirrored to its own repository on every push to `master`, and bindings for other languages are generated from it. A breaking change there breaks SDKs outside this repo too. Prefer additive changes, and call out anything breaking in the PR.
-- **Change the layers together.** A WIT change also needs the host bindings (`pumpkin-host-bindings`), the host implementation (`plugin/loader/wasm/`), the SDK (`pumpkin-plugin-api`) and sometimes the runtime (`pumpkin-plugin-runtime`). Run `cargo run --locked -p pumpkin-codegen -- wit` afterwards, because WIT data and packet mappings are generated. Breaking changes to the native plugin API bump `PLUGIN_API_VERSION` in `plugin/mod.rs`.
+- **Change the layers together.** A WIT change also needs the host implementation for that API version (`crates/pumpkin-wasm-host-v0_1/` or `crates/pumpkin-wasm-host-v0_2/`, which each generate their own bindings; shared code is in `crates/pumpkin-wasm-host-common/`), the SDK (`pumpkin-plugin-api`) and sometimes the runtime (`pumpkin-plugin-runtime`). Run `cargo run --locked -p pumpkin-codegen -- wit` afterwards, because WIT data and packet mappings are generated. Breaking changes to the native plugin API bump `PLUGIN_API_VERSION` in `plugin/mod.rs`.
 - **Keep events working.** When you port gameplay that a plugin could want to observe or cancel, check whether an event for it already exists in `plugin/api/events/`. If it does, keep its contract: fire it at the same point existing callers do, fill in the same payload, and if it's cancellable, skip the effect when `cancelled()` returns true. Look at how the event is fired elsewhere before wiring it up. A port that skips an existing event silently breaks every plugin that relied on it.
 
 ## Code quality
