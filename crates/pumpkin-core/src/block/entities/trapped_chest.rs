@@ -35,4 +35,4 @@ impl_block_entity_for_chest!(TrappedChestBlockEntity);
 impl_inventory_for_chest!(TrappedChestBlockEntity);
 impl_clearable_for_chest!(TrappedChestBlockEntity);
 impl_viewer_count_listener_for_chest!(TrappedChestBlockEntity);
-impl_chest_helper_methods!(TrappedChestBlockEntity);
+impl_chest_helper_methods!(TrappedChestBlockEntity, pumpkin_data::Block::TRAPPED_CHEST);
