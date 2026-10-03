@@ -153,7 +153,7 @@ impl SkyLightHeightMigration {
     pub fn mark_quadrant_diverged(chunk: &ChunkData, local_x: i32, local_z: i32) {
         // Read-modify-write on one word: load and store would keep only one of two
         // quadrants discovered in the same moment.
-        let previous = chunk.sky_light_height_cache.fetch_update(
+        let previous = chunk.sky_light_height_cache.try_update(
             Ordering::Relaxed,
             Ordering::Relaxed,
             |cached| {
