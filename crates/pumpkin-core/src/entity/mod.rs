@@ -4161,7 +4161,8 @@ impl EntityBase for Entity {
                     self.extinguish();
                 }
             } else {
-                if fire_ticks % 20 == 0 {
+                // lava deals its own damage.
+                if fire_ticks % 20 == 0 && !self.touching_lava.load(Ordering::SeqCst) {
                     caller.damage(caller, 1.0, DamageType::ON_FIRE);
                 }
 
