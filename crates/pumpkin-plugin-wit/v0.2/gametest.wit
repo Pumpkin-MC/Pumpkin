@@ -221,7 +221,6 @@ interface gametest {
     }
 
     /// @minecraft/server-gametest.Test.
-    /// Failed assertions fail the test; errors report invalid input or unavailable game state.
     resource test {
         assert: func(condition: bool, message: string) -> result<_, string>;
         assert-block-present: func(
