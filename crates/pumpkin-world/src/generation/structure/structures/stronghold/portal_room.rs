@@ -2,7 +2,7 @@ use pumpkin_data::{
     Block, BlockState,
     block_properties::{
         EndPortalFrameLikeProperties, HorizontalFacing, OakFenceLikeProperties,
-        OakStairsLikeProperties,
+        WhiteWoolStairsLikeProperties,
     },
 };
 use pumpkin_nbt::compound::NbtCompound;
@@ -296,7 +296,7 @@ impl StructurePieceBase for PortalRoomPiece {
         );
 
         // Stairs Blocks
-        let mut props = OakStairsLikeProperties::default(&Block::STONE_BRICK_STAIRS);
+        let mut props = WhiteWoolStairsLikeProperties::default(&Block::STONE_BRICK_STAIRS);
         props.facing = HorizontalFacing::North;
         let stairs_n = BlockState::from_id(props.to_state_id(&Block::STONE_BRICK_STAIRS));
 

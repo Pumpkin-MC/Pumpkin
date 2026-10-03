@@ -1,8 +1,0 @@
-{
-  "type": "minecraft:smelting",
-  "experience": 0.1,
-  "ingredient": "minecraft:sea_pickle",
-  "result": {
-    "id": "minecraft:lime_dye"
-  }
-}

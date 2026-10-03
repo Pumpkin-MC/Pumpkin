@@ -1,0 +1,21 @@
+{
+  "additional_wants": {
+    "count": 5,
+    "id": "minecraft:arrow"
+  },
+  "given_item_modifier": {
+    "type": "minecraft:set_random_potion",
+    "options": "#minecraft:tradeable"
+  },
+  "gives": {
+    "count": 5,
+    "id": "minecraft:tipped_arrow"
+  },
+  "max_uses": 12,
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 2,
+    "id": "minecraft:emerald"
+  },
+  "xp": 30
+}

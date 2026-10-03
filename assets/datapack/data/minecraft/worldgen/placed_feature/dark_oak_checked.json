@@ -1,0 +1,12 @@
+{
+  "feature": "minecraft:dark_oak",
+  "placement": [
+    {
+      "type": "minecraft:block_predicate_filter",
+      "predicate": {
+        "type": "minecraft:would_survive",
+        "state": "minecraft:dark_oak_sapling"
+      }
+    }
+  ]
+}

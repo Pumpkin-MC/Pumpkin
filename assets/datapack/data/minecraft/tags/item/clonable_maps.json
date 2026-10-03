@@ -1,0 +1,21 @@
+{
+  "values": [
+    "minecraft:filled_map",
+    "minecraft:ocean_monument_map",
+    "minecraft:woodland_mansion_map",
+    "minecraft:buried_trial_chambers_map",
+    "minecraft:jungle_pyramid_map",
+    "minecraft:swamp_hut_map",
+    "minecraft:desert_village_map",
+    "minecraft:plains_village_map",
+    "minecraft:savanna_village_map",
+    "minecraft:snowy_village_map",
+    "minecraft:taiga_village_map",
+    "minecraft:buried_treasure_map",
+    "minecraft:buried_ancient_city_map",
+    "minecraft:buried_mineshaft_map",
+    "minecraft:desert_pyramid_map",
+    "minecraft:abandoned_camp_map",
+    "minecraft:warm_ocean_ruins_map"
+  ]
+}

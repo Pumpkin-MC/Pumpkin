@@ -37,11 +37,9 @@ default = [
     "noise_router",
     "composter",
     "flower_pot",
-    "fuels",
     "effect",
     "structures",
     "potion",
-    "recipe_remainder",
     "material_rule",
     "noise_settings",
     "advancement",
@@ -57,8 +55,52 @@ default = [
     "dye_color",
     "block_transformer",
     "trial_spawner",
+    "test_instance",
+    "painting_variant",
+    "context_provider",
+    "instrument",
+    "wolf_variant",
+    "cat_variant",
+    "frog_variant",
+    "trim_material",
+    "trim_pattern",
+    "banner_pattern",
+    "decorated_pot_pattern",
+    "chat_type",
+    "enchantment_provider",
+    "cow_variant",
+    "cow_sound_variant",
+    "pig_variant",
+    "pig_sound_variant",
+    "chicken_variant",
+    "chicken_sound_variant",
+    "cat_sound_variant",
+    "wolf_sound_variant",
+    "zombie_nautilus_variant",
 ]
 
+cow_variant = ["tag"]
+cow_sound_variant = ["sound"]
+pig_variant = ["tag"]
+pig_sound_variant = ["sound"]
+chicken_variant = ["tag"]
+chicken_sound_variant = ["sound"]
+cat_sound_variant = ["sound"]
+wolf_sound_variant = ["sound"]
+zombie_nautilus_variant = ["tag"]
+enchantment_provider = ["enchantment", "item", "tag"]
+instrument = ["sound"]
+wolf_variant = []
+cat_variant = []
+frog_variant = []
+trim_material = []
+trim_pattern = []
+banner_pattern = []
+decorated_pot_pattern = []
+chat_type = []
+context_provider = []
+painting_variant = []
+test_instance = []
 trial_spawner = []
 block_transformer = ["block", "sound", "world", "tag"]
 map_color = []
@@ -96,11 +138,9 @@ tag = []
 noise_router = []
 composter = []
 flower_pot = []
-fuels = []
 effect = []
 structures = []
 potion = ["potion_brewing"]
-recipe_remainder = []
 material_rule = []
 noise_settings = []
 chunk_gen_settings = ["noise_settings", "material_rule"]
@@ -120,21 +160,6 @@ message_type = []
 placed_feature = []
 configured_feature = []
 block = []
-item_id_remap = []
-entity_id_remap = []
-sound_id_remap = []
-particle_id_remap = []
-menu_id_remap = []
-recipe_serializer_id_remap = []
-argument_type_id_remap = []
-attribute_id_remap = []
-block_entity_type_id_remap = []
-custom_stat_id_remap = []
-data_component_type_id_remap = []
-enchantment_id_remap = []
-environment_attribute_id_remap = []
-painting_variant_id_remap = []
-slot_display_id_remap = []
 potion_brewing = []
 
 [dependencies]

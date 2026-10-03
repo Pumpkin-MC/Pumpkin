@@ -1,0 +1,31 @@
+{
+  "type": "minecraft:fallen_tree",
+  "log_decorators": [
+    {
+      "type": "minecraft:attached_to_logs",
+      "block_provider": {
+        "id": "minecraft:brown_mushroom"
+      },
+      "directions": [
+        "up"
+      ],
+      "probability": 0.1
+    },
+    {
+      "type": "minecraft:shelf_mushroom",
+      "probability": 0.8
+    }
+  ],
+  "log_length": {
+    "type": "minecraft:uniform",
+    "max_inclusive": 7,
+    "min_inclusive": 4
+  },
+  "stump_decorators": [],
+  "trunk_provider": {
+    "id": "minecraft:poplar_log",
+    "properties": {
+      "axis": "y"
+    }
+  }
+}

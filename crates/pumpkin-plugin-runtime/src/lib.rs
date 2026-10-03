@@ -595,6 +595,50 @@ mod tests {
             .expect("shutdown result");
     }
 
+    async fn explicit_discard_drains_accepted_work() {
+        let spawner = Arc::new(TestSpawner {
+            runtime: tokio::runtime::Handle::current(),
+        });
+        let executor = LegacyStore::start(test_store(), LegacySyncReentry::new(), spawner)
+            .await
+            .expect("start test Store driver");
+        let handle = executor.handle();
+        let started = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+
+        let call_handle = handle.clone();
+        let call_started = Arc::clone(&started);
+        let call_release = Arc::clone(&release);
+        let accepted = tokio::spawn(async move {
+            call_handle
+                .call(move |_| {
+                    Box::pin(async move {
+                        call_started.notify_one();
+                        call_release.notified().await;
+                        Ok(11u8)
+                    })
+                })
+                .await
+        });
+        started.notified().await;
+
+        executor.discard();
+        let rejected = handle
+            .call(|_| Box::pin(async move { Ok(()) }))
+            .await
+            .expect_err("discard should close admission");
+        assert!(rejected.to_string().contains("shutting down"));
+
+        release.notify_one();
+        assert_eq!(accepted.await.expect("accepted call task").unwrap(), 11);
+
+        let mut join = handle.driver_join();
+        join.wait()
+            .await
+            .expect("explicit discard should stop the driver cleanly");
+        assert_eq!(handle.state(), DriverState::Stopped);
+    }
+
     async fn owner_drop_drains_accepted_work() {
         let spawner = Arc::new(TestSpawner {
             runtime: tokio::runtime::Handle::current(),
@@ -1289,6 +1333,7 @@ mod tests {
         timeout(Duration::from_secs(10), async {
             shutdown_drains_accepted_calls_and_rejects_new_work().await;
             shutdown_waits_for_joined_store_background_tasks().await;
+            explicit_discard_drains_accepted_work().await;
             owner_drop_drains_accepted_work().await;
             shutdown_reentry_scenario().await;
         })

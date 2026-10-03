@@ -316,6 +316,7 @@ enum StoreMessage<T> {
 
 enum ControlMessage {
     Dropped,
+    Discarded,
 }
 
 type ReentrySender<T> = mpsc::Sender<Box<dyn GuestStoreJob<T>>>;
@@ -757,7 +758,7 @@ where
 {
     handle: StoreHandle<T, P>,
     control: mpsc::UnboundedSender<ControlMessage>,
-    shutdown_admitted: AtomicBool,
+    terminal_admitted: AtomicBool,
 }
 
 impl<T, P> StoreExecutor<T, P>
@@ -831,7 +832,7 @@ where
         Ok(Self {
             handle: StoreHandle { shared },
             control,
-            shutdown_admitted: AtomicBool::new(false),
+            terminal_admitted: AtomicBool::new(false),
         })
     }
 
@@ -843,6 +844,28 @@ where
     #[must_use]
     pub fn driver_join(&self) -> DriverJoin {
         self.handle.driver_join()
+    }
+
+    fn claim_terminal(&self) -> bool {
+        self.terminal_admitted
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+    }
+
+    /// Stops admission and drains accepted work without running a final Store
+    /// operation.
+    ///
+    /// This is intended for a Store whose owner was prepared but never admitted
+    /// to its higher-level lifecycle. Dropping an executor without either
+    /// calling this method or completing [`Self::shutdown`] remains an error.
+    pub fn discard(&self) {
+        if !self.claim_terminal() {
+            return;
+        }
+
+        self.handle.shared.accepting.store(false, Ordering::Release);
+
+        let _ = self.control.send(ControlMessage::Discarded);
     }
 }
 
@@ -885,8 +908,16 @@ where
             self.handle
                 .terminal_error("Wasm plugin store driver is not running")
         })?;
+
+        if !self.claim_terminal() {
+            drop(permit);
+            return Err(wasmtime::Error::msg(
+                "Already shutting down wasm plugin store",
+            ));
+        }
+
         self.handle.shared.accepting.store(false, Ordering::Release);
-        self.shutdown_admitted.store(true, Ordering::Release);
+
         permit.send(StoreMessage::Shutdown {
             job: Box::new(ShutdownStoreCall {
                 call,
@@ -936,7 +967,7 @@ where
     P: StorePolicy,
 {
     fn drop(&mut self) {
-        if self.shutdown_admitted.load(Ordering::Acquire)
+        if self.terminal_admitted.load(Ordering::Acquire)
             || !self.handle.shared.accepting.swap(false, Ordering::AcqRel)
         {
             return;
@@ -947,6 +978,18 @@ where
 }
 
 pub type LegacyStore<T> = StoreExecutor<T, LegacySyncReentry>;
+
+fn control_result(message: Option<&ControlMessage>) -> wasmtime::Result<()> {
+    match message {
+        Some(ControlMessage::Dropped) => Err(wasmtime::Error::msg(
+            "Wasm plugin store lifecycle control was dropped before shutdown",
+        )),
+        Some(ControlMessage::Discarded) => Ok(()),
+        None => Err(wasmtime::Error::msg(
+            "Wasm plugin store submission channel closed before shutdown",
+        )),
+    }
+}
 
 #[allow(clippy::too_many_lines)]
 async fn run_driver<T>(
@@ -972,7 +1015,7 @@ async fn run_driver<T>(
                     Some(()) = active_calls.next(), if !active_calls.is_empty() => {
                         continue;
                     }
-                    Some(ControlMessage::Dropped) = control.recv() => {
+                    Some(control_message) = control.recv() => {
                         loop_lifecycle.transition(DriverState::Draining);
                         receiver.close();
                         loop {
@@ -1008,19 +1051,18 @@ async fn run_driver<T>(
                         while active_calls.next().await.is_some() {}
                         loop_lifecycle.transition(DriverState::Stopping);
                         poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
-                        return Err(wasmtime::Error::msg(
-                            "Wasm plugin store lifecycle control was dropped before shutdown",
-                        ));
+                        return control_result(Some(&control_message));
                     }
                     message = receiver.recv() => message,
                 };
                 let Some(message) = message else {
+                    loop_lifecycle.transition(DriverState::Draining);
                     while active_calls.next().await.is_some() {}
+                    // The owner may have closed the submission channel while its control signal is still pending
+                    let control_message = control.recv().await;
                     loop_lifecycle.transition(DriverState::Stopping);
                     poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
-                    return Err(wasmtime::Error::msg(
-                        "Wasm plugin store submission channel closed before shutdown",
-                    ));
+                    return control_result(control_message.as_ref());
                 };
 
                 match message {
@@ -1107,4 +1149,59 @@ fn panic_message(payload: &(dyn Any + Send)) -> String {
         },
         |message| (*message).to_owned(),
     )
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use std::sync::Arc;
+
+    use tokio::{
+        sync::{mpsc, oneshot},
+        time::{Duration, timeout},
+    };
+    use wasmtime::{Config, Engine, Store};
+
+    use super::{ControlMessage, DriverState, Lifecycle, run_driver};
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn submission_close_waits_for_owner_control() {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        config.wasm_component_model_async(true);
+        config.concurrency_support(true);
+        let engine = Engine::new(&config).expect("test engine");
+        let store = Store::new(&engine, ());
+        let (sender, receiver) = mpsc::channel(1);
+        let (control_sender, control_receiver) = mpsc::unbounded_channel();
+        let lifecycle = Lifecycle::new();
+        let (ready_sender, ready) = oneshot::channel();
+        let driver = tokio::spawn(run_driver(
+            store,
+            receiver,
+            control_receiver,
+            Arc::clone(&lifecycle),
+            ready_sender,
+            "test",
+        ));
+
+        timeout(Duration::from_secs(10), async {
+            ready.await.expect("driver should become ready");
+            drop(sender);
+            while lifecycle.state() != DriverState::Draining {
+                tokio::task::yield_now().await;
+            }
+            assert!(control_sender.send(ControlMessage::Dropped).is_ok());
+            driver.await.expect("driver task should finish");
+        })
+        .await
+        .expect("owner control should stop the driver");
+
+        let mut join = lifecycle.subscribe();
+        let error = join
+            .wait()
+            .await
+            .expect_err("owner drop should fail the driver");
+        assert!(error.to_string().contains("control was dropped"));
+    }
 }

@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smelting",
+  "cookingtime": 200,
+  "experience": 1.0,
+  "ingredient": "minecraft:cactus",
+  "result": {
+    "id": "minecraft:green_dye"
+  }
+}

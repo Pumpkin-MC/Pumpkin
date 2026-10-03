@@ -392,7 +392,7 @@ impl Placer {
                                 pool_alias_lookup.lookup(&target_jigsaw_x.pool, random);
                             let child_pool = TemplatePool::discover(child_pool_name);
                             let child_pool_size =
-                                child_pool.as_ref().map_or(0, TemplatePool::get_max_size);
+                                child_pool.as_ref().map_or(0, |p| p.get_max_size());
                             let child_fallback_size = child_pool
                                 .as_ref()
                                 .and_then(|p| {
@@ -467,7 +467,7 @@ impl Placer {
                                         target_bb,
                                         depth as u32 + 1,
                                     ),
-                                    element: target_element.clone(),
+                                    element: target_element,
                                     pos: target_box_position,
                                     rotation: target_rotation,
                                     mirror: Mirror::None,
@@ -564,7 +564,7 @@ impl JigsawPlacement {
         let actual_start_pool_id = pool_alias_lookup.lookup(start_pool_id, &mut context.random);
         let pool = TemplatePool::discover(actual_start_pool_id)?;
         let center_rotation = Rotation::from_index(context.random.next_bounded_i32(4) as u8);
-        let center_element = pool.get_random_element(&mut context.random).clone();
+        let center_element = pool.get_random_element(&mut context.random);
         if center_element.is_empty() {
             return None;
         }

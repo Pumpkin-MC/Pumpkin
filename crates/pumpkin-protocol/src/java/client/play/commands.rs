@@ -251,13 +251,10 @@ impl ArgumentType {
     pub const SCORE_HOLDER_FLAG_ALLOW_MULTIPLE: u8 = 1;
 
     #[must_use]
-    pub fn to_id(&self, version: &JavaMinecraftVersion) -> i32 {
+    pub const fn to_id(&self, _version: &JavaMinecraftVersion) -> i32 {
         // SAFETY: Since Self is repr(u32), it is guaranteed to hold the discriminant in the first 4 bytes
         // See https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
-        let id = unsafe { *std::ptr::from_ref::<Self>(self).cast::<u32>() };
-
-        pumpkin_data::argument_type_id_remap::remap_argument_type_id_for_version(id, *version)
-            as i32
+        unsafe { *std::ptr::from_ref::<Self>(self).cast::<u32>() as i32 }
     }
 
     #[must_use]

@@ -1,6 +1,0 @@
-{
-  "exhaustion": 0.0,
-  "death_message_type": "fall_variants",
-  "message_id": "fall",
-  "scaling": "when_caused_by_living_non_player"
-}

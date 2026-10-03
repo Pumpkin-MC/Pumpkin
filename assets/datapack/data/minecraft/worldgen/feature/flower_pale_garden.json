@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:simple_block",
+  "schedule_tick": true,
+  "to_place": {
+    "id": "minecraft:closed_eyeblossom"
+  }
+}

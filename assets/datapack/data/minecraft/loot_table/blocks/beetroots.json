@@ -1,0 +1,59 @@
+{
+  "type": "minecraft:block",
+  "modifier": {
+    "type": "minecraft:explosion_decay"
+  },
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:alternatives",
+          "children": [
+            {
+              "type": "minecraft:item",
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:beetroots",
+                "state": {
+                  "age": "3"
+                }
+              },
+              "name": "minecraft:beetroot"
+            },
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:beetroot_seeds"
+            }
+          ]
+        }
+      ],
+      "rolls": 1
+    },
+    {
+      "condition": {
+        "type": "minecraft:match_block",
+        "blocks": "minecraft:beetroots",
+        "state": {
+          "age": "3"
+        }
+      },
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:apply_bonus",
+            "enchantment": "minecraft:fortune",
+            "formula": "minecraft:binomial_with_bonus_count",
+            "parameters": {
+              "extra": 3,
+              "probability": 0.5714286
+            }
+          },
+          "name": "minecraft:beetroot_seeds"
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:blocks/beetroots"
+}

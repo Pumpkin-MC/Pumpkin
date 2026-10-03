@@ -1,0 +1,55 @@
+{
+  "type": "minecraft:gift",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:alternatives",
+          "children": [
+            {
+              "type": "minecraft:item",
+              "condition": {
+                "type": "minecraft:entity_properties",
+                "entity": "this",
+                "predicate": {
+                  "minecraft:components": {
+                    "minecraft:chicken/variant": "minecraft:temperate"
+                  }
+                }
+              },
+              "name": "minecraft:egg"
+            },
+            {
+              "type": "minecraft:item",
+              "condition": {
+                "type": "minecraft:entity_properties",
+                "entity": "this",
+                "predicate": {
+                  "minecraft:components": {
+                    "minecraft:chicken/variant": "minecraft:warm"
+                  }
+                }
+              },
+              "name": "minecraft:brown_egg"
+            },
+            {
+              "type": "minecraft:item",
+              "condition": {
+                "type": "minecraft:entity_properties",
+                "entity": "this",
+                "predicate": {
+                  "minecraft:components": {
+                    "minecraft:chicken/variant": "minecraft:cold"
+                  }
+                }
+              },
+              "name": "minecraft:blue_egg"
+            }
+          ]
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:gameplay/chicken_lay"
+}

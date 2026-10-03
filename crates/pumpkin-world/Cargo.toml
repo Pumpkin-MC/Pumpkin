@@ -77,7 +77,15 @@ name = "chunk_gen_concurrent"
 harness = false
 
 [[bench]]
+name = "jigsaw"
+harness = false
+
+[[bench]]
 name = "noise_router"
+harness = false
+
+[[bench]]
+name = "template_pool"
 harness = false
 
 

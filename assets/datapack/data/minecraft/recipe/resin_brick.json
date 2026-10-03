@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smelting",
+  "cookingtime": 200,
+  "experience": 0.1,
+  "ingredient": "minecraft:resin_clump",
+  "result": {
+    "id": "minecraft:resin_brick"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:overlay",
+  "features": [
+    {
+      "feature": {
+        "type": "minecraft:simple_block",
+        "to_place": {
+          "id": "minecraft:horn_coral_block"
+        }
+      },
+      "placement": []
+    },
+    {
+      "feature": "minecraft:coral/block_decoration",
+      "placement": []
+    }
+  ]
+}
