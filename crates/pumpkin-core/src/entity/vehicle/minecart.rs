@@ -640,20 +640,20 @@ impl EntityBase for MinecartEntity {
                     }
                 }
             } else {
-                if !self_entity.has_passengers() && self.is_pushable() {
-                    let mut vel = self_entity.velocity.load();
-                    vel.x -= xa;
-                    vel.z -= za;
-                    self_entity.velocity.store(vel);
-                    self_entity.send_velocity();
-                }
+                // Vanilla `AbstractMinecart.push`
+                let mut vel = self_entity.velocity.load();
+                vel.x -= xa;
+                vel.z -= za;
+                self_entity.velocity.store(vel);
+                self_entity.send_velocity();
 
                 if !other_entity.has_passengers() && entity.is_pushable() {
                     let mut vel = other_entity.velocity.load();
                     vel.x += xa / 4.0;
                     vel.z += za / 4.0;
                     other_entity.velocity.store(vel);
-                    other_entity.send_velocity();
+                    // a pushed player predicts this itself.
+                    other_entity.velocity_dirty.store(true, Ordering::SeqCst);
                 }
             }
         }
@@ -772,43 +772,6 @@ impl EntityBase for MinecartEntity {
             }
             MinecartKind::Rideable(_) => RideableMinecart::interact(&self.vehicle.entity, player),
             MinecartKind::Tnt(_) | MinecartKind::Other => false,
-        }
-    }
-
-    fn on_player_collision(&self, player: &Arc<Player>) {
-        if self.vehicle.entity.has_passenger(player.entity_id()) {
-            return;
-        }
-
-        if player.is_spectator() {
-            return;
-        }
-
-        let player_pos = player.get_entity().pos.load();
-        let minecart_pos = self.vehicle.entity.pos.load();
-
-        let mut diff_x = minecart_pos.x - player_pos.x;
-        let mut diff_z = minecart_pos.z - player_pos.z;
-
-        let dist_sq = diff_x * diff_x + diff_z * diff_z;
-        if dist_sq > 0.0001 {
-            let dist = dist_sq.sqrt();
-            diff_x /= dist;
-            diff_z /= dist;
-
-            let push_force = 0.1;
-            let mut vel = self.vehicle.entity.velocity.load();
-            vel.x += diff_x * push_force;
-            vel.z += diff_z * push_force;
-
-            let horizontal_speed = vel.x.hypot(vel.z);
-            if horizontal_speed > 0.4 {
-                vel.x = (vel.x / horizontal_speed) * 0.4;
-                vel.z = (vel.z / horizontal_speed) * 0.4;
-            }
-
-            self.vehicle.entity.velocity.store(vel);
-            self.vehicle.entity.send_velocity();
         }
     }
 

@@ -3199,6 +3199,7 @@ impl LivingEntity {
                 let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
                 self.entity
                     .apply_knockback(knockback_after_resistance(0.4, resistance), dx, dz);
+                self.entity.mark_hurt();
             }
         }
 
@@ -3379,8 +3380,17 @@ impl EntityBase for LivingEntity {
         }
 
         // Coalesce velocity sends to once per tick.
-        if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+        if self.entity.sync_velocity.swap(false, Ordering::SeqCst) {
+            self.entity.velocity_dirty.store(false, Ordering::SeqCst);
             self.entity.send_velocity();
+        } else if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+            self.entity.send_velocity_to_watchers();
+            // Bedrock client does not predict actor pushes
+            if let Some(player) = caller.get_player()
+                && player.client.bedrock().is_some()
+            {
+                player.send_own_velocity(self.entity.velocity.load());
+            }
         }
 
         // Fetch supporting blocks for players or other entities

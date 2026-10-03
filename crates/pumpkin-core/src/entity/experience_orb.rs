@@ -102,6 +102,10 @@ impl EntityBase for ExperienceOrbEntity {
         &self.entity
     }
 
+    fn receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn on_player_collision(&self, player: &Arc<Player>) {
         if player.living_entity.health.load() > 0.0 {
             let can_pickup = if let Ok(mut delay) = player.experience_pick_up_delay.try_lock()

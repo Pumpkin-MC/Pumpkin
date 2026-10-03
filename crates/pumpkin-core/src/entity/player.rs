@@ -27,7 +27,7 @@ use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::client::update_abilities::{Ability, CUpdateAbilities};
 use pumpkin_protocol::bedrock::client::{
-    CommandPermissionLevel, PlayerPermissionLevel, SerializedAbilitiesData,
+    CSetActorMotion, CommandPermissionLevel, PlayerPermissionLevel, SerializedAbilitiesData,
 };
 use pumpkin_protocol::bedrock::client::{
     SerializedAbilitiesDataSerializedLayer,
@@ -2576,7 +2576,22 @@ impl Player {
             velocity = event.velocity;
         }
         self.living_entity.entity.set_velocity(velocity);
-        self.try_send_client_packet(&CEntityVelocity::new(self.entity_id().into(), velocity));
+    }
+
+    /// Velocity to the own client. For Bedrock -> tagged with the last processed input tick.
+    pub fn send_own_velocity(&self, velocity: Vector3<f64>) {
+        let tick = self
+            .client
+            .bedrock()
+            .map_or(0, |client| client.input_tick.load(Ordering::Relaxed));
+        self.try_enqueue_packet_editioned(
+            &CEntityVelocity::new(self.entity_id().into(), velocity),
+            &CSetActorMotion {
+                target_runtime_id: VarULong(self.entity_id() as u64),
+                motion: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+                tick: VarULong(tick),
+            },
+        );
     }
 
     pub fn apply_knockback(&self, strength: f64, x: f64, z: f64) {
@@ -6923,7 +6938,8 @@ impl EntityBase for Player {
     }
 
     fn is_pushable(&self) -> bool {
-        self.gamemode.load() != GameMode::Spectator && self.gamemode.load() != GameMode::Creative
+        // creative players get pushed too.
+        !self.is_spectator() && self.living_entity.is_pushable()
     }
 
     fn get_name(&self) -> TextComponent {
