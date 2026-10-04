@@ -1476,7 +1476,7 @@ impl Player {
         if is_mace_smash && victim.get_living_entity().is_some() {
             let attacker = &self.living_entity.entity;
             let velocity = attacker.velocity.load();
-            attacker.set_velocity(Vector3::new(velocity.x, f64::from(0.01f32), velocity.z));
+            self.set_velocity(Vector3::new(velocity.x, f64::from(0.01f32), velocity.z));
 
             let fall_distance = self.living_entity.fall_distance.load();
             let sound = if !victim_entity.on_ground.load(Ordering::Relaxed) {
