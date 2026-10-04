@@ -320,9 +320,6 @@ impl EntityBase for CushionEntity {
         if player.get_entity().is_sneaking() {
             return false;
         }
-        if player.get_entity().has_vehicle() {
-            return false;
-        }
         if !self
             .entity
             .passengers
@@ -340,6 +337,22 @@ impl EntityBase for CushionEntity {
         let Some(passenger) = world.get_player_by_id(player.entity_id()) else {
             return false;
         };
+
+        // Vanilla `startRiding` leaves the current vehicle first, so this switches seats.
+        let current_vehicle = player
+            .get_entity()
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if let Some(current_vehicle) = current_vehicle {
+            current_vehicle
+                .get_entity()
+                .remove_passenger(player.entity_id());
+            if player.get_entity().has_vehicle() {
+                return false;
+            }
+        }
 
         world.play_sound(
             Sound::EntityCushionSit,
