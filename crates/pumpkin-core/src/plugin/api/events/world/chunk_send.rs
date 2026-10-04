@@ -1,6 +1,8 @@
+use crate::net::chunk_sender::PreparedChunk;
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_macros::{Event, cancellable};
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::level::SyncChunk;
 use std::sync::Arc;
@@ -42,5 +44,23 @@ impl ChunkSend {
             }
         }
         valid_chunks
+    }
+
+    /// Blocking per-chunk fire for the tick -> removes cancelled chunks, returns their positions.
+    pub fn retain_blocking(
+        server: &Arc<Server>,
+        world: &Arc<World>,
+        chunks: &mut Vec<PreparedChunk>,
+    ) -> Vec<Vector2<i32>> {
+        let mut cancelled = Vec::new();
+        chunks.retain(|prepared| {
+            let mut event = Self::new(world.clone(), prepared.chunk.clone());
+            server.plugin_manager.fire_blocking(server, &mut event);
+            if event.cancelled {
+                cancelled.push(prepared.position);
+            }
+            !event.cancelled
+        });
+        cancelled
     }
 }

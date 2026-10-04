@@ -4663,7 +4663,7 @@ impl World {
             .level
             .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
             .await;
-        // A cancelled `ChunkSend` keeps the chunk pending -> the batch path sends it later.
+        // A cancelled `ChunkSend` keeps the chunk pending -> the batch path fires it again.
         if java_client
             .send_chunks(&[chunk])
             .await

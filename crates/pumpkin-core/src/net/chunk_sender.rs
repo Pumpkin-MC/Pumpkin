@@ -122,6 +122,32 @@ impl ChunkSender {
         delivered
     }
 
+    /// Cancelled `ChunkSend` before dispatch -> the client never gets it, so it stops being pending.
+    pub fn cancel_pending(
+        &mut self,
+        batch: &PreparedBatch,
+        current_epoch: u32,
+        cancelled: &[Vector2<i32>],
+    ) {
+        if current_epoch != batch.epoch_snapshot {
+            return;
+        }
+        for pos in cancelled {
+            self.pending_chunks.remove(pos);
+        }
+    }
+
+    /// Bedrock dispatch that never reached the client -> no longer held. A re-enqueue since
+    /// then holds a newer token and is kept.
+    pub fn cancel_delivery(&mut self, cancelled: &[(Vector2<i32>, u64)]) {
+        for &(pos, token) in cancelled {
+            if self.awaiting_delivery.get(&pos) == Some(&token) {
+                self.awaiting_delivery.remove(&pos);
+                self.sent_chunks.remove(&pos);
+            }
+        }
+    }
+
     #[must_use]
     pub fn sent_chunks_count(&self) -> usize {
         self.sent_chunks.len()
