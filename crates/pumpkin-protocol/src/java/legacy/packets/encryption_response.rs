@@ -11,8 +11,8 @@ impl<'a> LegacyRead<'a> for SEncryptionResponse {
         version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
         let shared_secret = read_encryption_buffer(&mut read, *version)?;
-        let verify_token = if version >= &JavaMinecraftVersion::V_1_19_3
-            && version < &JavaMinecraftVersion::V_1_20_2
+        let verify_token = if version >= &JavaMinecraftVersion::V_1_19
+            && version < &JavaMinecraftVersion::V_1_19_3
         {
             let has_verify_token = read.get_bool()?;
             if has_verify_token {
