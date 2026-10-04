@@ -375,15 +375,13 @@ mod override_tests {
     #[test]
     fn disabling_a_node_command_also_disables_its_aliases() {
         let mut commands = CommandsConfig::default();
-        // `help` is a node-based command with the aliases `h` and `?`.
-        disabled(&mut commands, "help");
+        disabled(&mut commands, "experience");
 
         let manager = PermissionManager::new();
         let dispatcher = default_dispatcher(&manager, &commands);
 
-        assert!(dispatcher.is_disabled("help"));
-        assert!(dispatcher.is_disabled("h"));
-        assert!(dispatcher.is_disabled("?"));
+        assert!(dispatcher.is_disabled("experience"));
+        assert!(dispatcher.is_disabled("xp"));
     }
 
     #[test]
@@ -461,5 +459,15 @@ mod override_tests {
             .get_permission("minecraft:command.gamemode")
             .expect("gamemode permission should be registered");
         assert_eq!(permission.default, PermissionDefault::Allow);
+    }
+
+    #[test]
+    fn version_is_an_alias_of_pumpkin() {
+        let manager = PermissionManager::new();
+        let dispatcher = default_dispatcher(&manager, &CommandsConfig::default());
+
+        assert!(dispatcher.has_command("version"));
+        assert_eq!(dispatcher.primary_command_name("version"), "pumpkin");
+        assert!(!dispatcher.has_command("ver"));
     }
 }
