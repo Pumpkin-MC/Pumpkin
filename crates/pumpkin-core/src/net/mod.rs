@@ -201,7 +201,9 @@ impl ClientPlatform {
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
         match self {
-            Self::Java(java) => java.try_enqueue_packet_data(packet_data),
+            Self::Java(java) => {
+                java.try_enqueue_packet_data(packet_data);
+            }
             Self::Bedrock(bedrock) => {
                 bedrock.try_enqueue_packet_data(packet_data);
             }

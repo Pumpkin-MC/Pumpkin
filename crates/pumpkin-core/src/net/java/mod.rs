@@ -367,22 +367,22 @@ impl JavaClient {
         let Ok(serialized) = rx.await else {
             return Vec::new();
         };
-        let sent_count = serialized.len();
-        if sent_count == 0 {
+        if serialized.is_empty() {
             return Vec::new();
         }
 
         self.send_packet(&CChunkBatchStart).await;
 
         // One FIFO per connection: batch start/data/end stay in enqueue order.
-        let mut sent = Vec::with_capacity(sent_count);
+        let mut sent = Vec::with_capacity(serialized.len());
         for (pos, chunk_data) in serialized {
             if self.send_packet_now_data(chunk_data).await {
                 sent.push(pos);
             }
         }
 
-        self.send_packet(&CChunkBatchEnd::new(sent_count as u16))
+        // Count only queued chunks -> a `PacketSentEvent` cancel drops one without closing.
+        self.send_packet(&CChunkBatchEnd::new(sent.len() as u16))
             .await;
         sent
     }
@@ -463,11 +463,12 @@ impl JavaClient {
         self.try_enqueue_packet_data(packet_data);
     }
 
-    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+    /// `false` when the packet was dropped instead (cancelled, closed, buffer full).
+    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) -> bool {
         let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data) else {
-            return;
+            return false;
         };
-        self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len);
+        self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len)
     }
 
     /// `false` once the writer is gone. Then the connection is closed.

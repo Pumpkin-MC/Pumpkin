@@ -360,35 +360,42 @@ impl ChunkSender {
         let mut dispatched_positions = Vec::with_capacity(encoded_chunks.len());
         let version = batch.target_version;
 
-        if version >= JavaMinecraftVersion::V_1_20_2
-            && let ClientPlatform::Java(java_client) = client
-        {
-            java_client.try_send_packet(&CChunkBatchStart);
-        }
+        let batch_client = match client {
+            ClientPlatform::Java(java_client) if version >= JavaMinecraftVersion::V_1_20_2 => {
+                java_client.try_send_packet(&CChunkBatchStart);
+                Some(java_client)
+            }
+            _ => None,
+        };
 
         for chunk in encoded_chunks {
-            if !self.pending_chunks.contains(&chunk.position) {
+            if !self.pending_chunks.remove(&chunk.position) {
                 continue;
             }
 
-            client.try_enqueue_packet(chunk.payload.clone());
-
-            self.pending_chunks.remove(&chunk.position);
-            self.sent_chunks.insert(chunk.position);
-            dispatched_positions.push(chunk.position);
+            // A dropped packet (e.g. cancelled `PacketSentEvent`) never reached the client.
+            let queued = match client {
+                ClientPlatform::Java(java_client) => {
+                    java_client.try_enqueue_packet_data(chunk.payload.clone())
+                }
+                ClientPlatform::Bedrock(_) => {
+                    client.try_enqueue_packet(chunk.payload.clone());
+                    true
+                }
+            };
+            if queued {
+                self.sent_chunks.insert(chunk.position);
+                dispatched_positions.push(chunk.position);
+            }
         }
 
         let sent_count = dispatched_positions.len();
-        if sent_count > 0 {
-            if version >= JavaMinecraftVersion::V_1_20_2
-                && let ClientPlatform::Java(java_client) = client
-            {
-                java_client.try_send_packet(&CChunkBatchEnd::new(sent_count as u16));
-                self.in_flight_batches = self.in_flight_batches.saturating_add(1);
-            }
-
-            self.send_quota -= sent_count as f32;
+        // A started batch is always closed -> the client acks every `CChunkBatchEnd`.
+        if let Some(java_client) = batch_client {
+            java_client.try_send_packet(&CChunkBatchEnd::new(sent_count as u16));
+            self.in_flight_batches = self.in_flight_batches.saturating_add(1);
         }
+        self.send_quota -= sent_count as f32;
 
         dispatched_positions
     }
