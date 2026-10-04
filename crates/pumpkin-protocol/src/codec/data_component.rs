@@ -2408,13 +2408,9 @@ impl DataComponentCodec<Self> for BlockEntityDataImpl {
             .ok_or_else(|| {
                 ReadingError::Message(format!("Unknown block entity type: {type_id}"))
             })?;
-        let Some(NbtTag::Compound(mut nbt)) =
-            seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?
-        else {
-            return Err(ReadingError::Message(
-                "Expected block entity compound".to_string(),
-            ));
-        };
+        let mut nbt = seq
+            .get_compound_nbt_with_version(&JavaMinecraftVersion::V_26_2)?
+            .ok_or_else(|| ReadingError::Message("Expected block entity compound".to_string()))?;
         nbt.put_string("id", format!("minecraft:{name}"));
         Ok(Self { nbt })
     }
@@ -2875,6 +2871,7 @@ mod tests {
             assert!(BlockEntityDataImpl::deserialize(&mut bytes.as_slice()).is_err());
         }
         assert!(BlockEntityDataImpl::deserialize(&mut [23, 0].as_slice()).is_err());
+        assert!(BlockEntityDataImpl::deserialize(&mut [23, 1, 0].as_slice()).is_err());
         let missing_type = BlockEntityDataImpl {
             nbt: pumpkin_nbt::compound::NbtCompound::new(),
         };
