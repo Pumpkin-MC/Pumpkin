@@ -36,6 +36,8 @@ pub mod enchantment;
 pub mod entity;
 pub mod events;
 pub mod forms;
+#[allow(clippy::unused_async_trait_impl)]
+pub mod gametest;
 pub mod generated_packets;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod gui;
