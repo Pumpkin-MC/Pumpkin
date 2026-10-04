@@ -250,6 +250,38 @@ impl wit::exports::pumpkin::plugin::metadata::Guest for Component {
     }
 }
 
+/// No gametest callbacks can be registered through this crate yet, so none are ever invoked.
+// TODO: dispatch to registered handlers once the gametest API is wrapped here.
+impl wit::exports::pumpkin::plugin::gametest_callbacks::Guest for Component {
+    fn invoke_void(_callback: wit::pumpkin::plugin::gametest::VoidCallbackId) {}
+
+    fn invoke_test(
+        _callback: wit::pumpkin::plugin::gametest::TestCallbackId,
+        _test: wit::pumpkin::plugin::gametest::Test,
+    ) {
+    }
+
+    async fn invoke_async_test(
+        _callback: wit::pumpkin::plugin::gametest::AsyncTestCallbackId,
+        _test: wit::pumpkin::plugin::gametest::Test,
+    ) {
+    }
+
+    fn invoke_block_predicate(
+        _callback: wit::pumpkin::plugin::gametest::BlockPredicateCallbackId,
+        _permutation: wit::pumpkin::plugin::gametest::BlockPermutation,
+    ) -> bool {
+        false
+    }
+
+    fn invoke_entity_predicate(
+        _callback: wit::pumpkin::plugin::gametest::EntityPredicateCallbackId,
+        _entity: &wit::pumpkin::plugin::world::Entity,
+    ) -> bool {
+        false
+    }
+}
+
 impl wit::Guest for Component {
     /// WIT entry point — delegates to [`Plugin::on_load`].
     fn on_load(context: Context) -> Result<(), String> {
