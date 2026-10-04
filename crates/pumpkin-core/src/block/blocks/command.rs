@@ -4,11 +4,11 @@ use super::redstone::block_receives_redstone_power;
 use crate::block::entities::{BlockEntity, command_block::CommandBlockEntity};
 use crate::command::CommandSender;
 use crate::entity::EntityBase;
-use crate::entity::player::Player;
 use crate::{
     block::{
         BlockBehaviour, BlockMetadata, CanPlaceAtArgs, NormalUseArgs, OnNeighborUpdateArgs,
-        OnPlaceArgs, OnScheduledTickArgs, PlacedArgs, registry::BlockActionResult,
+        OnPlaceArgs, OnScheduledTickArgs, PlacedArgs, PlayerPlacedArgs,
+        registry::BlockActionResult,
     },
     server::Server,
     world::World,
@@ -16,7 +16,6 @@ use crate::{
 
 use pumpkin_data::block_properties::{CommandBlockLikeProperties, Facing};
 use pumpkin_data::data_component_impl::BlockEntityDataImpl;
-use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, FacingExt, Rotation};
 use pumpkin_nbt::compound::NbtCompound;
 
@@ -27,53 +26,6 @@ use tracing::warn;
 pub struct CommandBlock;
 
 impl CommandBlock {
-    pub fn apply_item_data(world: &Arc<World>, player: &Player, pos: &BlockPos, stack: &ItemStack) {
-        if !player.can_use_game_master_blocks() {
-            return;
-        }
-        let Some(data) = stack.get_data_component::<BlockEntityDataImpl>() else {
-            return;
-        };
-        if data
-            .nbt
-            .get_string("id")
-            .is_none_or(|id| id != CommandBlockEntity::ID && id != "command_block")
-        {
-            return;
-        }
-        let Some(entity) = world.get_block_entity(pos) else {
-            return;
-        };
-        let Some(command_entity) = entity.as_any().downcast_ref::<CommandBlockEntity>() else {
-            return;
-        };
-        let was_auto = command_entity.auto.load(Ordering::Relaxed);
-        let mut nbt = NbtCompound::new();
-        command_entity.write_nbt(&mut nbt);
-        // Tagged items keep the block entity's default, not the feedback game rule.
-        nbt.put_bool("TrackOutput", true);
-        nbt.merge(&data.nbt);
-        let restored = Arc::new(CommandBlockEntity::from_nbt(&nbt, *pos));
-        world.add_block_entity(restored.clone());
-
-        let block = world.get_block(pos);
-        if !was_auto
-            && restored.auto.load(Ordering::Relaxed)
-            && !restored.powered.load(Ordering::Relaxed)
-            && block.id != Block::CHAIN_COMMAND_BLOCK.id
-        {
-            Self::mark_condition_met(world, &restored, pos);
-            world.schedule_block_tick(block, *pos, 1, TickPriority::Normal);
-        }
-        Self::update(
-            world,
-            block,
-            &restored,
-            pos,
-            block_receives_redstone_power(world, pos),
-        );
-    }
-
     fn get_relative_facing(
         world: &World,
         pos: &BlockPos,
@@ -382,6 +334,60 @@ impl BlockBehaviour for CommandBlock {
         }
 
         false
+    }
+
+    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
+        let PlayerPlacedArgs {
+            world,
+            player,
+            position: pos,
+            stack,
+            block,
+            ..
+        } = args;
+        if !player.can_use_game_master_blocks() {
+            return;
+        }
+        let Some(data) = stack.get_data_component::<BlockEntityDataImpl>() else {
+            return;
+        };
+        if data
+            .nbt
+            .get_string("id")
+            .is_none_or(|id| id != CommandBlockEntity::ID && id != "command_block")
+        {
+            return;
+        }
+        let Some(entity) = world.get_block_entity(pos) else {
+            return;
+        };
+        let Some(command_entity) = entity.as_any().downcast_ref::<CommandBlockEntity>() else {
+            return;
+        };
+        let was_auto = command_entity.auto.load(Ordering::Relaxed);
+        let mut nbt = NbtCompound::new();
+        command_entity.write_nbt(&mut nbt);
+        // Tagged items keep the block entity's default, not the feedback game rule.
+        nbt.put_bool("TrackOutput", true);
+        nbt.merge(&data.nbt);
+        let restored = Arc::new(CommandBlockEntity::from_nbt(&nbt, *pos));
+        world.add_block_entity(restored.clone());
+
+        if !was_auto
+            && restored.auto.load(Ordering::Relaxed)
+            && !restored.powered.load(Ordering::Relaxed)
+            && block.id != Block::CHAIN_COMMAND_BLOCK.id
+        {
+            Self::mark_condition_met(world, &restored, pos);
+            world.schedule_block_tick(block, *pos, 1, TickPriority::Normal);
+        }
+        Self::update(
+            world,
+            block,
+            &restored,
+            pos,
+            block_receives_redstone_power(world, pos),
+        );
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {
