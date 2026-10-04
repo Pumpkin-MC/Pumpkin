@@ -237,6 +237,22 @@ impl HopperBlockEntity {
             for i in 0..container.size() {
                 let mut item = container.get_stack(i);
                 if !item.is_empty() && container.can_transfer_to(self, i, &item) {
+                    // The hopper above can be picking up a whole dropped stack into this slot
+                    // right now, and writing back the remainder read above would erase it, so
+                    // take the item out and put it back on failure like `eject_items` does.
+                    if let Some(source) = container.as_any().downcast_ref::<Self>() {
+                        let Some(extraction) = source.take_one(i) else {
+                            continue;
+                        };
+                        if Self::add_one_item(source, self, &extraction.one_item) {
+                            return true;
+                        }
+                        if let Some(leftover) = source.put_back(i, extraction) {
+                            let pos = source.position.to_centered_f64();
+                            world.scatter_stack(pos.x, pos.y, pos.z, leftover);
+                        }
+                        continue;
+                    }
                     //TODO WorldlyContainer
                     let _backup = item.clone();
                     let one_item = item.split(1);
@@ -432,8 +448,8 @@ impl HopperBlockEntity {
         changed
     }
 
-    /// Vanilla `addItem(Container, Container, ItemStack, Direction)`: offers `stack` to each slot of
-    /// `to` in order and returns what didn't fit.
+    /// Vanilla `addItem(Container, Container, ItemStack, Direction)`: offers `stack` to each slot
+    /// of `to` in order and returns what didn't fit.
     fn add_item(
         from: Option<&dyn Inventory>,
         to: &dyn Inventory,
@@ -459,23 +475,21 @@ impl HopperBlockEntity {
             return stack;
         }
         let to_empty = to.is_empty();
-        let mut dst = to.get_stack(slot);
-        let success = if dst.is_empty() {
-            to.set_stack(
-                slot,
-                std::mem::replace(&mut stack, ItemStack::EMPTY.clone()),
-            );
-            true
-        } else if dst.item_count < dst.get_max_stack_size()
-            && dst.are_items_and_components_equal(&stack)
-        {
-            let count = (stack.get_max_stack_size() - dst.item_count).min(stack.item_count);
-            stack.decrement(count);
-            dst.increment(count);
-            to.set_stack(slot, dst);
-            true
+        let success = if let Some(hopper) = to.as_any().downcast_ref::<Self>() {
+            // One lock for read and write: a hopper inserting into the same slot at the same
+            // time would otherwise overwrite this insert with its stale result, or the reverse.
+            let mut items = hopper
+                .items
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            Self::merge_into_slot(&mut items[slot], &mut stack)
         } else {
-            false
+            let mut dst = to.get_stack(slot);
+            let success = Self::merge_into_slot(&mut dst, &mut stack);
+            if success {
+                to.set_stack(slot, dst);
+            }
+            success
         };
         if success {
             if to_empty
@@ -499,6 +513,24 @@ impl HopperBlockEntity {
             to.mark_dirty();
         }
         stack
+    }
+
+    /// The slot half of vanilla `tryMoveInItem`: fills an empty `dst` with `stack`, or tops `dst`
+    /// up from it. Returns whether anything moved.
+    fn merge_into_slot(dst: &mut ItemStack, stack: &mut ItemStack) -> bool {
+        if dst.is_empty() {
+            *dst = std::mem::replace(stack, ItemStack::EMPTY.clone());
+            true
+        } else if dst.item_count < dst.get_max_stack_size()
+            && dst.are_items_and_components_equal(stack)
+        {
+            let count = (stack.get_max_stack_size() - dst.item_count).min(stack.item_count);
+            stack.decrement(count);
+            dst.increment(count);
+            true
+        } else {
+            false
+        }
     }
 }
 
