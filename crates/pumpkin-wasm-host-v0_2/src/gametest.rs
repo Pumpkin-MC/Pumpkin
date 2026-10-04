@@ -10,7 +10,7 @@ use pumpkin_wasm_host_common::state::PluginHostState;
 use wasmtime::component::Resource;
 
 impl gametest::Host for PluginHostState {
-    async fn register(
+    fn register(
         &mut self,
         _test_class_name: String,
         _test_name: String,
@@ -19,7 +19,7 @@ impl gametest::Host for PluginHostState {
         Ok(Err("gametest.register not implemented".to_string()))
     }
 
-    async fn register_async(
+    fn register_async(
         &mut self,
         _test_class_name: String,
         _test_name: String,
@@ -28,7 +28,7 @@ impl gametest::Host for PluginHostState {
         Ok(Err("gametest.register-async not implemented".to_string()))
     }
 
-    async fn set_after_batch_callback(
+    fn set_after_batch_callback(
         &mut self,
         _batch_name: String,
         _batch_callback: VoidCallbackId,
@@ -38,7 +38,7 @@ impl gametest::Host for PluginHostState {
         ))
     }
 
-    async fn set_before_batch_callback(
+    fn set_before_batch_callback(
         &mut self,
         _batch_name: String,
         _batch_callback: VoidCallbackId,
@@ -48,7 +48,7 @@ impl gametest::Host for PluginHostState {
         ))
     }
 
-    async fn spawn_simulated_player(
+    fn spawn_simulated_player(
         &mut self,
         _location: DimensionLocation,
         _name: String,
@@ -61,13 +61,13 @@ impl gametest::Host for PluginHostState {
 }
 
 impl gametest::HostSculkSpreader for PluginHostState {
-    async fn get_max_charge(&mut self, _res: Resource<SculkSpreader>) -> wasmtime::Result<u32> {
+    fn get_max_charge(&mut self, _res: Resource<SculkSpreader>) -> wasmtime::Result<u32> {
         Err(wasmtime::Error::msg(
             "gametest.sculk-spreader.get-max-charge not implemented",
         ))
     }
 
-    async fn add_cursors_with_offset(
+    fn add_cursors_with_offset(
         &mut self,
         _res: Resource<SculkSpreader>,
         _offset: Vector3,
@@ -78,7 +78,7 @@ impl gametest::HostSculkSpreader for PluginHostState {
         ))
     }
 
-    async fn get_cursor_position(
+    fn get_cursor_position(
         &mut self,
         _res: Resource<SculkSpreader>,
         _index: u32,
@@ -88,7 +88,7 @@ impl gametest::HostSculkSpreader for PluginHostState {
         ))
     }
 
-    async fn get_number_of_cursors(
+    fn get_number_of_cursors(
         &mut self,
         _res: Resource<SculkSpreader>,
     ) -> wasmtime::Result<u32> {
@@ -97,19 +97,19 @@ impl gametest::HostSculkSpreader for PluginHostState {
         ))
     }
 
-    async fn get_total_charge(&mut self, _res: Resource<SculkSpreader>) -> wasmtime::Result<u32> {
+    fn get_total_charge(&mut self, _res: Resource<SculkSpreader>) -> wasmtime::Result<u32> {
         Err(wasmtime::Error::msg(
             "gametest.sculk-spreader.get-total-charge not implemented",
         ))
     }
 
-    async fn drop(&mut self, _res: Resource<SculkSpreader>) -> wasmtime::Result<()> {
+    fn drop(&mut self, _res: Resource<SculkSpreader>) -> wasmtime::Result<()> {
         Ok(())
     }
 }
 
 impl gametest::HostRegistrationBuilder for PluginHostState {
-    async fn batch(
+    fn batch(
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _batch_name: String,
@@ -119,7 +119,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         ))
     }
 
-    async fn max_attempts(
+    fn max_attempts(
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _attempt_count: u32,
@@ -129,7 +129,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         ))
     }
 
-    async fn max_ticks(
+    fn max_ticks(
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _tick_count: u32,
@@ -139,7 +139,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         ))
     }
 
-    async fn padding(
+    fn padding(
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _padding_blocks: u32,
@@ -149,7 +149,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         ))
     }
 
-    async fn required(
+    fn required(
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _is_required: bool,
@@ -159,7 +159,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         ))
     }
 
-    async fn required_successful_attempts(
+    fn required_successful_attempts(
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _attempt_count: u32,
@@ -170,7 +170,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         ))
     }
 
-    async fn rotate_test(
+    fn rotate_test(
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _rotate: bool,
@@ -180,7 +180,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         ))
     }
 
-    async fn setup_ticks(
+    fn setup_ticks(
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _tick_count: u32,
@@ -190,7 +190,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         ))
     }
 
-    async fn structure_location(
+    fn structure_location(
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _structure_location: BlockPos,
@@ -201,7 +201,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         ))
     }
 
-    async fn structure_name(
+    fn structure_name(
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _structure_name: String,
@@ -211,7 +211,7 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         ))
     }
 
-    async fn tag(
+    fn tag(
         &mut self,
         _res: Resource<RegistrationBuilder>,
         _tag: String,
@@ -221,13 +221,13 @@ impl gametest::HostRegistrationBuilder for PluginHostState {
         ))
     }
 
-    async fn drop(&mut self, _res: Resource<RegistrationBuilder>) -> wasmtime::Result<()> {
+    fn drop(&mut self, _res: Resource<RegistrationBuilder>) -> wasmtime::Result<()> {
         Ok(())
     }
 }
 
 impl gametest::HostGameTestSequence for PluginHostState {
-    async fn then_execute(
+    fn then_execute(
         &mut self,
         _res: Resource<GameTestSequence>,
         _callback: VoidCallbackId,
@@ -237,7 +237,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
         ))
     }
 
-    async fn then_execute_after(
+    fn then_execute_after(
         &mut self,
         _res: Resource<GameTestSequence>,
         _delay_ticks: u32,
@@ -248,7 +248,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
         ))
     }
 
-    async fn then_execute_for(
+    fn then_execute_for(
         &mut self,
         _res: Resource<GameTestSequence>,
         _tick_count: u32,
@@ -259,7 +259,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
         ))
     }
 
-    async fn then_fail(
+    fn then_fail(
         &mut self,
         _res: Resource<GameTestSequence>,
         _error_message: String,
@@ -269,7 +269,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
         ))
     }
 
-    async fn then_idle(
+    fn then_idle(
         &mut self,
         _res: Resource<GameTestSequence>,
         _delay_ticks: u32,
@@ -279,7 +279,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
         ))
     }
 
-    async fn then_succeed(
+    fn then_succeed(
         &mut self,
         _res: Resource<GameTestSequence>,
     ) -> wasmtime::Result<Result<(), String>> {
@@ -288,7 +288,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
         ))
     }
 
-    async fn then_wait(
+    fn then_wait(
         &mut self,
         _res: Resource<GameTestSequence>,
         _callback: VoidCallbackId,
@@ -298,7 +298,7 @@ impl gametest::HostGameTestSequence for PluginHostState {
         ))
     }
 
-    async fn then_wait_after(
+    fn then_wait_after(
         &mut self,
         _res: Resource<GameTestSequence>,
         _delay_ticks: u32,
@@ -309,13 +309,13 @@ impl gametest::HostGameTestSequence for PluginHostState {
         ))
     }
 
-    async fn drop(&mut self, _res: Resource<GameTestSequence>) -> wasmtime::Result<()> {
+    fn drop(&mut self, _res: Resource<GameTestSequence>) -> wasmtime::Result<()> {
         Ok(())
     }
 }
 
 impl gametest::HostSimulatedPlayer for PluginHostState {
-    async fn as_player(
+    fn as_player(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<Resource<Player>, String>> {
@@ -324,7 +324,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn get_head_rotation(
+    fn get_head_rotation(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Vector2> {
@@ -333,7 +333,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn get_is_sprinting(
+    fn get_is_sprinting(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<bool> {
@@ -342,7 +342,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn set_is_sprinting(
+    fn set_is_sprinting(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _value: bool,
@@ -352,7 +352,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn attack(
+    fn attack(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<bool, String>> {
@@ -361,7 +361,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn attack_entity(
+    fn attack_entity(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _entity: Resource<Entity>,
@@ -371,7 +371,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn break_block(
+    fn break_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _block_location: BlockPos,
@@ -382,7 +382,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn chat(
+    fn chat(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _message: String,
@@ -392,7 +392,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn disconnect(
+    fn disconnect(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<(), String>> {
@@ -401,7 +401,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn drop_selected_item(
+    fn drop_selected_item(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<bool, String>> {
@@ -410,7 +410,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn fly(
+    fn fly(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<(), String>> {
@@ -419,7 +419,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn give_item(
+    fn give_item(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _item_stack: Resource<ItemStack>,
@@ -430,7 +430,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn glide(
+    fn glide(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<bool, String>> {
@@ -439,7 +439,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn interact(
+    fn interact(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<bool, String>> {
@@ -448,7 +448,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn interact_with_block(
+    fn interact_with_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _block_location: BlockPos,
@@ -459,7 +459,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn interact_with_entity(
+    fn interact_with_entity(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _entity: Resource<Entity>,
@@ -469,7 +469,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn jump(
+    fn jump(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<bool, String>> {
@@ -478,7 +478,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn look_at_block(
+    fn look_at_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _block_location: BlockPos,
@@ -489,7 +489,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn look_at_entity(
+    fn look_at_entity(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _entity: Resource<Entity>,
@@ -500,7 +500,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn look_at_location(
+    fn look_at_location(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _location: Position,
@@ -511,7 +511,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn move_(
+    fn move_(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _west_east: f64,
@@ -523,7 +523,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn move_relative(
+    fn move_relative(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _left_right: f64,
@@ -535,7 +535,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn move_to_block(
+    fn move_to_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _block_location: BlockPos,
@@ -546,7 +546,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn move_to_location(
+    fn move_to_location(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _location: Position,
@@ -557,7 +557,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn navigate_to_block(
+    fn navigate_to_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _block_location: BlockPos,
@@ -568,7 +568,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn navigate_to_entity(
+    fn navigate_to_entity(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _entity: Resource<Entity>,
@@ -579,7 +579,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn navigate_to_location(
+    fn navigate_to_location(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _location: Position,
@@ -590,7 +590,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn navigate_to_locations(
+    fn navigate_to_locations(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _locations: Vec<Position>,
@@ -601,7 +601,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn respawn(
+    fn respawn(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<bool, String>> {
@@ -610,7 +610,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn rotate_body(
+    fn rotate_body(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _angle_in_degrees: f64,
@@ -620,7 +620,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn set_body_rotation(
+    fn set_body_rotation(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _angle_in_degrees: f64,
@@ -630,7 +630,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn set_item(
+    fn set_item(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _item_stack: Resource<ItemStack>,
@@ -642,7 +642,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn start_build(
+    fn start_build(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _slot: Option<u8>,
@@ -652,7 +652,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn stop_breaking_block(
+    fn stop_breaking_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<(), String>> {
@@ -661,7 +661,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn stop_build(
+    fn stop_build(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<(), String>> {
@@ -670,7 +670,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn stop_flying(
+    fn stop_flying(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<(), String>> {
@@ -679,7 +679,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn stop_gliding(
+    fn stop_gliding(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<(), String>> {
@@ -688,7 +688,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn stop_interacting(
+    fn stop_interacting(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<(), String>> {
@@ -697,7 +697,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn stop_moving(
+    fn stop_moving(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<(), String>> {
@@ -706,7 +706,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn stop_swimming(
+    fn stop_swimming(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<(), String>> {
@@ -715,7 +715,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn stop_using_item(
+    fn stop_using_item(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<Option<Resource<ItemStack>>, String>> {
@@ -724,7 +724,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn swim(
+    fn swim(
         &mut self,
         _res: Resource<SimulatedPlayer>,
     ) -> wasmtime::Result<Result<(), String>> {
@@ -733,7 +733,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn use_item(
+    fn use_item(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _item_stack: Resource<ItemStack>,
@@ -743,7 +743,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn use_item_in_slot(
+    fn use_item_in_slot(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _slot: u8,
@@ -753,7 +753,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn use_item_in_slot_on_block(
+    fn use_item_in_slot_on_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _slot: u8,
@@ -766,7 +766,7 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn use_item_on_block(
+    fn use_item_on_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
         _item_stack: Resource<ItemStack>,
@@ -779,13 +779,13 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    async fn drop(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<()> {
+    fn drop(&mut self, _res: Resource<SimulatedPlayer>) -> wasmtime::Result<()> {
         Ok(())
     }
 }
 
 impl gametest::HostTest for PluginHostState {
-    async fn assert(
+    fn assert(
         &mut self,
         _res: Resource<Test>,
         _condition: bool,
@@ -794,7 +794,7 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.assert not implemented".to_string()))
     }
 
-    async fn assert_block_present(
+    fn assert_block_present(
         &mut self,
         _res: Resource<Test>,
         _block_type_id: String,
@@ -806,7 +806,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_block_state(
+    fn assert_block_state(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -817,7 +817,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_can_reach_location(
+    fn assert_can_reach_location(
         &mut self,
         _res: Resource<Test>,
         _mob: Resource<Entity>,
@@ -829,7 +829,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_container_contains(
+    fn assert_container_contains(
         &mut self,
         _res: Resource<Test>,
         _item_stack: Resource<ItemStack>,
@@ -840,7 +840,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_container_empty(
+    fn assert_container_empty(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -850,7 +850,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_entity_has_armor(
+    fn assert_entity_has_armor(
         &mut self,
         _res: Resource<Test>,
         _entity_type_identifier: String,
@@ -865,7 +865,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_entity_has_component(
+    fn assert_entity_has_component(
         &mut self,
         _res: Resource<Test>,
         _entity_type_identifier: String,
@@ -878,7 +878,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_entity_instance_present(
+    fn assert_entity_instance_present(
         &mut self,
         _res: Resource<Test>,
         _entity: Resource<Entity>,
@@ -890,7 +890,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_entity_instance_present_in_area(
+    fn assert_entity_instance_present_in_area(
         &mut self,
         _res: Resource<Test>,
         _entity: Resource<Entity>,
@@ -901,7 +901,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_entity_present(
+    fn assert_entity_present(
         &mut self,
         _res: Resource<Test>,
         _entity_type_identifier: String,
@@ -914,7 +914,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_entity_present_in_area(
+    fn assert_entity_present_in_area(
         &mut self,
         _res: Resource<Test>,
         _entity_type_identifier: String,
@@ -925,7 +925,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_entity_state(
+    fn assert_entity_state(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -937,7 +937,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_entity_touching(
+    fn assert_entity_touching(
         &mut self,
         _res: Resource<Test>,
         _entity_type_identifier: String,
@@ -949,7 +949,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_is_waterlogged(
+    fn assert_is_waterlogged(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -960,7 +960,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_item_entity_count_is(
+    fn assert_item_entity_count_is(
         &mut self,
         _res: Resource<Test>,
         _item_type: ItemTypeOrId,
@@ -973,7 +973,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_item_entity_present(
+    fn assert_item_entity_present(
         &mut self,
         _res: Resource<Test>,
         _item_type: ItemTypeOrId,
@@ -986,7 +986,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn assert_redstone_power(
+    fn assert_redstone_power(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -997,7 +997,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn destroy_block(
+    fn destroy_block(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -1008,7 +1008,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn fail(
+    fn fail(
         &mut self,
         _res: Resource<Test>,
         _error_message: String,
@@ -1016,7 +1016,7 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.fail not implemented".to_string()))
     }
 
-    async fn fail_if(
+    fn fail_if(
         &mut self,
         _res: Resource<Test>,
         _callback: VoidCallbackId,
@@ -1024,7 +1024,7 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.fail-if not implemented".to_string()))
     }
 
-    async fn get_dimension(
+    fn get_dimension(
         &mut self,
         _res: Resource<Test>,
     ) -> wasmtime::Result<Resource<Dimension>> {
@@ -1033,7 +1033,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn get_fence_connectivity(
+    fn get_fence_connectivity(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -1043,7 +1043,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn get_sculk_spreader(
+    fn get_sculk_spreader(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -1053,13 +1053,13 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn get_test_direction(&mut self, _res: Resource<Test>) -> wasmtime::Result<Direction> {
+    fn get_test_direction(&mut self, _res: Resource<Test>) -> wasmtime::Result<Direction> {
         Err(wasmtime::Error::msg(
             "gametest.test.get-test-direction not implemented",
         ))
     }
 
-    async fn idle(
+    fn idle(
         &mut self,
         _res: Resource<Test>,
         _tick_delay: u32,
@@ -1067,19 +1067,19 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.idle not implemented".to_string()))
     }
 
-    async fn is_cleaning_up(&mut self, _res: Resource<Test>) -> wasmtime::Result<bool> {
+    fn is_cleaning_up(&mut self, _res: Resource<Test>) -> wasmtime::Result<bool> {
         Err(wasmtime::Error::msg(
             "gametest.test.is-cleaning-up not implemented",
         ))
     }
 
-    async fn is_completed(&mut self, _res: Resource<Test>) -> wasmtime::Result<bool> {
+    fn is_completed(&mut self, _res: Resource<Test>) -> wasmtime::Result<bool> {
         Err(wasmtime::Error::msg(
             "gametest.test.is-completed not implemented",
         ))
     }
 
-    async fn kill_all_entities(
+    fn kill_all_entities(
         &mut self,
         _res: Resource<Test>,
     ) -> wasmtime::Result<Result<(), String>> {
@@ -1088,7 +1088,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn on_player_jump(
+    fn on_player_jump(
         &mut self,
         _res: Resource<Test>,
         _mob: Resource<Entity>,
@@ -1099,7 +1099,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn press_button(
+    fn press_button(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -1107,7 +1107,7 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.press-button not implemented".to_string()))
     }
 
-    async fn print(
+    fn print(
         &mut self,
         _res: Resource<Test>,
         _text: String,
@@ -1115,7 +1115,7 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.print not implemented".to_string()))
     }
 
-    async fn pull_lever(
+    fn pull_lever(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -1123,7 +1123,7 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.pull-lever not implemented".to_string()))
     }
 
-    async fn pulse_redstone(
+    fn pulse_redstone(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -1134,7 +1134,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn relative_block_location(
+    fn relative_block_location(
         &mut self,
         _res: Resource<Test>,
         _world_block_location: BlockPos,
@@ -1144,7 +1144,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn relative_location(
+    fn relative_location(
         &mut self,
         _res: Resource<Test>,
         _world_location: Position,
@@ -1154,7 +1154,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn remove_simulated_player(
+    fn remove_simulated_player(
         &mut self,
         _res: Resource<Test>,
         _simulated_player: Resource<SimulatedPlayer>,
@@ -1164,7 +1164,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn rotate_direction(
+    fn rotate_direction(
         &mut self,
         _res: Resource<Test>,
         _direction: Direction,
@@ -1174,7 +1174,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn rotate_vector(
+    fn rotate_vector(
         &mut self,
         _res: Resource<Test>,
         _vector: Vector3,
@@ -1184,7 +1184,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn run_after_delay(
+    fn run_after_delay(
         &mut self,
         _res: Resource<Test>,
         _delay_ticks: u32,
@@ -1195,7 +1195,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn run_at_tick_time(
+    fn run_at_tick_time(
         &mut self,
         _res: Resource<Test>,
         _tick: u32,
@@ -1206,7 +1206,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn run_on_finish(
+    fn run_on_finish(
         &mut self,
         _res: Resource<Test>,
         _callback: VoidCallbackId,
@@ -1216,7 +1216,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn set_block_permutation(
+    fn set_block_permutation(
         &mut self,
         _res: Resource<Test>,
         _block_data: BlockPermutation,
@@ -1227,7 +1227,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn set_block_type(
+    fn set_block_type(
         &mut self,
         _res: Resource<Test>,
         _block_type_id: String,
@@ -1238,7 +1238,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn set_fluid_container(
+    fn set_fluid_container(
         &mut self,
         _res: Resource<Test>,
         _location: BlockPos,
@@ -1249,7 +1249,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn set_tnt_fuse(
+    fn set_tnt_fuse(
         &mut self,
         _res: Resource<Test>,
         _entity: Resource<Entity>,
@@ -1258,7 +1258,7 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.set-tnt-fuse not implemented".to_string()))
     }
 
-    async fn spawn(
+    fn spawn(
         &mut self,
         _res: Resource<Test>,
         _entity_type_identifier: String,
@@ -1267,7 +1267,7 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.spawn not implemented".to_string()))
     }
 
-    async fn spawn_at_location(
+    fn spawn_at_location(
         &mut self,
         _res: Resource<Test>,
         _entity_type_identifier: String,
@@ -1278,7 +1278,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn spawn_item(
+    fn spawn_item(
         &mut self,
         _res: Resource<Test>,
         _item_stack: Resource<ItemStack>,
@@ -1287,7 +1287,7 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.spawn-item not implemented".to_string()))
     }
 
-    async fn spawn_simulated_player(
+    fn spawn_simulated_player(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -1299,7 +1299,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn spawn_without_behaviors(
+    fn spawn_without_behaviors(
         &mut self,
         _res: Resource<Test>,
         _entity_type_identifier: String,
@@ -1310,7 +1310,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn spawn_without_behaviors_at_location(
+    fn spawn_without_behaviors_at_location(
         &mut self,
         _res: Resource<Test>,
         _entity_type_identifier: String,
@@ -1321,7 +1321,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn spread_from_face_toward_direction(
+    fn spread_from_face_toward_direction(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -1333,7 +1333,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn start_sequence(
+    fn start_sequence(
         &mut self,
         _res: Resource<Test>,
     ) -> wasmtime::Result<Result<Resource<GameTestSequence>, String>> {
@@ -1342,11 +1342,11 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn succeed(&mut self, _res: Resource<Test>) -> wasmtime::Result<Result<(), String>> {
+    fn succeed(&mut self, _res: Resource<Test>) -> wasmtime::Result<Result<(), String>> {
         Ok(Err("gametest.test.succeed not implemented".to_string()))
     }
 
-    async fn succeed_if(
+    fn succeed_if(
         &mut self,
         _res: Resource<Test>,
         _callback: VoidCallbackId,
@@ -1354,7 +1354,7 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.succeed-if not implemented".to_string()))
     }
 
-    async fn succeed_on_tick(
+    fn succeed_on_tick(
         &mut self,
         _res: Resource<Test>,
         _tick: u32,
@@ -1364,7 +1364,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn succeed_on_tick_when(
+    fn succeed_on_tick_when(
         &mut self,
         _res: Resource<Test>,
         _tick: u32,
@@ -1375,7 +1375,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn succeed_when(
+    fn succeed_when(
         &mut self,
         _res: Resource<Test>,
         _callback: VoidCallbackId,
@@ -1383,7 +1383,7 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.succeed-when not implemented".to_string()))
     }
 
-    async fn succeed_when_block_present(
+    fn succeed_when_block_present(
         &mut self,
         _res: Resource<Test>,
         _block_type_id: String,
@@ -1395,7 +1395,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn succeed_when_entity_has_component(
+    fn succeed_when_entity_has_component(
         &mut self,
         _res: Resource<Test>,
         _entity_type_identifier: String,
@@ -1408,7 +1408,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn succeed_when_entity_present(
+    fn succeed_when_entity_present(
         &mut self,
         _res: Resource<Test>,
         _entity_type_identifier: String,
@@ -1420,7 +1420,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn trigger_internal_block_event(
+    fn trigger_internal_block_event(
         &mut self,
         _res: Resource<Test>,
         _block_location: BlockPos,
@@ -1432,7 +1432,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn until(
+    fn until(
         &mut self,
         _res: Resource<Test>,
         _callback: VoidCallbackId,
@@ -1440,7 +1440,7 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.until not implemented".to_string()))
     }
 
-    async fn walk_to(
+    fn walk_to(
         &mut self,
         _res: Resource<Test>,
         _mob: Resource<Entity>,
@@ -1450,7 +1450,7 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.walk-to not implemented".to_string()))
     }
 
-    async fn walk_to_location(
+    fn walk_to_location(
         &mut self,
         _res: Resource<Test>,
         _mob: Resource<Entity>,
@@ -1462,7 +1462,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn world_block_location(
+    fn world_block_location(
         &mut self,
         _res: Resource<Test>,
         _relative_block_location: BlockPos,
@@ -1472,7 +1472,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn world_location(
+    fn world_location(
         &mut self,
         _res: Resource<Test>,
         _relative_location: Position,
@@ -1482,7 +1482,7 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    async fn drop(&mut self, _res: Resource<Test>) -> wasmtime::Result<()> {
+    fn drop(&mut self, _res: Resource<Test>) -> wasmtime::Result<()> {
         Ok(())
     }
 }
