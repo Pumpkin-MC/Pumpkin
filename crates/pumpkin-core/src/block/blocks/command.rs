@@ -17,7 +17,6 @@ use crate::{
 use pumpkin_data::block_properties::{CommandBlockLikeProperties, Facing};
 use pumpkin_data::data_component_impl::BlockEntityDataImpl;
 use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, FacingExt, Rotation};
-use pumpkin_nbt::compound::NbtCompound;
 
 use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
 use pumpkin_world::tick::TickPriority;
@@ -339,71 +338,46 @@ impl BlockBehaviour for CommandBlock {
     fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
         let PlayerPlacedArgs {
             world,
-            player,
             position: pos,
             stack,
             block,
             ..
         } = args;
-        if !player.can_use_game_master_blocks() {
-            return;
-        }
-        let Some(data) = stack.get_data_component::<BlockEntityDataImpl>() else {
-            return;
-        };
-        if data
-            .nbt
-            .get_string("id")
-            .is_none_or(|id| id != CommandBlockEntity::ID && id != "command_block")
-        {
-            return;
-        }
         let Some(entity) = world.get_block_entity(pos) else {
             return;
         };
         let Some(command_entity) = entity.as_any().downcast_ref::<CommandBlockEntity>() else {
             return;
         };
-        let was_auto = command_entity.auto.load(Ordering::Relaxed);
-        let mut nbt = NbtCompound::new();
-        command_entity.write_nbt(&mut nbt);
-        // Tagged items keep the block entity's default, not the feedback game rule.
-        nbt.put_bool("TrackOutput", true);
-        nbt.merge(&data.nbt);
-        let restored = Arc::new(CommandBlockEntity::from_nbt(&nbt, *pos));
-        world.add_block_entity(restored.clone());
-
-        if !was_auto
-            && restored.auto.load(Ordering::Relaxed)
-            && !restored.powered.load(Ordering::Relaxed)
+        if stack.get_data_component::<BlockEntityDataImpl>().is_none() {
+            command_entity.track_output.store(
+                world.level_info.load().game_rules.send_command_feedback,
+                Ordering::Relaxed,
+            );
+        }
+        if command_entity.auto.load(Ordering::Relaxed)
+            && !command_entity.powered.load(Ordering::Relaxed)
             && block.id != Block::CHAIN_COMMAND_BLOCK.id
         {
-            Self::mark_condition_met(world, &restored, pos);
+            Self::mark_condition_met(world, command_entity, pos);
             world.schedule_block_tick(block, *pos, 1, TickPriority::Normal);
         }
         Self::update(
             world,
             block,
-            &restored,
+            command_entity,
             pos,
             block_receives_redstone_power(world, pos),
         );
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {
-        {
-            let send_command_feedback = {
-                let game_rules = &args.world.level_info.load().game_rules;
-                game_rules.send_command_feedback
-            };
-
-            let entity = CommandBlockEntity::new(
-                *args.position,
-                send_command_feedback,
-                args.block.id == Block::CHAIN_COMMAND_BLOCK.id,
-            );
-            args.world.add_block_entity(Arc::new(entity));
-        }
+        let entity = CommandBlockEntity::new(
+            *args.position,
+            true,
+            args.block.id == Block::CHAIN_COMMAND_BLOCK.id,
+        );
+        args.world.add_block_entity(Arc::new(entity));
     }
 
     fn get_comparator_output(&self, args: crate::block::GetComparatorOutputArgs<'_>) -> Option<u8> {

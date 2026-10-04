@@ -804,8 +804,12 @@ impl BlockRegistry {
 
         let stack = player.inventory().get_stack_in_hand(hand);
         if placed_block.default_state.block_entity_type != u16::MAX
-            && let Some(block_entity) = world.get_block_entity(&final_block_pos)
+            && let Some(mut block_entity) = world.get_block_entity(&final_block_pos)
         {
+            if let Some(restored) = block_entity.load_item_data(player, &stack, new_state) {
+                world.add_block_entity(restored.clone());
+                block_entity = restored;
+            }
             block_entity.apply_item_components(&stack);
         }
 
