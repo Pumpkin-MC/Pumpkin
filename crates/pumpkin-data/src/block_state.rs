@@ -218,17 +218,23 @@ impl BlockState {
         &self,
         pos: &BlockPos,
     ) -> impl Iterator<Item = BoundingBox> + '_ {
-        let offset = Block::from_state_id(self.id).shape_offset_delta(pos);
-        let base_shapes = self
-            .outline_shapes
-            .iter()
-            .map(move |&id| COLLISION_SHAPES[id as usize].shift(offset));
-
         let water_shape = self
             .is_waterlogged()
             .then(|| BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0)));
 
-        base_shapes.chain(water_shape)
+        self.get_block_outline_shapes_without_fluid_at(pos)
+            .chain(water_shape)
+    }
+
+    /// Returns the block's outline with its position offset, excluding fluid.
+    pub fn get_block_outline_shapes_without_fluid_at(
+        &self,
+        pos: &BlockPos,
+    ) -> impl Iterator<Item = BoundingBox> + '_ {
+        let offset = Block::from_state_id(self.id).shape_offset_delta(pos);
+        self.outline_shapes
+            .iter()
+            .map(move |&id| COLLISION_SHAPES[id as usize].shift(offset))
     }
 
     #[must_use]

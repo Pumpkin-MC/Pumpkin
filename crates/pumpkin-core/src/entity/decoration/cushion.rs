@@ -3,11 +3,12 @@ use std::sync::{
     atomic::{AtomicU8, AtomicU32, Ordering},
 };
 
-use pumpkin_data::block_properties::blocks_movement;
+use pumpkin_data::Block;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::Block as BlockTag;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -16,6 +17,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::version::JavaMinecraftVersion;
 
+use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, living::LivingEntity};
 use crate::server::Server;
@@ -60,7 +62,7 @@ impl CushionEntity {
         BlockPos::iterate(search_box.min_block_pos(), search_box.max_block_pos()).any(|pos| {
             let state = world.get_block_state(&pos);
             state
-                .get_block_outline_shapes_at(&pos)
+                .get_block_outline_shapes_without_fluid_at(&pos)
                 .reduce(|bounds, shape| {
                     BoundingBox::new(
                         Vector3::new(
@@ -105,7 +107,37 @@ impl CushionEntity {
         let inner = bounding_box.contract_all(1.0e-7);
         BlockPos::iterate(inner.min_block_pos(), inner.max_block_pos()).all(|pos| {
             let (block, state) = world.get_block_and_state(&pos);
-            blocks_movement(state, block.id) && state.is_full_cube()
+            // These blocks override vanilla's default tag/full-cube predicate.
+            if [
+                Block::FARMLAND.id,
+                Block::DIRT_PATH.id,
+                Block::SOUL_SAND.id,
+                Block::MUD.id,
+            ]
+            .contains(&block.id)
+            {
+                return true;
+            }
+            if block.id.has_tag(BlockTag::MINECRAFT_LEAVES)
+                || block.id.has_tag(BlockTag::C_GLASS_BLOCKS)
+                || block.name.ends_with("copper_grate")
+                || block.id == Block::MANGROVE_ROOTS.id
+                || block.id == Block::MOVING_PISTON.id
+            {
+                return false;
+            }
+            if block.id.has_tag(BlockTag::MINECRAFT_SHULKER_BOXES) {
+                return world.get_block_entity(&pos).is_none_or(|entity| {
+                    entity
+                        .as_any()
+                        .downcast_ref::<ShulkerBoxBlockEntity>()
+                        .is_none_or(ShulkerBoxBlockEntity::is_closed)
+                });
+            }
+            state.is_full_cube()
+                && (block.id.has_tag(BlockTag::MINECRAFT_CAUSES_SUFFOCATION)
+                    || block.id == Block::PISTON.id
+                    || block.id == Block::STICKY_PISTON.id)
         })
     }
 
@@ -320,6 +352,15 @@ impl EntityBase for CushionEntity {
         if player.get_entity().is_sneaking() {
             return false;
         }
+        // Do not replace an unacknowledged teleport with another seat switch.
+        if player
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
+        {
+            return false;
+        }
         if !self
             .entity
             .passengers
@@ -354,13 +395,43 @@ impl EntityBase for CushionEntity {
             }
         }
 
+        self.entity
+            .add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
+        if !player
+            .get_entity()
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .is_some_and(|vehicle| vehicle.get_entity().entity_id == self.entity.entity_id)
+        {
+            return false;
+        }
+
+        // The player's vehicle attachment is 0.6 blocks above their feet.
+        let position = self.entity.pos.load()
+            + Vector3::new(
+                0.0,
+                f64::from(self.entity.entity_type.dimension[1]) - 0.6,
+                0.0,
+            );
+        let mut awaiting_teleport = player
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        player.get_entity().set_pos(position);
+        // The dismount teleport precedes the mount packet. Its acknowledgement
+        // must preserve the new riding position, not restore the old seat.
+        if let Some((_, target)) = awaiting_teleport.as_mut() {
+            *target = position;
+        }
+        drop(awaiting_teleport);
+
         world.play_sound(
             Sound::EntityCushionSit,
             SoundCategory::Blocks,
             &self.entity.pos.load(),
         );
-        self.entity
-            .add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
         true
     }
 

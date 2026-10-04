@@ -143,6 +143,13 @@ impl ItemBehaviour for CushionItem {
         _block: &Block,
         _server: &Server,
     ) -> BlockActionResult {
+        // Vanilla validates the hit relative to the clicked block's center.
+        if ![cursor_pos.x, cursor_pos.y, cursor_pos.z]
+            .into_iter()
+            .all(|coordinate| (f64::from(coordinate) - 0.5).abs() < 1.000_000_1)
+        {
+            return BlockActionResult::Fail;
+        }
         let world = player.world();
         let (face, click_y) =
             Self::recalculate_for_special_collision_shapes(&world, player, location, cursor_pos)
