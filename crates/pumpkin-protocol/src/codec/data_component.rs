@@ -2852,7 +2852,7 @@ mod tests {
         let mut payload = pumpkin_nbt::compound::NbtCompound::new();
         payload.put_string("Command", "say hello".to_string());
         let mut wire = vec![23];
-        wire.write_nbt(NbtTag::Compound(payload.clone()))?;
+        wire.write_nbt(NbtTag::Compound(payload))?;
         let decoded = BlockEntityDataImpl::deserialize(&mut wire.as_slice())?;
         assert_eq!(
             decoded.nbt.get_string("id"),
@@ -2862,13 +2862,7 @@ mod tests {
 
         let mut encoded = Vec::new();
         decoded.serialize(&mut encoded)?;
-        let mut input = encoded.as_slice();
-        assert_eq!(input.get_var_int()?.0, 23);
-        assert_eq!(
-            input.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?,
-            Some(NbtTag::Compound(payload))
-        );
-        assert!(input.is_empty());
+        assert_eq!(encoded, wire);
         Ok(())
     }
 
