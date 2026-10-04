@@ -29,6 +29,7 @@ use crate::entity::mob::breeze::BreezeEntity;
 use crate::entity::mob::cave_spider::CaveSpiderEntity;
 use crate::entity::mob::creaking::CreakingEntity;
 use crate::entity::mob::creeper::CreeperEntity;
+use crate::entity::mob::cube_mob::CubeMobEntity;
 use crate::entity::mob::elder_guardian::ElderGuardianEntity;
 use crate::entity::mob::enderman::EndermanEntity;
 use crate::entity::mob::endermite::EndermiteEntity;
@@ -38,7 +39,7 @@ use crate::entity::mob::giant::GiantEntity;
 use crate::entity::mob::guardian::GuardianEntity;
 use crate::entity::mob::hoglin::HoglinEntity;
 use crate::entity::mob::illusioner::IllusionerEntity;
-use crate::entity::mob::magma_cube::MagmaCubeEntity;
+use crate::entity::mob::magma_cube::MAGMA_CUBE;
 use crate::entity::mob::phantom::PhantomEntity;
 use crate::entity::mob::piglin::PiglinEntity;
 use crate::entity::mob::piglin_brute::PiglinBruteEntity;
@@ -50,9 +51,9 @@ use crate::entity::mob::skeleton::{
     bogged::BoggedSkeletonEntity, parched::ParchedSkeletonEntity, skeleton::SkeletonEntity,
     stray::StraySkeletonEntity, wither::WitherSkeletonEntity,
 };
-use crate::entity::mob::slime::SlimeEntity;
+use crate::entity::mob::slime::{SLIME, check_slime_spawn_rules};
 use crate::entity::mob::spider::SpiderEntity;
-use crate::entity::mob::sulfur_cube::SulfurCubeEntity;
+use crate::entity::mob::sulfur_cube::SULFUR_CUBE;
 use crate::entity::mob::vex::VexEntity;
 use crate::entity::mob::vindicator::VindicatorEntity;
 use crate::entity::mob::warden::WardenEntity;
@@ -162,8 +163,8 @@ pub fn from_type(
         id if id == EntityType::SPIDER.id => SpiderEntity::new(entity),
         id if id == EntityType::CAVE_SPIDER.id => CaveSpiderEntity::new(entity),
         id if id == EntityType::GHAST.id => GhastEntity::new(entity),
-        id if id == EntityType::MAGMA_CUBE.id => MagmaCubeEntity::new(entity),
-        id if id == EntityType::SULFUR_CUBE.id => SulfurCubeEntity::new(entity),
+        id if id == EntityType::MAGMA_CUBE.id => CubeMobEntity::new(entity, &MAGMA_CUBE),
+        id if id == EntityType::SULFUR_CUBE.id => CubeMobEntity::new(entity, &SULFUR_CUBE),
         id if id == EntityType::PHANTOM.id => PhantomEntity::new(entity),
         id if id == EntityType::WITCH.id => WitchEntity::new(entity),
         id if id == EntityType::PIGLIN.id => PiglinEntity::new(entity),
@@ -254,7 +255,7 @@ pub fn from_type(
         id if id == EntityType::SNOWBALL.id => Arc::new(SnowballEntity::new(entity)),
         id if id == EntityType::EGG.id => Arc::new(EggEntity::new(entity)),
         id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity),
-        id if id == EntityType::SLIME.id => SlimeEntity::new(entity),
+        id if id == EntityType::SLIME.id => CubeMobEntity::new(entity, &SLIME),
         id if id == EntityType::SHULKER.id => ShulkerEntity::new(entity),
         id if id == EntityType::SHULKER_BULLET.id => {
             // Shulker bullets are normally spawned by ShulkerEntity directly;
@@ -455,7 +456,7 @@ pub fn check_spawn_rules(
 
     // Slime
     if id == EntityType::SLIME.id {
-        return SlimeEntity::check_slime_spawn_rules(world, pos);
+        return check_slime_spawn_rules(world, pos);
     }
 
     // Nether Mobs: Hoglin, Piglin, Zombified Piglin

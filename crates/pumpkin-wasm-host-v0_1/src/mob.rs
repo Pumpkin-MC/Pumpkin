@@ -22,7 +22,6 @@ use crate::{
 };
 use pumpkin_core::entity::ai::goal::Goal;
 use pumpkin_core::entity::mob::Mob as InternalMob;
-use pumpkin_core::entity::mob::cube_mob::CubeMob;
 use pumpkin_core::entity::passive::tamable::TamableAnimal;
 use pumpkin_core::server::Server;
 use pumpkin_wasm_host_common::{plugin::WasmPlugin, state::PluginHostState};
@@ -669,7 +668,9 @@ impl HostMob for PluginHostState {
             }));
         }
 
-        if let Some(slime) = any.downcast_ref::<pumpkin_core::entity::mob::slime::SlimeEntity>() {
+        if let Some(slime) =
+            any.downcast_ref::<pumpkin_core::entity::mob::cube_mob::CubeMobEntity>()
+        {
             return Ok(WitMobData::Slime(WitSlimeData {
                 size: slime.get_size(),
             }));
@@ -813,7 +814,7 @@ impl HostMob for PluginHostState {
             }
             WitMobData::Slime(slime_data) => {
                 if let Some(slime) =
-                    any.downcast_ref::<pumpkin_core::entity::mob::slime::SlimeEntity>()
+                    any.downcast_ref::<pumpkin_core::entity::mob::cube_mob::CubeMobEntity>()
                 {
                     slime.set_size(slime_data.size, false);
                     return Ok(true);
