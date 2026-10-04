@@ -13,7 +13,7 @@ use pumpkin_util::math::subtract_angles;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::ai::control::{Control, MoveControlTrait};
-use crate::entity::ai::goal::active_target::ActiveTargetGoal;
+use crate::entity::ai::goal::active_target::{ActiveTargetGoal, TargetCondition};
 use crate::entity::ai::goal::{Controls, Goal, to_goal_ticks};
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::mob::{Mob, MobEntity};
@@ -97,7 +97,8 @@ pub fn register_hostile_goals(mob: &MobEntity) {
         .unwrap_or_else(PoisonError::into_inner);
     targets.add_goal(
         1,
-        ActiveTargetGoal::with_default(mob, &EntityType::PLAYER, true),
+        ActiveTargetGoal::with_default(mob, &EntityType::PLAYER, true)
+            .when(TargetCondition::MaxHeightDifference(4.0)),
     );
     targets.add_goal(
         3,
