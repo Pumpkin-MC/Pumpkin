@@ -229,7 +229,11 @@ pub fn stop_or_exit_server() {
 /// Runs one Java connection from handshake to disconnect: login, configuration, play, and the
 /// player save when they leave.
 pub async fn serve_java_connection(server: Arc<Server>, mut pending: PendingConnection) {
-    let login_result = pending.handle_login_sequence(&server).await;
+    // Stop waiting on a pending login once this server stops
+    let login_result = select! {
+        result = pending.handle_login_sequence(&server) => result,
+        () = server.stop_token.cancelled() => PacketHandlerResult::Stop,
+    };
 
     match login_result {
         PacketHandlerResult::Stop => {
