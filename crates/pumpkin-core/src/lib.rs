@@ -510,7 +510,9 @@ impl PumpkinServer {
     }
 
     pub async fn start(&self) {
-        if self.server.advanced_config.commands.use_console
+        // Console input belongs to the process, so an embedded server leaves it to the host
+        if self.standalone
+            && self.server.advanced_config.commands.use_console
             && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
         {
             if let Some(rl) = wrapper.take_readline() {
