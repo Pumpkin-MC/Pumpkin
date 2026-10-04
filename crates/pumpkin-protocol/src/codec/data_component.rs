@@ -2386,18 +2386,36 @@ impl DataComponentCodec<Self> for BucketEntityDataImpl {
 
 impl DataComponentCodec<Self> for BlockEntityDataImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))?;
-        seq.write_nbt(NbtTag::Compound(self.nbt.clone()))
+        let id = self.nbt.get_string("id").ok_or_else(|| {
+            WritingError::Message("Block entity data is missing its type".to_string())
+        })?;
+        let name = id.strip_prefix("minecraft:").unwrap_or(id);
+        let type_id = pumpkin_data::block_properties::BLOCK_ENTITY_TYPES
+            .iter()
+            .position(|entry| *entry == name)
+            .ok_or_else(|| WritingError::Message(format!("Unknown block entity type: {id}")))?;
+        seq.write_var_int(&VarInt(type_id as i32))?;
+        let mut nbt = self.nbt.clone();
+        nbt.child_tags.remove("id");
+        seq.write_nbt(NbtTag::Compound(nbt))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _type_id = seq.get_var_int()?;
-        let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
-        let nbt = if let Some(NbtTag::Compound(c)) = tag {
-            c
-        } else {
-            pumpkin_nbt::compound::NbtCompound::new()
+        let type_id = seq.get_var_int()?.0;
+        let name = usize::try_from(type_id)
+            .ok()
+            .and_then(|index| pumpkin_data::block_properties::BLOCK_ENTITY_TYPES.get(index))
+            .ok_or_else(|| {
+                ReadingError::Message(format!("Unknown block entity type: {type_id}"))
+            })?;
+        let Some(NbtTag::Compound(mut nbt)) =
+            seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?
+        else {
+            return Err(ReadingError::Message(
+                "Expected block entity compound".to_string(),
+            ));
         };
+        nbt.put_string("id", format!("minecraft:{name}"));
         Ok(Self { nbt })
     }
 }
@@ -2827,6 +2845,47 @@ impl DataComponentCodec<Self> for BreakSoundImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn block_entity_data_preserves_wire_type() -> Result<(), Box<dyn std::error::Error>> {
+        // Vanilla 26.3 sends command_block (registry ID 23), then NBT without an id tag.
+        let mut payload = pumpkin_nbt::compound::NbtCompound::new();
+        payload.put_string("Command", "say hello".to_string());
+        let mut wire = vec![23];
+        wire.write_nbt(NbtTag::Compound(payload.clone()))?;
+        let decoded = BlockEntityDataImpl::deserialize(&mut wire.as_slice())?;
+        assert_eq!(
+            decoded.nbt.get_string("id"),
+            Some("minecraft:command_block")
+        );
+        assert_eq!(decoded.nbt.get_string("Command"), Some("say hello"));
+
+        let mut encoded = Vec::new();
+        decoded.serialize(&mut encoded)?;
+        let mut input = encoded.as_slice();
+        assert_eq!(input.get_var_int()?.0, 23);
+        assert_eq!(
+            input.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?,
+            Some(NbtTag::Compound(payload))
+        );
+        assert!(input.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn block_entity_data_rejects_invalid_wire_data() -> Result<(), Box<dyn std::error::Error>> {
+        for type_id in [-1, i32::MAX] {
+            let mut bytes = Vec::new();
+            bytes.write_var_int(&VarInt(type_id))?;
+            assert!(BlockEntityDataImpl::deserialize(&mut bytes.as_slice()).is_err());
+        }
+        assert!(BlockEntityDataImpl::deserialize(&mut [23, 0].as_slice()).is_err());
+        let missing_type = BlockEntityDataImpl {
+            nbt: pumpkin_nbt::compound::NbtCompound::new(),
+        };
+        assert!(missing_type.serialize(&mut Vec::new()).is_err());
+        Ok(())
+    }
 
     fn textured_profile() -> ProfileImpl {
         ProfileImpl {

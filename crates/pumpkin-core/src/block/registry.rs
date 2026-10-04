@@ -803,7 +803,16 @@ impl BlockRegistry {
             && placed_block.default_state.block_entity_type != u16::MAX
             && let Some(block_entity) = world.get_block_entity(&final_block_pos)
         {
-            block_entity.apply_item_components(&player.inventory().get_stack_in_hand(hand));
+            let stack = player.inventory().get_stack_in_hand(hand);
+            block_entity.apply_item_components(&stack);
+            if matches!(
+                placed_block.id,
+                BlockId::COMMAND_BLOCK
+                    | BlockId::CHAIN_COMMAND_BLOCK
+                    | BlockId::REPEATING_COMMAND_BLOCK
+            ) {
+                CommandBlock::apply_item_data(&world, player, &final_block_pos, &stack);
+            }
         }
 
         self.player_placed(

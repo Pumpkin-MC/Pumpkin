@@ -129,6 +129,9 @@ pub trait BlockEntity: Any + Send + Sync {
     /// Copies the block entity's state on the item stack dropped for it.
     fn collect_item_components(&self, _stack: &mut ItemStack) {}
 
+    /// Copies current implicit components when picking the block with its data.
+    fn collect_implicit_components(&self, _stack: &mut ItemStack) {}
+
     /// Restores the state from the item stack the block was placed from.
     fn apply_item_components(&self, _stack: &ItemStack) {}
 
