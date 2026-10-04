@@ -545,7 +545,10 @@ impl PumpkinServer {
             }
         }
 
-        SERVER_IS_STOPPING.store(true, Ordering::Release);
+        // Process-wide flag, so only a standalone server marks the process as stopping
+        if self.standalone {
+            SERVER_IS_STOPPING.store(true, Ordering::Release);
+        }
 
         if let Some(crash_report) = CRASH_REPORT.get() {
             crash_report.print_to_console();
