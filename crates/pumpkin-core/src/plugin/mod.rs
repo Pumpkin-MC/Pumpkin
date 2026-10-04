@@ -191,7 +191,7 @@ pub enum PluginStatus {
     Loading,
     /// Unloaded on request
     Unloaded,
-    /// Turned off in the configuration, or a `.deactivated` file
+    /// Turned off in the configuration
     Disabled,
     /// Unsigned while `allow_unsigned` is off
     Unsigned,
@@ -258,7 +258,7 @@ fn push_unless_known(entries: &mut Vec<PluginEntry>, entry: PluginEntry) {
 /// Whether a file claims to be a plugin, by extension.
 fn is_plugin_file(path: &Path) -> bool {
     path.extension().is_some_and(|ext| {
-        ["wasm", "so", "dll", "dylib", "deactivated"]
+        ["wasm", "so", "dll", "dylib"]
             .iter()
             .any(|known| ext.eq_ignore_ascii_case(known))
     })
@@ -903,7 +903,6 @@ impl PluginManager {
                 .extension()
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("deactivated"))
             {
-                self.mark_inactive(&path, None, PluginStatus::Disabled);
                 continue;
             }
 
