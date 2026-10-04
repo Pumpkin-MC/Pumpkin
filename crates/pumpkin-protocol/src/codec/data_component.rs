@@ -2877,6 +2877,7 @@ mod tests {
         for type_id in [-1, i32::MAX] {
             let mut bytes = Vec::new();
             bytes.write_var_int(&VarInt(type_id))?;
+            bytes.write_nbt(NbtTag::Compound(pumpkin_nbt::compound::NbtCompound::new()))?;
             assert!(BlockEntityDataImpl::deserialize(&mut bytes.as_slice()).is_err());
         }
         assert!(BlockEntityDataImpl::deserialize(&mut [23, 0].as_slice()).is_err());
