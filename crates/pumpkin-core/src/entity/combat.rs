@@ -58,9 +58,11 @@ impl AttackType {
     }
 }
 
-/// Vanilla `MaceItem.canSmashAttack`.
+/// Checks smash eligibility, rejecting stale fall distance after a ground-only packet.
 pub fn can_smash_attack(attacker: &LivingEntity) -> bool {
-    attacker.fall_distance.load() > 1.5 && !attacker.entity.is_fall_flying()
+    attacker.fall_distance.load() > 1.5
+        && !attacker.entity.on_ground.load(Ordering::Relaxed)
+        && !attacker.entity.is_fall_flying()
 }
 
 /// Vanilla `MaceItem.getAttackDamageBonus`, before the enchantment part.
