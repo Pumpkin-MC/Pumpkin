@@ -397,13 +397,13 @@ impl EntityBase for CushionEntity {
 
         self.entity
             .add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
-        if !player
+        if player
             .get_entity()
             .vehicle
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
-            .is_some_and(|vehicle| vehicle.get_entity().entity_id == self.entity.entity_id)
+            .is_none_or(|vehicle| vehicle.get_entity().entity_id != self.entity.entity_id)
         {
             return false;
         }
