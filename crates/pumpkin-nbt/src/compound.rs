@@ -205,6 +205,18 @@ impl NbtCompound {
         );
     }
 
+    /// Copies `other`'s tags into this compound, merging nested compounds (vanilla `CompoundTag.merge`).
+    pub fn merge(&mut self, other: &Self) {
+        for (name, tag) in &other.child_tags {
+            match (tag, self.child_tags.get_mut(name)) {
+                (NbtTag::Compound(from), Some(NbtTag::Compound(into))) => into.merge(from),
+                _ => {
+                    self.child_tags.insert(name.clone(), tag.clone());
+                }
+            }
+        }
+    }
+
     /// Returns the named byte value, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_byte(&self, name: &str) -> Option<i8> {
