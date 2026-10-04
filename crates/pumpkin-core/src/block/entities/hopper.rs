@@ -475,6 +475,8 @@ impl HopperBlockEntity {
             return stack;
         }
         let to_empty = to.is_empty();
+        // Vanilla `Container.getMaxStackSize(ItemStack)`, which `setItem` limits the slot to.
+        let max_count = to.get_max_count_per_stack().min(stack.get_max_stack_size());
         let success = if let Some(hopper) = to.as_any().downcast_ref::<Self>() {
             // One lock for read and write: a hopper inserting into the same slot at the same
             // time would otherwise overwrite this insert with its stale result, or the reverse.
@@ -482,10 +484,10 @@ impl HopperBlockEntity {
                 .items
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            Self::merge_into_slot(&mut items[slot], &mut stack)
+            Self::merge_into_slot(&mut items[slot], &mut stack, max_count)
         } else {
             let mut dst = to.get_stack(slot);
-            let success = Self::merge_into_slot(&mut dst, &mut stack);
+            let success = Self::merge_into_slot(&mut dst, &mut stack, max_count);
             if success {
                 to.set_stack(slot, dst);
             }
@@ -515,16 +517,20 @@ impl HopperBlockEntity {
         stack
     }
 
-    /// The slot half of vanilla `tryMoveInItem`: fills an empty `dst` with `stack`, or tops `dst`
-    /// up from it. Returns whether anything moved.
-    fn merge_into_slot(dst: &mut ItemStack, stack: &mut ItemStack) -> bool {
+    /// The slot half of vanilla `tryMoveInItem`: fills an empty `dst` from `stack`, or tops `dst`
+    /// up from it, up to `max_count`. Returns whether anything moved.
+    ///
+    /// Vanilla's `setItem` drops whatever is over the limit; here it stays in `stack`.
+    fn merge_into_slot(dst: &mut ItemStack, stack: &mut ItemStack, max_count: u8) -> bool {
         if dst.is_empty() {
-            *dst = std::mem::replace(stack, ItemStack::EMPTY.clone());
+            *dst = if stack.item_count > max_count {
+                stack.split(max_count)
+            } else {
+                std::mem::replace(stack, ItemStack::EMPTY.clone())
+            };
             true
-        } else if dst.item_count < dst.get_max_stack_size()
-            && dst.are_items_and_components_equal(stack)
-        {
-            let count = (stack.get_max_stack_size() - dst.item_count).min(stack.item_count);
+        } else if dst.item_count < max_count && dst.are_items_and_components_equal(stack) {
+            let count = (max_count - dst.item_count).min(stack.item_count);
             stack.decrement(count);
             dst.increment(count);
             true
@@ -773,5 +779,18 @@ mod tests {
         assert_eq!(hopper.get_stack(0).item_count, 64);
         assert_eq!(leftover.get_item().id, Item::DIAMOND.id);
         assert_eq!(leftover.item_count, 6);
+    }
+
+    /// A stack over the item's limit, like one loaded from NBT, fills a slot only up to that limit.
+    #[test]
+    fn add_item_splits_an_oversized_stack_across_slots() {
+        let hopper = hopper_holding(ItemStack::EMPTY.clone());
+
+        let leftover =
+            HopperBlockEntity::add_item(None, &hopper, ItemStack::new(99, &Item::DIAMOND));
+
+        assert!(leftover.is_empty());
+        assert_eq!(hopper.get_stack(0).item_count, 64);
+        assert_eq!(hopper.get_stack(1).item_count, 35);
     }
 }
