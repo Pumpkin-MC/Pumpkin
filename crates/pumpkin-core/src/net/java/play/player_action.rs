@@ -46,19 +46,6 @@ impl JavaClient {
                         }
                     }
 
-                    if block == &pumpkin_data::Block::NOTE_BLOCK {
-                        let props =
-                            pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
-                                state.id,
-                            );
-                        crate::block::blocks::note::NoteBlock::play_note(&props, &world, &position);
-                        player.increment_stat(
-                            StatisticCategory::Custom,
-                            CustomStatistic::PlayNoteblock as i32,
-                            1,
-                        );
-                    }
-
                     let inventory = player.inventory();
                     let held = inventory.held_item();
                     if !server.item_registry.can_mine(held.item, player) {
@@ -93,6 +80,9 @@ impl JavaClient {
                         Ordering::Relaxed,
                     );
                     if !state.is_air() {
+                        server
+                            .block_registry
+                            .attack(&world, block, state, &position, player);
                         let speed = block::calc_block_breaking(player, state, block);
                         // Instant break
                         if speed >= 1.0 {

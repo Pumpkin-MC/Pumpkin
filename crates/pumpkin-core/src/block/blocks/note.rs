@@ -1,6 +1,6 @@
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
+    AttackArgs, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
     UseWithItemArgs,
 };
 use pumpkin_data::BlockStateId;
@@ -103,6 +103,16 @@ impl BlockBehaviour for NoteBlock {
         );
 
         BlockActionResult::Success
+    }
+
+    fn attack(&self, args: AttackArgs<'_>) {
+        let note_props = NoteBlockLikeProperties::from_state_id(args.state.id);
+        Self::play_note(&note_props, args.world, args.position);
+        args.player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Custom,
+            pumpkin_data::statistic::CustomStatistic::PlayNoteblock as i32,
+            1,
+        );
     }
 
     fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {

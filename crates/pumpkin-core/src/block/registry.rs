@@ -204,7 +204,7 @@ use super::blocks::plant::crop::gourds::attached_stem::AttachedStemBlock;
 use super::blocks::plant::crop::gourds::stem::StemBlock;
 use super::fluid::FluidBehaviour;
 use super::{
-    BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs, EmitsRedstonePowerArgs, ExplodeArgs,
+    AttackArgs, BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs, EmitsRedstonePowerArgs, ExplodeArgs,
     GetRedstonePowerArgs, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
     OnPlaceArgs, OnStateReplacedArgs, OnSyncedBlockEventArgs, PlacedArgs, PlayerPlacedArgs,
     PrepareArgs, UseWithItemArgs,
@@ -1215,6 +1215,26 @@ impl BlockRegistry {
             );
         } else {
             stop_vertical_movement_after_fall(entity);
+        }
+    }
+
+    pub fn attack(
+        &self,
+        world: &Arc<World>,
+        block: &Block,
+        state: &BlockState,
+        position: &BlockPos,
+        player: &Arc<Player>,
+    ) {
+        let pumpkin_block = self.get_pumpkin_block(block.id);
+        if let Some(pumpkin_block) = pumpkin_block {
+            pumpkin_block.attack(AttackArgs {
+                world,
+                block,
+                state,
+                position,
+                player,
+            });
         }
     }
 
