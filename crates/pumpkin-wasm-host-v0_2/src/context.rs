@@ -1427,7 +1427,7 @@ impl pumpkin::plugin::context::Host for PluginHostState {}
 
 impl pumpkin::plugin::context::HostContext for PluginHostState {
     #[allow(clippy::too_many_lines)]
-    async fn register_event(
+    fn register_event(
         &mut self,
         context: Resource<WitContext>,
         handler_id: u32,
@@ -1681,7 +1681,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         Ok(())
     }
 
-    async fn register_command(
+    fn register_command(
         &mut self,
         context: Resource<WitContext>,
         command: Resource<Command>,
@@ -1702,7 +1702,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         Ok(())
     }
 
-    async fn register_java_versions(
+    fn register_java_versions(
         &mut self,
         context: Resource<WitContext>,
         versions: Vec<pumpkin::plugin::player::JavaMinecraftVersion>,
@@ -1715,7 +1715,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         Ok(())
     }
 
-    async fn register_permission(
+    fn register_permission(
         &mut self,
         context: Resource<WitContext>,
         permission: Permission,
@@ -1748,21 +1748,15 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         Ok(context_res.register_permission(util_permission))
     }
 
-    async fn get_data_folder(
-        &mut self,
-        _context: Resource<WitContext>,
-    ) -> wasmtime::Result<String> {
+    fn get_data_folder(&mut self, _context: Resource<WitContext>) -> wasmtime::Result<String> {
         Ok("data".to_string())
     }
 
-    async fn get_server(
-        &mut self,
-        context: Resource<WitContext>,
-    ) -> wasmtime::Result<Resource<Server>> {
+    fn get_server(&mut self, context: Resource<WitContext>) -> wasmtime::Result<Resource<Server>> {
         self.add(self.get(&context)?.server.clone())
     }
 
-    async fn get_marketplace_metadata(
+    fn get_marketplace_metadata(
         &mut self,
         _context: Resource<WitContext>,
     ) -> wasmtime::Result<Option<MarketplaceMetadata>> {
@@ -1783,7 +1777,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             }))
     }
 
-    async fn drop(&mut self, rep: Resource<WitContext>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<WitContext>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
 }

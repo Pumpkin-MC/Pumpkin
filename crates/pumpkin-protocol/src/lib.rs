@@ -28,7 +28,6 @@ pub mod java;
 pub mod packet;
 #[cfg(feature = "query")]
 pub mod query;
-pub mod rcon;
 pub mod ser;
 pub mod serial;
 

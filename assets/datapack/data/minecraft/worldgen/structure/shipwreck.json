@@ -1,7 +1,0 @@
-{
-  "type": "minecraft:shipwreck",
-  "biomes": "#minecraft:has_structure/shipwreck",
-  "is_beached": false,
-  "spawn_overrides": {},
-  "step": "surface_structures"
-}
