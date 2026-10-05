@@ -1,10 +1,15 @@
 use core::f32;
 use std::sync::{
     Arc,
-    atomic::{AtomicU32, Ordering},
+    atomic::{AtomicI32, AtomicU32, Ordering},
 };
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::{
+    damage::DamageType,
+    entity::EntityType,
+    tag::{self, Taggable},
+};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{server::Server, world::World};
@@ -14,17 +19,20 @@ use super::{Entity, EntityBase, living::LivingEntity, player::Player};
 pub struct ExperienceOrbEntity {
     entity: Entity,
     amount: u32,
+    health: AtomicI32,
     orb_age: AtomicU32,
 }
 
 impl ExperienceOrbEntity {
     const AIR_DRAG: f32 = 0.98;
+    const DEFAULT_HEALTH: i32 = 5;
 
     pub fn new(entity: Entity, amount: u32) -> Self {
         entity.yaw.store(rand::random::<f32>() * 360.0);
         Self {
             entity,
             amount,
+            health: AtomicI32::new(Self::DEFAULT_HEALTH),
             orb_age: AtomicU32::new(0),
         }
     }
@@ -99,6 +107,18 @@ impl ExperienceOrbEntity {
 }
 
 impl EntityBase for ExperienceOrbEntity {
+    fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_short("Health", self.health.load(Ordering::Relaxed) as i16);
+    }
+
+    fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        self.health.store(
+            nbt.get_short("Health")
+                .map_or(Self::DEFAULT_HEALTH, i32::from),
+            Ordering::Relaxed,
+        );
+    }
+
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = &self.entity;
         entity.tick(caller, server);
@@ -145,6 +165,56 @@ impl EntityBase for ExperienceOrbEntity {
 
     fn get_entity(&self) -> &Entity {
         &self.entity
+    }
+
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        if self.entity.is_invulnerable_to(&damage_type)
+            || (damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FIRE)
+                && (self.entity.entity_type.fire_immune
+                    || self.entity.fire_immune.load(Ordering::Relaxed)))
+        {
+            return false;
+        }
+
+        let mut event = crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
+            self.entity.entity_id,
+            damage_type,
+            amount,
+        );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled {
+            return false;
+        }
+
+        self.entity.velocity_dirty.store(true, Ordering::Relaxed);
+        let mut health = self.health.load(Ordering::Relaxed);
+        loop {
+            let remaining = (health as f32 - event.damage) as i32;
+            match self.health.compare_exchange_weak(
+                health,
+                remaining,
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => {
+                    if remaining <= 0 {
+                        self.entity.remove();
+                    }
+                    return true;
+                }
+                Err(current) => health = current,
+            }
+        }
     }
 
     fn on_player_collision(&self, player: &Arc<Player>) {
