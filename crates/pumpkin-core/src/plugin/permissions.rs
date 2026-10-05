@@ -70,6 +70,11 @@ pub const SYS_INFO_OS: &str = "sys.info.os";
 /// Custom items take network ids that connected clients have to know about.
 pub const REGISTRY_ITEMS: &str = "registry.items";
 
+/// Allows the plugin to register custom blocks (and block tags) while the server starts.
+///
+/// Custom blocks take block and block state ids that connected clients have to know about.
+pub const REGISTRY_BLOCKS: &str = "registry.blocks";
+
 #[must_use]
 pub fn get_permission_description(permission: &str) -> Option<&'static str> {
     match permission {
@@ -108,6 +113,7 @@ pub fn get_permission_description(permission: &str) -> Option<&'static str> {
         SYS_INFO_RAM => Some("Allows the plugin to read RAM information."),
         SYS_INFO_OS => Some("Allows the plugin to read OS information."),
         REGISTRY_ITEMS => Some("Allows the plugin to register custom items and item tags."),
+        REGISTRY_BLOCKS => Some("Allows the plugin to register custom blocks and block tags."),
         p if p.starts_with(SYS_ENV_PREFIX) => {
             Some("Allows the plugin to read specific environment variables.")
         }

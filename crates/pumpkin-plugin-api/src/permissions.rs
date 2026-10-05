@@ -65,3 +65,8 @@ pub const SYS_INFO_OS: &str = "sys.info.os";
 ///
 /// Registration is only possible while the server starts, before players can connect.
 pub const REGISTRY_ITEMS: &str = "registry.items";
+
+/// Allows the plugin to register custom blocks and block tags with `block_registry`.
+///
+/// Registration is only possible while the server starts, before players can connect.
+pub const REGISTRY_BLOCKS: &str = "registry.blocks";

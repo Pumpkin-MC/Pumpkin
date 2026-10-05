@@ -1,0 +1,218 @@
+/// Registration of custom blocks.
+///
+/// Blocks are compile time tables in the server, so plugin blocks are appended to them at runtime.
+///
+/// Vanilla blocks have the ids `0..get-vanilla-block-count()`, custom blocks get
+/// `get-vanilla-block-count() + n`, where `n` is the order of registration (0 for the first block
+/// registered by any plugin). The states of custom blocks follow the vanilla states: the first
+/// state of the first custom block has the id `get-vanilla-state-count()`, the first state of the
+/// next block comes right after the last state of the previous one. The server never reuses or
+/// changes an id while it runs. Plugins that register blocks must load in a stable order if
+/// clients depend on the ids.
+///
+/// # State order
+///
+/// The states of a block are numbered like vanilla's `StateDefinition` does it, whatever order the
+/// properties were declared in:
+///
+/// * the properties are sorted by name (byte order: `down`, `east`, `north`, `south`, `up`,
+///   `west`),
+/// * the first property is the most significant, the last one changes fastest,
+/// * the values of a property are in declaration order: `true` before `false`, integers from the
+///   minimum to the maximum, enum values as listed.
+///
+/// So `state id = first state id + sum(value index * stride)` where the stride of a property is
+/// the product of the value counts of all properties after it. A block with the six boolean
+/// properties above has 64 states, the first one has all of them `true`, the last one (index 63)
+/// all of them `false`.
+///
+/// Registration is only possible until the server starts accepting connections (plugin load and
+/// `server-load-event`), and needs the `registry.blocks` permission.
+interface block-registry {
+    /// Inclusive range of an integer property.
+    record int-bounds {
+        min: u8,
+        max: u8,
+    }
+
+    /// The values a property can have.
+    variant property-kind {
+        /// `true` and `false`, in this order.
+        boolean,
+        /// The integers from `min` to `max`, as decimal strings.
+        int-range(int-bounds),
+        /// The listed values, lowercase `a-z 0-9 _`, in this order.
+        enumeration(list<string>),
+    }
+
+    /// A block state property.
+    record block-property {
+        /// Lowercase `a-z 0-9 _`.
+        name: string,
+        kind: property-kind,
+    }
+
+    /// A property and one of its values. Booleans are `true` or `false`, integers decimal
+    /// strings, enum properties one of their values.
+    record property-value {
+        name: string,
+        value: string,
+    }
+
+    /// An axis aligned box in block units, `0..1` is the block itself.
+    record block-box {
+        min-x: f64,
+        min-y: f64,
+        min-z: f64,
+        max-x: f64,
+        max-y: f64,
+        max-z: f64,
+    }
+
+    /// A collision or selection shape.
+    variant block-shape {
+        /// No shape. Entities and items pass through, a ray goes through.
+        empty,
+        /// The whole block.
+        full-cube,
+        /// A union of boxes, at most 64.
+        boxes(list<block-box>),
+    }
+
+    enum connect-direction {
+        north,
+        south,
+        east,
+        west,
+        up,
+        down,
+    }
+
+    /// What a neighbour has to be to make a boolean property true.
+    variant connect-target {
+        /// A block of the same custom block.
+        same-block,
+        /// A block with this key (`minecraft:` is optional for vanilla blocks).
+        block(string),
+        /// A block in this tag, `namespace:path`.
+        tag(string),
+    }
+
+    /// Sets the boolean property `property` to whether the neighbour in `direction` matches
+    /// `target`, like glass panes, fences and chorus plants do. The server applies it when the
+    /// block is placed and whenever that neighbour changes. Directions are in world space,
+    /// `north` is `-z`.
+    record connect-rule {
+        property: string,
+        direction: connect-direction,
+        target: connect-target,
+    }
+
+    /// What breaking the block drops. Nothing drops when the tool is not correct for a block that
+    /// `requires-correct-tool`.
+    variant block-drops {
+        /// One item of the item linked with `set-block-item`.
+        self-item,
+        nothing,
+        /// The loot table with this key, for example `namespace:blocks/name`.
+        loot-table(string),
+    }
+
+    /// A block to add to the block registry.
+    record block-definition {
+        /// Full resource location, `namespace:path`, lowercase, `a-z 0-9 _ - .` (and `/` in the
+        /// path). The `minecraft` namespace is reserved.
+        key: string,
+        /// State properties, at most 32 and 16384 states in total.
+        properties: list<block-property>,
+        /// Values of the default state, the one a plain placement uses. A property that is not
+        /// listed gets its first value (vanilla's `StateDefinition.any()`), so `true` for a
+        /// boolean, list the properties that should start `false`.
+        default-state: list<property-value>,
+        /// Time to mine, -1 for unbreakable. Vanilla `strength(hardness, resistance)`.
+        hardness: f32,
+        /// Explosion resistance.
+        blast-resistance: f32,
+        /// Vanilla `requiresCorrectToolForDrops()`. Which tool is correct comes from the block
+        /// tags (`minecraft:mineable/pickaxe`, `minecraft:needs_diamond_tool`, ...) and the
+        /// tool rules of the item.
+        requires-correct-tool: bool,
+        /// Name of a vanilla sound type, for example `stone` or `amethyst`. Clients choose the
+        /// sounds, the server only keeps the name.
+        sound-type: string,
+        /// Light level 0 to 15 that every state emits.
+        luminance: u8,
+        /// Vanilla `canOcclude`, false for `noOcclusion()`: the block does not block light or
+        /// hide the faces of its neighbours.
+        can-occlude: bool,
+        /// Vanilla `isSuffocating`. A full block that is suffocating hurts an entity whose head is
+        /// inside it. Set false for a block that some entities are allowed to stand in.
+        suffocating: bool,
+        /// Whether a block placed against it replaces it, like grass does.
+        replaceable: bool,
+        /// Map colour id, 0 for none.
+        map-color: u8,
+        /// The shape that stops mobs, items and projectiles. Player movement is client side, so
+        /// players are only stopped if their client stops them.
+        collision-shape: block-shape,
+        /// The shape of the selection outline and the one a ray hits.
+        selection-shape: block-shape,
+        /// Properties that follow the neighbours. At most one rule per property.
+        connect-rules: list<connect-rule>,
+        drops: block-drops,
+        /// Block tags to join, `namespace:path`. Same as `register-block-tag` for each of them.
+        /// Joining `minecraft:needs_diamond_tool` also joins the `incorrect_for_*_tool` tags of
+        /// the lower tiers, like it does in vanilla.
+        tags: list<string>,
+    }
+
+    /// A block and its network ids.
+    record block-entry {
+        /// Full resource location.
+        key: string,
+        /// The block id.
+        id: u32,
+        /// The id of the first state, the states follow in state order.
+        base-state-id: u32,
+        state-count: u32,
+        /// The item linked with `set-block-item`.
+        item-id: option<u32>,
+    }
+
+    /// Registers a block and returns its id. Registering the same definition again returns the
+    /// same id (a reloaded plugin), a different definition for a known key fails. Fails for an
+    /// invalid definition or key, or when registration is closed.
+    register-block: func(definition: block-definition) -> result<u32, string>;
+
+    /// Adds entries to a block tag (`minecraft:mineable/pickaxe`, `c:ores`, ...), creating it if
+    /// needed. Entries are block keys or `#tag` references. Tags are used by the server for tool
+    /// checks and are sent to clients. Same restrictions as `register-block`.
+    register-block-tag: func(tag: string, entries: list<string>) -> result<_, string>;
+
+    /// Makes an item the item of a custom block: using it places the block, and the block drops it
+    /// with `self-item` drops. Both have to be registered. Same restrictions as
+    /// `register-block`, repeating a link is fine. A block has one item and an item places one
+    /// block.
+    set-block-item: func(item-key: string, block-key: string) -> result<_, string>;
+
+    /// Returns the id of a block by key, vanilla (`minecraft:` prefix optional) or custom.
+    get-block-id: func(key: string) -> option<u32>;
+
+    /// Returns the full resource location (`minecraft:` prefixed for vanilla) of a block id.
+    get-block-key: func(id: u32) -> option<string>;
+
+    /// Returns the number of vanilla blocks. This is also the id of the first custom block.
+    get-vanilla-block-count: func() -> u32;
+
+    /// Returns the number of vanilla block states. This is also the id of the first state of the
+    /// first custom block.
+    get-vanilla-state-count: func() -> u32;
+
+    /// Returns the id of the state of a vanilla or custom block with these property values.
+    /// Properties that are not listed have their default value. Unknown blocks, properties and
+    /// values give none.
+    get-state-id: func(block: string, properties: list<property-value>) -> option<u32>;
+
+    /// Returns all custom blocks in id order.
+    get-registered-blocks: func() -> list<block-entry>;
+}

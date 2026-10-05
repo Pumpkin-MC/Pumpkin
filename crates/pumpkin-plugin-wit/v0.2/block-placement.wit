@@ -1,0 +1,77 @@
+/// How placing a custom block chooses its property values, like vanilla's `getStateForPlacement`.
+///
+/// Without rules a placed block gets its default state (and the values of its `connect-rules`, see
+/// `block-registry`). A placement rule sets one property from what is known about the placement:
+/// the direction the player looks at, the clicked face, the pitch, whether the block replaces
+/// water, whether the player sneaks. The value is chosen **by name**: a source gives a value string
+/// (`north`, `up`, `bottom`, `true`, ...) and the property has to list it, which is checked when
+/// the rules are set.
+///
+/// Rules are tried in list order. For each property the first rule that gives a value wins, so
+/// several rules for one property are an ordered fallback. A property without a rule, or without a
+/// value from any of its rules, keeps the value of the default state. Connect rules are applied
+/// after the placement rules, so a property that has both ends up with the connect rule's value.
+///
+/// Placement rules only apply when a player places the block. States set by other means (commands,
+/// `set-block`, worldgen) are what they are.
+///
+/// Like block registration this is only possible until the server starts accepting connections
+/// (plugin load and `server-load-event`) and needs the `registry.blocks` permission. Setting the
+/// same rules again (a reloaded plugin) is fine at any time and does nothing, other rules for a
+/// block that has some fail.
+interface block-placement {
+    /// Where a rule takes the value of its property from.
+    variant placement-source {
+        /// The horizontal direction the player looks at. The property needs `north`, `south`,
+        /// `east` and `west`.
+        horizontal-facing,
+        /// The direction the player looks at, the dominant one of all six (a steep pitch gives
+        /// `up` or `down`). The property needs `down`, `up`, `north`, `south`, `west` and `east`.
+        looking-direction,
+        /// The face of the clicked block, which is the direction from the clicked block to the
+        /// block that is placed: clicking the top of a block gives `up`. The property needs `down`,
+        /// `up`, `north`, `south`, `west` and `east`.
+        clicked-face,
+        /// The axis of the clicked face: `x` (east, west), `y` (up, down) or `z` (north, south),
+        /// like logs and pillars. The property needs `x`, `y` and `z`. `opposite` is not allowed.
+        clicked-axis,
+        /// `bottom` or `top` like vanilla's stairs and slabs: clicking the top face, or the lower
+        /// half of a side face, gives `bottom`. The property needs `bottom` and `top`.
+        clicked-half,
+        /// The vertical direction the player looks at, with the pitch in degrees (above 0, at most
+        /// 90) from which a look counts as vertical: a pitch that far up or more gives `up`, that
+        /// far down or more gives `down`, in between it gives `horizontal`. The property needs
+        /// `up` and `down`. A property without a `horizontal` value is left to the next rule, or
+        /// its default, for a horizontal look.
+        vertical-look(f32),
+        /// `true` when the block replaces a water source (it is waterlogged), `false` otherwise.
+        /// The property needs `true` and `false`, a boolean has them.
+        in-water,
+        /// `true` when the player sneaks, `false` otherwise. The property needs `true` and
+        /// `false`.
+        sneaking,
+        /// Always this value, which the property has to list. Useful as the last rule of a
+        /// fallback.
+        constant(string),
+    }
+
+    /// Sets the property `property` when the block is placed.
+    record placement-rule {
+        /// A property of the block.
+        property: string,
+        source: placement-source,
+        /// Use the opposite of the value of `source`: the opposite direction (`north` for
+        /// `south`, `up` for `down`), `up` for `down` and `down` for `up` of `vertical-look`,
+        /// `top` for `bottom`, `false` for `true`. A property that points away from the player
+        /// (`facing` of a block that faces the player) uses it with `horizontal-facing`. Not
+        /// allowed for `clicked-axis` and `constant`.
+        opposite: bool,
+    }
+
+    /// Sets the placement rules of a block that `register-block` registered. At most 64 rules.
+    /// Fails for an unknown block or property, a property that does not list a value its source
+    /// can give, `opposite` on a source without one, a `vertical-look` pitch out of range, other
+    /// rules than the ones set before, or when registration is closed. Needs the `registry.blocks`
+    /// permission.
+    set-block-placement-rules: func(block-key: string, rules: list<placement-rule>) -> result<_, string>;
+}

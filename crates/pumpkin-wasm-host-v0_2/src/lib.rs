@@ -15,6 +15,8 @@ mod bindings;
 
 pub mod advancement;
 pub mod block_entity;
+pub mod block_placement;
+pub mod block_registry;
 pub mod boss_bar;
 pub mod commands;
 pub mod common;

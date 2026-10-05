@@ -86,7 +86,7 @@ pub(super) const fn from_wasm_block_position(
 }
 
 pub(super) fn to_wasm_block_name(block: &'static Block) -> String {
-    format!("minecraft:{}", block.name)
+    block.resource_location().into_owned()
 }
 
 pub(super) fn from_wasm_block_name(block_name: &str) -> &'static Block {

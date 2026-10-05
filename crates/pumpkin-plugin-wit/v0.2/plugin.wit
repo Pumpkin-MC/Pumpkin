@@ -63,6 +63,10 @@ world plugin {
     import enchantments;
     /// Provides custom item registration.
     import item-registry;
+    /// Provides custom block registration.
+    import block-registry;
+    /// Provides placement rules (property values chosen when a player places) for custom blocks.
+    import block-placement;
     /// Provides damage types.
     import damage-types;
     /// Provides screen / window types for GUIs and containers.
