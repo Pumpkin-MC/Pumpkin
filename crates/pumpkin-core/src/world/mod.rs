@@ -5170,7 +5170,7 @@ impl World {
                 }
             }
 
-            if !flags.contains(BlockFlags::MOVED) {
+            if !flags.intersects(BlockFlags::MOVED | BlockFlags::UPDATE_KNOWN_SHAPE) {
                 let mut neighbour_update_flags = flags;
                 neighbour_update_flags.remove(BlockFlags::NOTIFY_NEIGHBORS);
                 neighbour_update_flags.remove(BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT);
