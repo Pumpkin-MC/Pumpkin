@@ -1,4 +1,5 @@
 use super::AccessorExt;
+use crate::RequireServer;
 use crate::pumpkin::plugin::boss_bar::{
     self, BossBar, BossBarColor as WitColor, BossBarDivision as WitDivision,
     BossBarMetadata as WitMetadata,
@@ -116,7 +117,7 @@ impl boss_bar::HostBossBar for PluginHostState {
         self.drop(res)
     }
 
-    fn create(
+    fn new(
         &mut self,
         title: Resource<crate::pumpkin::plugin::text::TextComponent>,
         color: WitColor,
@@ -128,11 +129,7 @@ impl boss_bar::HostBossBar for PluginHostState {
         bossbar.color = from_wit_color(color);
         bossbar.division = from_wit_division(division);
 
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("server not available"))?
-            .clone();
+        let server = self.require_server()?.clone();
         let plugin_bossbar = Arc::new(Mutex::new(PluginBossBar::new(
             bossbar,
             Arc::downgrade(&server),

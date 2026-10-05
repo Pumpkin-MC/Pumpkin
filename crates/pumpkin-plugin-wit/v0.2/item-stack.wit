@@ -34,7 +34,7 @@ interface item-stack {
 
     resource item-stack {
         /// Creates an item stack from a registry key and item count.
-        create: static func(registry-key: string, count: u8) -> item-stack;
+        constructor(registry-key: string, count: u8);
 
         /// Returns the unique registry key of the item (e.g., "minecraft:diamond").
         get-registry-key: async func() -> string;

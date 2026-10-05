@@ -81,7 +81,7 @@ impl gui::HostGui for PluginHostState {
         self.drop(rep)
     }
 
-    fn create(
+    fn new(
         &mut self,
         screen: WitScreen,
         title: Resource<crate::pumpkin::plugin::text::TextComponent>,

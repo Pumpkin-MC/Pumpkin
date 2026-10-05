@@ -240,7 +240,7 @@ interface command {
         /// Creates a command from its names and description.
         ///
         /// The first name is primary; the remaining names are aliases.
-        create: static func(names: list<string>, description: string) -> command;
+        constructor(names: list<string>, description: string);
         then: func(node: command-node);
         execute-with-handler-id: func(handler-id: u32);
     }

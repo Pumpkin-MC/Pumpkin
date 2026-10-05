@@ -228,7 +228,7 @@ impl pumpkin::plugin::command::HostCommand for PluginHostState {
         self.drop(rep)
     }
 
-    fn create(
+    fn new(
         &mut self,
         names: Vec<String>,
         description: String,

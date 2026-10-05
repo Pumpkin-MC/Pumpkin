@@ -84,7 +84,7 @@ impl HostItemStack for PluginHostState {
         self.drop(rep)
     }
 
-    fn create(
+    fn new(
         &mut self,
         registry_key: String,
         count: u8,
