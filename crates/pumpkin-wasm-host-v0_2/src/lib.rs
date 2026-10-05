@@ -32,6 +32,7 @@ pub mod gui;
 pub mod i18n;
 pub mod inventory;
 pub mod ipc;
+pub mod item_registry;
 pub mod item_stack;
 pub mod java_dialogs;
 pub mod living_entity;

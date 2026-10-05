@@ -1,0 +1,57 @@
+/// Registration of custom items.
+///
+/// Items are compile time tables in the server, so plugin items are appended to them at runtime.
+/// Vanilla items have the ids `0..get-vanilla-item-count()`. Custom items get
+/// `get-vanilla-item-count() + n`, where `n` is the order of registration (0 for the first item
+/// registered by any plugin), and the server never reuses or changes an id while it runs. Plugins
+/// that register items must load in a stable order if clients depend on the ids.
+///
+/// Registration is only possible until the server starts accepting connections (plugin load and
+/// `server-load-event`), and needs the `registry.items` permission.
+interface item-registry {
+    use item-stack.{data-component-value};
+
+    /// An item to add to the item registry.
+    record item-definition {
+        /// Full resource location, `namespace:path`, lowercase, `a-z 0-9 _ - .` (and `/` in the
+        /// path). The `minecraft` namespace is reserved.
+        key: string,
+        /// Default components of the item, encoded exactly like `item-stack.set-component`.
+        /// Vanilla style defaults are added for the ones left out: max-stack-size (64, or 1 for an
+        /// item with max-damage), item-name (`item.<namespace>.<path>`), item-model, rarity,
+        /// repair-cost, lore, enchantments, damage (0, for an item with max-damage).
+        components: list<data-component-value>,
+        /// Maximum stack size. Replaces a max-stack-size component if both are given.
+        max-stack-size: option<u8>,
+    }
+
+    /// An item and its network id.
+    record item-entry {
+        key: string,
+        id: u32,
+    }
+
+    /// Registers an item and returns its id. Fails for an invalid or duplicate key, a component
+    /// that does not decode, or when registration is closed.
+    register-item: func(definition: item-definition) -> result<u32, string>;
+
+    /// Adds entries to an item tag (`minecraft:swords`, `c:gems/ruby`, ...), creating it if needed.
+    /// Entries are item keys or `#tag` references. Tags are used by the server for repairing,
+    /// recipes and tool checks, they are not sent to clients. Same restrictions as `register-item`.
+    register-item-tag: func(tag: string, entries: list<string>) -> result<_, string>;
+
+    /// Returns the id of an item by key, vanilla (`minecraft:` prefix optional) or custom.
+    get-item-id: func(key: string) -> option<u32>;
+
+    /// Returns the full resource location (`minecraft:` prefixed for vanilla) of an item id.
+    get-item-key: func(id: u32) -> option<string>;
+
+    /// Returns the number of vanilla items. This is also the id of the first custom item.
+    get-vanilla-item-count: func() -> u32;
+
+    /// Returns all vanilla items in id order.
+    get-vanilla-items: func() -> list<item-entry>;
+
+    /// Returns all custom items in id order.
+    get-registered-items: func() -> list<item-entry>;
+}

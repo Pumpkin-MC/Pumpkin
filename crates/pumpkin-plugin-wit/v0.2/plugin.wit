@@ -61,6 +61,8 @@ world plugin {
     import datapack;
     /// Provides custom enchantment registration and management.
     import enchantments;
+    /// Provides custom item registration.
+    import item-registry;
     /// Provides damage types.
     import damage-types;
     /// Provides screen / window types for GUIs and containers.
