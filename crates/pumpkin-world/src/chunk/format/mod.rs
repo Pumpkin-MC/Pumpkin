@@ -541,12 +541,7 @@ impl ChunkData {
                 .map(|&id| {
                     let block = Block::from_state_id(id);
                     let mut comp = NbtCompound::new();
-                    let name = if block.name.starts_with("minecraft:") {
-                        block.name.to_string()
-                    } else {
-                        format!("minecraft:{}", block.name)
-                    };
-                    comp.put_string("Name", name);
+                    comp.put_string("Name", block.resource_location().into_owned());
                     if let Some(props) = block.properties(id) {
                         let prop_vec = props.to_props();
                         if !prop_vec.is_empty() {

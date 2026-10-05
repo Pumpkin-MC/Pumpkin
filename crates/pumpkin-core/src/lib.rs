@@ -478,6 +478,8 @@ impl PumpkinServer {
 
         // Custom item ids are handed to clients, so the table must not change once they can connect.
         pumpkin_data::item::Item::freeze_dynamic_registry();
+        // Same for custom blocks, their ids and the state ids of the chunk palette.
+        pumpkin_data::Block::freeze_dynamic_registry();
 
         self.server.start_telemetry();
         self.server.management_hub.broadcast_server_started();

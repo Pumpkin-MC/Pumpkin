@@ -407,7 +407,7 @@ impl Mob for EndermanEntity {
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         if let Some(block_state) = nbt.get_int("carriedBlockState") {
-            self.set_carried_block(BlockStateId::new(block_state as u16));
+            self.set_carried_block(BlockStateId::from_raw(block_state as u16));
         }
     }
 

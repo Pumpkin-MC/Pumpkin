@@ -116,7 +116,7 @@ impl Taggable for Block {
 
 impl ToResourceLocation for &'static Block {
     fn to_resource_location(&self) -> ResourceLocation {
-        format!("minecraft:{}", self.name)
+        self.resource_location().into_owned()
     }
 }
 
@@ -322,11 +322,15 @@ impl BlockId {
     // depends on generated impl:
     // pub(crate) const BLOCK_COUNT: u16;
 
-    /// The total count of all registered blocks.
+    /// The count of the generated (vanilla) blocks. Blocks that plugins register get the ids after
+    /// these, see [`Self::total_count`].
     pub const COUNT: u16 = Self::BLOCK_COUNT;
 
-    // SAFETY: There must never be a BlockId where self.0 >= BlockId::BLOCK_COUNT
+    // SAFETY: There must never be a BlockId that is neither a generated block (< BLOCK_COUNT) nor
+    // a registered dynamic block (checked by `from_raw`). The generated lookups rely on it.
 
+    /// A generated block id. Const, so it cannot see registered blocks, use [`Self::from_raw`] for
+    /// ids from plugins, the network or disk.
     #[inline]
     #[must_use]
     pub const fn new(inner: u16) -> Option<Self> {
@@ -336,6 +340,7 @@ impl BlockId {
         None
     }
 
+    /// A generated block id, air for anything else. See [`Self::new`].
     #[inline]
     #[must_use]
     pub const fn new_or_air(inner: u16) -> Self {
@@ -345,9 +350,38 @@ impl BlockId {
         Self::AIR
     }
 
+    /// The id of a registered dynamic block. Only the dynamic registry may call this, with an id
+    /// it handed out.
     #[inline]
     #[must_use]
-    pub const fn to_block(self) -> &'static Block {
+    pub(crate) const fn from_dynamic_raw(inner: u16) -> Self {
+        Self(inner)
+    }
+
+    /// Number of generated and registered blocks. Ids are `0..total_count()`.
+    #[inline]
+    #[must_use]
+    pub fn total_count() -> u32 {
+        crate::block_registry::total_block_count()
+    }
+
+    /// A block id of a generated or registered block.
+    #[inline]
+    #[must_use]
+    pub fn from_raw(inner: u16) -> Option<Self> {
+        (u32::from(inner) < Self::total_count()).then_some(Self(inner))
+    }
+
+    /// Like [`Self::from_raw`], air for an id that does not exist.
+    #[inline]
+    #[must_use]
+    pub fn from_raw_or_air(inner: u16) -> Self {
+        Self::from_raw(inner).unwrap_or(Self::AIR)
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn to_block(self) -> &'static Block {
         Block::from_id(self)
     }
 

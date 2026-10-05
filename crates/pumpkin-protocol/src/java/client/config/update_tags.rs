@@ -49,6 +49,18 @@ impl ClientPacket for CUpdateTags<'_> {
                 return Ok(());
             }
 
+            // Tags that custom blocks joined, with the ids of the custom blocks.
+            if registry_key == RegistryKey::Block
+                && let Some(tags) = pumpkin_data::Block::network_tags()
+            {
+                p.write_var_int(&VarInt(tags.len() as i32))?;
+                for (name, ids) in &tags {
+                    p.write_string_bounded(name, u16::MAX as usize)?;
+                    p.write_list(ids, |p, &id| p.write_var_int(&VarInt::from(id)))?;
+                }
+                return Ok(());
+            }
+
             let Some(values) = get_registry_key_tags(*version, registry_key) else {
                 // no tags defined for that registry key in this version
                 // write an empty list and continue

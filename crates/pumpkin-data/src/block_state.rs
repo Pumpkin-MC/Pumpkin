@@ -1,6 +1,7 @@
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
-use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument};
+use crate::block_properties::NoteblockInstrument;
+use crate::block_registry::collision_shape;
 use crate::{Block, BlockDirection, BlockId};
 
 /// Represents a specific state of a block, including its properties and physical behaviors.
@@ -144,6 +145,14 @@ impl BlockState {
         self.state_flags & HAS_ANALOG_OUTPUT_SIGNAL != 0
     }
 
+    /// Whether an entity whose head is inside this block is spared from suffocating. Vanilla
+    /// blocks follow the default (a full block that blocks movement suffocates), only blocks that
+    /// plugins register can opt out, like vanilla's `isSuffocating((state, level, pos) -> false)`.
+    #[must_use]
+    pub const fn never_suffocates(&self) -> bool {
+        self.state_flags & NEVER_SUFFOCATES != 0
+    }
+
     ///`isFaceSturdy()` in Java!
     #[must_use]
     pub const fn is_side_solid(&self, side: BlockDirection) -> bool {
@@ -185,9 +194,7 @@ impl BlockState {
     }
 
     pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
-        self.collision_shapes
-            .iter()
-            .map(|&id| COLLISION_SHAPES[id as usize])
+        self.collision_shapes.iter().map(|&id| collision_shape(id))
     }
 
     /// Returns block-local collision shapes with vanilla's coordinate-derived offset applied.
@@ -201,10 +208,7 @@ impl BlockState {
     }
 
     pub fn get_block_outline_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
-        let base_shapes = self
-            .outline_shapes
-            .iter()
-            .map(|&id| COLLISION_SHAPES[id as usize]);
+        let base_shapes = self.outline_shapes.iter().map(|&id| collision_shape(id));
 
         let water_shape = self
             .is_waterlogged()
@@ -222,7 +226,7 @@ impl BlockState {
         let base_shapes = self
             .outline_shapes
             .iter()
-            .map(move |&id| COLLISION_SHAPES[id as usize].shift(offset));
+            .map(move |&id| collision_shape(id).shift(offset));
 
         let water_shape = self
             .is_waterlogged()
@@ -246,11 +250,16 @@ impl BlockStateId {
     // depends on generated impl:
     // pub(crate) const STATE_COUNT: u16;
 
-    /// The total count of all registered block states.
+    /// The count of the generated (vanilla) block states. The states of blocks that plugins
+    /// register get the ids after these, see [`Self::total_count`].
     pub const COUNT: u16 = Self::STATE_COUNT;
 
-    // SAFETY: There must never be a BlockStateId where self.0 >= BlockStateId::STATE_COUNT
+    // SAFETY: There must never be a BlockStateId that is neither a generated state
+    // (< STATE_COUNT) nor a state of a registered dynamic block (checked by `from_raw`). The
+    // generated lookups rely on it.
 
+    /// A generated state id. Const, so it cannot see registered blocks, use [`Self::from_raw`] for
+    /// ids from plugins, the network or disk.
     #[inline]
     #[must_use]
     pub const fn new(inner: u16) -> Option<Self> {
@@ -260,6 +269,7 @@ impl BlockStateId {
         None
     }
 
+    /// A generated state id, air for anything else. See [`Self::new`].
     #[inline]
     #[must_use]
     pub const fn new_or_air(inner: u16) -> Self {
@@ -267,6 +277,36 @@ impl BlockStateId {
             return Self(inner);
         }
         Self::AIR
+    }
+
+    /// The id of a state of a registered dynamic block. Only the dynamic registry may call this,
+    /// with an id it handed out.
+    #[inline]
+    #[must_use]
+    pub(crate) const fn from_dynamic_raw(inner: u16) -> Self {
+        Self(inner)
+    }
+
+    /// Number of generated and registered block states. Ids are `0..total_count()`, so this is
+    /// what the size of the global palette on the network derives from.
+    #[inline]
+    #[must_use]
+    pub fn total_count() -> u32 {
+        crate::block_registry::total_state_count()
+    }
+
+    /// A state id of a generated or registered block.
+    #[inline]
+    #[must_use]
+    pub fn from_raw(inner: u16) -> Option<Self> {
+        (u32::from(inner) < Self::total_count()).then_some(Self(inner))
+    }
+
+    /// Like [`Self::from_raw`], air for an id that does not exist.
+    #[inline]
+    #[must_use]
+    pub fn from_raw_or_air(inner: u16) -> Self {
+        Self::from_raw(inner).unwrap_or(Self::AIR)
     }
 
     #[inline(always)]
@@ -277,37 +317,37 @@ impl BlockStateId {
 
     #[inline]
     #[must_use]
-    pub const fn to_state(self) -> &'static BlockState {
+    pub fn to_state(self) -> &'static BlockState {
         BlockState::from_id(self)
     }
 
     #[inline]
     #[must_use]
-    pub const fn to_block_id(self) -> BlockId {
+    pub fn to_block_id(self) -> BlockId {
         BlockId::from_state_id(self)
     }
 
     #[inline]
     #[must_use]
-    pub const fn to_block(self) -> &'static Block {
+    pub fn to_block(self) -> &'static Block {
         Block::from_state_id(self)
     }
 
     #[inline]
     #[must_use]
-    pub const fn is_solid_render(self) -> bool {
+    pub fn is_solid_render(self) -> bool {
         self.to_state().is_solid_render()
     }
 
     #[inline]
     #[must_use]
-    pub const fn can_occlude(self) -> bool {
+    pub fn can_occlude(self) -> bool {
         self.to_state().can_occlude()
     }
 
     #[inline]
     #[must_use]
-    pub const fn has_analog_output_signal(self) -> bool {
+    pub fn has_analog_output_signal(self) -> bool {
         self.to_state().has_analog_output_signal()
     }
 
@@ -350,29 +390,31 @@ impl std::fmt::Display for BlockStateId {
 
 //This is the Layout of state_props in the right order
 // state_flags
-const IS_AIR: u16 = 1 << 0;
-const BURNABLE: u16 = 1 << 1;
-const TOOL_REQUIRED: u16 = 1 << 2;
-const SIDED_TRANSPARENCY: u16 = 1 << 3;
-const REPLACEABLE: u16 = 1 << 4;
-const IS_LIQUID: u16 = 1 << 5;
-const IS_SOLID: u16 = 1 << 6;
-const IS_FULL_CUBE: u16 = 1 << 7;
-const IS_SOLID_BLOCK: u16 = 1 << 8;
-const HAS_RANDOM_TICKS: u16 = 1 << 9;
-const IS_SOLID_RENDER: u16 = 1 << 10;
-const CAN_OCCLUDE: u16 = 1 << 11;
-const HAS_ANALOG_OUTPUT_SIGNAL: u16 = 1 << 12;
+pub(crate) const IS_AIR: u16 = 1 << 0;
+pub(crate) const BURNABLE: u16 = 1 << 1;
+pub(crate) const TOOL_REQUIRED: u16 = 1 << 2;
+pub(crate) const SIDED_TRANSPARENCY: u16 = 1 << 3;
+pub(crate) const REPLACEABLE: u16 = 1 << 4;
+pub(crate) const IS_LIQUID: u16 = 1 << 5;
+pub(crate) const IS_SOLID: u16 = 1 << 6;
+pub(crate) const IS_FULL_CUBE: u16 = 1 << 7;
+pub(crate) const IS_SOLID_BLOCK: u16 = 1 << 8;
+pub(crate) const HAS_RANDOM_TICKS: u16 = 1 << 9;
+pub(crate) const IS_SOLID_RENDER: u16 = 1 << 10;
+pub(crate) const CAN_OCCLUDE: u16 = 1 << 11;
+pub(crate) const HAS_ANALOG_OUTPUT_SIGNAL: u16 = 1 << 12;
+/// Only set on blocks that plugins register, see `BlockState::never_suffocates`.
+pub(crate) const NEVER_SUFFOCATES: u16 = 1 << 13;
 
 // side_flags
-const DOWN_SIDE_SOLID: u8 = 1 << 0;
-const UP_SIDE_SOLID: u8 = 1 << 1;
-const NORTH_SIDE_SOLID: u8 = 1 << 2;
-const SOUTH_SIDE_SOLID: u8 = 1 << 3;
-const WEST_SIDE_SOLID: u8 = 1 << 4;
-const EAST_SIDE_SOLID: u8 = 1 << 5;
-const DOWN_CENTER_SOLID: u8 = 1 << 6;
-const UP_CENTER_SOLID: u8 = 1 << 7;
+pub(crate) const DOWN_SIDE_SOLID: u8 = 1 << 0;
+pub(crate) const UP_SIDE_SOLID: u8 = 1 << 1;
+pub(crate) const NORTH_SIDE_SOLID: u8 = 1 << 2;
+pub(crate) const SOUTH_SIDE_SOLID: u8 = 1 << 3;
+pub(crate) const WEST_SIDE_SOLID: u8 = 1 << 4;
+pub(crate) const EAST_SIDE_SOLID: u8 = 1 << 5;
+pub(crate) const DOWN_CENTER_SOLID: u8 = 1 << 6;
+pub(crate) const UP_CENTER_SOLID: u8 = 1 << 7;
 
 #[cfg(test)]
 mod tests {

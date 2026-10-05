@@ -30,6 +30,7 @@ use crate::block::blocks::decorated_pot::DecoratedPotBlock;
 use crate::block::blocks::dirt_path::DirtPathBlock;
 use crate::block::blocks::doors::DoorBlock;
 use crate::block::blocks::dripstone::DripstoneBlock;
+use crate::block::blocks::dynamic::DynamicBlock;
 use crate::block::blocks::end_gateway::EndGatewayBlock;
 use crate::block::blocks::end_portal::EndPortalBlock;
 use crate::block::blocks::end_portal_frame::EndPortalFrameBlock;
@@ -500,8 +501,11 @@ impl BlockActionResult {
 const NO_BEHAVIOUR: u16 = u16::MAX;
 
 pub struct BlockRegistry {
+    /// Behaviour index by block id, for the generated blocks.
     block_indices: [u16; pumpkin_data::BlockId::COUNT as usize],
     behaviours: Vec<Arc<dyn BlockBehaviour>>,
+    /// The behaviour of every block that plugins register, their ids are past `block_indices`.
+    dynamic_behaviour: Arc<dyn BlockBehaviour>,
     fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
 }
 
@@ -510,6 +514,7 @@ impl Default for BlockRegistry {
         Self {
             block_indices: [NO_BEHAVIOUR; pumpkin_data::BlockId::COUNT as usize],
             behaviours: Vec::new(),
+            dynamic_behaviour: Arc::new(DynamicBlock),
             fluids: FxHashMap::default(),
         }
     }
@@ -824,7 +829,7 @@ impl BlockRegistry {
 
         player.trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::PlacedBlock {
-                block_id: format!("minecraft:{}", placed_block.name),
+                block_id: placed_block.resource_location().into_owned(),
             },
         );
 
@@ -1373,6 +1378,9 @@ impl BlockRegistry {
     #[inline]
     #[must_use]
     pub fn get_pumpkin_block(&self, block: BlockId) -> Option<&Arc<dyn BlockBehaviour>> {
+        if block.as_u16() >= BlockId::COUNT {
+            return Some(&self.dynamic_behaviour);
+        }
         let idx = self.block_indices[block.as_u16() as usize];
         if idx == NO_BEHAVIOUR {
             None

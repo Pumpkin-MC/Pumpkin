@@ -1,4 +1,6 @@
+use pumpkin_data::block_registry::BlockDrops;
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::item::Item;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockId, BlockState};
 
@@ -452,6 +454,42 @@ pub struct BlockEvent {
     pub data: u8,
 }
 
+/// The items a block drops: its loot table, or what the registration of a custom block says.
+fn block_loot(world: &Arc<World>, block: &Block, params: &LootContextParameters) -> Vec<ItemStack> {
+    let Some(info) = block.dynamic_info() else {
+        return loot_table_items(world, &format!("minecraft:blocks/{}", block.name), params);
+    };
+    match &info.registration.drops {
+        BlockDrops::Nothing => Vec::new(),
+        BlockDrops::LootTable(key) => loot_table_items(world, key, params),
+        BlockDrops::SelfItem => {
+            // The `survives_explosion` condition of the vanilla block loot tables.
+            if params
+                .explosion_radius
+                .is_some_and(|radius| rand::random::<f32>() > 1.0 / radius)
+            {
+                return Vec::new();
+            }
+            Item::from_id(block.item_id)
+                .filter(|_| block.item_id != 0)
+                .map(|item| vec![ItemStack::new(1, item)])
+                .unwrap_or_default()
+        }
+    }
+}
+
+fn loot_table_items(
+    world: &Arc<World>,
+    key: &str,
+    params: &LootContextParameters,
+) -> Vec<ItemStack> {
+    let Some(loot_table) = world.get_loot_table(key) else {
+        return Vec::new();
+    };
+    let seed: i64 = rand::random();
+    crate::world::loot::generate_loot_from_handle(&loot_table, seed, params)
+}
+
 pub fn drop_loot(
     world: &Arc<World>,
     block: &Block,
@@ -459,31 +497,27 @@ pub fn drop_loot(
     experience: bool,
     params: &LootContextParameters,
 ) {
-    let key = format!("minecraft:blocks/{}", block.name);
-    if let Some(loot_table) = world.get_loot_table(&key) {
-        let seed: i64 = rand::random();
-        let items = crate::world::loot::generate_loot_from_handle(&loot_table, seed, params);
-        if !items.is_empty() {
-            let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
-                block_pos: *pos,
-                world: world.clone(),
-                player: None,
-                items,
-                cancelled: false,
-            };
-            if let Some(server) = world.server.upgrade() {
-                server.plugin_manager.fire_blocking(&server, &mut event);
-            }
-            if !event.cancelled {
-                let block_entity = world.get_block_entity(pos);
-                for mut stack in event.items {
-                    if let Some(block_entity) = &block_entity
-                        && Block::from_item_id(stack.item.id) == Some(block)
-                    {
-                        block_entity.collect_item_components(&mut stack);
-                    }
-                    world.drop_stack(pos, stack);
+    let items = block_loot(world, block, params);
+    if !items.is_empty() {
+        let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
+            block_pos: *pos,
+            world: world.clone(),
+            player: None,
+            items,
+            cancelled: false,
+        };
+        if let Some(server) = world.server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if !event.cancelled {
+            let block_entity = world.get_block_entity(pos);
+            for mut stack in event.items {
+                if let Some(block_entity) = &block_entity
+                    && Block::from_item_id(stack.item.id) == Some(block)
+                {
+                    block_entity.collect_item_components(&mut stack);
                 }
+                world.drop_stack(pos, stack);
             }
         }
     }

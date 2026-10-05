@@ -143,7 +143,7 @@ impl<'a> ServerPacket<'a> for CMultiBlockUpdate {
                     (chunk_section.y << 4) + rel_y,
                     (chunk_section.z << 4) + rel_z,
                 );
-                updates.push((block_pos, BlockStateId::new_or_air(state_id)));
+                updates.push((block_pos, BlockStateId::from_raw_or_air(state_id)));
             }
 
             Ok(Self {
@@ -169,7 +169,7 @@ impl<'a> ServerPacket<'a> for CMultiBlockUpdate {
                 let block_state_id = bytebuf.get_i16_be()? as u16;
                 updates.push((
                     BlockPos::new(x, y, z),
-                    BlockStateId::new_or_air(block_state_id),
+                    BlockStateId::from_raw_or_air(block_state_id),
                 ));
             }
 
@@ -200,7 +200,7 @@ impl<'a> ServerPacket<'a> for CMultiBlockUpdate {
                 let block_state_id = bytebuf.get_var_int()?.0 as u16;
                 updates.push((
                     BlockPos::new(x, y, z),
-                    BlockStateId::new_or_air(block_state_id),
+                    BlockStateId::from_raw_or_air(block_state_id),
                 ));
             }
 
