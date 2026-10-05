@@ -676,10 +676,7 @@ impl EntityBase for ItemEntity {
     }
 
     fn on_player_collision(&self, player: &Arc<Player>) {
-        if self.pickup_delay.load(Ordering::Relaxed) > 0
-            || player.living_entity.health.load() <= 0.0
-            || player.is_spectator()
-        {
+        if self.pickup_delay.load(Ordering::Relaxed) > 0 {
             return;
         }
 

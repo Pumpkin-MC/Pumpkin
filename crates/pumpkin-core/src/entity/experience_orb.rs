@@ -107,23 +107,21 @@ impl EntityBase for ExperienceOrbEntity {
     }
 
     fn on_player_collision(&self, player: &Arc<Player>) {
-        if player.living_entity.health.load() > 0.0 {
-            let can_pickup = if let Ok(mut delay) = player.experience_pick_up_delay.try_lock()
-                && *delay == 0
-            {
-                *delay = 2;
-                true
-            } else {
-                false
-            };
-            if can_pickup {
-                player.living_entity.pickup(&self.entity, 1);
-                self.entity.remove();
-                let amount = self.amount as i32;
-                let remaining = player.apply_mending_from_xp(amount);
-                if remaining > 0 {
-                    player.add_experience_points(remaining);
-                }
+        let can_pickup = if let Ok(mut delay) = player.experience_pick_up_delay.try_lock()
+            && *delay == 0
+        {
+            *delay = 2;
+            true
+        } else {
+            false
+        };
+        if can_pickup {
+            player.living_entity.pickup(&self.entity, 1);
+            self.entity.remove();
+            let amount = self.amount as i32;
+            let remaining = player.apply_mending_from_xp(amount);
+            if remaining > 0 {
+                player.add_experience_points(remaining);
             }
         }
     }

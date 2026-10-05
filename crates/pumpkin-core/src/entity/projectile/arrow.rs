@@ -1007,10 +1007,6 @@ impl EntityBase for ArrowEntity {
             return;
         }
 
-        if player.living_entity.health.load() <= 0.0 {
-            return;
-        }
-
         // Check pickup rules
         match self.pickup {
             ArrowPickup::Disallowed => return,

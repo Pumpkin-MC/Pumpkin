@@ -394,10 +394,6 @@ impl EntityBase for TridentEntity {
             return;
         }
 
-        if player.living_entity.health.load() <= 0.0 {
-            return;
-        }
-
         match self.pickup {
             ArrowPickup::Disallowed => return,
             ArrowPickup::CreativeOnly if !player.is_creative() => return,
