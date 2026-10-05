@@ -37,9 +37,10 @@ impl Entity {
     }
 
     /// Java clients run `pushEntities` for living entities only (`ClientLevel.getPushableEntities`).
-    pub fn mark_predicted_push(&self, pusher: &(impl EntityBase + ?Sized)) {
+    pub fn mark_predicted_push(&self, pusher: &(impl EntityBase + ?Sized), x: f64, z: f64) {
         if pusher.get_living_entity().is_some() {
-            self.predicted_push.store(true, Ordering::SeqCst);
+            self.predicted_push
+                .store(self.predicted_push.load() + Vector3::new(x, 0.0, z));
         }
     }
 
@@ -118,7 +119,7 @@ impl Entity {
     /// Once per tick: sends what `push_velocity`, `apply_knockback` and `mark_hurt` left.
     pub fn flush_velocity(&self, player: Option<&Player>) {
         let hurt = self.sync_velocity.swap(false, Ordering::SeqCst);
-        let predicted_push = self.predicted_push.swap(false, Ordering::SeqCst);
+        let predicted_push = self.predicted_push.swap(Vector3::default());
         if !self.velocity_dirty.swap(false, Ordering::SeqCst) && !hurt {
             return;
         }
@@ -192,7 +193,7 @@ impl Player {
 
     /// Flush of pushed or knocked back velocity. `hurt` is vanilla `hurtMarked`.
     /// Cancelling the event sends nothing.
-    fn sync_velocity(&self, hurt: bool, predicted_push: bool) {
+    fn sync_velocity(&self, hurt: bool, predicted_push: Vector3<f64>) {
         let entity = &self.living_entity.entity;
         let velocity = entity.velocity.load();
         let Some(new_velocity) = self.fire_velocity_event(velocity) else {
@@ -204,9 +205,13 @@ impl Player {
         }
         entity.send_velocity_to_watchers();
         // Vanilla sends pushes to watchers only. Java predicts living pushes itself,
-        // Bedrock gets them sent. Minecart pushes reach neither client, like vanilla.
-        if hurt || changed || (predicted_push && self.client.bedrock().is_some()) {
+        // Bedrock gets them on top of its own motion. Minecart pushes reach neither client, like vanilla.
+        if hurt || changed {
             self.send_own_velocity(new_velocity);
+        } else if predicted_push != Vector3::default()
+            && let Some(bedrock) = self.client.bedrock()
+        {
+            self.send_own_velocity(bedrock.client_motion.load() + predicted_push);
         }
     }
 
@@ -255,11 +260,11 @@ pub fn push_apart(this: &(impl EntityBase + ?Sized), other: &dyn EntityBase) {
 
     if !this_entity.has_passengers() && this.is_pushable() {
         this_entity.push_velocity(-dx, -dz);
-        this_entity.mark_predicted_push(other);
+        this_entity.mark_predicted_push(other, -dx, -dz);
     }
     if !other_entity.has_passengers() && other.is_pushable() {
         other_entity.push_velocity(dx, dz);
-        other_entity.mark_predicted_push(this);
+        other_entity.mark_predicted_push(this, dx, dz);
     }
 }
 

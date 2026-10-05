@@ -810,8 +810,8 @@ pub struct Entity {
     pub velocity_dirty: AtomicBool,
     /// velocity goes to the own client
     pub sync_velocity: AtomicBool,
-    /// Pushed by a living entity. Java clients predict that push, Bedrock clients need it sent.
-    pub predicted_push: AtomicBool,
+    /// Pushes by living entities since the last flush. Java clients predict them, Bedrock gets them sent.
+    pub predicted_push: AtomicCell<Vector3<f64>>,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
     /// The last sent yaw value (encoded as u8) for change detection
@@ -945,7 +945,7 @@ impl Entity {
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
             sync_velocity: AtomicBool::new(false),
-            predicted_push: AtomicBool::new(false),
+            predicted_push: AtomicCell::new(Vector3::default()),
             removed: AtomicBool::new(false),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),

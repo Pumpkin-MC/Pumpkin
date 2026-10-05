@@ -70,6 +70,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use pumpkin_protocol::bedrock::server::login::ClientData;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::version::BedrockMinecraftVersion;
 use pumpkin_world::level::SyncChunk;
 
@@ -124,6 +125,8 @@ pub struct BedrockClient {
     pub inventory_opened: AtomicBool,
     /// Last processed `PlayerAuthInput` tick. Motion for the own player must carry it.
     pub input_tick: AtomicU64,
+    /// Client motion from the last `PlayerAuthInput`
+    pub client_motion: AtomicCell<Vector3<f64>>,
     /// Separate from normal vitals caching so the first rejected use always gets corrected.
     last_food_rejection_tick: AtomicCell<Option<i32>>,
     pub client_cache_supported: AtomicBool,
@@ -165,6 +168,7 @@ impl BedrockClient {
             next_form_id: AtomicU32::new(0),
             inventory_opened: AtomicBool::new(false),
             input_tick: AtomicU64::new(0),
+            client_motion: AtomicCell::new(Vector3::default()),
             last_food_rejection_tick: AtomicCell::new(None),
             client_cache_supported: AtomicBool::new(false),
             blob_cache: std::sync::Mutex::new(HashMap::new()),

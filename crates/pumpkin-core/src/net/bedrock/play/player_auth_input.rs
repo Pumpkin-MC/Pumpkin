@@ -23,9 +23,9 @@ impl BedrockClient {
             && packet.delta.y < 0.0
             && !entity.has_vehicle();
         entity.on_ground.store(on_ground, Ordering::Relaxed);
-        // Client predicted velocity. Server impulses (push, knockback)
+        // Kept apart from `velocity`, which holds only server impulses like Java
         self.input_tick.store(packet.tick.0, Ordering::Relaxed);
-        entity.velocity.store(packet.delta.to_f64());
+        self.client_motion.store(packet.delta.to_f64());
 
         let new_pos = packet
             .position
