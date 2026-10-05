@@ -2254,7 +2254,7 @@ mod tests {
         assert!(BlockStateId::new(block.default_state.id.as_u16()).is_none());
 
         // Properties through the generic interface.
-        let state = block.states[0];
+        let state = &block.states[0];
         let props = block.properties(state.id).unwrap().to_props();
         assert_eq!(props.len(), 6);
         assert!(props.iter().all(|(_, value)| *value == "true"));
