@@ -647,14 +647,12 @@ impl EntityBase for MinecartEntity {
                 self_entity.velocity.store(vel);
                 self_entity.send_velocity();
 
-                if !other_entity.has_passengers() && entity.is_pushable() {
-                    let mut vel = other_entity.velocity.load();
-                    vel.x += xa / 4.0;
-                    vel.z += za / 4.0;
-                    other_entity.velocity.store(vel);
-                    // a pushed player predicts this itself.
-                    other_entity.velocity_dirty.store(true, Ordering::SeqCst);
-                }
+                let mut vel = other_entity.velocity.load();
+                vel.x += xa / 4.0;
+                vel.z += za / 4.0;
+                other_entity.velocity.store(vel);
+                // a pushed player predicts this itself.
+                other_entity.velocity_dirty.store(true, Ordering::SeqCst);
             }
         }
     }
