@@ -22,6 +22,6 @@ pub(super) struct NetherNetState {
     pub(super) ice_local_addr: SocketAddr,
     pub(super) external_ip: Option<IpAddr>,
     pub(super) ice_router: Arc<IceRouter>,
-    /// The server's own stop token, so NetherNet ends with an embedded server
+    /// The server's own stop token, so `NetherNet` ends with an embedded server too.
     pub(super) stop_token: CancellationToken,
 }
