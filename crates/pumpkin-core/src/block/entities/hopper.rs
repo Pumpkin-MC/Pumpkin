@@ -108,7 +108,8 @@ impl BlockEntity for HopperBlockEntity {
         let Some(properties) = hopper_properties(block.id, state.id) else {
             return;
         };
-        if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
+        // Vanilla `pushItemsTick`: decrement first, move once the cooldown is down to 0.
+        if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) - 1 <= 0 {
             self.cooldown_time.store(0, Ordering::Relaxed);
             if properties.enabled
                 && let Some(entity) = world.get_block_entity(&self.position)
@@ -461,10 +462,13 @@ impl HopperBlockEntity {
             && let Some(hopper) = to.as_any().downcast_ref::<Self>()
             && hopper.cooldown_time.load(Ordering::Relaxed) <= 8
         {
+            // A hopper that hasn't ticked yet this game tick still counts its 8 down to 7.
+            // One that already ticked misses that count -> it starts at 7 instead, so both move
+            // again on the same game tick, no matter which hopper ticked first.
             let cooldown = match from.and_then(|from| from.as_any().downcast_ref::<Self>()) {
                 Some(from_hopper)
-                    if from_hopper.cooldown_time.load(Ordering::Relaxed)
-                        >= hopper.cooldown_time.load(Ordering::Relaxed) =>
+                    if hopper.ticked_game_time.load(Ordering::Relaxed)
+                        >= from_hopper.ticked_game_time.load(Ordering::Relaxed) =>
                 {
                     7
                 }
