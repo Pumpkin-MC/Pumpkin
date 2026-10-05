@@ -1,3 +1,4 @@
+use crate::RequireServer;
 use crate::pumpkin::{
     self,
     plugin::ipc::{IpcMessage, PluginId},
@@ -15,10 +16,7 @@ impl pumpkin::plugin::ipc::HostWithStore<PluginHostState> for HasSelf<PluginHost
     ) -> wasmtime::Result<Result<Result<IpcMessage, String>, ()>> {
         let (server, name) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+            let server = state.require_server().cloned()?;
             let name = state
                 .name
                 .clone()

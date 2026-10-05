@@ -1439,7 +1439,6 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         event_priority: EventPriority,
         blocking: bool,
     ) -> wasmtime::Result<()> {
-        let st = &mut *self;
         // Updated return type
         let priority = match event_priority {
             EventPriority::Highest => pumpkin_core::plugin::EventPriority::Highest,
@@ -1450,14 +1449,14 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         };
 
         // Use ? to trap if the plugin was dropped or the context handle is dead
-        let plugin = st
+        let plugin = self
             .plugin
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Plugin state uninitialized"))?
             .upgrade()
             .ok_or_else(|| wasmtime::Error::msg("Plugin has been dropped"))?;
 
-        let ctx = st.get(&context)?.as_ref();
+        let ctx = self.get(&context)?.as_ref();
         let handler = Arc::new(WasmPluginEventHandler { handler_id, plugin });
 
         match event_type {
@@ -1691,10 +1690,9 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         permission: String,
     ) -> wasmtime::Result<()> {
         use pumpkin_core::command::argument_builder::ArgumentBuilder;
-        let state = self;
 
-        let command = state.take(command)?;
-        let context = state.get(&context)?.clone();
+        let command = self.take(command)?;
+        let context = self.get(&context)?.clone();
         let aliases = if command.names.len() > 1 {
             command.names[1..].to_vec()
         } else {
@@ -1711,7 +1709,6 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         context: Resource<WitContext>,
         permission: Permission,
     ) -> wasmtime::Result<Result<(), String>> {
-        let state = self;
         let mut children = HashMap::with_capacity(permission.children.len());
         for child in permission.children {
             children.insert(child.node, child.value);
@@ -1736,7 +1733,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             children,
         };
 
-        let context_res = state.get(&context)?;
+        let context_res = self.get(&context)?;
         Ok(context_res.register_permission(util_permission))
     }
 
@@ -1745,16 +1742,14 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
     }
 
     fn get_server(&mut self, context: Resource<WitContext>) -> wasmtime::Result<Resource<Server>> {
-        let state = self;
-        state.add(state.get(&context)?.server.clone())
+        self.add(self.get(&context)?.server.clone())
     }
 
     fn get_marketplace_metadata(
         &mut self,
         _context: Resource<WitContext>,
     ) -> wasmtime::Result<Option<MarketplaceMetadata>> {
-        let state = self;
-        Ok(state
+        Ok(self
             .marketplace_metadata
             .clone()
             .map(|metadata| MarketplaceMetadata {

@@ -4,13 +4,12 @@ use std::sync::{Arc, atomic::Ordering};
 
 impl scheduler::Host for PluginHostState {
     fn schedule_delayed_task(&mut self, handler_id: u32, delay: u64) -> wasmtime::Result<u32> {
-        let state = self;
-        let plugin = state
+        let plugin = self
             .plugin
             .as_ref()
             .and_then(std::sync::Weak::upgrade)
             .ok_or_else(|| wasmtime::Error::msg("Plugin not found"))?;
-        let server = state
+        let server = self
             .server
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not found"))?;
@@ -26,13 +25,12 @@ impl scheduler::Host for PluginHostState {
         delay: u64,
         period: u64,
     ) -> wasmtime::Result<u32> {
-        let state = self;
-        let plugin = state
+        let plugin = self
             .plugin
             .as_ref()
             .and_then(std::sync::Weak::upgrade)
             .ok_or_else(|| wasmtime::Error::msg("Plugin not found"))?;
-        let server = state
+        let server = self
             .server
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not found"))?;
@@ -44,8 +42,7 @@ impl scheduler::Host for PluginHostState {
     }
 
     fn cancel_task(&mut self, task_id: u32) -> wasmtime::Result<()> {
-        let state = self;
-        let plugin = state
+        let plugin = self
             .plugin
             .as_ref()
             .and_then(std::sync::Weak::upgrade)

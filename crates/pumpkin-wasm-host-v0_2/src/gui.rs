@@ -1,4 +1,5 @@
 use super::AccessorExt;
+use crate::RwLockIgnorePoison;
 use crate::pumpkin::plugin::{
     gui::{self, Gui},
     item_stack::ItemStack as WitHostItemStack,
@@ -85,8 +86,7 @@ impl gui::HostGui for PluginHostState {
         screen: WitScreen,
         title: Resource<crate::pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<Resource<Gui>> {
-        let state = self;
-        let title = state.take(title)?;
+        let title = self.take(title)?;
         let window_type = from_wit_screen(screen);
 
         let size = match window_type {
@@ -108,7 +108,7 @@ impl gui::HostGui for PluginHostState {
             allow_put_items: true,
         }));
 
-        state.add(gui)
+        self.add(gui)
     }
 }
 
@@ -136,11 +136,7 @@ impl gui::HostGuiWithStore<PluginHostState> for HasSelf<PluginHostState> {
         let item_stack = accessor.take_res(item)?.lock().await.clone();
         let gui_handle = accessor.get_res(&res)?;
         let gui = gui_handle.lock().await;
-        let mut slots = gui
-            .inventory
-            .slots
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut slots = gui.inventory.slots.write_ignore_poison();
         if (slot as usize) < slots.len() {
             slots[slot as usize] = item_stack;
         }
@@ -155,11 +151,7 @@ impl gui::HostGuiWithStore<PluginHostState> for HasSelf<PluginHostState> {
         let stack = {
             let gui_handle = accessor.get_res(&res)?;
             let gui = gui_handle.lock().await;
-            let slots = gui
-                .inventory
-                .slots
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let slots = gui.inventory.slots.read_ignore_poison();
             if (slot as usize) < slots.len() {
                 let stack = &slots[slot as usize];
                 if stack.is_empty() {

@@ -89,7 +89,6 @@ impl HostItemStack for PluginHostState {
         registry_key: String,
         count: u8,
     ) -> wasmtime::Result<Resource<ItemStackHandle>> {
-        let state = self;
         let item = pumpkin_data::item::Item::from_registry_key(
             registry_key
                 .strip_prefix("minecraft:")
@@ -97,7 +96,7 @@ impl HostItemStack for PluginHostState {
         )
         .unwrap_or(&pumpkin_data::item::Item::AIR);
         let stack = pumpkin_data::item_stack::ItemStack::new(count, item);
-        state.add(Arc::new(Mutex::new(stack)))
+        self.add(Arc::new(Mutex::new(stack)))
     }
 }
 

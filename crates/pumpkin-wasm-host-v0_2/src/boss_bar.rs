@@ -122,14 +122,13 @@ impl boss_bar::HostBossBar for PluginHostState {
         color: WitColor,
         division: WitDivision,
     ) -> wasmtime::Result<Resource<BossBar>> {
-        let state = self;
-        let title = state.take(title)?;
+        let title = self.take(title)?;
         let mut bossbar = Bossbar::new(title);
 
         bossbar.color = from_wit_color(color);
         bossbar.division = from_wit_division(division);
 
-        let server = state
+        let server = self
             .server
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("server not available"))?
@@ -138,7 +137,7 @@ impl boss_bar::HostBossBar for PluginHostState {
             bossbar,
             Arc::downgrade(&server),
         )));
-        state.add(plugin_bossbar)
+        self.add(plugin_bossbar)
     }
 }
 

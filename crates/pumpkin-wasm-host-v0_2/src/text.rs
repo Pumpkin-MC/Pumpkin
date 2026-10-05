@@ -23,10 +23,8 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
     }
 
     fn text(&mut self, plain: String) -> wasmtime::Result<Resource<TextComponent>> {
-        let state = self;
         let tc = InternalTextComponent::text(plain);
-        state
-            .add(tc)
+        self.add(tc)
             .map_err(|_| wasmtime::Error::msg("Failed to add text component"))
     }
 
@@ -35,15 +33,13 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         key: String,
         with: Vec<Resource<TextComponent>>,
     ) -> wasmtime::Result<Resource<TextComponent>> {
-        let state = self;
         let mut components = Vec::with_capacity(with.len());
         for r in with {
-            components.push(state.take(r)?);
+            components.push(self.take(r)?);
         }
         #[allow(deprecated)]
         let tc = InternalTextComponent::translate(key, components);
-        state
-            .add(tc)
+        self.add(tc)
             .map_err(|_| wasmtime::Error::msg("Failed to add text component"))
     }
 
@@ -53,15 +49,13 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         bedrock_key: String,
         with: Vec<Resource<TextComponent>>,
     ) -> wasmtime::Result<Resource<TextComponent>> {
-        let state = self;
         let mut components = Vec::with_capacity(with.len());
         for r in with {
-            components.push(state.take(r)?);
+            components.push(self.take(r)?);
         }
         #[allow(deprecated)]
         let tc = InternalTextComponent::translate_cross(java_key, bedrock_key, components);
-        state
-            .add(tc)
+        self.add(tc)
             .map_err(|_| wasmtime::Error::msg("Failed to add text component"))
     }
 
@@ -70,18 +64,14 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         selector: String,
         separator: Option<String>,
     ) -> wasmtime::Result<Resource<TextComponent>> {
-        let state = self;
         let tc = InternalTextComponent::entity_names(selector, separator);
-        state
-            .add(tc)
+        self.add(tc)
             .map_err(|_| wasmtime::Error::msg("Failed to add text component"))
     }
 
     fn keybind(&mut self, keybind: String) -> wasmtime::Result<Resource<TextComponent>> {
-        let state = self;
         let tc = InternalTextComponent::keybind(keybind);
-        state
-            .add(tc)
+        self.add(tc)
             .map_err(|_| wasmtime::Error::msg("Failed to add text component"))
     }
 
@@ -92,23 +82,19 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         locale: String,
         with: Vec<Resource<TextComponent>>,
     ) -> wasmtime::Result<Resource<TextComponent>> {
-        let state = self;
         let loc = Locale::from_str(&locale).unwrap_or(Locale::EnUs);
         let mut components = Vec::with_capacity(with.len());
         for r in with {
-            components.push(state.take(r)?);
+            components.push(self.take(r)?);
         }
         let tc = InternalTextComponent::custom(namespace, key, loc, components);
-        state
-            .add(tc)
+        self.add(tc)
             .map_err(|_| wasmtime::Error::msg("Failed to add text component"))
     }
 
     fn from_legacy_string(&mut self, input: String) -> wasmtime::Result<Resource<TextComponent>> {
-        let state = self;
         let tc = InternalTextComponent::from_legacy_string(&input);
-        state
-            .add(tc)
+        self.add(tc)
             .map_err(|_| wasmtime::Error::msg("Failed to add text component"))
     }
 
@@ -117,10 +103,8 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         input: String,
         code_symbol: char,
     ) -> wasmtime::Result<Resource<TextComponent>> {
-        let state = self;
         let tc = InternalTextComponent::from_legacy_string_with_code(&input, code_symbol);
-        state
-            .add(tc)
+        self.add(tc)
             .map_err(|_| wasmtime::Error::msg("Failed to add text component"))
     }
 
@@ -128,9 +112,8 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         &mut self,
         json: String,
     ) -> wasmtime::Result<Result<Resource<TextComponent>, String>> {
-        let state = self;
         match serde_json::from_str::<InternalTextComponent>(&json) {
-            Ok(tc) => match state.add(tc) {
+            Ok(tc) => match self.add(tc) {
                 Ok(res) => Ok(Ok(res)),
                 Err(err) => Ok(Err(err.to_string())),
             },
@@ -139,8 +122,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
     }
 
     fn to_json(&mut self, text_component: Resource<TextComponent>) -> wasmtime::Result<String> {
-        let state = self;
-        let tc = &state.get(&text_component)?;
+        let tc = &self.get(&text_component)?;
         Ok(serde_json::to_string(tc).unwrap_or_default())
     }
 
@@ -149,9 +131,8 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         text_component: Resource<TextComponent>,
         child: Resource<TextComponent>,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let child_tc = state.take(child)?;
-        let parent = state.get_mut(&text_component)?;
+        let child_tc = self.take(child)?;
+        let parent = self.get_mut(&text_component)?;
         *parent = parent.clone().add_child(child_tc);
         Ok(())
     }
@@ -161,28 +142,24 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         text_component: Resource<TextComponent>,
         text: String,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let parent = state.get_mut(&text_component)?;
+        let parent = self.get_mut(&text_component)?;
         *parent = parent.clone().add_text(text);
         Ok(())
     }
 
     fn get_text(&mut self, text_component: Resource<TextComponent>) -> wasmtime::Result<String> {
-        let state = self;
-        Ok(state.get(&text_component)?.clone().get_text())
+        Ok(self.get(&text_component)?.clone().get_text())
     }
 
     fn encode(&mut self, text_component: Resource<TextComponent>) -> wasmtime::Result<Vec<u8>> {
-        let state = self;
-        Ok(state.get(&text_component)?.encode().into_vec())
+        Ok(self.get(&text_component)?.encode().into_vec())
     }
 
     fn to_pretty_console(
         &mut self,
         text_component: Resource<TextComponent>,
     ) -> wasmtime::Result<String> {
-        let state = self;
-        Ok(state.get(&text_component)?.clone().to_pretty_console())
+        Ok(self.get(&text_component)?.clone().to_pretty_console())
     }
 
     fn color_named(
@@ -190,14 +167,12 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         res: Resource<TextComponent>,
         color: NamedColor,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.color = Some(Color::Named(map_named_color(color)));
+        self.get_mut(&res)?.0.style.color = Some(Color::Named(map_named_color(color)));
         Ok(())
     }
 
     fn color_rgb(&mut self, res: Resource<TextComponent>, color: RgbColor) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.color =
+        self.get_mut(&res)?.0.style.color =
             Some(Color::Rgb(color::RGBColor::new(color.r, color.g, color.b)));
         Ok(())
     }
@@ -207,9 +182,8 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         res: Resource<TextComponent>,
         colors: Vec<NamedColor>,
     ) -> wasmtime::Result<()> {
-        let state = self;
         let mapped: Vec<_> = colors.into_iter().map(map_named_color).collect();
-        let parent = state.get_mut(&res)?;
+        let parent = self.get_mut(&res)?;
         *parent = parent.clone().gradient_named(&mapped);
         Ok(())
     }
@@ -219,62 +193,53 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         res: Resource<TextComponent>,
         colors: Vec<RgbColor>,
     ) -> wasmtime::Result<()> {
-        let state = self;
         let mapped: Vec<_> = colors
             .into_iter()
             .map(|c| color::RGBColor::new(c.r, c.g, c.b))
             .collect();
-        let parent = state.get_mut(&res)?;
+        let parent = self.get_mut(&res)?;
         *parent = parent.clone().gradient(&mapped);
         Ok(())
     }
 
     fn rainbow(&mut self, res: Resource<TextComponent>) -> wasmtime::Result<()> {
-        let state = self;
-        let parent = state.get_mut(&res)?;
+        let parent = self.get_mut(&res)?;
         *parent = parent.clone().rainbow();
         Ok(())
     }
 
     fn bold(&mut self, res: Resource<TextComponent>, value: bool) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.bold = Some(value);
+        self.get_mut(&res)?.0.style.bold = Some(value);
         Ok(())
     }
 
     fn italic(&mut self, res: Resource<TextComponent>, value: bool) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.italic = Some(value);
+        self.get_mut(&res)?.0.style.italic = Some(value);
         Ok(())
     }
 
     fn underlined(&mut self, res: Resource<TextComponent>, value: bool) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.underlined = Some(value);
+        self.get_mut(&res)?.0.style.underlined = Some(value);
         Ok(())
     }
 
     fn strikethrough(&mut self, res: Resource<TextComponent>, value: bool) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.strikethrough = Some(value);
+        self.get_mut(&res)?.0.style.strikethrough = Some(value);
         Ok(())
     }
 
     fn obfuscated(&mut self, res: Resource<TextComponent>, value: bool) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.obfuscated = Some(value);
+        self.get_mut(&res)?.0.style.obfuscated = Some(value);
         Ok(())
     }
 
     fn insertion(&mut self, res: Resource<TextComponent>, text: String) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.insertion = Some(text);
+        self.get_mut(&res)?.0.style.insertion = Some(text);
         Ok(())
     }
 
     fn font(&mut self, res: Resource<TextComponent>, font: String) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.font = Some(font);
+        self.get_mut(&res)?.0.style.font = Some(font);
         Ok(())
     }
 
@@ -283,8 +248,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         res: Resource<TextComponent>,
         color: ArgbColor,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.shadow_color =
+        self.get_mut(&res)?.0.style.shadow_color =
             Some(color::ARGBColor::new(color.a, color.r, color.g, color.b));
         Ok(())
     }
@@ -294,8 +258,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         res: Resource<TextComponent>,
         url: String,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.click_event = Some(ClickEvent::OpenUrl {
+        self.get_mut(&res)?.0.style.click_event = Some(ClickEvent::OpenUrl {
             url: Cow::Owned(url),
         });
         Ok(())
@@ -306,8 +269,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         res: Resource<TextComponent>,
         path: String,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.click_event = Some(ClickEvent::OpenFile {
+        self.get_mut(&res)?.0.style.click_event = Some(ClickEvent::OpenFile {
             path: Cow::Owned(path),
         });
         Ok(())
@@ -318,8 +280,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         res: Resource<TextComponent>,
         command: String,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.click_event = Some(ClickEvent::RunCommand {
+        self.get_mut(&res)?.0.style.click_event = Some(ClickEvent::RunCommand {
             command: Cow::Owned(command),
         });
         Ok(())
@@ -330,8 +291,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         res: Resource<TextComponent>,
         command: String,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.click_event = Some(ClickEvent::SuggestCommand {
+        self.get_mut(&res)?.0.style.click_event = Some(ClickEvent::SuggestCommand {
             command: Cow::Owned(command),
         });
         Ok(())
@@ -342,8 +302,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         res: Resource<TextComponent>,
         page: u32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.click_event = Some(ClickEvent::ChangePage { page });
+        self.get_mut(&res)?.0.style.click_event = Some(ClickEvent::ChangePage { page });
         Ok(())
     }
 
@@ -352,8 +311,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         res: Resource<TextComponent>,
         text: String,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.click_event = Some(ClickEvent::CopyToClipboard {
+        self.get_mut(&res)?.0.style.click_event = Some(ClickEvent::CopyToClipboard {
             value: Cow::Owned(text),
         });
         Ok(())
@@ -364,9 +322,8 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         res: Resource<TextComponent>,
         text: Resource<TextComponent>,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let hover_tc = state.take(text)?;
-        state.get_mut(&res)?.0.style.hover_event = Some(HoverEvent::ShowText {
+        let hover_tc = self.take(text)?;
+        self.get_mut(&res)?.0.style.hover_event = Some(HoverEvent::ShowText {
             value: vec![hover_tc.0],
         });
         Ok(())
@@ -377,8 +334,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         res: Resource<TextComponent>,
         item: String,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get_mut(&res)?.0.style.hover_event = Some(HoverEvent::ShowItem {
+        self.get_mut(&res)?.0.style.hover_event = Some(HoverEvent::ShowItem {
             id: Cow::Owned(item),
             count: None,
         });
@@ -392,12 +348,11 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         id: String,
         name: Option<Resource<TextComponent>>,
     ) -> wasmtime::Result<()> {
-        let state = self;
         let name_val = match name {
-            Some(r) => Some(vec![state.take(r)?.0]),
+            Some(r) => Some(vec![self.take(r)?.0]),
             None => None,
         };
-        state.get_mut(&res)?.0.style.hover_event = Some(HoverEvent::ShowEntity {
+        self.get_mut(&res)?.0.style.hover_event = Some(HoverEvent::ShowEntity {
             id: Cow::Owned(entity_type),
             uuid: Cow::Owned(id),
             name: name_val,

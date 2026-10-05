@@ -32,8 +32,7 @@ impl HostInventory for PluginHostState {
     }
 
     fn get_size(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<u32> {
-        let state = self;
-        let provider = state.get(&res)?;
+        let provider = self.get(&res)?;
         let size = match provider {
             InventoryProvider::Generic(inv) => inv.size() as u32,
             InventoryProvider::PlayerMain(_) => 36,
@@ -43,8 +42,7 @@ impl HostInventory for PluginHostState {
     }
 
     fn is_empty(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<bool> {
-        let state = self;
-        let provider = state.get(&res)?;
+        let provider = self.get(&res)?;
         let empty = match provider {
             InventoryProvider::Generic(inv) => inv.is_empty(),
             InventoryProvider::PlayerMain(player) => {
@@ -64,8 +62,7 @@ impl HostInventory for PluginHostState {
         res: Resource<WitInventory>,
         slot: u32,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let state = self;
-        let provider = state.get(&res)?;
+        let provider = self.get(&res)?;
         let stack = match provider {
             InventoryProvider::Generic(inv) => {
                 let s = inv.get_stack(slot as usize);
@@ -90,7 +87,7 @@ impl HostInventory for PluginHostState {
         };
 
         if let Some(stack) = stack {
-            Ok(Some(state.add(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         } else {
             Ok(None)
         }
@@ -101,8 +98,7 @@ impl HostInventory for PluginHostState {
         res: Resource<WitInventory>,
         item_id: String,
     ) -> wasmtime::Result<u32> {
-        let state = self;
-        let provider = state.get(&res)?;
+        let provider = self.get(&res)?;
         let mut total = 0u32;
         let is_matching =
             |key: &str| key == item_id || key.strip_prefix("minecraft:") == Some(&item_id);
@@ -300,9 +296,8 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Resource<WitInventory>> {
-        let state = self;
-        let player = state.get(&res)?.clone();
-        state.add(InventoryProvider::PlayerMain(player))
+        let player = self.get(&res)?.clone();
+        self.add(InventoryProvider::PlayerMain(player))
     }
 
     fn get_item_in_hand(
@@ -310,20 +305,18 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         hand: WitHand,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let state = self;
-        let player = state.get(&res)?;
+        let player = self.get(&res)?;
         let hand = from_wasm_hand(hand);
         let stack = player.inventory().get_stack_in_hand(hand);
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(state.add(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         }
     }
 
     fn get_selected_slot(&mut self, res: Resource<WitPlayerInventory>) -> wasmtime::Result<u8> {
-        let state = self;
-        let player = state.get(&res)?;
+        let player = self.get(&res)?;
         Ok(player.inventory().get_selected_slot())
     }
 
@@ -332,8 +325,7 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         slot: u8,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let player = state.get(&res)?;
+        let player = self.get(&res)?;
         if slot < 9 {
             player.inventory().set_selected_slot(slot);
         }
@@ -344,13 +336,12 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let state = self;
-        let player = state.get(&res)?;
+        let player = self.get(&res)?;
         let stack = player.inventory().get_slot(39);
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(state.add(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         }
     }
 
@@ -358,13 +349,12 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let state = self;
-        let player = state.get(&res)?;
+        let player = self.get(&res)?;
         let stack = player.inventory().get_slot(38);
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(state.add(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         }
     }
 
@@ -372,13 +362,12 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let state = self;
-        let player = state.get(&res)?;
+        let player = self.get(&res)?;
         let stack = player.inventory().get_slot(37);
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(state.add(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         }
     }
 
@@ -386,13 +375,12 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let state = self;
-        let player = state.get(&res)?;
+        let player = self.get(&res)?;
         let stack = player.inventory().get_slot(36);
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(state.add(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         }
     }
 
@@ -400,13 +388,12 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let state = self;
-        let player = state.get(&res)?;
+        let player = self.get(&res)?;
         let stack = player.inventory().get_slot(40);
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(state.add(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         }
     }
 }

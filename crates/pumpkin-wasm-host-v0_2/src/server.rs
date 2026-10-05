@@ -3,6 +3,8 @@ use super::{
     player::{from_wit_permission_level, parse_ban_expiry, to_wit_permission_level},
     run_blocking,
 };
+use crate::RequireServer;
+use crate::RwLockIgnorePoison;
 use crate::{
     pumpkin::{
         self,
@@ -38,8 +40,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     }
 
     fn get_sys_info(&mut self, _res: Resource<Server>) -> wasmtime::Result<SysInfo> {
-        let state = self;
-        let has_perm = |p: &str| state.permissions.iter().any(|perm| perm == p);
+        let has_perm = |p: &str| self.permissions.iter().any(|perm| perm == p);
 
         let mut sys = sysinfo::System::new_all();
         sys.refresh_all();
@@ -72,11 +73,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     }
 
     fn get_difficulty(&mut self, _res: Resource<Server>) -> wasmtime::Result<Difficulty> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(match server.get_difficulty() {
             pumpkin_util::Difficulty::Peaceful => Difficulty::Peaceful,
@@ -87,29 +84,17 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     }
 
     fn get_player_count(&mut self, _res: Resource<Server>) -> wasmtime::Result<u32> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         Ok(server.get_player_count() as u32)
     }
 
     fn get_mspt(&mut self, _res: Resource<Server>) -> wasmtime::Result<f64> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         Ok(server.get_mspt())
     }
 
     fn get_tps(&mut self, _res: Resource<Server>) -> wasmtime::Result<f64> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         Ok(server.get_tps())
     }
 
@@ -117,16 +102,12 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         &mut self,
         _res: Resource<Server>,
     ) -> wasmtime::Result<Vec<Resource<Player>>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(server
             .get_all_players()
             .into_iter()
-            .map(|player| state.add(player).expect("failed to add player resource"))
+            .map(|player| self.add(player).expect("failed to add player resource"))
             .collect())
     }
 
@@ -135,15 +116,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         name: String,
     ) -> wasmtime::Result<Option<Resource<Player>>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         server
             .get_player_by_name(&name)
-            .map(|player| state.add(player))
+            .map(|player| self.add(player))
             .transpose()
     }
 
@@ -152,17 +129,13 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         id: WitUuid,
     ) -> wasmtime::Result<Option<Resource<Player>>> {
-        let state = self;
         let uuid = WitUuid::from_wit(&id);
 
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         server
             .get_player_by_uuid(uuid)
-            .map(|player| state.add(player))
+            .map(|player| self.add(player))
             .transpose()
     }
 
@@ -170,19 +143,14 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         &mut self,
         _rep: Resource<Server>,
     ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::world::World>>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(server
             .worlds
             .load()
             .iter()
             .map(|world| {
-                state
-                    .add(world.clone())
+                self.add(world.clone())
                     .expect("failed to add world resource")
             })
             .collect())
@@ -193,11 +161,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         name: String,
     ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::world::World>>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(server
             .worlds
@@ -205,18 +169,13 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .iter()
             .find(|world| world.get_world_name() == name || world.dimension.minecraft_name == name)
             .map(|world| {
-                state
-                    .add(world.clone())
+                self.add(world.clone())
                     .expect("failed to add world resource")
             }))
     }
 
     fn has_world(&mut self, _rep: Resource<Server>, name: String) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(server
             .worlds
@@ -230,12 +189,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         world: Resource<pumpkin::plugin::world::World>,
     ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::player::Player>>> {
-        let state = self;
-        let world_res = state.take(world)?;
+        let world_res = self.take(world)?;
         let players = world_res.players.load();
         let mut player_resources = Vec::with_capacity(players.len());
         for p in players.iter() {
-            let res = state.add(p.clone())?;
+            let res = self.add(p.clone())?;
             player_resources.push(res);
         }
         Ok(player_resources)
@@ -246,8 +204,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         world: Resource<pumpkin::plugin::world::World>,
     ) -> wasmtime::Result<u32> {
-        let state = self;
-        let world_res = state.take(world)?;
+        let world_res = self.take(world)?;
         Ok(world_res.players.load().len() as u32)
     }
 
@@ -256,11 +213,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         signature: Vec<u8>,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let packet = pumpkin_protocol::java::client::play::CDeleteChat::from_signature(&signature);
         server.broadcast_packet_all(&packet);
         Ok(())
@@ -271,11 +224,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         signature_id: i32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let packet = pumpkin_protocol::java::client::play::CDeleteChat::from_cache_id(signature_id);
         server.broadcast_packet_all(&packet);
         Ok(())
@@ -287,103 +236,63 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         header: Resource<pumpkin::plugin::text::TextComponent>,
         footer: Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let header = state.take(header)?;
-        let footer = state.take(footer)?;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let header = self.take(header)?;
+        let footer = self.take(footer)?;
+        let server = self.require_server()?;
         server.broadcast_tab_list_header_footer(&header, &footer);
         Ok(())
     }
 
     fn get_max_players(&mut self, _rep: Resource<Server>) -> wasmtime::Result<u32> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(server.advanced_config.networking.java.max_players)
     }
 
     fn is_hardcore(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(server.basic_config.hardcore)
     }
 
     fn is_online_mode(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(server.advanced_config.networking.java.online_mode)
     }
 
     fn get_motd(&mut self, _rep: Resource<Server>) -> wasmtime::Result<String> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(server.advanced_config.networking.java.motd.clone())
     }
 
     fn has_whitelist(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(server.basic_config.white_list)
     }
 
     fn get_allow_nether(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(server.basic_config.allow_nether)
     }
 
     fn get_allow_end(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(server.basic_config.allow_end)
     }
 
     fn get_view_distance(&mut self, _rep: Resource<Server>) -> wasmtime::Result<u8> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(server.advanced_config.networking.java.view_distance.get())
     }
 
     fn get_simulation_distance(&mut self, _rep: Resource<Server>) -> wasmtime::Result<u8> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(server
             .advanced_config
@@ -397,11 +306,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         &mut self,
         _rep: Resource<Server>,
     ) -> wasmtime::Result<pumpkin::plugin::common::GameMode> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
 
         Ok(super::events::to_wasm_game_mode(
             server.basic_config.default_gamemode,
@@ -412,48 +317,32 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         &mut self,
         _rep: Resource<Server>,
     ) -> wasmtime::Result<Resource<WitRecipeManager>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        state.add(server.recipe_manager.clone())
+        let server = self.require_server()?;
+        self.add(server.recipe_manager.clone())
     }
 
     fn get_op_manager(
         &mut self,
         _rep: Resource<Server>,
     ) -> wasmtime::Result<Resource<WitOpManager>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        state.add(server.clone())
+        let server = self.require_server()?;
+        self.add(server.clone())
     }
 
     fn get_ban_manager(
         &mut self,
         _rep: Resource<Server>,
     ) -> wasmtime::Result<Resource<WitBanManager>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        state.add(server.clone())
+        let server = self.require_server()?;
+        self.add(server.clone())
     }
 
     fn get_whitelist_manager(
         &mut self,
         _rep: Resource<Server>,
     ) -> wasmtime::Result<Resource<WitWhitelistManager>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        state.add(server.clone())
+        let server = self.require_server()?;
+        self.add(server.clone())
     }
 
     fn get_advancement(
@@ -461,11 +350,10 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         id: String,
     ) -> wasmtime::Result<Option<pumpkin::plugin::advancement::AdvancementInfo>> {
-        let state = self;
         let Some(advancement) = crate::advancement::find_advancement(&id) else {
             return Ok(None);
         };
-        crate::advancement::to_wasm_advancement_info(state, advancement).map(Some)
+        crate::advancement::to_wasm_advancement_info(self, advancement).map(Some)
     }
 
     fn get_all_advancement_ids(&mut self, _rep: Resource<Server>) -> wasmtime::Result<Vec<String>> {
@@ -480,24 +368,16 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         &mut self,
         _rep: Resource<Server>,
     ) -> wasmtime::Result<Resource<WitEnchantmentManager>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        state.add(server.enchantment_manager.clone())
+        let server = self.require_server()?;
+        self.add(server.enchantment_manager.clone())
     }
 
     fn get_datapack_manager(
         &mut self,
         _rep: Resource<Server>,
     ) -> wasmtime::Result<Resource<WitDatapackManager>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        state.add(server.clone())
+        let server = self.require_server()?;
+        self.add(server.clone())
     }
 
     fn set_server_links(
@@ -505,14 +385,10 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         links: Vec<pumpkin::plugin::player::ServerLink>,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let server = state
-            .server
-            .clone()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server().cloned()?;
         let mut converted = Vec::new();
         for link in links {
-            converted.push(super::player::from_wit_server_link(state, link)?);
+            converted.push(super::player::from_wit_server_link(self, link)?);
         }
         let protocol_links: Vec<pumpkin_protocol::Link<'_>> = converted
             .iter()
@@ -597,14 +473,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
         name: String,
         dimension: Dimension,
     ) -> wasmtime::Result<Resource<pumpkin::plugin::world::World>> {
-        let server = accessor.with(|mut host| -> wasmtime::Result<_> {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            Ok(server)
-        })?;
+        let server = accessor.server()?;
 
         let internal_dim = match dimension {
             Dimension::Overworld => pumpkin_data::dimension::Dimension::OVERWORLD,
@@ -623,14 +492,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
         _rep: Resource<Server>,
         name: String,
     ) -> wasmtime::Result<Result<(), String>> {
-        let server = accessor.with(|mut host| -> wasmtime::Result<_> {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            Ok(server)
-        })?;
+        let server = accessor.server()?;
 
         in_active_context(accessor, server.unload_world(&name)).await
     }
@@ -639,14 +501,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
         accessor: &Accessor<PluginHostState, Self>,
         _rep: Resource<Server>,
     ) -> wasmtime::Result<Result<(), String>> {
-        let server = accessor.with(|mut host| -> wasmtime::Result<_> {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            Ok(server)
-        })?;
+        let server = accessor.server()?;
 
         in_active_context(accessor, server.save_all()).await
     }
@@ -656,14 +511,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
         _rep: Resource<Server>,
         message: String,
     ) -> wasmtime::Result<()> {
-        let server = accessor.with(|mut host| -> wasmtime::Result<_> {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            Ok(server)
-        })?;
+        let server = accessor.server()?;
         let message = TextComponent::text(message);
         let sender = TextComponent::text("Server");
 
@@ -681,10 +529,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let (server, native_sender) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+            let server = state.require_server().cloned()?;
             let native_sender = match sender {
                 WasmCommandSender::Console => CommandSender::Console,
                 WasmCommandSender::Player(player_res) => {
@@ -709,17 +554,9 @@ impl pumpkin::plugin::server::HostOpManager for PluginHostState {
     }
 
     fn is_op(&mut self, _res: Resource<WitOpManager>, id: WitUuid) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let uuid = WitUuid::from_wit(&id);
-        let ops = server
-            .data
-            .operator_config
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let ops = server.data.operator_config.read_ignore_poison();
         Ok(ops.get_entry(&uuid).is_some())
     }
 
@@ -728,17 +565,9 @@ impl pumpkin::plugin::server::HostOpManager for PluginHostState {
         _res: Resource<WitOpManager>,
         id: WitUuid,
     ) -> wasmtime::Result<Option<OpEntry>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let uuid = WitUuid::from_wit(&id);
-        let ops = server
-            .data
-            .operator_config
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let ops = server.data.operator_config.read_ignore_poison();
         Ok(ops.get_entry(&uuid).map(|entry| OpEntry {
             uuid: WitUuid::to_wit(&entry.uuid),
             name: entry.name.clone(),
@@ -752,17 +581,9 @@ impl pumpkin::plugin::server::HostOpManager for PluginHostState {
         _res: Resource<WitOpManager>,
         id: WitUuid,
     ) -> wasmtime::Result<pumpkin::plugin::permission::PermissionLevel> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let uuid = WitUuid::from_wit(&id);
-        let ops = server
-            .data
-            .operator_config
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let ops = server.data.operator_config.read_ignore_poison();
         Ok(ops.get_entry(&uuid).map_or(
             pumpkin::plugin::permission::PermissionLevel::Zero,
             |entry| to_wit_permission_level(entry.level),
@@ -770,16 +591,8 @@ impl pumpkin::plugin::server::HostOpManager for PluginHostState {
     }
 
     fn list_ops(&mut self, _res: Resource<WitOpManager>) -> wasmtime::Result<Vec<OpEntry>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        let config = server
-            .data
-            .operator_config
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let server = self.require_server()?;
+        let config = server.data.operator_config.read_ignore_poison();
         Ok(config
             .ops
             .iter()
@@ -802,23 +615,12 @@ impl pumpkin::plugin::server::HostOpManagerWithStore<PluginHostState> for HasSel
         level: pumpkin::plugin::permission::PermissionLevel,
         bypasses_player_limit: bool,
     ) -> wasmtime::Result<()> {
-        let server = accessor.with(|mut host| -> wasmtime::Result<_> {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            Ok(server)
-        })?;
+        let server = accessor.server()?;
         let uuid = WitUuid::from_wit(&id);
         let internal_level = from_wit_permission_level(level);
 
         run_blocking(accessor, move || {
-            let mut config = server
-                .data
-                .operator_config
-                .write()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut config = server.data.operator_config.write_ignore_poison();
             if let Some(existing) = config.ops.iter_mut().find(|o| o.uuid == uuid) {
                 existing.level = internal_level;
                 existing.name.clone_from(&name);
@@ -844,23 +646,12 @@ impl pumpkin::plugin::server::HostOpManagerWithStore<PluginHostState> for HasSel
         _res: Resource<WitOpManager>,
         id: WitUuid,
     ) -> wasmtime::Result<bool> {
-        let server = accessor.with(|mut host| -> wasmtime::Result<_> {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            Ok(server)
-        })?;
+        let server = accessor.server()?;
         let uuid = WitUuid::from_wit(&id);
 
         run_blocking(accessor, move || {
             let removed = {
-                let mut config = server
-                    .data
-                    .operator_config
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut config = server.data.operator_config.write_ignore_poison();
                 config
                     .ops
                     .iter()
@@ -897,11 +688,7 @@ impl pumpkin::plugin::server::HostBanManager for PluginHostState {
         _res: Resource<WitBanManager>,
         id: WitUuid,
     ) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let uuid = WitUuid::from_wit(&id);
         let now = time::OffsetDateTime::now_utc();
         let mut list = server.data.banned_player_list.write().unwrap();
@@ -916,11 +703,7 @@ impl pumpkin::plugin::server::HostBanManager for PluginHostState {
         _res: Resource<WitBanManager>,
         id: WitUuid,
     ) -> wasmtime::Result<Option<BannedPlayerEntry>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let uuid = WitUuid::from_wit(&id);
         let now = time::OffsetDateTime::now_utc();
         let mut list = server.data.banned_player_list.write().unwrap();
@@ -952,11 +735,7 @@ impl pumpkin::plugin::server::HostBanManager for PluginHostState {
         _res: Resource<WitBanManager>,
         id: WitUuid,
     ) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let uuid = WitUuid::from_wit(&id);
         let mut list = server.data.banned_player_list.write().unwrap();
         Ok(list
@@ -974,11 +753,7 @@ impl pumpkin::plugin::server::HostBanManager for PluginHostState {
         &mut self,
         _res: Resource<WitBanManager>,
     ) -> wasmtime::Result<Vec<BannedPlayerEntry>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let now = time::OffsetDateTime::now_utc();
         let mut list = server.data.banned_player_list.write().unwrap();
         list.banned_players
@@ -1009,11 +784,7 @@ impl pumpkin::plugin::server::HostBanManager for PluginHostState {
         _res: Resource<WitBanManager>,
         ip: String,
     ) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let ip_addr: std::net::IpAddr = ip
             .parse()
             .map_err(|_| wasmtime::Error::msg("Invalid IP address"))?;
@@ -1030,11 +801,7 @@ impl pumpkin::plugin::server::HostBanManager for PluginHostState {
         _res: Resource<WitBanManager>,
         ip: String,
     ) -> wasmtime::Result<Option<BannedIpEntry>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let ip_addr: std::net::IpAddr = ip
             .parse()
             .map_err(|_| wasmtime::Error::msg("Invalid IP address"))?;
@@ -1063,11 +830,7 @@ impl pumpkin::plugin::server::HostBanManager for PluginHostState {
     }
 
     fn unban_ip(&mut self, _res: Resource<WitBanManager>, ip: String) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let ip_addr: std::net::IpAddr = ip
             .parse()
             .map_err(|_| wasmtime::Error::msg("Invalid IP address"))?;
@@ -1087,11 +850,7 @@ impl pumpkin::plugin::server::HostBanManager for PluginHostState {
         &mut self,
         _res: Resource<WitBanManager>,
     ) -> wasmtime::Result<Vec<BannedIpEntry>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let now = time::OffsetDateTime::now_utc();
         let mut list = server.data.banned_ip_list.write().unwrap();
         list.banned_ips
@@ -1129,10 +888,7 @@ impl pumpkin::plugin::server::HostBanManagerWithStore<PluginHostState>
     ) -> wasmtime::Result<()> {
         let (server, reason_text) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+            let server = state.require_server().cloned()?;
             let reason_text = options
                 .reason
                 .map(|res| state.take(res))
@@ -1255,11 +1011,7 @@ impl pumpkin::plugin::server::HostWhitelistManager for PluginHostState {
     }
 
     fn is_enabled(&mut self, _res: Resource<WitWhitelistManager>) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         Ok(server.white_list.load(std::sync::atomic::Ordering::Relaxed))
     }
 
@@ -1268,11 +1020,7 @@ impl pumpkin::plugin::server::HostWhitelistManager for PluginHostState {
         _res: Resource<WitWhitelistManager>,
         id: WitUuid,
     ) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let uuid = WitUuid::from_wit(&id);
         let whitelist = server.data.whitelist_config.read().unwrap();
         Ok(whitelist.whitelist.iter().any(|e| e.uuid == uuid))
@@ -1284,11 +1032,7 @@ impl pumpkin::plugin::server::HostWhitelistManager for PluginHostState {
         name: String,
         id: WitUuid,
     ) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let uuid = WitUuid::from_wit(&id);
         let mut config = server.data.whitelist_config.write().unwrap();
         if config.whitelist.iter().any(|e| e.uuid == uuid) {
@@ -1307,11 +1051,7 @@ impl pumpkin::plugin::server::HostWhitelistManager for PluginHostState {
         _res: Resource<WitWhitelistManager>,
         id: WitUuid,
     ) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let uuid = WitUuid::from_wit(&id);
         let mut config = server.data.whitelist_config.write().unwrap();
         Ok(config
@@ -1329,11 +1069,7 @@ impl pumpkin::plugin::server::HostWhitelistManager for PluginHostState {
         &mut self,
         _res: Resource<WitWhitelistManager>,
     ) -> wasmtime::Result<Vec<WitWhitelistEntry>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let config = server.data.whitelist_config.read().unwrap();
         Ok(config
             .whitelist
@@ -1354,14 +1090,7 @@ impl pumpkin::plugin::server::HostWhitelistManagerWithStore<PluginHostState>
         _res: Resource<WitWhitelistManager>,
         enabled: bool,
     ) -> wasmtime::Result<()> {
-        let server = accessor.with(|mut host| -> wasmtime::Result<_> {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            Ok(server)
-        })?;
+        let server = accessor.server()?;
 
         run_blocking(accessor, move || {
             server

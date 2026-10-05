@@ -112,12 +112,11 @@ impl HostDisplayEntity for PluginHostState {
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Result<Resource<DisplayEntity>, Resource<Entity>>> {
-        let state = self;
-        let entity = state.take(entity)?;
+        let entity = self.take(entity)?;
         if get_display_entity(entity.as_ref()).is_some() {
-            Ok(Ok(state.add(entity)?))
+            Ok(Ok(self.add(entity)?))
         } else {
-            Ok(Err(state.add(entity)?))
+            Ok(Err(self.add(entity)?))
         }
     }
 
@@ -125,17 +124,15 @@ impl HostDisplayEntity for PluginHostState {
         &mut self,
         display: Resource<DisplayEntity>,
     ) -> wasmtime::Result<Resource<Entity>> {
-        let state = self;
-        let display_res = state.get(&display)?;
-        state.add(display_res.clone())
+        let display_res = self.get(&display)?;
+        self.add(display_res.clone())
     }
 
     fn get_transformation(
         &mut self,
         display: Resource<DisplayEntity>,
     ) -> wasmtime::Result<DisplayTransformation> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         get_display_entity(display_res.as_ref()).map_or_else(
             || {
                 Ok(DisplayTransformation {
@@ -202,8 +199,7 @@ impl HostDisplayEntity for PluginHostState {
         display: Resource<DisplayEntity>,
         transformation: DisplayTransformation,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         if let Some(d) = get_display_entity(display_res.as_ref()) {
             d.set_translation(Vector3::new(
                 transformation.translation.x,
@@ -235,8 +231,7 @@ impl HostDisplayEntity for PluginHostState {
         &mut self,
         display: Resource<DisplayEntity>,
     ) -> wasmtime::Result<i32> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         Ok(get_display_entity(display_res.as_ref()).map_or(
             0,
             pumpkin_core::entity::decoration::display::DisplayEntity::get_interpolation_duration,
@@ -248,8 +243,7 @@ impl HostDisplayEntity for PluginHostState {
         display: Resource<DisplayEntity>,
         duration: i32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         if let Some(d) = get_display_entity(display_res.as_ref()) {
             d.set_interpolation_duration(duration);
         }
@@ -260,8 +254,7 @@ impl HostDisplayEntity for PluginHostState {
         &mut self,
         display: Resource<DisplayEntity>,
     ) -> wasmtime::Result<i32> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         Ok(get_display_entity(display_res.as_ref()).map_or(
                 0,
                 pumpkin_core::entity::decoration::display::DisplayEntity::get_interpolation_start_delta_ticks,
@@ -273,8 +266,7 @@ impl HostDisplayEntity for PluginHostState {
         display: Resource<DisplayEntity>,
         delta_ticks: i32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         if let Some(d) = get_display_entity(display_res.as_ref()) {
             d.set_interpolation_start_delta_ticks(delta_ticks);
         }
@@ -282,8 +274,7 @@ impl HostDisplayEntity for PluginHostState {
     }
 
     fn get_teleport_duration(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<i32> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         Ok(get_display_entity(display_res.as_ref()).map_or(
             0,
             pumpkin_core::entity::decoration::display::DisplayEntity::get_teleport_duration,
@@ -295,8 +286,7 @@ impl HostDisplayEntity for PluginHostState {
         display: Resource<DisplayEntity>,
         duration: i32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         if let Some(d) = get_display_entity(display_res.as_ref()) {
             d.set_teleport_duration(duration);
         }
@@ -307,8 +297,7 @@ impl HostDisplayEntity for PluginHostState {
         &mut self,
         display: Resource<DisplayEntity>,
     ) -> wasmtime::Result<BillboardMode> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         Ok(
             get_display_entity(display_res.as_ref()).map_or(BillboardMode::Fixed, |d| {
                 map_billboard_mode(d.get_billboard())
@@ -321,8 +310,7 @@ impl HostDisplayEntity for PluginHostState {
         display: Resource<DisplayEntity>,
         mode: BillboardMode,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         if let Some(d) = get_display_entity(display_res.as_ref()) {
             d.set_billboard(map_billboard_mode_rev(mode));
         }
@@ -330,8 +318,7 @@ impl HostDisplayEntity for PluginHostState {
     }
 
     fn get_view_range(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<f32> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         get_display_entity(display_res.as_ref()).map_or_else(|| Ok(1.0), |d| Ok(d.get_view_range()))
     }
 
@@ -340,8 +327,7 @@ impl HostDisplayEntity for PluginHostState {
         display: Resource<DisplayEntity>,
         range: f32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         if let Some(d) = get_display_entity(display_res.as_ref()) {
             d.set_view_range(range);
         }
@@ -349,8 +335,7 @@ impl HostDisplayEntity for PluginHostState {
     }
 
     fn get_shadow_radius(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<f32> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         get_display_entity(display_res.as_ref())
             .map_or_else(|| Ok(0.0), |d| Ok(d.get_shadow_radius()))
     }
@@ -360,8 +345,7 @@ impl HostDisplayEntity for PluginHostState {
         display: Resource<DisplayEntity>,
         radius: f32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         if let Some(d) = get_display_entity(display_res.as_ref()) {
             d.set_shadow_radius(radius);
         }
@@ -369,8 +353,7 @@ impl HostDisplayEntity for PluginHostState {
     }
 
     fn get_shadow_strength(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<f32> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         get_display_entity(display_res.as_ref())
             .map_or_else(|| Ok(1.0), |d| Ok(d.get_shadow_strength()))
     }
@@ -380,8 +363,7 @@ impl HostDisplayEntity for PluginHostState {
         display: Resource<DisplayEntity>,
         strength: f32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         if let Some(d) = get_display_entity(display_res.as_ref()) {
             d.set_shadow_strength(strength);
         }
@@ -389,8 +371,7 @@ impl HostDisplayEntity for PluginHostState {
     }
 
     fn get_display_width(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<f32> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         get_display_entity(display_res.as_ref())
             .map_or_else(|| Ok(0.0), |d| Ok(d.get_display_width()))
     }
@@ -400,8 +381,7 @@ impl HostDisplayEntity for PluginHostState {
         display: Resource<DisplayEntity>,
         width: f32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         if let Some(d) = get_display_entity(display_res.as_ref()) {
             d.set_display_width(width);
         }
@@ -409,8 +389,7 @@ impl HostDisplayEntity for PluginHostState {
     }
 
     fn get_display_height(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<f32> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         get_display_entity(display_res.as_ref())
             .map_or_else(|| Ok(0.0), |d| Ok(d.get_display_height()))
     }
@@ -420,8 +399,7 @@ impl HostDisplayEntity for PluginHostState {
         display: Resource<DisplayEntity>,
         height: f32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         if let Some(d) = get_display_entity(display_res.as_ref()) {
             d.set_display_height(height);
         }
@@ -432,8 +410,7 @@ impl HostDisplayEntity for PluginHostState {
         &mut self,
         display: Resource<DisplayEntity>,
     ) -> wasmtime::Result<i32> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         Ok(get_display_entity(display_res.as_ref()).map_or(
             -1,
             pumpkin_core::entity::decoration::display::DisplayEntity::get_glow_color_override,
@@ -445,8 +422,7 @@ impl HostDisplayEntity for PluginHostState {
         display: Resource<DisplayEntity>,
         color: i32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         if let Some(d) = get_display_entity(display_res.as_ref()) {
             d.set_glow_color_override(color);
         }
@@ -454,8 +430,7 @@ impl HostDisplayEntity for PluginHostState {
     }
 
     fn get_brightness(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<i32> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         Ok(get_display_entity(display_res.as_ref()).map_or(
             -1,
             pumpkin_core::entity::decoration::display::DisplayEntity::get_brightness,
@@ -467,8 +442,7 @@ impl HostDisplayEntity for PluginHostState {
         display: Resource<DisplayEntity>,
         brightness: i32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let display_res = state.get(&display)?;
+        let display_res = self.get(&display)?;
         if let Some(d) = get_display_entity(display_res.as_ref()) {
             d.set_brightness(brightness);
         }
@@ -485,11 +459,10 @@ impl HostBlockDisplayEntity for PluginHostState {
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Result<Resource<BlockDisplayEntity>, Resource<Entity>>> {
-        let state = self;
-        let entity = state.take(entity)?;
+        let entity = self.take(entity)?;
         match Arc::downcast(entity.clone()) {
-            Ok(display) => Ok(Ok(state.add(display)?)),
-            Err(_) => Ok(Err(state.add(entity)?)),
+            Ok(display) => Ok(Ok(self.add(display)?)),
+            Err(_) => Ok(Err(self.add(entity)?)),
         }
     }
 
@@ -497,24 +470,21 @@ impl HostBlockDisplayEntity for PluginHostState {
         &mut self,
         block_display: Resource<BlockDisplayEntity>,
     ) -> wasmtime::Result<Resource<DisplayEntity>> {
-        let state = self;
-        state.add(state.get(&block_display)?.clone() as _)
+        self.add(self.get(&block_display)?.clone() as _)
     }
 
     fn get_entity(
         &mut self,
         block_display: Resource<BlockDisplayEntity>,
     ) -> wasmtime::Result<Resource<Entity>> {
-        let state = self;
-        state.add(state.get(&block_display)?.clone() as _)
+        self.add(self.get(&block_display)?.clone() as _)
     }
 
     fn get_block_state_id(
         &mut self,
         block_display: Resource<BlockDisplayEntity>,
     ) -> wasmtime::Result<u16> {
-        let state = self;
-        Ok(state.get(&block_display)?.get_block_state() as u16)
+        Ok(self.get(&block_display)?.get_block_state() as u16)
     }
 
     fn set_block_state_id(
@@ -522,8 +492,7 @@ impl HostBlockDisplayEntity for PluginHostState {
         block_display: Resource<BlockDisplayEntity>,
         state_id: u16,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get(&block_display)?.set_block_state(state_id as i32);
+        self.get(&block_display)?.set_block_state(state_id as i32);
         Ok(())
     }
 }
@@ -537,11 +506,10 @@ impl HostItemDisplayEntity for PluginHostState {
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Result<Resource<ItemDisplayEntity>, Resource<Entity>>> {
-        let state = self;
-        let entity = state.take(entity)?;
+        let entity = self.take(entity)?;
         match Arc::downcast(entity.clone()) {
-            Ok(display) => Ok(Ok(state.add(display)?)),
-            Err(_) => Ok(Err(state.add(entity)?)),
+            Ok(display) => Ok(Ok(self.add(display)?)),
+            Err(_) => Ok(Err(self.add(entity)?)),
         }
     }
 
@@ -549,28 +517,25 @@ impl HostItemDisplayEntity for PluginHostState {
         &mut self,
         item_display: Resource<ItemDisplayEntity>,
     ) -> wasmtime::Result<Resource<DisplayEntity>> {
-        let state = self;
-        state.add(state.get(&item_display)?.clone() as _)
+        self.add(self.get(&item_display)?.clone() as _)
     }
 
     fn get_entity(
         &mut self,
         item_display: Resource<ItemDisplayEntity>,
     ) -> wasmtime::Result<Resource<Entity>> {
-        let state = self;
-        state.add(state.get(&item_display)?.clone() as _)
+        self.add(self.get(&item_display)?.clone() as _)
     }
 
     fn get_item(
         &mut self,
         item_display: Resource<ItemDisplayEntity>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let state = self;
-        let item = state.get(&item_display)?.get_item();
+        let item = self.get(&item_display)?.get_item();
         if *item.item == pumpkin_data::item::Item::AIR || item.item_count == 0 {
             Ok(None)
         } else {
-            let res = state.add(Arc::new(tokio::sync::Mutex::new(item)))?;
+            let res = self.add(Arc::new(tokio::sync::Mutex::new(item)))?;
             Ok(Some(res))
         }
     }
@@ -579,9 +544,8 @@ impl HostItemDisplayEntity for PluginHostState {
         &mut self,
         item_display: Resource<ItemDisplayEntity>,
     ) -> wasmtime::Result<ItemDisplayMode> {
-        let state = self;
         Ok(map_item_display_mode(
-            state.get(&item_display)?.get_item_display_mode(),
+            self.get(&item_display)?.get_item_display_mode(),
         ))
     }
 
@@ -590,9 +554,7 @@ impl HostItemDisplayEntity for PluginHostState {
         item_display: Resource<ItemDisplayEntity>,
         mode: ItemDisplayMode,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state
-            .get(&item_display)?
+        self.get(&item_display)?
             .set_item_display_mode(map_item_display_mode_rev(mode));
 
         Ok(())
@@ -625,11 +587,10 @@ impl HostTextDisplayEntity for PluginHostState {
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Result<Resource<TextDisplayEntity>, Resource<Entity>>> {
-        let state = self;
-        let entity = state.take(entity)?;
+        let entity = self.take(entity)?;
         match Arc::downcast(entity.clone()) {
-            Ok(display) => Ok(Ok(state.add(display)?)),
-            Err(_) => Ok(Err(state.add(entity)?)),
+            Ok(display) => Ok(Ok(self.add(display)?)),
+            Err(_) => Ok(Err(self.add(entity)?)),
         }
     }
 
@@ -637,24 +598,21 @@ impl HostTextDisplayEntity for PluginHostState {
         &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<Resource<DisplayEntity>> {
-        let state = self;
-        state.add(state.get(&text_display)?.clone() as _)
+        self.add(self.get(&text_display)?.clone() as _)
     }
 
     fn get_entity(
         &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<Resource<Entity>> {
-        let state = self;
-        state.add(state.get(&text_display)?.clone() as _)
+        self.add(self.get(&text_display)?.clone() as _)
     }
 
     fn get_text(
         &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<Resource<TextComponent>> {
-        let state = self;
-        state.add(state.get(&text_display)?.get_text())
+        self.add(self.get(&text_display)?.get_text())
     }
 
     fn set_text(
@@ -662,9 +620,8 @@ impl HostTextDisplayEntity for PluginHostState {
         text_display: Resource<TextDisplayEntity>,
         text: Resource<TextComponent>,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        let text_val = state.take(text)?;
-        state.get(&text_display)?.set_text(text_val);
+        let text_val = self.take(text)?;
+        self.get(&text_display)?.set_text(text_val);
         Ok(())
     }
 
@@ -672,8 +629,7 @@ impl HostTextDisplayEntity for PluginHostState {
         &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<i32> {
-        let state = self;
-        Ok(state.get(&text_display)?.get_line_width())
+        Ok(self.get(&text_display)?.get_line_width())
     }
 
     fn set_line_width(
@@ -681,8 +637,7 @@ impl HostTextDisplayEntity for PluginHostState {
         text_display: Resource<TextDisplayEntity>,
         width: i32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get(&text_display)?.set_line_width(width);
+        self.get(&text_display)?.set_line_width(width);
         Ok(())
     }
 
@@ -690,8 +645,7 @@ impl HostTextDisplayEntity for PluginHostState {
         &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<i32> {
-        let state = self;
-        Ok(state.get(&text_display)?.get_background_color())
+        Ok(self.get(&text_display)?.get_background_color())
     }
 
     fn set_background(
@@ -699,8 +653,7 @@ impl HostTextDisplayEntity for PluginHostState {
         text_display: Resource<TextDisplayEntity>,
         color: i32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get(&text_display)?.set_background_color(color);
+        self.get(&text_display)?.set_background_color(color);
         Ok(())
     }
 
@@ -708,8 +661,7 @@ impl HostTextDisplayEntity for PluginHostState {
         &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<i8> {
-        let state = self;
-        Ok(state.get(&text_display)?.get_text_opacity())
+        Ok(self.get(&text_display)?.get_text_opacity())
     }
 
     fn set_text_opacity(
@@ -717,14 +669,12 @@ impl HostTextDisplayEntity for PluginHostState {
         text_display: Resource<TextDisplayEntity>,
         opacity: i8,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get(&text_display)?.set_text_opacity(opacity);
+        self.get(&text_display)?.set_text_opacity(opacity);
         Ok(())
     }
 
     fn get_shadow(&mut self, text_display: Resource<TextDisplayEntity>) -> wasmtime::Result<bool> {
-        let state = self;
-        Ok(state.get(&text_display)?.get_shadow())
+        Ok(self.get(&text_display)?.get_shadow())
     }
 
     fn set_shadow(
@@ -732,8 +682,7 @@ impl HostTextDisplayEntity for PluginHostState {
         text_display: Resource<TextDisplayEntity>,
         shadow: bool,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get(&text_display)?.set_shadow(shadow);
+        self.get(&text_display)?.set_shadow(shadow);
         Ok(())
     }
 
@@ -741,8 +690,7 @@ impl HostTextDisplayEntity for PluginHostState {
         &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<bool> {
-        let state = self;
-        Ok(state.get(&text_display)?.get_see_through())
+        Ok(self.get(&text_display)?.get_see_through())
     }
 
     fn set_see_through(
@@ -750,8 +698,7 @@ impl HostTextDisplayEntity for PluginHostState {
         text_display: Resource<TextDisplayEntity>,
         see_through: bool,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get(&text_display)?.set_see_through(see_through);
+        self.get(&text_display)?.set_see_through(see_through);
         Ok(())
     }
 
@@ -759,8 +706,7 @@ impl HostTextDisplayEntity for PluginHostState {
         &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<bool> {
-        let state = self;
-        Ok(state.get(&text_display)?.get_use_default_background())
+        Ok(self.get(&text_display)?.get_use_default_background())
     }
 
     fn set_default_background(
@@ -768,9 +714,7 @@ impl HostTextDisplayEntity for PluginHostState {
         text_display: Resource<TextDisplayEntity>,
         default_background: bool,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state
-            .get(&text_display)?
+        self.get(&text_display)?
             .set_use_default_background(default_background);
         Ok(())
     }
@@ -779,10 +723,7 @@ impl HostTextDisplayEntity for PluginHostState {
         &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<TextAlignment> {
-        let state = self;
-        Ok(map_text_alignment(
-            state.get(&text_display)?.get_alignment(),
-        ))
+        Ok(map_text_alignment(self.get(&text_display)?.get_alignment()))
     }
 
     fn set_alignment(
@@ -790,9 +731,7 @@ impl HostTextDisplayEntity for PluginHostState {
         text_display: Resource<TextDisplayEntity>,
         alignment: TextAlignment,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state
-            .get(&text_display)?
+        self.get(&text_display)?
             .set_alignment(map_text_alignment_rev(alignment));
         Ok(())
     }
@@ -807,11 +746,10 @@ impl HostInteractionEntity for PluginHostState {
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Result<Resource<InteractionEntity>, Resource<Entity>>> {
-        let state = self;
-        let entity = state.take(entity)?;
+        let entity = self.take(entity)?;
         match Arc::downcast(entity.clone()) {
-            Ok(display) => Ok(Ok(state.add(display)?)),
-            Err(_) => Ok(Err(state.add(entity)?)),
+            Ok(display) => Ok(Ok(self.add(display)?)),
+            Err(_) => Ok(Err(self.add(entity)?)),
         }
     }
 
@@ -819,13 +757,11 @@ impl HostInteractionEntity for PluginHostState {
         &mut self,
         interaction: Resource<InteractionEntity>,
     ) -> wasmtime::Result<Resource<Entity>> {
-        let state = self;
-        state.add(state.get(&interaction)?.clone() as _)
+        self.add(self.get(&interaction)?.clone() as _)
     }
 
     fn get_width(&mut self, interaction: Resource<InteractionEntity>) -> wasmtime::Result<f32> {
-        let state = self;
-        Ok(state.get(&interaction)?.get_width())
+        Ok(self.get(&interaction)?.get_width())
     }
 
     fn set_width(
@@ -833,14 +769,12 @@ impl HostInteractionEntity for PluginHostState {
         interaction: Resource<InteractionEntity>,
         width: f32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get(&interaction)?.set_width(width);
+        self.get(&interaction)?.set_width(width);
         Ok(())
     }
 
     fn get_height(&mut self, interaction: Resource<InteractionEntity>) -> wasmtime::Result<f32> {
-        let state = self;
-        Ok(state.get(&interaction)?.get_height())
+        Ok(self.get(&interaction)?.get_height())
     }
 
     fn set_height(
@@ -848,14 +782,12 @@ impl HostInteractionEntity for PluginHostState {
         interaction: Resource<InteractionEntity>,
         height: f32,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get(&interaction)?.set_height(height);
+        self.get(&interaction)?.set_height(height);
         Ok(())
     }
 
     fn get_response(&mut self, interaction: Resource<InteractionEntity>) -> wasmtime::Result<bool> {
-        let state = self;
-        Ok(state.get(&interaction)?.get_response())
+        Ok(self.get(&interaction)?.get_response())
     }
 
     fn set_response(
@@ -863,8 +795,7 @@ impl HostInteractionEntity for PluginHostState {
         interaction: Resource<InteractionEntity>,
         response: bool,
     ) -> wasmtime::Result<()> {
-        let state = self;
-        state.get(&interaction)?.set_response(response);
+        self.get(&interaction)?.set_response(response);
         Ok(())
     }
 
@@ -872,8 +803,7 @@ impl HostInteractionEntity for PluginHostState {
         &mut self,
         interaction: Resource<InteractionEntity>,
     ) -> wasmtime::Result<Option<Uuid>> {
-        let state = self;
-        let action = state.get(&interaction)?.get_last_attacker();
+        let action = self.get(&interaction)?.get_last_attacker();
         Ok(action.map(|a| Uuid::to_wit(&a.player)))
     }
 
@@ -881,8 +811,7 @@ impl HostInteractionEntity for PluginHostState {
         &mut self,
         interaction: Resource<InteractionEntity>,
     ) -> wasmtime::Result<Option<Uuid>> {
-        let state = self;
-        let action = state.get(&interaction)?.get_target();
+        let action = self.get(&interaction)?.get_target();
         Ok(action.map(|a| Uuid::to_wit(&a.player)))
     }
 }

@@ -4,6 +4,7 @@ use crate::pumpkin::plugin::datapack::{
     EnablePosition as WitEnablePosition, Host as DatapackHost, HostDatapackManager,
     HostDatapackManagerWithStore,
 };
+use crate::{AccessorExt, RequireServer};
 use pumpkin_core::data::datapack::DatapackManager;
 use pumpkin_wasm_host_common::state::PluginHostState;
 use wasmtime::component::{Accessor, HasSelf, Resource};
@@ -19,11 +20,7 @@ impl HostDatapackManager for PluginHostState {
         &mut self,
         _res: Resource<WitDatapackManager>,
     ) -> wasmtime::Result<Vec<WitDatapackInfo>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let packs = DatapackManager::list_all_packs(server);
         Ok(packs.into_iter().map(to_wit_datapack_info).collect())
     }
@@ -32,11 +29,7 @@ impl HostDatapackManager for PluginHostState {
         &mut self,
         _res: Resource<WitDatapackManager>,
     ) -> wasmtime::Result<Vec<WitDatapackInfo>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let packs = DatapackManager::list_enabled_packs(server);
         Ok(packs.into_iter().map(to_wit_datapack_info).collect())
     }
@@ -45,11 +38,7 @@ impl HostDatapackManager for PluginHostState {
         &mut self,
         _res: Resource<WitDatapackManager>,
     ) -> wasmtime::Result<Vec<WitDatapackInfo>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let packs = DatapackManager::list_available_packs(server);
         Ok(packs.into_iter().map(to_wit_datapack_info).collect())
     }
@@ -59,11 +48,7 @@ impl HostDatapackManager for PluginHostState {
         _res: Resource<WitDatapackManager>,
         name: String,
     ) -> wasmtime::Result<Option<WitDatapackInfo>> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let pack = DatapackManager::get_pack_info(server, &name);
         Ok(pack.map(to_wit_datapack_info))
     }
@@ -73,11 +58,7 @@ impl HostDatapackManager for PluginHostState {
         _res: Resource<WitDatapackManager>,
         name: String,
     ) -> wasmtime::Result<bool> {
-        let state = self;
-        let server = state
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         Ok(DatapackManager::is_pack_enabled(server, &name))
     }
 }
@@ -89,14 +70,7 @@ impl HostDatapackManagerWithStore<PluginHostState> for HasSelf<PluginHostState> 
         name: String,
         position: WitEnablePosition,
     ) -> wasmtime::Result<Result<(), String>> {
-        let server = accessor.with(|mut host| -> wasmtime::Result<_> {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            Ok(server)
-        })?;
+        let server = accessor.server()?;
         let position = to_data_enable_position(position);
 
         run_blocking(accessor, move || {
@@ -110,14 +84,7 @@ impl HostDatapackManagerWithStore<PluginHostState> for HasSelf<PluginHostState> 
         _res: Resource<WitDatapackManager>,
         name: String,
     ) -> wasmtime::Result<Result<(), String>> {
-        let server = accessor.with(|mut host| -> wasmtime::Result<_> {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            Ok(server)
-        })?;
+        let server = accessor.server()?;
 
         run_blocking(accessor, move || {
             DatapackManager::disable_pack(&server, &name)
@@ -129,14 +96,7 @@ impl HostDatapackManagerWithStore<PluginHostState> for HasSelf<PluginHostState> 
         accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitDatapackManager>,
     ) -> wasmtime::Result<Result<(), String>> {
-        let server = accessor.with(|mut host| -> wasmtime::Result<_> {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            Ok(server)
-        })?;
+        let server = accessor.server()?;
 
         run_blocking(accessor, move || DatapackManager::reload(&server)).await
     }
@@ -146,14 +106,7 @@ impl HostDatapackManagerWithStore<PluginHostState> for HasSelf<PluginHostState> 
         _res: Resource<WitDatapackManager>,
         name: String,
     ) -> wasmtime::Result<Result<u32, String>> {
-        let server = accessor.with(|mut host| -> wasmtime::Result<_> {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            Ok(server)
-        })?;
+        let server = accessor.server()?;
 
         run_blocking(accessor, move || {
             DatapackManager::execute_function_from_console(&server, &name).map(|count| count as u32)

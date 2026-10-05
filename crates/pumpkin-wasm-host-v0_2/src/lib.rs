@@ -88,8 +88,8 @@ pub(crate) async fn in_active_context<R>(
         .await)
 }
 
-/// Resource-table access from an [`Accessor`](wasmtime::component::Accessor) without holding the
-/// store borrow across an `.await`.
+/// Resource-table access from an [`Accessor`] without holding the store borrow across an
+/// `.await`.
 pub(crate) trait AccessorExt {
     fn get_res<T: FromResource>(&self, res: &Resource<T>) -> wasmtime::Result<T::Internal>
     where
@@ -116,20 +116,60 @@ impl AccessorExt for Accessor<PluginHostState, HasSelf<PluginHostState>> {
     }
 
     fn server(&self) -> wasmtime::Result<std::sync::Arc<pumpkin_core::server::Server>> {
-        self.with(|mut host| host.get().server_arc())
+        self.with(|mut host| host.get().require_server().cloned())
     }
 }
 
-/// Server access for synchronous host imports, which have the state itself instead of an accessor.
-pub(crate) trait ServerArc {
-    fn server_arc(&self) -> wasmtime::Result<std::sync::Arc<pumpkin_core::server::Server>>;
+/// Server access for synchronous host imports, which work on the host state directly instead of
+/// through an [`Accessor`].
+pub(crate) trait RequireServer {
+    /// Borrows the server, failing if the host state has none set.
+    fn require_server(&self) -> wasmtime::Result<&std::sync::Arc<pumpkin_core::server::Server>>;
 }
 
-impl ServerArc for PluginHostState {
-    fn server_arc(&self) -> wasmtime::Result<std::sync::Arc<pumpkin_core::server::Server>> {
+impl RequireServer for PluginHostState {
+    fn require_server(&self) -> wasmtime::Result<&std::sync::Arc<pumpkin_core::server::Server>> {
         self.server
-            .clone()
+            .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))
+    }
+}
+
+/// Locking for a standard [`Mutex`](std::sync::Mutex) that ignores poisoning.
+///
+/// Poisoning only records that another thread panicked while holding the lock. The host keeps
+/// going with the data as that thread left it instead of failing every later call on the lock.
+pub(crate) trait LockIgnorePoison<T: ?Sized> {
+    /// Locks the mutex, taking the guard out of the poison error if it was poisoned.
+    fn lock_ignore_poison(&self) -> std::sync::MutexGuard<'_, T>;
+}
+
+impl<T: ?Sized> LockIgnorePoison<T> for std::sync::Mutex<T> {
+    fn lock_ignore_poison(&self) -> std::sync::MutexGuard<'_, T> {
+        self.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+/// Locking for a standard [`RwLock`](std::sync::RwLock) that ignores poisoning, see
+/// [`LockIgnorePoison`].
+pub(crate) trait RwLockIgnorePoison<T: ?Sized> {
+    /// Takes a read lock, taking the guard out of the poison error if it was poisoned.
+    fn read_ignore_poison(&self) -> std::sync::RwLockReadGuard<'_, T>;
+
+    /// Takes a write lock, taking the guard out of the poison error if it was poisoned.
+    fn write_ignore_poison(&self) -> std::sync::RwLockWriteGuard<'_, T>;
+}
+
+impl<T: ?Sized> RwLockIgnorePoison<T> for std::sync::RwLock<T> {
+    fn read_ignore_poison(&self) -> std::sync::RwLockReadGuard<'_, T> {
+        self.read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn write_ignore_poison(&self) -> std::sync::RwLockWriteGuard<'_, T> {
+        self.write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 
