@@ -249,7 +249,7 @@ impl TrackedEntity {
                 &CEntityVelocity::new(VarInt(self.entity_id), velocity),
                 &CSetActorMotion {
                     target_runtime_id: VarULong(self.entity_id as u64),
-                    motion: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+                    motion: velocity.to_f32_lossy(),
                     tick: VarULong(0),
                 },
                 world,
