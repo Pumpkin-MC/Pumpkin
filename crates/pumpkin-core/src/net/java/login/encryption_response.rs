@@ -1,6 +1,7 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use crate::net::can_not_join;
+use crate::net::java::features::JavaConnectionFeatures;
 
 impl PendingConnection {
     async fn verify_encryption_token(
@@ -12,7 +13,12 @@ impl PendingConnection {
             return Err(EncryptionError::NoPendingVerifyToken);
         };
 
-        if token.is_empty() && self.features.load().optional_verify_token {
+        if token.is_empty()
+            && self
+                .features
+                .load()
+                .contains(JavaConnectionFeatures::OPTIONAL_VERIFY_TOKEN)
+        {
             return Ok(());
         }
 
@@ -172,7 +178,11 @@ impl PendingConnection {
             uuid::Uuid::new_v4(),
         );
         self.send_packet_now(&packet).await;
-        if self.features.load().configuration_state {
+        if self
+            .features
+            .load()
+            .contains(JavaConnectionFeatures::CONFIGURATION_STATE)
+        {
             return None;
         }
 

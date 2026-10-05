@@ -549,17 +549,10 @@ impl Server {
             .execute_function(server, &source, "#minecraft:load");
 
         let dynamic_recipes = self.recipe_manager.get_dynamic_recipes_internal();
-        for player in self.get_all_players() {
-            if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
-                let add_packet = pumpkin_protocol::java::client::play::CRecipeBookAdd::new(
-                    true,
-                    &dynamic_recipes,
-                );
-                if let Ok(data) = java_client.serialize_packet(&add_packet) {
-                    java_client.try_enqueue_packet(data);
-                }
-            }
-        }
+        World::broadcast_java_players(
+            &pumpkin_protocol::java::client::play::CRecipeBookAdd::new(true, &dynamic_recipes),
+            self.get_all_players().iter(),
+        );
     }
 
     #[must_use]

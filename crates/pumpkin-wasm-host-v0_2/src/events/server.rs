@@ -157,39 +157,42 @@ const fn to_wasm_connection_state(state: ConnectionState) -> WitConnectionState 
     }
 }
 
+/// Each core feature and its WIT flag.
+const FEATURE_FLAGS: [(JavaConnectionFeatures, WitJavaConnectionFeatures); 4] = [
+    (
+        JavaConnectionFeatures::CONFIGURATION_STATE,
+        WitJavaConnectionFeatures::CONFIGURATION_STATE,
+    ),
+    (
+        JavaConnectionFeatures::CHUNK_BATCH_ACKS,
+        WitJavaConnectionFeatures::CHUNK_BATCH_ACKS,
+    ),
+    (
+        JavaConnectionFeatures::PLAYER_LOADED,
+        WitJavaConnectionFeatures::PLAYER_LOADED,
+    ),
+    (
+        JavaConnectionFeatures::OPTIONAL_VERIFY_TOKEN,
+        WitJavaConnectionFeatures::OPTIONAL_VERIFY_TOKEN,
+    ),
+];
+
 fn to_wasm_features(features: JavaConnectionFeatures) -> WitJavaConnectionFeatures {
-    [
-        (
-            features.configuration_state,
-            WitJavaConnectionFeatures::CONFIGURATION_STATE,
-        ),
-        (
-            features.chunk_batch_acks,
-            WitJavaConnectionFeatures::CHUNK_BATCH_ACKS,
-        ),
-        (
-            features.player_loaded,
-            WitJavaConnectionFeatures::PLAYER_LOADED,
-        ),
-        (
-            features.optional_verify_token,
-            WitJavaConnectionFeatures::OPTIONAL_VERIFY_TOKEN,
-        ),
-    ]
-    .into_iter()
-    .filter(|(has, _)| *has)
-    .fold(WitJavaConnectionFeatures::empty(), |flags, (_, flag)| {
-        flags | flag
-    })
+    FEATURE_FLAGS
+        .into_iter()
+        .filter(|(feature, _)| features.contains(*feature))
+        .fold(WitJavaConnectionFeatures::empty(), |flags, (_, flag)| {
+            flags | flag
+        })
 }
 
 fn from_wasm_features(flags: WitJavaConnectionFeatures) -> JavaConnectionFeatures {
-    JavaConnectionFeatures {
-        configuration_state: flags.contains(WitJavaConnectionFeatures::CONFIGURATION_STATE),
-        chunk_batch_acks: flags.contains(WitJavaConnectionFeatures::CHUNK_BATCH_ACKS),
-        player_loaded: flags.contains(WitJavaConnectionFeatures::PLAYER_LOADED),
-        optional_verify_token: flags.contains(WitJavaConnectionFeatures::OPTIONAL_VERIFY_TOKEN),
-    }
+    FEATURE_FLAGS
+        .into_iter()
+        .filter(|(_, flag)| flags.contains(*flag))
+        .fold(JavaConnectionFeatures::empty(), |features, (feature, _)| {
+            features | feature
+        })
 }
 
 /// Generates the WIT conversion for a connection packet event

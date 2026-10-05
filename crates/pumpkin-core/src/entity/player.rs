@@ -297,6 +297,7 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::{CommandSender, client_suggestions};
 use crate::data::SaveJSONConfiguration;
 use crate::log_at_level;
+use crate::net::java::features::JavaConnectionFeatures;
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
@@ -716,7 +717,10 @@ impl Player {
         }
 
         let supports_player_loaded = match client.as_ref() {
-            ClientPlatform::Java(client) => client.features.load().player_loaded,
+            ClientPlatform::Java(client) => client
+                .features
+                .load()
+                .contains(JavaConnectionFeatures::PLAYER_LOADED),
             ClientPlatform::Bedrock(_) => true,
         };
         let initially_loaded = !supports_player_loaded;
@@ -2806,7 +2810,10 @@ impl Player {
         let player_chunk = self.get_entity().chunk_pos.load();
         let epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
         let batch_acks = match self.client.as_ref() {
-            ClientPlatform::Java(java_client) => java_client.features.load().chunk_batch_acks,
+            ClientPlatform::Java(java_client) => java_client
+                .features
+                .load()
+                .contains(JavaConnectionFeatures::CHUNK_BATCH_ACKS),
             ClientPlatform::Bedrock(_) => false,
         };
 
@@ -3112,7 +3119,10 @@ impl Player {
     #[must_use]
     pub fn supports_player_loaded(&self) -> bool {
         match self.client.as_ref() {
-            ClientPlatform::Java(client) => client.features.load().player_loaded,
+            ClientPlatform::Java(client) => client
+                .features
+                .load()
+                .contains(JavaConnectionFeatures::PLAYER_LOADED),
             ClientPlatform::Bedrock(_) => true,
         }
     }
