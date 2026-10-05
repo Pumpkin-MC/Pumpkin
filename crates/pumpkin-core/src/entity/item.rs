@@ -315,16 +315,13 @@ impl ItemEntity {
             return;
         }
 
-        let mut event = crate::plugin::api::events::entity::item_merge::ItemMergeEvent {
-            entity_id: target.entity.entity_id,
-            target_id: source.entity.entity_id,
-            cancelled: false,
-        };
-        let server = self.entity.world.load().server.upgrade();
-        if let Some(server) = server {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
-        if event.cancelled
+        let cancelled = self.entity.world.load().cancelled_by_plugin(|| {
+            crate::plugin::api::events::entity::item_merge::ItemMergeEvent::new(
+                target.entity.entity_id,
+                source.entity.entity_id,
+            )
+        });
+        if cancelled
             || self.entity.removed.load(Ordering::SeqCst)
             || other.entity.removed.load(Ordering::SeqCst)
         {
@@ -563,15 +560,9 @@ impl ItemEntity {
         if age >= LIFETIME {
             let entity_id = entity.entity_id;
             let world = entity.world.load_full();
-            let mut despawn_event =
-                crate::plugin::api::events::entity::item_despawn::ItemDespawnEvent::new(entity_id);
-            if let Some(server) = world.server.upgrade() {
-                server
-                    .plugin_manager
-                    .fire_blocking(&server, &mut despawn_event);
-            }
-            if !despawn_event.cancelled
-                && let Some(e) = world.get_entity_by_id(entity_id)
+            if !world.cancelled_by_plugin(|| {
+                crate::plugin::api::events::entity::item_despawn::ItemDespawnEvent::new(entity_id)
+            }) && let Some(e) = world.get_entity_by_id(entity_id)
             {
                 e.get_entity().remove();
             }
@@ -690,17 +681,17 @@ impl EntityBase for ItemEntity {
             return false;
         }
 
-        let mut event = crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
-            entity.entity_id,
-            damage_type,
-            amount,
-        );
-        if let Some(server) = world.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
-        if event.cancelled {
-            return false;
-        }
+        let damage = match world.plugin_event(|| {
+            crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
+                entity.entity_id,
+                damage_type,
+                amount,
+            )
+        }) {
+            Some(event) if event.cancelled => return false,
+            Some(event) => event.damage,
+            None => amount,
+        };
 
         // Vanilla `markHurt`: resend the motion.
         entity.velocity_dirty.store(true, Ordering::SeqCst);
@@ -708,7 +699,7 @@ impl EntityBase for ItemEntity {
         // Vanilla keeps item health as an int: `(int)(health - damage)`.
         let destroyed = loop {
             let current = self.health.load(Relaxed);
-            let new = (current - event.damage).trunc();
+            let new = (current - damage).trunc();
             if self
                 .health
                 .compare_exchange(current, new, AcqRel, Relaxed)

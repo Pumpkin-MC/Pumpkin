@@ -3,7 +3,6 @@ use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::plugin::api::events::inventory::hopper_inventory_search::HopperInventorySearchEvent;
 use crate::plugin::api::events::inventory::inventory_move_item::InventoryMoveItemEvent;
 use crate::plugin::api::events::inventory::inventory_pickup_item::InventoryPickupItemEvent;
-use crate::plugin::api::events::{Cancellable, Payload};
 use crate::world::World;
 use pumpkin_data::block_properties::{FacingHopper, HopperLikeProperties};
 use pumpkin_data::item_stack::ItemStack;
@@ -25,23 +24,6 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64};
 
 /// Vanilla `Hopper.SUCK_AABB`: from the hopper's bowl up to the top of the block above.
 const SUCK_AABB: BoundingBox = BoundingBox::new_array([0.0, 11.0 / 16.0, 0.0], [1.0, 2.0, 1.0]);
-
-/// Whether a plugin cancelled the event. Hoppers offer one per item every tick, so it is only
-/// built and fired while a plugin listens.
-fn cancelled_by_plugin<E: Payload + Cancellable + 'static>(
-    world: &World,
-    event: impl FnOnce() -> E,
-) -> bool {
-    let Some(server) = world.server.upgrade() else {
-        return false;
-    };
-    if !server.plugin_manager.has_handlers::<E>() {
-        return false;
-    }
-    let mut event = event();
-    server.plugin_manager.fire_blocking(&server, &mut event);
-    event.cancelled()
-}
 
 pub struct HopperBlockEntity {
     pub position: BlockPos,
@@ -237,9 +219,7 @@ impl HopperBlockEntity {
     fn suck_in_items(&self, world: &Arc<World>) -> bool {
         // TODO getEntityContainer
         let pos_up = &self.position.up();
-        if cancelled_by_plugin(world, || {
-            HopperInventorySearchEvent::new(self.position, *pos_up)
-        }) {
+        if world.cancelled_by_plugin(|| HopperInventorySearchEvent::new(self.position, *pos_up)) {
             return false;
         }
 
@@ -303,7 +283,7 @@ impl HopperBlockEntity {
                     (stack.is_empty(), stack.item.registry_key)
                 };
                 if is_empty
-                    || cancelled_by_plugin(world, || {
+                    || world.cancelled_by_plugin(|| {
                         InventoryPickupItemEvent::new(
                             self.position,
                             item_entity.get_entity().entity_id,
@@ -395,7 +375,7 @@ impl HopperBlockEntity {
                 if item.is_empty() {
                     continue;
                 }
-                if cancelled_by_plugin(world, || {
+                if world.cancelled_by_plugin(|| {
                     InventoryMoveItemEvent::new(
                         self.position,
                         target_pos,
