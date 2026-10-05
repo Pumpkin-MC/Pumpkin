@@ -410,8 +410,13 @@ pub struct BundleContentsImpl {
     pub items: Vec<crate::item_stack::ItemStack>,
 }
 impl PartialEq for BundleContentsImpl {
-    fn eq(&self, _other: &Self) -> bool {
-        false
+    fn eq(&self, other: &Self) -> bool {
+        self.items.len() == other.items.len()
+            && self
+                .items
+                .iter()
+                .zip(&other.items)
+                .all(|(a, b)| a.are_equal(b))
     }
 }
 impl Eq for BundleContentsImpl {}
@@ -434,35 +439,52 @@ impl BundleContentsImpl {
         }
         Some(Self { items })
     }
+    // Vanilla `BundleContents.getWeight`, in 64ths of a full bundle.
+    pub fn weight_of(stack: &crate::item_stack::ItemStack) -> u32 {
+        (64 / stack.get_max_stack_size().max(1)) as u32
+    }
     pub fn get_weight(&self) -> u32 {
         self.items
             .iter()
-            .map(|item| item.item_count as u32 * (64 / item.get_max_stack_size() as u32).max(1))
+            .map(|item| item.item_count as u32 * Self::weight_of(item))
             .sum()
     }
-    pub fn try_insert(&mut self, stack: &mut crate::item_stack::ItemStack) -> bool {
-        if stack.is_empty() || stack.get_data_component::<BundleContentsImpl>().is_some() {
-            return false;
+    // Vanilla `BundleContents.Mutable.getMaxAmountToAdd`.
+    pub fn get_max_amount_to_add(&self, item_weight: u32) -> u8 {
+        let remaining = 64u32.saturating_sub(self.get_weight());
+        (remaining / item_weight.max(1)).min(u32::from(u8::MAX)) as u8
+    }
+    // Vanilla `BundleContents.canItemBeInBundle`. Pumpkin's weight model has no 1/16 weight for a
+    // nested bundle, so unlike vanilla it keeps rejecting them.
+    pub fn can_item_be_in_bundle(stack: &crate::item_stack::ItemStack) -> bool {
+        !stack.is_empty() && stack.get_data_component::<Self>().is_none()
+    }
+    // Vanilla `BundleContents.Mutable.tryInsert`. Inserts what fits and returns the amount taken.
+    pub fn try_insert(&mut self, stack: &mut crate::item_stack::ItemStack) -> u8 {
+        if !Self::can_item_be_in_bundle(stack) {
+            return 0;
         }
-        let weight_per_item = (64 / stack.get_max_stack_size() as u32).max(1);
-        let mut inserted_anything = false;
-        while stack.item_count > 0 && self.get_weight() + weight_per_item <= 64 {
+        let item_weight = Self::weight_of(stack);
+        let amount_to_add = stack
+            .item_count
+            .min(self.get_max_amount_to_add(item_weight));
+        let mut inserted = 0;
+        while stack.item_count > 0 && inserted < amount_to_add {
             if let Some(top) = self.items.first_mut()
                 && crate::item_stack::ItemStack::are_items_and_components_equal(top, stack)
                 && top.item_count < top.get_max_stack_size()
             {
                 top.item_count += 1;
-                stack.item_count -= 1;
-                inserted_anything = true;
-                continue;
+            } else {
+                self.items.insert(0, stack.copy_with_count(1));
             }
-            self.items.insert(0, stack.copy_with_count(1));
             stack.item_count -= 1;
-            inserted_anything = true;
+            inserted += 1;
         }
-        inserted_anything
+        inserted
     }
-    pub fn try_extract(&mut self) -> Option<crate::item_stack::ItemStack> {
+    // Vanilla `BundleContents.Mutable.removeOne`.
+    pub fn remove_one(&mut self) -> Option<crate::item_stack::ItemStack> {
         if self.items.is_empty() {
             None
         } else {
@@ -879,4 +901,83 @@ impl RecipesImpl {
 }
 impl DataComponentImpl for RecipesImpl {
     default_impl!(Recipes);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BundleContentsImpl;
+    use crate::item::Item;
+    use crate::item_stack::ItemStack;
+
+    fn empty() -> BundleContentsImpl {
+        BundleContentsImpl { items: Vec::new() }
+    }
+
+    #[test]
+    fn a_bundle_holds_what_its_items_weigh() {
+        // A 64 stack weighs 1 unit and a 16 stack 4, so 64 units make a full bundle.
+        assert_eq!(
+            BundleContentsImpl::weight_of(&ItemStack::new(64, &Item::STONE)),
+            1
+        );
+        assert_eq!(
+            BundleContentsImpl::weight_of(&ItemStack::new(1, &Item::ENDER_PEARL)),
+            4
+        );
+
+        let mut contents = empty();
+        let mut pearls = ItemStack::new(64, &Item::ENDER_PEARL);
+        assert_eq!(contents.try_insert(&mut pearls), 16);
+        assert_eq!(pearls.item_count, 48);
+        assert_eq!(contents.get_weight(), 64);
+
+        // A full bundle takes nothing more.
+        let mut stone = ItemStack::new(1, &Item::STONE);
+        assert_eq!(contents.try_insert(&mut stone), 0);
+        assert_eq!(stone.item_count, 1);
+    }
+
+    #[test]
+    fn a_bundle_merges_and_splits_stacks_like_vanilla() {
+        let mut contents = empty();
+        let mut stone = ItemStack::new(64, &Item::STONE);
+        assert_eq!(contents.try_insert(&mut stone), 64);
+        assert_eq!(contents.items.len(), 1);
+        assert_eq!(contents.items[0].item_count, 64);
+
+        assert_eq!(
+            contents.remove_one().map(|stack| stack.item_count),
+            Some(64)
+        );
+        assert!(contents.items.is_empty());
+        assert!(contents.remove_one().is_none());
+    }
+
+    #[test]
+    fn bundles_compare_by_their_items() {
+        let stone = ItemStack::new(1, &Item::STONE);
+        let dirt = ItemStack::new(1, &Item::DIRT);
+        let contents = BundleContentsImpl {
+            items: vec![stone.clone()],
+        };
+
+        assert!(contents == BundleContentsImpl { items: vec![stone] });
+        assert!(contents != BundleContentsImpl { items: vec![dirt] });
+        assert!(contents != empty());
+    }
+
+    #[test]
+    fn a_bundle_never_goes_inside_a_bundle() {
+        assert!(!BundleContentsImpl::can_item_be_in_bundle(&ItemStack::new(
+            1,
+            &Item::BUNDLE
+        )));
+        assert!(!BundleContentsImpl::can_item_be_in_bundle(
+            &ItemStack::EMPTY
+        ));
+        assert!(BundleContentsImpl::can_item_be_in_bundle(&ItemStack::new(
+            1,
+            &Item::STONE
+        )));
+    }
 }

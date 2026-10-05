@@ -7940,6 +7940,17 @@ impl InventoryPlayer for Player {
         self.increment_stat(category, stat_id, amount);
     }
 
+    // Vanilla `Entity.playSound`, for the item overrides that play their own sounds.
+    fn play_item_sound(&self, sound: Sound, volume: f32, pitch: f32) {
+        self.world().play_sound_fine(
+            sound,
+            SoundCategory::Players,
+            &self.position(),
+            volume,
+            pitch,
+        );
+    }
+
     fn play_block_sound(&self, sound: Sound, pitch: f32) {
         if let Some(pos) = self.open_container_pos.load() {
             self.world().play_sound_fine(
