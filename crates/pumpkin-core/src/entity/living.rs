@@ -1246,6 +1246,18 @@ impl LivingEntity {
             })
     }
 
+    /// Whether an elytra (of any durability) is in the chest slot. An already-active glide
+    /// continues until the elytra is removed, even at 1 durability; `can_glide` additionally
+    /// requires a non-broken elytra to *start* one.
+    pub fn has_elytra_equipped(&self) -> bool {
+        self.entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .get(&EquipmentSlot::CHEST)
+            .is_some_and(|stack| stack.item == &Item::ELYTRA)
+    }
+
     // Check if the entity is in powder snow
     pub fn is_in_powder_snow(&self) -> bool {
         self.entity.is_in_powder_snow.load(Ordering::Relaxed)

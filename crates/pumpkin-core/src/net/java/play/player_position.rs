@@ -123,18 +123,7 @@ impl JavaClient {
                 entity.on_ground.store(new_on_ground, Ordering::Relaxed);
                 let was_fall_flying = entity.is_fall_flying();
                 if was_fall_flying {
-                    let still_has_elytra = {
-                        let equipment = player
-                            .living_entity
-                            .entity_equipment
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        equipment
-                            .equipment
-                            .get(&pumpkin_data::data_component_impl::EquipmentSlot::CHEST)
-                            .is_some_and(|stack| stack.item == &pumpkin_data::item::Item::ELYTRA)
-                    };
-                    if new_on_ground || !still_has_elytra {
+                    if new_on_ground || !player.living_entity.has_elytra_equipped() {
                         entity.set_fall_flying(false);
                     }
                 }
@@ -280,18 +269,7 @@ impl JavaClient {
                 entity.on_ground.store(new_on_ground, Ordering::Relaxed);
                 let was_fall_flying = entity.is_fall_flying();
                 if was_fall_flying {
-                    let still_has_elytra = {
-                        let equipment = player
-                            .living_entity
-                            .entity_equipment
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        equipment
-                            .equipment
-                            .get(&pumpkin_data::data_component_impl::EquipmentSlot::CHEST)
-                            .is_some_and(|stack| stack.item == &pumpkin_data::item::Item::ELYTRA)
-                    };
-                    if new_on_ground || !still_has_elytra {
+                    if new_on_ground || !player.living_entity.has_elytra_equipped() {
                         entity.set_fall_flying(false);
                     }
                 }
