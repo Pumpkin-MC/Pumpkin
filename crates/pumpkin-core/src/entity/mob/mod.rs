@@ -340,19 +340,6 @@ impl MobEntity {
         }
     }
 
-    pub fn spawn_at_location(&self, stack: ItemStack) {
-        if stack.is_empty() {
-            return;
-        }
-        let entity = &self.living_entity.entity;
-        let world = entity.world.load();
-        let item_entity = crate::entity::item::ItemEntity::new(
-            Entity::new(world.clone(), entity.pos.load(), &EntityType::ITEM),
-            stack,
-        );
-        world.spawn_entity(Arc::new(item_entity));
-    }
-
     #[must_use]
     pub fn drop_chance(&self, slot: &EquipmentSlot) -> f32 {
         self.living_entity
