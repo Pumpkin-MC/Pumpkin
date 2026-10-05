@@ -3326,6 +3326,10 @@ impl EntityBase for LivingEntity {
         let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
         let in_death_animation = self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
         let is_player = self.entity.entity_type == &EntityType::PLAYER;
+        // Vanilla `ServerEntity.sendChanges` runs before the player's `aiStep`.
+        if is_player {
+            self.entity.flush_velocity(caller.get_player());
+        }
         if (is_alive || in_death_animation) && !is_player {
             self.tick_movement(caller);
             // Vanilla-like order: freeze logic runs after movement/collisions.
@@ -3346,7 +3350,9 @@ impl EntityBase for LivingEntity {
             self.entity.tick_frozen(caller);
         }
 
-        self.entity.flush_velocity(caller.get_player());
+        if !is_player {
+            self.entity.flush_velocity(None);
+        }
 
         // Fetch supporting blocks for players or other entities
         let supporting_pos = caller.get_player().map_or_else(
