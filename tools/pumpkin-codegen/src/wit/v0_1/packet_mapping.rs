@@ -9,7 +9,9 @@ pub fn build_java_mapping() -> String {
     output.push_str("#![allow(clippy::pedantic)]\n");
     output.push_str("#![allow(unused_imports)]\n");
     output.push_str("#![allow(unused_variables)]\n");
-    output.push_str("use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::{ClientboundPacket, ServerboundPacket};\n");
+    output.push_str(
+        "use crate::pumpkin::plugin::java_packets::{ClientboundPacket, ServerboundPacket};\n",
+    );
     output.push_str("use pumpkin_protocol::codec::var_int::VarInt;\n");
     output.push_str("use pumpkin_util::version::JavaMinecraftVersion;\n");
     output.push_str("use bytes::Bytes;\n");
@@ -104,7 +106,7 @@ pub fn build_java_mapping() -> String {
 
 pub fn build_bedrock_mapping() -> String {
     let mut output = String::new();
-    output.push_str("\nuse crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::{ClientboundPacket as BClientboundPacket, ServerboundPacket as BServerboundPacket};\n\n");
+    output.push_str("\nuse crate::pumpkin::plugin::bedrock_packets::{ClientboundPacket as BClientboundPacket, ServerboundPacket as BServerboundPacket};\n\n");
     output.push_str("#[must_use]\n");
     output.push_str(
         "pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {\n",
@@ -447,7 +449,7 @@ fn convert_value(
             }
             MappingMode::Deserialize | MappingMode::ToWit => {
                 let map_fn = format!(
-                    "crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: {{}}.as_u64_pair().1, low: {{}}.as_u64_pair().0 }}",
+                    "crate::pumpkin::plugin::uuid::Uuid {{ high: {{}}.as_u64_pair().1, low: {{}}.as_u64_pair().0 }}",
                 );
                 if is_slice {
                     format!(
@@ -457,7 +459,7 @@ fn convert_value(
                     )
                 } else {
                     format!(
-                        "crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: {}.as_u64_pair().1, low: {}.as_u64_pair().0 }}",
+                        "crate::pumpkin::plugin::uuid::Uuid {{ high: {}.as_u64_pair().1, low: {}.as_u64_pair().0 }}",
                         src, src
                     )
                 }
@@ -768,9 +770,9 @@ fn emit_struct_output(
             output.push_str("            };\n");
             output.push_str("            let mut buf = Vec::new();\n");
             if attr_name == "java_packet" {
-                output.push_str("            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();\n");
+                output.push_str("            pumpkin_core::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();\n");
             } else {
-                output.push_str("            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();\n");
+                output.push_str("            pumpkin_core::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();\n");
             }
             output.push_str("            Some(buf.into())\n");
             output.push_str("        }\n");
@@ -802,7 +804,7 @@ fn emit_struct_output(
             }
             output.push_str(prep_code);
             output.push_str(&format!(
-                "            Some({}::{}(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::{}::{} {{\n",
+                "            Some({}::{}(crate::pumpkin::plugin::{}::{} {{\n",
                 variant_prefix, wit_case, packet_ns, wit_case
             ));
             output.push_str(field_inits);
@@ -827,7 +829,7 @@ fn emit_struct_output(
             output.push_str(&format!("    fn to_wit(&self) -> {} {{\n", wit_type));
             output.push_str(prep_code);
             output.push_str(&format!(
-                "        {}::{}(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::{}::{} {{\n",
+                "        {}::{}(crate::pumpkin::plugin::{}::{} {{\n",
                 variant_prefix, wit_case, packet_ns, wit_case
             ));
             output.push_str(field_inits);
@@ -874,10 +876,7 @@ fn process_enum(
     } else {
         "bedrock_packets"
     };
-    let wit_ns = format!(
-        "crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::{}::{}",
-        packet_ns, enum_name
-    );
+    let wit_ns = format!("crate::pumpkin::plugin::{}::{}", packet_ns, enum_name);
 
     match mode {
         MappingMode::Serialize => {
@@ -898,9 +897,9 @@ fn process_enum(
             output.push_str("            };\n");
             output.push_str("            let mut buf = Vec::new();\n");
             if attr_name == "java_packet" {
-                output.push_str("            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();\n");
+                output.push_str("            pumpkin_core::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();\n");
             } else {
-                output.push_str("            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();\n");
+                output.push_str("            pumpkin_core::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();\n");
             }
             output.push_str("            Some(buf.into())\n");
             output.push_str("        }\n");
