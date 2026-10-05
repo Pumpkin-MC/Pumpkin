@@ -168,6 +168,33 @@ impl ItemEntity {
         &self.entity
     }
 
+    /// Vanilla `HopperBlockEntity.addItem(Container, ItemEntity)`: `insert` gets a copy of the
+    /// stack and returns the rest. Locked throughout -> a parallel tick never sees the stack
+    /// emptied by an insert that is still running. True once the whole stack moved.
+    pub fn insert_into(&self, insert: impl FnOnce(ItemStack) -> ItemStack) -> bool {
+        let mut stack = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if stack.is_empty() || self.entity.removed.load(Ordering::SeqCst) {
+            return false;
+        }
+        let rest = insert(stack.clone()).item_count;
+        let changed = rest != stack.item_count;
+        stack.set_count(rest);
+        drop(stack);
+
+        if rest == 0 {
+            self.entity.remove();
+            true
+        } else {
+            if changed {
+                self.on_count_changed();
+            }
+            false
+        }
+    }
+
     /// Vanilla `ItemStack.canBeHurtBy`: the `damage_resistant` tag blocks matching damage.
     fn can_be_hurt_by(stack: &ItemStack, damage_type: DamageType) -> bool {
         stack
