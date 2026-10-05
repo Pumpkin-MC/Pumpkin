@@ -70,33 +70,33 @@ pub fn build() -> TokenStream {
         }
     }
 
-    let mut arms = Vec::new();
-    for (resource_id, (is_default, bare_id, rel_path)) in &templates {
+    let mut data = Vec::with_capacity(templates.len());
+    let mut index: Vec<(&str, usize)> = Vec::with_capacity(templates.len() * 2);
+    for (i, (resource_id, (is_default, bare_id, rel_path))) in templates.iter().enumerate() {
+        data.push(quote! { include_bytes!(#rel_path) });
+        index.push((resource_id, i));
         if *is_default {
-            arms.push(quote! {
-                #resource_id | #bare_id => Some(include_bytes!(#rel_path)),
-            });
-        } else {
-            arms.push(quote! {
-                #resource_id => Some(include_bytes!(#rel_path)),
-            });
+            index.push((bare_id, i));
         }
     }
+    index.sort_by_key(|&(key, _)| key);
+    let data_len = data.len();
+    let index_len = index.len();
+    let index_rows = index.iter().map(|(key, i)| quote! { (#key, #i) });
 
     let names: Vec<&str> = templates.keys().map(String::as_str).collect();
     let pack_names: Vec<&str> = embedded_pack_names.iter().map(String::as_str).collect();
 
     quote! {
-        #[allow(clippy::too_many_lines)]
-        #[allow(clippy::match_same_arms)]
-        #[allow(clippy::missing_const_for_fn)]
-        #[allow(clippy::match_single_binding)]
+        static TEMPLATE_DATA: [&[u8]; #data_len] = [#(#data),*];
+        static TEMPLATE_INDEX: [(&str, usize); #index_len] = [#(#index_rows),*];
+
         #[must_use]
         pub fn get_template_bytes(path: &str) -> Option<&'static [u8]> {
-            match path {
-                #( #arms )*
-                _ => None,
-            }
+            TEMPLATE_INDEX
+                .binary_search_by_key(&path, |&(key, _)| key)
+                .ok()
+                .map(|i| TEMPLATE_DATA[TEMPLATE_INDEX[i].1])
         }
 
         #[must_use]
