@@ -269,7 +269,8 @@ wasmtime-wasi-http = { git = "https://github.com/bytecodealliance/wasmtime", rev
 
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.11", default-features = false }
-axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "ws"] }
+subtle = { version = "2.6", default-features = false }
 webrtc = { version = "0.20.5" }
 async-trait = "0.1"
 wit-bindgen = { version = "0.62", default-features = false, features = ["macros"] }
