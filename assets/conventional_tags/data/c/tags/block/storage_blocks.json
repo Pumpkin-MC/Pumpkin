@@ -1,0 +1,21 @@
+{
+  "values": [
+    "#c:storage_blocks/bone_meal",
+    "#c:storage_blocks/coal",
+    "#c:storage_blocks/copper",
+    "#c:storage_blocks/diamond",
+    "#c:storage_blocks/dried_kelp",
+    "#c:storage_blocks/emerald",
+    "#c:storage_blocks/gold",
+    "#c:storage_blocks/iron",
+    "#c:storage_blocks/lapis",
+    "#c:storage_blocks/netherite",
+    "#c:storage_blocks/raw_copper",
+    "#c:storage_blocks/raw_gold",
+    "#c:storage_blocks/raw_iron",
+    "#c:storage_blocks/redstone",
+    "#c:storage_blocks/resin",
+    "#c:storage_blocks/slime",
+    "#c:storage_blocks/wheat"
+  ]
+}

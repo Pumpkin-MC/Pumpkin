@@ -1,0 +1,16 @@
+{
+  "values": [
+    {
+      "id": "#c:is_dense_vegetation/overworld",
+      "required": false
+    },
+    {
+      "id": "#c:is_dense_vegetation/nether",
+      "required": false
+    },
+    {
+      "id": "#c:is_dense_vegetation/end",
+      "required": false
+    }
+  ]
+}

@@ -1448,7 +1448,7 @@ impl Player {
             return;
         }
 
-        if damage >= 100.0 {
+        if is_mace_smash && damage >= 100.0 {
             self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::DealtOverkillDamage);
         }
 
