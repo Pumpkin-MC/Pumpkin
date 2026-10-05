@@ -3,12 +3,10 @@ use std::sync::{
     atomic::{AtomicU8, AtomicU32, Ordering},
 };
 
-use pumpkin_data::Block;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::Block as BlockTag;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -17,7 +15,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, living::LivingEntity};
 use crate::server::Server;
@@ -107,37 +104,7 @@ impl CushionEntity {
         let inner = bounding_box.contract_all(1.0e-7);
         BlockPos::iterate(inner.min_block_pos(), inner.max_block_pos()).all(|pos| {
             let (block, state) = world.get_block_and_state(&pos);
-            // These blocks override vanilla's default tag/full-cube predicate.
-            if [
-                Block::FARMLAND.id,
-                Block::DIRT_PATH.id,
-                Block::SOUL_SAND.id,
-                Block::MUD.id,
-            ]
-            .contains(&block.id)
-            {
-                return true;
-            }
-            if block.id.has_tag(BlockTag::MINECRAFT_LEAVES)
-                || block.id.has_tag(BlockTag::C_GLASS_BLOCKS)
-                || block.name.ends_with("copper_grate")
-                || block.id == Block::MANGROVE_ROOTS.id
-                || block.id == Block::MOVING_PISTON.id
-            {
-                return false;
-            }
-            if block.id.has_tag(BlockTag::MINECRAFT_SHULKER_BOXES) {
-                return world.get_block_entity(&pos).is_none_or(|entity| {
-                    entity
-                        .as_any()
-                        .downcast_ref::<ShulkerBoxBlockEntity>()
-                        .is_none_or(ShulkerBoxBlockEntity::is_closed)
-                });
-            }
-            state.is_full_cube()
-                && (block.id.has_tag(BlockTag::MINECRAFT_CAUSES_SUFFOCATION)
-                    || block.id == Block::PISTON.id
-                    || block.id == Block::STICKY_PISTON.id)
+            crate::block::is_suffocating(world, &pos, block, state)
         })
     }
 

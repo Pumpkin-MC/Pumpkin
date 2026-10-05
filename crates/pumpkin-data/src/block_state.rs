@@ -113,6 +113,12 @@ impl BlockState {
         self.state_flags & IS_FULL_CUBE != 0
     }
 
+    /// Static suffocation predicate extracted from vanilla; block entities may override it.
+    #[must_use]
+    pub const fn is_suffocating(&self) -> bool {
+        self.state_flags & IS_SUFFOCATING != 0
+    }
+
     /// Returns whether the block is solid.
     /// Solid blocks conduct redstone and block redstone wire.
     /// Non-solid blocks don't allow redstone wire on top to propagate their signal downwards in java.
@@ -369,6 +375,7 @@ const HAS_RANDOM_TICKS: u16 = 1 << 9;
 const IS_SOLID_RENDER: u16 = 1 << 10;
 const CAN_OCCLUDE: u16 = 1 << 11;
 const HAS_ANALOG_OUTPUT_SIGNAL: u16 = 1 << 12;
+const IS_SUFFOCATING: u16 = 1 << 13;
 
 // side_flags
 const DOWN_SIDE_SOLID: u8 = 1 << 0;

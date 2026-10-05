@@ -1,3 +1,4 @@
+use pumpkin_data::block_properties::StickyPistonLikeProperties;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockId, BlockState};
@@ -36,6 +37,27 @@ pub enum PathComputationType {
     Land,
     Water,
     Air,
+}
+
+/// Vanilla's suffocation predicate, including state and block-entity overrides.
+pub(crate) fn is_suffocating(
+    world: &World,
+    pos: &BlockPos,
+    block: &Block,
+    state: &BlockState,
+) -> bool {
+    if block.has_tag(&tag::Block::MINECRAFT_SHULKER_BOXES) {
+        return world.get_block_entity(pos).is_none_or(|entity| {
+            entity
+                .as_any()
+                .downcast_ref::<entities::shulker_box::ShulkerBoxBlockEntity>()
+                .is_none_or(entities::shulker_box::ShulkerBoxBlockEntity::is_closed)
+        });
+    }
+    if matches!(block.id, BlockId::PISTON | BlockId::STICKY_PISTON) {
+        return !StickyPistonLikeProperties::from_state_id(state.id).extended;
+    }
+    state.is_suffocating()
 }
 
 pub trait BlockMetadata {
