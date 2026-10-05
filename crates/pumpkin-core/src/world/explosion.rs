@@ -655,4 +655,42 @@ mod tests {
             ]
         );
     }
+
+    /// a multi-item stack tops up a pile to 16 and the
+    /// rest becomes one pile of any size.
+    #[test]
+    fn multi_item_drop_tops_up_then_stays_one_pile() {
+        let mut drops = vec![(
+            BlockPos::new(0, 0, 0),
+            ItemStack::new(10, &Item::COBBLESTONE),
+        )];
+
+        add_or_append_stack(
+            &mut drops,
+            ItemStack::new(32, &Item::COBBLESTONE),
+            BlockPos::new(1, 0, 0),
+        );
+
+        let counts: Vec<_> = drops.iter().map(|(_, stack)| stack.item_count).collect();
+        assert_eq!(counts, [16, 26]);
+    }
+
+    /// Vanilla `areMergable` checks the whole incoming count: 10 + 60 > 64, so the pile is
+    /// skipped although it still has room for 6.
+    #[test]
+    fn pile_with_room_is_skipped_when_both_exceed_the_max_stack() {
+        let mut drops = vec![(
+            BlockPos::new(0, 0, 0),
+            ItemStack::new(10, &Item::COBBLESTONE),
+        )];
+
+        add_or_append_stack(
+            &mut drops,
+            ItemStack::new(60, &Item::COBBLESTONE),
+            BlockPos::new(1, 0, 0),
+        );
+
+        let counts: Vec<_> = drops.iter().map(|(_, stack)| stack.item_count).collect();
+        assert_eq!(counts, [10, 60]);
+    }
 }
