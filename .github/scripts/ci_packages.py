@@ -54,6 +54,7 @@ RUST_CI_IGNORED_FILES = {
     ".github/PULL_REQUEST_TEMPLATE.md",
     ".github/workflows/nix.yml",
     ".github/workflows/docker.yml",
+    ".github/workflows/nightly.yml",
     ".github/workflows/release.yml",
     ".github/workflows/reviewers.yml",
     ".github/workflows/sync-wit.yml",
@@ -81,7 +82,11 @@ RUST_CI_IGNORED_FILES = {
 
 WIT_ROOT = Path("crates/pumpkin-plugin-wit")
 # Crates that generate Rust bindings from the WIT files; their dependents follow from the closure.
-WIT_CONSUMER_PACKAGES = {"pumpkin-plugin-api", "pumpkin-host-bindings"}
+WIT_CONSUMER_PACKAGES = {
+    "pumpkin-plugin-api",
+    "pumpkin-wasm-host-v0_1",
+    "pumpkin-wasm-host-v0_2",
+}
 
 
 def run_command(command: list[str], *, capture: bool = False) -> str:
