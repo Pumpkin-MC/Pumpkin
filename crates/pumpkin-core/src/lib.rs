@@ -572,7 +572,8 @@ impl PumpkinServer {
 
         self.shutdown(&tasks).await;
 
-        if let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
+        // An embedding host may never set the logger, so don't wait for it
+        if let Some(Some((wrapper, _, _))) = LOGGER_IMPL.get()
             && let Some(rl) = wrapper.take_readline()
         {
             let _ = rl;
