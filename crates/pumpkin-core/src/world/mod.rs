@@ -2775,8 +2775,7 @@ impl World {
             level_name: "Pumpkin world".to_string(),
             premium_world_template_id: String::new(),
             is_trial: false,
-            // BDS `player-rewind-history-size-ticks` default, so tick tagged corrections rewind.
-            rewind_history_size: VarInt(40),
+            rewind_history_size: VarInt(0),
             server_authoritative_block_breaking: true,
             current_level_time: self.get_world_age() as _,
             enchantment_seed: VarInt(0),

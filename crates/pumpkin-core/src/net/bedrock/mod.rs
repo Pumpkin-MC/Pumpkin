@@ -35,7 +35,6 @@ use pumpkin_protocol::{
             interact::SInteract, inventory_transaction::SInventoryTransaction,
             item_stack_request::SItemStackRequest, loading_screen::SLoadingScreen, login::SLogin,
             mob_equipment::SMobEquipment, modal_form_response::SModalFormResponse,
-            network_stack_latency::SNetworkStackLatency,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
@@ -125,8 +124,6 @@ pub struct BedrockClient {
     pub inventory_opened: AtomicBool,
     /// Last processed `PlayerAuthInput` tick. Motion for the own player must carry it.
     pub input_tick: AtomicU64,
-    /// Java client pushes sent to this client, see `client_push`.
-    pub push_sync: std::sync::Mutex<crate::entity::client_push::BedrockPushSync>,
     /// Separate from normal vitals caching so the first rejected use always gets corrected.
     last_food_rejection_tick: AtomicCell<Option<i32>>,
     pub client_cache_supported: AtomicBool,
@@ -168,7 +165,6 @@ impl BedrockClient {
             next_form_id: AtomicU32::new(0),
             inventory_opened: AtomicBool::new(false),
             input_tick: AtomicU64::new(0),
-            push_sync: std::sync::Mutex::default(),
             last_food_rejection_tick: AtomicCell::new(None),
             client_cache_supported: AtomicBool::new(false),
             blob_cache: std::sync::Mutex::new(HashMap::new()),
@@ -741,10 +737,6 @@ impl BedrockClient {
                         .handle_resource_pack_response(packet, &server_c)
                         .await;
                 });
-            }
-            SNetworkStackLatency::PACKET_ID => {
-                SNetworkStackLatency::read(reader)?;
-                crate::entity::client_push::on_bedrock_ack(self);
             }
             SPlayerAuthInput::PACKET_ID => {
                 let packet = SPlayerAuthInput::read(reader)?;

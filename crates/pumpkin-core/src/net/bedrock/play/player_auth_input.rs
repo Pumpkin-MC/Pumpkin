@@ -152,14 +152,7 @@ impl BedrockClient {
             }
         }
 
-        crate::entity::client_push::on_bedrock_input(
-            player,
-            self,
-            packet.tick.0,
-            packet.position,
-            packet.delta,
-            on_ground,
-        );
+        crate::entity::client_push::send_bedrock_client_push(player, packet.delta.to_f64());
 
         let input_data = packet.input_data;
 
