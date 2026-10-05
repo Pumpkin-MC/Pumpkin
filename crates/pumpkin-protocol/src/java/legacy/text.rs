@@ -5,10 +5,7 @@ use std::fmt::Write as _;
 
 use pumpkin_nbt::{compound::NbtCompound, serializer::NbtWriteHelperJava, tag::NbtTag};
 use pumpkin_util::{
-    text::{
-        TextComponent, TextComponentBase,
-        color::{Color, NamedColor, RGBColor},
-    },
+    text::{TextComponent, TextComponentBase, color::Color},
     translation::Locale,
     version::JavaMinecraftVersion,
 };
@@ -50,9 +47,7 @@ pub fn to_legacy_string(
 }
 
 fn name_rgb_colors(base: &mut TextComponentBase) {
-    if let Some(Color::Rgb(rgb)) = base.style.color {
-        base.style.color = Some(Color::Named(nearest_named(rgb)));
-    }
+    base.style.color = base.style.color.map(|color| color.downsample());
     base.extra.iter_mut().for_each(name_rgb_colors);
 }
 
@@ -101,9 +96,9 @@ fn downgrade_compound(tag: &mut NbtCompound, version: JavaMinecraftVersion) {
     // Hex colours, hover contents and fonts (ViaBackwards 1.16 -> 1.15.2)
     if version < JavaMinecraftVersion::V_1_16 {
         if let Some(NbtTag::String(color)) = tag.child_tags.get_mut("color")
-            && let Some(rgb) = parse_hex(color)
+            && let Some(Color::Rgb(rgb)) = color.strip_prefix('#').and_then(Color::from_hex_str)
         {
-            *color = nearest_named(rgb).name().into();
+            *color = rgb.to_nearest_named().name().into();
         }
         tag.child_tags.remove("font");
         if let Some(NbtTag::Compound(hover)) = tag.child_tags.get_mut("hoverEvent") {
@@ -241,49 +236,6 @@ fn snbt_string(value: &str) -> String {
     format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-fn parse_hex(color: &str) -> Option<RGBColor> {
-    let rgb = u32::from_str_radix(color.strip_prefix('#')?, 16).ok()?;
-    Some(RGBColor::new(
-        (rgb >> 16) as u8,
-        (rgb >> 8) as u8,
-        rgb as u8,
-    ))
-}
-
-const NAMED_COLORS: [NamedColor; 16] = [
-    NamedColor::Black,
-    NamedColor::DarkBlue,
-    NamedColor::DarkGreen,
-    NamedColor::DarkAqua,
-    NamedColor::DarkRed,
-    NamedColor::DarkPurple,
-    NamedColor::Gold,
-    NamedColor::Gray,
-    NamedColor::DarkGray,
-    NamedColor::Blue,
-    NamedColor::Green,
-    NamedColor::Aqua,
-    NamedColor::Red,
-    NamedColor::LightPurple,
-    NamedColor::Yellow,
-    NamedColor::White,
-];
-
-/// `ViaBackwards`' weighted distance (`TranslatableRewriter1_16.getClosestChatColor`).
-fn nearest_named(rgb: RGBColor) -> NamedColor {
-    NAMED_COLORS
-        .into_iter()
-        .min_by_key(|named| {
-            let color = named.to_rgb();
-            let r_mean = i32::midpoint(i32::from(color.red), i32::from(rgb.red));
-            let dr = i32::from(color.red) - i32::from(rgb.red);
-            let dg = i32::from(color.green) - i32::from(rgb.green);
-            let db = i32::from(color.blue) - i32::from(rgb.blue);
-            (2 + (r_mean >> 8)) * dr * dr + 4 * dg * dg + (2 + ((255 - r_mean) >> 8)) * db * db
-        })
-        .unwrap_or(NamedColor::White)
-}
-
 const BOOLEAN_KEYS: [&str; 7] = [
     "bold",
     "italic",
@@ -337,7 +289,7 @@ fn tag_to_json(tag: &NbtTag) -> serde_json::Value {
 mod tests {
     use std::borrow::Cow;
 
-    use pumpkin_util::text::{click::ClickEvent, hover::HoverEvent};
+    use pumpkin_util::text::{click::ClickEvent, color::RGBColor, hover::HoverEvent};
 
     use super::*;
 
