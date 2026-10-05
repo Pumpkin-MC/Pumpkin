@@ -2,8 +2,12 @@ use pumpkin_nbt::compound::NbtCompound;
 use std::fs::{File, create_dir_all};
 use std::io;
 use std::path::PathBuf;
-use tracing::{debug, error};
+use std::sync::atomic::{AtomicU64, Ordering};
+use tracing::{debug, error, warn};
 use uuid::Uuid;
+
+/// Process-wide counter making per-save temp paths unique.
+static TEMP_SAVE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Manages the storage and retrieval of player data from disk and memory cache.
 ///
@@ -137,15 +141,59 @@ impl PlayerDataStorage {
             return Err(PlayerDataError::Io(e));
         }
 
-        // Create the file and write directly with GZip compression
-        match File::create(&path) {
-            Ok(file) => {
-                if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, file) {
+        // Serialize to a temporary file first, then atomically replace the
+        // player's .dat file. Writing directly to the live file with
+        // `File::create` would truncate the last good save before the new one
+        // is complete, so any failure or interruption mid-write would destroy
+        // the only copy of the player's data.
+        // Unique temp name per save: a shared <uuid>.dat_new lets two
+        // concurrent saves of the same player open, write, and fsync the
+        // same inode, so the slower writer can rename torn contents over
+        // the good file and the loser's rename can clobber the winner's.
+        let temp_unique = TEMP_SAVE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let temp_path =
+            path.with_extension(format!("dat_new.{}.{}", std::process::id(), temp_unique));
+        match File::create(&temp_path) {
+            Ok(mut file) => {
+                // Write through a &mut so the write handle stays alive for the
+                // fsync below: opening a second, read-only handle for sync_all
+                // fails with Access Denied on Windows (FlushFileBuffers needs
+                // write access).
+                let written = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, &mut file);
+                if let Err(e) = written {
                     error!("Failed to write compressed player data for {uuid}: {e}");
+                    let _ = std::fs::remove_file(&temp_path);
                     Err(PlayerDataError::Nbt(e.to_string()))
+                } else if let Err(e) = file.sync_all() {
+                    // Flush the new file to stable storage BEFORE the swap:
+                    // without an fsync the rename can become durable while
+                    // the data itself is still in the page cache, so a power
+                    // loss could leave an empty or truncated .dat behind.
+                    error!("Failed to sync player data file for {uuid}: {e}");
+                    let _ = std::fs::remove_file(&temp_path);
+                    Err(PlayerDataError::Io(e))
                 } else {
-                    debug!("Saved player data for {uuid} to disk");
-                    Ok(())
+                    // Windows refuses to rename a file while any handle to it
+                    // is open; the write handle must be dropped first.
+                    drop(file);
+                    if let Err(e) = std::fs::rename(&temp_path, &path) {
+                        error!("Failed to install player data file for {uuid}: {e}");
+                        let _ = std::fs::remove_file(&temp_path);
+                        Err(PlayerDataError::Io(e))
+                    } else {
+                        // Sync the parent directory so the rename itself is
+                        // durable. Best-effort: the data file is already synced,
+                        // and some filesystems do not support directory fsync
+                        // (Windows cannot open directories as files at all).
+                        if cfg!(unix)
+                            && let Some(parent) = path.parent()
+                            && let Err(e) = File::open(parent).and_then(|d| d.sync_all())
+                        {
+                            warn!("Failed to sync player data directory for {uuid}: {e}");
+                        }
+                        debug!("Saved player data for {uuid} to disk");
+                        Ok(())
+                    }
                 }
             }
             Err(e) => {
