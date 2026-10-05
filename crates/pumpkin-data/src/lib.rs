@@ -26,6 +26,9 @@ pub use loot_table as chest_loot_table;
 pub mod item;
 
 #[cfg(feature = "item")]
+pub mod item_registry;
+
+#[cfg(feature = "item")]
 pub mod item_stack;
 
 #[cfg(feature = "packet")]
@@ -268,6 +271,9 @@ pub mod bedrock_biome;
 #[rustfmt::skip]
 #[path = "generated/tag.rs"]
 pub mod tag;
+
+#[cfg(feature = "tag")]
+pub mod dynamic_tag;
 
 #[cfg(feature = "noise_router")]
 #[rustfmt::skip]

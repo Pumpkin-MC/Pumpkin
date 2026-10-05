@@ -167,6 +167,7 @@ potion_brewing = []
 phf = { workspace = true, features = ["macros"] }
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
+tracing.workspace = true
 serde = {workspace = true, features = ["rc"]}
 crc32c.workspace = true
 rand.workspace = true

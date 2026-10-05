@@ -555,7 +555,7 @@ pub(crate) fn build() -> TokenStream {
             #[must_use]
             fn is_tagged_with(&self, tag: &str) -> Option<bool> {
                 let tag = tag.strip_prefix('#').unwrap_or(tag);
-                let items = get_tag_ids(Self::tag_key(), tag).or_else(|| {
+                let generated = get_tag_ids(Self::tag_key(), tag).or_else(|| {
                     if !tag.contains(':') {
                         let mut full = String::with_capacity(10 + tag.len());
                         full.push_str("minecraft:");
@@ -566,8 +566,17 @@ pub(crate) fn build() -> TokenStream {
                     } else {
                         None
                     }
-                })?;
-                Some(items.contains(&self.registry_id()))
+                }).map(|items| items.contains(&self.registry_id()));
+                let runtime = crate::dynamic_tag::is_member(
+                    Self::tag_key(),
+                    tag,
+                    self.registry_key(),
+                    self.registry_id(),
+                );
+                if generated.is_none() && runtime.is_none() {
+                    return None;
+                }
+                Some(generated.unwrap_or(false) || runtime.unwrap_or(false))
             }
 
             #[must_use]

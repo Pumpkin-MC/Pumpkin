@@ -15,13 +15,13 @@ impl OwnedRecipeIngredient {
     pub fn match_item(&self, item: &Item) -> bool {
         match self {
             Self::Simple(id) => {
-                let name = format!("minecraft:{}", item.registry_key);
-                name == *id
+                let name = item.resource_location();
+                *name == *id
             }
             Self::Tagged(tag) => item.is_tagged_with(tag).unwrap_or(false),
             Self::OneOf(ids) => {
-                let name = format!("minecraft:{}", item.registry_key);
-                ids.contains(&name)
+                let name = item.resource_location();
+                ids.iter().any(|id| *id == *name)
             }
         }
     }
@@ -88,4 +88,48 @@ pub enum DynamicRecipe {
     Crafting(OwnedCraftingRecipe),
     Cooking(OwnedCookingRecipeType),
     Brewing(OwnedBrewingRecipe),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::dynamic_tag::register_tag;
+    use pumpkin_data::item_registry::ItemRegistration;
+    use pumpkin_data::tag::RegistryKey;
+
+    #[test]
+    fn ingredients_match_dynamic_items_by_key_and_tag() {
+        let gem = Item::register_dynamic(ItemRegistration {
+            key: "test_recipe:gem".to_string(),
+            components: Vec::new(),
+            max_stack_size: None,
+        })
+        .unwrap();
+        register_tag(
+            RegistryKey::Item,
+            "test_recipe:gems",
+            ["test_recipe:gem".to_string()],
+        );
+
+        assert!(OwnedRecipeIngredient::Simple("test_recipe:gem".to_string()).match_item(gem));
+        assert!(
+            !OwnedRecipeIngredient::Simple("test_recipe:gem".to_string())
+                .match_item(&Item::DIAMOND)
+        );
+        assert!(
+            OwnedRecipeIngredient::Simple("minecraft:diamond".to_string())
+                .match_item(&Item::DIAMOND)
+        );
+        assert!(
+            OwnedRecipeIngredient::OneOf(vec![
+                "minecraft:diamond".to_string(),
+                "test_recipe:gem".to_string()
+            ])
+            .match_item(gem)
+        );
+        assert!(OwnedRecipeIngredient::Tagged("test_recipe:gems".to_string()).match_item(gem));
+        assert!(
+            !OwnedRecipeIngredient::Tagged("test_recipe:gems".to_string()).match_item(&Item::COAL)
+        );
+    }
 }

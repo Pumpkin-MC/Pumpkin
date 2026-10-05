@@ -854,3 +854,75 @@ impl From<Option<ItemStack>> for ItemStackOptionalTemplateSerializer<'_> {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::data_component_impl::{DamageImpl, MaxDamageImpl, Rarity, RarityImpl};
+    use pumpkin_data::item_registry::ItemRegistration;
+
+    /// Encodes a component the way a plugin passes it to the item registry.
+    fn component_bytes(id: DataComponent, component: &dyn DataComponentImpl) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        serialize(id, component, &mut bytes).unwrap();
+        bytes
+    }
+
+    #[test]
+    fn dynamic_item_stack_round_trips_over_the_wire() {
+        let max_damage = MaxDamageImpl { max_damage: 2031 };
+        let decoded = deserialize(
+            DataComponent::MaxDamage,
+            &mut Cursor::new(component_bytes(DataComponent::MaxDamage, &max_damage)),
+        )
+        .unwrap();
+        let item = Item::register_dynamic(ItemRegistration {
+            key: "test_wire:lonsdaleite_sword".to_string(),
+            components: vec![(DataComponent::MaxDamage, decoded)],
+            max_stack_size: None,
+        })
+        .unwrap();
+        assert_eq!(
+            item.id,
+            Item::vanilla_count() + Item::dynamic_items().len() as u16 - 1
+        );
+
+        let mut stack = ItemStack::new(1, item);
+        stack.set_data_component(DamageImpl { damage: 12 });
+        stack.set_data_component(RarityImpl {
+            rarity: Rarity::Epic,
+        });
+        assert_eq!(stack.get_max_damage(), Some(2031));
+
+        let mut bytes = Vec::new();
+        ItemStackSerializer::from(stack.clone())
+            .write(&mut bytes)
+            .unwrap();
+        let read = ItemStackSerializer::read(&mut bytes.as_slice())
+            .unwrap()
+            .0
+            .into_owned();
+
+        assert_eq!(read.item, item);
+        assert_eq!(read.item_count, 1);
+        assert_eq!(read.get_max_damage(), Some(2031));
+        assert_eq!(read.get_data_component::<DamageImpl>().unwrap().damage, 12);
+        assert_eq!(
+            read.get_data_component::<RarityImpl>().unwrap().rarity,
+            Rarity::Epic
+        );
+    }
+
+    #[test]
+    fn unknown_item_id_reads_as_air() {
+        let mut bytes = Vec::new();
+        for value in [1, 60_000, 0, 0] {
+            bytes.write_var_int(&VarInt(value)).unwrap();
+        }
+        let read = ItemStackSerializer::read(&mut bytes.as_slice())
+            .unwrap()
+            .0
+            .into_owned();
+        assert_eq!(read.item, &Item::AIR);
+    }
+}

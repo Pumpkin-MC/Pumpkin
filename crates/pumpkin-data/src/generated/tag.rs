@@ -30620,19 +30620,30 @@ pub trait Taggable {
     #[must_use]
     fn is_tagged_with(&self, tag: &str) -> Option<bool> {
         let tag = tag.strip_prefix('#').unwrap_or(tag);
-        let items = get_tag_ids(Self::tag_key(), tag).or_else(|| {
-            if !tag.contains(':') {
-                let mut full = String::with_capacity(10 + tag.len());
-                full.push_str("minecraft:");
-                full.push_str(tag);
-                get_tag_ids(Self::tag_key(), &full)
-            } else if let Some(stripped) = tag.strip_prefix("minecraft:") {
-                get_tag_ids(Self::tag_key(), stripped)
-            } else {
-                None
-            }
-        })?;
-        Some(items.contains(&self.registry_id()))
+        let generated = get_tag_ids(Self::tag_key(), tag)
+            .or_else(|| {
+                if !tag.contains(':') {
+                    let mut full = String::with_capacity(10 + tag.len());
+                    full.push_str("minecraft:");
+                    full.push_str(tag);
+                    get_tag_ids(Self::tag_key(), &full)
+                } else if let Some(stripped) = tag.strip_prefix("minecraft:") {
+                    get_tag_ids(Self::tag_key(), stripped)
+                } else {
+                    None
+                }
+            })
+            .map(|items| items.contains(&self.registry_id()));
+        let runtime = crate::dynamic_tag::is_member(
+            Self::tag_key(),
+            tag,
+            self.registry_key(),
+            self.registry_id(),
+        );
+        if generated.is_none() && runtime.is_none() {
+            return None;
+        }
+        Some(generated.unwrap_or(false) || runtime.unwrap_or(false))
     }
     #[must_use]
     fn has_tag(&self, tag: &'static Tag) -> bool {

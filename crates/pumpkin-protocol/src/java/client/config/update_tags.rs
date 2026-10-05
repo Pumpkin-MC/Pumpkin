@@ -38,6 +38,17 @@ impl ClientPacket for CUpdateTags<'_> {
         write.write_list(&valid_keys, |p, &registry_key| {
             p.write_string(&format!("minecraft:{}", registry_key.identifier_string()))?;
 
+            if registry_key == RegistryKey::Item
+                && let Some(tags) = pumpkin_data::item::Item::network_tags()
+            {
+                p.write_var_int(&VarInt(tags.len() as i32))?;
+                for (name, ids) in &tags {
+                    p.write_string_bounded(name, u16::MAX as usize)?;
+                    p.write_list(ids, |p, &id| p.write_var_int(&VarInt::from(id)))?;
+                }
+                return Ok(());
+            }
+
             let Some(values) = get_registry_key_tags(*version, registry_key) else {
                 // no tags defined for that registry key in this version
                 // write an empty list and continue
