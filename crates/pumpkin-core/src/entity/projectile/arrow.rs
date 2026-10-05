@@ -119,7 +119,7 @@ impl ArrowEntity {
     ) -> Self {
         let mut owner_pos = shooter.pos.load();
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
-        entity.pos.store(owner_pos);
+        entity.set_pos(owner_pos);
         let mut launch_event =
             crate::plugin::api::events::entity::projectile_launch::ProjectileLaunchEvent::new(
                 entity.entity_id,

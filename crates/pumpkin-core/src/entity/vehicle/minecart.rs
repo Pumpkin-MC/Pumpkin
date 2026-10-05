@@ -391,7 +391,7 @@ impl EntityBase for MinecartEntity {
                 | RailShape::AscendingSouth => pos.y,
                 _ => f64::from(block_pos.0.y) + RAIL_HEIGHT_OFFSET,
             };
-            self.vehicle.entity.pos.store(target_position);
+            self.vehicle.entity.set_pos(target_position);
 
             let horizontal_in_direction = Vector3::new(exit1.x, 0.0, exit1.z);
             let mut horizontal_out_direction = Vector3::new(exit0.x, 0.0, exit0.z);

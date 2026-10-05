@@ -147,7 +147,7 @@ use pumpkin_util::{
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
 };
 use pumpkin_util::{
-    math::{get_section_cord, position::chunk_section_from_pos, vector2::Vector2},
+    math::{position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
@@ -1582,11 +1582,7 @@ impl World {
         let tickable: Vec<_> = entities_to_tick
             .par_iter()
             .filter_map(|entity| {
-                let entity_pos = entity.get_entity().pos.load();
-                let entity_chunk = Vector2::new(
-                    get_section_cord(entity_pos.x.floor() as i32),
-                    get_section_cord(entity_pos.z.floor() as i32),
-                );
+                let entity_chunk = entity.get_entity().chunk_pos.load();
                 if !active_chunks.contains(&entity_chunk) {
                     return None;
                 }

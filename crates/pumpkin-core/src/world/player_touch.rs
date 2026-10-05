@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_util::math::{boundingbox::BoundingBox, get_section_cord, vector2::Vector2};
+use pumpkin_util::math::{boundingbox::BoundingBox, vector2::Vector2};
 
 use crate::entity::{EntityBase, player::Player};
 
@@ -18,7 +18,6 @@ impl<'a> PlayerTouch<'a> {
             return None;
         }
         let entity = player.get_entity();
-        let pos = entity.pos.load();
         let hitbox = entity.bounding_box.load();
         // Vanilla `Player.aiStep` pickup volume. Push uses stored hitboxes elsewhere.
         let area = match entity.get_vehicle() {
@@ -27,14 +26,10 @@ impl<'a> PlayerTouch<'a> {
                 .expand(1.0, 0.0, 1.0),
             _ => hitbox.expand(1.0, 0.5, 1.0),
         };
-        let chunk = Vector2::new(
-            get_section_cord(pos.x.floor() as i32),
-            get_section_cord(pos.z.floor() as i32),
-        );
         Some(Self {
             player,
             area,
-            chunk,
+            chunk: entity.chunk_pos.load(),
         })
     }
 

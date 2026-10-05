@@ -30,7 +30,7 @@ use pumpkin_protocol::{BClientPacket, ClientPacket};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::math::{get_section_cord, pack_degrees};
+use pumpkin_util::math::{pack_degrees, position::chunk_section_from_pos};
 use rustc_hash::FxHashSet;
 use uuid::Uuid;
 
@@ -108,11 +108,7 @@ impl TrackedEntity {
         base.last_sent_pitch.store(rot[0], Relaxed);
         base.last_sent_yaw.store(rot[1], Relaxed);
         base.last_sent_head_yaw.store(rot[2], Relaxed);
-        let last_section_pos = Vector3::new(
-            get_section_cord(pos.x.floor() as i32),
-            get_section_cord(pos.y.floor() as i32),
-            get_section_cord(pos.z.floor() as i32),
-        );
+        let last_section_pos = chunk_section_from_pos(&base.block_pos.load());
         Self {
             entity,
             entity_id,
@@ -917,12 +913,7 @@ impl EntityTracker {
     }
 
     pub fn update_player_position(&self, player: &Arc<Player>, world: &World) {
-        let pos = player.get_entity().pos.load();
-        let new_pos = Vector3::new(
-            get_section_cord(pos.x.floor() as i32),
-            get_section_cord(pos.y.floor() as i32),
-            get_section_cord(pos.z.floor() as i32),
-        );
+        let new_pos = chunk_section_from_pos(&player.get_entity().block_pos.load());
         if let Some(tracked) = self.entity_map.get(&player.get_entity().entity_id) {
             tracked.last_section_pos.store(new_pos);
         }
@@ -938,12 +929,7 @@ impl EntityTracker {
 
     pub fn update_entity_position(&self, entity: &dyn EntityBase, world: &World) {
         if let Some(tracked) = self.entity_map.get(&entity.get_entity().entity_id) {
-            let pos = entity.get_entity().pos.load();
-            let new_pos = Vector3::new(
-                get_section_cord(pos.x.floor() as i32),
-                get_section_cord(pos.y.floor() as i32),
-                get_section_cord(pos.z.floor() as i32),
-            );
+            let new_pos = chunk_section_from_pos(&entity.get_entity().block_pos.load());
             tracked.last_section_pos.store(new_pos);
             let players = world.players.load();
             tracked.update_players(players.as_ref(), world);
@@ -956,12 +942,7 @@ impl EntityTracker {
 
         for entry in &self.entity_map {
             let tracked = entry.value();
-            let pos = tracked.entity.get_entity().pos.load();
-            let new_pos = Vector3::new(
-                get_section_cord(pos.x.floor() as i32),
-                get_section_cord(pos.y.floor() as i32),
-                get_section_cord(pos.z.floor() as i32),
-            );
+            let new_pos = chunk_section_from_pos(&tracked.entity.get_entity().block_pos.load());
             let old_pos = tracked.last_section_pos.load();
             if old_pos != new_pos {
                 tracked.update_players(players.as_ref(), world);
