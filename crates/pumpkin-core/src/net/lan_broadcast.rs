@@ -1,12 +1,12 @@
 use pumpkin_config::LANBroadcastConfig;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::{select, time};
 use tracing::{error, info, warn};
 
-use crate::{SHOULD_STOP, STOP_INTERRUPT};
+use crate::server::Server;
 
 /// The standard Minecraft multicast address used for LAN discovery
 ///
@@ -46,12 +46,13 @@ impl LANBroadcast {
     /// port the actual game server is listening on.
     ///
     /// # Arguments
+    /// * `server` - The server whose stop ends the broadcast
     /// * `bound_addr` - The address where the actual Minecraft server is running
     ///   The port from this address is what clients will use to connect
     ///
     /// # Panics
     /// Panics if the UDP socket cannot be bound or if broadcast permissions are denied
-    pub async fn start(self, bound_addr: SocketAddr) {
+    pub async fn start(self, server: Arc<Server>, bound_addr: SocketAddr) {
         let Ok(socket) = UdpSocket::bind(format!("0.0.0.0:{}", self.port)).await else {
             error!("Unable to bind LAN broadcast UDP socket");
             return;
@@ -70,9 +71,9 @@ impl LANBroadcast {
             info!("LAN broadcast running on {local_addr}");
         }
 
-        while !SHOULD_STOP.load(Ordering::Relaxed) {
+        loop {
             let t1 = interval.tick();
-            let t2 = STOP_INTERRUPT.cancelled();
+            let t2 = server.stop_token.cancelled();
 
             let should_continue = select! {
                 _ = t1 => true,
