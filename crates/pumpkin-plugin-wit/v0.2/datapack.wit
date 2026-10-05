@@ -23,19 +23,19 @@ interface datapack {
     /// Global manager for inspecting and controlling server datapacks.
     resource datapack-manager {
         /// Returns all known datapacks (both enabled and available/disabled).
-        list-all-packs: async func() -> list<datapack-info>;
+        list-all-packs: func() -> list<datapack-info>;
 
         /// Returns only currently enabled datapacks.
-        list-enabled-packs: async func() -> list<datapack-info>;
+        list-enabled-packs: func() -> list<datapack-info>;
 
         /// Returns available (disabled) datapacks.
-        list-available-packs: async func() -> list<datapack-info>;
+        list-available-packs: func() -> list<datapack-info>;
 
         /// Retrieves details about a specific datapack by name or ID.
-        get-pack: async func(name: string) -> option<datapack-info>;
+        get-pack: func(name: string) -> option<datapack-info>;
 
         /// Checks if a datapack is currently enabled.
-        is-enabled: async func(name: string) -> bool;
+        is-enabled: func(name: string) -> bool;
 
         /// Enables a datapack with a specific priority position.
         enable-pack: async func(name: string, position: enable-position) -> result<_, string>;

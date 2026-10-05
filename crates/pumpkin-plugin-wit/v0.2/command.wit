@@ -15,12 +15,12 @@ interface command {
     }
 
     resource command-node {
-        literal: static async func(name: string) -> command-node;
-        argument: static async func(name: string, %type: argument-type) -> command-node;
-        then: async func(node: command-node);
-        execute-with-handler-id: async func(handler-id: u32);
-        suggest-with-handler-id: async func(handler-id: u32);
-        require-with-handler-id: async func(handler-id: u32);
+        literal: static func(name: string) -> command-node;
+        argument: static func(name: string, %type: argument-type) -> command-node;
+        then: func(node: command-node);
+        execute-with-handler-id: func(handler-id: u32);
+        suggest-with-handler-id: func(handler-id: u32);
+        require-with-handler-id: func(handler-id: u32);
     }
 
     record suggestion-request {
@@ -119,25 +119,25 @@ interface command {
     }
 
     resource command-sender {
-        get-command-sender-type: async func() -> command-sender-type;
-        get-name: async func() -> string;
-        send-message: async func(text: text-component);
-        send-system-message: async func(text: text-component);
-        send-error: async func(text: text-component);
-        set-success-count: async func(count: s32);
-        is-player: async func() -> bool;
-        is-console: async func() -> bool;
-        as-player: async func() -> option<player>;
-        permission-level: async func() -> permission-level;
-        has-permission-level: async func(level: permission-level) -> bool;
+        get-command-sender-type: func() -> command-sender-type;
+        get-name: func() -> string;
+        send-message: func(text: text-component);
+        send-system-message: func(text: text-component);
+        send-error: func(text: text-component);
+        set-success-count: func(count: s32);
+        is-player: func() -> bool;
+        is-console: func() -> bool;
+        as-player: func() -> option<player>;
+        permission-level: func() -> permission-level;
+        has-permission-level: func(level: permission-level) -> bool;
         /// Checks whether the sender has a permission on the server.
         has-permission: async func(node: string) -> bool;
-        position: async func() -> option<position>;
-        %world: async func() -> option<%world>;
-        get-locale: async func() -> locale;
-        should-receive-feedback: async func() -> bool;
-        should-broadcast-console-to-ops: async func() -> bool;
-        should-track-output: async func() -> bool;
+        position: func() -> option<position>;
+        %world: func() -> option<%world>;
+        get-locale: func() -> locale;
+        should-receive-feedback: func() -> bool;
+        should-broadcast-console-to-ops: func() -> bool;
+        should-track-output: func() -> bool;
     }
 
     enum string-type {
@@ -233,15 +233,15 @@ interface command {
     }
 
     resource consumed-args {
-        get-value: async func(key: string) -> arg;
+        get-value: func(key: string) -> arg;
     }
 
     resource command {
         /// Creates a command from its names and description.
         ///
         /// The first name is primary; the remaining names are aliases.
-        create: static async func(names: list<string>, description: string) -> command;
-        then: async func(node: command-node);
-        execute-with-handler-id: async func(handler-id: u32);
+        create: static func(names: list<string>, description: string) -> command;
+        then: func(node: command-node);
+        execute-with-handler-id: func(handler-id: u32);
     }
 }

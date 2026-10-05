@@ -47,495 +47,426 @@ pub mod executor;
 impl pumpkin::plugin::command::Host for PluginHostState {}
 
 impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
-    async fn drop(&mut self, rep: Resource<ConsumedArgs>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<ConsumedArgs>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
-}
 
-impl pumpkin::plugin::command::HostConsumedArgsWithStore<PluginHostState>
-    for HasSelf<PluginHostState>
-{
     #[expect(clippy::too_many_lines)]
-    async fn get_value(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_value(
+        &mut self,
         consumed_args: Resource<ConsumedArgs>,
         key: String,
     ) -> wasmtime::Result<Arg> {
-        accessor.with(|mut host| {
-            use pumpkin_wasm_host_common::args::OwnedArg;
-            let state = host.get();
+        use pumpkin_wasm_host_common::args::OwnedArg;
+        let state = self;
 
-            let resource = state.get(&consumed_args)?;
+        let resource = state.get(&consumed_args)?;
 
-            let Some(owned_arg) = resource.get(&key).cloned() else {
-                return Ok(Arg::Simple(String::new()));
-            };
+        let Some(owned_arg) = resource.get(&key).cloned() else {
+            return Ok(Arg::Simple(String::new()));
+        };
 
-            Ok(match owned_arg {
-                OwnedArg::Simple(s) => Arg::Simple(s),
-                OwnedArg::Msg(s) => Arg::Msg(s),
-                OwnedArg::Bool(b) => Arg::Bool(b),
-                OwnedArg::Item(s) => Arg::Item(s),
-                OwnedArg::ItemPredicate(s) => Arg::ItemPredicate(s),
-                OwnedArg::ResourceLocation(s) => Arg::ResourceLocation(s),
-                OwnedArg::Block(s) => Arg::Block(s),
-                OwnedArg::BlockPredicate(s) => Arg::BlockPredicate(s),
-                OwnedArg::Time(t) => Arg::Time(t),
-                OwnedArg::Num(n) => {
-                    use pumpkin_wasm_host_common::args::NotInBounds;
-                    use pumpkin_wasm_host_common::args::Number;
-                    let convert_num = |n: Number| match n {
-                        Number::F64(v) => pumpkin::plugin::command::Number::Float64(v),
-                        Number::F32(v) => pumpkin::plugin::command::Number::Float32(v),
-                        Number::I32(v) => pumpkin::plugin::command::Number::Int32(v),
-                        Number::I64(v) => pumpkin::plugin::command::Number::Int64(v),
-                    };
-                    Arg::Num(n.map(convert_num).map_err(|e| match e {
-                        NotInBounds::LowerBound(a, b) => {
-                            pumpkin::plugin::command::NotInBounds::LowerBound((
-                                convert_num(a),
-                                convert_num(b),
-                            ))
-                        }
-                        NotInBounds::UpperBound(a, b) => {
-                            pumpkin::plugin::command::NotInBounds::UpperBound((
-                                convert_num(a),
-                                convert_num(b),
-                            ))
-                        }
-                    }))
+        Ok(match owned_arg {
+            OwnedArg::Simple(s) => Arg::Simple(s),
+            OwnedArg::Msg(s) => Arg::Msg(s),
+            OwnedArg::Bool(b) => Arg::Bool(b),
+            OwnedArg::Item(s) => Arg::Item(s),
+            OwnedArg::ItemPredicate(s) => Arg::ItemPredicate(s),
+            OwnedArg::ResourceLocation(s) => Arg::ResourceLocation(s),
+            OwnedArg::Block(s) => Arg::Block(s),
+            OwnedArg::BlockPredicate(s) => Arg::BlockPredicate(s),
+            OwnedArg::Time(t) => Arg::Time(t),
+            OwnedArg::Num(n) => {
+                use pumpkin_wasm_host_common::args::NotInBounds;
+                use pumpkin_wasm_host_common::args::Number;
+                let convert_num = |n: Number| match n {
+                    Number::F64(v) => pumpkin::plugin::command::Number::Float64(v),
+                    Number::F32(v) => pumpkin::plugin::command::Number::Float32(v),
+                    Number::I32(v) => pumpkin::plugin::command::Number::Int32(v),
+                    Number::I64(v) => pumpkin::plugin::command::Number::Int64(v),
+                };
+                Arg::Num(n.map(convert_num).map_err(|e| match e {
+                    NotInBounds::LowerBound(a, b) => {
+                        pumpkin::plugin::command::NotInBounds::LowerBound((
+                            convert_num(a),
+                            convert_num(b),
+                        ))
+                    }
+                    NotInBounds::UpperBound(a, b) => {
+                        pumpkin::plugin::command::NotInBounds::UpperBound((
+                            convert_num(a),
+                            convert_num(b),
+                        ))
+                    }
+                }))
+            }
+            OwnedArg::BlockPos(p) => Arg::BlockPos(WitBlockPos {
+                x: p.0.x,
+                y: p.0.y,
+                z: p.0.z,
+            }),
+            OwnedArg::Pos3D(v) => Arg::Pos3d((v.x, v.y, v.z)),
+            OwnedArg::Pos2D(v) => Arg::Pos2d((v.x, v.y)),
+            OwnedArg::Rotation(a, b, c, d) => Arg::Rotation((a, b, c, d)),
+            OwnedArg::GameMode(g) => Arg::Gamemode(match g {
+                pumpkin_util::GameMode::Survival => pumpkin::plugin::common::GameMode::Survival,
+                pumpkin_util::GameMode::Creative => pumpkin::plugin::common::GameMode::Creative,
+                pumpkin_util::GameMode::Adventure => pumpkin::plugin::common::GameMode::Adventure,
+                pumpkin_util::GameMode::Spectator => pumpkin::plugin::common::GameMode::Spectator,
+            }),
+            OwnedArg::Difficulty(d) => Arg::Difficulty(match d {
+                pumpkin_util::Difficulty::Peaceful => pumpkin::plugin::server::Difficulty::Peaceful,
+                pumpkin_util::Difficulty::Easy => pumpkin::plugin::server::Difficulty::Easy,
+                pumpkin_util::Difficulty::Normal => pumpkin::plugin::server::Difficulty::Normal,
+                pumpkin_util::Difficulty::Hard => pumpkin::plugin::server::Difficulty::Hard,
+            }),
+            OwnedArg::Players(players) => {
+                let mut resources = Vec::new();
+                for p in players {
+                    if let Ok(r) = state.add(p) {
+                        resources.push(r);
+                    }
                 }
-                OwnedArg::BlockPos(p) => Arg::BlockPos(WitBlockPos {
-                    x: p.0.x,
-                    y: p.0.y,
-                    z: p.0.z,
-                }),
-                OwnedArg::Pos3D(v) => Arg::Pos3d((v.x, v.y, v.z)),
-                OwnedArg::Pos2D(v) => Arg::Pos2d((v.x, v.y)),
-                OwnedArg::Rotation(a, b, c, d) => Arg::Rotation((a, b, c, d)),
-                OwnedArg::GameMode(g) => Arg::Gamemode(match g {
-                    pumpkin_util::GameMode::Survival => pumpkin::plugin::common::GameMode::Survival,
-                    pumpkin_util::GameMode::Creative => pumpkin::plugin::common::GameMode::Creative,
-                    pumpkin_util::GameMode::Adventure => {
-                        pumpkin::plugin::common::GameMode::Adventure
-                    }
-                    pumpkin_util::GameMode::Spectator => {
-                        pumpkin::plugin::common::GameMode::Spectator
-                    }
-                }),
-                OwnedArg::Difficulty(d) => Arg::Difficulty(match d {
-                    pumpkin_util::Difficulty::Peaceful => {
-                        pumpkin::plugin::server::Difficulty::Peaceful
-                    }
-                    pumpkin_util::Difficulty::Easy => pumpkin::plugin::server::Difficulty::Easy,
-                    pumpkin_util::Difficulty::Normal => pumpkin::plugin::server::Difficulty::Normal,
-                    pumpkin_util::Difficulty::Hard => pumpkin::plugin::server::Difficulty::Hard,
-                }),
-                OwnedArg::Players(players) => {
-                    let mut resources = Vec::new();
-                    for p in players {
-                        if let Ok(r) = state.add(p) {
-                            resources.push(r);
-                        }
-                    }
-                    Arg::Players(resources)
+                Arg::Players(resources)
+            }
+            OwnedArg::Particle(p) => Arg::Particle(format!("{p:?}")),
+            OwnedArg::TextComponent(t) => Arg::TextComponent(state.add(t)?),
+            OwnedArg::BossbarColor(c) => Arg::BossbarColor(match c {
+                pumpkin_core::world::bossbar::BossbarColor::Pink => {
+                    pumpkin::plugin::command::BossbarColor::Pink
                 }
-                OwnedArg::Particle(p) => Arg::Particle(format!("{p:?}")),
-                OwnedArg::TextComponent(t) => Arg::TextComponent(state.add(t)?),
-                OwnedArg::BossbarColor(c) => Arg::BossbarColor(match c {
-                    pumpkin_core::world::bossbar::BossbarColor::Pink => {
-                        pumpkin::plugin::command::BossbarColor::Pink
-                    }
-                    pumpkin_core::world::bossbar::BossbarColor::Blue => {
-                        pumpkin::plugin::command::BossbarColor::Blue
-                    }
-                    pumpkin_core::world::bossbar::BossbarColor::Red => {
-                        pumpkin::plugin::command::BossbarColor::Red
-                    }
-                    pumpkin_core::world::bossbar::BossbarColor::Green => {
-                        pumpkin::plugin::command::BossbarColor::Green
-                    }
-                    pumpkin_core::world::bossbar::BossbarColor::Yellow => {
-                        pumpkin::plugin::command::BossbarColor::Yellow
-                    }
-                    pumpkin_core::world::bossbar::BossbarColor::Purple => {
-                        pumpkin::plugin::command::BossbarColor::Purple
-                    }
-                    pumpkin_core::world::bossbar::BossbarColor::White => {
-                        pumpkin::plugin::command::BossbarColor::White
-                    }
-                }),
-                OwnedArg::BossbarStyle(s) => Arg::BossbarStyle(match s {
-                    pumpkin_core::world::bossbar::BossbarDivisions::NoDivision => {
-                        pumpkin::plugin::command::BossbarStyle::NoDivision
-                    }
-                    pumpkin_core::world::bossbar::BossbarDivisions::Notches6 => {
-                        pumpkin::plugin::command::BossbarStyle::Notches6
-                    }
-                    pumpkin_core::world::bossbar::BossbarDivisions::Notches10 => {
-                        pumpkin::plugin::command::BossbarStyle::Notches10
-                    }
-                    pumpkin_core::world::bossbar::BossbarDivisions::Notches12 => {
-                        pumpkin::plugin::command::BossbarStyle::Notches12
-                    }
-                    pumpkin_core::world::bossbar::BossbarDivisions::Notches20 => {
-                        pumpkin::plugin::command::BossbarStyle::Notches20
-                    }
-                }),
-                OwnedArg::SoundCategory(s) => Arg::SoundCategory(match s {
-                    pumpkin_data::sound::SoundCategory::Master
-                    | pumpkin_data::sound::SoundCategory::Ui => {
-                        pumpkin::plugin::command::SoundCategory::Master
-                    }
-                    pumpkin_data::sound::SoundCategory::Music => {
-                        pumpkin::plugin::command::SoundCategory::Music
-                    }
-                    pumpkin_data::sound::SoundCategory::Records => {
-                        pumpkin::plugin::command::SoundCategory::Records
-                    }
-                    pumpkin_data::sound::SoundCategory::Weather => {
-                        pumpkin::plugin::command::SoundCategory::Weather
-                    }
-                    pumpkin_data::sound::SoundCategory::Blocks => {
-                        pumpkin::plugin::command::SoundCategory::Blocks
-                    }
-                    pumpkin_data::sound::SoundCategory::Hostile => {
-                        pumpkin::plugin::command::SoundCategory::Hostile
-                    }
-                    pumpkin_data::sound::SoundCategory::Neutral => {
-                        pumpkin::plugin::command::SoundCategory::Neutral
-                    }
-                    pumpkin_data::sound::SoundCategory::Players => {
-                        pumpkin::plugin::command::SoundCategory::Players
-                    }
-                    pumpkin_data::sound::SoundCategory::Ambient => {
-                        pumpkin::plugin::command::SoundCategory::Ambient
-                    }
-                    pumpkin_data::sound::SoundCategory::Voice => {
-                        pumpkin::plugin::command::SoundCategory::Voice
-                    }
-                }),
-                OwnedArg::DamageType(d) => Arg::DamageType(d.message_id.to_string()),
-                OwnedArg::Effect(e) => Arg::Effect(e.minecraft_name.to_string()),
-                OwnedArg::Enchantment(e) => Arg::Enchantment(e.name.to_string()),
-                OwnedArg::Advancement(a) => Arg::Advancement(a.to_string()),
-                OwnedArg::EntityAnchor(a) => Arg::EntityAnchor(match a {
-                    pumpkin_core::command::argument_types::entity_anchor::EntityAnchor::Eyes => {
-                        pumpkin::plugin::command::EntityAnchor::Eyes
-                    }
-                    pumpkin_core::command::argument_types::entity_anchor::EntityAnchor::Feet => {
-                        pumpkin::plugin::command::EntityAnchor::Feet
-                    }
-                }),
-                // These types don't have direct WIT resource mappings yet
-                OwnedArg::Entities(_) | OwnedArg::Entity(_) | OwnedArg::GameProfiles(_) => {
-                    Arg::Simple(String::new())
+                pumpkin_core::world::bossbar::BossbarColor::Blue => {
+                    pumpkin::plugin::command::BossbarColor::Blue
                 }
-            })
+                pumpkin_core::world::bossbar::BossbarColor::Red => {
+                    pumpkin::plugin::command::BossbarColor::Red
+                }
+                pumpkin_core::world::bossbar::BossbarColor::Green => {
+                    pumpkin::plugin::command::BossbarColor::Green
+                }
+                pumpkin_core::world::bossbar::BossbarColor::Yellow => {
+                    pumpkin::plugin::command::BossbarColor::Yellow
+                }
+                pumpkin_core::world::bossbar::BossbarColor::Purple => {
+                    pumpkin::plugin::command::BossbarColor::Purple
+                }
+                pumpkin_core::world::bossbar::BossbarColor::White => {
+                    pumpkin::plugin::command::BossbarColor::White
+                }
+            }),
+            OwnedArg::BossbarStyle(s) => Arg::BossbarStyle(match s {
+                pumpkin_core::world::bossbar::BossbarDivisions::NoDivision => {
+                    pumpkin::plugin::command::BossbarStyle::NoDivision
+                }
+                pumpkin_core::world::bossbar::BossbarDivisions::Notches6 => {
+                    pumpkin::plugin::command::BossbarStyle::Notches6
+                }
+                pumpkin_core::world::bossbar::BossbarDivisions::Notches10 => {
+                    pumpkin::plugin::command::BossbarStyle::Notches10
+                }
+                pumpkin_core::world::bossbar::BossbarDivisions::Notches12 => {
+                    pumpkin::plugin::command::BossbarStyle::Notches12
+                }
+                pumpkin_core::world::bossbar::BossbarDivisions::Notches20 => {
+                    pumpkin::plugin::command::BossbarStyle::Notches20
+                }
+            }),
+            OwnedArg::SoundCategory(s) => Arg::SoundCategory(match s {
+                pumpkin_data::sound::SoundCategory::Master
+                | pumpkin_data::sound::SoundCategory::Ui => {
+                    pumpkin::plugin::command::SoundCategory::Master
+                }
+                pumpkin_data::sound::SoundCategory::Music => {
+                    pumpkin::plugin::command::SoundCategory::Music
+                }
+                pumpkin_data::sound::SoundCategory::Records => {
+                    pumpkin::plugin::command::SoundCategory::Records
+                }
+                pumpkin_data::sound::SoundCategory::Weather => {
+                    pumpkin::plugin::command::SoundCategory::Weather
+                }
+                pumpkin_data::sound::SoundCategory::Blocks => {
+                    pumpkin::plugin::command::SoundCategory::Blocks
+                }
+                pumpkin_data::sound::SoundCategory::Hostile => {
+                    pumpkin::plugin::command::SoundCategory::Hostile
+                }
+                pumpkin_data::sound::SoundCategory::Neutral => {
+                    pumpkin::plugin::command::SoundCategory::Neutral
+                }
+                pumpkin_data::sound::SoundCategory::Players => {
+                    pumpkin::plugin::command::SoundCategory::Players
+                }
+                pumpkin_data::sound::SoundCategory::Ambient => {
+                    pumpkin::plugin::command::SoundCategory::Ambient
+                }
+                pumpkin_data::sound::SoundCategory::Voice => {
+                    pumpkin::plugin::command::SoundCategory::Voice
+                }
+            }),
+            OwnedArg::DamageType(d) => Arg::DamageType(d.message_id.to_string()),
+            OwnedArg::Effect(e) => Arg::Effect(e.minecraft_name.to_string()),
+            OwnedArg::Enchantment(e) => Arg::Enchantment(e.name.to_string()),
+            OwnedArg::Advancement(a) => Arg::Advancement(a.to_string()),
+            OwnedArg::EntityAnchor(a) => Arg::EntityAnchor(match a {
+                pumpkin_core::command::argument_types::entity_anchor::EntityAnchor::Eyes => {
+                    pumpkin::plugin::command::EntityAnchor::Eyes
+                }
+                pumpkin_core::command::argument_types::entity_anchor::EntityAnchor::Feet => {
+                    pumpkin::plugin::command::EntityAnchor::Feet
+                }
+            }),
+            // These types don't have direct WIT resource mappings yet
+            OwnedArg::Entities(_) | OwnedArg::Entity(_) | OwnedArg::GameProfiles(_) => {
+                Arg::Simple(String::new())
+            }
         })
     }
 }
 
 impl pumpkin::plugin::command::HostCommand for PluginHostState {
-    async fn drop(&mut self, rep: Resource<Command>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<Command>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
-}
 
-impl pumpkin::plugin::command::HostCommandWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn create(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn create(
+        &mut self,
         names: Vec<String>,
         description: String,
     ) -> wasmtime::Result<Resource<Command>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state
-                .add(WasmCommand::new(names, description))
-                .map_err(|_| wasmtime::Error::msg("Failed to add command resource"))
-        })
+        let state = self;
+        state
+            .add(WasmCommand::new(names, description))
+            .map_err(|_| wasmtime::Error::msg("Failed to add command resource"))
     }
 
-    async fn then(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn then(
+        &mut self,
         command: Resource<Command>,
         node: Resource<CommandNode>,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let node_data = state.take(node)?;
-            let command_res = state.get_mut(&command)?;
-            let cmd = std::mem::replace(command_res, WasmCommand::new(Vec::new(), String::new()));
-            *command_res = cmd.then(node_data);
-            Ok(())
-        })
+        let state = self;
+        let node_data = state.take(node)?;
+        let command_res = state.get_mut(&command)?;
+        let cmd = std::mem::replace(command_res, WasmCommand::new(Vec::new(), String::new()));
+        *command_res = cmd.then(node_data);
+        Ok(())
     }
 
-    async fn execute_with_handler_id(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn execute_with_handler_id(
+        &mut self,
         command: Resource<Command>,
         handler_id: u32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin dropped"))?;
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not initialized"))?;
+        let state = self;
+        let plugin = state
+            .plugin
+            .as_ref()
+            .and_then(std::sync::Weak::upgrade)
+            .ok_or_else(|| wasmtime::Error::msg("Plugin dropped"))?;
+        let server = state
+            .server
+            .clone()
+            .ok_or_else(|| wasmtime::Error::msg("Server not initialized"))?;
 
-            let executor = WasmCommandExecutor {
-                handler_id,
-                plugin,
-                server,
-            };
-            let command_res = state.get_mut(&command)?;
-            let cmd = std::mem::replace(command_res, WasmCommand::new(Vec::new(), String::new()));
-            *command_res = cmd.executes(executor);
-            Ok(())
-        })
+        let executor = WasmCommandExecutor {
+            handler_id,
+            plugin,
+            server,
+        };
+        let command_res = state.get_mut(&command)?;
+        let cmd = std::mem::replace(command_res, WasmCommand::new(Vec::new(), String::new()));
+        *command_res = cmd.executes(executor);
+        Ok(())
     }
 }
 
 impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
-    async fn drop(&mut self, rep: Resource<CommandSender>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<CommandSender>) -> wasmtime::Result<()> {
         self.drop(rep)
+    }
+
+    fn get_command_sender_type(
+        &mut self,
+        res: Resource<CommandSender>,
+    ) -> wasmtime::Result<CommandSenderType> {
+        let state = self;
+        let sender = state.get(&res)?.clone();
+        match sender {
+            pumpkin_core::command::CommandSender::Rcon(_) => Ok(CommandSenderType::Rcon),
+            pumpkin_core::command::CommandSender::Console => Ok(CommandSenderType::Console),
+            pumpkin_core::command::CommandSender::Player(player) => {
+                Ok(CommandSenderType::Player(state.add(player)?))
+            }
+            pumpkin_core::command::CommandSender::CommandBlock(block_entity, world) => Ok(
+                CommandSenderType::CommandBlock((state.add(block_entity)?, state.add(world)?)),
+            ),
+            pumpkin_core::command::CommandSender::Dummy => Ok(CommandSenderType::Dummy),
+        }
+    }
+
+    fn get_name(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<String> {
+        let state = self;
+        Ok(state.get(&sender)?.to_string())
+    }
+
+    fn send_message(
+        &mut self,
+        sender: Resource<CommandSender>,
+        text: Resource<TextComponent>,
+    ) -> wasmtime::Result<()> {
+        let state = self;
+        let component = state.take(text)?;
+        state.get(&sender)?.send_message(component);
+        Ok(())
+    }
+
+    fn send_system_message(
+        &mut self,
+        sender: Resource<CommandSender>,
+        text: Resource<TextComponent>,
+    ) -> wasmtime::Result<()> {
+        let state = self;
+        let component = state.take(text)?;
+        state.get(&sender)?.send_message(component);
+        Ok(())
+    }
+
+    fn send_error(
+        &mut self,
+        sender: Resource<CommandSender>,
+        text: Resource<TextComponent>,
+    ) -> wasmtime::Result<()> {
+        let state = self;
+        let component = state.take(text)?;
+        state
+            .get(&sender)?
+            .send_message(component.color(pumpkin_util::text::color::Color::Named(
+                pumpkin_util::text::color::NamedColor::Red,
+            )));
+        Ok(())
+    }
+
+    fn set_success_count(
+        &mut self,
+        sender: Resource<CommandSender>,
+        count: i32,
+    ) -> wasmtime::Result<()> {
+        let state = self;
+        state.get_mut(&sender)?.set_success_count(count as u32);
+        Ok(())
+    }
+
+    fn is_player(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<bool> {
+        let state = self;
+        Ok(matches!(
+            state.get(&sender)?,
+            pumpkin_core::command::CommandSender::Player(_)
+        ))
+    }
+
+    fn is_console(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<bool> {
+        let state = self;
+        Ok(matches!(
+            state.get(&sender)?,
+            pumpkin_core::command::CommandSender::Console
+                | pumpkin_core::command::CommandSender::Rcon(_)
+        ))
+    }
+
+    fn as_player(
+        &mut self,
+        sender: Resource<CommandSender>,
+    ) -> wasmtime::Result<Option<Resource<Player>>> {
+        let state = self;
+        if let pumpkin_core::command::CommandSender::Player(player) = &state.get(&sender)? {
+            Ok(Some(state.add(player.clone()).map_err(|_| {
+                wasmtime::Error::msg("Failed to add player resource")
+            })?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn permission_level(
+        &mut self,
+        sender: Resource<CommandSender>,
+    ) -> wasmtime::Result<PermissionLevel> {
+        let state = self;
+        Ok(match state.get(&sender)?.permission_lvl() {
+            pumpkin_util::PermissionLvl::Zero => PermissionLevel::Zero,
+            pumpkin_util::PermissionLvl::One => PermissionLevel::One,
+            pumpkin_util::PermissionLvl::Two => PermissionLevel::Two,
+            pumpkin_util::PermissionLvl::Three => PermissionLevel::Three,
+            pumpkin_util::PermissionLvl::Four => PermissionLevel::Four,
+        })
+    }
+
+    fn has_permission_level(
+        &mut self,
+        sender: Resource<CommandSender>,
+        level: PermissionLevel,
+    ) -> wasmtime::Result<bool> {
+        let state = self;
+        let required = match level {
+            PermissionLevel::Zero => pumpkin_util::PermissionLvl::Zero,
+            PermissionLevel::One => pumpkin_util::PermissionLvl::One,
+            PermissionLevel::Two => pumpkin_util::PermissionLvl::Two,
+            PermissionLevel::Three => pumpkin_util::PermissionLvl::Three,
+            PermissionLevel::Four => pumpkin_util::PermissionLvl::Four,
+        };
+        Ok(state.get(&sender)?.permission_lvl() >= required)
+    }
+
+    fn position(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<Option<Position>> {
+        let state = self;
+        Ok(state.get(&sender)?.position().map(|p| (p.x, p.y, p.z)))
+    }
+
+    fn world(
+        &mut self,
+        sender: Resource<CommandSender>,
+    ) -> wasmtime::Result<Option<Resource<World>>> {
+        let state = self;
+        if let Some(world) = state.get(&sender)?.world() {
+            Ok(Some(state.add(world).map_err(|_| {
+                wasmtime::Error::msg("Failed to add world resource")
+            })?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn get_locale(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<Locale> {
+        let state = self;
+        Ok(map_util_locale_to_wit(state.get(&sender)?.get_locale()))
+    }
+
+    fn should_receive_feedback(
+        &mut self,
+        sender: Resource<CommandSender>,
+    ) -> wasmtime::Result<bool> {
+        let state = self;
+        Ok(state.get(&sender)?.should_receive_feedback())
+    }
+
+    fn should_broadcast_console_to_ops(
+        &mut self,
+        sender: Resource<CommandSender>,
+    ) -> wasmtime::Result<bool> {
+        let state = self;
+        Ok(state.get(&sender)?.should_broadcast_console_to_ops())
+    }
+
+    fn should_track_output(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<bool> {
+        let state = self;
+        Ok(state.get(&sender)?.should_track_output())
     }
 }
 
 impl pumpkin::plugin::command::HostCommandSenderWithStore<PluginHostState>
     for HasSelf<PluginHostState>
 {
-    async fn get_command_sender_type(
-        accessor: &Accessor<PluginHostState, Self>,
-        res: Resource<CommandSender>,
-    ) -> wasmtime::Result<CommandSenderType> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let sender = state.get(&res)?.clone();
-            match sender {
-                pumpkin_core::command::CommandSender::Rcon(_) => Ok(CommandSenderType::Rcon),
-                pumpkin_core::command::CommandSender::Console => Ok(CommandSenderType::Console),
-                pumpkin_core::command::CommandSender::Player(player) => {
-                    Ok(CommandSenderType::Player(state.add(player)?))
-                }
-                pumpkin_core::command::CommandSender::CommandBlock(block_entity, world) => Ok(
-                    CommandSenderType::CommandBlock((state.add(block_entity)?, state.add(world)?)),
-                ),
-                pumpkin_core::command::CommandSender::Dummy => Ok(CommandSenderType::Dummy),
-            }
-        })
-    }
-
-    async fn get_name(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-    ) -> wasmtime::Result<String> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&sender)?.to_string())
-        })
-    }
-
-    async fn send_message(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-        text: Resource<TextComponent>,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let component = state.take(text)?;
-            state.get(&sender)?.send_message(component);
-            Ok(())
-        })
-    }
-
-    async fn send_system_message(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-        text: Resource<TextComponent>,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let component = state.take(text)?;
-            state.get(&sender)?.send_message(component);
-            Ok(())
-        })
-    }
-
-    async fn send_error(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-        text: Resource<TextComponent>,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let component = state.take(text)?;
-            state.get(&sender)?.send_message(component.color(
-                pumpkin_util::text::color::Color::Named(pumpkin_util::text::color::NamedColor::Red),
-            ));
-            Ok(())
-        })
-    }
-
-    async fn set_success_count(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-        count: i32,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.get_mut(&sender)?.set_success_count(count as u32);
-            Ok(())
-        })
-    }
-
-    async fn is_player(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-    ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(matches!(
-                state.get(&sender)?,
-                pumpkin_core::command::CommandSender::Player(_)
-            ))
-        })
-    }
-
-    async fn is_console(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-    ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(matches!(
-                state.get(&sender)?,
-                pumpkin_core::command::CommandSender::Console
-                    | pumpkin_core::command::CommandSender::Rcon(_)
-            ))
-        })
-    }
-
-    async fn as_player(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-    ) -> wasmtime::Result<Option<Resource<Player>>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            if let pumpkin_core::command::CommandSender::Player(player) = &state.get(&sender)? {
-                Ok(Some(state.add(player.clone()).map_err(|_| {
-                    wasmtime::Error::msg("Failed to add player resource")
-                })?))
-            } else {
-                Ok(None)
-            }
-        })
-    }
-
-    async fn permission_level(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-    ) -> wasmtime::Result<PermissionLevel> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(match state.get(&sender)?.permission_lvl() {
-                pumpkin_util::PermissionLvl::Zero => PermissionLevel::Zero,
-                pumpkin_util::PermissionLvl::One => PermissionLevel::One,
-                pumpkin_util::PermissionLvl::Two => PermissionLevel::Two,
-                pumpkin_util::PermissionLvl::Three => PermissionLevel::Three,
-                pumpkin_util::PermissionLvl::Four => PermissionLevel::Four,
-            })
-        })
-    }
-
-    async fn has_permission_level(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-        level: PermissionLevel,
-    ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let required = match level {
-                PermissionLevel::Zero => pumpkin_util::PermissionLvl::Zero,
-                PermissionLevel::One => pumpkin_util::PermissionLvl::One,
-                PermissionLevel::Two => pumpkin_util::PermissionLvl::Two,
-                PermissionLevel::Three => pumpkin_util::PermissionLvl::Three,
-                PermissionLevel::Four => pumpkin_util::PermissionLvl::Four,
-            };
-            Ok(state.get(&sender)?.permission_lvl() >= required)
-        })
-    }
-
-    async fn position(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-    ) -> wasmtime::Result<Option<Position>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&sender)?.position().map(|p| (p.x, p.y, p.z)))
-        })
-    }
-
-    async fn world(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-    ) -> wasmtime::Result<Option<Resource<World>>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            if let Some(world) = state.get(&sender)?.world() {
-                Ok(Some(state.add(world).map_err(|_| {
-                    wasmtime::Error::msg("Failed to add world resource")
-                })?))
-            } else {
-                Ok(None)
-            }
-        })
-    }
-
-    async fn get_locale(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-    ) -> wasmtime::Result<Locale> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(map_util_locale_to_wit(state.get(&sender)?.get_locale()))
-        })
-    }
-
-    async fn should_receive_feedback(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-    ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&sender)?.should_receive_feedback())
-        })
-    }
-
-    async fn should_broadcast_console_to_ops(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-    ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&sender)?.should_broadcast_console_to_ops())
-        })
-    }
-
-    async fn should_track_output(
-        accessor: &Accessor<PluginHostState, Self>,
-        sender: Resource<CommandSender>,
-    ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&sender)?.should_track_output())
-        })
-    }
     async fn has_permission(
         accessor: &Accessor<PluginHostState, Self>,
         sender: Resource<CommandSender>,
@@ -549,205 +480,184 @@ impl pumpkin::plugin::command::HostCommandSenderWithStore<PluginHostState>
 }
 
 impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
-    async fn drop(&mut self, rep: Resource<CommandNode>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<CommandNode>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
-}
 
-impl pumpkin::plugin::command::HostCommandNodeWithStore<PluginHostState>
-    for HasSelf<PluginHostState>
-{
-    async fn literal(
-        accessor: &Accessor<PluginHostState, Self>,
-        name: String,
-    ) -> wasmtime::Result<Resource<CommandNode>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state
-                .add(WasmCommandNode::Literal(literal(name)))
-                .map_err(|_| wasmtime::Error::msg("Failed to add literal node"))
-        })
+    fn literal(&mut self, name: String) -> wasmtime::Result<Resource<CommandNode>> {
+        let state = self;
+        state
+            .add(WasmCommandNode::Literal(literal(name)))
+            .map_err(|_| wasmtime::Error::msg("Failed to add literal node"))
     }
 
-    async fn argument(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn argument(
+        &mut self,
         name: String,
         arg_type: ArgumentType,
     ) -> wasmtime::Result<Resource<CommandNode>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let node = match arg_type {
-                ArgumentType::Bool => WasmCommandNode::Argument(argument(name, BoolArgumentType)),
-                ArgumentType::Float((min, max)) => WasmCommandNode::Argument(argument(
-                    name,
-                    FloatArgumentType::new(min.unwrap_or(f32::MIN), max.unwrap_or(f32::MAX)),
-                )),
-                ArgumentType::Double((min, max)) => WasmCommandNode::Argument(argument(
-                    name,
-                    DoubleArgumentType::new(min.unwrap_or(f64::MIN), max.unwrap_or(f64::MAX)),
-                )),
-                ArgumentType::Integer((min, max)) => WasmCommandNode::Argument(argument(
-                    name,
-                    IntegerArgumentType::new(min.unwrap_or(i32::MIN), max.unwrap_or(i32::MAX)),
-                )),
-                ArgumentType::Long((min, max)) => WasmCommandNode::Argument(argument(
-                    name,
-                    LongArgumentType::new(min.unwrap_or(i64::MIN), max.unwrap_or(i64::MAX)),
-                )),
-                ArgumentType::String(st) => match st {
-                    StringType::SingleWord => {
-                        WasmCommandNode::Argument(argument(name, StringArgumentType::SingleWord))
-                    }
-                    StringType::Quotable => WasmCommandNode::Argument(argument(
-                        name,
-                        StringArgumentType::QuotablePhrase,
-                    )),
-                    StringType::Greedy => {
-                        WasmCommandNode::Argument(argument(name, StringArgumentType::GreedyPhrase))
-                    }
-                },
-                ArgumentType::Entities => {
-                    WasmCommandNode::Argument(argument(name, EntityArgumentType::Entities))
-                }
-                ArgumentType::Entity => {
-                    WasmCommandNode::Argument(argument(name, EntityArgumentType::Entity))
-                }
-                ArgumentType::Players => {
-                    WasmCommandNode::Argument(argument(name, EntityArgumentType::Players))
-                }
-                ArgumentType::GameProfile => {
-                    WasmCommandNode::Argument(argument(name, GameProfileArgumentType))
-                }
-                ArgumentType::BlockPos => {
-                    WasmCommandNode::Argument(argument(name, BlockPosArgumentType))
-                }
-                ArgumentType::Position3d => {
-                    WasmCommandNode::Argument(argument(name, Vec3ArgumentType::Default))
-                }
-                ArgumentType::Position2d => {
-                    WasmCommandNode::Argument(argument(name, Vec2ArgumentType::Default))
-                }
-                ArgumentType::BlockState => {
-                    WasmCommandNode::Argument(argument(name, BlockArgumentType))
-                }
-                ArgumentType::BlockPredicate => {
-                    WasmCommandNode::Argument(argument(name, BlockPredicateArgumentType))
-                }
-                ArgumentType::Item => {
-                    WasmCommandNode::Argument(argument(name, ItemStackArgumentType))
-                }
-                ArgumentType::ItemPredicate => {
-                    WasmCommandNode::Argument(argument(name, ItemPredicateArgumentType))
-                }
-                ArgumentType::Component => {
-                    WasmCommandNode::Argument(argument(name, ComponentArgumentType))
-                }
-                ArgumentType::Rotation => {
-                    WasmCommandNode::Argument(argument(name, RotationArgumentType))
-                }
-                ArgumentType::ResourceLocation | ArgumentType::Resource(_) => {
-                    WasmCommandNode::Argument(argument(name, IdentifierArgumentType))
-                }
-                ArgumentType::EntityAnchor => {
-                    WasmCommandNode::Argument(argument(name, EntityAnchorArgumentType))
-                }
-                ArgumentType::Gamemode => {
-                    WasmCommandNode::Argument(argument(name, GameModeArgumentType))
-                }
-                ArgumentType::Difficulty => {
+        let state = self;
+        let node = match arg_type {
+            ArgumentType::Bool => WasmCommandNode::Argument(argument(name, BoolArgumentType)),
+            ArgumentType::Float((min, max)) => WasmCommandNode::Argument(argument(
+                name,
+                FloatArgumentType::new(min.unwrap_or(f32::MIN), max.unwrap_or(f32::MAX)),
+            )),
+            ArgumentType::Double((min, max)) => WasmCommandNode::Argument(argument(
+                name,
+                DoubleArgumentType::new(min.unwrap_or(f64::MIN), max.unwrap_or(f64::MAX)),
+            )),
+            ArgumentType::Integer((min, max)) => WasmCommandNode::Argument(argument(
+                name,
+                IntegerArgumentType::new(min.unwrap_or(i32::MIN), max.unwrap_or(i32::MAX)),
+            )),
+            ArgumentType::Long((min, max)) => WasmCommandNode::Argument(argument(
+                name,
+                LongArgumentType::new(min.unwrap_or(i64::MIN), max.unwrap_or(i64::MAX)),
+            )),
+            ArgumentType::String(st) => match st {
+                StringType::SingleWord => {
                     WasmCommandNode::Argument(argument(name, StringArgumentType::SingleWord))
                 }
-                ArgumentType::Time(min) => WasmCommandNode::Argument(argument(
-                    name,
-                    TimeArgumentType::new(min.unwrap_or(0)),
-                )),
-                _ => {
-                    return Err(wasmtime::Error::msg(format!(
-                        "Unimplemented argument type: {arg_type:?}"
-                    )));
+                StringType::Quotable => {
+                    WasmCommandNode::Argument(argument(name, StringArgumentType::QuotablePhrase))
                 }
-            };
-            state
-                .add(node)
-                .map_err(|_| wasmtime::Error::msg("Failed to add argument node"))
-        })
+                StringType::Greedy => {
+                    WasmCommandNode::Argument(argument(name, StringArgumentType::GreedyPhrase))
+                }
+            },
+            ArgumentType::Entities => {
+                WasmCommandNode::Argument(argument(name, EntityArgumentType::Entities))
+            }
+            ArgumentType::Entity => {
+                WasmCommandNode::Argument(argument(name, EntityArgumentType::Entity))
+            }
+            ArgumentType::Players => {
+                WasmCommandNode::Argument(argument(name, EntityArgumentType::Players))
+            }
+            ArgumentType::GameProfile => {
+                WasmCommandNode::Argument(argument(name, GameProfileArgumentType))
+            }
+            ArgumentType::BlockPos => {
+                WasmCommandNode::Argument(argument(name, BlockPosArgumentType))
+            }
+            ArgumentType::Position3d => {
+                WasmCommandNode::Argument(argument(name, Vec3ArgumentType::Default))
+            }
+            ArgumentType::Position2d => {
+                WasmCommandNode::Argument(argument(name, Vec2ArgumentType::Default))
+            }
+            ArgumentType::BlockState => {
+                WasmCommandNode::Argument(argument(name, BlockArgumentType))
+            }
+            ArgumentType::BlockPredicate => {
+                WasmCommandNode::Argument(argument(name, BlockPredicateArgumentType))
+            }
+            ArgumentType::Item => WasmCommandNode::Argument(argument(name, ItemStackArgumentType)),
+            ArgumentType::ItemPredicate => {
+                WasmCommandNode::Argument(argument(name, ItemPredicateArgumentType))
+            }
+            ArgumentType::Component => {
+                WasmCommandNode::Argument(argument(name, ComponentArgumentType))
+            }
+            ArgumentType::Rotation => {
+                WasmCommandNode::Argument(argument(name, RotationArgumentType))
+            }
+            ArgumentType::ResourceLocation | ArgumentType::Resource(_) => {
+                WasmCommandNode::Argument(argument(name, IdentifierArgumentType))
+            }
+            ArgumentType::EntityAnchor => {
+                WasmCommandNode::Argument(argument(name, EntityAnchorArgumentType))
+            }
+            ArgumentType::Gamemode => {
+                WasmCommandNode::Argument(argument(name, GameModeArgumentType))
+            }
+            ArgumentType::Difficulty => {
+                WasmCommandNode::Argument(argument(name, StringArgumentType::SingleWord))
+            }
+            ArgumentType::Time(min) => {
+                WasmCommandNode::Argument(argument(name, TimeArgumentType::new(min.unwrap_or(0))))
+            }
+            _ => {
+                return Err(wasmtime::Error::msg(format!(
+                    "Unimplemented argument type: {arg_type:?}"
+                )));
+            }
+        };
+        state
+            .add(node)
+            .map_err(|_| wasmtime::Error::msg("Failed to add argument node"))
     }
 
-    async fn then(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn then(
+        &mut self,
         self_node: Resource<CommandNode>,
         node: Resource<CommandNode>,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let child = state.take(node)?;
-            let parent = state.get_mut(&self_node)?;
-            let builder = std::mem::replace(parent, WasmCommandNode::Literal(literal("")));
-            *parent = builder.then(child);
-            Ok(())
-        })
+        let state = self;
+        let child = state.take(node)?;
+        let parent = state.get_mut(&self_node)?;
+        let builder = std::mem::replace(parent, WasmCommandNode::Literal(literal("")));
+        *parent = builder.then(child);
+        Ok(())
     }
 
-    async fn execute_with_handler_id(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn execute_with_handler_id(
+        &mut self,
         node: Resource<CommandNode>,
         handler_id: u32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin dropped"))?;
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not initialized"))?;
+        let state = self;
+        let plugin = state
+            .plugin
+            .as_ref()
+            .and_then(std::sync::Weak::upgrade)
+            .ok_or_else(|| wasmtime::Error::msg("Plugin dropped"))?;
+        let server = state
+            .server
+            .clone()
+            .ok_or_else(|| wasmtime::Error::msg("Server not initialized"))?;
 
-            let executor = WasmCommandExecutor {
-                handler_id,
-                plugin,
-                server,
-            };
-            let resource = state.get_mut(&node)?;
-            let builder = std::mem::replace(resource, WasmCommandNode::Literal(literal("")));
-            *resource = builder.executes(executor);
-            Ok(())
-        })
+        let executor = WasmCommandExecutor {
+            handler_id,
+            plugin,
+            server,
+        };
+        let resource = state.get_mut(&node)?;
+        let builder = std::mem::replace(resource, WasmCommandNode::Literal(literal("")));
+        *resource = builder.executes(executor);
+        Ok(())
     }
 
-    async fn suggest_with_handler_id(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn suggest_with_handler_id(
+        &mut self,
         node: Resource<CommandNode>,
         handler_id: u32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin dropped"))?;
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not initialized"))?;
+        let state = self;
+        let plugin = state
+            .plugin
+            .as_ref()
+            .and_then(std::sync::Weak::upgrade)
+            .ok_or_else(|| wasmtime::Error::msg("Plugin dropped"))?;
+        let server = state
+            .server
+            .clone()
+            .ok_or_else(|| wasmtime::Error::msg("Server not initialized"))?;
 
-            let provider = WasmCommandSuggestionProvider {
-                handler_id,
-                plugin,
-                server,
-            };
-            let resource = state.get_mut(&node)?;
-            let builder = std::mem::replace(resource, WasmCommandNode::Literal(literal("")));
-            *resource = builder.suggests(provider);
-            Ok(())
-        })
+        let provider = WasmCommandSuggestionProvider {
+            handler_id,
+            plugin,
+            server,
+        };
+        let resource = state.get_mut(&node)?;
+        let builder = std::mem::replace(resource, WasmCommandNode::Literal(literal("")));
+        *resource = builder.suggests(provider);
+        Ok(())
     }
 
-    async fn require_with_handler_id(
-        _accessor: &Accessor<PluginHostState, Self>,
+    fn require_with_handler_id(
+        &mut self,
         _node: Resource<CommandNode>,
         _handler_id: u32,
     ) -> wasmtime::Result<()> {

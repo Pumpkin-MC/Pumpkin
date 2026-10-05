@@ -80,30 +80,28 @@ pub const fn to_wit_item_operation(op: Operation) -> WitModifierOperation {
 impl ItemStackInterfaceHost for PluginHostState {}
 
 impl HostItemStack for PluginHostState {
-    async fn drop(&mut self, rep: Resource<ItemStackHandle>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<ItemStackHandle>) -> wasmtime::Result<()> {
         self.drop(rep)
+    }
+
+    fn create(
+        &mut self,
+        registry_key: String,
+        count: u8,
+    ) -> wasmtime::Result<Resource<ItemStackHandle>> {
+        let state = self;
+        let item = pumpkin_data::item::Item::from_registry_key(
+            registry_key
+                .strip_prefix("minecraft:")
+                .unwrap_or(&registry_key),
+        )
+        .unwrap_or(&pumpkin_data::item::Item::AIR);
+        let stack = pumpkin_data::item_stack::ItemStack::new(count, item);
+        state.add(Arc::new(Mutex::new(stack)))
     }
 }
 
 impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn create(
-        accessor: &Accessor<PluginHostState, Self>,
-        registry_key: String,
-        count: u8,
-    ) -> wasmtime::Result<Resource<ItemStackHandle>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let item = pumpkin_data::item::Item::from_registry_key(
-                registry_key
-                    .strip_prefix("minecraft:")
-                    .unwrap_or(&registry_key),
-            )
-            .unwrap_or(&pumpkin_data::item::Item::AIR);
-            let stack = pumpkin_data::item_stack::ItemStack::new(count, item);
-            state.add(Arc::new(Mutex::new(stack)))
-        })
-    }
-
     async fn get_registry_key(
         accessor: &Accessor<PluginHostState, Self>,
         res: Resource<ItemStackHandle>,

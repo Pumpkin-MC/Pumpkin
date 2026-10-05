@@ -1,26 +1,16 @@
-use crate::pumpkin::plugin::{
-    common::Locale as WitLocale,
-    i18n::{Host, HostWithStore},
-};
+use crate::pumpkin::plugin::{common::Locale as WitLocale, i18n::Host};
 use pumpkin_util::translation::{Locale as UtilLocale, add_translation_file, get_translation};
 use pumpkin_wasm_host_common::state::PluginHostState;
 use std::str::FromStr;
-use wasmtime::component::{Accessor, HasSelf};
 
-impl Host for PluginHostState {}
-
-impl HostWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn translate(
-        _accessor: &Accessor<PluginHostState, Self>,
-        key: String,
-        locale: WitLocale,
-    ) -> wasmtime::Result<String> {
+impl Host for PluginHostState {
+    fn translate(&mut self, key: String, locale: WitLocale) -> wasmtime::Result<String> {
         let util_locale = wit_to_util_locale(locale);
         Ok(get_translation(&key, util_locale))
     }
 
-    async fn load_translations(
-        _accessor: &Accessor<PluginHostState, Self>,
+    fn load_translations(
+        &mut self,
         namespace: String,
         json: String,
         locale: WitLocale,

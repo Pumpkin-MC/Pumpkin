@@ -16,7 +16,7 @@ use wasmtime::component::{Accessor, HasSelf, Resource};
 impl RecipeHost for PluginHostState {}
 
 impl HostRecipeManager for PluginHostState {
-    async fn drop(&mut self, _rep: Resource<WitRecipeManager>) -> wasmtime::Result<()> {
+    fn drop(&mut self, _rep: Resource<WitRecipeManager>) -> wasmtime::Result<()> {
         Ok(())
     }
 }

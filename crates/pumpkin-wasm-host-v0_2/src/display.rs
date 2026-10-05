@@ -3,11 +3,10 @@ use crate::{
     pumpkin::plugin::{
         display::{
             BillboardMode, BlockDisplayEntity, DisplayEntity, DisplayTransformation, Host,
-            HostBlockDisplayEntity, HostBlockDisplayEntityWithStore, HostDisplayEntity,
-            HostDisplayEntityWithStore, HostInteractionEntity, HostInteractionEntityWithStore,
+            HostBlockDisplayEntity, HostDisplayEntity, HostInteractionEntity,
             HostItemDisplayEntity, HostItemDisplayEntityWithStore, HostTextDisplayEntity,
-            HostTextDisplayEntityWithStore, InteractionEntity, ItemDisplayEntity, ItemDisplayMode,
-            Quaternionf, TextAlignment, TextDisplayEntity, Vector3f,
+            InteractionEntity, ItemDisplayEntity, ItemDisplayMode, Quaternionf, TextAlignment,
+            TextDisplayEntity, Vector3f,
         },
         item_stack::ItemStack as WitHostItemStack,
         text::TextComponent,
@@ -105,575 +104,502 @@ fn get_display_entity<'a>(
 }
 
 impl HostDisplayEntity for PluginHostState {
-    async fn drop(&mut self, rep: Resource<DisplayEntity>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<DisplayEntity>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
-}
 
-impl HostDisplayEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn from_entity(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn from_entity(
+        &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Result<Resource<DisplayEntity>, Resource<Entity>>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.take(entity)?;
-            if get_display_entity(entity.as_ref()).is_some() {
-                Ok(Ok(state.add(entity)?))
-            } else {
-                Ok(Err(state.add(entity)?))
-            }
-        })
+        let state = self;
+        let entity = state.take(entity)?;
+        if get_display_entity(entity.as_ref()).is_some() {
+            Ok(Ok(state.add(entity)?))
+        } else {
+            Ok(Err(state.add(entity)?))
+        }
     }
 
-    async fn get_entity(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_entity(
+        &mut self,
         display: Resource<DisplayEntity>,
     ) -> wasmtime::Result<Resource<Entity>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            state.add(display_res.clone())
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        state.add(display_res.clone())
     }
 
-    async fn get_transformation(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_transformation(
+        &mut self,
         display: Resource<DisplayEntity>,
     ) -> wasmtime::Result<DisplayTransformation> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            get_display_entity(display_res.as_ref()).map_or_else(
-                || {
-                    Ok(DisplayTransformation {
-                        translation: Vector3f {
-                            x: 0.0,
-                            y: 0.0,
-                            z: 0.0,
-                        },
-                        scale: Vector3f {
-                            x: 1.0,
-                            y: 1.0,
-                            z: 1.0,
-                        },
-                        left_rotation: Quaternionf {
-                            x: 0.0,
-                            y: 0.0,
-                            z: 0.0,
-                            w: 1.0,
-                        },
-                        right_rotation: Quaternionf {
-                            x: 0.0,
-                            y: 0.0,
-                            z: 0.0,
-                            w: 1.0,
-                        },
-                    })
-                },
-                |d| {
-                    let translation = d.get_translation();
-                    let scale = d.get_scale();
-                    let left_rot = d.get_left_rotation();
-                    let right_rot = d.get_right_rotation();
+        let state = self;
+        let display_res = state.get(&display)?;
+        get_display_entity(display_res.as_ref()).map_or_else(
+            || {
+                Ok(DisplayTransformation {
+                    translation: Vector3f {
+                        x: 0.0,
+                        y: 0.0,
+                        z: 0.0,
+                    },
+                    scale: Vector3f {
+                        x: 1.0,
+                        y: 1.0,
+                        z: 1.0,
+                    },
+                    left_rotation: Quaternionf {
+                        x: 0.0,
+                        y: 0.0,
+                        z: 0.0,
+                        w: 1.0,
+                    },
+                    right_rotation: Quaternionf {
+                        x: 0.0,
+                        y: 0.0,
+                        z: 0.0,
+                        w: 1.0,
+                    },
+                })
+            },
+            |d| {
+                let translation = d.get_translation();
+                let scale = d.get_scale();
+                let left_rot = d.get_left_rotation();
+                let right_rot = d.get_right_rotation();
 
-                    Ok(DisplayTransformation {
-                        translation: Vector3f {
-                            x: translation.x,
-                            y: translation.y,
-                            z: translation.z,
-                        },
-                        scale: Vector3f {
-                            x: scale.x,
-                            y: scale.y,
-                            z: scale.z,
-                        },
-                        left_rotation: Quaternionf {
-                            x: left_rot[0],
-                            y: left_rot[1],
-                            z: left_rot[2],
-                            w: left_rot[3],
-                        },
-                        right_rotation: Quaternionf {
-                            x: right_rot[0],
-                            y: right_rot[1],
-                            z: right_rot[2],
-                            w: right_rot[3],
-                        },
-                    })
-                },
-            )
-        })
+                Ok(DisplayTransformation {
+                    translation: Vector3f {
+                        x: translation.x,
+                        y: translation.y,
+                        z: translation.z,
+                    },
+                    scale: Vector3f {
+                        x: scale.x,
+                        y: scale.y,
+                        z: scale.z,
+                    },
+                    left_rotation: Quaternionf {
+                        x: left_rot[0],
+                        y: left_rot[1],
+                        z: left_rot[2],
+                        w: left_rot[3],
+                    },
+                    right_rotation: Quaternionf {
+                        x: right_rot[0],
+                        y: right_rot[1],
+                        z: right_rot[2],
+                        w: right_rot[3],
+                    },
+                })
+            },
+        )
     }
 
-    async fn set_transformation(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_transformation(
+        &mut self,
         display: Resource<DisplayEntity>,
         transformation: DisplayTransformation,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            if let Some(d) = get_display_entity(display_res.as_ref()) {
-                d.set_translation(Vector3::new(
-                    transformation.translation.x,
-                    transformation.translation.y,
-                    transformation.translation.z,
-                ));
-                d.set_scale(Vector3::new(
-                    transformation.scale.x,
-                    transformation.scale.y,
-                    transformation.scale.z,
-                ));
-                d.set_left_rotation([
-                    transformation.left_rotation.x,
-                    transformation.left_rotation.y,
-                    transformation.left_rotation.z,
-                    transformation.left_rotation.w,
-                ]);
-                d.set_right_rotation([
-                    transformation.right_rotation.x,
-                    transformation.right_rotation.y,
-                    transformation.right_rotation.z,
-                    transformation.right_rotation.w,
-                ]);
-            }
-            Ok(())
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        if let Some(d) = get_display_entity(display_res.as_ref()) {
+            d.set_translation(Vector3::new(
+                transformation.translation.x,
+                transformation.translation.y,
+                transformation.translation.z,
+            ));
+            d.set_scale(Vector3::new(
+                transformation.scale.x,
+                transformation.scale.y,
+                transformation.scale.z,
+            ));
+            d.set_left_rotation([
+                transformation.left_rotation.x,
+                transformation.left_rotation.y,
+                transformation.left_rotation.z,
+                transformation.left_rotation.w,
+            ]);
+            d.set_right_rotation([
+                transformation.right_rotation.x,
+                transformation.right_rotation.y,
+                transformation.right_rotation.z,
+                transformation.right_rotation.w,
+            ]);
+        }
+        Ok(())
     }
 
-    async fn get_interpolation_duration(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_interpolation_duration(
+        &mut self,
         display: Resource<DisplayEntity>,
     ) -> wasmtime::Result<i32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            Ok(get_display_entity(display_res.as_ref()).map_or(
-                0,
-                pumpkin_core::entity::decoration::display::DisplayEntity::get_interpolation_duration,
-            ))
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        Ok(get_display_entity(display_res.as_ref()).map_or(
+            0,
+            pumpkin_core::entity::decoration::display::DisplayEntity::get_interpolation_duration,
+        ))
     }
 
-    async fn set_interpolation_duration(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_interpolation_duration(
+        &mut self,
         display: Resource<DisplayEntity>,
         duration: i32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            if let Some(d) = get_display_entity(display_res.as_ref()) {
-                d.set_interpolation_duration(duration);
-            }
-            Ok(())
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        if let Some(d) = get_display_entity(display_res.as_ref()) {
+            d.set_interpolation_duration(duration);
+        }
+        Ok(())
     }
 
-    async fn get_interpolation_start(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_interpolation_start(
+        &mut self,
         display: Resource<DisplayEntity>,
     ) -> wasmtime::Result<i32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            Ok(get_display_entity(display_res.as_ref()).map_or(
+        let state = self;
+        let display_res = state.get(&display)?;
+        Ok(get_display_entity(display_res.as_ref()).map_or(
                 0,
                 pumpkin_core::entity::decoration::display::DisplayEntity::get_interpolation_start_delta_ticks,
             ))
-        })
     }
 
-    async fn set_interpolation_start(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_interpolation_start(
+        &mut self,
         display: Resource<DisplayEntity>,
         delta_ticks: i32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            if let Some(d) = get_display_entity(display_res.as_ref()) {
-                d.set_interpolation_start_delta_ticks(delta_ticks);
-            }
-            Ok(())
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        if let Some(d) = get_display_entity(display_res.as_ref()) {
+            d.set_interpolation_start_delta_ticks(delta_ticks);
+        }
+        Ok(())
     }
 
-    async fn get_teleport_duration(
-        accessor: &Accessor<PluginHostState, Self>,
-        display: Resource<DisplayEntity>,
-    ) -> wasmtime::Result<i32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            Ok(get_display_entity(display_res.as_ref()).map_or(
-                0,
-                pumpkin_core::entity::decoration::display::DisplayEntity::get_teleport_duration,
-            ))
-        })
+    fn get_teleport_duration(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<i32> {
+        let state = self;
+        let display_res = state.get(&display)?;
+        Ok(get_display_entity(display_res.as_ref()).map_or(
+            0,
+            pumpkin_core::entity::decoration::display::DisplayEntity::get_teleport_duration,
+        ))
     }
 
-    async fn set_teleport_duration(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_teleport_duration(
+        &mut self,
         display: Resource<DisplayEntity>,
         duration: i32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            if let Some(d) = get_display_entity(display_res.as_ref()) {
-                d.set_teleport_duration(duration);
-            }
-            Ok(())
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        if let Some(d) = get_display_entity(display_res.as_ref()) {
+            d.set_teleport_duration(duration);
+        }
+        Ok(())
     }
 
-    async fn get_billboard(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_billboard(
+        &mut self,
         display: Resource<DisplayEntity>,
     ) -> wasmtime::Result<BillboardMode> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            Ok(
-                get_display_entity(display_res.as_ref()).map_or(BillboardMode::Fixed, |d| {
-                    map_billboard_mode(d.get_billboard())
-                }),
-            )
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        Ok(
+            get_display_entity(display_res.as_ref()).map_or(BillboardMode::Fixed, |d| {
+                map_billboard_mode(d.get_billboard())
+            }),
+        )
     }
 
-    async fn set_billboard(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_billboard(
+        &mut self,
         display: Resource<DisplayEntity>,
         mode: BillboardMode,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            if let Some(d) = get_display_entity(display_res.as_ref()) {
-                d.set_billboard(map_billboard_mode_rev(mode));
-            }
-            Ok(())
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        if let Some(d) = get_display_entity(display_res.as_ref()) {
+            d.set_billboard(map_billboard_mode_rev(mode));
+        }
+        Ok(())
     }
 
-    async fn get_view_range(
-        accessor: &Accessor<PluginHostState, Self>,
-        display: Resource<DisplayEntity>,
-    ) -> wasmtime::Result<f32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            get_display_entity(display_res.as_ref())
-                .map_or_else(|| Ok(1.0), |d| Ok(d.get_view_range()))
-        })
+    fn get_view_range(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<f32> {
+        let state = self;
+        let display_res = state.get(&display)?;
+        get_display_entity(display_res.as_ref()).map_or_else(|| Ok(1.0), |d| Ok(d.get_view_range()))
     }
 
-    async fn set_view_range(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_view_range(
+        &mut self,
         display: Resource<DisplayEntity>,
         range: f32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            if let Some(d) = get_display_entity(display_res.as_ref()) {
-                d.set_view_range(range);
-            }
-            Ok(())
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        if let Some(d) = get_display_entity(display_res.as_ref()) {
+            d.set_view_range(range);
+        }
+        Ok(())
     }
 
-    async fn get_shadow_radius(
-        accessor: &Accessor<PluginHostState, Self>,
-        display: Resource<DisplayEntity>,
-    ) -> wasmtime::Result<f32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            get_display_entity(display_res.as_ref())
-                .map_or_else(|| Ok(0.0), |d| Ok(d.get_shadow_radius()))
-        })
+    fn get_shadow_radius(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<f32> {
+        let state = self;
+        let display_res = state.get(&display)?;
+        get_display_entity(display_res.as_ref())
+            .map_or_else(|| Ok(0.0), |d| Ok(d.get_shadow_radius()))
     }
 
-    async fn set_shadow_radius(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_shadow_radius(
+        &mut self,
         display: Resource<DisplayEntity>,
         radius: f32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            if let Some(d) = get_display_entity(display_res.as_ref()) {
-                d.set_shadow_radius(radius);
-            }
-            Ok(())
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        if let Some(d) = get_display_entity(display_res.as_ref()) {
+            d.set_shadow_radius(radius);
+        }
+        Ok(())
     }
 
-    async fn get_shadow_strength(
-        accessor: &Accessor<PluginHostState, Self>,
-        display: Resource<DisplayEntity>,
-    ) -> wasmtime::Result<f32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            get_display_entity(display_res.as_ref())
-                .map_or_else(|| Ok(1.0), |d| Ok(d.get_shadow_strength()))
-        })
+    fn get_shadow_strength(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<f32> {
+        let state = self;
+        let display_res = state.get(&display)?;
+        get_display_entity(display_res.as_ref())
+            .map_or_else(|| Ok(1.0), |d| Ok(d.get_shadow_strength()))
     }
 
-    async fn set_shadow_strength(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_shadow_strength(
+        &mut self,
         display: Resource<DisplayEntity>,
         strength: f32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            if let Some(d) = get_display_entity(display_res.as_ref()) {
-                d.set_shadow_strength(strength);
-            }
-            Ok(())
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        if let Some(d) = get_display_entity(display_res.as_ref()) {
+            d.set_shadow_strength(strength);
+        }
+        Ok(())
     }
 
-    async fn get_display_width(
-        accessor: &Accessor<PluginHostState, Self>,
-        display: Resource<DisplayEntity>,
-    ) -> wasmtime::Result<f32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            get_display_entity(display_res.as_ref())
-                .map_or_else(|| Ok(0.0), |d| Ok(d.get_display_width()))
-        })
+    fn get_display_width(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<f32> {
+        let state = self;
+        let display_res = state.get(&display)?;
+        get_display_entity(display_res.as_ref())
+            .map_or_else(|| Ok(0.0), |d| Ok(d.get_display_width()))
     }
 
-    async fn set_display_width(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_display_width(
+        &mut self,
         display: Resource<DisplayEntity>,
         width: f32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            if let Some(d) = get_display_entity(display_res.as_ref()) {
-                d.set_display_width(width);
-            }
-            Ok(())
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        if let Some(d) = get_display_entity(display_res.as_ref()) {
+            d.set_display_width(width);
+        }
+        Ok(())
     }
 
-    async fn get_display_height(
-        accessor: &Accessor<PluginHostState, Self>,
-        display: Resource<DisplayEntity>,
-    ) -> wasmtime::Result<f32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            get_display_entity(display_res.as_ref())
-                .map_or_else(|| Ok(0.0), |d| Ok(d.get_display_height()))
-        })
+    fn get_display_height(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<f32> {
+        let state = self;
+        let display_res = state.get(&display)?;
+        get_display_entity(display_res.as_ref())
+            .map_or_else(|| Ok(0.0), |d| Ok(d.get_display_height()))
     }
 
-    async fn set_display_height(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_display_height(
+        &mut self,
         display: Resource<DisplayEntity>,
         height: f32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            if let Some(d) = get_display_entity(display_res.as_ref()) {
-                d.set_display_height(height);
-            }
-            Ok(())
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        if let Some(d) = get_display_entity(display_res.as_ref()) {
+            d.set_display_height(height);
+        }
+        Ok(())
     }
 
-    async fn get_glow_color_override(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_glow_color_override(
+        &mut self,
         display: Resource<DisplayEntity>,
     ) -> wasmtime::Result<i32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            Ok(get_display_entity(display_res.as_ref()).map_or(
-                -1,
-                pumpkin_core::entity::decoration::display::DisplayEntity::get_glow_color_override,
-            ))
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        Ok(get_display_entity(display_res.as_ref()).map_or(
+            -1,
+            pumpkin_core::entity::decoration::display::DisplayEntity::get_glow_color_override,
+        ))
     }
 
-    async fn set_glow_color_override(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_glow_color_override(
+        &mut self,
         display: Resource<DisplayEntity>,
         color: i32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            if let Some(d) = get_display_entity(display_res.as_ref()) {
-                d.set_glow_color_override(color);
-            }
-            Ok(())
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        if let Some(d) = get_display_entity(display_res.as_ref()) {
+            d.set_glow_color_override(color);
+        }
+        Ok(())
     }
 
-    async fn get_brightness(
-        accessor: &Accessor<PluginHostState, Self>,
-        display: Resource<DisplayEntity>,
-    ) -> wasmtime::Result<i32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            Ok(get_display_entity(display_res.as_ref()).map_or(
-                -1,
-                pumpkin_core::entity::decoration::display::DisplayEntity::get_brightness,
-            ))
-        })
+    fn get_brightness(&mut self, display: Resource<DisplayEntity>) -> wasmtime::Result<i32> {
+        let state = self;
+        let display_res = state.get(&display)?;
+        Ok(get_display_entity(display_res.as_ref()).map_or(
+            -1,
+            pumpkin_core::entity::decoration::display::DisplayEntity::get_brightness,
+        ))
     }
 
-    async fn set_brightness(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_brightness(
+        &mut self,
         display: Resource<DisplayEntity>,
         brightness: i32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let display_res = state.get(&display)?;
-            if let Some(d) = get_display_entity(display_res.as_ref()) {
-                d.set_brightness(brightness);
-            }
-            Ok(())
-        })
+        let state = self;
+        let display_res = state.get(&display)?;
+        if let Some(d) = get_display_entity(display_res.as_ref()) {
+            d.set_brightness(brightness);
+        }
+        Ok(())
     }
 }
 
 impl HostBlockDisplayEntity for PluginHostState {
-    async fn drop(&mut self, rep: Resource<BlockDisplayEntity>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<BlockDisplayEntity>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
-}
 
-impl HostBlockDisplayEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn from_entity(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn from_entity(
+        &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Result<Resource<BlockDisplayEntity>, Resource<Entity>>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.take(entity)?;
-            match Arc::downcast(entity.clone()) {
-                Ok(display) => Ok(Ok(state.add(display)?)),
-                Err(_) => Ok(Err(state.add(entity)?)),
-            }
-        })
+        let state = self;
+        let entity = state.take(entity)?;
+        match Arc::downcast(entity.clone()) {
+            Ok(display) => Ok(Ok(state.add(display)?)),
+            Err(_) => Ok(Err(state.add(entity)?)),
+        }
     }
 
-    async fn get_display(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_display(
+        &mut self,
         block_display: Resource<BlockDisplayEntity>,
     ) -> wasmtime::Result<Resource<DisplayEntity>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.add(state.get(&block_display)?.clone() as _)
-        })
+        let state = self;
+        state.add(state.get(&block_display)?.clone() as _)
     }
 
-    async fn get_entity(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_entity(
+        &mut self,
         block_display: Resource<BlockDisplayEntity>,
     ) -> wasmtime::Result<Resource<Entity>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.add(state.get(&block_display)?.clone() as _)
-        })
+        let state = self;
+        state.add(state.get(&block_display)?.clone() as _)
     }
 
-    async fn get_block_state_id(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_block_state_id(
+        &mut self,
         block_display: Resource<BlockDisplayEntity>,
     ) -> wasmtime::Result<u16> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&block_display)?.get_block_state() as u16)
-        })
+        let state = self;
+        Ok(state.get(&block_display)?.get_block_state() as u16)
     }
 
-    async fn set_block_state_id(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_block_state_id(
+        &mut self,
         block_display: Resource<BlockDisplayEntity>,
         state_id: u16,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.get(&block_display)?.set_block_state(state_id as i32);
-            Ok(())
-        })
+        let state = self;
+        state.get(&block_display)?.set_block_state(state_id as i32);
+        Ok(())
     }
 }
 
 impl HostItemDisplayEntity for PluginHostState {
-    async fn drop(&mut self, rep: Resource<ItemDisplayEntity>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<ItemDisplayEntity>) -> wasmtime::Result<()> {
         self.drop(rep)
+    }
+
+    fn from_entity(
+        &mut self,
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Result<Resource<ItemDisplayEntity>, Resource<Entity>>> {
+        let state = self;
+        let entity = state.take(entity)?;
+        match Arc::downcast(entity.clone()) {
+            Ok(display) => Ok(Ok(state.add(display)?)),
+            Err(_) => Ok(Err(state.add(entity)?)),
+        }
+    }
+
+    fn get_display(
+        &mut self,
+        item_display: Resource<ItemDisplayEntity>,
+    ) -> wasmtime::Result<Resource<DisplayEntity>> {
+        let state = self;
+        state.add(state.get(&item_display)?.clone() as _)
+    }
+
+    fn get_entity(
+        &mut self,
+        item_display: Resource<ItemDisplayEntity>,
+    ) -> wasmtime::Result<Resource<Entity>> {
+        let state = self;
+        state.add(state.get(&item_display)?.clone() as _)
+    }
+
+    fn get_item(
+        &mut self,
+        item_display: Resource<ItemDisplayEntity>,
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let state = self;
+        let item = state.get(&item_display)?.get_item();
+        if *item.item == pumpkin_data::item::Item::AIR || item.item_count == 0 {
+            Ok(None)
+        } else {
+            let res = state.add(Arc::new(tokio::sync::Mutex::new(item)))?;
+            Ok(Some(res))
+        }
+    }
+
+    fn get_item_display_mode(
+        &mut self,
+        item_display: Resource<ItemDisplayEntity>,
+    ) -> wasmtime::Result<ItemDisplayMode> {
+        let state = self;
+        Ok(map_item_display_mode(
+            state.get(&item_display)?.get_item_display_mode(),
+        ))
+    }
+
+    fn set_item_display_mode(
+        &mut self,
+        item_display: Resource<ItemDisplayEntity>,
+        mode: ItemDisplayMode,
+    ) -> wasmtime::Result<()> {
+        let state = self;
+        state
+            .get(&item_display)?
+            .set_item_display_mode(map_item_display_mode_rev(mode));
+
+        Ok(())
     }
 }
 
 impl HostItemDisplayEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn from_entity(
-        accessor: &Accessor<PluginHostState, Self>,
-        entity: Resource<Entity>,
-    ) -> wasmtime::Result<Result<Resource<ItemDisplayEntity>, Resource<Entity>>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.take(entity)?;
-            match Arc::downcast(entity.clone()) {
-                Ok(display) => Ok(Ok(state.add(display)?)),
-                Err(_) => Ok(Err(state.add(entity)?)),
-            }
-        })
-    }
-
-    async fn get_display(
-        accessor: &Accessor<PluginHostState, Self>,
-        item_display: Resource<ItemDisplayEntity>,
-    ) -> wasmtime::Result<Resource<DisplayEntity>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.add(state.get(&item_display)?.clone() as _)
-        })
-    }
-
-    async fn get_entity(
-        accessor: &Accessor<PluginHostState, Self>,
-        item_display: Resource<ItemDisplayEntity>,
-    ) -> wasmtime::Result<Resource<Entity>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.add(state.get(&item_display)?.clone() as _)
-        })
-    }
-
-    async fn get_item(
-        accessor: &Accessor<PluginHostState, Self>,
-        item_display: Resource<ItemDisplayEntity>,
-    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let item = state.get(&item_display)?.get_item();
-            if *item.item == pumpkin_data::item::Item::AIR || item.item_count == 0 {
-                Ok(None)
-            } else {
-                let res = state.add(Arc::new(tokio::sync::Mutex::new(item)))?;
-                Ok(Some(res))
-            }
-        })
-    }
-
     async fn set_item(
         accessor: &Accessor<PluginHostState, Self>,
         item_display: Resource<ItemDisplayEntity>,
@@ -688,376 +614,275 @@ impl HostItemDisplayEntityWithStore<PluginHostState> for HasSelf<PluginHostState
         accessor.get_res(&item_display)?.set_item(stack);
         Ok(())
     }
-
-    async fn get_item_display_mode(
-        accessor: &Accessor<PluginHostState, Self>,
-        item_display: Resource<ItemDisplayEntity>,
-    ) -> wasmtime::Result<ItemDisplayMode> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(map_item_display_mode(
-                state.get(&item_display)?.get_item_display_mode(),
-            ))
-        })
-    }
-
-    async fn set_item_display_mode(
-        accessor: &Accessor<PluginHostState, Self>,
-        item_display: Resource<ItemDisplayEntity>,
-        mode: ItemDisplayMode,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state
-                .get(&item_display)?
-                .set_item_display_mode(map_item_display_mode_rev(mode));
-
-            Ok(())
-        })
-    }
 }
 
 impl HostTextDisplayEntity for PluginHostState {
-    async fn drop(&mut self, rep: Resource<TextDisplayEntity>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<TextDisplayEntity>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
-}
 
-impl HostTextDisplayEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn from_entity(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn from_entity(
+        &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Result<Resource<TextDisplayEntity>, Resource<Entity>>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.take(entity)?;
-            match Arc::downcast(entity.clone()) {
-                Ok(display) => Ok(Ok(state.add(display)?)),
-                Err(_) => Ok(Err(state.add(entity)?)),
-            }
-        })
+        let state = self;
+        let entity = state.take(entity)?;
+        match Arc::downcast(entity.clone()) {
+            Ok(display) => Ok(Ok(state.add(display)?)),
+            Err(_) => Ok(Err(state.add(entity)?)),
+        }
     }
 
-    async fn get_display(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_display(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<Resource<DisplayEntity>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.add(state.get(&text_display)?.clone() as _)
-        })
+        let state = self;
+        state.add(state.get(&text_display)?.clone() as _)
     }
 
-    async fn get_entity(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_entity(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<Resource<Entity>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.add(state.get(&text_display)?.clone() as _)
-        })
+        let state = self;
+        state.add(state.get(&text_display)?.clone() as _)
     }
 
-    async fn get_text(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_text(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<Resource<TextComponent>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.add(state.get(&text_display)?.get_text())
-        })
+        let state = self;
+        state.add(state.get(&text_display)?.get_text())
     }
 
-    async fn set_text(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_text(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
         text: Resource<TextComponent>,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let text_val = state.take(text)?;
-            state.get(&text_display)?.set_text(text_val);
-            Ok(())
-        })
+        let state = self;
+        let text_val = state.take(text)?;
+        state.get(&text_display)?.set_text(text_val);
+        Ok(())
     }
 
-    async fn get_line_width(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_line_width(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<i32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&text_display)?.get_line_width())
-        })
+        let state = self;
+        Ok(state.get(&text_display)?.get_line_width())
     }
 
-    async fn set_line_width(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_line_width(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
         width: i32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.get(&text_display)?.set_line_width(width);
-            Ok(())
-        })
+        let state = self;
+        state.get(&text_display)?.set_line_width(width);
+        Ok(())
     }
 
-    async fn get_background(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_background(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<i32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&text_display)?.get_background_color())
-        })
+        let state = self;
+        Ok(state.get(&text_display)?.get_background_color())
     }
 
-    async fn set_background(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_background(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
         color: i32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.get(&text_display)?.set_background_color(color);
-            Ok(())
-        })
+        let state = self;
+        state.get(&text_display)?.set_background_color(color);
+        Ok(())
     }
 
-    async fn get_text_opacity(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_text_opacity(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<i8> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&text_display)?.get_text_opacity())
-        })
+        let state = self;
+        Ok(state.get(&text_display)?.get_text_opacity())
     }
 
-    async fn set_text_opacity(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_text_opacity(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
         opacity: i8,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.get(&text_display)?.set_text_opacity(opacity);
-            Ok(())
-        })
+        let state = self;
+        state.get(&text_display)?.set_text_opacity(opacity);
+        Ok(())
     }
 
-    async fn get_shadow(
-        accessor: &Accessor<PluginHostState, Self>,
-        text_display: Resource<TextDisplayEntity>,
-    ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&text_display)?.get_shadow())
-        })
+    fn get_shadow(&mut self, text_display: Resource<TextDisplayEntity>) -> wasmtime::Result<bool> {
+        let state = self;
+        Ok(state.get(&text_display)?.get_shadow())
     }
 
-    async fn set_shadow(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_shadow(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
         shadow: bool,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.get(&text_display)?.set_shadow(shadow);
-            Ok(())
-        })
+        let state = self;
+        state.get(&text_display)?.set_shadow(shadow);
+        Ok(())
     }
 
-    async fn get_see_through(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_see_through(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&text_display)?.get_see_through())
-        })
+        let state = self;
+        Ok(state.get(&text_display)?.get_see_through())
     }
 
-    async fn set_see_through(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_see_through(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
         see_through: bool,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.get(&text_display)?.set_see_through(see_through);
-            Ok(())
-        })
+        let state = self;
+        state.get(&text_display)?.set_see_through(see_through);
+        Ok(())
     }
 
-    async fn get_default_background(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_default_background(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&text_display)?.get_use_default_background())
-        })
+        let state = self;
+        Ok(state.get(&text_display)?.get_use_default_background())
     }
 
-    async fn set_default_background(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_default_background(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
         default_background: bool,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state
-                .get(&text_display)?
-                .set_use_default_background(default_background);
-            Ok(())
-        })
+        let state = self;
+        state
+            .get(&text_display)?
+            .set_use_default_background(default_background);
+        Ok(())
     }
 
-    async fn get_alignment(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_alignment(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
     ) -> wasmtime::Result<TextAlignment> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(map_text_alignment(
-                state.get(&text_display)?.get_alignment(),
-            ))
-        })
+        let state = self;
+        Ok(map_text_alignment(
+            state.get(&text_display)?.get_alignment(),
+        ))
     }
 
-    async fn set_alignment(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_alignment(
+        &mut self,
         text_display: Resource<TextDisplayEntity>,
         alignment: TextAlignment,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state
-                .get(&text_display)?
-                .set_alignment(map_text_alignment_rev(alignment));
-            Ok(())
-        })
+        let state = self;
+        state
+            .get(&text_display)?
+            .set_alignment(map_text_alignment_rev(alignment));
+        Ok(())
     }
 }
 
 impl HostInteractionEntity for PluginHostState {
-    async fn drop(&mut self, rep: Resource<InteractionEntity>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<InteractionEntity>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
-}
 
-impl HostInteractionEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn from_entity(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn from_entity(
+        &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Result<Resource<InteractionEntity>, Resource<Entity>>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.take(entity)?;
-            match Arc::downcast(entity.clone()) {
-                Ok(display) => Ok(Ok(state.add(display)?)),
-                Err(_) => Ok(Err(state.add(entity)?)),
-            }
-        })
+        let state = self;
+        let entity = state.take(entity)?;
+        match Arc::downcast(entity.clone()) {
+            Ok(display) => Ok(Ok(state.add(display)?)),
+            Err(_) => Ok(Err(state.add(entity)?)),
+        }
     }
 
-    async fn get_entity(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_entity(
+        &mut self,
         interaction: Resource<InteractionEntity>,
     ) -> wasmtime::Result<Resource<Entity>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.add(state.get(&interaction)?.clone() as _)
-        })
+        let state = self;
+        state.add(state.get(&interaction)?.clone() as _)
     }
 
-    async fn get_width(
-        accessor: &Accessor<PluginHostState, Self>,
-        interaction: Resource<InteractionEntity>,
-    ) -> wasmtime::Result<f32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&interaction)?.get_width())
-        })
+    fn get_width(&mut self, interaction: Resource<InteractionEntity>) -> wasmtime::Result<f32> {
+        let state = self;
+        Ok(state.get(&interaction)?.get_width())
     }
 
-    async fn set_width(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_width(
+        &mut self,
         interaction: Resource<InteractionEntity>,
         width: f32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.get(&interaction)?.set_width(width);
-            Ok(())
-        })
+        let state = self;
+        state.get(&interaction)?.set_width(width);
+        Ok(())
     }
 
-    async fn get_height(
-        accessor: &Accessor<PluginHostState, Self>,
-        interaction: Resource<InteractionEntity>,
-    ) -> wasmtime::Result<f32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&interaction)?.get_height())
-        })
+    fn get_height(&mut self, interaction: Resource<InteractionEntity>) -> wasmtime::Result<f32> {
+        let state = self;
+        Ok(state.get(&interaction)?.get_height())
     }
 
-    async fn set_height(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_height(
+        &mut self,
         interaction: Resource<InteractionEntity>,
         height: f32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.get(&interaction)?.set_height(height);
-            Ok(())
-        })
+        let state = self;
+        state.get(&interaction)?.set_height(height);
+        Ok(())
     }
 
-    async fn get_response(
-        accessor: &Accessor<PluginHostState, Self>,
-        interaction: Resource<InteractionEntity>,
-    ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            Ok(state.get(&interaction)?.get_response())
-        })
+    fn get_response(&mut self, interaction: Resource<InteractionEntity>) -> wasmtime::Result<bool> {
+        let state = self;
+        Ok(state.get(&interaction)?.get_response())
     }
 
-    async fn set_response(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_response(
+        &mut self,
         interaction: Resource<InteractionEntity>,
         response: bool,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.get(&interaction)?.set_response(response);
-            Ok(())
-        })
+        let state = self;
+        state.get(&interaction)?.set_response(response);
+        Ok(())
     }
 
-    async fn get_last_attacker(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_last_attacker(
+        &mut self,
         interaction: Resource<InteractionEntity>,
     ) -> wasmtime::Result<Option<Uuid>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let action = state.get(&interaction)?.get_last_attacker();
-            Ok(action.map(|a| Uuid::to_wit(&a.player)))
-        })
+        let state = self;
+        let action = state.get(&interaction)?.get_last_attacker();
+        Ok(action.map(|a| Uuid::to_wit(&a.player)))
     }
 
-    async fn get_last_interaction(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_last_interaction(
+        &mut self,
         interaction: Resource<InteractionEntity>,
     ) -> wasmtime::Result<Option<Uuid>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let action = state.get(&interaction)?.get_target();
-            Ok(action.map(|a| Uuid::to_wit(&a.player)))
-        })
+        let state = self;
+        let action = state.get(&interaction)?.get_target();
+        Ok(action.map(|a| Uuid::to_wit(&a.player)))
     }
 }

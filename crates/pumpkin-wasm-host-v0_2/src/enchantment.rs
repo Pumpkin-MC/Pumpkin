@@ -11,7 +11,7 @@ use pumpkin_wasm_host_common::state::PluginHostState;
 use wasmtime::component::{Accessor, HasSelf, Resource};
 
 impl HostEnchantmentManager for PluginHostState {
-    async fn drop(&mut self, rep: Resource<WitEnchantmentManager>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<WitEnchantmentManager>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
 }

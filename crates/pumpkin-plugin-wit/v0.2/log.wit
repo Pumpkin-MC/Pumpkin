@@ -8,7 +8,7 @@ interface logging {
     }
 
     /// log any general purpose message
-    log: async func(level: level, message: string);
+    log: func(level: level, message: string);
     /// This function is meant to be used by the tracing crate.
-    log-tracing: async func(event: list<u8>);
+    log-tracing: func(event: list<u8>);
 }

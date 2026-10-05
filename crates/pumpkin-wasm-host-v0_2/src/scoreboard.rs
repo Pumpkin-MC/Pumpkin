@@ -1,14 +1,14 @@
 use crate::pumpkin::{
     self,
     plugin::scoreboard::{
-        self, CollisionRule, DisplaySlot, HostBedrockScoreboard, HostBedrockScoreboardWithStore,
-        NametagVisibility, RenderType, TeamSettings,
+        self, CollisionRule, DisplaySlot, HostBedrockScoreboard, NametagVisibility, RenderType,
+        TeamSettings,
     },
 };
 use pumpkin_core::world::scoreboard::{ScoreboardObjective, ScoreboardScore, Team};
 use pumpkin_protocol::{NumberFormat, codec::var_int::VarInt};
 use pumpkin_wasm_host_common::state::{PluginHostState, ScoreboardProvider};
-use wasmtime::component::{Accessor, HasSelf, Resource};
+use wasmtime::component::Resource;
 
 fn map_number_format(
     nf: Option<scoreboard::NumberFormat>,
@@ -27,723 +27,683 @@ fn map_number_format(
 impl scoreboard::Host for PluginHostState {}
 
 impl scoreboard::HostScoreboard for PluginHostState {
-    async fn drop(&mut self, rep: Resource<scoreboard::Scoreboard>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<scoreboard::Scoreboard>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
-}
 
-impl scoreboard::HostScoreboardWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn add_objective(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn add_objective(
+        &mut self,
         res: Resource<scoreboard::Scoreboard>,
         name: String,
         display_name: Resource<pumpkin::plugin::text::TextComponent>,
         render_type: RenderType,
         number_format: Option<scoreboard::NumberFormat>,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            let display_name = state.take(display_name)?;
-            let nf = map_number_format(number_format, state)?;
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        let display_name = state.take(display_name)?;
+        let nf = map_number_format(number_format, state)?;
 
-            let rt = match render_type {
-                RenderType::Integer => pumpkin_protocol::java::client::play::RenderType::Integer,
-                RenderType::Hearts => pumpkin_protocol::java::client::play::RenderType::Hearts,
-            };
+        let rt = match render_type {
+            RenderType::Integer => pumpkin_protocol::java::client::play::RenderType::Integer,
+            RenderType::Hearts => pumpkin_protocol::java::client::play::RenderType::Hearts,
+        };
 
-            let objective = ScoreboardObjective::new(name, display_name, rt, nf, "dummy");
+        let objective = ScoreboardObjective::new(name, display_name, rt, nf, "dummy");
 
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .add_objective(world.as_ref(), objective);
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .add_objective(world.as_ref(), objective);
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !matches!(
+                    *custom_guard,
+                    Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
+                ) {
+                    *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
+                        pumpkin_core::world::scoreboard::Scoreboard::default(),
+                    ));
                 }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if !matches!(
-                        *custom_guard,
-                        Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
-                    ) {
-                        *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
-                            pumpkin_core::world::scoreboard::Scoreboard::default(),
-                        ));
-                    }
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.add_objective(player.as_ref(), objective);
-                    }
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.add_objective(player.as_ref(), objective);
                 }
             }
-            Ok(())
-        })
+        }
+        Ok(())
     }
 
-    async fn update_objective(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn update_objective(
+        &mut self,
         res: Resource<scoreboard::Scoreboard>,
         name: String,
         display_name: Resource<pumpkin::plugin::text::TextComponent>,
         render_type: RenderType,
         number_format: Option<scoreboard::NumberFormat>,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            let display_name = state.take(display_name)?;
-            let nf = map_number_format(number_format, state)?;
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        let display_name = state.take(display_name)?;
+        let nf = map_number_format(number_format, state)?;
 
-            let rt = match render_type {
-                RenderType::Integer => pumpkin_protocol::java::client::play::RenderType::Integer,
-                RenderType::Hearts => pumpkin_protocol::java::client::play::RenderType::Hearts,
-            };
+        let rt = match render_type {
+            RenderType::Integer => pumpkin_protocol::java::client::play::RenderType::Integer,
+            RenderType::Hearts => pumpkin_protocol::java::client::play::RenderType::Hearts,
+        };
 
-            let objective = ScoreboardObjective::new(name, display_name, rt, nf, "dummy");
+        let objective = ScoreboardObjective::new(name, display_name, rt, nf, "dummy");
 
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .update_objective(world.as_ref(), objective);
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .update_objective(world.as_ref(), objective);
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !matches!(
+                    *custom_guard,
+                    Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
+                ) {
+                    *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
+                        pumpkin_core::world::scoreboard::Scoreboard::default(),
+                    ));
                 }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if !matches!(
-                        *custom_guard,
-                        Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
-                    ) {
-                        *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
-                            pumpkin_core::world::scoreboard::Scoreboard::default(),
-                        ));
-                    }
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.update_objective(player.as_ref(), objective);
-                    }
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.update_objective(player.as_ref(), objective);
                 }
             }
-            Ok(())
-        })
+        }
+        Ok(())
     }
 
-    async fn remove_objective(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn remove_objective(
+        &mut self,
         res: Resource<scoreboard::Scoreboard>,
         name: String,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .remove_objective(world.as_ref(), &name);
-                }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.remove_objective(player.as_ref(), &name);
-                    }
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove_objective(world.as_ref(), &name);
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.remove_objective(player.as_ref(), &name);
                 }
             }
-            Ok(())
-        })
+        }
+        Ok(())
     }
 
-    async fn set_display_slot(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_display_slot(
+        &mut self,
         res: Resource<scoreboard::Scoreboard>,
         slot: DisplaySlot,
         objective_name: String,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            let slot = map_display_slot(slot);
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        let slot = map_display_slot(slot);
 
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .set_display_objective(world.as_ref(), slot, Some(&objective_name));
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .set_display_objective(world.as_ref(), slot, Some(&objective_name));
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !matches!(
+                    *custom_guard,
+                    Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
+                ) {
+                    *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
+                        pumpkin_core::world::scoreboard::Scoreboard::default(),
+                    ));
                 }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if !matches!(
-                        *custom_guard,
-                        Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
-                    ) {
-                        *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
-                            pumpkin_core::world::scoreboard::Scoreboard::default(),
-                        ));
-                    }
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.set_display_objective(player.as_ref(), slot, Some(&objective_name));
-                    }
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.set_display_objective(player.as_ref(), slot, Some(&objective_name));
                 }
             }
-            Ok(())
-        })
+        }
+        Ok(())
     }
 
-    async fn clear_display_slot(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn clear_display_slot(
+        &mut self,
         res: Resource<scoreboard::Scoreboard>,
         slot: DisplaySlot,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            let slot = map_display_slot(slot);
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        let slot = map_display_slot(slot);
 
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clear_display_objective(world.as_ref(), slot);
-                }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.clear_display_objective(player.as_ref(), slot);
-                    }
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clear_display_objective(world.as_ref(), slot);
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.clear_display_objective(player.as_ref(), slot);
                 }
             }
-            Ok(())
-        })
+        }
+        Ok(())
     }
 
-    async fn update_score(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn update_score(
+        &mut self,
         res: Resource<scoreboard::Scoreboard>,
         entity_name: String,
         objective_name: String,
         value: i32,
         number_format: Option<scoreboard::NumberFormat>,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            let nf = map_number_format(number_format, state)?;
-            let score = ScoreboardScore::new(entity_name, objective_name, VarInt(value), None, nf);
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .update_score(world.as_ref(), score);
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        let nf = map_number_format(number_format, state)?;
+        let score = ScoreboardScore::new(entity_name, objective_name, VarInt(value), None, nf);
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .update_score(world.as_ref(), score);
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !matches!(
+                    *custom_guard,
+                    Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
+                ) {
+                    *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
+                        pumpkin_core::world::scoreboard::Scoreboard::default(),
+                    ));
                 }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if !matches!(
-                        *custom_guard,
-                        Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
-                    ) {
-                        *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
-                            pumpkin_core::world::scoreboard::Scoreboard::default(),
-                        ));
-                    }
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.update_score(player.as_ref(), score);
-                    }
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.update_score(player.as_ref(), score);
                 }
             }
-            Ok(())
-        })
+        }
+        Ok(())
     }
 
-    async fn add_score(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn add_score(
+        &mut self,
         res: Resource<scoreboard::Scoreboard>,
         entity_name: String,
         objective_name: String,
         delta: i32,
     ) -> wasmtime::Result<i32> {
-        accessor.with(|mut host| {
-            let st = host.get();
-            let provider = st.get(&res)?.clone();
-            let new_val = match provider {
-                ScoreboardProvider::World(world) => world
-                    .scoreboard
+        let st = &mut *self;
+        let provider = st.get(&res)?.clone();
+        let new_val = match provider {
+            ScoreboardProvider::World(world) => world
+                .scoreboard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .add_score(world.as_ref(), entity_name, objective_name, delta),
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
                     .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .add_score(world.as_ref(), entity_name, objective_name, delta),
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if !matches!(
-                        *custom_guard,
-                        Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
-                    ) {
-                        *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
-                            pumpkin_core::world::scoreboard::Scoreboard::default(),
-                        ));
-                    }
-                    let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    else {
-                        return Err(wasmtime::Error::msg("Invalid scoreboard state"));
-                    };
-                    sb.add_score(player.as_ref(), entity_name, objective_name, delta)
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !matches!(
+                    *custom_guard,
+                    Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
+                ) {
+                    *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
+                        pumpkin_core::world::scoreboard::Scoreboard::default(),
+                    ));
                 }
-            };
-            Ok(new_val)
-        })
+                let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                else {
+                    return Err(wasmtime::Error::msg("Invalid scoreboard state"));
+                };
+                sb.add_score(player.as_ref(), entity_name, objective_name, delta)
+            }
+        };
+        Ok(new_val)
     }
 
-    async fn remove_score(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn remove_score(
+        &mut self,
         res: Resource<scoreboard::Scoreboard>,
         entity_name: String,
         objective_name: String,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .remove_score(world.as_ref(), &entity_name, &objective_name);
-                }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.remove_score(player.as_ref(), &entity_name, &objective_name);
-                    }
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove_score(world.as_ref(), &entity_name, &objective_name);
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.remove_score(player.as_ref(), &entity_name, &objective_name);
                 }
             }
-            Ok(())
-        })
+        }
+        Ok(())
     }
 
-    async fn reset_entity_scores(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn reset_entity_scores(
+        &mut self,
         res: Resource<scoreboard::Scoreboard>,
         entity_name: String,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .reset_scores_for_entity(world.as_ref(), &entity_name);
-                }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.reset_scores_for_entity(player.as_ref(), &entity_name);
-                    }
-                }
-            }
-            Ok(())
-        })
-    }
-
-    async fn create_team(
-        accessor: &Accessor<PluginHostState, Self>,
-        res: Resource<scoreboard::Scoreboard>,
-        name: String,
-        settings: TeamSettings,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            let team = map_team_settings(name, settings, state)?;
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .add_team(world.as_ref(), team);
-                }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if !matches!(
-                        *custom_guard,
-                        Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
-                    ) {
-                        *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
-                            pumpkin_core::world::scoreboard::Scoreboard::default(),
-                        ));
-                    }
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.add_team(player.as_ref(), team);
-                    }
-                }
-            }
-            Ok(())
-        })
-    }
-
-    async fn remove_team(
-        accessor: &Accessor<PluginHostState, Self>,
-        res: Resource<scoreboard::Scoreboard>,
-        name: String,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .remove_team(world.as_ref(), &name);
-                }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.remove_team(player.as_ref(), &name);
-                    }
-                }
-            }
-            Ok(())
-        })
-    }
-
-    async fn update_team(
-        accessor: &Accessor<PluginHostState, Self>,
-        res: Resource<scoreboard::Scoreboard>,
-        name: String,
-        settings: TeamSettings,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            let team = map_team_settings(name, settings, state)?;
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .update_team(world.as_ref(), team);
-                }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.update_team(player.as_ref(), team);
-                    }
-                }
-            }
-            Ok(())
-        })
-    }
-
-    async fn add_player_to_team(
-        accessor: &Accessor<PluginHostState, Self>,
-        res: Resource<scoreboard::Scoreboard>,
-        team_name: String,
-        player_name: String,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .add_player_to_team(world.as_ref(), &team_name, player_name);
-                }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.add_player_to_team(player.as_ref(), &team_name, player_name);
-                    }
-                }
-            }
-            Ok(())
-        })
-    }
-
-    async fn remove_player_from_team(
-        accessor: &Accessor<PluginHostState, Self>,
-        res: Resource<scoreboard::Scoreboard>,
-        team_name: String,
-        player_name: String,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .remove_player_from_team(world.as_ref(), &team_name, &player_name);
-                }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.remove_player_from_team(player.as_ref(), &team_name, &player_name);
-                    }
-                }
-            }
-            Ok(())
-        })
-    }
-
-    async fn clear_team_players(
-        accessor: &Accessor<PluginHostState, Self>,
-        res: Resource<scoreboard::Scoreboard>,
-        team_name: String,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            match provider {
-                ScoreboardProvider::World(world) => {
-                    world
-                        .scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clear_team_players(world.as_ref(), &team_name);
-                }
-                ScoreboardProvider::Player(player) => {
-                    let mut custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_mut()
-                    {
-                        sb.clear_team_players(player.as_ref(), &team_name);
-                    }
-                }
-            }
-            Ok(())
-        })
-    }
-
-    async fn get_teams(
-        accessor: &Accessor<PluginHostState, Self>,
-        res: Resource<scoreboard::Scoreboard>,
-    ) -> wasmtime::Result<Vec<String>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            let teams = match provider {
-                ScoreboardProvider::World(world) => world
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
                     .scoreboard
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .get_teams()
-                    .keys()
-                    .cloned()
-                    .collect(),
-                ScoreboardProvider::Player(player) => {
-                    let custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_ref()
-                    {
-                        sb.get_teams().keys().cloned().collect()
-                    } else {
-                        Vec::new()
-                    }
+                    .reset_scores_for_entity(world.as_ref(), &entity_name);
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.reset_scores_for_entity(player.as_ref(), &entity_name);
                 }
-            };
-            Ok(teams)
-        })
+            }
+        }
+        Ok(())
     }
 
-    async fn get_team(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn create_team(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        name: String,
+        settings: TeamSettings,
+    ) -> wasmtime::Result<()> {
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        let team = map_team_settings(name, settings, state)?;
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .add_team(world.as_ref(), team);
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !matches!(
+                    *custom_guard,
+                    Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
+                ) {
+                    *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
+                        pumpkin_core::world::scoreboard::Scoreboard::default(),
+                    ));
+                }
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.add_team(player.as_ref(), team);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn remove_team(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        name: String,
+    ) -> wasmtime::Result<()> {
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove_team(world.as_ref(), &name);
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.remove_team(player.as_ref(), &name);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn update_team(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        name: String,
+        settings: TeamSettings,
+    ) -> wasmtime::Result<()> {
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        let team = map_team_settings(name, settings, state)?;
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .update_team(world.as_ref(), team);
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.update_team(player.as_ref(), team);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn add_player_to_team(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        team_name: String,
+        player_name: String,
+    ) -> wasmtime::Result<()> {
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .add_player_to_team(world.as_ref(), &team_name, player_name);
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.add_player_to_team(player.as_ref(), &team_name, player_name);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn remove_player_from_team(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        team_name: String,
+        player_name: String,
+    ) -> wasmtime::Result<()> {
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove_player_from_team(world.as_ref(), &team_name, &player_name);
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.remove_player_from_team(player.as_ref(), &team_name, &player_name);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn clear_team_players(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        team_name: String,
+    ) -> wasmtime::Result<()> {
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        match provider {
+            ScoreboardProvider::World(world) => {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clear_team_players(world.as_ref(), &team_name);
+            }
+            ScoreboardProvider::Player(player) => {
+                let mut custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_mut()
+                {
+                    sb.clear_team_players(player.as_ref(), &team_name);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn get_teams(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+    ) -> wasmtime::Result<Vec<String>> {
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        let teams = match provider {
+            ScoreboardProvider::World(world) => world
+                .scoreboard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_teams()
+                .keys()
+                .cloned()
+                .collect(),
+            ScoreboardProvider::Player(player) => {
+                let custom_guard = player
+                    .custom_scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_ref()
+                {
+                    sb.get_teams().keys().cloned().collect()
+                } else {
+                    Vec::new()
+                }
+            }
+        };
+        Ok(teams)
+    }
+
+    fn get_team(
+        &mut self,
         res: Resource<scoreboard::Scoreboard>,
         name: String,
     ) -> wasmtime::Result<Option<TeamSettings>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            let team_opt = match provider {
-                ScoreboardProvider::World(world) => world
-                    .scoreboard
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        let team_opt = match provider {
+            ScoreboardProvider::World(world) => world
+                .scoreboard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_team(&name)
+                .cloned(),
+            ScoreboardProvider::Player(player) => {
+                let custom_guard = player
+                    .custom_scoreboard
                     .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .get_team(&name)
-                    .cloned(),
-                ScoreboardProvider::Player(player) => {
-                    let custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_ref()
-                    {
-                        sb.get_team(&name).cloned()
-                    } else {
-                        None
-                    }
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_ref()
+                {
+                    sb.get_team(&name).cloned()
+                } else {
+                    None
                 }
-            };
-
-            if let Some(team) = team_opt {
-                Ok(Some(map_team_to_settings(&team, state)?))
-            } else {
-                Ok(None)
             }
-        })
+        };
+
+        if let Some(team) = team_opt {
+            Ok(Some(map_team_to_settings(&team, state)?))
+        } else {
+            Ok(None)
+        }
     }
 
-    async fn get_team_players(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_team_players(
+        &mut self,
         res: Resource<scoreboard::Scoreboard>,
         team_name: String,
     ) -> wasmtime::Result<Vec<String>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            let players = match provider {
-                ScoreboardProvider::World(world) => world
-                    .scoreboard
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        let players = match provider {
+            ScoreboardProvider::World(world) => world
+                .scoreboard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_team(&team_name)
+                .map(|t| t.players.clone())
+                .unwrap_or_default(),
+            ScoreboardProvider::Player(player) => {
+                let custom_guard = player
+                    .custom_scoreboard
                     .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .get_team(&team_name)
-                    .map(|t| t.players.clone())
-                    .unwrap_or_default(),
-                ScoreboardProvider::Player(player) => {
-                    let custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_ref()
-                    {
-                        sb.get_team(&team_name)
-                            .map(|t| t.players.clone())
-                            .unwrap_or_default()
-                    } else {
-                        Vec::new()
-                    }
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_ref()
+                {
+                    sb.get_team(&team_name)
+                        .map(|t| t.players.clone())
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
                 }
-            };
-            Ok(players)
-        })
+            }
+        };
+        Ok(players)
     }
 
-    async fn get_player_team(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_player_team(
+        &mut self,
         res: Resource<scoreboard::Scoreboard>,
         player_name: String,
     ) -> wasmtime::Result<Option<String>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let provider = state.get(&res)?.clone();
-            let team_name = match provider {
-                ScoreboardProvider::World(world) => world
-                    .scoreboard
+        let state = self;
+        let provider = state.get(&res)?.clone();
+        let team_name = match provider {
+            ScoreboardProvider::World(world) => world
+                .scoreboard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_entity_team(&player_name)
+                .map(|t| t.name.clone()),
+            ScoreboardProvider::Player(player) => {
+                let custom_guard = player
+                    .custom_scoreboard
                     .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .get_entity_team(&player_name)
-                    .map(|t| t.name.clone()),
-                ScoreboardProvider::Player(player) => {
-                    let custom_guard = player
-                        .custom_scoreboard
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                        custom_guard.as_ref()
-                    {
-                        sb.get_entity_team(&player_name).map(|t| t.name.clone())
-                    } else {
-                        None
-                    }
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_ref()
+                {
+                    sb.get_entity_team(&player_name).map(|t| t.name.clone())
+                } else {
+                    None
                 }
-            };
-            Ok(team_name)
-        })
+            }
+        };
+        Ok(team_name)
     }
 }
 
@@ -959,154 +919,171 @@ const fn map_named_color_rev(
 }
 
 impl HostBedrockScoreboard for PluginHostState {
-    async fn drop(
-        &mut self,
-        _res: Resource<scoreboard::BedrockScoreboard>,
-    ) -> wasmtime::Result<()> {
+    fn drop(&mut self, _res: Resource<scoreboard::BedrockScoreboard>) -> wasmtime::Result<()> {
         Ok(())
     }
-}
 
-impl HostBedrockScoreboardWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn add_objective(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn add_objective(
+        &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         name: String,
         display_name: String,
         sort_order: scoreboard::BedrockSortOrder,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let st = host.get();
-            let player = st.get(&res)?.clone();
-            let mut custom_guard = player
-                .custom_scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if !matches!(
-                *custom_guard,
-                Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
-            ) {
-                *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
-                    pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
-                ));
-            }
-            let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-                custom_guard.as_mut()
-            else {
-                return Err(wasmtime::Error::msg("Invalid scoreboard state"));
-            };
-            sb.add_objective(
-                player.as_ref(),
-                pumpkin_core::world::scoreboard::BedrockObjective {
-                    name,
-                    display_name,
-                    sort_order: match sort_order {
-                        scoreboard::BedrockSortOrder::Ascending => {
-                            pumpkin_core::world::scoreboard::BedrockSortOrder::Ascending
-                        }
-                        scoreboard::BedrockSortOrder::Descending => {
-                            pumpkin_core::world::scoreboard::BedrockSortOrder::Descending
-                        }
-                    },
+        let st = &mut *self;
+        let player = st.get(&res)?.clone();
+        let mut custom_guard = player
+            .custom_scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !matches!(
+            *custom_guard,
+            Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
+        ) {
+            *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
+                pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
+            ));
+        }
+        let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
+            custom_guard.as_mut()
+        else {
+            return Err(wasmtime::Error::msg("Invalid scoreboard state"));
+        };
+        sb.add_objective(
+            player.as_ref(),
+            pumpkin_core::world::scoreboard::BedrockObjective {
+                name,
+                display_name,
+                sort_order: match sort_order {
+                    scoreboard::BedrockSortOrder::Ascending => {
+                        pumpkin_core::world::scoreboard::BedrockSortOrder::Ascending
+                    }
+                    scoreboard::BedrockSortOrder::Descending => {
+                        pumpkin_core::world::scoreboard::BedrockSortOrder::Descending
+                    }
                 },
-            );
-            Ok(())
-        })
+            },
+        );
+        Ok(())
     }
 
-    async fn update_objective(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn update_objective(
+        &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         name: String,
         display_name: String,
         sort_order: scoreboard::BedrockSortOrder,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let st = host.get();
-            let player = st.get(&res)?.clone();
-            let mut custom_guard = player
-                .custom_scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if !matches!(
-                *custom_guard,
-                Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
-            ) {
-                *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
-                    pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
-                ));
-            }
-            let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-                custom_guard.as_mut()
-            else {
-                return Err(wasmtime::Error::msg("Invalid scoreboard state"));
-            };
-            sb.update_objective(
-                player.as_ref(),
-                pumpkin_core::world::scoreboard::BedrockObjective {
-                    name,
-                    display_name,
-                    sort_order: match sort_order {
-                        scoreboard::BedrockSortOrder::Ascending => {
-                            pumpkin_core::world::scoreboard::BedrockSortOrder::Ascending
-                        }
-                        scoreboard::BedrockSortOrder::Descending => {
-                            pumpkin_core::world::scoreboard::BedrockSortOrder::Descending
-                        }
-                    },
+        let st = &mut *self;
+        let player = st.get(&res)?.clone();
+        let mut custom_guard = player
+            .custom_scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !matches!(
+            *custom_guard,
+            Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
+        ) {
+            *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
+                pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
+            ));
+        }
+        let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
+            custom_guard.as_mut()
+        else {
+            return Err(wasmtime::Error::msg("Invalid scoreboard state"));
+        };
+        sb.update_objective(
+            player.as_ref(),
+            pumpkin_core::world::scoreboard::BedrockObjective {
+                name,
+                display_name,
+                sort_order: match sort_order {
+                    scoreboard::BedrockSortOrder::Ascending => {
+                        pumpkin_core::world::scoreboard::BedrockSortOrder::Ascending
+                    }
+                    scoreboard::BedrockSortOrder::Descending => {
+                        pumpkin_core::world::scoreboard::BedrockSortOrder::Descending
+                    }
                 },
-            );
-            Ok(())
-        })
+            },
+        );
+        Ok(())
     }
 
-    async fn remove_objective(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn remove_objective(
+        &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         name: String,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let player = state.get(&res)?.clone();
-            let mut custom_guard = player
-                .custom_scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-                custom_guard.as_mut()
-            {
-                sb.remove_objective(player.as_ref(), &name);
-            }
-            Ok(())
-        })
+        let state = self;
+        let player = state.get(&res)?.clone();
+        let mut custom_guard = player
+            .custom_scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
+            custom_guard.as_mut()
+        {
+            sb.remove_objective(player.as_ref(), &name);
+        }
+        Ok(())
     }
 
-    async fn set_display_slot(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_display_slot(
+        &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         slot: scoreboard::BedrockDisplaySlot,
         objective_name: String,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let st = host.get();
-            let player = st.get(&res)?.clone();
-            let mut custom_guard = player
-                .custom_scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if !matches!(
-                *custom_guard,
-                Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
-            ) {
-                *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
-                    pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
-                ));
+        let st = &mut *self;
+        let player = st.get(&res)?.clone();
+        let mut custom_guard = player
+            .custom_scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !matches!(
+            *custom_guard,
+            Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
+        ) {
+            *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
+                pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
+            ));
+        }
+        let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
+            custom_guard.as_mut()
+        else {
+            return Err(wasmtime::Error::msg("Invalid scoreboard state"));
+        };
+        let b_slot = match slot {
+            scoreboard::BedrockDisplaySlot::PlayerList => {
+                pumpkin_core::world::scoreboard::BedrockDisplaySlot::PlayerList
             }
-            let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-                custom_guard.as_mut()
-            else {
-                return Err(wasmtime::Error::msg("Invalid scoreboard state"));
-            };
+            scoreboard::BedrockDisplaySlot::Sidebar => {
+                pumpkin_core::world::scoreboard::BedrockDisplaySlot::Sidebar
+            }
+            scoreboard::BedrockDisplaySlot::BelowName => {
+                pumpkin_core::world::scoreboard::BedrockDisplaySlot::BelowName
+            }
+        };
+        sb.set_display_objective(player.as_ref(), b_slot, Some(&objective_name));
+        Ok(())
+    }
+
+    fn clear_display_slot(
+        &mut self,
+        res: Resource<scoreboard::BedrockScoreboard>,
+        slot: scoreboard::BedrockDisplaySlot,
+    ) -> wasmtime::Result<()> {
+        let state = self;
+        let player = state.get(&res)?.clone();
+        let mut custom_guard = player
+            .custom_scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
+            custom_guard.as_mut()
+        {
             let b_slot = match slot {
                 scoreboard::BedrockDisplaySlot::PlayerList => {
                     pumpkin_core::world::scoreboard::BedrockDisplaySlot::PlayerList
@@ -1118,147 +1095,107 @@ impl HostBedrockScoreboardWithStore<PluginHostState> for HasSelf<PluginHostState
                     pumpkin_core::world::scoreboard::BedrockDisplaySlot::BelowName
                 }
             };
-            sb.set_display_objective(player.as_ref(), b_slot, Some(&objective_name));
-            Ok(())
-        })
+            sb.clear_display_objective(player.as_ref(), b_slot);
+        }
+        Ok(())
     }
 
-    async fn clear_display_slot(
-        accessor: &Accessor<PluginHostState, Self>,
-        res: Resource<scoreboard::BedrockScoreboard>,
-        slot: scoreboard::BedrockDisplaySlot,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let player = state.get(&res)?.clone();
-            let mut custom_guard = player
-                .custom_scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-                custom_guard.as_mut()
-            {
-                let b_slot = match slot {
-                    scoreboard::BedrockDisplaySlot::PlayerList => {
-                        pumpkin_core::world::scoreboard::BedrockDisplaySlot::PlayerList
-                    }
-                    scoreboard::BedrockDisplaySlot::Sidebar => {
-                        pumpkin_core::world::scoreboard::BedrockDisplaySlot::Sidebar
-                    }
-                    scoreboard::BedrockDisplaySlot::BelowName => {
-                        pumpkin_core::world::scoreboard::BedrockDisplaySlot::BelowName
-                    }
-                };
-                sb.clear_display_objective(player.as_ref(), b_slot);
-            }
-            Ok(())
-        })
-    }
-
-    async fn update_score(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn update_score(
+        &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         entity_name: String,
         objective_name: String,
         value: i32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let st = host.get();
-            let player = st.get(&res)?.clone();
-            let mut custom_guard = player
-                .custom_scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if !matches!(
-                *custom_guard,
-                Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
-            ) {
-                *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
-                    pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
-                ));
-            }
-            let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-                custom_guard.as_mut()
-            else {
-                return Err(wasmtime::Error::msg("Invalid scoreboard state"));
-            };
-            sb.update_score(player.as_ref(), &entity_name, &objective_name, value);
-            Ok(())
-        })
+        let st = &mut *self;
+        let player = st.get(&res)?.clone();
+        let mut custom_guard = player
+            .custom_scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !matches!(
+            *custom_guard,
+            Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
+        ) {
+            *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
+                pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
+            ));
+        }
+        let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
+            custom_guard.as_mut()
+        else {
+            return Err(wasmtime::Error::msg("Invalid scoreboard state"));
+        };
+        sb.update_score(player.as_ref(), &entity_name, &objective_name, value);
+        Ok(())
     }
 
-    async fn add_score(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn add_score(
+        &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         entity_name: String,
         objective_name: String,
         delta: i32,
     ) -> wasmtime::Result<i32> {
-        accessor.with(|mut host| {
-            let st = host.get();
-            let player = st.get(&res)?.clone();
-            let mut custom_guard = player
-                .custom_scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if !matches!(
-                *custom_guard,
-                Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
-            ) {
-                *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
-                    pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
-                ));
-            }
-            let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-                custom_guard.as_mut()
-            else {
-                return Err(wasmtime::Error::msg("Invalid scoreboard state"));
-            };
-            let new_val = sb.add_score(player.as_ref(), entity_name, objective_name, delta);
-            Ok(new_val)
-        })
+        let st = &mut *self;
+        let player = st.get(&res)?.clone();
+        let mut custom_guard = player
+            .custom_scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !matches!(
+            *custom_guard,
+            Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
+        ) {
+            *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
+                pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
+            ));
+        }
+        let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
+            custom_guard.as_mut()
+        else {
+            return Err(wasmtime::Error::msg("Invalid scoreboard state"));
+        };
+        let new_val = sb.add_score(player.as_ref(), entity_name, objective_name, delta);
+        Ok(new_val)
     }
 
-    async fn remove_score(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn remove_score(
+        &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         entity_name: String,
         objective_name: String,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let player = state.get(&res)?.clone();
-            let mut custom_guard = player
-                .custom_scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-                custom_guard.as_mut()
-            {
-                sb.remove_score(player.as_ref(), &entity_name, &objective_name);
-            }
-            Ok(())
-        })
+        let state = self;
+        let player = state.get(&res)?.clone();
+        let mut custom_guard = player
+            .custom_scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
+            custom_guard.as_mut()
+        {
+            sb.remove_score(player.as_ref(), &entity_name, &objective_name);
+        }
+        Ok(())
     }
 
-    async fn reset_entity_scores(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn reset_entity_scores(
+        &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         entity_name: String,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let player = state.get(&res)?.clone();
-            let mut custom_guard = player
-                .custom_scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-                custom_guard.as_mut()
-            {
-                sb.reset_scores_for_entity(player.as_ref(), &entity_name);
-            }
-            Ok(())
-        })
+        let state = self;
+        let player = state.get(&res)?.clone();
+        let mut custom_guard = player
+            .custom_scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
+            custom_guard.as_mut()
+        {
+            sb.reset_scores_for_entity(player.as_ref(), &entity_name);
+        }
+        Ok(())
     }
 }

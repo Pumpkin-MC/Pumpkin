@@ -115,36 +115,34 @@ impl boss_bar::HostBossBar for PluginHostState {
         remove_all_players(&pbb_handle).await;
         self.drop(res)
     }
-}
 
-impl boss_bar::HostBossBarWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn create(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn create(
+        &mut self,
         title: Resource<crate::pumpkin::plugin::text::TextComponent>,
         color: WitColor,
         division: WitDivision,
     ) -> wasmtime::Result<Resource<BossBar>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let title = state.take(title)?;
-            let mut bossbar = Bossbar::new(title);
+        let state = self;
+        let title = state.take(title)?;
+        let mut bossbar = Bossbar::new(title);
 
-            bossbar.color = from_wit_color(color);
-            bossbar.division = from_wit_division(division);
+        bossbar.color = from_wit_color(color);
+        bossbar.division = from_wit_division(division);
 
-            let server = state
-                .server
-                .as_ref()
-                .ok_or_else(|| wasmtime::Error::msg("server not available"))?
-                .clone();
-            let plugin_bossbar = Arc::new(Mutex::new(PluginBossBar::new(
-                bossbar,
-                Arc::downgrade(&server),
-            )));
-            state.add(plugin_bossbar)
-        })
+        let server = state
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("server not available"))?
+            .clone();
+        let plugin_bossbar = Arc::new(Mutex::new(PluginBossBar::new(
+            bossbar,
+            Arc::downgrade(&server),
+        )));
+        state.add(plugin_bossbar)
     }
+}
 
+impl boss_bar::HostBossBarWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn get_title(
         accessor: &Accessor<PluginHostState, Self>,
         res: Resource<BossBar>,

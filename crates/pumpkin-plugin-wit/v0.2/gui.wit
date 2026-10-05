@@ -7,7 +7,7 @@ interface gui {
 
     resource gui {
         /// Creates a GUI with the specified screen type and title.
-        create: static async func(%type: screen, title: text-component) -> gui;
+        create: static func(%type: screen, title: text-component) -> gui;
         /// Returns the underlying inventory handle for this GUI.
         get-inventory: async func() -> inventory;
         set-item: async func(slot: u32, item: item-stack);

@@ -76,45 +76,43 @@ pub const fn from_wit_screen(screen: WitScreen) -> WindowType {
 impl gui::Host for PluginHostState {}
 
 impl gui::HostGui for PluginHostState {
-    async fn drop(&mut self, rep: Resource<Gui>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<Gui>) -> wasmtime::Result<()> {
         self.drop(rep)
+    }
+
+    fn create(
+        &mut self,
+        screen: WitScreen,
+        title: Resource<crate::pumpkin::plugin::text::TextComponent>,
+    ) -> wasmtime::Result<Resource<Gui>> {
+        let state = self;
+        let title = state.take(title)?;
+        let window_type = from_wit_screen(screen);
+
+        let size = match window_type {
+            pumpkin_data::screen::WindowType::Generic9x2 => 18,
+            pumpkin_data::screen::WindowType::Generic9x4 => 36,
+            pumpkin_data::screen::WindowType::Generic9x5 => 45,
+            pumpkin_data::screen::WindowType::Generic9x6 => 54,
+            pumpkin_data::screen::WindowType::Generic3x3 => 9,
+            pumpkin_data::screen::WindowType::Generic9x1
+            | pumpkin_data::screen::WindowType::Hopper => 5,
+            _ => 27, // Default
+        };
+
+        let gui = Arc::new(Mutex::new(PluginGui {
+            window_type,
+            title,
+            inventory: Arc::new(PluginInventory::new(size)),
+            allow_grab_items: true,
+            allow_put_items: true,
+        }));
+
+        state.add(gui)
     }
 }
 
 impl gui::HostGuiWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn create(
-        accessor: &Accessor<PluginHostState, Self>,
-        screen: WitScreen,
-        title: Resource<crate::pumpkin::plugin::text::TextComponent>,
-    ) -> wasmtime::Result<Resource<Gui>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let title = state.take(title)?;
-            let window_type = from_wit_screen(screen);
-
-            let size = match window_type {
-                pumpkin_data::screen::WindowType::Generic9x2 => 18,
-                pumpkin_data::screen::WindowType::Generic9x4 => 36,
-                pumpkin_data::screen::WindowType::Generic9x5 => 45,
-                pumpkin_data::screen::WindowType::Generic9x6 => 54,
-                pumpkin_data::screen::WindowType::Generic3x3 => 9,
-                pumpkin_data::screen::WindowType::Generic9x1
-                | pumpkin_data::screen::WindowType::Hopper => 5,
-                _ => 27, // Default
-            };
-
-            let gui = Arc::new(Mutex::new(PluginGui {
-                window_type,
-                title,
-                inventory: Arc::new(PluginInventory::new(size)),
-                allow_grab_items: true,
-                allow_put_items: true,
-            }));
-
-            state.add(gui)
-        })
-    }
-
     async fn get_inventory(
         accessor: &Accessor<PluginHostState, Self>,
         res: Resource<Gui>,

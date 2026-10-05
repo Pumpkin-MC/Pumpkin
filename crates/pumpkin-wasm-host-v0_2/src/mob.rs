@@ -288,699 +288,627 @@ impl Goal for CustomWasmGoal {
 }
 
 impl HostMob for PluginHostState {
-    async fn drop(&mut self, rep: Resource<WitMob>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<WitMob>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
-}
 
-impl HostMobWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn as_entity(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-    ) -> wasmtime::Result<Resource<Entity>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.add(state.get(&this)?.clone())
-        })
+    fn as_entity(&mut self, this: Resource<WitMob>) -> wasmtime::Result<Resource<Entity>> {
+        let state = self;
+        state.add(state.get(&this)?.clone())
     }
 
-    async fn as_living(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-    ) -> wasmtime::Result<Resource<WitLivingEntity>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            state.add(state.get(&this)?.clone())
-        })
+    fn as_living(&mut self, this: Resource<WitMob>) -> wasmtime::Result<Resource<WitLivingEntity>> {
+        let state = self;
+        state.add(state.get(&this)?.clone())
     }
 
-    async fn add_ai_goal(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn add_ai_goal(
+        &mut self,
         this: Resource<WitMob>,
         priority: u8,
         goal: crate::pumpkin::plugin::world::BuiltinAiGoal,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            if let Some(mob) = entity.get_mob() {
-                let mob_entity = mob.get_mob_entity();
-                match goal {
-                    crate::pumpkin::plugin::world::BuiltinAiGoal::Swim => {
-                        mob_entity.add_goal(priority, pumpkin_core::entity::ai::goal::swim::SwimGoal::default());
-                    }
-                    crate::pumpkin::plugin::world::BuiltinAiGoal::WanderAround(speed) => {
-                        mob_entity.add_goal(priority, pumpkin_core::entity::ai::goal::wander_around::WanderAroundGoal::new(f64::from(speed)));
-                    }
-                    crate::pumpkin::plugin::world::BuiltinAiGoal::MeleeAttack(speed) => {
-                        mob_entity.add_goal(priority, pumpkin_core::entity::ai::goal::melee_attack::MeleeAttackGoal::new(f64::from(speed), false));
-                    }
-                    crate::pumpkin::plugin::world::BuiltinAiGoal::LookAtPlayer(range) => {
-                        mob_entity.add_goal(priority, pumpkin_core::entity::ai::goal::look_at_entity::LookAtEntityGoal::new(
+        let state = self;
+        let entity = state.get(&this)?;
+        if let Some(mob) = entity.get_mob() {
+            let mob_entity = mob.get_mob_entity();
+            match goal {
+                crate::pumpkin::plugin::world::BuiltinAiGoal::Swim => {
+                    mob_entity.add_goal(
+                        priority,
+                        pumpkin_core::entity::ai::goal::swim::SwimGoal::default(),
+                    );
+                }
+                crate::pumpkin::plugin::world::BuiltinAiGoal::WanderAround(speed) => {
+                    mob_entity.add_goal(
+                        priority,
+                        pumpkin_core::entity::ai::goal::wander_around::WanderAroundGoal::new(
+                            f64::from(speed),
+                        ),
+                    );
+                }
+                crate::pumpkin::plugin::world::BuiltinAiGoal::MeleeAttack(speed) => {
+                    mob_entity.add_goal(
+                        priority,
+                        pumpkin_core::entity::ai::goal::melee_attack::MeleeAttackGoal::new(
+                            f64::from(speed),
+                            false,
+                        ),
+                    );
+                }
+                crate::pumpkin::plugin::world::BuiltinAiGoal::LookAtPlayer(range) => {
+                    mob_entity.add_goal(priority, pumpkin_core::entity::ai::goal::look_at_entity::LookAtEntityGoal::new(
                             std::sync::Weak::<pumpkin_core::entity::mob::zombie::zombie::ZombieEntity>::new() as std::sync::Weak<dyn pumpkin_core::entity::mob::Mob>,
                             &pumpkin_data::entity::EntityType::PLAYER,
                             range,
                             0.02,
                             false,
                         ));
-                    }
-                    crate::pumpkin::plugin::world::BuiltinAiGoal::LookAround => {
-                        mob_entity.add_goal(priority, pumpkin_core::entity::ai::goal::look_around::RandomLookAroundGoal::default());
-                    }
-                    crate::pumpkin::plugin::world::BuiltinAiGoal::EscapeDanger(speed) => {
-                        mob_entity.add_goal(priority, *pumpkin_core::entity::ai::goal::escape_danger::EscapeDangerGoal::new(f64::from(speed)));
-                    }
-                    _ => {}
                 }
+                crate::pumpkin::plugin::world::BuiltinAiGoal::LookAround => {
+                    mob_entity.add_goal(
+                        priority,
+                        pumpkin_core::entity::ai::goal::look_around::RandomLookAroundGoal::default(
+                        ),
+                    );
+                }
+                crate::pumpkin::plugin::world::BuiltinAiGoal::EscapeDanger(speed) => {
+                    mob_entity.add_goal(
+                        priority,
+                        *pumpkin_core::entity::ai::goal::escape_danger::EscapeDangerGoal::new(
+                            f64::from(speed),
+                        ),
+                    );
+                }
+                _ => {}
             }
-            Ok(())
-        })
+        }
+        Ok(())
     }
 
-    async fn add_custom_ai_goal(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn add_custom_ai_goal(
+        &mut self,
         this: Resource<WitMob>,
         priority: u8,
         goal_id: u32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let Some(plugin) = state.plugin.as_ref().and_then(std::sync::Weak::upgrade) else {
-                return Err(wasmtime::Error::msg("Plugin not active"));
-            };
-            let entity = state.get(&this)?;
-            if let Some(mob) = entity.get_mob() {
-                let mob_entity = mob.get_mob_entity();
-                mob_entity.add_goal(priority, CustomWasmGoal { plugin, goal_id });
-            }
-            Ok(())
-        })
+        let state = self;
+        let Some(plugin) = state.plugin.as_ref().and_then(std::sync::Weak::upgrade) else {
+            return Err(wasmtime::Error::msg("Plugin not active"));
+        };
+        let entity = state.get(&this)?;
+        if let Some(mob) = entity.get_mob() {
+            let mob_entity = mob.get_mob_entity();
+            mob_entity.add_goal(priority, CustomWasmGoal { plugin, goal_id });
+        }
+        Ok(())
     }
 
-    async fn set_ai_disabled(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-        disabled: bool,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            if let Some(mob) = entity.get_mob() {
-                mob.get_mob_entity().set_no_ai(disabled);
-            }
-            Ok(())
-        })
+    fn set_ai_disabled(&mut self, this: Resource<WitMob>, disabled: bool) -> wasmtime::Result<()> {
+        let state = self;
+        let entity = state.get(&this)?;
+        if let Some(mob) = entity.get_mob() {
+            mob.get_mob_entity().set_no_ai(disabled);
+        }
+        Ok(())
     }
 
-    async fn is_ai_disabled(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-    ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            Ok(entity
-                .get_mob()
-                .is_none_or(|mob| mob.get_mob_entity().is_no_ai()))
-        })
+    fn is_ai_disabled(&mut self, this: Resource<WitMob>) -> wasmtime::Result<bool> {
+        let state = self;
+        let entity = state.get(&this)?;
+        Ok(entity
+            .get_mob()
+            .is_none_or(|mob| mob.get_mob_entity().is_no_ai()))
     }
 
-    async fn set_target(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_target(
+        &mut self,
         this: Resource<WitMob>,
         target: Option<Resource<Entity>>,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?.clone();
-            let target_entity = target.map(|t| state.take(t)).transpose()?;
-            if let Some(mob) = entity.get_mob() {
-                mob.get_mob_entity().set_target(target_entity);
-            }
-            Ok(())
-        })
+        let state = self;
+        let entity = state.get(&this)?.clone();
+        let target_entity = target.map(|t| state.take(t)).transpose()?;
+        if let Some(mob) = entity.get_mob() {
+            mob.get_mob_entity().set_target(target_entity);
+        }
+        Ok(())
     }
 
-    async fn get_target(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-    ) -> wasmtime::Result<Option<Resource<Entity>>> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            if let Some(target) = entity
-                .get_mob()
-                .and_then(|mob| mob.get_mob_entity().get_target())
-            {
-                return Ok(Some(state.add(target)?));
-            }
-            Ok(None)
-        })
+    fn get_target(&mut self, this: Resource<WitMob>) -> wasmtime::Result<Option<Resource<Entity>>> {
+        let state = self;
+        let entity = state.get(&this)?;
+        if let Some(target) = entity
+            .get_mob()
+            .and_then(|mob| mob.get_mob_entity().get_target())
+        {
+            return Ok(Some(state.add(target)?));
+        }
+        Ok(None)
     }
 
-    async fn navigate_to_pos(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn navigate_to_pos(
+        &mut self,
         this: Resource<WitMob>,
         pos: Position,
         speed: f64,
     ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            Ok(entity.get_mob().is_some_and(|mob| {
-                let mob_pos = entity.get_entity().pos.load();
-                let dest = Vector3::new(pos.0, pos.1, pos.2);
-                mob.get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .set_progress(pumpkin_core::entity::ai::pathfinder::NavigatorGoal::new(
-                        mob_pos, dest, speed,
-                    ));
-                true
-            }))
-        })
+        let state = self;
+        let entity = state.get(&this)?;
+        Ok(entity.get_mob().is_some_and(|mob| {
+            let mob_pos = entity.get_entity().pos.load();
+            let dest = Vector3::new(pos.0, pos.1, pos.2);
+            mob.get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .set_progress(pumpkin_core::entity::ai::pathfinder::NavigatorGoal::new(
+                    mob_pos, dest, speed,
+                ));
+            true
+        }))
     }
 
-    async fn navigate_to_entity(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn navigate_to_entity(
+        &mut self,
         this: Resource<WitMob>,
         target: Resource<Entity>,
         speed: f64,
     ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?.clone();
-            let target_entity = state.take(target)?;
-            Ok(entity.get_mob().is_some_and(|mob| {
-                let mob_pos = entity.get_entity().pos.load();
-                let target_pos = target_entity.get_entity().pos.load();
-                mob.get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .set_progress(pumpkin_core::entity::ai::pathfinder::NavigatorGoal::new(
-                        mob_pos, target_pos, speed,
-                    ));
-                mob.get_mob_entity()
-                    .look_control
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .look_at_entity(mob, &target_entity);
-                true
-            }))
-        })
+        let state = self;
+        let entity = state.get(&this)?.clone();
+        let target_entity = state.take(target)?;
+        Ok(entity.get_mob().is_some_and(|mob| {
+            let mob_pos = entity.get_entity().pos.load();
+            let target_pos = target_entity.get_entity().pos.load();
+            mob.get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .set_progress(pumpkin_core::entity::ai::pathfinder::NavigatorGoal::new(
+                    mob_pos, target_pos, speed,
+                ));
+            mob.get_mob_entity()
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .look_at_entity(mob, &target_entity);
+            true
+        }))
     }
 
-    async fn stop_navigation(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            if let Some(mob) = entity.get_mob() {
-                mob.get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .stop();
-            }
-            Ok(())
-        })
+    fn stop_navigation(&mut self, this: Resource<WitMob>) -> wasmtime::Result<()> {
+        let state = self;
+        let entity = state.get(&this)?;
+        if let Some(mob) = entity.get_mob() {
+            mob.get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .stop();
+        }
+        Ok(())
     }
 
-    async fn is_navigating(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-    ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            Ok(entity.get_mob().is_some_and(|mob| {
-                let is_idle = mob
-                    .get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .is_idle();
-                !is_idle
-            }))
-        })
+    fn is_navigating(&mut self, this: Resource<WitMob>) -> wasmtime::Result<bool> {
+        let state = self;
+        let entity = state.get(&this)?;
+        Ok(entity.get_mob().is_some_and(|mob| {
+            let is_idle = mob
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_idle();
+            !is_idle
+        }))
     }
 
-    async fn has_reached_destination(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-    ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            Ok(entity.get_mob().is_none_or(|mob| {
-                mob.get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .is_idle()
-            }))
-        })
+    fn has_reached_destination(&mut self, this: Resource<WitMob>) -> wasmtime::Result<bool> {
+        let state = self;
+        let entity = state.get(&this)?;
+        Ok(entity.get_mob().is_none_or(|mob| {
+            mob.get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_idle()
+        }))
     }
 
-    async fn set_navigation_speed(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-        speed: f64,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            if let Some(mob) = entity.get_mob() {
-                mob.get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .set_speed(speed);
-            }
-            Ok(())
-        })
+    fn set_navigation_speed(&mut self, this: Resource<WitMob>, speed: f64) -> wasmtime::Result<()> {
+        let state = self;
+        let entity = state.get(&this)?;
+        if let Some(mob) = entity.get_mob() {
+            mob.get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .set_speed(speed);
+        }
+        Ok(())
     }
 
-    async fn can_reach(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn can_reach(
+        &mut self,
         this: Resource<WitMob>,
         pos: Position,
         max_distance: f32,
     ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            Ok(entity.get_mob().is_some_and(|mob| {
-                let living = &mob.get_mob_entity().living_entity;
-                let dest = Vector3::new(pos.0, pos.1, pos.2);
-                mob.get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .can_reach_within(living, dest, max_distance)
-            }))
-        })
+        let state = self;
+        let entity = state.get(&this)?;
+        Ok(entity.get_mob().is_some_and(|mob| {
+            let living = &mob.get_mob_entity().living_entity;
+            let dest = Vector3::new(pos.0, pos.1, pos.2);
+            mob.get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .can_reach_within(living, dest, max_distance)
+        }))
     }
 
-    async fn set_pathfinding_malus(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn set_pathfinding_malus(
+        &mut self,
         this: Resource<WitMob>,
         node_type: WitPathNodeType,
         malus: f32,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            if let Some(mob) = entity.get_mob() {
-                let internal_type = from_wit_path_node_type(node_type);
-                mob.get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .set_pathfinding_malus(internal_type, malus);
-            }
-            Ok(())
-        })
+        let state = self;
+        let entity = state.get(&this)?;
+        if let Some(mob) = entity.get_mob() {
+            let internal_type = from_wit_path_node_type(node_type);
+            mob.get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .set_pathfinding_malus(internal_type, malus);
+        }
+        Ok(())
     }
 
-    async fn get_pathfinding_malus(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn get_pathfinding_malus(
+        &mut self,
         this: Resource<WitMob>,
         node_type: WitPathNodeType,
     ) -> wasmtime::Result<f32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            Ok(entity.get_mob().map_or(0.0, |mob| {
-                let internal_type = from_wit_path_node_type(node_type);
-                mob.get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .get_pathfinding_malus(internal_type)
-            }))
-        })
+        let state = self;
+        let entity = state.get(&this)?;
+        Ok(entity.get_mob().map_or(0.0, |mob| {
+            let internal_type = from_wit_path_node_type(node_type);
+            mob.get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_pathfinding_malus(internal_type)
+        }))
     }
 
-    async fn look_at(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-        pos: Position,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            if let Some(mob) = entity.get_mob() {
-                mob.get_mob_entity()
-                    .look_control
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .look_at(mob, pos.0, pos.1, pos.2);
-            }
-            Ok(())
-        })
+    fn look_at(&mut self, this: Resource<WitMob>, pos: Position) -> wasmtime::Result<()> {
+        let state = self;
+        let entity = state.get(&this)?;
+        if let Some(mob) = entity.get_mob() {
+            mob.get_mob_entity()
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .look_at(mob, pos.0, pos.1, pos.2);
+        }
+        Ok(())
     }
 
-    async fn look_at_entity(
-        accessor: &Accessor<PluginHostState, Self>,
+    fn look_at_entity(
+        &mut self,
         this: Resource<WitMob>,
         target: Resource<Entity>,
     ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let target_entity = state.take(target)?;
-            let entity = state.get(&this)?;
-            if let Some(mob) = entity.get_mob() {
-                mob.get_mob_entity()
-                    .look_control
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .look_at_entity(mob, &target_entity);
-            }
-            Ok(())
-        })
+        let state = self;
+        let target_entity = state.take(target)?;
+        let entity = state.get(&this)?;
+        if let Some(mob) = entity.get_mob() {
+            mob.get_mob_entity()
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .look_at_entity(mob, &target_entity);
+        }
+        Ok(())
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn get_mob_data(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-    ) -> wasmtime::Result<WitMobData> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            let any = entity.cast_any();
+    fn get_mob_data(&mut self, this: Resource<WitMob>) -> wasmtime::Result<WitMobData> {
+        let state = self;
+        let entity = state.get(&this)?;
+        let any = entity.cast_any();
 
-            if let Some(sheep) =
-                any.downcast_ref::<pumpkin_core::entity::passive::sheep::SheepEntity>()
-            {
-                return Ok(WitMobData::Sheep(WitSheepData {
-                    color: to_wit_dye_color(sheep.get_color()),
-                    is_sheared: sheep.is_sheared(),
-                }));
-            }
+        if let Some(sheep) = any.downcast_ref::<pumpkin_core::entity::passive::sheep::SheepEntity>()
+        {
+            return Ok(WitMobData::Sheep(WitSheepData {
+                color: to_wit_dye_color(sheep.get_color()),
+                is_sheared: sheep.is_sheared(),
+            }));
+        }
 
-            if let Some(wolf) =
-                any.downcast_ref::<pumpkin_core::entity::passive::wolf::WolfEntity>()
-            {
-                return Ok(WitMobData::Wolf(WitWolfData {
-                    is_tamed: wolf.is_tame(),
-                    owner: wolf.get_owner().map(|u| Uuid::to_wit(&u)),
-                    is_sitting: wolf.is_in_sitting_pose(),
-                    collar_color: to_wit_dye_color(wolf.get_collar_color()),
-                    is_angry: false,
-                    is_begging: false,
-                }));
-            }
+        if let Some(wolf) = any.downcast_ref::<pumpkin_core::entity::passive::wolf::WolfEntity>() {
+            return Ok(WitMobData::Wolf(WitWolfData {
+                is_tamed: wolf.is_tame(),
+                owner: wolf.get_owner().map(|u| Uuid::to_wit(&u)),
+                is_sitting: wolf.is_in_sitting_pose(),
+                collar_color: to_wit_dye_color(wolf.get_collar_color()),
+                is_angry: false,
+                is_begging: false,
+            }));
+        }
 
-            if let Some(cat) = any.downcast_ref::<pumpkin_core::entity::passive::cat::CatEntity>() {
-                return Ok(WitMobData::Cat(WitCatData {
-                    is_tamed: cat.is_tame(),
-                    owner: cat.get_owner().map(|u| Uuid::to_wit(&u)),
-                    is_sitting: cat.is_in_sitting_pose(),
-                    collar_color: to_wit_dye_color(cat.get_collar_color()),
-                }));
-            }
+        if let Some(cat) = any.downcast_ref::<pumpkin_core::entity::passive::cat::CatEntity>() {
+            return Ok(WitMobData::Cat(WitCatData {
+                is_tamed: cat.is_tame(),
+                owner: cat.get_owner().map(|u| Uuid::to_wit(&u)),
+                is_sitting: cat.is_in_sitting_pose(),
+                collar_color: to_wit_dye_color(cat.get_collar_color()),
+            }));
+        }
 
-            if let Some(villager) =
-                any.downcast_ref::<pumpkin_core::entity::passive::villager::VillagerEntity>()
-            {
-                let data = *villager
-                    .villager_data
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                return Ok(WitMobData::Villager(WitVillagerData {
-                    profession: to_wit_villager_profession(data.profession.0),
-                    level: (data.level.0).clamp(0, 255) as u8,
-                    experience: villager
-                        .xp
-                        .load(std::sync::atomic::Ordering::Relaxed)
-                        .max(0) as u32,
-                }));
-            }
+        if let Some(villager) =
+            any.downcast_ref::<pumpkin_core::entity::passive::villager::VillagerEntity>()
+        {
+            let data = *villager
+                .villager_data
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            return Ok(WitMobData::Villager(WitVillagerData {
+                profession: to_wit_villager_profession(data.profession.0),
+                level: (data.level.0).clamp(0, 255) as u8,
+                experience: villager
+                    .xp
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                    .max(0) as u32,
+            }));
+        }
 
-            if let Some(creeper) =
-                any.downcast_ref::<pumpkin_core::entity::mob::creeper::CreeperEntity>()
-            {
-                return Ok(WitMobData::Creeper(WitCreeperData {
-                    is_powered: creeper.is_charged(),
-                    fuse: creeper.get_fuse(),
-                    is_ignited: creeper.is_ignited(),
-                    explosion_radius: creeper.get_explosion_radius().clamp(0, 255) as u8,
-                }));
-            }
+        if let Some(creeper) =
+            any.downcast_ref::<pumpkin_core::entity::mob::creeper::CreeperEntity>()
+        {
+            return Ok(WitMobData::Creeper(WitCreeperData {
+                is_powered: creeper.is_charged(),
+                fuse: creeper.get_fuse(),
+                is_ignited: creeper.is_ignited(),
+                explosion_radius: creeper.get_explosion_radius().clamp(0, 255) as u8,
+            }));
+        }
 
-            if let Some(slime) = any.downcast_ref::<pumpkin_core::entity::mob::slime::SlimeEntity>()
-            {
-                return Ok(WitMobData::Slime(WitSlimeData {
-                    size: slime.get_size(),
-                }));
-            }
+        if let Some(slime) = any.downcast_ref::<pumpkin_core::entity::mob::slime::SlimeEntity>() {
+            return Ok(WitMobData::Slime(WitSlimeData {
+                size: slime.get_size(),
+            }));
+        }
 
-            if let Some(enderman) =
-                any.downcast_ref::<pumpkin_core::entity::mob::enderman::EndermanEntity>()
-            {
-                return Ok(WitMobData::Enderman(WitEndermanData {
-                    carried_block_state: enderman
-                        .get_carried_block()
-                        .map(pumpkin_data::BlockStateId::as_u16),
-                    is_screaming: enderman.is_creepy(),
-                    is_staring: enderman.is_creepy(),
-                }));
-            }
+        if let Some(enderman) =
+            any.downcast_ref::<pumpkin_core::entity::mob::enderman::EndermanEntity>()
+        {
+            return Ok(WitMobData::Enderman(WitEndermanData {
+                carried_block_state: enderman
+                    .get_carried_block()
+                    .map(pumpkin_data::BlockStateId::as_u16),
+                is_screaming: enderman.is_creepy(),
+                is_staring: enderman.is_creepy(),
+            }));
+        }
 
-            if let Some(iron_golem) =
-                any.downcast_ref::<pumpkin_core::entity::passive::iron_golem::IronGolemEntity>()
-            {
-                return Ok(WitMobData::IronGolem(WitIronGolemData {
-                    is_player_created: iron_golem.is_player_created(),
-                }));
-            }
+        if let Some(iron_golem) =
+            any.downcast_ref::<pumpkin_core::entity::passive::iron_golem::IronGolemEntity>()
+        {
+            return Ok(WitMobData::IronGolem(WitIronGolemData {
+                is_player_created: iron_golem.is_player_created(),
+            }));
+        }
 
-            if let Some(fox) = any.downcast_ref::<pumpkin_core::entity::passive::fox::FoxEntity>() {
-                return Ok(WitMobData::Fox(WitFoxData {
-                    is_sitting: fox.is_sitting(),
-                    is_sleeping: fox.is_sleeping(),
-                    is_crouching: fox.is_crouching(),
-                }));
-            }
+        if let Some(fox) = any.downcast_ref::<pumpkin_core::entity::passive::fox::FoxEntity>() {
+            return Ok(WitMobData::Fox(WitFoxData {
+                is_sitting: fox.is_sitting(),
+                is_sleeping: fox.is_sleeping(),
+                is_crouching: fox.is_crouching(),
+            }));
+        }
 
-            if let Some(shulker) =
-                any.downcast_ref::<pumpkin_core::entity::mob::shulker::ShulkerEntity>()
-            {
-                return Ok(WitMobData::Shulker(WitShulkerData {
-                    attached_face: to_wit_block_direction(shulker.get_attach_face()),
-                    peek_amount: shulker.get_raw_peek(),
-                    color: shulker.get_color().map(to_wit_dye_color),
-                }));
-            }
+        if let Some(shulker) =
+            any.downcast_ref::<pumpkin_core::entity::mob::shulker::ShulkerEntity>()
+        {
+            return Ok(WitMobData::Shulker(WitShulkerData {
+                attached_face: to_wit_block_direction(shulker.get_attach_face()),
+                peek_amount: shulker.get_raw_peek(),
+                color: shulker.get_color().map(to_wit_dye_color),
+            }));
+        }
 
-            if let Some(zombie) =
-                any.downcast_ref::<pumpkin_core::entity::mob::zombie::zombie::ZombieEntity>()
-            {
-                return Ok(WitMobData::Zombie(WitZombieData {
-                    is_baby: zombie.is_baby(),
-                    can_break_doors: zombie.can_break_doors(),
-                }));
-            }
+        if let Some(zombie) =
+            any.downcast_ref::<pumpkin_core::entity::mob::zombie::zombie::ZombieEntity>()
+        {
+            return Ok(WitMobData::Zombie(WitZombieData {
+                is_baby: zombie.is_baby(),
+                can_break_doors: zombie.can_break_doors(),
+            }));
+        }
 
-            if let Some(living) = entity.get_living_entity() {
-                let age = living.entity.age.load(std::sync::atomic::Ordering::Relaxed);
-                return Ok(WitMobData::Ageable(WitAgeableData {
-                    is_baby: age < 0,
-                    age,
-                    in_love_ticks: 0,
-                }));
-            }
+        if let Some(living) = entity.get_living_entity() {
+            let age = living.entity.age.load(std::sync::atomic::Ordering::Relaxed);
+            return Ok(WitMobData::Ageable(WitAgeableData {
+                is_baby: age < 0,
+                age,
+                in_love_ticks: 0,
+            }));
+        }
 
-            Ok(WitMobData::Generic)
-        })
+        Ok(WitMobData::Generic)
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn set_mob_data(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-        data: WitMobData,
-    ) -> wasmtime::Result<bool> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            let any = entity.cast_any();
+    fn set_mob_data(&mut self, this: Resource<WitMob>, data: WitMobData) -> wasmtime::Result<bool> {
+        let state = self;
+        let entity = state.get(&this)?;
+        let any = entity.cast_any();
 
-            match data {
-                WitMobData::Sheep(sheep_data) => {
-                    if let Some(sheep) =
-                        any.downcast_ref::<pumpkin_core::entity::passive::sheep::SheepEntity>()
-                    {
-                        sheep.set_color(from_wit_dye_color(sheep_data.color));
-                        sheep.set_sheared(sheep_data.is_sheared);
-                        return Ok(true);
-                    }
+        match data {
+            WitMobData::Sheep(sheep_data) => {
+                if let Some(sheep) =
+                    any.downcast_ref::<pumpkin_core::entity::passive::sheep::SheepEntity>()
+                {
+                    sheep.set_color(from_wit_dye_color(sheep_data.color));
+                    sheep.set_sheared(sheep_data.is_sheared);
+                    return Ok(true);
                 }
-                WitMobData::Wolf(wolf_data) => {
-                    if let Some(wolf) =
-                        any.downcast_ref::<pumpkin_core::entity::passive::wolf::WolfEntity>()
-                    {
-                        wolf.set_tame(wolf_data.is_tamed);
-                        wolf.set_owner(wolf_data.owner.map(|u| Uuid::from_wit(&u)));
-                        wolf.set_in_sitting_pose(wolf_data.is_sitting);
-                        wolf.set_collar_color(from_wit_dye_color(wolf_data.collar_color));
-                        return Ok(true);
-                    }
-                }
-                WitMobData::Cat(cat_data) => {
-                    if let Some(cat) = any.downcast_ref::<pumpkin_core::entity::passive::cat::CatEntity>()
-                    {
-                        cat.set_tame(
-                            cat_data.is_tamed,
-                            cat_data.owner.map(|u| Uuid::from_wit(&u)),
-                        );
-                        cat.set_sitting(cat_data.is_sitting);
-                        cat.set_collar_color(from_wit_dye_color(cat_data.collar_color));
-                        return Ok(true);
-                    }
-                }
-                WitMobData::Villager(villager_data) => {
-                    if let Some(villager) =
-                        any.downcast_ref::<pumpkin_core::entity::passive::villager::VillagerEntity>()
-                    {
-                        {
-                            let mut vdata = villager
-                                .villager_data
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner);
-                            vdata.profession = pumpkin_protocol::codec::var_int::VarInt(
-                                from_wit_villager_profession(villager_data.profession) as i32,
-                            );
-                            vdata.level = pumpkin_protocol::codec::var_int::VarInt(i32::from(
-                                villager_data.level,
-                            ));
-                        };
-                        villager.xp.store(
-                            villager_data.experience as i32,
-                            std::sync::atomic::Ordering::Relaxed,
-                        );
-                        return Ok(true);
-                    }
-                }
-                WitMobData::Creeper(creeper_data) => {
-                    if let Some(creeper) =
-                        any.downcast_ref::<pumpkin_core::entity::mob::creeper::CreeperEntity>()
-                    {
-                        creeper.set_charged(creeper_data.is_powered);
-                        creeper.set_fuse(creeper_data.fuse);
-                        creeper.set_ignited(creeper_data.is_ignited);
-                        creeper.set_explosion_radius(i32::from(creeper_data.explosion_radius));
-                        return Ok(true);
-                    }
-                }
-                WitMobData::Slime(slime_data) => {
-                    if let Some(slime) =
-                        any.downcast_ref::<pumpkin_core::entity::mob::slime::SlimeEntity>()
-                    {
-                        slime.set_size(slime_data.size, false);
-                        return Ok(true);
-                    }
-                }
-                WitMobData::Enderman(enderman_data) => {
-                    if let Some(enderman) =
-                        any.downcast_ref::<pumpkin_core::entity::mob::enderman::EndermanEntity>()
-                    {
-                        enderman.set_carried_block(
-                            enderman_data
-                                .carried_block_state
-                                .and_then(pumpkin_data::BlockStateId::new),
-                        );
-                        enderman.set_creepy(enderman_data.is_screaming || enderman_data.is_staring);
-                        return Ok(true);
-                    }
-                }
-                WitMobData::IronGolem(iron_golem_data) => {
-                    if let Some(iron_golem) =
-                        any.downcast_ref::<pumpkin_core::entity::passive::iron_golem::IronGolemEntity>()
-                    {
-                        iron_golem.set_player_created(iron_golem_data.is_player_created);
-                        return Ok(true);
-                    }
-                }
-                WitMobData::Fox(fox_data) => {
-                    if let Some(fox) = any.downcast_ref::<pumpkin_core::entity::passive::fox::FoxEntity>()
-                    {
-                        fox.set_sitting(fox_data.is_sitting);
-                        fox.set_sleeping(fox_data.is_sleeping);
-                        fox.set_crouching(fox_data.is_crouching);
-                        return Ok(true);
-                    }
-                }
-                WitMobData::Shulker(shulker_data) => {
-                    if let Some(shulker) =
-                        any.downcast_ref::<pumpkin_core::entity::mob::shulker::ShulkerEntity>()
-                    {
-                        shulker
-                            .set_attach_face(from_wit_block_direction(shulker_data.attached_face));
-                        shulker.set_raw_peek(shulker_data.peek_amount);
-                        shulker.set_color(shulker_data.color.map(from_wit_dye_color));
-                        return Ok(true);
-                    }
-                }
-                WitMobData::Zombie(zombie_data) => {
-                    if let Some(zombie) =
-                        any.downcast_ref::<pumpkin_core::entity::mob::zombie::zombie::ZombieEntity>()
-                    {
-                        zombie.set_baby(zombie_data.is_baby);
-                        zombie.set_can_break_doors(zombie_data.can_break_doors);
-                        return Ok(true);
-                    }
-                }
-                WitMobData::Ageable(ageable_data) => {
-                    if let Some(living) = entity.get_living_entity() {
-                        let age = if ageable_data.is_baby && ageable_data.age >= 0 {
-                            -24000
-                        } else {
-                            ageable_data.age
-                        };
-                        living
-                            .entity
-                            .age
-                            .store(age, std::sync::atomic::Ordering::Relaxed);
-                        return Ok(true);
-                    }
-                }
-                WitMobData::Generic => return Ok(true),
             }
+            WitMobData::Wolf(wolf_data) => {
+                if let Some(wolf) =
+                    any.downcast_ref::<pumpkin_core::entity::passive::wolf::WolfEntity>()
+                {
+                    wolf.set_tame(wolf_data.is_tamed);
+                    wolf.set_owner(wolf_data.owner.map(|u| Uuid::from_wit(&u)));
+                    wolf.set_in_sitting_pose(wolf_data.is_sitting);
+                    wolf.set_collar_color(from_wit_dye_color(wolf_data.collar_color));
+                    return Ok(true);
+                }
+            }
+            WitMobData::Cat(cat_data) => {
+                if let Some(cat) =
+                    any.downcast_ref::<pumpkin_core::entity::passive::cat::CatEntity>()
+                {
+                    cat.set_tame(
+                        cat_data.is_tamed,
+                        cat_data.owner.map(|u| Uuid::from_wit(&u)),
+                    );
+                    cat.set_sitting(cat_data.is_sitting);
+                    cat.set_collar_color(from_wit_dye_color(cat_data.collar_color));
+                    return Ok(true);
+                }
+            }
+            WitMobData::Villager(villager_data) => {
+                if let Some(villager) =
+                    any.downcast_ref::<pumpkin_core::entity::passive::villager::VillagerEntity>()
+                {
+                    {
+                        let mut vdata = villager
+                            .villager_data
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        vdata.profession = pumpkin_protocol::codec::var_int::VarInt(
+                            from_wit_villager_profession(villager_data.profession) as i32,
+                        );
+                        vdata.level = pumpkin_protocol::codec::var_int::VarInt(i32::from(
+                            villager_data.level,
+                        ));
+                    };
+                    villager.xp.store(
+                        villager_data.experience as i32,
+                        std::sync::atomic::Ordering::Relaxed,
+                    );
+                    return Ok(true);
+                }
+            }
+            WitMobData::Creeper(creeper_data) => {
+                if let Some(creeper) =
+                    any.downcast_ref::<pumpkin_core::entity::mob::creeper::CreeperEntity>()
+                {
+                    creeper.set_charged(creeper_data.is_powered);
+                    creeper.set_fuse(creeper_data.fuse);
+                    creeper.set_ignited(creeper_data.is_ignited);
+                    creeper.set_explosion_radius(i32::from(creeper_data.explosion_radius));
+                    return Ok(true);
+                }
+            }
+            WitMobData::Slime(slime_data) => {
+                if let Some(slime) =
+                    any.downcast_ref::<pumpkin_core::entity::mob::slime::SlimeEntity>()
+                {
+                    slime.set_size(slime_data.size, false);
+                    return Ok(true);
+                }
+            }
+            WitMobData::Enderman(enderman_data) => {
+                if let Some(enderman) =
+                    any.downcast_ref::<pumpkin_core::entity::mob::enderman::EndermanEntity>()
+                {
+                    enderman.set_carried_block(
+                        enderman_data
+                            .carried_block_state
+                            .and_then(pumpkin_data::BlockStateId::new),
+                    );
+                    enderman.set_creepy(enderman_data.is_screaming || enderman_data.is_staring);
+                    return Ok(true);
+                }
+            }
+            WitMobData::IronGolem(iron_golem_data) => {
+                if let Some(iron_golem) =
+                    any.downcast_ref::<pumpkin_core::entity::passive::iron_golem::IronGolemEntity>()
+                {
+                    iron_golem.set_player_created(iron_golem_data.is_player_created);
+                    return Ok(true);
+                }
+            }
+            WitMobData::Fox(fox_data) => {
+                if let Some(fox) =
+                    any.downcast_ref::<pumpkin_core::entity::passive::fox::FoxEntity>()
+                {
+                    fox.set_sitting(fox_data.is_sitting);
+                    fox.set_sleeping(fox_data.is_sleeping);
+                    fox.set_crouching(fox_data.is_crouching);
+                    return Ok(true);
+                }
+            }
+            WitMobData::Shulker(shulker_data) => {
+                if let Some(shulker) =
+                    any.downcast_ref::<pumpkin_core::entity::mob::shulker::ShulkerEntity>()
+                {
+                    shulker.set_attach_face(from_wit_block_direction(shulker_data.attached_face));
+                    shulker.set_raw_peek(shulker_data.peek_amount);
+                    shulker.set_color(shulker_data.color.map(from_wit_dye_color));
+                    return Ok(true);
+                }
+            }
+            WitMobData::Zombie(zombie_data) => {
+                if let Some(zombie) =
+                    any.downcast_ref::<pumpkin_core::entity::mob::zombie::zombie::ZombieEntity>()
+                {
+                    zombie.set_baby(zombie_data.is_baby);
+                    zombie.set_can_break_doors(zombie_data.can_break_doors);
+                    return Ok(true);
+                }
+            }
+            WitMobData::Ageable(ageable_data) => {
+                if let Some(living) = entity.get_living_entity() {
+                    let age = if ageable_data.is_baby && ageable_data.age >= 0 {
+                        -24000
+                    } else {
+                        ageable_data.age
+                    };
+                    living
+                        .entity
+                        .age
+                        .store(age, std::sync::atomic::Ordering::Relaxed);
+                    return Ok(true);
+                }
+            }
+            WitMobData::Generic => return Ok(true),
+        }
 
-            Ok(false)
-        })
+        Ok(false)
     }
 
-    async fn set_freeze_ticks(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-        ticks: i32,
-    ) -> wasmtime::Result<()> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            entity.get_entity().set_frozen_ticks(ticks);
-            Ok(())
-        })
+    fn set_freeze_ticks(&mut self, this: Resource<WitMob>, ticks: i32) -> wasmtime::Result<()> {
+        let state = self;
+        let entity = state.get(&this)?;
+        entity.get_entity().set_frozen_ticks(ticks);
+        Ok(())
     }
 
-    async fn get_freeze_ticks(
-        accessor: &Accessor<PluginHostState, Self>,
-        this: Resource<WitMob>,
-    ) -> wasmtime::Result<i32> {
-        accessor.with(|mut host| {
-            let state = host.get();
-            let entity = state.get(&this)?;
-            Ok(entity.get_entity().get_frozen_ticks())
-        })
+    fn get_freeze_ticks(&mut self, this: Resource<WitMob>) -> wasmtime::Result<i32> {
+        let state = self;
+        let entity = state.get(&this)?;
+        Ok(entity.get_entity().get_frozen_ticks())
     }
+}
+
+impl HostMobWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn clear_ai_goals(
         accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitMob>,

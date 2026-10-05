@@ -36,7 +36,7 @@ interface boss-bar {
     /// Represents a boss bar that can be shown to players.
     resource boss-bar {
         /// Creates a boss bar and returns its handle.
-        create: static async func(title: text-component, color: boss-bar-color, division: boss-bar-division) -> boss-bar;
+        create: static func(title: text-component, color: boss-bar-color, division: boss-bar-division) -> boss-bar;
 
         /// Returns the title of this boss bar.
         get-title: async func() -> text-component;
