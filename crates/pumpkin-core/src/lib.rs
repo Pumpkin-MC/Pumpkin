@@ -582,6 +582,8 @@ impl PumpkinServer {
     /// Saves every player, kicks them, waits for their connection `tasks` to end, then unloads
     /// plugins and saves the worlds.
     pub async fn shutdown(&self, tasks: &TaskTracker) {
+        self.server.close_admission();
+
         if let Err(e) = self
             .server
             .player_data_storage

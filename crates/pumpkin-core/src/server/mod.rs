@@ -152,6 +152,9 @@ pub struct Server {
     /// process-wide stop reaches it, while an integrated server can stop without ending the
     /// process.
     pub stop_token: CancellationToken,
+    /// `true` once shutdown closed admission.
+    /// so the shutdown kick pass sees every admitted player.
+    admission_closed: std::sync::RwLock<bool>,
     pub management_hub: Arc<crate::net::management::hub::ManagementHub>,
 
     // world stuff which maybe should be put into a struct
@@ -320,6 +323,7 @@ impl Server {
             debug_profiler: debug_profiler::DebugProfiler::new(),
             tasks: TaskTracker::new(),
             stop_token: crate::STOP_INTERRUPT.child_token(),
+            admission_closed: std::sync::RwLock::new(false),
             runtime: tokio::runtime::Handle::current(),
             scheduled_functions: Arc::new(crate::server::scheduler::ScheduledFunctionQueue::new()),
             server_guid: rand::random(),
@@ -709,7 +713,11 @@ impl Server {
             &mut PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
                 player.screen_handler_sync_handler.store_player(player.clone());
-                world.add_player(&player).is_ok().then(|| {
+                if !self.admit_player(&world, &player) {
+                    player.kick(DisconnectReason::Shutdown, &TextComponent::text("Server stopped"));
+                    return None;
+                }
+                Some({
                     {
                         let mut user_cache = self
                             .data
@@ -764,6 +772,23 @@ impl Server {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove_player(player);
+    }
+
+    /// Adds player to `world` unless shutdown already closed admission.
+    fn admit_player(&self, world: &World, player: &Arc<Player>) -> bool {
+        let closed = self
+            .admission_closed
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        !*closed && world.add_player(player).is_ok()
+    }
+
+    /// Refuses all later joins. Returns once every join in progress is in a world
+    pub fn close_admission(&self) {
+        *self
+            .admission_closed
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = true;
     }
 
     /// Asks this server to stop: the ticker ends and a standalone server stops accepting
