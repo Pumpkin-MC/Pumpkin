@@ -23,9 +23,7 @@ impl BedrockClient {
             && packet.delta.y < 0.0
             && !entity.has_vehicle();
         entity.on_ground.store(on_ground, Ordering::Relaxed);
-        // Kept apart from `velocity`, which holds only server impulses like Java
         self.input_tick.store(packet.tick.0, Ordering::Relaxed);
-        self.client_motion.store(packet.delta.to_f64());
 
         let new_pos = packet
             .position
@@ -153,6 +151,15 @@ impl BedrockClient {
                 player.progress_motion(delta);
             }
         }
+
+        crate::entity::client_push::on_bedrock_input(
+            player,
+            self,
+            packet.tick.0,
+            packet.position,
+            packet.delta,
+            on_ground,
+        );
 
         let input_data = packet.input_data;
 

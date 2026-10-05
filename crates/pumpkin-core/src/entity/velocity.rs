@@ -36,14 +36,6 @@ impl Entity {
         self.velocity_dirty.store(true, Ordering::SeqCst);
     }
 
-    /// Java clients run `pushEntities` for living entities only (`ClientLevel.getPushableEntities`).
-    pub fn mark_predicted_push(&self, pusher: &(impl EntityBase + ?Sized), x: f64, z: f64) {
-        if pusher.get_living_entity().is_some() {
-            self.predicted_push
-                .store(self.predicted_push.load() + Vector3::new(x, 0.0, z));
-        }
-    }
-
     /// Vanilla `markHurt`: the next flush also reaches the own client.
     pub fn mark_hurt(&self) {
         self.sync_velocity.store(true, Ordering::SeqCst);
@@ -119,12 +111,11 @@ impl Entity {
     /// Once per tick: sends what `push_velocity`, `apply_knockback` and `mark_hurt` left.
     pub fn flush_velocity(&self, player: Option<&Player>) {
         let hurt = self.sync_velocity.swap(false, Ordering::SeqCst);
-        let predicted_push = self.predicted_push.swap(Vector3::default());
         if !self.velocity_dirty.swap(false, Ordering::SeqCst) && !hurt {
             return;
         }
         match player {
-            Some(player) => player.sync_velocity(hurt, predicted_push),
+            Some(player) => player.sync_velocity(hurt),
             None => self.send_velocity_to_watchers(),
         }
     }
@@ -193,7 +184,7 @@ impl Player {
 
     /// Flush of pushed or knocked back velocity. `hurt` is vanilla `hurtMarked`.
     /// Cancelling the event sends nothing.
-    fn sync_velocity(&self, hurt: bool, predicted_push: Vector3<f64>) {
+    fn sync_velocity(&self, hurt: bool) {
         let entity = &self.living_entity.entity;
         let velocity = entity.velocity.load();
         let Some(new_velocity) = self.fire_velocity_event(velocity) else {
@@ -204,14 +195,9 @@ impl Player {
             entity.velocity.store(new_velocity);
         }
         entity.send_velocity_to_watchers();
-        // Vanilla sends pushes to watchers only. Java predicts living pushes itself,
-        // Bedrock gets them on top of its own motion. Minecart pushes reach neither client, like vanilla.
+        // Vanilla sends pushes to watchers only. Own client pushes: see `client_push`.
         if hurt || changed {
             self.send_own_velocity(new_velocity);
-        } else if predicted_push != Vector3::default()
-            && let Some(bedrock) = self.client.bedrock()
-        {
-            self.send_own_velocity(bedrock.client_motion.load() + predicted_push);
         }
     }
 
@@ -260,11 +246,9 @@ pub fn push_apart(this: &(impl EntityBase + ?Sized), other: &dyn EntityBase) {
 
     if !this_entity.has_passengers() && this.is_pushable() {
         this_entity.push_velocity(-dx, -dz);
-        this_entity.mark_predicted_push(other, -dx, -dz);
     }
     if !other_entity.has_passengers() && other.is_pushable() {
         other_entity.push_velocity(dx, dz);
-        other_entity.mark_predicted_push(this, dx, dz);
     }
 }
 
