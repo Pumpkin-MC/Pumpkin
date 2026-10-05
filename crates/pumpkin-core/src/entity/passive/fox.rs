@@ -26,10 +26,12 @@ use crate::entity::ai::goal::breed::BreedGoal;
 use crate::entity::ai::goal::escape_danger::EscapeDangerGoal;
 use crate::entity::ai::goal::follow_parent::FollowParentGoal;
 use crate::entity::ai::goal::leap_at_target::LeapAtTargetGoal;
+use crate::entity::ai::goal::look_at_entity::LookAtEntityGoal;
 use crate::entity::ai::goal::swim::SwimGoal;
+use crate::entity::ai::goal::water_avoiding_random_stroll::WaterAvoidingRandomStrollGoal;
 use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
-use crate::entity::ai::util::{default_random_pos, land_random_pos};
+use crate::entity::ai::util::default_random_pos;
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::{Mob, MobEntity};
@@ -133,7 +135,11 @@ impl FoxEntity {
             interested_angle: AtomicCell::new(0.0),
         });
 
-        let mob_weak = Arc::downgrade(&mob_arc);
+        let fox_weak = Arc::downgrade(&mob_arc);
+        let dyn_mob_weak: Weak<dyn Mob> = {
+            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
+            Arc::downgrade(&mob_arc)
+        };
 
         {
             let mut goal_selector = mob_arc
@@ -143,14 +149,14 @@ impl FoxEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(FaceplantGoal::new(mob_weak.clone())));
-            goal_selector.add_goal(2, Box::new(FoxPanicGoal::new(mob_weak.clone(), 2.2)));
-            goal_selector.add_goal(3, Box::new(FoxBreedGoal::new(mob_weak.clone(), 1.0)));
-            goal_selector.add_goal(4, Box::new(FoxAvoidPlayerGoal::new(mob_weak.clone())));
+            goal_selector.add_goal(1, Box::new(FaceplantGoal::new(fox_weak.clone())));
+            goal_selector.add_goal(2, Box::new(FoxPanicGoal::new(fox_weak.clone(), 2.2)));
+            goal_selector.add_goal(3, Box::new(FoxBreedGoal::new(fox_weak.clone(), 1.0)));
+            goal_selector.add_goal(4, Box::new(FoxAvoidPlayerGoal::new(fox_weak.clone())));
             goal_selector.add_goal(
                 4,
                 Box::new(FoxAvoidEntityGoal::new(
-                    mob_weak.clone(),
+                    fox_weak.clone(),
                     &EntityType::WOLF,
                     8.0,
                     1.4,
@@ -160,28 +166,28 @@ impl FoxEntity {
             goal_selector.add_goal(
                 4,
                 Box::new(FoxAvoidEntityGoal::new(
-                    mob_weak.clone(),
+                    fox_weak.clone(),
                     &EntityType::POLAR_BEAR,
                     8.0,
                     1.4,
                     1.6,
                 )),
             );
-            goal_selector.add_goal(5, Box::new(StalkPreyGoal::new(mob_weak.clone())));
-            goal_selector.add_goal(6, Box::new(FoxPounceGoal::new(mob_weak.clone())));
-            goal_selector.add_goal(6, Box::new(SeekShelterGoal::new(mob_weak.clone(), 1.25)));
-            goal_selector.add_goal(7, Box::new(FoxMeleeAttackGoal::new(mob_weak.clone(), 1.2)));
-            goal_selector.add_goal(7, Box::new(SleepGoal::new(mob_weak.clone())));
+            goal_selector.add_goal(5, Box::new(StalkPreyGoal::new(fox_weak.clone())));
+            goal_selector.add_goal(6, Box::new(FoxPounceGoal::new(fox_weak.clone())));
+            goal_selector.add_goal(6, Box::new(FoxSeekShelterGoal::new(fox_weak.clone(), 1.25)));
+            goal_selector.add_goal(7, Box::new(FoxMeleeAttackGoal::new(fox_weak.clone(), 1.2)));
+            goal_selector.add_goal(7, Box::new(SleepGoal::new(fox_weak.clone())));
             goal_selector.add_goal(8, Box::new(FollowParentGoal::new(1.25)));
-            goal_selector.add_goal(10, Box::new(FoxEatBerriesGoal::new(mob_weak.clone(), 1.2)));
+            goal_selector.add_goal(10, Box::new(FoxEatBerriesGoal::new(fox_weak.clone(), 1.2)));
             goal_selector.add_goal(10, Box::new(LeapAtTargetGoal::new(0.4)));
-            goal_selector.add_goal(11, Box::new(FoxStrollGoal::new(mob_weak.clone(), 1.0)));
-            goal_selector.add_goal(11, Box::new(FoxSearchForItemsGoal::new(mob_weak.clone())));
+            goal_selector.add_goal(11, Box::new(FoxStrollGoal::new(fox_weak.clone(), 1.0)));
+            goal_selector.add_goal(11, Box::new(FoxSearchForItemsGoal::new(fox_weak.clone())));
             goal_selector.add_goal(
                 12,
-                Box::new(FoxLookAtPlayerGoal::new(mob_weak.clone(), 16.0)),
+                Box::new(FoxLookAtPlayerGoal::new(fox_weak.clone(), dyn_mob_weak, 16.0)),
             );
-            goal_selector.add_goal(13, Box::new(PerchAndSearchGoal::new(mob_weak.clone())));
+            goal_selector.add_goal(13, Box::new(PerchAndSearchGoal::new(fox_weak.clone())));
         }
 
         {
@@ -191,7 +197,7 @@ impl FoxEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            target_selector.add_goal(3, Box::new(DefendTrustedTargetGoal::new(mob_weak)));
+            target_selector.add_goal(3, Box::new(DefendTrustedTargetGoal::new(fox_weak)));
             target_selector.add_goal(
                 4,
                 ActiveTargetGoal::predicated(
@@ -1236,16 +1242,16 @@ impl Goal for FoxPounceGoal {
     }
 }
 
-pub struct SeekShelterGoal {
+pub struct FoxSeekShelterGoal {
     fox: Weak<FoxEntity>,
     speed: f64,
     interval: i32,
     shelter_pos: Option<Vector3<f64>>,
 }
 
-impl SeekShelterGoal {
+impl FoxSeekShelterGoal {
     #[must_use]
-    pub fn new(fox: Weak<FoxEntity>, speed: f64) -> Self {
+    pub const fn new(fox: Weak<FoxEntity>, speed: f64) -> Self {
         Self {
             fox,
             speed,
@@ -1289,14 +1295,14 @@ impl SeekShelterGoal {
     }
 }
 
-impl Goal for SeekShelterGoal {
+impl Goal for FoxSeekShelterGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let Some(fox) = self.fox.upgrade() else { return false; };
         if fox.is_sleeping() || mob.get_mob_entity().get_target().is_some() {
             return false;
         }
 
-        let entity = fox.get_entity();
+        let entity = mob.get_entity();
         let world = entity.world.load();
         let block_pos = entity.block_pos.load();
 
@@ -1668,33 +1674,15 @@ impl Goal for FoxEatBerriesGoal {
 
 pub struct FoxStrollGoal {
     fox: Weak<FoxEntity>,
-    speed: f64,
-    target: Option<Vector3<f64>>,
-    interval: i32,
-    force_trigger: bool,
+    stroll_goal: WaterAvoidingRandomStrollGoal,
 }
 
 impl FoxStrollGoal {
     #[must_use]
-    pub fn new(fox: Weak<FoxEntity>, speed: f64) -> Self {
+    pub const fn new(fox: Weak<FoxEntity>, speed: f64) -> Self {
         Self {
             fox,
-            speed,
-            target: None,
-            interval: 120,
-            force_trigger: false,
-        }
-    }
-
-    fn get_position(&self, mob: &dyn Mob, in_water: bool) -> Option<Vector3<f64>> {
-        if in_water {
-            // Vanilla WaterAvoidingRandomStrollGoal: LandRandomPos.getPos(this.mob, 15, 7)
-            land_random_pos::get_pos(mob, 15, 7).or_else(|| default_random_pos::get_pos(mob, 10, 7))
-        } else if mob.get_random().random::<f32>() >= 0.001 {
-            // Vanilla: LandRandomPos.getPos(this.mob, 10, 7)
-            land_random_pos::get_pos(mob, 10, 7).or_else(|| default_random_pos::get_pos(mob, 10, 7))
-        } else {
-            default_random_pos::get_pos(mob, 10, 7)
+            stroll_goal: WaterAvoidingRandomStrollGoal::new(speed),
         }
     }
 }
@@ -1706,29 +1694,10 @@ impl Goal for FoxStrollGoal {
             || fox.is_crouching()
             || fox.is_pouncing()
             || mob.get_mob_entity().get_target().is_some()
-            || mob.get_entity().has_passengers()
         {
             return false;
         }
-
-        let in_water = fox.get_entity().is_in_water();
-        let interval = if in_water { 10 } else { self.interval };
-
-        if !self.force_trigger
-            && mob
-                .get_random()
-                .random_range(0..crate::entity::ai::goal::to_goal_ticks(interval))
-                != 0
-        {
-            return false;
-        }
-
-        self.target = self.get_position(mob, in_water);
-        if self.target.is_none() {
-            return false;
-        }
-        self.force_trigger = false;
-        true
+        self.stroll_goal.can_start(mob)
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
@@ -1737,35 +1706,22 @@ impl Goal for FoxStrollGoal {
             || fox.is_crouching()
             || fox.is_pouncing()
             || mob.get_mob_entity().get_target().is_some()
-            || mob.get_entity().has_passengers()
         {
             return false;
         }
-        !mob.is_navigator_idle()
+        self.stroll_goal.should_continue(mob)
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        if let Some(target) = self.target {
-            let pos = mob.get_mob_entity().living_entity.entity.pos.load();
-            mob.get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .set_progress(NavigatorGoal::new(pos, target, self.speed));
-        }
+        self.stroll_goal.start(mob);
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
-        self.target = None;
-        mob.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        self.stroll_goal.stop(mob);
     }
 
     fn controls(&self) -> Controls {
-        Controls::MOVE
+        self.stroll_goal.controls()
     }
 }
 
@@ -1885,82 +1841,50 @@ impl Goal for FoxSearchForItemsGoal {
 
 pub struct FoxLookAtPlayerGoal {
     fox: Weak<FoxEntity>,
-    target: Option<Arc<Player>>,
-    look_time: i32,
-    range: f32,
+    inner: LookAtEntityGoal,
 }
 
 impl FoxLookAtPlayerGoal {
     #[must_use]
-    pub fn new(fox: Weak<FoxEntity>, range: f32) -> Self {
+    pub fn new(fox_weak: Weak<FoxEntity>, mob_weak: Weak<dyn Mob>, range: f32) -> Self {
         Self {
-            fox,
-            target: None,
-            look_time: 0,
-            range,
+            fox: fox_weak,
+            inner: LookAtEntityGoal::new(mob_weak, &EntityType::PLAYER, range, 0.02, false),
         }
     }
 }
 
 impl Goal for FoxLookAtPlayerGoal {
-    fn can_start(&mut self, _mob: &dyn Mob) -> bool {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let Some(fox) = self.fox.upgrade() else { return false; };
-        if fox.is_faceplanted() || fox.is_interested() || fox.is_crouching() || fox.is_sleeping() || rand::random::<f32>() >= 0.02 {
+        if fox.is_faceplanted() || fox.is_interested() || fox.is_crouching() || fox.is_sleeping() {
             return false;
         }
-        let pos = fox.get_entity().pos.load();
-        let world = fox.get_entity().world.load();
-        let target = world.get_nearest_player(pos, f64::from(self.range), |player| {
-            let gm = player.gamemode.load();
-            gm != GameMode::Creative && gm != GameMode::Spectator
-        });
-        if let Some(player) = target {
-            self.target = Some(player);
-            true
-        } else {
-            false
-        }
+        self.inner.can_start(mob)
     }
 
-    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let Some(fox) = self.fox.upgrade() else { return false; };
-        if fox.is_faceplanted() || fox.is_interested() || fox.is_crouching() || fox.is_sleeping() || self.look_time <= 0 {
+        if fox.is_faceplanted() || fox.is_interested() || fox.is_crouching() || fox.is_sleeping() {
             return false;
         }
-        if let Some(player) = &self.target {
-            let dist_sq = fox
-                .get_entity()
-                .pos
-                .load()
-                .squared_distance_to_vec(&player.get_entity().pos.load());
-            dist_sq <= f64::from(self.range * self.range)
-        } else {
-            false
-        }
+        self.inner.should_continue(mob)
     }
 
-    fn start(&mut self, _mob: &dyn Mob) {
-        self.look_time = 40 + rand::rng().random_range(0..40);
+    fn start(&mut self, mob: &dyn Mob) {
+        self.inner.start(mob);
     }
 
-    fn stop(&mut self, _mob: &dyn Mob) {
-        self.target = None;
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.inner.stop(mob);
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        self.look_time -= 1;
-        if let Some(player) = &self.target {
-            let mut look = mob
-                .get_mob_entity()
-                .look_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            look.look_at_entity(mob, &(player.clone() as Arc<dyn EntityBase>));
-        }
+        self.inner.tick(mob);
     }
 
     fn controls(&self) -> Controls {
-        Controls::LOOK
+        self.inner.controls()
     }
 }
 
