@@ -93,14 +93,7 @@ impl EntityBase for ExperienceBottleEntity {
         let mut random = rand::rng();
         let amount = 3 + random.random_range(0..5) + random.random_range(0..5);
         let direction = match &hit {
-            ProjectileHit::Block { face, .. } => {
-                let offset = face.to_offset();
-                pumpkin_util::math::vector3::Vector3::new(
-                    f64::from(offset.x),
-                    f64::from(offset.y),
-                    f64::from(offset.z),
-                )
-            }
+            ProjectileHit::Block { face, .. } => face.to_offset().to_f64(),
             ProjectileHit::Entity { .. } => entity.velocity.load().multiply(-1.0, -1.0, -1.0),
         };
         ExperienceOrbEntity::spawn_with_direction(&world, hit.hit_pos(), direction, amount);

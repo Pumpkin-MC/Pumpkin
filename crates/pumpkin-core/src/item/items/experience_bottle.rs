@@ -30,33 +30,22 @@ impl ItemBehaviour for ExperienceBottleItem {
             0.4 / (rand::rng().random::<f32>() * 0.4 + 0.8),
         );
 
-        let main_hand = player.inventory().held_item();
-        let used_main = !main_hand.is_empty() && main_hand.item == &Item::EXPERIENCE_BOTTLE;
-        let mut stack = if used_main {
-            main_hand
+        let inventory = player.inventory();
+        let mut held = inventory.held_item();
+        let hand = if !held.is_empty() && held.item == &Item::EXPERIENCE_BOTTLE {
+            pumpkin_util::Hand::Right
         } else {
-            player.inventory().off_hand_item()
+            held = inventory.off_hand_item();
+            pumpkin_util::Hand::Left
         };
         let entity = Entity::new(world.clone(), pos, &EntityType::EXPERIENCE_BOTTLE);
         let bottle = ExperienceBottleEntity::new_shot(entity, player.get_entity());
-        bottle.set_item_stack(stack.split(1));
+        bottle.set_item_stack(held.split_unless_creative(player.gamemode.load(), 1));
         let (yaw, pitch) = player.rotation();
         bottle.thrown.set_velocity_from(pitch, yaw, -20.0, 0.7, 1.0);
         world.spawn_entity(Arc::new(bottle));
 
-        let mut held = if used_main {
-            player.inventory().held_item()
-        } else {
-            player.inventory().off_hand_item()
-        };
-        held.decrement_unless_creative(player.gamemode.load(), 1);
-        if used_main {
-            player.inventory().set_held_item(held);
-        } else {
-            player
-                .inventory()
-                .set_stack_in_hand(pumpkin_util::Hand::Left, held);
-        }
+        inventory.set_stack_in_hand(hand, held);
     }
 
     fn as_any(&self) -> &dyn Any {
