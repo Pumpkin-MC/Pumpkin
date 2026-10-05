@@ -4,11 +4,7 @@ use std::sync::{
     atomic::{AtomicI32, AtomicU32, Ordering},
 };
 
-use pumpkin_data::{
-    damage::DamageType,
-    entity::EntityType,
-    tag::{self, Taggable},
-};
+use pumpkin_data::{damage::DamageType, entity::EntityType};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -174,13 +170,9 @@ impl EntityBase for ExperienceOrbEntity {
         damage_type: DamageType,
         _position: Option<Vector3<f64>>,
         _source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
     ) -> bool {
-        if self.entity.is_invulnerable_to(&damage_type)
-            || (damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FIRE)
-                && (self.entity.entity_type.fire_immune
-                    || self.entity.fire_immune.load(Ordering::Relaxed)))
-        {
+        if self.entity.is_invulnerable_to(&damage_type, cause) {
             return false;
         }
 
