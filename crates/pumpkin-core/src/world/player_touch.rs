@@ -40,7 +40,7 @@ impl<'a> PlayerTouch<'a> {
     }
 }
 
-/// Vanilla `Entity.playerTouch`. First overlapping player in list order wins.
+/// Vanilla `Entity.playerTouch` for each overlapping player, in list order, until removed.
 pub(super) fn touch_players(
     entity: &Arc<dyn EntityBase>,
     entity_chunk: Vector2<i32>,
@@ -50,15 +50,15 @@ pub(super) fn touch_players(
         return;
     }
     let entity_inner = entity.get_entity();
-    if entity_inner.is_removed() {
-        return;
-    }
     let entity_bb = entity_inner.bounding_box.load();
 
-    if let Some(touch) = players
-        .iter()
-        .find(|touch| touch.touches(&entity_bb, entity_chunk))
-    {
-        entity.on_player_collision(touch.player);
+    // A player can reject the touch (full inventory), so the next one gets it.
+    for touch in players {
+        if entity_inner.is_removed() {
+            return;
+        }
+        if touch.touches(&entity_bb, entity_chunk) {
+            entity.on_player_collision(touch.player);
+        }
     }
 }
