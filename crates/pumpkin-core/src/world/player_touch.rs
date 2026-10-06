@@ -1,6 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
+use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::{boundingbox::BoundingBox, vector2::Vector2};
+use rand::RngExt;
 
 use crate::entity::{EntityBase, player::Player};
 
@@ -9,6 +11,8 @@ pub(super) struct PlayerTouch<'a> {
     player: &'a Arc<Player>,
     area: BoundingBox,
     chunk: Vector2<i32>,
+    /// Orbs in the pickup area
+    orbs: Mutex<Vec<Arc<dyn EntityBase>>>,
 }
 
 impl<'a> PlayerTouch<'a> {
@@ -30,6 +34,7 @@ impl<'a> PlayerTouch<'a> {
             player,
             area,
             chunk: entity.chunk_pos.load(),
+            orbs: Mutex::new(Vec::new()),
         })
     }
 
@@ -38,9 +43,22 @@ impl<'a> PlayerTouch<'a> {
             && (self.chunk.y - chunk.y).abs() <= 1
             && self.area.intersects(entity_bb)
     }
+
+    /// Vanilla `Player.aiStep`: one random orb per player per tick.
+    pub(super) fn touch_random_orb(&self) {
+        let mut orbs = self.orbs.lock().unwrap_or_else(PoisonError::into_inner);
+        // Earlier players may have taken some since they were collected
+        orbs.retain(|orb| !orb.get_entity().is_removed());
+        if orbs.is_empty() {
+            return;
+        }
+        let orb = &orbs[rand::rng().random_range(0..orbs.len())];
+        orb.on_player_collision(self.player);
+    }
 }
 
-/// Vanilla `Entity.playerTouch`. First overlapping player in list order wins.
+/// Vanilla `Entity.playerTouch`, run for every player whose pickup area overlaps.
+/// Experience orbs are only collected here and touched by `touch_random_orb`.
 pub(super) fn touch_players(
     entity: &Arc<dyn EntityBase>,
     entity_chunk: Vector2<i32>,
@@ -50,15 +68,25 @@ pub(super) fn touch_players(
         return;
     }
     let entity_inner = entity.get_entity();
-    if entity_inner.is_removed() {
-        return;
-    }
     let entity_bb = entity_inner.bounding_box.load();
+    let is_orb = entity_inner.entity_type == &EntityType::EXPERIENCE_ORB;
 
-    if let Some(touch) = players
-        .iter()
-        .find(|touch| touch.touches(&entity_bb, entity_chunk))
-    {
-        entity.on_player_collision(touch.player);
+    for touch in players {
+        // An earlier player may have picked it up
+        if entity_inner.is_removed() {
+            return;
+        }
+        if !touch.touches(&entity_bb, entity_chunk) {
+            continue;
+        }
+        if is_orb {
+            touch
+                .orbs
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(entity.clone());
+        } else {
+            entity.on_player_collision(touch.player);
+        }
     }
 }

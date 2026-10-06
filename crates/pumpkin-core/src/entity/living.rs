@@ -3126,7 +3126,7 @@ impl LivingEntity {
 
         // Apply hurt cooldown logic
         let last_damage = self.last_damage_taken.load();
-        let (damage_amount, play_sound) =
+        let (damage_amount, took_full_damage) =
             if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
                 if effective_amount <= last_damage {
                     return false;
@@ -3134,8 +3134,9 @@ impl LivingEntity {
                 (effective_amount - last_damage, false)
             } else {
                 self.hurt_cooldown.store(20, Relaxed);
-                (effective_amount, self.health.load() > effective_amount)
+                (effective_amount, true)
             };
+        let play_sound = took_full_damage && self.health.load() > effective_amount;
 
         // Finalize state
         self.last_damage_taken.store(amount);
@@ -3190,16 +3191,15 @@ impl LivingEntity {
                 1.0,
                 self.get_pitch(),
             );
+        }
 
-            if let Some(source) = source {
-                let source_pos = source.get_entity().pos.load();
-                let target_pos = self.entity.pos.load();
-                let dx = source_pos.x - target_pos.x;
-                let dz = source_pos.z - target_pos.z;
-                let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
-                self.entity
-                    .apply_knockback(knockback_after_resistance(0.4, resistance), dx, dz);
+        // Full blocks returned early, so `!blocked || damage > 0` always holds here
+        if took_full_damage {
+            if !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_IMPACT) {
                 self.entity.mark_hurt();
+            }
+            if !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_KNOCKBACK) {
+                self.deal_default_knockback(position, source);
             }
         }
 
@@ -3321,6 +3321,25 @@ impl LivingEntity {
 
     pub fn damage(&self, caller: &dyn EntityBase, amount: f32, damage_type: DamageType) -> bool {
         self.damage_with_context(caller, amount, damage_type, None, None, None)
+    }
+
+    /// Vanilla `LivingEntity.dealDefaultKnockback`.
+    // Callers pass the hit point as `position` for projectiles, so the source entity goes first.
+    fn deal_default_knockback(
+        &self,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+    ) {
+        let target_pos = self.entity.pos.load();
+        let (dx, dz) = source
+            .map(|source| source.get_entity().pos.load())
+            .or(position)
+            .map_or((0.0, 0.0), |pos| {
+                (pos.x - target_pos.x, pos.z - target_pos.z)
+            });
+        let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
+        self.entity
+            .apply_knockback(knockback_after_resistance(0.4, resistance), dx, dz);
     }
 }
 

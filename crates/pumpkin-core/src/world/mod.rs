@@ -1605,6 +1605,10 @@ impl World {
                     touch_players(entity, *entity_chunk, &player_touches);
                 }
             });
+        // Sequential so two players can't take the same orb
+        for touch in &player_touches {
+            touch.touch_random_orb();
+        }
         let entity_elapsed = t_entities.elapsed();
 
         self.entity_tracker.update_all(self);
