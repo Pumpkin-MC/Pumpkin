@@ -3151,6 +3151,13 @@ impl Player {
         {
             return;
         }
+        // Vanilla `checkFallDistanceAccumulation` while gliding: only a steep dive builds it up
+        if self.living_entity.entity.is_fall_flying()
+            && height_difference > -0.5
+            && self.living_entity.fall_distance.load() > 1.0
+        {
+            self.living_entity.fall_distance.store(1.0);
+        }
         self.living_entity.fall(
             self,
             height_difference,
@@ -4250,13 +4257,14 @@ impl Player {
         self.living_entity.entity.set_pos(position);
         let entity = &self.living_entity.entity;
         entity.set_rotation(yaw, pitch);
+        // Moves are ignored until the client confirms, for both editions
+        *self
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some((teleport_id.into(), position));
         match self.client.as_ref() {
             ClientPlatform::Java(client) => {
-                *self
-                    .awaiting_teleport
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                    Some((teleport_id.into(), position));
                 let packet = CPlayerPosition::new(
                     teleport_id.into(),
                     position,
@@ -4271,27 +4279,41 @@ impl Player {
                 }
             }
             ClientPlatform::Bedrock(client) => {
-                let packet = CBedrockMovePlayer::new(
-                    VarULong(self.entity_id() as u64),
-                    Vector3::new(
-                        position.x as f32,
-                        position.y as f32 + entity.entity_type.eye_height,
-                        position.z as f32,
-                    ),
-                    pitch,
-                    yaw,
-                    yaw,
-                    CBedrockMovePlayer::MODE_TELEPORT,
-                    false,
-                    VarULong(0),
-                    0,
-                    0,
-                    VarULong(self.tick_counter.load(Ordering::Relaxed).max(0) as u64),
-                );
-                if let Ok(data) = client.serialize_packet(&packet) {
-                    client.try_enqueue_packet(data);
-                }
+                client
+                    .teleport_unconfirmed_inputs
+                    .store(0, Ordering::Relaxed);
+                self.send_bedrock_teleport(client, position, yaw, pitch);
             }
+        }
+    }
+
+    /// Bedrock has no teleport id: the client confirms by reaching the position.
+    pub fn send_bedrock_teleport(
+        &self,
+        client: &crate::net::bedrock::BedrockClient,
+        position: Vector3<f64>,
+        yaw: f32,
+        pitch: f32,
+    ) {
+        let packet = CBedrockMovePlayer::new(
+            VarULong(self.entity_id() as u64),
+            Vector3::new(
+                position.x as f32,
+                position.y as f32 + self.living_entity.entity.entity_type.eye_height,
+                position.z as f32,
+            ),
+            pitch,
+            yaw,
+            yaw,
+            CBedrockMovePlayer::MODE_TELEPORT,
+            false,
+            VarULong(0),
+            0,
+            0,
+            VarULong(client.input_tick.load(Ordering::Relaxed)),
+        );
+        if let Ok(data) = client.serialize_packet(&packet) {
+            client.try_enqueue_packet(data);
         }
     }
 
@@ -4446,6 +4468,10 @@ impl Player {
         source: Option<&dyn crate::entity::EntityBase>,
         cause: Option<&dyn crate::entity::EntityBase>,
     ) -> bool {
+        // Vanilla `ServerPlayer.isInvulnerableTo`: nothing hurts a player still loading in
+        if !self.has_client_loaded() {
+            return false;
+        }
         if self
             .abilities
             .lock()

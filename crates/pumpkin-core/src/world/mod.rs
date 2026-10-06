@@ -4121,6 +4121,8 @@ impl World {
             )
             .await;
 
+        // Vanilla `restartClientLoadTimerAfterRespawn`: invulnerable and still until loaded
+        player.set_client_loaded(false);
         player.living_entity.reset_state();
 
         player.send_permission_lvl_update();

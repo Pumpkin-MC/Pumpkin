@@ -10,12 +10,12 @@ impl BedrockClient {
         packet: SPlayerAuthInput,
         server: &Arc<Server>,
     ) {
-        if !player.has_client_loaded() {
-            return;
-        }
         if player.living_entity.dead.load(Ordering::Relaxed)
             || player.living_entity.health.load() <= 0.0
         {
+            return;
+        }
+        if self.await_teleport(player, &packet) || !player.has_client_loaded() {
             return;
         }
         let entity = player.get_entity();
@@ -155,13 +155,7 @@ impl BedrockClient {
             }
         }
 
-        // The teleport input's jump is no fall
-        let height_difference = if packet.input_data.get(InputData::HandledTeleport as usize) {
-            0.0
-        } else {
-            new_pos.y - old_pos.y
-        };
-        player.do_check_fall_damage(height_difference, on_ground);
+        player.do_check_fall_damage(new_pos.y - old_pos.y, on_ground);
 
         let input_data = packet.input_data;
 
@@ -237,5 +231,47 @@ impl BedrockClient {
                 self.handle_player_block_action(player, server, action);
             }
         }
+    }
+}
+
+impl BedrockClient {
+    /// inputs are ignored until the client reaches a pending teleport, so stale
+    /// positions (e.g. the death spot before a respawn) never count as movement or a fall.
+    /// Returns true while still waiting.
+    fn await_teleport(&self, player: &Arc<Player>, packet: &SPlayerAuthInput) -> bool {
+        const TELEPORT_ERROR: f64 = 0.1;
+        const RESEND_INPUTS: u32 = 20;
+
+        let mut awaiting = player
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some((_, target)) = *awaiting else {
+            return false;
+        };
+        let entity = player.get_entity();
+        let position = packet
+            .position
+            .add_raw(0.0, -entity.entity_type.eye_height, 0.0)
+            .to_f64();
+        if (position.x - target.x).abs() < TELEPORT_ERROR
+            && (position.y - target.y).abs() < TELEPORT_ERROR
+            && (position.z - target.z).abs() < TELEPORT_ERROR
+        {
+            *awaiting = None;
+            drop(awaiting);
+            // Bedrock sends no `PlayerLoaded` after a respawn, reaching the spawn stands in
+            player.set_client_loaded(true);
+        } else if self
+            .teleport_unconfirmed_inputs
+            .fetch_add(1, Ordering::Relaxed)
+            + 1
+            >= RESEND_INPUTS
+        {
+            self.teleport_unconfirmed_inputs.store(0, Ordering::Relaxed);
+            drop(awaiting);
+            player.send_bedrock_teleport(self, target, entity.yaw.load(), entity.pitch.load());
+        }
+        true
     }
 }

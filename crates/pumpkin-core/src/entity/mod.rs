@@ -3904,6 +3904,15 @@ impl Entity {
                             PositionFlag::XRot,
                         ],
                     ));
+                    if let Some(client) = player.client.bedrock() {
+                        client.teleport_unconfirmed_inputs.store(0, Relaxed);
+                        player.send_bedrock_teleport(
+                            client,
+                            dismount_pos,
+                            passenger_entity.yaw.load(),
+                            passenger_entity.pitch.load(),
+                        );
+                    }
                 }
 
                 // Vanilla: setSneaking(false) after dismount via sneak input
@@ -3931,6 +3940,7 @@ impl Entity {
 
     pub fn reset_state(&self) {
         self.pose.store(EntityPose::Standing);
+        self.refresh_dimensions();
         self.fall_flying.store(false, Relaxed);
         self.extinguish();
         self.set_on_fire(false);
