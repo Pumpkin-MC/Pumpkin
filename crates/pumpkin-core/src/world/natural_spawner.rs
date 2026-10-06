@@ -187,11 +187,15 @@ impl LocalMobCapCalculator {
 struct PointCharge(BlockPos, f64);
 
 impl PointCharge {
+    /// Change in spawn potential this charge adds at `pos`.
+    ///
+    /// Widen before subtracting, like vanilla's `Vec3i.distSqr` does with `i2d`;
+    /// multiplying in `i32` overflows past ~46341 blocks before any cast runs.
     fn get_potential_change(&self, pos: &BlockPos) -> f64 {
-        let dx = self.0.0.x - pos.0.x;
-        let dy = self.0.0.y - pos.0.y;
-        let dz = self.0.0.z - pos.0.z;
-        let dist_sq = (dx * dx + dy * dy + dz * dz) as f64;
+        let dx = self.0.0.x as f64 - pos.0.x as f64;
+        let dy = self.0.0.y as f64 - pos.0.y as f64;
+        let dz = self.0.0.z as f64 - pos.0.z as f64;
+        let dist_sq = dx * dx + dy * dy + dz * dz;
         if dist_sq == 0.0 {
             f64::INFINITY
         } else {
@@ -1133,6 +1137,22 @@ fn is_burning_block(block: &Block) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn potential_change_is_finite_beyond_i32_range() {
+        let origin = BlockPos::new(0, 64, 0);
+        for (far, distance) in [
+            (BlockPos::new(46_342, 64, 0), 46_342.0),
+            (
+                BlockPos::new(40_000, 64, 40_000),
+                40_000f64.hypot(40_000f64),
+            ),
+        ] {
+            let change = PointCharge(far, 1.0).get_potential_change(&origin);
+
+            assert_eq!(change, 1.0 / distance, "wrong potential for {far:?}");
+        }
+    }
 
     #[test]
     fn vanilla_spawn_floor_predicates_are_preserved() {
