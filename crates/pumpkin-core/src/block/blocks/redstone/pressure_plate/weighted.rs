@@ -16,6 +16,14 @@ use super::{PressurePlate, detection_box_at};
 /// This is for Gold and Iron Pressure Plate
 pub struct WeightedPressurePlateBlock;
 
+pub(super) fn signal_strength(entity_count: usize, max_weight: usize) -> u8 {
+    let count = entity_count.min(max_weight);
+    if count == 0 {
+        return 0;
+    }
+    (count as f32 / max_weight as f32 * 15.0).ceil() as u8
+}
+
 type PressurePlateProps = pumpkin_data::block_properties::LightWeightedPressurePlateLikeProperties;
 
 impl BlockMetadata for WeightedPressurePlateBlock {
@@ -94,12 +102,7 @@ impl PressurePlate for WeightedPressurePlateBlock {
         };
         let aabb = detection_box_at(pos);
         let len = world.get_entities_at_box(&aabb).len() + world.get_players_at_box(&aabb).len();
-        let len = len.min(weight);
-        if len > 0 {
-            let f = (weight.min(len) / weight) as f32;
-            return (f * 15.0).ceil() as u8;
-        }
-        0
+        signal_strength(len, weight)
     }
 
     fn set_redstone_output(&self, block: &Block, state: &BlockState, output: u8) -> BlockStateId {

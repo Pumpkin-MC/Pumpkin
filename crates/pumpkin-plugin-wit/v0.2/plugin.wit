@@ -77,6 +77,8 @@ world plugin {
     import potions;
     /// Provides entity status / animation event types.
     import entity-statuses;
+    /// Provides gametest framework for automated testing.
+    import gametest;
 
     // --- Plugin-provided exports ---
 
@@ -118,4 +120,7 @@ world plugin {
 
     /// Dispatches a chunk generation phase to the plugin.
     export handle-generate-phase: func(generator-id: u32, phase: generation-phase, chunk: chunk-buffer);
+
+    /// Dispatches gametest callbacks to the plugin.
+    export gametest-callbacks;
 }

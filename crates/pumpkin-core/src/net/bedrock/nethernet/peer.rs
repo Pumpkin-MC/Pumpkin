@@ -13,7 +13,7 @@ use webrtc::{
         PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCConfiguration,
         RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceCandidateType, RTCIceConnectionState,
         RTCIceGatheringState, RTCIceServer, RTCPeerConnectionState, RTCSessionDescription,
-        SettingEngine,
+        SettingEngineBuilder,
     },
 };
 
@@ -197,10 +197,12 @@ async fn build_peer(
     } else {
         SocketAddr::new(state.ice_local_addr.ip(), 0)
     };
-    let mut setting_engine = SettingEngine::default();
+    let mut setting_engine_builder = SettingEngineBuilder::default();
     if direct_ip && let Some(external_ip) = advertised_ip {
-        setting_engine.set_nat_1to1_ips(vec![external_ip.to_string()], RTCIceCandidateType::Host);
+        setting_engine_builder = setting_engine_builder
+            .with_nat_1to1_ips(vec![external_ip.to_string()], RTCIceCandidateType::Host);
     }
+    let setting_engine = setting_engine_builder.build();
     Ok(Arc::new(
         Box::pin(
             PeerConnectionBuilder::new()

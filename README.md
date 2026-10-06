@@ -81,7 +81,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - Server
   - [Plugins](https://github.com/Pumpkin-MC/Pumpkin/issues/1407)
   - [x] Query
-  - [x] RCON
+  - [x] [Minecraft Server Management Protocol (MSMP)](https://minecraft.wiki/w/Minecraft_Server_Management_Protocol)
   - [x] Inventories
   - [x] Particles
   - [x] Chat

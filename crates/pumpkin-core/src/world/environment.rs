@@ -4,7 +4,7 @@ use pumpkin_data::environment_attribute::{
     VillagerScheduleTimeline, sample_activity_track, sample_bool_track, sample_float_track,
     sample_moon_phase_track, sample_step_float_track, sample_unbounded_bool_track,
 };
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::{lerp, position::BlockPos};
 
 use super::World;
 
@@ -47,15 +47,7 @@ impl<'a> EnvironmentAttributes<'a> {
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
                         (weather.rain_level, weather.thunder_level)
                     };
-                    let rain_adj = (rain_level - thunder_level).max(0.0);
-                    if rain_adj > 0.0 {
-                        let rain_target = 4.0;
-                        level += rain_adj * 0.3125 * (rain_target - level);
-                    }
-                    if thunder_level > 0.0 {
-                        let thunder_target = 4.0;
-                        level += thunder_level * 0.52734375 * (thunder_target - level);
-                    }
+                    level = Self::apply_weather_sky_light(level, rain_level, thunder_level);
                 }
                 level.clamp(0.0, 15.0)
             }
@@ -79,6 +71,23 @@ impl<'a> EnvironmentAttributes<'a> {
             }
             _ => 0.0,
         }
+    }
+
+    fn apply_weather_sky_light(mut level: f32, rain_level: f32, thunder_level: f32) -> f32 {
+        // Level.getThunderLevel scales thunder by rain before WeatherAttributes.addLayer.
+        let thunder_level = thunder_level * rain_level;
+        let rain_adj = rain_level - thunder_level;
+        if rain_adj > 0.0 {
+            let rain_target = 4.0;
+            let rain_value = lerp(0.3125, level, rain_target);
+            level = lerp(rain_adj, level, rain_value);
+        }
+        if thunder_level > 0.0 {
+            let thunder_target = 4.0;
+            let thunder_value = lerp(0.52734375, level, thunder_target);
+            level = lerp(thunder_level, level, thunder_value);
+        }
+        level
     }
 
     /// Evaluates a boolean environment attribute at the dimension level.
@@ -234,5 +243,44 @@ impl<'a> EnvironmentAttributes<'a> {
     #[must_use]
     pub fn get_value_activity(&self, baby: bool, _pos: &BlockPos) -> Activity {
         self.get_dimension_value_activity(baby)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EnvironmentAttributes;
+
+    #[test]
+    fn daylight_detector_sky_light_matches_vanilla_steady_weather() {
+        // Captured from vanilla 26.3 EnvironmentAttributeSystem with WeatherAttributes layers.
+        for (base, rain, thunder, expected) in [
+            (15.0, 0.0, 0.0, 15.0f32),
+            (15.0, 1.0, 0.0, 11.5625),
+            (15.0, 1.0, 1.0, 9.199_219),
+            (4.0, 1.0, 1.0, 4.0),
+        ] {
+            assert_eq!(
+                EnvironmentAttributes::apply_weather_sky_light(base, rain, thunder).to_bits(),
+                expected.to_bits(),
+                "base={base}, rain={rain}, thunder={thunder}",
+            );
+        }
+    }
+
+    #[test]
+    fn daylight_detector_sky_light_matches_vanilla_thunder_transitions() {
+        // WeatherAccess uses Level.getThunderLevel(1), which scales raw thunder by rain.
+        for (rain, thunder, expected) in [
+            (0.2, 0.2, 14.229_57f32),
+            (0.5, 0.5, 12.803_726),
+            (0.0, 1.0, 15.0),
+            (0.2, 1.0, 13.839_844),
+        ] {
+            assert_eq!(
+                EnvironmentAttributes::apply_weather_sky_light(15.0, rain, thunder).to_bits(),
+                expected.to_bits(),
+                "rain={rain}, thunder={thunder}",
+            );
+        }
     }
 }

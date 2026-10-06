@@ -95,8 +95,10 @@ impl TemplateCache {
 
         let mut template = if let Some(bytes) = self.dynamic_templates.get(&key) {
             StructureTemplate::from_nbt_bytes(&bytes)?
-        } else if let Some(bytes) = Self::load_template_bytes(&key) {
-            StructureTemplate::from_nbt_bytes(bytes)?
+        } else if let Some(static_template) =
+            pumpkin_data::structure_template::get_structure_template(&key)
+        {
+            StructureTemplate::from_static(static_template)?
         } else {
             return Err(TemplateError::MissingField("template file not found"));
         };
@@ -135,11 +137,6 @@ impl TemplateCache {
     pub fn clear(&self) {
         self.cache.clear();
     }
-
-    /// Loads raw template bytes from embedded resources.
-    fn load_template_bytes(path: &str) -> Option<&'static [u8]> {
-        pumpkin_data::template_bytes::get_template_bytes(path)
-    }
 }
 
 /// Global template cache instance.
@@ -170,7 +167,7 @@ pub fn get_template(name: &str) -> Option<Arc<StructureTemplate>> {
 /// Useful for tab-completion in commands.
 #[must_use]
 pub const fn all_template_names() -> &'static [&'static str] {
-    pumpkin_data::template_bytes::all_template_names()
+    pumpkin_data::structure_template::all_template_names()
 }
 
 /// Returns a list of all available structure names for `/place structure` tab-completion.
@@ -185,13 +182,7 @@ pub const fn all_pool_names() -> &'static [&'static str] {
     pumpkin_data::template_pool::StaticTemplatePool::all_names()
 }
 
-/// Returns raw NBT bytes for an embedded structure template.
-#[must_use]
-pub fn template_bytes(name: &str) -> Option<&'static [u8]> {
-    pumpkin_data::template_bytes::get_template_bytes(&canonicalize(name))
-}
-
 #[must_use]
 pub const fn all_embedded_datapack_names() -> &'static [&'static str] {
-    pumpkin_data::template_bytes::all_embedded_datapack_names()
+    pumpkin_data::structure_template::all_embedded_datapack_names()
 }

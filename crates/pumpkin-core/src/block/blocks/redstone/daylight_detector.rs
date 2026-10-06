@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::block::entities::daylight_detector::DaylightDetectorBlockEntity;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::{cos, position::BlockPos};
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::{
@@ -82,7 +82,7 @@ impl DaylightDetectorBlock {
                 std::f32::consts::PI * 2.0
             };
             sun_angle += (offset - sun_angle) * 0.2;
-            target = ((target as f32 * sun_angle.cos()) + 0.5).floor() as i32;
+            target = ((target as f32 * cos(sun_angle)) + 0.5).floor() as i32;
         }
 
         target.clamp(0, 15) as u8
@@ -102,6 +102,59 @@ impl DaylightDetectorBlock {
             props.power = target;
             let new_state = props.to_state_id(block);
             world.set_block_state(block_pos, new_state, BlockFlags::NOTIFY_ALL);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DaylightDetectorBlock;
+    use crate::world::calculate_celestial_angle;
+
+    #[test]
+    fn daylight_detector_matches_vanilla_day_cycle_and_shade() {
+        // Outputs from vanilla 26.3 DaylightDetectorBlock.updateSignalStrength.
+        for (time, sky_brightness, normal, inverted) in [
+            (0, 15, 7, 0),
+            (6000, 15, 15, 0),
+            (12000, 15, 7, 0),
+            (18000, 4, 0, 11),
+            (6000, 0, 0, 15),
+            (6000, 5, 5, 10),
+            (6000, 10, 10, 5),
+        ] {
+            let angle = calculate_celestial_angle(time) * 360.0 * (std::f32::consts::PI / 180.0);
+            for (is_inverted, expected) in [(false, normal), (true, inverted)] {
+                assert_eq!(
+                    DaylightDetectorBlock::calculate_signal_strength(
+                        sky_brightness,
+                        angle,
+                        is_inverted,
+                    ),
+                    expected,
+                    "time={time}, sky={sky_brightness}, inverted={is_inverted}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn daylight_detector_matches_vanilla_cosine_rounding_boundaries() {
+        // Vanilla's Mth.cos lookup changes the rounding boundary on both sides of noon.
+        for (time, sky_brightness, expected) in [
+            (2446, 15, 12),
+            (2447, 15, 12),
+            (2448, 15, 13),
+            (7821, 13, 13),
+            (7822, 13, 13),
+            (7823, 13, 12),
+        ] {
+            let angle = calculate_celestial_angle(time) * 360.0 * (std::f32::consts::PI / 180.0);
+            assert_eq!(
+                DaylightDetectorBlock::calculate_signal_strength(sky_brightness, angle, false),
+                expected,
+                "time={time}, sky={sky_brightness}",
+            );
         }
     }
 }

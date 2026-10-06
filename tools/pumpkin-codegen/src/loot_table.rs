@@ -1,7 +1,7 @@
 use std::{fs, path::Path};
 
 use heck::ToShoutySnakeCase;
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use pumpkin_util::loot_table::{LootBonusFormula, LootCondition};
 use quote::{format_ident, quote};
 use serde::Deserialize;
@@ -777,9 +777,7 @@ pub fn build() -> TokenStream {
     let mut all_tokens = TokenStream::new();
 
     // Emit one set of statics per file
-    let mut table_idents = Vec::new();
-    let mut table_keys = Vec::new();
-    let mut short_table_keys = Vec::new();
+    let mut lookup_rows: Vec<(String, Ident)> = Vec::with_capacity(files.len() * 2);
 
     for (relative_path, table) in &files {
         let prefix = path_to_ident(relative_path);
@@ -794,19 +792,25 @@ pub fn build() -> TokenStream {
             pub static #table_ident: LootTable = LootTable { pools: #pools_ident };
         });
 
-        table_idents.push(table_ident.clone());
-        table_keys.push(LitStr::new(&key, Span::call_site()));
-        short_table_keys.push(LitStr::new(relative_path, Span::call_site()));
+        lookup_rows.push((key, table_ident.clone()));
+        lookup_rows.push((relative_path.clone(), table_ident));
     }
+    lookup_rows.sort_by(|a, b| a.0.cmp(&b.0));
+    let lookup_len = lookup_rows.len();
+    let lookup_rows = lookup_rows
+        .iter()
+        .map(|(key, ident)| quote! { (#key, &#ident) });
 
     // Emit get_loot_table and get_chest_loot_table
     all_tokens.extend(quote! {
+        static LOOT_TABLES_BY_KEY: [(&str, &LootTable); #lookup_len] = [#(#lookup_rows),*];
+
         #[must_use]
         pub fn get_loot_table(key: &str) -> Option<&'static LootTable> {
-            match key {
-                #(#table_keys | #short_table_keys => Some(&#table_idents),)*
-                _ => None,
-            }
+            LOOT_TABLES_BY_KEY
+                .binary_search_by_key(&key, |&(k, _)| k)
+                .ok()
+                .map(|i| LOOT_TABLES_BY_KEY[i].1)
         }
 
         #[must_use]

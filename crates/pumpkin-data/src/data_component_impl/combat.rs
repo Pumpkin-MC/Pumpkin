@@ -1,3 +1,4 @@
+use super::Digest;
 use crate::Block;
 use crate::Enchantment;
 use crate::attributes::Attributes;
@@ -12,8 +13,6 @@ use crate::item::Item;
 use crate::item_stack::ItemStack;
 use crate::sound::Sound;
 use crate::tag::Taggable;
-use crc_fast::CrcAlgorithm::Crc32Iscsi;
-use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use std::borrow::Cow;
@@ -91,7 +90,7 @@ impl DataComponentImpl for EnchantmentsImpl {
         NbtTag::Compound(data)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[2u8]);
         for (enc, level) in self.enchantment.iter() {
             digest.update(&get_str_hash(enc.name).to_le_bytes());
@@ -550,7 +549,7 @@ impl DataComponentImpl for AttackRangeImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         for value in self.values() {
             digest.update(&get_f32_hash(value).to_le_bytes());
         }
@@ -639,7 +638,7 @@ impl EquippableImpl {
 }
 impl DataComponentImpl for EquippableImpl {
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[16u8]);
         digest.update(&get_i32_hash(self.slot.get_slot_index()).to_le_bytes());
         digest.update(&get_idor_hash(&self.equip_sound).to_le_bytes());
@@ -818,7 +817,7 @@ impl DataComponentImpl for PiercingWeaponImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[self.deals_knockback as u8, self.dismounts as u8]);
         update_optional_idor(&mut digest, self.sound.as_ref());
         update_optional_idor(&mut digest, self.hit_sound.as_ref());
@@ -920,7 +919,7 @@ impl DataComponentImpl for KineticWeaponImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&get_i32_hash(self.contact_cooldown_ticks).to_le_bytes());
         digest.update(&get_i32_hash(self.delay_ticks).to_le_bytes());
         for (_, condition) in self.conditions() {
@@ -1095,7 +1094,7 @@ impl DataComponentImpl for StoredEnchantmentsImpl {
         NbtTag::Compound(data)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[2u8]);
         for (enc, level) in self.enchantment.iter() {
             digest.update(&get_str_hash(enc.name).to_le_bytes());

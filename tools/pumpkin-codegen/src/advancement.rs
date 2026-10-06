@@ -774,19 +774,18 @@ impl AdvancementTree {
 
 impl ToTokens for AdvancementTree {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        let node_count = self.nodes.len();
         let nodes = self.nodes.iter().map(|(k, v)| {
             let key = identifier_to_tokens(k);
-            quote! {
-                nodes.insert(#key, #v);
-            }
+            quote! { (#key, #v) }
         });
         let nodes_vector = &self.nodes_vector;
         let roots = &self.roots;
         let tasks = &self.tasks;
         tokens.extend(quote! {
             LazyLock::new(|| {
-                let mut nodes = BTreeMap::new();
-                #(#nodes)*
+                const NODE_IDS: [(Identifier, usize); #node_count] = [#(#nodes),*];
+                let nodes: BTreeMap<Identifier, usize> = NODE_IDS.into_iter().collect();
                 let nodes_vector = vec![#(#nodes_vector),*];
                 let roots = vec![#(#roots),*];
                 let tasks = vec![#(#tasks),*];
@@ -1002,8 +1001,10 @@ pub(crate) fn build() -> TokenStream {
                 [#advancement_list]
             }
 
+            const IDENTIFIERS: [Identifier; #capacity] = [#minecraft_namespaces];
+
             pub const fn get_identifier_list() -> [Identifier;#capacity] {
-                [#minecraft_namespaces]
+                Self::IDENTIFIERS
             }
 
             pub const fn is_root(&self) -> bool{

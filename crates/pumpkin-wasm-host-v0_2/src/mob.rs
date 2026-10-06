@@ -289,18 +289,15 @@ impl Goal for CustomWasmGoal {
 }
 
 impl HostMob for PluginHostState {
-    async fn as_entity(&mut self, this: Resource<WitMob>) -> wasmtime::Result<Resource<Entity>> {
+    fn as_entity(&mut self, this: Resource<WitMob>) -> wasmtime::Result<Resource<Entity>> {
         self.add(self.get(&this)?.clone())
     }
 
-    async fn as_living(
-        &mut self,
-        this: Resource<WitMob>,
-    ) -> wasmtime::Result<Resource<WitLivingEntity>> {
+    fn as_living(&mut self, this: Resource<WitMob>) -> wasmtime::Result<Resource<WitLivingEntity>> {
         self.add(self.get(&this)?.clone())
     }
 
-    async fn add_ai_goal(
+    fn add_ai_goal(
         &mut self,
         this: Resource<WitMob>,
         priority: u8,
@@ -363,7 +360,7 @@ impl HostMob for PluginHostState {
         Ok(())
     }
 
-    async fn add_custom_ai_goal(
+    fn add_custom_ai_goal(
         &mut self,
         this: Resource<WitMob>,
         priority: u8,
@@ -380,11 +377,7 @@ impl HostMob for PluginHostState {
         Ok(())
     }
 
-    async fn set_ai_disabled(
-        &mut self,
-        this: Resource<WitMob>,
-        disabled: bool,
-    ) -> wasmtime::Result<()> {
+    fn set_ai_disabled(&mut self, this: Resource<WitMob>, disabled: bool) -> wasmtime::Result<()> {
         let entity = self.get(&this)?;
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity().set_no_ai(disabled);
@@ -392,14 +385,14 @@ impl HostMob for PluginHostState {
         Ok(())
     }
 
-    async fn is_ai_disabled(&mut self, this: Resource<WitMob>) -> wasmtime::Result<bool> {
+    fn is_ai_disabled(&mut self, this: Resource<WitMob>) -> wasmtime::Result<bool> {
         let entity = self.get(&this)?;
         Ok(entity
             .get_mob()
             .is_none_or(|mob| mob.get_mob_entity().is_no_ai()))
     }
 
-    async fn set_target(
+    fn set_target(
         &mut self,
         this: Resource<WitMob>,
         target: Option<Resource<Entity>>,
@@ -412,10 +405,7 @@ impl HostMob for PluginHostState {
         Ok(())
     }
 
-    async fn get_target(
-        &mut self,
-        this: Resource<WitMob>,
-    ) -> wasmtime::Result<Option<Resource<Entity>>> {
+    fn get_target(&mut self, this: Resource<WitMob>) -> wasmtime::Result<Option<Resource<Entity>>> {
         let entity = self.get(&this)?;
         if let Some(target) = entity
             .get_mob()
@@ -426,7 +416,7 @@ impl HostMob for PluginHostState {
         Ok(None)
     }
 
-    async fn navigate_to_pos(
+    fn navigate_to_pos(
         &mut self,
         this: Resource<WitMob>,
         pos: Position,
@@ -447,7 +437,7 @@ impl HostMob for PluginHostState {
         }))
     }
 
-    async fn navigate_to_entity(
+    fn navigate_to_entity(
         &mut self,
         this: Resource<WitMob>,
         target: Resource<Entity>,
@@ -474,7 +464,7 @@ impl HostMob for PluginHostState {
         }))
     }
 
-    async fn stop_navigation(&mut self, this: Resource<WitMob>) -> wasmtime::Result<()> {
+    fn stop_navigation(&mut self, this: Resource<WitMob>) -> wasmtime::Result<()> {
         let entity = self.get(&this)?;
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity()
@@ -486,7 +476,7 @@ impl HostMob for PluginHostState {
         Ok(())
     }
 
-    async fn is_navigating(&mut self, this: Resource<WitMob>) -> wasmtime::Result<bool> {
+    fn is_navigating(&mut self, this: Resource<WitMob>) -> wasmtime::Result<bool> {
         let entity = self.get(&this)?;
         Ok(entity.get_mob().is_some_and(|mob| {
             let is_idle = mob
@@ -499,7 +489,7 @@ impl HostMob for PluginHostState {
         }))
     }
 
-    async fn has_reached_destination(&mut self, this: Resource<WitMob>) -> wasmtime::Result<bool> {
+    fn has_reached_destination(&mut self, this: Resource<WitMob>) -> wasmtime::Result<bool> {
         let entity = self.get(&this)?;
         Ok(entity.get_mob().is_none_or(|mob| {
             mob.get_mob_entity()
@@ -510,11 +500,7 @@ impl HostMob for PluginHostState {
         }))
     }
 
-    async fn set_navigation_speed(
-        &mut self,
-        this: Resource<WitMob>,
-        speed: f64,
-    ) -> wasmtime::Result<()> {
+    fn set_navigation_speed(&mut self, this: Resource<WitMob>, speed: f64) -> wasmtime::Result<()> {
         let entity = self.get(&this)?;
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity()
@@ -526,7 +512,7 @@ impl HostMob for PluginHostState {
         Ok(())
     }
 
-    async fn can_reach(
+    fn can_reach(
         &mut self,
         this: Resource<WitMob>,
         pos: Position,
@@ -544,7 +530,7 @@ impl HostMob for PluginHostState {
         }))
     }
 
-    async fn set_pathfinding_malus(
+    fn set_pathfinding_malus(
         &mut self,
         this: Resource<WitMob>,
         node_type: WitPathNodeType,
@@ -562,7 +548,7 @@ impl HostMob for PluginHostState {
         Ok(())
     }
 
-    async fn get_pathfinding_malus(
+    fn get_pathfinding_malus(
         &mut self,
         this: Resource<WitMob>,
         node_type: WitPathNodeType,
@@ -578,7 +564,7 @@ impl HostMob for PluginHostState {
         }))
     }
 
-    async fn look_at(&mut self, this: Resource<WitMob>, pos: Position) -> wasmtime::Result<()> {
+    fn look_at(&mut self, this: Resource<WitMob>, pos: Position) -> wasmtime::Result<()> {
         let entity = self.get(&this)?;
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity()
@@ -590,7 +576,7 @@ impl HostMob for PluginHostState {
         Ok(())
     }
 
-    async fn look_at_entity(
+    fn look_at_entity(
         &mut self,
         this: Resource<WitMob>,
         target: Resource<Entity>,
@@ -608,7 +594,7 @@ impl HostMob for PluginHostState {
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn get_mob_data(&mut self, this: Resource<WitMob>) -> wasmtime::Result<WitMobData> {
+    fn get_mob_data(&mut self, this: Resource<WitMob>) -> wasmtime::Result<WitMobData> {
         let entity = self.get(&this)?;
         let any = entity.cast_any();
 
@@ -734,11 +720,7 @@ impl HostMob for PluginHostState {
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn set_mob_data(
-        &mut self,
-        this: Resource<WitMob>,
-        data: WitMobData,
-    ) -> wasmtime::Result<bool> {
+    fn set_mob_data(&mut self, this: Resource<WitMob>, data: WitMobData) -> wasmtime::Result<bool> {
         let entity = self.get(&this)?;
         let any = entity.cast_any();
 
@@ -888,22 +870,18 @@ impl HostMob for PluginHostState {
         Ok(false)
     }
 
-    async fn set_freeze_ticks(
-        &mut self,
-        this: Resource<WitMob>,
-        ticks: i32,
-    ) -> wasmtime::Result<()> {
+    fn set_freeze_ticks(&mut self, this: Resource<WitMob>, ticks: i32) -> wasmtime::Result<()> {
         let entity = self.get(&this)?;
         entity.get_entity().set_frozen_ticks(ticks);
         Ok(())
     }
 
-    async fn get_freeze_ticks(&mut self, this: Resource<WitMob>) -> wasmtime::Result<i32> {
+    fn get_freeze_ticks(&mut self, this: Resource<WitMob>) -> wasmtime::Result<i32> {
         let entity = self.get(&this)?;
         Ok(entity.get_entity().get_frozen_ticks())
     }
 
-    async fn drop(&mut self, rep: Resource<WitMob>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<WitMob>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
 }

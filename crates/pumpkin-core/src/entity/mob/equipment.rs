@@ -1052,7 +1052,7 @@ pub fn equip_item_if_possible(mob: &dyn Mob, stack: ItemStack) -> ItemStack {
 
     let drop_chance = mob_entity.drop_chance(&slot);
     if !current.is_empty() && (rand::random::<f32>() - 0.1).max(0.0) < drop_chance {
-        mob_entity.spawn_at_location(current);
+        mob_entity.living_entity.entity.spawn_at_location(current);
     }
 
     let mut stack = stack;

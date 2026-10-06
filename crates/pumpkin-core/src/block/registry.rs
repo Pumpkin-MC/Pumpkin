@@ -183,6 +183,7 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::BlockStateId;
+use pumpkin_data::block_properties::SnowLikeProperties;
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::fluid::Fluid;
@@ -230,8 +231,9 @@ use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
 use crate::block::blocks::stonecutter::StonecutterBlock;
 use crate::block::blocks::weathering_copper::{
-    WeatheringCopperBlock, WeatheringCopperDoorBlock, WeatheringCopperGrateBlock,
-    WeatheringCopperSlabBlock, WeatheringCopperStairBlock, WeatheringCopperTrapDoorBlock,
+    WeatheringCopperBlock, WeatheringCopperChainBlock, WeatheringCopperDoorBlock,
+    WeatheringCopperGrateBlock, WeatheringCopperSlabBlock, WeatheringCopperStairBlock,
+    WeatheringCopperTrapDoorBlock,
 };
 
 #[must_use]
@@ -353,6 +355,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 
     // Weathering copper blocks
     manager.register(WeatheringCopperBlock);
+    manager.register(WeatheringCopperChainBlock);
     manager.register(WeatheringCopperDoorBlock);
     manager.register(WeatheringCopperGrateBlock);
     manager.register(WeatheringCopperSlabBlock);
@@ -518,7 +521,11 @@ pub enum BlockPlacingError {
     BlockOutOfWorld,
 }
 
-fn can_replace_with_other_block(block: &Block, state: &BlockState) -> bool {
+pub(crate) fn can_replace_with_other_block(block: &Block, state: &BlockState) -> bool {
+    // Vanilla SnowLayerBlock.canBeReplaced: only a single layer gives way to another item.
+    if block == &Block::SNOW {
+        return SnowLikeProperties::from_state_id(state.id).layers == 1;
+    }
     // Sculk veins allow replacement by another block despite their state flag.
     block == &Block::SCULK_VEIN || state.replaceable()
 }
@@ -1515,7 +1522,10 @@ impl BlockRegistry {
 #[cfg(test)]
 mod replacement_tests {
     use super::can_replace_with_other_block;
-    use pumpkin_data::{Block, BlockState, block_properties::GlowLichenLikeProperties};
+    use pumpkin_data::{
+        Block, BlockState,
+        block_properties::{GlowLichenLikeProperties, SnowLikeProperties},
+    };
 
     #[test]
     fn sculk_vein_can_be_replaced_when_dry_or_waterlogged() {
@@ -1527,6 +1537,18 @@ mod replacement_tests {
             let state = BlockState::from_id(properties.to_state_id(block));
             assert!(!state.replaceable());
             assert!(can_replace_with_other_block(block, state));
+        }
+    }
+
+    #[test]
+    fn only_single_layer_snow_can_be_replaced() {
+        let block = &Block::SNOW;
+        for (layers, expected) in [(1, true), (2, false), (8, false)] {
+            let mut properties = SnowLikeProperties::default(block);
+            properties.layers = layers;
+            let state = BlockState::from_id(properties.to_state_id(block));
+            assert!(state.replaceable());
+            assert_eq!(can_replace_with_other_block(block, state), expected);
         }
     }
 

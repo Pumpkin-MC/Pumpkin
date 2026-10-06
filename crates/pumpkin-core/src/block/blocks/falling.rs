@@ -19,10 +19,9 @@ pub struct FallingBlock;
 impl FallingBlock {
     #[must_use]
     pub fn can_fall_through(state: &BlockState, block: &Block) -> bool {
-        state.is_air()
-            || block.has_tag(&tag::Block::MINECRAFT_FIRE)
-            || state.is_liquid()
-            || state.replaceable()
+        // Vanilla also checks liquid(), but only water, lava and bubble columns set it and
+        // those are replaceable. is_liquid() would also match waterlogged blocks.
+        state.is_air() || block.has_tag(&tag::Block::MINECRAFT_FIRE) || state.replaceable()
     }
 
     #[must_use]

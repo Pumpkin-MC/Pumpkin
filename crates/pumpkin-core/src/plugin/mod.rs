@@ -1202,12 +1202,21 @@ impl PluginManager {
         server: &Arc<Server>,
         event: &mut E,
     ) {
+        self.fire_dyn(server, E::get_name_static(), event).await;
+    }
+
+    async fn fire_dyn(
+        &self,
+        server: &Arc<Server>,
+        event_name: &'static str,
+        event: &mut (dyn Payload + Send + Sync),
+    ) {
         let handlers_map = self.handlers.load();
         if handlers_map.is_empty() {
             return;
         }
 
-        let Some(handlers) = handlers_map.get(E::get_name_static()) else {
+        let Some(handlers) = handlers_map.get(event_name) else {
             return;
         };
 
@@ -1237,12 +1246,21 @@ impl PluginManager {
         server: &Arc<Server>,
         event: &mut E,
     ) {
+        self.fire_blocking_dyn(server, E::get_name_static(), event);
+    }
+
+    fn fire_blocking_dyn(
+        &self,
+        server: &Arc<Server>,
+        event_name: &'static str,
+        event: &mut (dyn Payload + Send + Sync),
+    ) {
         let handlers_map = self.handlers.load();
         if handlers_map.is_empty() {
             return;
         }
 
-        let Some(handlers) = handlers_map.get(E::get_name_static()) else {
+        let Some(handlers) = handlers_map.get(event_name) else {
             return;
         };
 
@@ -1252,10 +1270,14 @@ impl PluginManager {
 
         if tokio::runtime::Handle::try_current().is_ok() {
             tokio::task::block_in_place(|| {
-                server.runtime.block_on(self.fire(server, event));
+                server
+                    .runtime
+                    .block_on(self.fire_dyn(server, event_name, event));
             });
         } else {
-            server.runtime.block_on(self.fire(server, event));
+            server
+                .runtime
+                .block_on(self.fire_dyn(server, event_name, event));
         }
     }
 

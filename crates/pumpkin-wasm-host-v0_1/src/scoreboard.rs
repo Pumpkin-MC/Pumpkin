@@ -29,7 +29,7 @@ fn map_number_format(
 impl scoreboard::Host for PluginHostState {}
 
 impl scoreboard::HostScoreboard for PluginHostState {
-    async fn add_objective(
+    fn add_objective(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         name: String,
@@ -79,7 +79,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn update_objective(
+    fn update_objective(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         name: String,
@@ -129,7 +129,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn remove_objective(
+    fn remove_objective(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         name: String,
@@ -158,7 +158,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn set_display_slot(
+    fn set_display_slot(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         slot: DisplaySlot,
@@ -198,7 +198,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn clear_display_slot(
+    fn clear_display_slot(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         slot: DisplaySlot,
@@ -229,7 +229,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn update_score(
+    fn update_score(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         entity_name: String,
@@ -271,7 +271,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn add_score(
+    fn add_score(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         entity_name: String,
@@ -309,7 +309,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(new_val)
     }
 
-    async fn remove_score(
+    fn remove_score(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         entity_name: String,
@@ -339,7 +339,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn reset_entity_scores(
+    fn reset_entity_scores(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         entity_name: String,
@@ -368,7 +368,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn create_team(
+    fn create_team(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         name: String,
@@ -407,7 +407,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn remove_team(
+    fn remove_team(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         name: String,
@@ -436,7 +436,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn update_team(
+    fn update_team(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         name: String,
@@ -467,7 +467,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn add_player_to_team(
+    fn add_player_to_team(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         team_name: String,
@@ -497,7 +497,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn remove_player_from_team(
+    fn remove_player_from_team(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         team_name: String,
@@ -527,7 +527,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn clear_team_players(
+    fn clear_team_players(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         team_name: String,
@@ -556,7 +556,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn get_teams(
+    fn get_teams(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
     ) -> wasmtime::Result<Vec<String>> {
@@ -587,7 +587,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(teams)
     }
 
-    async fn get_team(
+    fn get_team(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         name: String,
@@ -622,7 +622,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         }
     }
 
-    async fn get_team_players(
+    fn get_team_players(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         team_name: String,
@@ -655,7 +655,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(players)
     }
 
-    async fn get_player_team(
+    fn get_player_team(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         player_name: String,
@@ -685,7 +685,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(team_name)
     }
 
-    async fn drop(&mut self, rep: Resource<scoreboard::Scoreboard>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<scoreboard::Scoreboard>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
 }
@@ -902,7 +902,7 @@ const fn map_named_color_rev(
 }
 
 impl HostBedrockScoreboard for PluginHostState {
-    async fn add_objective(
+    fn add_objective(
         &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         name: String,
@@ -945,7 +945,7 @@ impl HostBedrockScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn update_objective(
+    fn update_objective(
         &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         name: String,
@@ -988,7 +988,7 @@ impl HostBedrockScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn remove_objective(
+    fn remove_objective(
         &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         name: String,
@@ -1006,7 +1006,7 @@ impl HostBedrockScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn set_display_slot(
+    fn set_display_slot(
         &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         slot: scoreboard::BedrockDisplaySlot,
@@ -1045,7 +1045,7 @@ impl HostBedrockScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn clear_display_slot(
+    fn clear_display_slot(
         &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         slot: scoreboard::BedrockDisplaySlot,
@@ -1074,7 +1074,7 @@ impl HostBedrockScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn update_score(
+    fn update_score(
         &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         entity_name: String,
@@ -1103,7 +1103,7 @@ impl HostBedrockScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn add_score(
+    fn add_score(
         &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         entity_name: String,
@@ -1132,7 +1132,7 @@ impl HostBedrockScoreboard for PluginHostState {
         Ok(new_val)
     }
 
-    async fn remove_score(
+    fn remove_score(
         &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         entity_name: String,
@@ -1151,7 +1151,7 @@ impl HostBedrockScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn reset_entity_scores(
+    fn reset_entity_scores(
         &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
         entity_name: String,
@@ -1169,10 +1169,7 @@ impl HostBedrockScoreboard for PluginHostState {
         Ok(())
     }
 
-    async fn drop(
-        &mut self,
-        _res: Resource<scoreboard::BedrockScoreboard>,
-    ) -> wasmtime::Result<()> {
+    fn drop(&mut self, _res: Resource<scoreboard::BedrockScoreboard>) -> wasmtime::Result<()> {
         Ok(())
     }
 }

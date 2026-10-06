@@ -1,6 +1,5 @@
+use super::Digest;
 use crate::data_component_impl::DataComponentImpl;
-use crc_fast::CrcAlgorithm::Crc32Iscsi;
-use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 
@@ -156,7 +155,7 @@ impl DataComponentImpl for BlockStateImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         let mut props = self.properties.to_vec();
         props.sort_by(|a, b| a.0.cmp(&b.0));
         for (k, v) in props {

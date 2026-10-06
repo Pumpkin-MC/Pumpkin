@@ -1,6 +1,6 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId, block_properties::OakLeavesLikeProperties, tag,
-    tag::Taggable,
+    Block, BlockDirection, BlockState, BlockStateId, block_properties::OakLeavesLikeProperties,
+    tag, tag::Taggable,
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
@@ -12,8 +12,9 @@ use pumpkin_world::{
 use crate::block::blocks::plant::mangrove_propagule::MangrovePropaguleBlock;
 use crate::block::{
     BlockBehaviour, BonemealArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
-    RandomTickArgs,
+    RandomTickArgs, drop_loot,
 };
+use crate::world::loot::LootContextParameters;
 
 pub const DECAY_DISTANCE: u8 = 7;
 
@@ -112,8 +113,21 @@ impl BlockBehaviour for LeavesBlock {
                     return;
                 }
             }
+            let params = LootContextParameters {
+                block_state: Some(BlockState::from_id(state_id)),
+                position: Some(args.position.to_f64()),
+                ..Default::default()
+            };
+            // loot is dropped
+            drop_loot(args.world, args.block, args.position, true, &params);
+            let new_state_id = if args.block.is_waterlogged(state_id) {
+                Block::WATER.default_state.id
+            } else {
+                BlockStateId::AIR
+            };
+            // and the block gets removed, not broken
             args.world
-                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
+                .set_block_state(args.position, new_state_id, BlockFlags::NOTIFY_ALL);
         }
     }
 

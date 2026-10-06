@@ -1,3 +1,4 @@
+use super::Digest;
 use crate::data_component_impl::basic::SoundEvent;
 use crate::data_component_impl::{
     DataComponentImpl, IDSet, IdOr, get_f32_hash, get_i32_hash, get_idor, get_idor_hash,
@@ -5,8 +6,6 @@ use crate::data_component_impl::{
 };
 use crate::effect::StatusEffect;
 use crate::sound::Sound;
-use crc_fast::CrcAlgorithm::Crc32Iscsi;
-use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use std::borrow::Cow;
@@ -91,7 +90,7 @@ impl StatusEffectInstance {
     }
 
     pub fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&get_str_hash(self.effect_id.as_ref()).to_le_bytes());
         digest.update(&get_i32_hash(self.amplifier).to_le_bytes());
         digest.update(&get_i32_hash(self.duration).to_le_bytes());
@@ -265,7 +264,7 @@ impl ConsumeEffect {
         NbtTag::Compound(compound)
     }
     pub fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         match self {
             ConsumeEffect::ApplyEffects((effects, probability)) => {
                 digest.update(&[1u8]);
@@ -362,7 +361,7 @@ impl DataComponentImpl for ConsumableImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[2u8]);
         digest.update(&get_f32_hash(self.consume_seconds).to_le_bytes());
         digest.update(&get_i32_hash(self.animation as i32).to_le_bytes());
@@ -438,7 +437,7 @@ impl DataComponentImpl for UseCooldownImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&get_f32_hash(self.seconds).to_le_bytes());
         if let Some(group) = &self.cooldown_group {
             digest.update(&get_str_hash(group).to_le_bytes());
@@ -543,7 +542,7 @@ impl DataComponentImpl for PotionContentsImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         if let Some(id) = self.potion_id {
             digest.update(&[1u8]);
             digest.update(&get_i32_hash(id).to_le_bytes());
@@ -668,7 +667,7 @@ impl DataComponentImpl for SuspiciousStewEffectsImpl {
         )
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         for effect in self.effects.iter() {
             digest.update(&get_str_hash(&effect.effect).to_le_bytes());
             digest.update(&get_i32_hash(effect.duration).to_le_bytes());

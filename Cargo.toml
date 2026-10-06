@@ -174,7 +174,7 @@ futures = { version = "0.3", default-features = false, features = ["std"] }
 rayon = { version = "1.12", default-features = false }
 crossbeam = { version = "0.8", default-features = false, features = ["std"] }
 
-uuid = { version = "1.26", default-features = false, features = ["serde", "v3", "v4", "std"] }
+uuid = { version = "1.27", default-features = false, features = ["serde", "v3", "v4", "std"] }
 serde = { version = "1.0", default-features = false, features = ["derive", "std"] }
 serde_repr = { version = "0.1", default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
@@ -182,14 +182,14 @@ serde_json = { version = "1.0", default-features = false, features = ["std"] }
 tempfile = { version = "3.27.0", default-features = false }
 proc-macro-error2 = { version = "2", default-features = false }
 aes = { version = "0.9", default-features = false }
-async-compression = { version = "0.4.48", default-features = false }
+async-compression = { version = "0.4.50", default-features = false }
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
 cesu8 = { version = "1.1", default-features = false }
 cfb8 = { version = "0.9", default-features = false }
 colored = { version = "3.1", default-features = false }
 console-subscriber = { version = "0.5.0", default-features = false }
-crc-fast = { version = "1.10.0", default-features = false, features = ["std"] }
+crc32c = { version = "0.6.8", default-features = false }
 criterion = { version = "0.8", default-features = false }
 crypto-bigint = { version = "0.7.5", default-features = false }
 dashmap = { version = "6.2", default-features = false }
@@ -256,7 +256,7 @@ toml = { version = "1.1", default-features = false, features = ["parse", "displa
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "json", "http2"] }
 notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
 
-sysinfo = { version = "0.39", default-features = false, features = ["system"] }
+sysinfo = { version = "0.38", default-features = false, features = ["system"] }
 rustc_version_runtime = { version = "0.3", default-features = false }
 ordered-float = { version = "5.4", default-features = false, features = ["std"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
@@ -269,15 +269,18 @@ wasmtime-wasi-http = { git = "https://github.com/bytecodealliance/wasmtime", rev
 
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.11", default-features = false }
-axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
-webrtc = { version = "0.20.5" }
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "ws"] }
+subtle = { version = "2.6", default-features = false }
+webrtc = { version = "0.21.0" }
 async-trait = "0.1"
 wit-bindgen = { version = "0.62", default-features = false, features = ["macros"] }
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
-wasmparser = { version = "0.259", default-features = false }
-wasm-encoder = { version = "0.259", default-features = false, features = ["component-model", "std"] }
+wasmparser = { version = "0.261", default-features = false }
+wasm-encoder = { version = "0.261", default-features = false, features = ["component-model", "std"] }
 webpki-root-certs = { version = "1.0.9", default-features = false }
 # ring-only: must match the provider the rest of the tree (wasmtime-wasi-http, rtc) uses
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }
+

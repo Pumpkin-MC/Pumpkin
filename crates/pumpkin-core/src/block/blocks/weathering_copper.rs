@@ -12,6 +12,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
 
+use crate::block::blocks::chain::ChainBlock;
 use crate::block::blocks::doors::DoorBlock;
 use crate::block::blocks::slabs::SlabBlock;
 use crate::block::blocks::stairs::StairBlock;
@@ -575,7 +576,7 @@ pub fn change_over_time(world: &Arc<World>, position: &BlockPos, block: &Block) 
 // Block implementations
 // ---------------------------------------------------------------------------
 
-/// Handles standard full weathering copper blocks, grates, bars, chains, lanterns, and statues.
+/// Weathering behavior for copper blocks without a specialized handler.
 #[derive(Default)]
 pub struct WeatheringCopperBlock;
 
@@ -622,10 +623,6 @@ impl BlockMetadata for WeatheringCopperBlock {
             BlockId::EXPOSED_COPPER_BARS,
             BlockId::WEATHERED_COPPER_BARS,
             BlockId::OXIDIZED_COPPER_BARS,
-            BlockId::COPPER_CHAIN,
-            BlockId::EXPOSED_COPPER_CHAIN,
-            BlockId::WEATHERED_COPPER_CHAIN,
-            BlockId::OXIDIZED_COPPER_CHAIN,
             BlockId::COPPER_LANTERN,
             BlockId::EXPOSED_COPPER_LANTERN,
             BlockId::WEATHERED_COPPER_LANTERN,
@@ -663,6 +660,60 @@ const fn is_copper_golem_statue(id: BlockId) -> bool {
             | BlockId::WEATHERED_COPPER_GOLEM_STATUE
             | BlockId::OXIDIZED_COPPER_GOLEM_STATUE
     )
+}
+
+/// Weathering copper chain blocks.
+#[derive(Default)]
+pub struct WeatheringCopperChainBlock;
+
+impl ChangeOverTimeBlock<WeatherState> for WeatheringCopperChainBlock {
+    fn get_age(&self, block: &Block) -> Option<WeatherState> {
+        get_weather_state(block)
+    }
+
+    fn get_chance_modifier(&self, age: WeatherState) -> f32 {
+        get_chance_modifier(age)
+    }
+
+    fn get_next(&self, block: &Block) -> Option<&'static Block> {
+        get_next(block)
+    }
+
+    fn get_previous(&self, block: &Block) -> Option<&'static Block> {
+        get_previous(block)
+    }
+
+    fn get_first(&self, block: &Block) -> Option<&'static Block> {
+        get_first(block)
+    }
+}
+
+impl WeatheringCopper for WeatheringCopperChainBlock {}
+
+impl BlockMetadata for WeatheringCopperChainBlock {
+    fn ids() -> Box<[BlockId]> {
+        [
+            BlockId::COPPER_CHAIN,
+            BlockId::EXPOSED_COPPER_CHAIN,
+            BlockId::WEATHERED_COPPER_CHAIN,
+            BlockId::OXIDIZED_COPPER_CHAIN,
+        ]
+        .into()
+    }
+}
+
+impl BlockBehaviour for WeatheringCopperChainBlock {
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        ChainBlock.on_place(args)
+    }
+
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        change_over_time(args.world, args.position, args.block);
+    }
+
+    fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
+        ChainBlock.is_pathfindable(state, computation_type)
+    }
 }
 
 /// Weathering copper stair blocks.
