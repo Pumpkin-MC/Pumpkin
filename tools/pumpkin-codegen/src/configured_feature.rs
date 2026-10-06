@@ -11,6 +11,29 @@ use crate::placed_feature::{
     value_to_block_state_codec, value_to_height_provider, value_to_int_provider,
 };
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolves_tree_soil_provider_references() {
+        for name in ["soil_beneath_tree", "podzol_beneath_tree"] {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../assets/datapack/data/minecraft/worldgen/block_state_provider")
+                .join(format!("{name}.json"));
+            let inline: Value = serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+            let expected = value_to_block_state_provider(&inline).to_string();
+            assert!(expected.contains("BlockStateProvider :: Rule"));
+            for reference in [format!("minecraft:{name}"), name.to_string()] {
+                assert_eq!(
+                    value_to_block_state_provider(&Value::String(reference)).to_string(),
+                    expected,
+                );
+            }
+        }
+    }
+}
+
 fn load_configured_features() -> BTreeMap<String, Value> {
     let dir = Path::new("../../assets/datapack/data/minecraft/worldgen/feature");
     let mut map = BTreeMap::new();
@@ -1075,6 +1098,19 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
 /// # Returns
 /// A `TokenStream` for the appropriate `BlockStateProvider` variant; defaults to `BlockStateProvider::Simple` with air if the type is unrecognised.
 fn value_to_block_state_provider(v: &Value) -> TokenStream {
+    if let Some(id) = v.as_str() {
+        let (namespace, name) = id.split_once(':').unwrap_or(("minecraft", id));
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/datapack/data")
+            .join(namespace)
+            .join("worldgen/block_state_provider")
+            .join(format!("{name}.json"));
+        let content = fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("Failed to read block state provider {id}: {err}"));
+        let provider: Value = serde_json::from_str(&content)
+            .unwrap_or_else(|err| panic!("Failed to parse block state provider {id}: {err}"));
+        return value_to_block_state_provider(&provider);
+    }
     if v.get("type").is_none() && (v.get("id").is_some() || v.get("Name").is_some()) {
         let state = value_to_block_state(v);
         return quote! { BlockStateProvider::Simple(SimpleStateProvider { state: #state }) };
