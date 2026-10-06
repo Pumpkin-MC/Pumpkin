@@ -2,6 +2,7 @@ use crate::data_component_impl::{DataComponentImpl, get_i32_hash, get_str_hash};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::ARGBColor;
 use std::borrow::Cow;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -291,9 +292,10 @@ pub struct CustomModelDataImpl {
 impl CustomModelDataImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
+        // SNBT `1` / `1.0` are Int/Double; vanilla Codec.FLOAT accepts any number.
         let floats = compound
             .get_list("floats")
-            .map(|l| l.iter().filter_map(NbtTag::extract_float).collect())
+            .map(|l| l.iter().filter_map(NbtTag::as_numeric_float).collect())
             .unwrap_or_default();
         let flags = compound
             .get_list("flags")
@@ -307,11 +309,11 @@ impl CustomModelDataImpl {
                     .collect()
             })
             .unwrap_or_default();
-        // Vanilla encodes the color list as ints, but tolerate a packed int array too.
+        // Vanilla encodes colors as ints; SNBT also allows [r,g,b] float triples.
         let colors = if let Some(arr) = compound.get_int_array("colors") {
             arr.to_vec()
         } else if let Some(l) = compound.get_list("colors") {
-            l.iter().filter_map(NbtTag::extract_int).collect()
+            l.iter().filter_map(Self::read_color).collect()
         } else {
             Vec::new()
         };
@@ -321,6 +323,20 @@ impl CustomModelDataImpl {
             strings,
             colors,
         })
+    }
+
+    fn read_color(tag: &NbtTag) -> Option<i32> {
+        if let Some(rgb) = tag.as_numeric_int() {
+            return Some(rgb);
+        }
+        let channels = tag.extract_list()?;
+        if channels.len() != 3 {
+            return None;
+        }
+        let r = channels[0].as_numeric_float()?;
+        let g = channels[1].as_numeric_float()?;
+        let b = channels[2].as_numeric_float()?;
+        Some(ARGBColor::from_float(1.0, r, g, b).to_argb_int())
     }
 }
 impl DataComponentImpl for CustomModelDataImpl {
