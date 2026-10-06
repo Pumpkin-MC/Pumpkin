@@ -2215,15 +2215,16 @@ impl DataComponentCodec<Self> for MapPostProcessingImpl {
     }
 }
 
+const MAX_CHARGED_PROJECTILES: i32 = 64;
+
 impl DataComponentCodec<Self> for ChargedProjectilesImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         // `minecraft:charged_projectiles` is a VarInt count followed by that many Slots.
-        let count = i32::try_from(self.projectiles.len()).map_err(|_| {
-            WritingError::Message(format!(
-                "{} charged projectiles do not fit in a VarInt",
-                self.projectiles.len()
-            ))
-        })?;
+        let count = i32::try_from(self.projectiles.len())
+            .map_err(|_| WritingError::Message("Too many charged projectiles".into()))?;
+        if count > MAX_CHARGED_PROJECTILES {
+            return Err(WritingError::Message("Too many charged projectiles".into()));
+        }
         seq.write_var_int(&VarInt(count))?;
         for projectile in &self.projectiles {
             let stack = pumpkin_data::item_stack::ItemStack::read_item_stack(projectile)
@@ -2234,13 +2235,9 @@ impl DataComponentCodec<Self> for ChargedProjectilesImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        const MAX_PROJECTILES: i32 = 64;
-
         let len = seq.get_var_int()?.0;
-        if !(0..=MAX_PROJECTILES).contains(&len) {
-            return Err(ReadingError::Message(
-                "Too many charged projectiles".into(),
-            ));
+        if !(0..=MAX_CHARGED_PROJECTILES).contains(&len) {
+            return Err(ReadingError::Message("Too many charged projectiles".into()));
         }
         let mut projectiles = Vec::with_capacity(len as usize);
         for _ in 0..len {
@@ -2922,7 +2919,24 @@ mod tests {
         assert!(cursor.is_empty());
         let stack = ItemStack::read_item_stack(&decoded.projectiles[0]).unwrap();
         assert_eq!(stack.item.id, Item::ARROW.id);
-        assert!(stack.get_data_component::<IntangibleProjectileImpl>().is_some());
+        assert!(
+            stack
+                .get_data_component::<IntangibleProjectileImpl>()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn charged_projectiles_over_the_limit_are_not_written() {
+        let charged = ChargedProjectilesImpl {
+            projectiles: vec![
+                pumpkin_nbt::compound::NbtCompound::new();
+                (MAX_CHARGED_PROJECTILES as usize) + 1
+            ],
+        };
+        let mut encoded = Vec::new();
+        assert!(charged.serialize(&mut encoded).is_err());
+        assert!(encoded.is_empty());
     }
 
     #[test]
