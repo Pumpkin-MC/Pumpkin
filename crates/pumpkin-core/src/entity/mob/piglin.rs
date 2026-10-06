@@ -78,11 +78,6 @@ impl PiglinEntity {
     pub const XP_REWARD: u32 = 5;
     pub const AMBIENT_SOUND_INTERVAL: i32 = 80;
 
-    pub const ADULT_DIMENSIONS: EntityDimensions = EntityDimensions {
-        width: 0.6,
-        height: 1.95,
-        eye_height: 1.79,
-    };
     pub const BABY_DIMENSIONS: EntityDimensions = EntityDimensions {
         width: 0.49,
         height: 0.98,
@@ -226,14 +221,12 @@ impl PiglinEntity {
     }
 
     pub fn set_baby(&self, baby: bool) {
-        self.mob_entity
-            .set_baby_flag(&self.is_baby, tracked_data::piglin::DATA_BABY_ID, baby);
-        let entity = &self.mob_entity.living_entity.entity;
-        entity.set_default_dimensions(if baby {
-            Self::BABY_DIMENSIONS
-        } else {
-            Self::ADULT_DIMENSIONS
-        });
+        self.mob_entity.set_baby_flag(
+            &self.is_baby,
+            tracked_data::piglin::DATA_BABY_ID,
+            baby,
+            Self::BABY_DIMENSIONS,
+        );
     }
 
     #[must_use]

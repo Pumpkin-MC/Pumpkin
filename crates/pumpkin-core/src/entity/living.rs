@@ -1404,26 +1404,13 @@ impl LivingEntity {
             self.fall_distance.store(0.0);
         }
 
-        let touching_water = self.entity.touching_water.load(SeqCst);
-
         // Vanilla Mob.isEffectiveAi: NoAI mobs don't travel, so they neither move nor fall.
         let effective_ai = caller
             .get_mob()
             .is_none_or(|mob| !mob.get_mob_entity().is_no_ai());
 
-        // Strider is the only entity that has canWalkOnFluid = false
-
-        if !effective_ai {
-            // No travel.
-        } else if (touching_water || self.entity.touching_lava.load(SeqCst))
-            && should_swim_in_fluids
-            && self.entity.entity_type != &EntityType::STRIDER
-        {
-            self.travel_in_fluid(caller, touching_water);
-        } else {
-            // TODO: Gliding
-
-            self.travel_in_air(caller);
+        if effective_ai {
+            self.travel(caller);
         }
 
         let suffocating = self.entity.tick_block_collisions(caller);
@@ -1479,64 +1466,19 @@ impl LivingEntity {
         }
     }
 
-    /// Vanilla server `travel` for a player: no input, and the client owns the position,
-    /// so only the server velocity is stepped. Knockback builds on it.
-    fn travel_without_input(&self, caller: &dyn EntityBase) {
-        let mut velo = self.entity.velocity.load();
-        let on_ground = self.entity.on_ground.load(Relaxed);
-        let falling = velo.y <= 0.0;
-        let gravity = self.get_effective_gravity(caller);
-
-        if self.entity.touching_water.load(SeqCst) {
-            // travelInWater: default slowdown, then getFluidFallingAdjustedMovement
-            velo = velo.multiply(0.8, 0.8, 0.8);
-            if gravity != 0.0 && !self.entity.sprinting.load(Relaxed) {
-                velo.y = if falling
-                    && (velo.y - 0.005).abs() >= 0.003
-                    && (velo.y - gravity / 16.0).abs() < 0.003
-                {
-                    -0.003
-                } else {
-                    velo.y - gravity / 16.0
-                };
-            }
-        } else if self.entity.touching_lava.load(SeqCst) {
-            velo = velo * 0.5;
-            velo.y -= gravity / 4.0;
-        } else {
-            // `move` lands the player: vertical collision stops falling
-            if on_ground && velo.y < 0.0 {
-                velo.y = 0.0;
-            }
-            let friction = if on_ground {
-                f64::from(
-                    self.entity
-                        .get_block_with_y_offset(0.500_001)
-                        .1
-                        .slipperiness,
-                ) * 0.91
-            } else {
-                0.91
-            };
-            if let Some(lev) = self.get_effect(&StatusEffect::LEVITATION) {
-                velo.y += 0.05f64.mul_add(f64::from(lev.amplifier + 1), -velo.y) * 0.2;
-            } else {
-                velo.y -= gravity;
-            }
-            velo.x *= friction;
-            velo.z *= friction;
-            velo.y *= 0.98;
-        }
-
-        // Vanilla `Player.travel` while flying keeps 0.6 of the old vertical speed
-        if caller
-            .get_player()
-            .is_some_and(super::player::Player::is_flying)
+    /// Vanilla `LivingEntity.travel`, without gliding yet
+    fn travel(&self, caller: &dyn EntityBase) {
+        let should_swim_in_fluids = caller.get_player().is_none_or(|player| !player.is_flying());
+        let touching_water = self.entity.touching_water.load(SeqCst);
+        // Strider is the only entity that has canWalkOnFluid = false
+        if self.entity.is_in_liquid()
+            && should_swim_in_fluids
+            && self.entity.entity_type != &EntityType::STRIDER
         {
-            velo.y = self.entity.velocity.load().y * 0.6;
+            self.travel_in_fluid(caller, touching_water);
+        } else {
+            self.travel_in_air(caller);
         }
-
-        self.entity.velocity.store(velo);
     }
 
     fn travel_in_air(&self, caller: &dyn EntityBase) {
@@ -1713,7 +1655,17 @@ impl LivingEntity {
     }
 
     fn make_move(&self, caller: &dyn EntityBase) {
-        self.entity.move_entity(caller, self.entity.velocity.load());
+        if self.entity.entity_type == &EntityType::PLAYER {
+            // The client owns the position, only the landing of `move` applies
+            let velo = self.entity.velocity.load();
+            if self.entity.on_ground.load(Relaxed) && velo.y < 0.0 {
+                self.entity
+                    .velocity
+                    .store(Vector3::new(velo.x, 0.0, velo.z));
+            }
+        } else {
+            self.entity.move_entity(caller, self.entity.velocity.load());
+        }
 
         self.check_climbing();
     }
@@ -1958,19 +1910,19 @@ impl LivingEntity {
 
         let damage = (unsafe_fall_distance * damage_per_distance).floor();
         if damage > 0.0 {
-            let check_damage = self.damage(caller, damage, DamageType::FALL); // Fall
-            if check_damage {
-                self.entity
-                    .play_sound(Self::get_fall_sound(fall_distance as i32));
-            }
+            self.entity.play_sound(self.fall_sound(damage as i32));
+            self.damage(caller, damage, DamageType::FALL);
         }
     }
 
-    const fn get_fall_sound(distance: i32) -> Sound {
-        if distance > 4 {
-            Sound::EntityGenericBigFall
-        } else {
-            Sound::EntityGenericSmallFall
+    /// Vanilla `getFallDamageSound` with `getFallSounds`, which players override
+    pub fn fall_sound(&self, damage: i32) -> Sound {
+        let is_player = self.entity.entity_type == &EntityType::PLAYER;
+        match (is_player, damage > 4) {
+            (true, true) => Sound::EntityPlayerBigFall,
+            (true, false) => Sound::EntityPlayerSmallFall,
+            (false, true) => Sound::EntityGenericBigFall,
+            (false, false) => Sound::EntityGenericSmallFall,
         }
     }
 
@@ -3426,9 +3378,21 @@ impl EntityBase for LivingEntity {
             // Vanilla-like order: freeze logic runs after movement/collisions.
             self.entity.tick_frozen(caller);
         } else if is_alive {
-            // Unsent knockback goes out undecayed
+            // Vanilla server `travel` for a player, which has no input. Unsent knockback
+            // goes out undecayed.
             if !self.entity.sync_velocity.load(Ordering::SeqCst) {
-                self.travel_without_input(caller);
+                let old_y = self.entity.velocity.load().y;
+                self.travel(caller);
+                // Vanilla `Player.travel` while flying keeps 0.6 of the old vertical speed
+                if caller
+                    .get_player()
+                    .is_some_and(super::player::Player::is_flying)
+                {
+                    let velo = self.entity.velocity.load();
+                    self.entity
+                        .velocity
+                        .store(Vector3::new(velo.x, old_y * 0.6, velo.z));
+                }
             }
 
             let suffocating = self.entity.tick_block_collisions(caller);

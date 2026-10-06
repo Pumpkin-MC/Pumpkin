@@ -11,5 +11,7 @@ impl JavaClient {
             .entity
             .on_ground
             .store(ground.on_ground, Ordering::Relaxed);
+        // Vanilla runs status packets through the move path too, with no movement
+        player.do_check_fall_damage(Vector3::default(), ground.on_ground, false);
     }
 }

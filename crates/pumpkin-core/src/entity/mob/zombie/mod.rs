@@ -146,13 +146,8 @@ impl ZombieEntityBase {
             &self.is_baby,
             pumpkin_data::tracked_data::zombie::BABY,
             baby,
+            Self::baby_dimensions(self.mob_entity.living_entity.entity.entity_type),
         );
-        let entity = &self.mob_entity.living_entity.entity;
-        entity.set_default_dimensions(if baby {
-            Self::baby_dimensions(entity.entity_type)
-        } else {
-            Entity::type_dimensions(entity.entity_type)
-        });
     }
 
     /// Vanilla `BABY_DIMENSIONS` of `Zombie`, `Husk`, `Drowned` and `ZombieVillager`.

@@ -249,6 +249,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .add_raw(0.0, self.bedrock_y_offset(), 0.0)
     }
 
+    /// Feet position of a Bedrock network position
+    fn feet_from_bedrock_pos(&self, bedrock_pos: Vector3<f64>) -> Vector3<f64> {
+        bedrock_pos.add_raw(0.0, -self.bedrock_y_offset(), 0.0)
+    }
+
     fn get_mob(&self) -> Option<&dyn mob::Mob> {
         None
     }
@@ -1725,7 +1730,10 @@ impl Entity {
     pub fn update_last_pos(&self) -> Vector3<f64> {
         let pos = self.pos.load();
         let old = self.last_pos.load();
-        self.movement.store(pos - old);
+        // A player's movement is its last client move, set by the move handlers
+        if self.entity_type != &EntityType::PLAYER {
+            self.movement.store(pos - old);
+        }
         self.last_pos.store(pos);
         old
     }
@@ -2548,6 +2556,12 @@ impl Entity {
     #[must_use]
     pub fn is_in_water(&self) -> bool {
         self.touching_water.load(Ordering::Relaxed)
+    }
+
+    /// Vanilla `isInLiquid`
+    #[must_use]
+    pub fn is_in_liquid(&self) -> bool {
+        self.is_in_water() || self.touching_lava.load(Ordering::Relaxed)
     }
 
     #[must_use]
@@ -3910,13 +3924,7 @@ impl Entity {
                         ],
                     ));
                     if let Some(client) = player.client.bedrock() {
-                        client.teleport_unconfirmed_inputs.store(0, Relaxed);
-                        player.send_bedrock_teleport(
-                            client,
-                            dismount_pos,
-                            passenger_entity.yaw.load(),
-                            passenger_entity.pitch.load(),
-                        );
+                        player.send_bedrock_teleport(client);
                     }
                 }
 

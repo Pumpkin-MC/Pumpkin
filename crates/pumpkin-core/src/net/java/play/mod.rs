@@ -54,7 +54,6 @@ use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_protocol::bedrock::client::CMovePlayer;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, CPingResponse,
     CPlayerInfoUpdate, CPlayerPosition, CSetCamera, CSetSelectedSlot, CUpdateEntityPos,
@@ -82,32 +81,6 @@ use pumpkin_world::world::BlockFlags;
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
 const CHAT_MESSAGE_MAX_AGE: i64 = 1000 * 60 * 2;
-
-/// Bedrock move/rotate for another player's tracked entity. Client lerps, no delta packet needed.
-fn bedrock_move_player_packet(
-    entity: &Entity,
-    pos: Vector3<f64>,
-    mode: u8,
-    on_ground: bool,
-) -> CMovePlayer {
-    CMovePlayer::new(
-        VarULong(entity.entity_id as u64),
-        Vector3::new(
-            pos.x as f32,
-            pos.y as f32 + entity.entity_type.eye_height,
-            pos.z as f32,
-        ),
-        entity.pitch.load(),
-        entity.yaw.load(),
-        entity.head_yaw.load(),
-        mode,
-        on_ground,
-        VarULong(0),
-        0,
-        0,
-        VarULong(0),
-    )
-}
 
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {

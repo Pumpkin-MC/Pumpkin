@@ -478,9 +478,7 @@ impl SlimeFloatGoal {
 
 impl Goal for SlimeFloatGoal {
     fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        let entity = &self.slime.entity.living_entity.entity;
-        entity.touching_water.load(Ordering::Relaxed)
-            || entity.touching_lava.load(Ordering::Relaxed)
+        self.slime.entity.living_entity.entity.is_in_liquid()
     }
 
     fn tick(&mut self, _mob: &dyn Mob) {

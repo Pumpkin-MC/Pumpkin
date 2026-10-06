@@ -33,16 +33,16 @@ impl JavaClient {
         let je_packet =
             CUpdateEntityRot::new(entity_id.into(), yaw as u8, pitch as u8, rotation.ground);
 
-        let pos = entity.pos.load();
-
         // MODE_ROTATION not used for other players -> AvatarEntity always sends
         // MODE_NORMAL (client already lerps). MODE_ROTATION drops live head yaw on Bedrock.
-        let be_packet =
-            bedrock_move_player_packet(entity, pos, CMovePlayer::MODE_NORMAL, rotation.ground);
+        let be_packet = player.bedrock_move_packet(CMovePlayer::MODE_NORMAL, rotation.ground, 0);
 
         world.send_to_tracking_players_editioned(entity, &je_packet, &be_packet);
 
         let je_packet = CHeadRot::new(entity_id.into(), yaw as u8);
         world.send_to_tracking_players(entity, &je_packet);
+
+        // Vanilla runs rotation packets through the move path too, with no movement
+        player.do_check_fall_damage(Vector3::default(), rotation.ground, false);
     }
 }

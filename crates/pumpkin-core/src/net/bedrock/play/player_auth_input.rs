@@ -30,10 +30,7 @@ impl BedrockClient {
         self.input_tick.store(packet.tick.0, Ordering::Relaxed);
         self.client_delta.store(packet.delta.to_f64());
 
-        let new_pos = packet
-            .position
-            .add_raw(0.0, -entity.entity_type.eye_height, 0.0)
-            .to_f64();
+        let new_pos = player.feet_from_bedrock_pos(packet.position.to_f64());
         let old_pos = player.position();
 
         let new_pitch = packet.pitch;
@@ -52,36 +49,19 @@ impl BedrockClient {
                 player.get_entity().set_pos(new_pos);
             }
             if rot_changed {
-                entity.pitch.store(new_pitch);
-                entity.yaw.store(new_yaw);
+                entity.set_rotation(new_yaw, new_pitch);
             }
 
             // TODO: use `pumpkin_util::math::pack_degrees`.
             let je_yaw = (new_yaw * 256.0 / 360.0).rem_euclid(256.0);
             let je_pitch = (new_pitch * 256.0 / 360.0).rem_euclid(256.0);
 
-            let delta = pumpkin_util::math::vector3::Vector3::new(
-                new_pos.x - old_pos.x,
-                new_pos.y - old_pos.y,
-                new_pos.z - old_pos.z,
-            );
+            let delta = new_pos - old_pos;
 
-            let bedrock_move_packet = pumpkin_protocol::bedrock::client::CMovePlayer::new(
-                pumpkin_protocol::codec::var_ulong::VarULong(player.entity_id() as u64),
-                pumpkin_util::math::vector3::Vector3::new(
-                    new_pos.x as f32,
-                    new_pos.y as f32 + entity.entity_type.eye_height,
-                    new_pos.z as f32,
-                ),
-                new_pitch,
-                new_yaw,
-                new_yaw, // Head yaw
+            let bedrock_move_packet = player.bedrock_move_packet(
                 pumpkin_protocol::bedrock::client::CMovePlayer::MODE_NORMAL,
                 on_ground,
-                pumpkin_protocol::codec::var_ulong::VarULong(0),
                 0,
-                0,
-                pumpkin_protocol::codec::var_ulong::VarULong(0),
             );
 
             if pos_changed && delta.length_squared() >= 64.0 {
@@ -294,11 +274,7 @@ impl BedrockClient {
         let Some((_, target)) = *awaiting else {
             return false;
         };
-        let entity = player.get_entity();
-        let position = packet
-            .position
-            .add_raw(0.0, -entity.entity_type.eye_height, 0.0)
-            .to_f64();
+        let position = player.feet_from_bedrock_pos(packet.position.to_f64());
         if (position.x - target.x).abs() < TELEPORT_ERROR
             && (position.y - target.y).abs() < TELEPORT_ERROR
             && (position.z - target.z).abs() < TELEPORT_ERROR
@@ -313,9 +289,8 @@ impl BedrockClient {
             + 1
             >= RESEND_INPUTS
         {
-            self.teleport_unconfirmed_inputs.store(0, Ordering::Relaxed);
             drop(awaiting);
-            player.send_bedrock_teleport(self, target, entity.yaw.load(), entity.pitch.load());
+            player.send_bedrock_teleport(self);
         }
         true
     }

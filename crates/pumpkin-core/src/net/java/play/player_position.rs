@@ -37,17 +37,16 @@ impl JavaClient {
                 entity.pitch.load(),
                 on_ground,
             ),
-            &bedrock_move_player_packet(entity, pos, CMovePlayer::MODE_TELEPORT, on_ground),
+            &player.bedrock_move_packet(CMovePlayer::MODE_TELEPORT, on_ground, 0),
         );
         // Bedrock ignores head yaw on teleport -> follow-up normal move re-asserts.
         world.send_to_tracking_players_bedrock(
             entity,
-            &bedrock_move_player_packet(entity, pos, CMovePlayer::MODE_NORMAL, on_ground),
+            &player.bedrock_move_packet(CMovePlayer::MODE_NORMAL, on_ground, 0),
         );
         true
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn handle_position(
         &self,
         player: &Arc<Player>,
@@ -140,12 +139,7 @@ impl JavaClient {
                             ),
                             packet.collision & FLAG_ON_GROUND != 0,
                         ),
-                        &bedrock_move_player_packet(
-                            entity,
-                            pos,
-                            CMovePlayer::MODE_NORMAL,
-                            packet.collision & FLAG_ON_GROUND != 0,
-                        ),
+                        &player.bedrock_move_packet(CMovePlayer::MODE_NORMAL, packet.collision & FLAG_ON_GROUND != 0, 0),
                     );
                 }
 
@@ -291,11 +285,10 @@ impl JavaClient {
                             pitch as u8,
                             (packet.collision & FLAG_ON_GROUND) != 0,
                         ),
-                        &bedrock_move_player_packet(
-                            entity,
-                            pos,
+                        &player.bedrock_move_packet(
                             CMovePlayer::MODE_NORMAL,
                             (packet.collision & FLAG_ON_GROUND) != 0,
+                            0,
                         ),
                     );
                 }

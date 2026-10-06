@@ -176,7 +176,9 @@ impl Mob for HoglinEntity {
 
     fn spawn_as_baby(&self) -> bool {
         self.is_baby.store(true, Ordering::Relaxed);
-        self.mob_entity.set_baby_by_age();
+        // Vanilla `Hoglin.BABY_DIMENSIONS` is the zoglin one
+        self.mob_entity
+            .set_baby_by_age(super::zoglin::ZoglinEntity::BABY_DIMENSIONS);
         true
     }
 

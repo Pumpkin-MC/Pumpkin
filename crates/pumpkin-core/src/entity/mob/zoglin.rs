@@ -123,14 +123,13 @@ impl ZoglinEntity {
 
     /// Vanilla `Zoglin.setBaby`; growing up keeps the lowered attack damage, as in vanilla.
     pub fn set_baby(&self, baby: bool) {
-        self.mob_entity
-            .set_baby_flag(&self.is_baby, tracked_data::zoglin::DATA_BABY_ID, baby);
+        self.mob_entity.set_baby_flag(
+            &self.is_baby,
+            tracked_data::zoglin::DATA_BABY_ID,
+            baby,
+            Self::BABY_DIMENSIONS,
+        );
         let living = &self.mob_entity.living_entity;
-        living.entity.set_default_dimensions(if baby {
-            Self::BABY_DIMENSIONS
-        } else {
-            Entity::type_dimensions(living.entity.entity_type)
-        });
         if baby {
             living.set_attribute_base(&Attributes::ATTACK_DAMAGE, Self::BABY_ATTACK_DAMAGE);
         }

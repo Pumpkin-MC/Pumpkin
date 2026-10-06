@@ -233,6 +233,9 @@ impl BedrockPlayer<'_> {
         self.client_data().map(|d| d.graphics_mode)
     }
 }
+use crate::net::bedrock::play::{
+    bedrock_inventory_slot, bedrock_player_inventory_slot, send_bedrock_inventory_slot,
+};
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::damage::DamageType;
@@ -262,7 +265,6 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::SoundEvent;
 use pumpkin_protocol::bedrock::client::container_open::CContainerOpen;
-use pumpkin_protocol::bedrock::network_item::ContainerName as BedrockContainer;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventID, SActorEvent};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
@@ -373,72 +375,6 @@ pub const DATA_VERSION: i32 = 4903; // 26.2
 /// non-creative players holding a tool that can harvest the block, so callers
 /// must apply the same gating.
 pub const MINE_BLOCK_EXHAUSTION: f32 = 0.005; // Vanilla: 0.005F
-
-/// Bedrock container id, name and slot of a Java player-screen slot, like Geyser's `PlayerInventoryTranslator`
-const fn bedrock_inventory_slot(player_screen_slot: i16) -> Option<(u32, BedrockContainer, u32)> {
-    match player_screen_slot {
-        5..=8 => Some((
-            BEDROCK_ARMOR_CONTAINER,
-            BedrockContainer::Armor,
-            (player_screen_slot - 5) as u32,
-        )),
-        9..=35 => Some((0, BedrockContainer::Inventory, player_screen_slot as u32)),
-        36..=44 => Some((
-            0,
-            BedrockContainer::Inventory,
-            (player_screen_slot - 36) as u32,
-        )),
-        45 => Some((BEDROCK_OFFHAND_CONTAINER, BedrockContainer::Offhand, 0)),
-        _ => None,
-    }
-}
-
-/// Same as [`bedrock_inventory_slot`] for a `PlayerInventory` index
-const fn bedrock_player_inventory_slot(index: usize) -> Option<(u32, BedrockContainer, u32)> {
-    match index {
-        0..=35 => Some((0, BedrockContainer::Inventory, index as u32)),
-        // Feet to head here, head to feet on Bedrock
-        36..=39 => Some((
-            BEDROCK_ARMOR_CONTAINER,
-            BedrockContainer::Armor,
-            (39 - index) as u32,
-        )),
-        PlayerInventory::OFF_HAND_SLOT => {
-            Some((BEDROCK_OFFHAND_CONTAINER, BedrockContainer::Offhand, 0))
-        }
-        _ => None,
-    }
-}
-
-const BEDROCK_OFFHAND_CONTAINER: u32 = 119;
-const BEDROCK_ARMOR_CONTAINER: u32 = 120;
-
-/// Sends one slot of the Bedrock player's own containers
-fn send_bedrock_inventory_slot(
-    bedrock: &crate::net::bedrock::BedrockClient,
-    (container_id, container_name, slot): (u32, BedrockContainer, u32),
-    stack: &ItemStack,
-) {
-    use pumpkin_protocol::bedrock::{
-        client::inventory_slot::CInventorySlot,
-        network_item::{FullContainerName, NetworkItemStackDescriptor},
-    };
-    use pumpkin_protocol::codec::var_uint::VarUInt;
-
-    let packet = CInventorySlot {
-        container_id: VarUInt(container_id),
-        slot: VarUInt(slot),
-        full_container_name: Some(FullContainerName {
-            container_name,
-            dynamic_id: None,
-        }),
-        storage_item: None,
-        item: NetworkItemStackDescriptor::from(stack),
-    };
-    if let Ok(data) = bedrock.serialize_packet(&packet) {
-        bedrock.try_enqueue_packet(data);
-    }
-}
 
 /// Represents a Minecraft player entity.
 ///
@@ -591,8 +527,6 @@ pub struct Player {
     pub enchantment_seed: AtomicI32,
     /// Ticks spent gliding, vanilla `fallFlyTicks`
     pub fall_fly_ticks: AtomicI32,
-    /// Position step of the last client move, both editions
-    pub last_move: AtomicCell<Vector3<f64>>,
     pub fishing_bobber: AtomicI32,
     pub bedrock_skin: arc_swap::ArcSwap<pumpkin_protocol::bedrock::client::Skin>,
     pub seen_credits: AtomicBool,
@@ -807,7 +741,6 @@ impl Player {
             synced_mining_efficiency_level: AtomicI32::new(-1),
             enchantment_seed: AtomicI32::new(rand::random()),
             fall_fly_ticks: AtomicI32::new(0),
-            last_move: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
             raid_omen_position: AtomicCell::new(None),
@@ -3216,11 +3149,7 @@ impl Player {
     /// Vanilla `tryToStartFallFlying`, for the glide request of both editions
     pub fn try_to_start_fall_flying(&self, server: &Arc<Server>) -> bool {
         let entity = &self.living_entity.entity;
-        if entity.is_fall_flying()
-            || !self.can_glide()
-            || entity.is_in_water()
-            || entity.touching_lava.load(Ordering::Relaxed)
-        {
+        if entity.is_fall_flying() || !self.can_glide() || entity.is_in_liquid() {
             return false;
         }
         let mut event =
@@ -3245,7 +3174,7 @@ impl Player {
         }
         // Vanilla `checkFallDistanceAccumulation`: only a steep dive builds it up. In the tick,
         // so a landing move has already taken its damage.
-        if self.last_move.load().y > -0.5 && self.living_entity.fall_distance.load() > 1.0 {
+        if entity.movement.load().y > -0.5 && self.living_entity.fall_distance.load() > 1.0 {
             self.living_entity.fall_distance.store(1.0);
         }
         if !self.can_glide() {
@@ -3271,11 +3200,9 @@ impl Player {
     fn handle_fall_flying_collision(&self, last_speed: f64, new_speed: f64) {
         let damage = (last_speed - new_speed).mul_add(10.0, -3.0) as f32;
         if damage > 0.0 {
-            self.living_entity.entity.play_sound(if damage as i32 > 4 {
-                Sound::EntityPlayerBigFall
-            } else {
-                Sound::EntityPlayerSmallFall
-            });
+            self.living_entity
+                .entity
+                .play_sound(self.living_entity.fall_sound(damage as i32));
             self.living_entity
                 .damage(self, damage, DamageType::FLY_INTO_WALL);
         }
@@ -3289,7 +3216,8 @@ impl Player {
         on_ground: bool,
         horizontal_collision: bool,
     ) {
-        let last_move = self.last_move.swap(movement);
+        // Vanilla `handlePlayerKnownMovement`
+        let last_move = self.living_entity.entity.movement.swap(movement);
         if self.is_flying()
             || self.living_entity.health.load() <= 0.0
             || self.living_entity.dead.load(Ordering::Relaxed)
@@ -4423,42 +4351,40 @@ impl Player {
                 }
             }
             ClientPlatform::Bedrock(client) => {
-                client
-                    .teleport_unconfirmed_inputs
-                    .store(0, Ordering::Relaxed);
-                self.send_bedrock_teleport(client, position, yaw, pitch);
+                self.send_bedrock_teleport(client);
             }
         }
     }
 
-    /// Bedrock has no teleport id: the client confirms by reaching the position.
-    pub fn send_bedrock_teleport(
-        &self,
-        client: &crate::net::bedrock::BedrockClient,
-        position: Vector3<f64>,
-        yaw: f32,
-        pitch: f32,
-    ) {
-        let packet = CBedrockMovePlayer::new(
-            VarULong(self.entity_id() as u64),
-            Vector3::new(
-                position.x as f32,
-                position.y as f32 + self.living_entity.entity.entity_type.eye_height,
-                position.z as f32,
-            ),
-            pitch,
-            yaw,
-            yaw,
-            CBedrockMovePlayer::MODE_TELEPORT,
-            false,
+    /// `MovePlayer` at the current position and rotation, for the own client and watchers
+    pub fn bedrock_move_packet(&self, mode: u8, on_ground: bool, tick: u64) -> CBedrockMovePlayer {
+        let entity = &self.living_entity.entity;
+        CBedrockMovePlayer::new(
+            VarULong(entity.entity_id as u64),
+            self.bedrock_pos().to_f32_lossy(),
+            entity.pitch.load(),
+            entity.yaw.load(),
+            entity.head_yaw.load(),
+            mode,
+            on_ground,
             VarULong(0),
             0,
             0,
-            VarULong(client.input_tick.load(Ordering::Relaxed)),
-        );
-        if let Ok(data) = client.serialize_packet(&packet) {
-            client.try_enqueue_packet(data);
-        }
+            VarULong(tick),
+        )
+    }
+
+    /// Teleports the Bedrock client to the current position. It has no teleport id and
+    /// confirms by reaching the position.
+    pub fn send_bedrock_teleport(&self, client: &crate::net::bedrock::BedrockClient) {
+        client
+            .teleport_unconfirmed_inputs
+            .store(0, Ordering::Relaxed);
+        client.try_enqueue_client_packet(&self.bedrock_move_packet(
+            CBedrockMovePlayer::MODE_TELEPORT,
+            false,
+            client.input_tick.load(Ordering::Relaxed),
+        ));
     }
 
     pub fn block_interaction_range(&self) -> f64 {
@@ -4696,19 +4622,11 @@ impl Player {
 
     fn send_bedrock_respawn_state(&self, state: RespawnState) {
         if let ClientPlatform::Bedrock(client) = self.client.as_ref() {
-            let entity = self.get_entity();
-            let position = entity.pos.load();
-            if let Ok(data) = client.serialize_packet(&SBedrockRespawn {
-                position: Vector3::new(
-                    position.x as f32,
-                    position.y as f32 + entity.entity_type.eye_height,
-                    position.z as f32,
-                ),
+            client.try_enqueue_client_packet(&SBedrockRespawn {
+                position: self.bedrock_pos().to_f32_lossy(),
                 state,
                 player_runtime_id: VarULong(self.entity_id() as u64),
-            }) {
-                client.try_enqueue_packet(data);
-            }
+            });
         }
     }
 
@@ -7133,6 +7051,11 @@ impl EntityBase for Player {
     }
 
     /// Bedrock renders remote players only from `AddPlayer`, never `AddActor`.
+    /// Endstone `getBaseOffset`: a player's Bedrock position is at its eyes
+    fn bedrock_y_offset(&self) -> f64 {
+        f64::from(self.living_entity.entity.entity_type.eye_height)
+    }
+
     fn send_bedrock_spawn_packet(&self, client: &crate::net::bedrock::BedrockClient) {
         let (player_list, add_player) = self.bedrock_spawn_packets();
         let equipment = pumpkin_protocol::bedrock::client::CMobEquipment {
@@ -7984,11 +7907,11 @@ impl InventoryPlayer for Player {
                         bedrock.try_enqueue_packet(data);
                     }
                     // Armor and off-hand are their own containers on Bedrock
-                    for (index, stack) in packet.slot_data.iter().enumerate() {
-                        if let Some(target @ (container_id, _, _)) =
-                            bedrock_inventory_slot(index as i16)
-                            && container_id != 0
-                        {
+                    for slot in (5..=8).chain([45]) {
+                        if let (Some(target), Some(stack)) = (
+                            bedrock_inventory_slot(slot),
+                            packet.slot_data.get(slot as usize),
+                        ) {
                             send_bedrock_inventory_slot(bedrock, target, &stack.0);
                         }
                     }
@@ -8317,53 +8240,9 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        BEDROCK_ARMOR_CONTAINER, BEDROCK_OFFHAND_CONTAINER, BedrockContainer,
-        bedrock_inventory_slot, bedrock_player_inventory_slot, read_root_vehicle,
-        write_root_vehicle,
-    };
+    use super::{read_root_vehicle, write_root_vehicle};
     use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
     use uuid::Uuid;
-
-    #[test]
-    fn player_screen_slots_map_to_bedrock_inventory() {
-        let inventory = |slot| Some((0, BedrockContainer::Inventory, slot));
-        assert_eq!(bedrock_inventory_slot(9), inventory(9));
-        assert_eq!(bedrock_inventory_slot(35), inventory(35));
-        assert_eq!(bedrock_inventory_slot(36), inventory(0));
-        assert_eq!(bedrock_inventory_slot(44), inventory(8));
-        assert_eq!(bedrock_inventory_slot(4), None);
-        assert_eq!(
-            bedrock_inventory_slot(6),
-            Some((BEDROCK_ARMOR_CONTAINER, BedrockContainer::Armor, 1))
-        );
-        assert_eq!(
-            bedrock_inventory_slot(45),
-            Some((BEDROCK_OFFHAND_CONTAINER, BedrockContainer::Offhand, 0))
-        );
-    }
-
-    #[test]
-    fn player_inventory_slots_map_to_bedrock_containers() {
-        assert_eq!(
-            bedrock_player_inventory_slot(4),
-            Some((0, BedrockContainer::Inventory, 4))
-        );
-        // Chest
-        assert_eq!(
-            bedrock_player_inventory_slot(38),
-            Some((BEDROCK_ARMOR_CONTAINER, BedrockContainer::Armor, 1))
-        );
-        // Head
-        assert_eq!(
-            bedrock_player_inventory_slot(39),
-            Some((BEDROCK_ARMOR_CONTAINER, BedrockContainer::Armor, 0))
-        );
-        assert_eq!(
-            bedrock_player_inventory_slot(40),
-            Some((BEDROCK_OFFHAND_CONTAINER, BedrockContainer::Offhand, 0))
-        );
-    }
 
     #[test]
     fn root_vehicle_uuid_round_trips_with_vanilla_shape() {

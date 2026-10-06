@@ -18,7 +18,8 @@ impl<'a> ServerPacket<'a> for SPlayerRotation {
         Ok(Self {
             yaw: bytebuf.get_f32_be()?,
             pitch: bytebuf.get_f32_be()?,
-            ground: bytebuf.get_bool()?,
+            // A flags byte, the horizontal collision bit is not on ground
+            ground: bytebuf.get_u8()? & super::FLAG_ON_GROUND != 0,
         })
     }
 }

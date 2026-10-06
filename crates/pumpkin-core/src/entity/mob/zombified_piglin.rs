@@ -119,11 +119,7 @@ impl Mob for ZombifiedPiglinEntity {
     }
 
     fn spawn_as_baby(&self) -> bool {
-        self.mob_entity.set_baby_by_age();
-        self.mob_entity
-            .living_entity
-            .entity
-            .set_default_dimensions(Self::BABY_DIMENSIONS);
+        self.mob_entity.set_baby_by_age(Self::BABY_DIMENSIONS);
         true
     }
 
