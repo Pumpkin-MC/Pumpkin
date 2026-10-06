@@ -12,6 +12,7 @@ use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 use rustc_hash::FxHashMap;
+use tracing::warn;
 
 use crate::{
     chunk::{
@@ -268,36 +269,31 @@ impl ChunkData {
                         continue;
                     }
 
-                    let block_light = section_compound
-                        .get("BlockLight")
-                        .and_then(|tag| tag.extract_byte_array())
-                        .map(|arr| {
-                            // SAFETY: `arr` is an `i8` slice (`&[i8]`). `u8` and `i8` have identical memory layout, alignment (1 byte), and lifetime.
-                            unsafe {
-                                Box::from(std::slice::from_raw_parts(
-                                    arr.as_ptr().cast::<u8>(),
-                                    arr.len(),
-                                ))
-                            }
-                        });
-
-                    let sky_light = section_compound
-                        .get("SkyLight")
-                        .and_then(|tag| tag.extract_byte_array())
-                        .map(|arr| {
-                            // SAFETY: `arr` is an `i8` slice (`&[i8]`). `u8` and `i8` have identical memory layout, alignment (1 byte), and lifetime.
-                            unsafe {
-                                Box::from(std::slice::from_raw_parts(
-                                    arr.as_ptr().cast::<u8>(),
-                                    arr.len(),
-                                ))
-                            }
-                        });
+                    let light_array = |tag: &str| {
+                        let arr = section_compound.get(tag)?.extract_byte_array()?;
+                        if arr.len() != LightContainer::ARRAY_SIZE {
+                            warn!(
+                                "Section {y} of chunk {},{} has a {tag} array of {} bytes instead of {}; ignoring it",
+                                position.x,
+                                position.y,
+                                arr.len(),
+                                LightContainer::ARRAY_SIZE
+                            );
+                            return None;
+                        }
+                        // SAFETY: `arr` is an `i8` slice (`&[i8]`). `u8` and `i8` have identical memory layout, alignment (1 byte), and lifetime.
+                        let data = unsafe {
+                            Box::from(std::slice::from_raw_parts(
+                                arr.as_ptr().cast::<u8>(),
+                                arr.len(),
+                            ))
+                        };
+                        Some(LightContainer::Full(data))
+                    };
 
                     block_lights[index] =
-                        block_light.map_or(LightContainer::Empty(0), LightContainer::Full);
-                    sky_lights[index] =
-                        sky_light.map_or(LightContainer::Empty(0), LightContainer::Full);
+                        light_array("BlockLight").unwrap_or(LightContainer::Empty(0));
+                    sky_lights[index] = light_array("SkyLight").unwrap_or(LightContainer::Empty(0));
 
                     if let Some(bs_compound) = section_compound.get_compound("block_states") {
                         let data = bs_compound
@@ -1055,6 +1051,19 @@ mod tests {
             NbtTag::List(sections.into_iter().map(NbtTag::Compound).collect()),
         );
         pumpkin_nbt::Nbt::new(String::new(), root)
+    }
+
+    #[test]
+    fn light_array_of_the_wrong_length_is_ignored() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let mut section = test_section(-4, "minecraft:stone", true);
+        section.put("SkyLight", NbtTag::ByteArray(Box::new([])));
+        let bytes = test_chunk(vec![section]).write();
+        let chunk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("chunk parses");
+        let light = chunk.light_engine.lock().expect("light lock");
+        assert!(light.sky_light.iter().all(LightContainer::is_empty));
     }
 
     #[test]
