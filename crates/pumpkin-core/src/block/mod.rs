@@ -452,6 +452,19 @@ pub struct BlockEvent {
     pub data: u8,
 }
 
+/// Returns the block name whose loot table should be used.
+/// Some blocks (e.g. wall torches) share the loot table of their
+/// non-wall counterpart but do not have their own loot table file.
+pub fn loot_table_name(block: &Block) -> &str {
+    match block.name {
+        "wall_torch" => "torch",
+        "soul_wall_torch" => "soul_torch",
+        "copper_wall_torch" => "copper_torch",
+        "redstone_wall_torch" => "redstone_torch",
+        _ => block.name,
+    }
+}
+
 pub fn drop_loot(
     world: &Arc<World>,
     block: &Block,
@@ -459,7 +472,7 @@ pub fn drop_loot(
     experience: bool,
     params: &LootContextParameters,
 ) {
-    let key = format!("minecraft:blocks/{}", block.name);
+    let key = format!("minecraft:blocks/{}", loot_table_name(block));
     if let Some(loot_table) = world.get_loot_table(&key) {
         let seed: i64 = rand::random();
         let items = crate::world::loot::generate_loot_from_handle(&loot_table, seed, params);
