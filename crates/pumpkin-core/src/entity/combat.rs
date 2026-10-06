@@ -97,11 +97,7 @@ pub fn sync_hit_player_velocity(victim: &dyn EntityBase, old_movement: Vector3<f
         return;
     }
     victim_player.send_own_velocity(entity.velocity.load());
-    // Bedrock velocity mirrors the client, which now has the knockback. Restoring would
-    // make a later push in this tick send the old movement and cancel it.
-    if victim_player.client.bedrock().is_none() {
-        entity.velocity.store(old_movement);
-    }
+    entity.velocity.store(old_movement);
 }
 
 pub fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {

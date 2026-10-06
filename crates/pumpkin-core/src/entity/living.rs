@@ -1478,27 +1478,62 @@ impl LivingEntity {
         }
     }
 
-    /// Decays player velocity like vanilla `travelInAir` friction.
-    fn apply_travel_friction(&self) {
+    /// Vanilla server `travel` for a player: no input, and the client owns the position,
+    /// so only the server velocity is stepped. Knockback builds on it.
+    fn travel_without_input(&self, caller: &dyn EntityBase) {
         let mut velo = self.entity.velocity.load();
-        if velo.x == 0.0 && velo.z == 0.0 {
-            return;
+        let on_ground = self.entity.on_ground.load(Relaxed);
+        let falling = velo.y <= 0.0;
+        let gravity = self.get_effective_gravity(caller);
+
+        if self.entity.touching_water.load(SeqCst) {
+            // travelInWater: default slowdown, then getFluidFallingAdjustedMovement
+            velo = velo.multiply(0.8, 0.8, 0.8);
+            if gravity != 0.0 && !self.entity.sprinting.load(Relaxed) {
+                velo.y = if falling
+                    && (velo.y - 0.005).abs() >= 0.003
+                    && (velo.y - gravity / 16.0).abs() < 0.003
+                {
+                    -0.003
+                } else {
+                    velo.y - gravity / 16.0
+                };
+            }
+        } else if self.entity.touching_lava.load(SeqCst) {
+            velo = velo * 0.5;
+            velo.y -= gravity / 4.0;
+        } else {
+            // `move` lands the player: vertical collision stops falling
+            if on_ground && velo.y < 0.0 {
+                velo.y = 0.0;
+            }
+            let friction = if on_ground {
+                f64::from(
+                    self.entity
+                        .get_block_with_y_offset(0.500_001)
+                        .1
+                        .slipperiness,
+                ) * 0.91
+            } else {
+                0.91
+            };
+            if let Some(lev) = self.get_effect(&StatusEffect::LEVITATION) {
+                velo.y += 0.05f64.mul_add(f64::from(lev.amplifier + 1), -velo.y) * 0.2;
+            } else {
+                velo.y -= gravity;
+            }
+            velo.x *= friction;
+            velo.z *= friction;
+            velo.y *= 0.98;
         }
 
-        let friction = if self.entity.on_ground.load(Relaxed) {
-            f64::from(
-                self.entity
-                    .get_block_with_y_offset(0.500_001)
-                    .1
-                    .slipperiness,
-            ) * 0.91
-        } else {
-            0.91
-        };
-
-        velo.x *= friction;
-
-        velo.z *= friction;
+        // Vanilla `Player.travel` while flying keeps 0.6 of the old vertical speed
+        if caller
+            .get_player()
+            .is_some_and(super::player::Player::is_flying)
+        {
+            velo.y = self.entity.velocity.load().y * 0.6;
+        }
 
         self.entity.velocity.store(velo);
     }
@@ -3390,11 +3425,9 @@ impl EntityBase for LivingEntity {
             // Vanilla-like order: freeze logic runs after movement/collisions.
             self.entity.tick_frozen(caller);
         } else if is_alive {
-            // Client-authoritative players skip `travel`, so decay pushed velocity like
-            // vanilla to prevent it accumulating and launching the player.
             // Unsent knockback goes out undecayed
             if !self.entity.sync_velocity.load(Ordering::SeqCst) {
-                self.apply_travel_friction();
+                self.travel_without_input(caller);
             }
 
             let suffocating = self.entity.tick_block_collisions(caller);

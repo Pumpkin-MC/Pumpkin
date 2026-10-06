@@ -572,21 +572,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             dz *= 0.05;
 
             if !self_entity.has_passengers() && self.is_pushable() {
-                let mut vel = self_entity.velocity.load();
-                vel.x -= dx;
-                vel.z -= dz;
-                self_entity.velocity.store(vel);
-                self_entity.velocity_dirty.store(true, Ordering::SeqCst);
-                self_entity.pushed.store(true, Ordering::SeqCst);
+                self_entity.push_by(Vector3::new(-dx, 0.0, -dz));
             }
 
             if !other_entity.has_passengers() && entity.is_pushable() {
-                let mut vel = other_entity.velocity.load();
-                vel.x += dx;
-                vel.z += dz;
-                other_entity.velocity.store(vel);
-                other_entity.velocity_dirty.store(true, Ordering::SeqCst);
-                other_entity.pushed.store(true, Ordering::SeqCst);
+                other_entity.push_by(Vector3::new(dx, 0.0, dz));
             }
         }
     }
@@ -964,9 +954,8 @@ pub struct Entity {
     pub velocity_dirty: AtomicBool,
     /// velocity goes to the own client
     pub sync_velocity: AtomicBool,
-    /// Pushed by another entity since the last sync. Bedrock clients don't predict
-    /// pushes, so a pushed Bedrock player also gets its own velocity.
-    pub pushed: AtomicBool,
+    /// Pushes on a player this tick. Bedrock clients don't predict them.
+    pub push_impulse: AtomicCell<Vector3<f64>>,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
     /// The last sent yaw value (encoded as u8) for change detection
@@ -1100,7 +1089,7 @@ impl Entity {
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
             sync_velocity: AtomicBool::new(false),
-            pushed: AtomicBool::new(false),
+            push_impulse: AtomicCell::new(Vector3::default()),
             removed: AtomicBool::new(false),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -1735,6 +1724,25 @@ impl Entity {
         self.movement.store(pos - old);
         self.last_pos.store(pos);
         old
+    }
+
+    /// Vanilla `Entity.push(Vec3)`. A player's pushes are also kept apart for Bedrock,
+    /// whose client doesn't predict them.
+    pub fn push_by(&self, impulse: Vector3<f64>) {
+        self.velocity.store(self.velocity.load() + impulse);
+        self.velocity_dirty.store(true, Ordering::SeqCst);
+        if self.entity_type == &EntityType::PLAYER {
+            self.push_impulse.store(self.push_impulse.load() + impulse);
+        }
+    }
+
+    /// Vanilla `getKnownMovement`: a player's own client motion, otherwise the velocity.
+    pub fn known_movement(&self) -> Vector3<f64> {
+        if self.entity_type == &EntityType::PLAYER {
+            self.movement.load()
+        } else {
+            self.velocity.load()
+        }
     }
 
     // updateWaterState() in yarn

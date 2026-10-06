@@ -23,12 +23,10 @@ impl BedrockClient {
             && packet.delta.y < 0.0
             && !entity.has_vehicle();
         entity.on_ground.store(on_ground, Ordering::Relaxed);
+        // Velocity stays server owned like Java (vanilla `deltaMovement`). The client's
+        // own motion is the position delta in `Entity::movement`, the same for both editions.
         self.input_tick.store(packet.tick.0, Ordering::Relaxed);
-        // Client predicted velocity. A server impulse (knockback, push) still waiting
-        // for `send_velocity_changes` wins: the client hasn't seen it yet.
-        if !entity.sync_velocity.load(Ordering::SeqCst) && !entity.pushed.load(Ordering::SeqCst) {
-            entity.velocity.store(packet.delta.to_f64());
-        }
+        self.client_delta.store(packet.delta.to_f64());
 
         let new_pos = packet
             .position

@@ -124,6 +124,10 @@ pub struct BedrockClient {
     pub inventory_opened: AtomicBool,
     /// Last processed `PlayerAuthInput` tick. Motion for the own player must carry it.
     pub input_tick: AtomicU64,
+    /// Client predicted velocity from the last `PlayerAuthInput`. Pushes build on it.
+    pub client_delta: AtomicCell<pumpkin_util::math::vector3::Vector3<f64>>,
+    /// World age of the last server motion sent to the own player.
+    pub own_motion_age: AtomicCell<i64>,
     /// Separate from normal vitals caching so the first rejected use always gets corrected.
     last_food_rejection_tick: AtomicCell<Option<i32>>,
     pub client_cache_supported: AtomicBool,
@@ -165,6 +169,8 @@ impl BedrockClient {
             next_form_id: AtomicU32::new(0),
             inventory_opened: AtomicBool::new(false),
             input_tick: AtomicU64::new(0),
+            client_delta: AtomicCell::new(pumpkin_util::math::vector3::Vector3::default()),
+            own_motion_age: AtomicCell::new(i64::MIN),
             last_food_rejection_tick: AtomicCell::new(None),
             client_cache_supported: AtomicBool::new(false),
             blob_cache: std::sync::Mutex::new(HashMap::new()),

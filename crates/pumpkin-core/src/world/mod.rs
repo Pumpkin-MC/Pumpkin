@@ -1611,7 +1611,7 @@ impl World {
         }
         let entity_elapsed = t_entities.elapsed();
 
-        // Before the next tick's input packets overwrite Bedrock velocity
+        // Like vanilla `sendChanges`: before the next tick's packets
         for player in players.iter() {
             player.send_velocity_changes();
         }
