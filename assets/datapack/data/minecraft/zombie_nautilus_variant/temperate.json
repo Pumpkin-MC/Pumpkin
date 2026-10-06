@@ -1,8 +1,0 @@
-{
-  "asset_id": "minecraft:entity/nautilus/zombie_nautilus",
-  "spawn_conditions": [
-    {
-      "priority": 0
-    }
-  ]
-}
