@@ -1428,6 +1428,7 @@ impl Player {
             damage += (1.5 + smash_bonus_per_block) * f64::from(fall_distance);
         }
 
+        let old_movement = victim_entity.velocity.load();
         if !victim.damage_with_context(
             victim.as_ref(),
             damage as f32,
@@ -1570,6 +1571,17 @@ impl Player {
             if config.knockback && knockback_strength > 0.0 {
                 combat::handle_knockback(attacker_entity, victim.as_ref(), knockback_strength);
             }
+        }
+
+        // a hit player gets its knockback only for
+        // itself, and the server keeps the old movement. Clearing the dirty flag too keeps
+        // `send_velocity_changes` from sending that old movement back to a Bedrock hit player.
+        if let Some(victim_player) = victim.get_player()
+            && victim_entity.sync_velocity.swap(false, Ordering::SeqCst)
+        {
+            victim_entity.velocity_dirty.store(false, Ordering::SeqCst);
+            victim_player.send_own_velocity(victim_entity.velocity.load());
+            victim_entity.velocity.store(old_movement);
         }
 
         // NOTE: TOCTOU race condition in single-player context.
@@ -2593,6 +2605,23 @@ impl Player {
                 tick: VarULong(tick),
             },
         );
+    }
+
+    /// Runs after the entity pass,
+    /// so this tick's knockback goes out before the next input packet replaces it.
+    pub fn send_velocity_changes(&self) {
+        let entity = self.get_entity();
+        if entity.sync_velocity.swap(false, Ordering::SeqCst) {
+            entity.velocity_dirty.store(false, Ordering::SeqCst);
+            entity.send_velocity_to_watchers();
+            self.send_own_velocity(entity.velocity.load());
+        } else if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+            entity.send_velocity_to_watchers();
+            // Bedrock client does not predict actor pushes
+            if self.client.bedrock().is_some() {
+                self.send_own_velocity(entity.velocity.load());
+            }
+        }
     }
 
     pub fn apply_knockback(&self, strength: f64, x: f64, z: f64) {

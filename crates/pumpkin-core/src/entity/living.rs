@@ -3385,7 +3385,10 @@ impl EntityBase for LivingEntity {
         } else if is_alive {
             // Client-authoritative players skip `travel`, so decay pushed velocity like
             // vanilla to prevent it accumulating and launching the player.
-            self.apply_travel_friction();
+            // Unsent knockback goes out undecayed
+            if !self.entity.sync_velocity.load(Ordering::SeqCst) {
+                self.apply_travel_friction();
+            }
 
             let suffocating = self.entity.tick_block_collisions(caller);
             if suffocating {
@@ -3398,17 +3401,13 @@ impl EntityBase for LivingEntity {
             self.entity.tick_frozen(caller);
         }
 
-        // Coalesce velocity sends to once per tick.
-        if self.entity.sync_velocity.swap(false, Ordering::SeqCst) {
-            self.entity.velocity_dirty.store(false, Ordering::SeqCst);
-            self.entity.send_velocity();
-        } else if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-            self.entity.send_velocity_to_watchers();
-            // Bedrock client does not predict actor pushes
-            if let Some(player) = caller.get_player()
-                && player.client.bedrock().is_some()
-            {
-                player.send_own_velocity(self.entity.velocity.load());
+        // Coalesce velocity sends to once per tick. Players sync after the entity pass.
+        if !is_player {
+            if self.entity.sync_velocity.swap(false, Ordering::SeqCst) {
+                self.entity.velocity_dirty.store(false, Ordering::SeqCst);
+                self.entity.send_velocity();
+            } else if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+                self.entity.send_velocity_to_watchers();
             }
         }
 

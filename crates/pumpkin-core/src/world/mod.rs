@@ -1611,6 +1611,10 @@ impl World {
         }
         let entity_elapsed = t_entities.elapsed();
 
+        // Before the next tick's input packets overwrite Bedrock velocity
+        for player in players.iter() {
+            player.send_velocity_changes();
+        }
         self.entity_tracker.update_all(self);
 
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
