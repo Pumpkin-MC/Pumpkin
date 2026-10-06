@@ -1727,11 +1727,14 @@ impl DataComponentCodec<Self> for EnchantmentGlintOverrideImpl {
 }
 
 impl DataComponentCodec<Self> for IntangibleProjectileImpl {
-    fn serialize(&self, _seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        Ok(())
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        // Vanilla writes an empty compound. Omitting it shifts every later field
+        // and the client fails the whole container packet.
+        seq.write_nbt(NbtTag::Compound(pumpkin_nbt::compound::NbtCompound::new()))
     }
 
-    fn deserialize(_seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_3)?;
         Ok(Self)
     }
 }
@@ -2214,22 +2217,40 @@ impl DataComponentCodec<Self> for MapPostProcessingImpl {
 
 impl DataComponentCodec<Self> for ChargedProjectilesImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt::from(self.projectiles.len() as i32))?;
-        for _ in &self.projectiles {
-            seq.write_var_int(&VarInt(0))?;
-            seq.write_var_int(&VarInt(0))?;
-            seq.write_var_int(&VarInt(0))?;
-            seq.write_var_int(&VarInt(0))?;
+        // `minecraft:charged_projectiles` is a VarInt count followed by that many Slots.
+        let count = i32::try_from(self.projectiles.len()).map_err(|_| {
+            WritingError::Message(format!(
+                "{} charged projectiles do not fit in a VarInt",
+                self.projectiles.len()
+            ))
+        })?;
+        seq.write_var_int(&VarInt(count))?;
+        for projectile in &self.projectiles {
+            let stack = pumpkin_data::item_stack::ItemStack::read_item_stack(projectile)
+                .unwrap_or_else(|| pumpkin_data::item_stack::ItemStack::EMPTY.clone());
+            crate::codec::item_stack_seralizer::ItemStackSerializer::from(stack).write(seq)?;
         }
         Ok(())
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
-        let mut projectiles = Vec::with_capacity(len);
+        const MAX_PROJECTILES: i32 = 64;
+
+        let len = seq.get_var_int()?.0;
+        if !(0..=MAX_PROJECTILES).contains(&len) {
+            return Err(ReadingError::Message(
+                "Too many charged projectiles".into(),
+            ));
+        }
+        let mut projectiles = Vec::with_capacity(len as usize);
         for _ in 0..len {
-            let _ = deserialize_item_stack_template(seq)?;
-            projectiles.push(pumpkin_nbt::compound::NbtCompound::new());
+            let stack =
+                crate::codec::item_stack_seralizer::ItemStackSerializer::read(seq)?.to_stack();
+            let mut compound = pumpkin_nbt::compound::NbtCompound::new();
+            if !stack.is_empty() {
+                stack.write_item_stack(&mut compound);
+            }
+            projectiles.push(compound);
         }
         Ok(Self { projectiles })
     }
@@ -2869,6 +2890,39 @@ mod tests {
     fn partial_profile_is_read_as_name_then_id() {
         let decoded = ProfileImpl::deserialize(&mut textured_profile_bytes().as_slice()).unwrap();
         assert_eq!(decoded, textured_profile());
+    }
+
+    #[test]
+    fn charged_crossbow_projectile_is_written_as_a_slot() {
+        use pumpkin_data::item::Item;
+        use pumpkin_data::item_stack::ItemStack;
+
+        let mut arrow = ItemStack::new(1, &Item::ARROW);
+        arrow.set_data_component(IntangibleProjectileImpl);
+        let mut projectile = pumpkin_nbt::compound::NbtCompound::new();
+        arrow.write_item_stack(&mut projectile);
+
+        let charged = ChargedProjectilesImpl {
+            projectiles: vec![projectile],
+        };
+        let mut encoded = Vec::new();
+        charged.serialize(&mut encoded).unwrap();
+
+        // One projectile, stack count 1. The old writer emitted four zero VarInts
+        // after the count, which the client cannot decode as a Slot.
+        assert_eq!(&encoded[..2], &[1, 1]);
+        let intangible_at = encoded
+            .iter()
+            .position(|byte| *byte == DataComponent::IntangibleProjectile.to_id())
+            .expect("intangible projectile component");
+        assert_eq!(&encoded[intangible_at + 1..intangible_at + 3], &[10, 0]);
+
+        let mut cursor = encoded.as_slice();
+        let decoded = ChargedProjectilesImpl::deserialize(&mut cursor).unwrap();
+        assert!(cursor.is_empty());
+        let stack = ItemStack::read_item_stack(&decoded.projectiles[0]).unwrap();
+        assert_eq!(stack.item.id, Item::ARROW.id);
+        assert!(stack.get_data_component::<IntangibleProjectileImpl>().is_some());
     }
 
     #[test]
