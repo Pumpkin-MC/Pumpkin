@@ -3027,6 +3027,12 @@ impl LivingEntity {
             }
         }
 
+        if let Some(player) = caller.get_player()
+            && player.sleeping_since.load().is_some()
+        {
+            player.wake_up();
+        }
+
         // Vanilla parity: entities in FREEZE_HURTS_EXTRA_TYPES take 5x freezing damage.
         if damage_type == DamageType::FREEZE
             && self
