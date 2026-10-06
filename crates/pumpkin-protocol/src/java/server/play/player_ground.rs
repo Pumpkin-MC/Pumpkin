@@ -9,13 +9,15 @@ use pumpkin_util::version::JavaMinecraftVersion;
 #[java_packet(MOVE_PLAYER_STATUS_ONLY)]
 pub struct SSetPlayerGround {
     pub on_ground: bool,
+    pub horizontal_collision: bool,
 }
 
 impl<'a> ServerPacket<'a> for SSetPlayerGround {
     fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let flags = bytebuf.get_u8()?;
         Ok(Self {
-            // A flags byte, the horizontal collision bit is not on ground
-            on_ground: bytebuf.get_u8()? & super::FLAG_ON_GROUND != 0,
+            on_ground: flags & super::FLAG_ON_GROUND != 0,
+            horizontal_collision: flags & super::FLAG_HORIZONTAL_COLLISION != 0,
         })
     }
 }

@@ -12,7 +12,6 @@ use tracing::{Level, debug, error, info, trace, warn};
 use crate::block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self};
-use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::equipment_break_status;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
@@ -29,13 +28,9 @@ use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
-use crate::plugin::player::player_move::PlayerMoveEvent;
-use crate::plugin::player::player_toggle_flight_event::PlayerToggleFlightEvent;
-use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
 
 use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::jigsaw_block::JigsawBlockEntity;
-use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{BlockBreakingProgress, World, chunker};
 use pumpkin_data::block_properties::CommandBlockLikeProperties;
@@ -52,12 +47,10 @@ use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
-use pumpkin_protocol::bedrock::client::CMovePlayer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
-    CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, CPingResponse,
-    CPlayerInfoUpdate, CPlayerPosition, CSetCamera, CSetSelectedSlot, CUpdateEntityPos,
-    CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction, PlayerInfoFlags,
+    CBlockUpdate, CCommandSuggestions, CPingResponse, CPlayerInfoUpdate, CSetCamera,
+    CSetSelectedSlot, InitChat, PlayerAction, PlayerInfoFlags,
 };
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_HORIZONTAL_COLLISION, FLAG_ON_GROUND, SAttack,
@@ -73,7 +66,7 @@ use pumpkin_protocol::java::server::play::{
     SUseItemOn, Status,
 };
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
+use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos};
 use pumpkin_util::{GameMode, text::TextComponent};
 use pumpkin_world::generation::structure::structures::jigsaw::JigsawJointType;
 use pumpkin_world::world::BlockFlags;

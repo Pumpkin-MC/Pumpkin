@@ -1,17 +1,26 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use crate::entity::player::ClientMove;
 
 impl JavaClient {
-    pub fn handle_player_ground(&self, player: &Player, ground: &SSetPlayerGround) {
-        // A movement packet was received this tick — tracked for SClientTickEnd zeroing.
+    pub fn handle_player_ground(
+        &self,
+        player: &Arc<Player>,
+        server: &Arc<Server>,
+        ground: &SSetPlayerGround,
+    ) {
         self.received_movement_this_tick
             .store(true, Ordering::Relaxed);
-        player
-            .living_entity
-            .entity
-            .on_ground
-            .store(ground.on_ground, Ordering::Relaxed);
-        // Vanilla runs status packets through the move path too, with no movement
-        player.do_check_fall_damage(Vector3::default(), ground.on_ground, false);
+        player.apply_client_move(
+            server,
+            ClientMove {
+                position: None,
+                yaw: None,
+                pitch: None,
+                head_yaw: None,
+                on_ground: ground.on_ground,
+                horizontal_collision: ground.horizontal_collision,
+            },
+        );
     }
 }

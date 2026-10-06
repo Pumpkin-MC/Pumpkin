@@ -11,15 +11,19 @@ pub struct SPlayerRotation {
     pub yaw: f32,
     pub pitch: f32,
     pub ground: bool,
+    pub horizontal_collision: bool,
 }
 
 impl<'a> ServerPacket<'a> for SPlayerRotation {
     fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let yaw = bytebuf.get_f32_be()?;
+        let pitch = bytebuf.get_f32_be()?;
+        let flags = bytebuf.get_u8()?;
         Ok(Self {
-            yaw: bytebuf.get_f32_be()?,
-            pitch: bytebuf.get_f32_be()?,
-            // A flags byte, the horizontal collision bit is not on ground
-            ground: bytebuf.get_u8()? & super::FLAG_ON_GROUND != 0,
+            yaw,
+            pitch,
+            ground: flags & super::FLAG_ON_GROUND != 0,
+            horizontal_collision: flags & super::FLAG_HORIZONTAL_COLLISION != 0,
         })
     }
 }

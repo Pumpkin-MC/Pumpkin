@@ -1,5 +1,8 @@
 pub mod advancement;
+pub mod client_move;
 pub mod statistics;
+
+pub use client_move::{ClientMove, ClientMoveOutcome};
 
 use core::f32;
 use std::collections::{HashMap, VecDeque};
