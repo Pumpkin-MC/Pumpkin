@@ -37,28 +37,28 @@ interface boss-bar {
     resource boss-bar {
         /// Creates a boss bar and returns its handle.
         constructor(title: text-component, color: boss-bar-color, division: boss-bar-division);
-
+        
         /// Returns the title of this boss bar.
         get-title: async func() -> text-component;
-
+        
         /// Sets the title of this boss bar.
         set-title: async func(title: text-component);
-
+        
         /// Returns the health (0.0 to 1.0) of this boss bar.
         get-health: async func() -> f32;
-
+        
         /// Sets the health (0.0 to 1.0) of this boss bar.
         set-health: async func(health: f32);
-
+        
         /// Returns the color of this boss bar.
         get-color: async func() -> boss-bar-color;
-
+        
         /// Sets the color of this boss bar.
         set-color: async func(color: boss-bar-color);
-
+        
         /// Returns the division of this boss bar.
         get-division: async func() -> boss-bar-division;
-
+        
         /// Sets the division of this boss bar.
         set-division: async func(division: boss-bar-division);
 
@@ -67,16 +67,16 @@ interface boss-bar {
 
         /// Updates the metadata on this boss bar.
         set-metadata: async func(metadata: boss-bar-metadata);
-
+        
         /// Adds a player to this boss bar, making it visible to them.
         add-player: async func(player: player);
-
+        
         /// Removes a player from this boss bar, hiding it from them.
         remove-player: async func(player: player);
-
+        
         /// Returns a list of all players currently seeing this boss bar.
         get-players: async func() -> list<player>;
-
+        
         /// Removes this boss bar from all players and cleans it up.
         remove-all: async func();
     }

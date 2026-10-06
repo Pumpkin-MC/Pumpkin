@@ -77,7 +77,7 @@ interface recipe {
     resource recipe-manager {
         /// Registers a shaped crafting recipe.
         register-shaped: async func(id: string, recipe: shaped-recipe);
-
+        
         /// Registers a shapeless crafting recipe.
         register-shapeless: async func(id: string, recipe: shapeless-recipe);
 

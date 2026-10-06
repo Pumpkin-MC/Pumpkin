@@ -38,7 +38,7 @@ interface item-stack {
 
         /// Returns the unique registry key of the item (e.g., "minecraft:diamond").
         get-registry-key: async func() -> string;
-
+        
         /// Returns the number of items in the stack.
         get-count: async func() -> u8;
         /// Sets the number of items in the stack.

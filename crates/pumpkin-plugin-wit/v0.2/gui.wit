@@ -12,16 +12,16 @@ interface gui {
         get-inventory: async func() -> inventory;
         set-item: async func(slot: u32, item: item-stack);
         get-item: async func(slot: u32) -> option<item-stack>;
-
+        
         /// Returns the type of this GUI.
         get-type: async func() -> screen;
-
+        
         /// Returns the title of this GUI.
         get-title: async func() -> text-component;
-
+        
         /// Returns the number of slots in this GUI.
         get-size: async func() -> u32;
-
+        
         /// Clears all items from the GUI.
         clear-items: async func();
 

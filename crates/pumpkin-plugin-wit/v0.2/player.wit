@@ -1127,11 +1127,11 @@ interface player {
         set-absorption: func (absorption: f32);
 
         /// Returns the player's total experience level.
-        get-experience-level: func() -> s32;
+        get-experience-level:    func() -> s32;
         /// Returns the player's progress toward the next level (0.0 to 1.0).
         get-experience-progress: func() -> f32;
         /// Returns the total experience points the player has.
-        get-experience-points: func() -> s32;
+        get-experience-points:   func() -> s32;
         /// Sets the player's total experience level.
         set-experience-level:    async func(level: s32);
         /// Sets the player's progress toward the next level.
@@ -1144,9 +1144,9 @@ interface player {
         add-experience-points:   async func(points: s32);
 
         /// Returns whether the player is currently flying.
-        is-flying: func() -> bool;
+        is-flying:    func() -> bool;
         /// Sets whether the player should be flying.
-        set-flying: func(flying: bool);
+        set-flying:   func(flying: bool);
 
         /// Returns the player's current abilities.
         get-abilities: func() -> player-abilities;
