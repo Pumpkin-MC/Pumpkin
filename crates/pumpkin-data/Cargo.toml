@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+build = "build.rs"
 
 [features]
 default = [
@@ -169,6 +170,13 @@ pumpkin-nbt.workspace = true
 serde = {workspace = true, features = ["rc"]}
 crc32c.workspace = true
 rand.workspace = true
+
+[build-dependencies]
+reqwest = { workspace = true, features = ["blocking", "json"] }
+rustls = { workspace = true }
+serde_json = { workspace = true }
+zip = { workspace = true }
+flate2.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
