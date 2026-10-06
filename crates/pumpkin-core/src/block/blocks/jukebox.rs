@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use crate::block::entities::jukebox::JukeboxBlockEntity;
 use crate::block::registry::BlockActionResult;
@@ -6,17 +7,20 @@ use crate::block::{
     BlockBehaviour, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
     GetRedstonePowerArgs, NormalUseArgs, OnStateReplacedArgs, PlacedArgs, UseWithItemArgs,
 };
-use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
+use crate::entity::Entity;
 use crate::world::World;
 use pumpkin_data::data_component_impl::JukeboxPlayableImpl;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::jukebox_song::JukeboxSong;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockStateId, block_properties::JukeboxLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::GameMode;
 use pumpkin_world::world::BlockFlags;
 use rand::{RngExt, rng};
 
@@ -116,6 +120,20 @@ impl BlockBehaviour for JukeboxBlock {
         let jukebox_playable = item_stack
             .get_data_component::<JukeboxPlayableImpl>()
             .map(|i| i.song);
+
+        if args.player.gamemode.load() != GameMode::Creative {
+            let hand_slot = args.player.inventory.selected_slot.load(Ordering::Relaxed) as usize;
+
+            // Personally I'm just fine with ignoring the lock case
+            let _ = args
+                .player
+                .inventory
+                .main_inventory
+                .write()
+                .map(|mut lock| {
+                    lock[hand_slot] = ItemStack::new(0, &Item::AIR);
+                });
+        }
 
         // Vanilla: if (lv == null) return PASS_TO_DEFAULT_BLOCK_ACTION
         let Some(jukebox_playable) = jukebox_playable else {
