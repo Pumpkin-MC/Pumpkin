@@ -2228,7 +2228,7 @@ impl DataComponentCodec<Self> for ChargedProjectilesImpl {
         seq.write_var_int(&VarInt(count))?;
         for projectile in &self.projectiles {
             let stack = pumpkin_data::item_stack::ItemStack::read_item_stack(projectile)
-                .unwrap_or_else(|| pumpkin_data::item_stack::ItemStack::EMPTY.clone());
+                .ok_or_else(|| WritingError::Message("Invalid charged projectile".into()))?;
             crate::codec::item_stack_seralizer::ItemStackSerializer::from(stack).write(seq)?;
         }
         Ok(())
@@ -2937,6 +2937,15 @@ mod tests {
         let mut encoded = Vec::new();
         assert!(charged.serialize(&mut encoded).is_err());
         assert!(encoded.is_empty());
+    }
+
+    #[test]
+    fn invalid_charged_projectile_is_rejected() {
+        let charged = ChargedProjectilesImpl {
+            projectiles: vec![pumpkin_nbt::compound::NbtCompound::new()],
+        };
+        let mut encoded = Vec::new();
+        assert!(charged.serialize(&mut encoded).is_err());
     }
 
     #[test]
