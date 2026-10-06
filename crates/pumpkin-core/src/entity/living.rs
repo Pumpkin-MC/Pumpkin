@@ -3183,7 +3183,10 @@ impl LivingEntity {
             if !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_IMPACT) {
                 self.entity.mark_hurt();
             }
-            if !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_KNOCKBACK) {
+            // Vanilla knocks back lethal hits too -> `pvp.knockback` turns it off for player hits
+            let knockback_allowed =
+                config.knockback || source.and_then(EntityBase::get_player).is_none();
+            if knockback_allowed && !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_KNOCKBACK) {
                 self.deal_default_knockback(position, source);
             }
         }
