@@ -47,7 +47,6 @@ impl JavaClient {
         true
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn handle_position(
         &self,
         player: &Arc<Player>,
@@ -149,18 +148,7 @@ impl JavaClient {
                     );
                 }
 
-                // Only process fall damage if player is alive
-                if !player.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying
-                    && player.living_entity.health.load() > 0.0
-                    && !player.living_entity.dead.load(Ordering::Relaxed)
-                {
-                    player.living_entity.fall(
-                        player.as_ref(),
-                        height_difference,
-                        packet.collision & FLAG_ON_GROUND != 0,
-                        player.gamemode.load() == GameMode::Creative,
-                    );
-                }
+                player.do_check_fall_damage(height_difference, packet.collision & FLAG_ON_GROUND != 0);
                 chunker::update_position(player);
                 let delta = Vector3::new(
                     pos.x - last_pos.x,
@@ -308,18 +296,7 @@ impl JavaClient {
                 }
 
                 world.send_to_tracking_players(entity, &CHeadRot::new(entity_id.into(), yaw as u8));
-                // Only process fall damage if player is alive
-                if !player.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying
-                    && player.living_entity.health.load() > 0.0
-                    && !player.living_entity.dead.load(Ordering::Relaxed)
-                {
-                    player.living_entity.fall(
-                        player.as_ref(),
-                        height_difference,
-                        (packet.collision & FLAG_ON_GROUND) != 0,
-                        player.gamemode.load() == GameMode::Creative,
-                    );
-                }
+                player.do_check_fall_damage(height_difference, (packet.collision & FLAG_ON_GROUND) != 0);
                 chunker::update_position(player);
                 let delta = Vector3::new(
                     pos.x - last_pos.x,

@@ -3143,6 +3143,22 @@ impl Player {
         }
     }
 
+    /// Vanilla `doCheckFallDamage` from the move handlers of both editions.
+    pub fn do_check_fall_damage(&self, height_difference: f64, on_ground: bool) {
+        if self.is_flying()
+            || self.living_entity.health.load() <= 0.0
+            || self.living_entity.dead.load(Ordering::Relaxed)
+        {
+            return;
+        }
+        self.living_entity.fall(
+            self,
+            height_difference,
+            on_ground,
+            self.gamemode.load() == GameMode::Creative,
+        );
+    }
+
     pub fn progress_motion(&self, delta_pos: Vector3<f64>) {
         // TODO: gliding...
         let entity = &self.living_entity.entity;

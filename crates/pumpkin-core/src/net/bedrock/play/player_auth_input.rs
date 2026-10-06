@@ -155,6 +155,14 @@ impl BedrockClient {
             }
         }
 
+        // The teleport input's jump is no fall
+        let height_difference = if packet.input_data.get(InputData::HandledTeleport as usize) {
+            0.0
+        } else {
+            new_pos.y - old_pos.y
+        };
+        player.do_check_fall_damage(height_difference, on_ground);
+
         let input_data = packet.input_data;
 
         if input_data.get(InputData::StartSprinting as usize) {
