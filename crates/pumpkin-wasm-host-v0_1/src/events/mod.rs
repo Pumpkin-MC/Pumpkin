@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{any::Any, sync::Arc};
 
 use pumpkin_data::{Block, entity::EntityType};
 use pumpkin_inventory::screen_handler::ClickType;
@@ -219,48 +219,96 @@ pub(super) fn consume_world(
         .expect("invalid world resource handle")
 }
 
+type WasmEvent = crate::pumpkin::plugin::event::Event;
+
+/// An event crossing into a guest handler and back, with its type erased.
+trait PendingWasmEvent: Send {
+    fn to_wasm(&self, state: &mut PluginHostState) -> WasmEvent;
+
+    fn from_wasm(
+        self: Box<Self>,
+        returned_event: WasmEvent,
+        state: &mut PluginHostState,
+    ) -> Box<dyn Any + Send>;
+}
+
+struct NotifiedEvent<E>(E);
+
+impl<E: ToFromWasmEvent + Send> PendingWasmEvent for NotifiedEvent<E> {
+    fn to_wasm(&self, state: &mut PluginHostState) -> WasmEvent {
+        self.0.to_wasm_event(state)
+    }
+
+    fn from_wasm(
+        self: Box<Self>,
+        returned_event: WasmEvent,
+        state: &mut PluginHostState,
+    ) -> Box<dyn Any + Send> {
+        cleanup_event(&returned_event, state);
+        Box::new(())
+    }
+}
+
+struct BlockingEvent<E>(E);
+
+impl<E: ToFromWasmEvent + Send + 'static> PendingWasmEvent for BlockingEvent<E> {
+    fn to_wasm(&self, state: &mut PluginHostState) -> WasmEvent {
+        self.0.to_wasm_event(state)
+    }
+
+    fn from_wasm(
+        self: Box<Self>,
+        returned_event: WasmEvent,
+        state: &mut PluginHostState,
+    ) -> Box<dyn Any + Send> {
+        let mut updated_event = self.0;
+        updated_event.apply_wasm_event(returned_event, state);
+        Box::new(updated_event)
+    }
+}
+
+impl WasmPluginEventHandler {
+    // Kept non-generic over the event type so the guest round trip is compiled once, not
+    // once per event (~27% of the pumpkin crate's LLVM IR before this was split out).
+    async fn dispatch(
+        &self,
+        server: Arc<Server>,
+        event: Box<dyn PendingWasmEvent>,
+    ) -> wasmtime::Result<Box<dyn Any + Send>> {
+        let handler_id = self.handler_id;
+        let function = self.plugin.instance::<crate::Plugin>().func_handle_event();
+        self.plugin
+            .store
+            .call_guest(move |mut guest| {
+                Box::pin(async move {
+                    let (wasm_event, server_res) = guest.with(|mut store| {
+                        let wasm_event = event.to_wasm(store.data_mut());
+                        match store.data_mut().add(server) {
+                            Ok(resource) => Ok((wasm_event, resource)),
+                            Err(error) => {
+                                cleanup_event(&wasm_event, store.data_mut());
+                                Err(error)
+                            }
+                        }
+                    })?;
+                    // Lowering transfers these resources to the guest. Only a
+                    // successfully returned event is owned by the host again.
+                    let (returned_event,) = guest
+                        .call(function, (handler_id, server_res, wasm_event))
+                        .await?;
+                    Ok(guest.with(|mut store| event.from_wasm(returned_event, store.data_mut())))
+                })
+            })
+            .await
+    }
+}
+
 impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPluginEventHandler {
     fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a E) -> BoxFuture<'a, ()> {
         Box::pin(async {
-            let event = event.clone();
-            let server = server.clone();
-            let handler_id = self.handler_id;
-            let function = {
-                let plugin = self.plugin.instance::<crate::Plugin>();
-                plugin.func_handle_event()
-            };
-            if let Err(error) = self
-                .plugin
-                .store
-                .call_guest(move |mut guest| {
-                    Box::pin(async move {
-                        let (wasm_event, server_res) = guest.with(|mut store| {
-                            let wasm_event = event.to_wasm_event(store.data_mut());
-                            match store.data_mut().add(server) {
-                                Ok(resource) => Ok((wasm_event, resource)),
-                                Err(error) => {
-                                    cleanup_event(&wasm_event, store.data_mut());
-                                    Err(error)
-                                }
-                            }
-                        })?;
-                        // Lowering transfers these resources to the guest. Only a
-                        // successfully returned event is owned by the host again.
-                        let result = guest
-                            .call(function, (handler_id, server_res, wasm_event))
-                            .await
-                            .map(|(returned_event,)| returned_event);
-                        if let Ok(returned_event) = &result {
-                            guest.with(|mut store| {
-                                cleanup_event(returned_event, store.data_mut());
-                            });
-                        }
-                        result.map(|_| ())
-                    })
-                })
-                .await
-            {
-                tracing::error!(handler_id, %error, "Wasm event handler failed");
+            let pending = Box::new(NotifiedEvent(event.clone()));
+            if let Err(error) = self.dispatch(server.clone(), pending).await {
+                tracing::error!(handler_id = self.handler_id, %error, "Wasm event handler failed");
             }
         })
     }
@@ -271,49 +319,19 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
         event: &'a mut E,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async {
-            let owned_event = event.clone();
-            let server = server.clone();
-            let handler_id = self.handler_id;
-            let function = {
-                let plugin = self.plugin.instance::<crate::Plugin>();
-                plugin.func_handle_event()
-            };
-            let result = self
-                .plugin
-                .store
-                .call_guest(move |mut guest| {
-                    Box::pin(async move {
-                        let (wasm_event, server_res) = guest.with(|mut store| {
-                            let wasm_event = owned_event.to_wasm_event(store.data_mut());
-                            match store.data_mut().add(server) {
-                                Ok(resource) => Ok((wasm_event, resource)),
-                                Err(error) => {
-                                    cleanup_event(&wasm_event, store.data_mut());
-                                    Err(error)
-                                }
-                            }
-                        })?;
-                        // Lowering transfers these resources to the guest. Only a
-                        // successfully returned event is owned by the host again.
-                        let result = guest
-                            .call(function, (handler_id, server_res, wasm_event))
-                            .await
-                            .map(|(returned_event,)| returned_event);
-                        match result {
-                            Ok(returned_event) => Ok(guest.with(|mut store| {
-                                let mut updated_event = owned_event;
-                                updated_event.apply_wasm_event(returned_event, store.data_mut());
-                                updated_event
-                            })),
-                            Err(error) => Err(error),
-                        }
-                    })
-                })
-                .await;
-            match result {
-                Ok(returned_event) => *event = returned_event,
+            let pending = Box::new(BlockingEvent(event.clone()));
+            match self.dispatch(server.clone(), pending).await {
+                Ok(updated_event) => {
+                    if let Ok(updated_event) = updated_event.downcast::<E>() {
+                        *event = *updated_event;
+                    }
+                }
                 Err(error) => {
-                    tracing::error!(handler_id, %error, "Blocking Wasm event handler failed");
+                    tracing::error!(
+                        handler_id = self.handler_id,
+                        %error,
+                        "Blocking Wasm event handler failed"
+                    );
                 }
             }
         })

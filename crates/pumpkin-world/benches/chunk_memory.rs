@@ -180,13 +180,14 @@ fn main() {
 
     let before = live_kib();
     let mut blocks = 0;
-    let templates: Vec<StructureTemplate> = pumpkin_data::template_bytes::all_template_names()
+    let templates: Vec<StructureTemplate> = pumpkin_data::structure_template::all_template_names()
         .iter()
         .filter_map(|name| {
-            pumpkin_data::template_bytes::get_template_bytes(name).map(|bytes| (name, bytes))
+            pumpkin_data::structure_template::get_structure_template(name)
+                .map(|template| (name, template))
         })
-        .map(|(name, bytes)| {
-            StructureTemplate::from_nbt_bytes(bytes).unwrap_or_else(|err| panic!("{name}: {err}"))
+        .map(|(name, template)| {
+            StructureTemplate::from_static(template).unwrap_or_else(|err| panic!("{name}: {err}"))
         })
         .inspect(|template| {
             blocks += template
