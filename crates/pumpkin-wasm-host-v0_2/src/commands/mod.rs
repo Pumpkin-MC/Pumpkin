@@ -287,7 +287,6 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
     ) -> wasmtime::Result<CommandSenderType> {
         let sender = self.get(&res)?.clone();
         match sender {
-            pumpkin_core::command::CommandSender::Rcon(_) => Ok(CommandSenderType::Rcon),
             pumpkin_core::command::CommandSender::Console => Ok(CommandSenderType::Console),
             pumpkin_core::command::CommandSender::Player(player) => {
                 Ok(CommandSenderType::Player(self.add(player)?))
@@ -356,7 +355,6 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         Ok(matches!(
             self.get(&sender)?,
             pumpkin_core::command::CommandSender::Console
-                | pumpkin_core::command::CommandSender::Rcon(_)
         ))
     }
 

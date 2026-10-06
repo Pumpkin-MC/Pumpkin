@@ -16,8 +16,8 @@ use wasmtime::component::{Accessor, HasSelf, Resource};
 impl RecipeHost for PluginHostState {}
 
 impl HostRecipeManager for PluginHostState {
-    fn drop(&mut self, _rep: Resource<WitRecipeManager>) -> wasmtime::Result<()> {
-        Ok(())
+    fn drop(&mut self, rep: Resource<WitRecipeManager>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 
@@ -158,5 +158,32 @@ fn to_owned_ingredient(ing: WitIngredient) -> OwnedRecipeIngredient {
         WitIngredient::Item(id) => OwnedRecipeIngredient::Simple(id),
         WitIngredient::Tag(tag) => OwnedRecipeIngredient::Tagged(tag),
         WitIngredient::OneOf(items) => OwnedRecipeIngredient::OneOf(items),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_core::server::RecipeManager;
+    use std::sync::Arc;
+
+    #[test]
+    fn guest_drop_releases_recipe_manager_resource() {
+        let mut state = PluginHostState::new();
+        let manager = Arc::new(RecipeManager::new());
+        let weak_manager = Arc::downgrade(&manager);
+        let resource = state
+            .add::<WitRecipeManager>(manager)
+            .expect("insert recipe manager resource");
+        let rep = resource.rep();
+
+        HostRecipeManager::drop(&mut state, resource).expect("drop recipe manager resource");
+
+        assert!(weak_manager.upgrade().is_none());
+        assert!(
+            state
+                .get(&Resource::<WitRecipeManager>::new_borrow(rep))
+                .is_err()
+        );
     }
 }

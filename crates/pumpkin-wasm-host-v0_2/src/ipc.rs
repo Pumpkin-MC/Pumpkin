@@ -1,3 +1,4 @@
+use super::in_active_context;
 use crate::RequireServer;
 use crate::pumpkin::{
     self,
@@ -32,6 +33,6 @@ impl pumpkin::plugin::ipc::HostWithStore<PluginHostState> for HasSelf<PluginHost
         let outbound = server
             .plugin_manager
             .send_message(&name, &recipient, &message);
-        Ok(outbound.await)
+        in_active_context(accessor, outbound).await
     }
 }

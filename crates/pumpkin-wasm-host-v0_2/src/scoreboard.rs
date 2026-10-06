@@ -800,8 +800,8 @@ const fn map_named_color_rev(
 }
 
 impl HostBedrockScoreboard for PluginHostState {
-    fn drop(&mut self, _res: Resource<scoreboard::BedrockScoreboard>) -> wasmtime::Result<()> {
-        Ok(())
+    fn drop(&mut self, res: Resource<scoreboard::BedrockScoreboard>) -> wasmtime::Result<()> {
+        self.drop(res)
     }
 
     fn add_objective(

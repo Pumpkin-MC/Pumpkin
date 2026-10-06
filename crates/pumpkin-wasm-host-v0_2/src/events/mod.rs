@@ -1,4 +1,4 @@
-use std::{any::Any, sync::Arc};
+use std::{any::Any, mem::Discriminant, sync::Arc};
 
 use pumpkin_data::{Block, entity::EntityType};
 use pumpkin_inventory::screen_handler::ClickType;
@@ -228,8 +228,9 @@ trait PendingWasmEvent: Send {
     fn from_wasm(
         self: Box<Self>,
         returned_event: WasmEvent,
+        dispatched_case: Discriminant<WasmEvent>,
         state: &mut PluginHostState,
-    ) -> Box<dyn Any + Send>;
+    ) -> wasmtime::Result<Box<dyn Any + Send>>;
 }
 
 struct NotifiedEvent<E>(E);
@@ -242,10 +243,11 @@ impl<E: ToFromWasmEvent + Send> PendingWasmEvent for NotifiedEvent<E> {
     fn from_wasm(
         self: Box<Self>,
         returned_event: WasmEvent,
+        _dispatched_case: Discriminant<WasmEvent>,
         state: &mut PluginHostState,
-    ) -> Box<dyn Any + Send> {
+    ) -> wasmtime::Result<Box<dyn Any + Send>> {
         cleanup_event(&returned_event, state);
-        Box::new(())
+        Ok(Box::new(()))
     }
 }
 
@@ -259,11 +261,18 @@ impl<E: ToFromWasmEvent + Send + 'static> PendingWasmEvent for BlockingEvent<E> 
     fn from_wasm(
         self: Box<Self>,
         returned_event: WasmEvent,
+        dispatched_case: Discriminant<WasmEvent>,
         state: &mut PluginHostState,
-    ) -> Box<dyn Any + Send> {
+    ) -> wasmtime::Result<Box<dyn Any + Send>> {
+        if std::mem::discriminant(&returned_event) != dispatched_case {
+            cleanup_event(&returned_event, state);
+            return Err(wasmtime::Error::msg(
+                "Returned event variant does not match the dispatched event",
+            ));
+        }
         let mut updated_event = self.0;
         updated_event.apply_wasm_event(returned_event, state);
-        Box::new(updated_event)
+        Ok(Box::new(updated_event))
     }
 }
 
@@ -290,11 +299,14 @@ impl WasmPluginEventHandler {
                             }
                         }
                     })?;
+                    let dispatched_case = std::mem::discriminant(&wasm_event);
                     // Lowering transfers these resources to the guest, allowing successfully returned events to be owned by the host again
                     let (returned_event,) = guest
                         .call(function, (handler_id, server_res, wasm_event))
                         .await?;
-                    Ok(guest.with(|mut store| event.from_wasm(returned_event, store.data_mut())))
+                    guest.with(|mut store| {
+                        event.from_wasm(returned_event, dispatched_case, store.data_mut())
+                    })
                 })
             })
             .await
@@ -333,5 +345,63 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
                 }
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_core::plugin::server::{
+        server_broadcast::ServerBroadcastEvent, server_command::ServerCommandEvent,
+    };
+    use pumpkin_util::text::TextComponent;
+
+    #[test]
+    fn blocking_event_validates_returned_case_and_releases_rejected_resources() {
+        let mut state = PluginHostState::new();
+        let original = ServerCommandEvent::new("say original".to_string());
+        let pending: Box<dyn PendingWasmEvent> = Box::new(BlockingEvent(original.clone()));
+        let dispatched_case = std::mem::discriminant(&pending.to_wasm(&mut state));
+        let broadcast = ServerBroadcastEvent::new(
+            TextComponent::text("unexpected"),
+            TextComponent::text("sender"),
+        );
+        let returned = broadcast.to_wasm_event(&mut state);
+        let WasmEvent::ServerBroadcastEvent(data) = &returned else {
+            panic!("expected broadcast event");
+        };
+        let rejected_handles = [data.message.rep(), data.sender.rep()];
+        let retained_text: Resource<pumpkin::plugin::text::TextComponent> = state
+            .add(TextComponent::text("retained"))
+            .expect("insert unrelated resource");
+
+        let result = pending.from_wasm(returned, dispatched_case, &mut state);
+        assert_eq!(
+            result.expect_err("reject mismatched case").to_string(),
+            "Returned event variant does not match the dispatched event"
+        );
+        for rep in rejected_handles {
+            assert!(
+                state
+                    .resource_table
+                    .get::<TextComponent>(&Resource::new_borrow(rep))
+                    .is_err()
+            );
+        }
+        assert!(state.get(&retained_text).is_ok());
+
+        let pending: Box<dyn PendingWasmEvent> = Box::new(BlockingEvent(original));
+        let mut returned = pending.to_wasm(&mut state);
+        if let WasmEvent::ServerCommandEvent(data) = &mut returned {
+            data.command = "say updated".to_string();
+            data.cancelled = true;
+        }
+        let updated = pending
+            .from_wasm(returned, dispatched_case, &mut state)
+            .expect("accept matching case")
+            .downcast::<ServerCommandEvent>()
+            .expect("return command event");
+        assert_eq!(updated.command, "say updated");
+        assert!(updated.cancelled);
     }
 }

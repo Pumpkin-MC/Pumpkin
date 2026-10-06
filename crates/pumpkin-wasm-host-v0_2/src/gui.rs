@@ -94,9 +94,10 @@ impl gui::HostGui for PluginHostState {
             pumpkin_data::screen::WindowType::Generic9x4 => 36,
             pumpkin_data::screen::WindowType::Generic9x5 => 45,
             pumpkin_data::screen::WindowType::Generic9x6 => 54,
-            pumpkin_data::screen::WindowType::Generic3x3 => 9,
             pumpkin_data::screen::WindowType::Generic9x1
-            | pumpkin_data::screen::WindowType::Hopper => 5,
+            | pumpkin_data::screen::WindowType::Generic3x3
+            | pumpkin_data::screen::WindowType::Crafter3x3 => 9,
+            pumpkin_data::screen::WindowType::Hopper => 5,
             _ => 27, // Default
         };
 
@@ -253,5 +254,38 @@ impl gui::HostGuiWithStore<PluginHostState> for HasSelf<PluginHostState> {
         let gui_handle = accessor.get_res(&res)?;
         let gui = gui_handle.lock().await;
         Ok(gui.allow_put_items)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_inventory::Inventory;
+    use pumpkin_util::text::TextComponent;
+
+    #[test]
+    fn nine_slot_gui_keeps_items_in_the_last_slot() {
+        let mut state = PluginHostState::new();
+        for screen in [
+            WitScreen::Generic9x1,
+            WitScreen::Generic3x3,
+            WitScreen::Crafter3x3,
+        ] {
+            let title = state
+                .add(TextComponent::text("Test GUI"))
+                .expect("insert title");
+            let resource = gui::HostGui::new(&mut state, screen, title).expect("create GUI");
+            let handle = state.get(&resource).expect("get GUI").clone();
+            let inventory = handle.blocking_lock().inventory.clone();
+            inventory.set_stack(8, ItemStack::new(1, &Item::DIAMOND));
+
+            let stack = inventory.get_stack(8);
+            assert_eq!(stack.item, &Item::DIAMOND);
+            assert_eq!(stack.item_count, 1);
+            inventory.set_stack(9, ItemStack::new(1, &Item::DIAMOND));
+            assert!(inventory.get_stack(9).is_empty());
+            gui::HostGui::drop(&mut state, resource).expect("drop GUI");
+        }
     }
 }
