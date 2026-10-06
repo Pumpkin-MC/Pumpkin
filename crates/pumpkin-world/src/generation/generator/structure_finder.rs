@@ -154,7 +154,7 @@ fn search_structure_starts(
     first_in_each_placement: bool,
 ) -> Option<(BlockPos, pumpkin_data::structures::StructureKeys)> {
     use crate::{
-        biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
+        biome::BiomeSupplier,
         generation::{
             noise::router::multi_noise_sampler::MultiNoiseSampler,
             structure::{
@@ -219,7 +219,7 @@ fn search_structure_starts(
                                     &noise_generator.base_router.multi_noise,
                                 );
                                 let biome_supplier: &dyn BiomeSupplier =
-                                    &MultiNoiseBiomeSupplier::OVERWORLD;
+                                    &noise_generator.biome_supplier;
                                 let context = StructureGeneratorContext {
                                     seed: world_seed,
                                     chunk_x,
