@@ -7,7 +7,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
-use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
+use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -141,11 +141,7 @@ impl SlimeEntity {
             height: entity.entity_type.dimension[1] * actual_size as f32,
             eye_height: entity.entity_type.eye_height * actual_size as f32,
         };
-        entity.entity_dimension.store(scaled_dimensions);
-
-        let pos = entity.pos.load();
-        let new_bb = BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &scaled_dimensions);
-        entity.bounding_box.store(new_bb);
+        entity.set_default_dimensions(scaled_dimensions);
     }
 
     pub fn get_size(&self) -> i32 {

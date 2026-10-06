@@ -5,6 +5,7 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_util::math::boundingbox::EntityDimensions;
 
 use crate::entity::ai::util::goal_utils;
 use crate::entity::{
@@ -35,6 +36,9 @@ pub struct ZombifiedPiglinEntity {
 }
 
 impl ZombifiedPiglinEntity {
+    /// Vanilla `ZombifiedPiglin.BABY_DIMENSIONS`
+    const BABY_DIMENSIONS: EntityDimensions = EntityDimensions::new(0.49, 0.98, 0.78);
+
     pub const XP_REWARD: u32 = 5;
 
     pub fn new(entity: Entity) -> Arc<Self> {
@@ -116,6 +120,10 @@ impl Mob for ZombifiedPiglinEntity {
 
     fn spawn_as_baby(&self) -> bool {
         self.mob_entity.set_baby_by_age();
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_default_dimensions(Self::BABY_DIMENSIONS);
         true
     }
 

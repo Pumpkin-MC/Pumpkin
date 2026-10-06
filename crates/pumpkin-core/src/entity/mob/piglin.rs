@@ -229,11 +229,11 @@ impl PiglinEntity {
         self.mob_entity
             .set_baby_flag(&self.is_baby, tracked_data::piglin::DATA_BABY_ID, baby);
         let entity = &self.mob_entity.living_entity.entity;
-        if baby {
-            entity.entity_dimension.store(Self::BABY_DIMENSIONS);
+        entity.set_default_dimensions(if baby {
+            Self::BABY_DIMENSIONS
         } else {
-            entity.entity_dimension.store(Self::ADULT_DIMENSIONS);
-        }
+            Self::ADULT_DIMENSIONS
+        });
     }
 
     #[must_use]

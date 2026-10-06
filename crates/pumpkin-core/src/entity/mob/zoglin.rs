@@ -126,7 +126,7 @@ impl ZoglinEntity {
         self.mob_entity
             .set_baby_flag(&self.is_baby, tracked_data::zoglin::DATA_BABY_ID, baby);
         let living = &self.mob_entity.living_entity;
-        living.entity.entity_dimension.store(if baby {
+        living.entity.set_default_dimensions(if baby {
             Self::BABY_DIMENSIONS
         } else {
             Entity::type_dimensions(living.entity.entity_type)

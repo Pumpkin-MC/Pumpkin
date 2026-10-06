@@ -429,7 +429,7 @@ impl BoundingBox {
 }
 
 /// Represents the dimensions of an entity.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EntityDimensions {
     /// Width of the entity.
     pub width: f32,

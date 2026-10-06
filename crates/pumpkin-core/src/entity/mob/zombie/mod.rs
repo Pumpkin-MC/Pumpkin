@@ -18,6 +18,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
+use pumpkin_util::math::boundingbox::EntityDimensions;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
@@ -146,6 +147,24 @@ impl ZombieEntityBase {
             pumpkin_data::tracked_data::zombie::BABY,
             baby,
         );
+        let entity = &self.mob_entity.living_entity.entity;
+        entity.set_default_dimensions(if baby {
+            Self::baby_dimensions(entity.entity_type)
+        } else {
+            Entity::type_dimensions(entity.entity_type)
+        });
+    }
+
+    /// Vanilla `BABY_DIMENSIONS` of `Zombie`, `Husk`, `Drowned` and `ZombieVillager`.
+    fn baby_dimensions(entity_type: &EntityType) -> EntityDimensions {
+        let eye_height = if entity_type == &EntityType::HUSK {
+            0.825
+        } else if entity_type == &EntityType::ZOMBIE_VILLAGER {
+            0.67
+        } else {
+            0.775
+        };
+        EntityDimensions::new(0.49, 0.98, eye_height)
     }
 
     #[must_use]

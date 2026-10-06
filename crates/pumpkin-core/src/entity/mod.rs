@@ -895,6 +895,8 @@ pub struct Entity {
     pub bounding_box: AtomicCell<BoundingBox>,
     ///The size (width and height) of the bounding box
     pub entity_dimension: AtomicCell<EntityDimensions>,
+    /// Size before the pose: the type size, or a baby or slime size. Vanilla `getDefaultDimensions`.
+    pub default_dimension: AtomicCell<EntityDimensions>,
     /// Whether this entity is invulnerable to all damage
     pub invulnerable: AtomicBool,
     /// List of damage types this entity is immune to
@@ -1056,6 +1058,7 @@ impl Entity {
                 &bounding_box_size,
             )),
             entity_dimension: AtomicCell::new(bounding_box_size),
+            default_dimension: AtomicCell::new(bounding_box_size),
             invulnerable: AtomicBool::new(false),
             damage_immunities: std::sync::Mutex::new(Vec::new()),
             data: AtomicI32::new(0),
@@ -1131,13 +1134,14 @@ impl Entity {
         }
 
         let mut metadata = SyncedActorDataList::new();
+        let dimension = self.entity_dimension.load();
         metadata.set(
             entity_data_key::WIDTH,
-            MetadataValue::Float(self.entity_type.dimension[0]),
+            MetadataValue::Float(dimension.width),
         );
         metadata.set(
             entity_data_key::HEIGHT,
-            MetadataValue::Float(self.entity_type.dimension[1]),
+            MetadataValue::Float(dimension.height),
         );
         metadata.set(entity_data_key::SCALE, MetadataValue::Float(1.0));
         metadata.set(
@@ -3043,15 +3047,41 @@ impl Entity {
             }
         }
 
-        let dimension = Self::get_entity_dimensions(pose);
-        let position = self.pos.load();
-        let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
         self.pose.store(pose);
-        self.bounding_box.store(aabb);
-        self.entity_dimension.store(dimension);
         let pose = pose as i32;
         let mut bedrock_meta = SyncedActorDataList::new();
         bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
+        self.set_synced_data(tracked_data::entity::DATA_POSE, VarInt(pose));
+        self.send_bedrock_actor_data(&bedrock_meta);
+        self.refresh_dimensions();
+    }
+
+    /// Vanilla `getDefaultDimensions` changed, e.g. a baby growing up.
+    pub fn set_default_dimensions(&self, dimensions: EntityDimensions) {
+        self.default_dimension.store(dimensions);
+        self.refresh_dimensions();
+    }
+
+    /// Vanilla `LivingEntity.getDimensions`: the player pose table, sleeping, or the default.
+    fn dimensions_for_pose(&self, pose: EntityPose) -> EntityDimensions {
+        if self.entity_type == &EntityType::PLAYER || pose == EntityPose::Sleeping {
+            Self::get_entity_dimensions(pose)
+        } else {
+            self.default_dimension.load()
+        }
+    }
+
+    /// Vanilla `refreshDimensions`: size and bounding box for the current pose.
+    fn refresh_dimensions(&self) {
+        let dimension = self.dimensions_for_pose(self.pose.load());
+        if self.entity_dimension.swap(dimension) == dimension {
+            return;
+        }
+        let position = self.pos.load();
+        self.bounding_box.store(BoundingBox::new_from_pos(
+            position.x, position.y, position.z, &dimension,
+        ));
+        let mut bedrock_meta = SyncedActorDataList::new();
         bedrock_meta.set(
             entity_data_key::WIDTH,
             MetadataValue::Float(dimension.width),
@@ -3060,7 +3090,6 @@ impl Entity {
             entity_data_key::HEIGHT,
             MetadataValue::Float(dimension.height),
         );
-        self.set_synced_data(tracked_data::entity::DATA_POSE, VarInt(pose));
         self.send_bedrock_actor_data(&bedrock_meta);
     }
 
