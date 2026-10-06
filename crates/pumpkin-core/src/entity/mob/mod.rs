@@ -1737,7 +1737,7 @@ mod tests {
             0.0,
             &Entity::get_entity_dimensions(pumpkin_data::entity::EntityPose::Standing),
         );
-        let seat_y = 64.5_f64;
+        let seat_y = 64.5f64;
         let hitbox = player.with_min_y(seat_y.max(player.min.y));
         assert_eq!(hitbox.min.y, 64.5);
         assert_eq!(hitbox.max.y, player.max.y);

@@ -3641,7 +3641,7 @@ impl EntityBase for LivingEntity {
     }
 
     fn is_pushable(&self) -> bool {
-        LivingEntity::is_pushable(self)
+        Self::is_pushable(self)
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {
