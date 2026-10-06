@@ -3,8 +3,7 @@ use crate::entity::EntityBase;
 use pumpkin_data::block_registry::PlacementContext;
 use pumpkin_data::{Block, BlockStateId, FacingExt, HorizontalFacingExt};
 
-/// Behaviour shared by every block that a plugin registers. The registration says what the block
-/// does (connecting to neighbours, drops, tool requirements), nothing here is specific to one block.
+/// Behaviour of every block that a plugin registers, driven by its registration.
 pub struct DynamicBlock;
 
 fn state_id(block: &Block, state_index: u16) -> BlockStateId {
@@ -30,8 +29,7 @@ impl BlockBehaviour for DynamicBlock {
             in_water: args.replacing.water_source(),
             sneaking: entity.is_sneaking(),
         };
-        // The placement rules choose the properties the player decides, the connect rules then
-        // follow the neighbours.
+        // Placement rules first, then connect rules from the neighbours.
         let placed = info.state_for_placement(info.default_state_index(), &context);
         let index = info.state_for_neighbours(placed, |direction| {
             args.world

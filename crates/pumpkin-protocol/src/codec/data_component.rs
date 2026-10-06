@@ -1596,9 +1596,8 @@ impl DataComponentCodec<Self> for CanBreakImpl {
 
 /// Upper bound on the entries of one attribute modifier component (vanilla items carry < 10).
 const MAX_ATTRIBUTE_MODIFIERS: usize = 256;
-/// Upper bound on distinct modifier ids kept alive by [`intern_modifier_id`]. Ids read from the
-/// network have to be `&'static str` (see `Modifier::id`), so they are leaked once per distinct
-/// value. The cap keeps a client that sends fresh ids in every packet from growing memory.
+/// Upper bound on distinct modifier ids leaked by [`intern_modifier_id`], so a client cannot grow
+/// memory with fresh ids.
 const MAX_INTERNED_MODIFIER_IDS: usize = 4096;
 
 fn intern_modifier_id(id: &str) -> Result<&'static str, ReadingError> {
@@ -1621,7 +1620,7 @@ fn intern_modifier_id(id: &str) -> Result<&'static str, ReadingError> {
     Ok(leaked)
 }
 
-/// Wire id of an `AttributeModifierSlot` (vanilla `AttributeModifierSlot` packet index).
+/// Wire id of an `AttributeModifierSlot`.
 const fn attribute_slot_to_id(slot: &AttributeModifierSlot) -> i32 {
     match slot {
         AttributeModifierSlot::Any => 0,
@@ -1664,12 +1663,8 @@ const fn attribute_operation_from_id(id: i32) -> Option<Operation> {
     }
 }
 
-/// Entry layout (vanilla `AttributeModifiersComponent.Entry`): attribute holder id, modifier
-/// (identifier, f64 amount, operation), slot and the tooltip display (`0` default, `1` hidden,
-/// `2` override followed by a text component).
-///
-/// `Modifier` has no display field, so the display is read and dropped, and is always written
-/// as the default one.
+/// Vanilla `AttributeModifiersComponent.Entry` layout. `Modifier` has no tooltip display field, so
+/// it is dropped when read and written as the default.
 impl DataComponentCodec<Self> for AttributeModifiersImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         seq.write_var_int(&VarInt::from(self.attribute_modifiers.len() as i32))?;
@@ -3013,8 +3008,7 @@ mod tests {
 
     #[test]
     fn attribute_modifiers_skip_display_and_reject_bad_ids() {
-        // One entry, attribute 3 (attack_damage), id "a:b", amount 1.0, add_value, any slot,
-        // hidden display.
+        // One entry: attack damage, id "a:b", amount 1.0, add_value, any slot, hidden display.
         let mut encoded = vec![1, Attributes::ATTACK_DAMAGE.id, 3];
         encoded.extend_from_slice(b"a:b");
         encoded.extend_from_slice(&1.0f64.to_be_bytes());

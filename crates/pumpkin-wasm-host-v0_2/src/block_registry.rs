@@ -114,8 +114,7 @@ fn to_wit_entry(block: &Block) -> Option<WitBlockEntry> {
     })
 }
 
-/// Fails unless the plugin has the `registry.blocks` permission. A free function, because
-/// `PluginHostState` lives in another crate.
+/// Fails unless the plugin has the `registry.blocks` permission.
 fn check_block_permission(state: &PluginHostState) -> Result<(), String> {
     if state
         .permissions
@@ -136,7 +135,7 @@ fn plugin_name(state: &PluginHostState) -> &str {
 }
 
 /// State id of a vanilla block with the given property values, `None` for an unknown property or
-/// value. Properties that are not listed have their default value.
+/// value. Unlisted properties keep their default.
 fn vanilla_state_id(block: &'static Block, properties: &[(&str, &str)]) -> Option<u32> {
     let mut merged: Vec<(&str, &str)> = block
         .properties(block.default_state.id)
@@ -156,8 +155,7 @@ impl Host for PluginHostState {
         &mut self,
         definition: WitBlockDefinition,
     ) -> wasmtime::Result<Result<u32, String>> {
-        // Registering a known block again is fine after the registry is closed, so a reloaded
-        // plugin finds its blocks. The registry rejects everything new by itself.
+        // The registry itself rejects new blocks once closed, but allows re-registering a known one.
         if let Err(error) = check_block_permission(self) {
             return Ok(Err(error));
         }

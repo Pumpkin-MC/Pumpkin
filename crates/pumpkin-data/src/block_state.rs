@@ -145,9 +145,8 @@ impl BlockState {
         self.state_flags & HAS_ANALOG_OUTPUT_SIGNAL != 0
     }
 
-    /// Whether an entity whose head is inside this block is spared from suffocating. Vanilla
-    /// blocks follow the default (a full block that blocks movement suffocates), only blocks that
-    /// plugins register can opt out, like vanilla's `isSuffocating((state, level, pos) -> false)`.
+    /// Whether an entity whose head is inside this block is spared from suffocating. Only
+    /// plugin-registered blocks can opt out.
     #[must_use]
     pub const fn never_suffocates(&self) -> bool {
         self.state_flags & NEVER_SUFFOCATES != 0
@@ -250,16 +249,13 @@ impl BlockStateId {
     // depends on generated impl:
     // pub(crate) const STATE_COUNT: u16;
 
-    /// The count of the generated (vanilla) block states. The states of blocks that plugins
-    /// register get the ids after these, see [`Self::total_count`].
+    /// The count of the generated (vanilla) block states. Plugin blocks' states follow them.
     pub const COUNT: u16 = Self::STATE_COUNT;
 
-    // SAFETY: There must never be a BlockStateId that is neither a generated state
-    // (< STATE_COUNT) nor a state of a registered dynamic block (checked by `from_raw`). The
-    // generated lookups rely on it.
+    // SAFETY: A BlockStateId must be a generated state (< STATE_COUNT) or a registered dynamic
+    // one (checked by `from_raw`); the generated lookups rely on it.
 
-    /// A generated state id. Const, so it cannot see registered blocks, use [`Self::from_raw`] for
-    /// ids from plugins, the network or disk.
+    /// A generated state id. Cannot see registered blocks, use [`Self::from_raw`] for external ids.
     #[inline]
     #[must_use]
     pub const fn new(inner: u16) -> Option<Self> {
@@ -279,16 +275,14 @@ impl BlockStateId {
         Self::AIR
     }
 
-    /// The id of a state of a registered dynamic block. Only the dynamic registry may call this,
-    /// with an id it handed out.
+    /// The id of a registered dynamic state. Only for ids the dynamic registry handed out.
     #[inline]
     #[must_use]
     pub(crate) const fn from_dynamic_raw(inner: u16) -> Self {
         Self(inner)
     }
 
-    /// Number of generated and registered block states. Ids are `0..total_count()`, so this is
-    /// what the size of the global palette on the network derives from.
+    /// Number of generated and registered block states.
     #[inline]
     #[must_use]
     pub fn total_count() -> u32 {

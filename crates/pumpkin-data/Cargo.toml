@@ -164,6 +164,7 @@ block = []
 potion_brewing = []
 
 [dependencies]
+arc-swap.workspace = true
 phf = { workspace = true, features = ["macros"] }
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true

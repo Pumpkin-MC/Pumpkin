@@ -1,25 +1,9 @@
 //! Runtime blocks registered by plugins on top of the generated vanilla blocks.
 //!
-//! The generated `Block` and `BlockState` tables are compile time only. Blocks added here get the
-//! ids `BlockId::COUNT + index` and their states the ids `BlockStateId::COUNT + offset`, both in
-//! registration order. The generated lookups (`Block::from_id`, `BlockState::from_id`,
-//! `Block::from_registry_key`, ...) fall back to this registry after their static tables miss, so
-//! every caller that maps an id or a key to a block also sees dynamic blocks.
-//!
-//! # State ids
-//!
-//! The states of a block are numbered like vanilla's `StateDefinition` does it:
-//!
-//! * the properties are sorted by name (byte order),
-//! * the first property is the most significant, the last one changes fastest,
-//! * the values of a property are in declaration order: `true` before `false`, integers from the
-//!   minimum to the maximum, enum values as listed.
-//!
-//! `state id = base state id + sum(value index * stride)` where the stride of a property is the
-//! product of the value counts of all properties after it.
-//!
-//! Registration is append only and closes with [`Block::freeze_dynamic_registry`], which the server
-//! calls before it accepts connections. Entries are leaked so they can be `&'static`.
+//! Registered blocks get the ids `BlockId::COUNT + index` and their states `BlockStateId::COUNT +
+//! offset`, in registration order. The generated lookups (`Block::from_id`, `BlockState::from_id`,
+//! ...) fall back to this registry when their static tables miss. States are numbered like
+//! vanilla: properties sorted by name, the first most significant, values in declared order.
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -40,13 +24,8 @@ const VANILLA_NAMESPACE: &str = "minecraft";
 const VANILLA_NAMESPACE_PREFIX: &str = "minecraft:";
 /// Vanilla's default friction.
 const DEFAULT_SLIPPERINESS: f32 = 0.6;
-/// A block with more states than this is rejected. Vanilla's largest block has a few thousand.
-///
-/// This is only a sanity bound, the hard limit is the 16 bit state id space shared by all blocks:
-/// [`BlockStateId`] is a `u16`, so generated and registered states together can not pass
-/// `u16::MAX + 1` (65536), which leaves `65536 - BlockStateId::STATE_COUNT` states for plugin
-/// blocks in total (29813 with the 35723 states of 1.21.x). The chunk palettes follow the total,
-/// see `block_network_max_bits`, they need at most 16 bits.
+/// A block with more states than this is rejected. All states of all blocks must also fit the 16
+/// bit state id space.
 const MAX_STATES_PER_BLOCK: u32 = 16384;
 /// Number of state ids, `BlockStateId` is a `u16`.
 const STATE_ID_SPACE: usize = u16::MAX as usize + 1;
@@ -61,10 +40,8 @@ const OPAQUE_LIGHT_BLOCK: u8 = 15;
 const CENTER_MIN: f64 = 0.4375;
 const CENTER_MAX: f64 = 0.5625;
 
-/// Tags that vanilla defines as references to other tags, and that the generated (flattened) tables
-/// no longer know as references. Adding an entry to the first tag adds it to the listed ones too
-/// (`data/minecraft/tags/block/incorrect_for_*_tool.json`), otherwise a block that `needs_diamond_tool`
-/// would be mineable with an iron pickaxe.
+/// Vanilla tags that include other tags, which the flattened generated tables no longer know.
+/// Adding an entry to the first tag adds it to the listed ones too.
 const IMPLIED_TAGS: &[(&str, &[&str])] = &[
     (
         "minecraft:needs_diamond_tool",
@@ -175,8 +152,8 @@ pub struct ConnectRule {
     pub target: ConnectTarget,
 }
 
-/// Where a placement rule takes the value of its property from. The value is chosen by name: the
-/// property has to list the names the source can give.
+/// Where a placement rule gets the value of its property from. The property has to list the value
+/// names the source can give.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlacementSource {
     /// The horizontal direction the player looks at: `north`, `south`, `east`, `west`.
@@ -192,9 +169,8 @@ pub enum PlacementSource {
     /// `bottom` or `top`, like vanilla's stairs and slabs: clicking the top face or the lower half
     /// of a side gives `bottom`.
     ClickedHalf,
-    /// `up` when the pitch of the player is this many degrees (above 0, at most 90) or more upwards,
-    /// `down` when it is as far downwards, and `horizontal` between. A property without a
-    /// `horizontal` value is not set in between (the next rule or the default applies).
+    /// `up` or `down` when the pitch is at least this many degrees (1..=90) up or down, otherwise
+    /// `horizontal`. A property without `horizontal` is left to the next rule.
     VerticalLook(f32),
     /// `true` when the placed block replaces a water source (waterlogged), `false` otherwise.
     InWater,
@@ -244,8 +220,7 @@ impl PlacementSource {
         }
     }
 
-    /// The value name this source gives for a placement, `None` when it gives none. `opposite`
-    /// flips the result: the opposite direction, up and down, top and bottom, true and false.
+    /// The value name this source gives, `None` when it gives none.
     fn value(&self, context: &PlacementContext, opposite: bool) -> Option<&str> {
         Some(match self {
             Self::HorizontalFacing => picked_direction(context.horizontal_facing, opposite),
@@ -277,9 +252,8 @@ impl PlacementSource {
     }
 }
 
-/// Sets a property when the block is placed, like vanilla's `getStateForPlacement`. Rules are
-/// tried in order: the first rule of a property that gives a value wins, a property without a
-/// value keeps its default. Connect rules apply after the placement rules.
+/// Sets a property when the block is placed, like vanilla's `getStateForPlacement`. The first rule
+/// of a property that gives a value wins; connect rules apply afterwards.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlacementRule {
     pub property: String,
@@ -340,14 +314,13 @@ pub struct BlockRegistration {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub requires_correct_tool: bool,
-    /// Name of the vanilla sound type (`amethyst`, `stone`, ...). Clients pick the sounds, the
-    /// server only keeps the name.
+    /// Name of the vanilla sound type (`amethyst`, `stone`, ...).
     pub sound_type: String,
     /// Light emitted by every state, 0 to 15.
     pub luminance: u8,
     /// Vanilla `canOcclude`, false for `noOcclusion()`.
     pub can_occlude: bool,
-    /// Vanilla `isSuffocating`. A suffocating full block hurts an entity whose head is inside.
+    /// Vanilla `isSuffocating`.
     pub suffocating: bool,
     pub replaceable: bool,
     pub map_color: u8,
@@ -505,9 +478,8 @@ fn check_shape(shape: &ShapeDefinition) -> Result<(), BlockRegistrationError> {
     Ok(())
 }
 
-/// Validates a registration and puts it in its canonical form: properties sorted by name, the
-/// default state complete and sorted, rules and tags sorted. Two registrations that describe the
-/// same block are equal after this, which makes re-registering a plugin idempotent.
+/// Validates a registration and returns it in canonical form (sorted properties, complete default
+/// state, sorted rules and tags), so registering the same block twice compares equal.
 fn normalize(mut reg: BlockRegistration) -> Result<BlockRegistration, BlockRegistrationError> {
     check_key(&reg.key)?;
 
@@ -586,7 +558,6 @@ fn normalize(mut reg: BlockRegistration) -> Result<BlockRegistration, BlockRegis
         }
     }
 
-    // The default state names every property, in property order.
     for (name, _) in &reg.default_state {
         if !reg.properties.iter().any(|property| property.name == *name) {
             return Err(invalid(format!(
@@ -961,7 +932,7 @@ impl DynamicBlockInfo {
             return state_index;
         };
         let mut index = state_index;
-        // At most 32 properties, one bit each. The first rule that gives a value wins.
+        // One bit per property (at most 32). The first rule that gives a value wins.
         let mut set: u32 = 0;
         for rule in &placement.resolved {
             let bit = 1u32 << rule.position;
@@ -1154,8 +1125,7 @@ fn is_full_cube(boxes: &[BoundingBox]) -> bool {
     })
 }
 
-/// `isFaceSturdy` per side: a box that touches the side and covers all of it. The result uses the
-/// `side_flags` layout of `BlockState`.
+/// `isFaceSturdy` per side, in the `side_flags` layout of `BlockState`.
 fn side_flags(boxes: &[BoundingBox]) -> u8 {
     let covers_x = |b: &BoundingBox| b.min.x <= 0.0 && b.max.x >= 1.0;
     let covers_y = |b: &BoundingBox| b.min.y <= 0.0 && b.max.y >= 1.0;
@@ -1233,6 +1203,7 @@ fn derive_state_data(reg: &BlockRegistration) -> (u16, u8, u8) {
 }
 
 /// Append only block table. The global instance backs `Block::from_id` and friends.
+#[derive(Clone)]
 pub struct DynamicBlockRegistry {
     frozen: bool,
     blocks: Vec<&'static Block>,
@@ -1328,9 +1299,8 @@ impl DynamicBlockRegistry {
         Ok(Box::leak(states.into_boxed_slice()))
     }
 
-    /// Adds a block. Registering a key again with an identical definition returns the existing
-    /// block, even when the registry is closed, so a plugin can be reloaded. A different definition
-    /// for a known key is [`BlockRegistrationError::Duplicate`].
+    /// Adds a block. Registering the same definition again returns the existing block, even once
+    /// closed. A different definition for a known key is [`BlockRegistrationError::Duplicate`].
     pub fn register(
         &mut self,
         registration: BlockRegistration,
@@ -1396,8 +1366,8 @@ impl DynamicBlockRegistry {
         Ok(block)
     }
 
-    /// Makes `item_id` the item that places the block `block_key`, and the block's `item_id`. Doing
-    /// it again with the same pair is fine, also when the registry is closed.
+    /// Makes `item_id` the item that places `block_key`. Repeating the same pair is fine, also once
+    /// closed.
     pub fn link_item(
         &mut self,
         block_key: &str,
@@ -1441,9 +1411,8 @@ impl DynamicBlockRegistry {
         Ok(updated)
     }
 
-    /// Sets how placing the block `block_key` chooses its property values. Setting the same rules
-    /// again is fine, also when the registry is closed, other rules for a block that has some are
-    /// [`BlockRegistrationError::PlacementRulesChanged`].
+    /// Sets how placing `block_key` chooses its property values. Repeating the same rules is fine,
+    /// other rules are [`BlockRegistrationError::PlacementRulesChanged`].
     pub fn set_placement_rules(
         &mut self,
         block_key: &str,
@@ -1524,12 +1493,34 @@ impl Default for DynamicBlockRegistry {
 
 static REGISTRY: LazyLock<RwLock<DynamicBlockRegistry>> =
     LazyLock::new(|| RwLock::new(DynamicBlockRegistry::new()));
+/// A copy of the registry taken when it was closed, read without taking a lock.
+static FROZEN: OnceLock<DynamicBlockRegistry> = OnceLock::new();
 /// Lets the id checks skip the lock. Updated after the registry changed.
 static DYNAMIC_BLOCK_COUNT: AtomicU32 = AtomicU32::new(0);
 static DYNAMIC_STATE_COUNT: AtomicU32 = AtomicU32::new(0);
 
-fn read_registry() -> RwLockReadGuard<'static, DynamicBlockRegistry> {
-    REGISTRY.read().unwrap_or_else(PoisonError::into_inner)
+/// Read access: the lock free copy once closed, the live registry before that.
+enum RegistryRead {
+    Frozen(&'static DynamicBlockRegistry),
+    Live(RwLockReadGuard<'static, DynamicBlockRegistry>),
+}
+
+impl std::ops::Deref for RegistryRead {
+    type Target = DynamicBlockRegistry;
+
+    fn deref(&self) -> &DynamicBlockRegistry {
+        match self {
+            Self::Frozen(registry) => registry,
+            Self::Live(guard) => guard,
+        }
+    }
+}
+
+fn read_registry() -> RegistryRead {
+    match FROZEN.get() {
+        Some(registry) => RegistryRead::Frozen(registry),
+        None => RegistryRead::Live(REGISTRY.read().unwrap_or_else(PoisonError::into_inner)),
+    }
 }
 
 fn write_registry() -> RwLockWriteGuard<'static, DynamicBlockRegistry> {
@@ -1643,12 +1634,19 @@ impl Block {
 
     /// Closes the global registry. Later registrations fail with [`BlockRegistrationError::Frozen`].
     pub fn freeze_dynamic_registry() {
-        write_registry().freeze();
+        {
+            let mut registry = write_registry();
+            registry.freeze();
+            // Set while the write lock is held, so no change can slip in between.
+            let _ = FROZEN.set(registry.clone());
+        }
+        // Runtime tags that name entries registered after the tag are resolved now.
+        crate::dynamic_tag::refresh();
     }
 
     #[must_use]
     pub fn is_dynamic_registry_frozen() -> bool {
-        read_registry().is_frozen()
+        FROZEN.get().is_some()
     }
 
     /// Blocks registered at runtime, in id order.
@@ -1781,8 +1779,8 @@ mod tests {
         }
     }
 
-    /// The Lonsdaleite wardframe: six booleans, connecting to its own kind.
-    fn wardframe(key: &str) -> BlockRegistration {
+    /// A block with six boolean sides that connects to its own kind.
+    fn connecting_block(key: &str) -> BlockRegistration {
         let sides = [
             ("north", BlockDirection::North),
             ("south", BlockDirection::South),
@@ -1832,7 +1830,6 @@ mod tests {
         let second = registry.register(second).unwrap();
         assert_eq!(first.id.as_u16(), Block::vanilla_block_count());
         assert_eq!(second.id.as_u16(), Block::vanilla_block_count() + 1);
-        // One state for the first block, then 15 for the second.
         assert_eq!(
             first.default_state.id.as_u16(),
             Block::vanilla_state_count()
@@ -1862,18 +1859,18 @@ mod tests {
     #[test]
     fn state_ids_follow_vanilla_property_order() {
         let mut registry = DynamicBlockRegistry::new();
-        let block = registry.register(wardframe("test_order:ward")).unwrap();
+        let block = registry
+            .register(connecting_block("test_order:ward"))
+            .unwrap();
         let info = registry.get_info(block.id.as_u16()).unwrap();
         assert_eq!(block.states.len(), 64);
-        // Sorted by name, whatever the declaration order was.
         assert_eq!(
             info.property_names(),
             vec!["down", "east", "north", "south", "up", "west"]
         );
-        // The first state is all true, the last all false, true before false.
         assert!(info.to_props(0).iter().all(|(_, value)| *value == "true"));
         assert!(info.to_props(63).iter().all(|(_, value)| *value == "false"));
-        // The default state is all false: index 63 of 64, like the Java mod's manifest says.
+        // The default state is all false: index 63 of 64.
         assert_eq!(info.default_state_index(), 63);
         assert_eq!(block.default_state.id, block.states[63].id);
         // The last property (west) changes fastest, the first (down) is the most significant.
@@ -1920,7 +1917,6 @@ mod tests {
         // age (3 values), lit (2), mode (3): 18 states, age most significant.
         assert_eq!(block.states.len(), 18);
         assert_eq!(info.property_names(), vec!["age", "lit", "mode"]);
-        // Unlisted properties take their first value: age 2, lit true, mode auto.
         assert_eq!(info.default_state_index(), 2);
         for index in 0..info.state_count() {
             let props = info.to_props(index);
@@ -1933,7 +1929,6 @@ mod tests {
         );
         assert_eq!(info.strict_index_from_props(&[("mode", "nope")]), None);
         assert_eq!(info.strict_index_from_props(&[("missing", "true")]), None);
-        // The lenient mapping keeps the default for what it does not know.
         assert_eq!(
             info.index_from_props(&[("mode", "nope")]),
             info.default_state_index()
@@ -2013,22 +2008,20 @@ mod tests {
             Some(BlockRegistrationError::Invalid(_))
         ));
 
-        // Nothing of the above was added.
         assert!(registry.blocks().is_empty());
     }
 
     #[test]
     fn duplicates_idempotence_and_frozen() {
         let mut registry = DynamicBlockRegistry::new();
-        let first = registry.register(wardframe("test_dup:a")).unwrap();
-        // The same definition, written in another order, is the same block.
-        let mut shuffled = wardframe("test_dup:a");
+        let first = registry.register(connecting_block("test_dup:a")).unwrap();
+        let mut shuffled = connecting_block("test_dup:a");
         shuffled.properties.reverse();
         shuffled.default_state.reverse();
         shuffled.connect_rules.reverse();
         shuffled.tags.reverse();
         assert_eq!(registry.register(shuffled).unwrap(), first);
-        let mut different = wardframe("test_dup:a");
+        let mut different = connecting_block("test_dup:a");
         different.hardness = 1.0;
         assert_eq!(
             registry.register(different).err(),
@@ -2041,8 +2034,10 @@ mod tests {
             registry.register(registration("test_dup:b")).err(),
             Some(BlockRegistrationError::Frozen),
         );
-        // Re-registering a known block still works for plugin reloads.
-        assert_eq!(registry.register(wardframe("test_dup:a")).unwrap(), first);
+        assert_eq!(
+            registry.register(connecting_block("test_dup:a")).unwrap(),
+            first
+        );
         assert_eq!(registry.blocks().len(), 1);
     }
 
@@ -2061,7 +2056,6 @@ mod tests {
         let linked = registry.link_item("test_item:a", 5000).unwrap();
         assert_eq!(linked.item_id, 5000);
         assert_eq!(linked.id, block.id);
-        // The states are shared with the block that was replaced.
         assert_eq!(linked.default_state.id, block.default_state.id);
         assert_eq!(registry.get_by_key("test_item:a"), Some(linked));
         assert_eq!(registry.get_by_item(5000), Some(linked));
@@ -2069,7 +2063,6 @@ mod tests {
             registry.get_state_block(block.default_state.id.as_u16()),
             Some(linked)
         );
-        // Same pair again is fine, other pairs are not.
         assert_eq!(registry.link_item("test_item:a", 5000).unwrap(), linked);
         assert!(registry.link_item("test_item:a", 5001).is_err());
         assert!(registry.link_item("test_item:b", 5000).is_err());
@@ -2079,7 +2072,9 @@ mod tests {
     #[test]
     fn derived_state_data_matches_vanilla_glass_like_blocks() {
         let mut registry = DynamicBlockRegistry::new();
-        let block = registry.register(wardframe("test_flags:ward")).unwrap();
+        let block = registry
+            .register(connecting_block("test_flags:ward"))
+            .unwrap();
         let state = block.default_state;
         assert_eq!(state.luminance, 7);
         assert_eq!(state.hardness, 5.0);
@@ -2105,7 +2100,6 @@ mod tests {
         assert!(state.can_occlude() && state.is_solid_render() && state.is_solid_block());
         assert!(!state.never_suffocates());
         assert_eq!(state.opacity, 15);
-        // Vanilla stone has the same flags apart from the tool requirement.
         assert_eq!(
             state.state_flags,
             Block::STONE.default_state.state_flags & !4
@@ -2137,7 +2131,6 @@ mod tests {
         let shapes = state.collision_shapes;
         assert_eq!(shapes.len(), 1);
 
-        // An odd box that vanilla does not have is added behind the generated shapes.
         let mut odd = registration("test_shape:odd");
         odd.collision_shape = ShapeDefinition::Boxes(vec![[0.123, 0.0, 0.0, 0.456, 0.789, 1.0]]);
         odd.selection_shape = ShapeDefinition::Empty;
@@ -2147,7 +2140,6 @@ mod tests {
         let shape = registry.shapes[usize::from(index) - COLLISION_SHAPES.len()];
         assert_eq!(shape.min.x, 0.123);
         assert_eq!(shape.max.y, 0.789);
-        // The same box again reuses the entry.
         let shape_count = registry.shapes.len();
         let mut again = registration("test_shape:again");
         again.collision_shape = ShapeDefinition::Boxes(vec![[0.123, 0.0, 0.0, 0.456, 0.789, 1.0]]);
@@ -2159,9 +2151,10 @@ mod tests {
     #[test]
     fn connect_rules_follow_the_neighbours() {
         let mut registry = DynamicBlockRegistry::new();
-        let block = registry.register(wardframe("test_connect:ward")).unwrap();
+        let block = registry
+            .register(connecting_block("test_connect:ward"))
+            .unwrap();
         let info = registry.get_info(block.id.as_u16()).unwrap();
-        // Another block of the same kind is the only thing that connects.
         let neighbour = |direction: BlockDirection| match direction {
             BlockDirection::North | BlockDirection::Up => block,
             _ => &Block::STONE,
@@ -2172,7 +2165,6 @@ mod tests {
             let expected = matches!(name, "north" | "up");
             assert_eq!(value, if expected { "true" } else { "false" }, "{name}");
         }
-        // A neighbour update only changes the property of its direction.
         let after = info.update_connection(placed, BlockDirection::South, block);
         assert_eq!(info.value(after, "south"), Some("true"));
         assert_eq!(info.value(after, "north"), Some("true"));
@@ -2185,7 +2177,6 @@ mod tests {
             cleared
         );
 
-        // Rules can target a block or a tag as well.
         let mut fence = registration("test_connect:fence");
         fence.properties = vec![bool_property("north")];
         fence.default_state = vec![("north".to_string(), "false".to_string())];
@@ -2227,8 +2218,8 @@ mod tests {
 
     #[test]
     fn global_lookups_cover_dynamic_blocks() {
-        let block = Block::register_dynamic(wardframe("test_global:ward")).unwrap();
-        let again = Block::register_dynamic(wardframe("test_global:ward")).unwrap();
+        let block = Block::register_dynamic(connecting_block("test_global:ward")).unwrap();
+        let again = Block::register_dynamic(connecting_block("test_global:ward")).unwrap();
         assert_eq!(block, again);
 
         assert_eq!(Block::from_id(block.id), block);
@@ -2253,7 +2244,6 @@ mod tests {
         // The vanilla constructors still stop at the vanilla ranges.
         assert!(BlockStateId::new(block.default_state.id.as_u16()).is_none());
 
-        // Properties through the generic interface.
         let state = &block.states[0];
         let props = block.properties(state.id).unwrap().to_props();
         assert_eq!(props.len(), 6);
@@ -2282,14 +2272,13 @@ mod tests {
 
     #[test]
     fn linked_items_place_blocks_and_tags_work() {
-        let block = Block::register_dynamic(wardframe("test_tagged:ward")).unwrap();
+        let block = Block::register_dynamic(connecting_block("test_tagged:ward")).unwrap();
         assert!(Block::from_item_id(60_000).is_none());
         let linked = Block::link_dynamic_item("test_tagged:ward", 60_000).unwrap();
         assert_eq!(Block::from_item_id(60_000), Some(linked));
         assert_eq!(Block::from_registry_key("test_tagged:ward"), Some(linked));
         assert_eq!(Block::from_id(block.id).item_id, 60_000);
 
-        // Tag membership through the string interface that tool rules use.
         assert_eq!(
             linked.is_tagged_with("minecraft:mineable/pickaxe"),
             Some(true)
@@ -2303,7 +2292,6 @@ mod tests {
             Block::STONE.is_tagged_with("minecraft:mineable/pickaxe"),
             Some(true)
         );
-        // A diamond tier block is also wrong for every lower tier.
         assert_eq!(
             linked.is_tagged_with("minecraft:incorrect_for_iron_tool"),
             Some(true)
@@ -2320,7 +2308,6 @@ mod tests {
             Block::OBSIDIAN.is_tagged_with("minecraft:incorrect_for_iron_tool"),
             Some(true)
         );
-        // And the client tag sync sees it.
         let tags = Block::network_tags().unwrap();
         let ids = |name: &str| &tags.iter().find(|(n, _)| n == name).unwrap().1;
         assert!(ids("minecraft:needs_diamond_tool").contains(&linked.id.as_u16()));
@@ -2402,7 +2389,6 @@ mod tests {
         let block = registry.register(reg).unwrap();
         let info = registry.get_info(block.id.as_u16()).unwrap();
         let default = info.default_state_index();
-        // Without rules the state is the default one.
         assert_eq!(
             info.state_for_placement(default, &placement(BlockDirection::North)),
             default
@@ -2419,7 +2405,6 @@ mod tests {
         registry
             .set_placement_rules("test_place:block", rules.clone())
             .unwrap();
-        // The same rules again are fine, also when the registry is closed.
         registry.freeze();
         registry
             .set_placement_rules("test_place:block", rules.clone())
@@ -2433,11 +2418,9 @@ mod tests {
         let state = info.state_for_placement(default, &placement(BlockDirection::North));
         assert_eq!(info.value(state, "facing"), Some("west"));
         assert_eq!(info.value(state, "waterlogged"), Some("true"));
-        // Clicked on a side, above the middle.
         assert_eq!(info.value(state, "half"), Some("top"));
         assert_eq!(info.value(state, "axis"), Some("z"));
         assert_eq!(info.value(state, "look"), Some("down"));
-        // Not sneaking, opposite.
         assert_eq!(info.value(state, "sneak"), Some("true"));
 
         let top_face = info.state_for_placement(default, &placement(BlockDirection::Up));
@@ -2460,8 +2443,7 @@ mod tests {
             .set_placement_rules(
                 "test_place:fallback",
                 vec![
-                    // Looking 80 degrees or more up or down wins. In between the rule gives
-                    // `horizontal`, which the property lacks, so the next rule applies.
+                    // From 80 degrees on this wins; below, `horizontal` is unlisted so the next rule applies.
                     rule("facing", PlacementSource::VerticalLook(80.0), false),
                     rule("facing", PlacementSource::HorizontalFacing, false),
                     rule(
@@ -2498,48 +2480,118 @@ mod tests {
                 Err(BlockRegistrationError::Invalid(_))
             )
         };
-        // A facing property that does not list all four directions.
         assert!(rejected(vec![rule(
             "facing",
             PlacementSource::HorizontalFacing,
             false
         )]));
-        // Unknown property.
         assert!(rejected(vec![rule(
             "nope",
             PlacementSource::Sneaking,
             false
         )]));
-        // Not a boolean.
         assert!(rejected(vec![rule(
             "axis",
             PlacementSource::InWater,
             false
         )]));
-        // Constant that is no value.
         assert!(rejected(vec![rule(
             "facing",
             PlacementSource::Constant("up".to_string()),
             false
         )]));
-        // No opposite of an axis.
         assert!(rejected(vec![rule(
             "axis",
             PlacementSource::ClickedAxis,
             true
         )]));
-        // Pitch out of range.
         assert!(rejected(vec![rule(
             "axis",
             PlacementSource::VerticalLook(0.0),
             false
         )]));
-        // Nothing of the above was kept.
         assert!(info.placement_rules().is_empty());
-        // Rules for a block that is not registered.
         assert!(matches!(
             registry.set_placement_rules("test_place:missing", Vec::new()),
             Err(BlockRegistrationError::UnknownBlock(_))
         ));
+    }
+
+    /// Checks every state of a block registered with the properties of `vanilla` against the vanilla
+    /// numbering.
+    fn assert_numbered_like_vanilla(vanilla: &'static Block, key: &str) {
+        let mut names: Vec<&'static str> = Vec::new();
+        let mut values: Vec<Vec<&'static str>> = Vec::new();
+        for state in vanilla.states {
+            let props = vanilla
+                .properties(state.id)
+                .expect("the vanilla block has properties")
+                .to_props();
+            for (name, value) in props {
+                let position = match names.iter().position(|known| *known == name) {
+                    Some(position) => position,
+                    None => {
+                        names.push(name);
+                        values.push(Vec::new());
+                        names.len() - 1
+                    }
+                };
+                if !values[position].contains(&value) {
+                    values[position].push(value);
+                }
+            }
+        }
+
+        let kind_of = |values: &[&'static str]| {
+            if values == ["true", "false"] {
+                return PropertyKind::Bool;
+            }
+            let numbers: Option<Vec<u8>> = values.iter().map(|v| v.parse().ok()).collect();
+            match numbers {
+                Some(numbers) if numbers.windows(2).all(|pair| pair[1] == pair[0] + 1) => {
+                    PropertyKind::Int {
+                        min: numbers[0],
+                        max: numbers[numbers.len() - 1],
+                    }
+                }
+                _ => PropertyKind::Enum(values.iter().map(|v| (*v).to_string()).collect()),
+            }
+        };
+        let mut definition = registration(key);
+        definition.properties = names
+            .iter()
+            .zip(&values)
+            .map(|(name, values)| PropertyDefinition {
+                name: (*name).to_string(),
+                kind: kind_of(values),
+            })
+            .collect();
+
+        let mut registry = DynamicBlockRegistry::new();
+        let block = registry.register(definition).unwrap();
+        let info = registry.get_info(block.id.as_u16()).unwrap();
+        assert_eq!(block.states.len(), vanilla.states.len(), "{key}");
+        for (index, state) in vanilla.states.iter().enumerate() {
+            let index = u16::try_from(index).unwrap();
+            let mut expected = vanilla.properties(state.id).unwrap().to_props();
+            expected.sort_unstable();
+            let mut actual = info.to_props(index);
+            actual.sort_unstable();
+            assert_eq!(actual, expected, "{key}: state {index}");
+            assert_eq!(
+                info.index_from_props(&expected),
+                index,
+                "{key}: state {index}"
+            );
+        }
+    }
+
+    #[test]
+    fn state_numbering_matches_vanilla_blocks() {
+        assert_numbered_like_vanilla(&Block::OAK_STAIRS, "test_vanilla:stairs");
+        assert_numbered_like_vanilla(&Block::REPEATER, "test_vanilla:repeater");
+        // A 0..=15 integer next to four three-valued enums.
+        assert_numbered_like_vanilla(&Block::REDSTONE_WIRE, "test_vanilla:wire");
+        assert_numbered_like_vanilla(&Block::OAK_FENCE, "test_vanilla:fence");
     }
 }

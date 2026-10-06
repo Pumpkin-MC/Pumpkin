@@ -66,13 +66,9 @@ pub const SYS_INFO_RAM: &str = "sys.info.ram";
 pub const SYS_INFO_OS: &str = "sys.info.os";
 
 /// Allows the plugin to register custom items (and item tags) while the server starts.
-///
-/// Custom items take network ids that connected clients have to know about.
 pub const REGISTRY_ITEMS: &str = "registry.items";
 
 /// Allows the plugin to register custom blocks (and block tags) while the server starts.
-///
-/// Custom blocks take block and block state ids that connected clients have to know about.
 pub const REGISTRY_BLOCKS: &str = "registry.blocks";
 
 #[must_use]

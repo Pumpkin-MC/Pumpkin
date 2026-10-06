@@ -76,18 +76,15 @@ mod test {
             BlockStateId::total_count(),
             block_network_max_bits()
         );
-        // Every state id fits in a u16, so the global palette never needs more than 16 bits.
+        // State ids are a u16.
         assert!(block_network_max_bits() <= 16);
     }
 
     #[test]
     fn global_palette_bits_follow_the_state_count() {
-        // Vanilla: 35723 states need 16 bits.
         assert_eq!(global_palette_bits(u32::from(BlockStateId::COUNT)), 16);
-        // Custom blocks add states, the count is still below 2^16.
         assert_eq!(global_palette_bits(u32::from(BlockStateId::COUNT) + 64), 16);
         assert_eq!(global_palette_bits(1 << 16), 16);
-        // Below 2^15 the client would use fewer bits, never fewer than the first direct width.
         assert_eq!(global_palette_bits(1 << 15), 15);
         assert_eq!(global_palette_bits((1 << 15) + 1), 16);
         assert_eq!(global_palette_bits(300), 9);

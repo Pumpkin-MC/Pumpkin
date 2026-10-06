@@ -1360,9 +1360,7 @@ pub fn build() -> TokenStream {
                 if id.as_u16() >= BlockStateId::STATE_COUNT {
                     return Self::from_dynamic_id(id);
                 }
-                // Safety: We always check this condition when creating a BlockStateId.
-                // the u16 field is private and immutable. BlockStateId::STATE_COUNT is a const u16.
-                // If the condition held once, it will always hold.
+                // Safety: ids at or past BlockStateId::STATE_COUNT returned above, so `id` is below it.
                 unsafe { std::hint::assert_unchecked(id.as_u16() < BlockStateId::STATE_COUNT) }
                 // This hint guarantees that bound checks can be optimized away in release builds.
                 // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
@@ -1386,9 +1384,7 @@ pub fn build() -> TokenStream {
                 if id.as_u16() >= BlockStateId::STATE_COUNT {
                     return Self::STATE_ID_TO_BEDROCK[Self::BEDROCK_PLACEHOLDER.as_u16() as usize];
                 }
-                // Safety: We always check this condition when creating a BlockStateId.
-                // the u16 field is private and immutable. BlockStateId::STATE_COUNT is a const u16.
-                // If the condition held once, it will always hold.
+                // Safety: ids at or past BlockStateId::STATE_COUNT returned above, so `id` is below it.
                 unsafe { std::hint::assert_unchecked(id.as_u16() < BlockStateId::STATE_COUNT) }
                 // This hint guarantees that bound checks can be optimized away in release builds.
                 // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
@@ -1470,9 +1466,7 @@ pub fn build() -> TokenStream {
                 if id.as_u16() >= BlockId::BLOCK_COUNT {
                     return Self::from_dynamic_id(id);
                 }
-                // Safety: We always check this condition when creating a BlockId.
-                // the u16 field is private and immutable. BlockId::BLOCK_COUNT is a const u16.
-                // If the condition held once, it will always hold.
+                // Safety: ids at or past BlockId::BLOCK_COUNT returned above, so `id` is below it.
                 unsafe { std::hint::assert_unchecked(id.as_u16() < BlockId::BLOCK_COUNT) }
                 // This hint guarantees that bound checks can be optimized away in release builds.
                 // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
@@ -1536,9 +1530,7 @@ pub fn build() -> TokenStream {
                 if id.as_u16() >= BlockStateId::STATE_COUNT {
                     return Self::from_dynamic_state_id(id);
                 }
-                // Safety: We always check this condition when creating a BlockStateId.
-                // the u16 field is private and immutable. BlockStateId::STATE_COUNT is a const u16.
-                // If the condition held once, it will always hold.
+                // Safety: ids at or past BlockStateId::STATE_COUNT returned above, so `id` is below it.
                 unsafe { std::hint::assert_unchecked(id.as_u16() < BlockStateId::STATE_COUNT) }
                 // This hint guarantees that bound checks can be optimized away in release builds.
                 // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)

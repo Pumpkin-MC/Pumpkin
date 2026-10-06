@@ -877,7 +877,7 @@ mod tests {
         )
         .unwrap();
         let item = Item::register_dynamic(ItemRegistration {
-            key: "test_wire:lonsdaleite_sword".to_string(),
+            key: "test_wire:ruby_sword".to_string(),
             components: vec![(DataComponent::MaxDamage, decoded)],
             max_stack_size: None,
         })

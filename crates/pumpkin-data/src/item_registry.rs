@@ -1,17 +1,13 @@
 //! Runtime items registered by plugins on top of the generated vanilla items.
 //!
-//! The generated `Item` table is compile time only. Items added here get the ids
-//! `Item::vanilla_count() + index`, in registration order. The generated lookups
-//! (`Item::from_id`, `Item::from_registry_key`) fall back to this registry after their static
-//! match misses, so every caller that maps an id or key to an `Item` also sees dynamic items.
-//!
-//! Registration is append only and closes with [`Item::freeze_dynamic_registry`], which the server
-//! calls before it accepts connections. Entries are leaked so they can be `&'static Item`.
+//! Registered items get the ids `Item::vanilla_count() + index`, in registration order. The
+//! generated lookups (`Item::from_id`, `Item::from_registry_key`) fall back to this registry when
+//! their static tables miss. Registration closes with [`Item::freeze_dynamic_registry`].
 
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::{LazyLock, PoisonError, RwLock};
+use std::sync::{LazyLock, OnceLock, PoisonError, RwLock, RwLockReadGuard};
 
 use crate::data_component::DataComponent;
 use crate::data_component_impl::{
@@ -109,7 +105,7 @@ fn split_key(key: &str) -> Result<(&str, &str), ItemRegistrationError> {
     Ok((namespace, path))
 }
 
-/// Vanilla ids are `0..count`.
+/// Vanilla item ids are `0..count`.
 static VANILLA_COUNT: LazyLock<u16> = LazyLock::new(|| {
     let mut count = 0u16;
     while Item::from_vanilla_id(count).is_some() {
@@ -119,6 +115,7 @@ static VANILLA_COUNT: LazyLock<u16> = LazyLock::new(|| {
 });
 
 /// Append only item table. The global instance backs `Item::from_id` and friends.
+#[derive(Clone)]
 pub struct ItemRegistry {
     frozen: bool,
     items: Vec<&'static Item>,
@@ -144,9 +141,8 @@ impl ItemRegistry {
         self.frozen
     }
 
-    /// Adds an item. Registering a key again with an identical definition returns the existing
-    /// item, even when the registry is closed, so a plugin can be reloaded. A different definition
-    /// for a known key is [`ItemRegistrationError::Duplicate`].
+    /// Adds an item. Registering the same definition again returns the existing item, even once
+    /// closed. A different definition for a known key is [`ItemRegistrationError::Duplicate`].
     pub fn register(
         &mut self,
         registration: ItemRegistration,
@@ -227,8 +223,7 @@ fn same_components(
         })
 }
 
-/// Adds what vanilla gives every item and what the item behaviour code reads without checking
-/// for presence (most of all `MaxStackSize`, which defaults to 1 when absent on a stack).
+/// Adds the default components vanilla gives every item, most of all `MaxStackSize`.
 fn with_default_components(
     key: &str,
     namespace: &str,
@@ -316,9 +311,31 @@ fn with_default_components(
 
 static REGISTRY: LazyLock<RwLock<ItemRegistry>> =
     LazyLock::new(|| RwLock::new(ItemRegistry::new()));
+/// A copy of the registry taken when it was closed, read without taking a lock.
+static FROZEN: OnceLock<ItemRegistry> = OnceLock::new();
 
-fn read_registry() -> std::sync::RwLockReadGuard<'static, ItemRegistry> {
-    REGISTRY.read().unwrap_or_else(PoisonError::into_inner)
+/// Read access: the lock free copy once closed, the live registry before that.
+enum RegistryRead {
+    Frozen(&'static ItemRegistry),
+    Live(RwLockReadGuard<'static, ItemRegistry>),
+}
+
+impl std::ops::Deref for RegistryRead {
+    type Target = ItemRegistry;
+
+    fn deref(&self) -> &ItemRegistry {
+        match self {
+            Self::Frozen(registry) => registry,
+            Self::Live(guard) => guard,
+        }
+    }
+}
+
+fn read_registry() -> RegistryRead {
+    match FROZEN.get() {
+        Some(registry) => RegistryRead::Frozen(registry),
+        None => RegistryRead::Live(REGISTRY.read().unwrap_or_else(PoisonError::into_inner)),
+    }
 }
 
 fn write_registry() -> std::sync::RwLockWriteGuard<'static, ItemRegistry> {
@@ -341,12 +358,19 @@ impl Item {
 
     /// Closes the global registry. Later registrations fail with [`ItemRegistrationError::Frozen`].
     pub fn freeze_dynamic_registry() {
-        write_registry().freeze();
+        {
+            let mut registry = write_registry();
+            registry.freeze();
+            // Set while the write lock is held, so no change can slip in between.
+            let _ = FROZEN.set(registry.clone());
+        }
+        // Runtime tags that name entries registered after the tag are resolved now.
+        crate::dynamic_tag::refresh();
     }
 
     #[must_use]
     pub fn is_dynamic_registry_frozen() -> bool {
-        read_registry().is_frozen()
+        FROZEN.get().is_some()
     }
 
     /// Items registered at runtime, in id order.
@@ -454,7 +478,6 @@ mod tests {
             )),
         );
         let first = registry.register(registration("test_dup:a")).unwrap();
-        // The same definition is the same item, a different one is a conflict.
         assert_eq!(
             registry.register(registration("test_dup:a")).unwrap(),
             first
@@ -493,7 +516,6 @@ mod tests {
             registry.register(registration("test_dup:c")).err(),
             Some(ItemRegistrationError::Frozen),
         );
-        // Re-registering a known item still works for plugin reloads.
         assert_eq!(
             registry.register(registration("test_dup:a")).unwrap(),
             first
@@ -594,7 +616,6 @@ mod tests {
             Rarity::Epic
         );
 
-        // A plugin that is gone leaves an unknown item behind. It must not decode.
         let mut missing = pumpkin_nbt::compound::NbtCompound::new();
         missing.put_string("id", "test_global:removed".to_string());
         missing.put_int("count", 1);

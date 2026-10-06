@@ -995,14 +995,12 @@ const BLOCK_DISK_MIN_BITS: u8 = 4;
 const BLOCK_NETWORK_MIN_MAP_BITS: u8 = 4;
 const BLOCK_NETWORK_MAX_MAP_BITS: u8 = 8;
 
-/// Bits per entry of the global block palette, the `ceillog2` of the number of block states that the
-/// client knows. That is the generated states plus the ones of registered custom blocks, whose
-/// registry is closed before the first client connects.
+/// Bits per entry of the global block palette, covering the generated and registered block states.
 pub(crate) fn block_network_max_bits() -> u8 {
     global_palette_bits(BlockStateId::total_count())
 }
 
-/// `global_palette_bits(count)` for a block state registry of `count` entries.
+/// Bits per entry of the global block palette for `state_count` block states.
 pub(crate) fn global_palette_bits(state_count: u32) -> u8 {
     encompassing_bits(state_count as usize).max(BLOCK_NETWORK_MAX_MAP_BITS + 1)
 }

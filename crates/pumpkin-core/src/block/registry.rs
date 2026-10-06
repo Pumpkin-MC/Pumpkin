@@ -504,7 +504,7 @@ pub struct BlockRegistry {
     /// Behaviour index by block id, for the generated blocks.
     block_indices: [u16; pumpkin_data::BlockId::COUNT as usize],
     behaviours: Vec<Arc<dyn BlockBehaviour>>,
-    /// The behaviour of every block that plugins register, their ids are past `block_indices`.
+    /// The behaviour of every plugin-registered block.
     dynamic_behaviour: Arc<dyn BlockBehaviour>,
     fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
 }

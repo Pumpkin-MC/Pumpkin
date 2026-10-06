@@ -5,10 +5,7 @@ use std::path::Path;
 use serde_json::Value;
 
 /// Collects the entries of every `tags/item` (or legacy `tags/items`) file of a namespace into
-/// `tags`, keyed by `namespace:path`. Entries are item ids or `#tag` references.
-///
-/// `replace` is not honoured: the tags are merged with the generated ones, see
-/// `pumpkin_data::dynamic_tag`.
+/// `tags`, keyed by `namespace:path`. `replace` is not honoured: tags merge with the generated ones.
 pub fn load_item_tags_from_dir<S: std::hash::BuildHasher>(
     namespace: &str,
     tags_dir: &Path,
@@ -57,7 +54,6 @@ fn load_recursive<S: std::hash::BuildHasher>(
 }
 
 /// Reads the `values` of a tag file. An entry is a string or `{"id": ..., "required": ...}`.
-/// Entries that name unknown items are kept, they are resolved when the tag is checked.
 fn parse_tag_values(json: &Value) -> Vec<String> {
     json.get("values")
         .and_then(Value::as_array)
@@ -83,12 +79,12 @@ mod tests {
     #[test]
     fn parses_string_and_object_entries() {
         let json: Value = serde_json::from_str(
-            r##"{"replace": false, "values": ["lonsdaleite:gem", {"id": "minecraft:diamond", "required": false}, "#c:gems", 3]}"##,
+            r##"{"replace": false, "values": ["mymod:gem", {"id": "minecraft:diamond", "required": false}, "#c:gems", 3]}"##,
         )
         .unwrap();
         assert_eq!(
             parse_tag_values(&json),
-            ["lonsdaleite:gem", "minecraft:diamond", "#c:gems"]
+            ["mymod:gem", "minecraft:diamond", "#c:gems"]
         );
         assert!(parse_tag_values(&Value::Null).is_empty());
     }
@@ -98,20 +94,16 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("pumpkin_item_tags_{}", std::process::id()));
         let nested = dir.join("item").join("ingots");
         fs::create_dir_all(&nested).unwrap();
-        fs::write(
-            nested.join("lonsdaleite.json"),
-            r#"{"values": ["lonsdaleite:ingot"]}"#,
-        )
-        .unwrap();
+        fs::write(nested.join("mymod.json"), r#"{"values": ["mymod:ingot"]}"#).unwrap();
         fs::write(
             dir.join("item").join("swords.json"),
-            r#"{"values": ["lonsdaleite:sword"]}"#,
+            r#"{"values": ["mymod:sword"]}"#,
         )
         .unwrap();
         let mut tags = HashMap::new();
         load_item_tags_from_dir("c", &dir, &mut tags);
         fs::remove_dir_all(&dir).unwrap();
-        assert_eq!(tags["c:ingots/lonsdaleite"], ["lonsdaleite:ingot"]);
-        assert_eq!(tags["c:swords"], ["lonsdaleite:sword"]);
+        assert_eq!(tags["c:ingots/ruby"], ["mymod:ingot"]);
+        assert_eq!(tags["c:swords"], ["mymod:sword"]);
     }
 }

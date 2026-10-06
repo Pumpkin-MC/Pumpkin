@@ -322,15 +322,13 @@ impl BlockId {
     // depends on generated impl:
     // pub(crate) const BLOCK_COUNT: u16;
 
-    /// The count of the generated (vanilla) blocks. Blocks that plugins register get the ids after
-    /// these, see [`Self::total_count`].
+    /// The count of the generated (vanilla) blocks. Plugin blocks' ids follow them.
     pub const COUNT: u16 = Self::BLOCK_COUNT;
 
-    // SAFETY: There must never be a BlockId that is neither a generated block (< BLOCK_COUNT) nor
-    // a registered dynamic block (checked by `from_raw`). The generated lookups rely on it.
+    // SAFETY: A BlockId must be a generated block (< BLOCK_COUNT) or a registered dynamic one
+    // (checked by `from_raw`); the generated lookups rely on it.
 
-    /// A generated block id. Const, so it cannot see registered blocks, use [`Self::from_raw`] for
-    /// ids from plugins, the network or disk.
+    /// A generated block id. Cannot see registered blocks, use [`Self::from_raw`] for external ids.
     #[inline]
     #[must_use]
     pub const fn new(inner: u16) -> Option<Self> {
@@ -350,8 +348,7 @@ impl BlockId {
         Self::AIR
     }
 
-    /// The id of a registered dynamic block. Only the dynamic registry may call this, with an id
-    /// it handed out.
+    /// The id of a registered dynamic block. Only for ids the dynamic registry handed out.
     #[inline]
     #[must_use]
     pub(crate) const fn from_dynamic_raw(inner: u16) -> Self {
@@ -395,6 +392,8 @@ impl BlockId {
     #[must_use]
     pub fn has_tag(self, tag: Tag) -> bool {
         tag.1.contains(&self.0)
+            || crate::dynamic_tag::contains_id(crate::tag::RegistryKey::Block, tag.2, self.0)
+                .unwrap_or(false)
     }
 }
 

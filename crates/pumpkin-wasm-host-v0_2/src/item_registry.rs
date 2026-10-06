@@ -18,8 +18,7 @@ fn to_wit_entry(item: &Item) -> WitItemEntry {
     }
 }
 
-/// Whether the plugin may register items right now. Free functions, because `PluginHostState`
-/// lives in another crate.
+/// Whether the plugin may register items right now.
 fn check_item_registration_allowed(state: &PluginHostState) -> Result<(), String> {
     if !state
         .permissions
@@ -52,9 +51,7 @@ impl Host for PluginHostState {
             let mut cursor = std::io::Cursor::new(entry.value);
             match deserialize(id, &mut cursor) {
                 Ok(component) => components.push((id, component)),
-                // Not every component has a reader yet (e.g. interact_animation, block_transformer).
-                // The value of a component is its own buffer, so skipping one cannot disturb the
-                // others: register the item with the components that can be read.
+                // Not every component has a reader yet; skip it and keep the readable ones.
                 Err(error) => {
                     warn!(
                         "Plugin {} registered item {} with component {} that cannot be read, \
