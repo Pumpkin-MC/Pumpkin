@@ -2243,10 +2243,12 @@ impl DataComponentCodec<Self> for ChargedProjectilesImpl {
         for _ in 0..len {
             let stack =
                 crate::codec::item_stack_seralizer::ItemStackSerializer::read(seq)?.to_stack();
-            let mut compound = pumpkin_nbt::compound::NbtCompound::new();
-            if !stack.is_empty() {
-                stack.write_item_stack(&mut compound);
+            // Vanilla holds non-empty templates, and an empty stack could not be written back.
+            if stack.is_empty() {
+                return Err(ReadingError::Message("Invalid charged projectile".into()));
             }
+            let mut compound = pumpkin_nbt::compound::NbtCompound::new();
+            stack.write_item_stack(&mut compound);
             projectiles.push(compound);
         }
         Ok(Self { projectiles })
@@ -2937,6 +2939,14 @@ mod tests {
         let mut encoded = Vec::new();
         assert!(charged.serialize(&mut encoded).is_err());
         assert!(encoded.is_empty());
+    }
+
+    #[test]
+    fn empty_charged_projectile_slot_is_rejected() {
+        // One projectile, then a Slot with item count 0.
+        let encoded = [1u8, 0];
+        let mut cursor = encoded.as_slice();
+        assert!(ChargedProjectilesImpl::deserialize(&mut cursor).is_err());
     }
 
     #[test]
