@@ -218,7 +218,7 @@ struct LoadedPlugin {
 pub enum ManagerError {
     #[error("Plugin not found: {0}")]
     PluginNotFound(String),
-    #[error("Loader error: {0}")]
+    #[error(transparent)]
     LoaderError(#[from] LoaderError),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),

@@ -5,34 +5,34 @@ use crate::{concurrent_store::LegacyStore, scheduler::TaskScheduler};
 
 #[derive(Error, Debug)]
 pub enum PluginInitError {
-    #[error("Engine creation failed: {0}")]
-    EngineCreationFailed(wasmtime::Error),
-    #[error("Failed to setup linker: {0}")]
-    LinkerSetupFailed(wasmtime::Error),
+    #[error("Could not create the Wasmtime engine")]
+    EngineCreationFailed(#[source] wasmtime::Error),
+    #[error("Could not set up the plugin linker")]
+    LinkerSetupFailed(#[source] wasmtime::Error),
     #[error("Could not identify the plugin API version (does not export pumpkin:plugin/metadata?)")]
     UnknownApiVersion(),
     #[error("Plugin is built against an unsupported version of the API: {0}")]
     UnsupportedApiVersion(String),
-    #[error("Plugin was built against a different iteration of the API: {0}")]
-    ApiMismatch(wasmtime::Error),
-    #[error("Failed to read plugin file: {0}")]
-    FileReadFailed(std::io::Error),
-    #[error("Failed to load plugin as component: {0}")]
-    ComponentNewFailed(wasmtime::Error),
-    #[error("Failed to create cache data for plugin: {0}")]
-    ComponentCacheSerializeFailed(wasmtime::Error),
-    #[error("Failed to write cache file for plugin: {0}")]
-    ComponentCacheWriteFailed(std::io::Error),
-    #[error("Failed to instantiate plugin: {0}")]
-    InstantiationFailed(wasmtime::Error),
-    #[error("Calling `init_plugin` failed: {0}")]
-    CallInitPluginFailed(wasmtime::Error),
-    #[error("Calling `get_metadata` failed: {0}")]
-    CallGetMetadataFailed(wasmtime::Error),
-    #[error("Failed to get absolute path: {0}")]
-    PathResolutionFailed(std::io::Error),
-    #[error("Failed to create cache: {0}")]
-    CacheCreationFailed(wasmtime::Error),
+    #[error("The plugin does not match the expected Pumpkin API")]
+    ApiMismatch(#[source] wasmtime::Error),
+    #[error("Could not read the plugin file")]
+    FileReadFailed(#[source] std::io::Error),
+    #[error("Could not compile the plugin component")]
+    ComponentNewFailed(#[source] wasmtime::Error),
+    #[error("Could not serialize the compiled plugin cache")]
+    ComponentCacheSerializeFailed(#[source] wasmtime::Error),
+    #[error("Could not write the compiled plugin cache")]
+    ComponentCacheWriteFailed(#[source] std::io::Error),
+    #[error("Could not instantiate the plugin")]
+    InstantiationFailed(#[source] wasmtime::Error),
+    #[error("The plugin failed during init_plugin")]
+    CallInitPluginFailed(#[source] wasmtime::Error),
+    #[error("The plugin failed while providing its metadata")]
+    CallGetMetadataFailed(#[source] wasmtime::Error),
+    #[error("Could not resolve the plugin path")]
+    PathResolutionFailed(#[source] std::io::Error),
+    #[error("Could not create the Wasmtime cache")]
+    CacheCreationFailed(#[source] wasmtime::Error),
 }
 
 #[derive(Copy, Clone)]

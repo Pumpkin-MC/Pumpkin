@@ -46,8 +46,8 @@ pub trait PluginLoader: Send + Sync {
 /// Unified loader error type
 #[derive(Error, Debug)]
 pub enum LoaderError {
-    #[error("Failed to load library: {0}")]
-    LibraryLoad(String),
+    #[error("Could not load the native plugin library")]
+    LibraryLoad(#[source] libloading::Error),
 
     #[error("Missing plugin metadata")]
     MetadataMissing,
@@ -64,19 +64,15 @@ pub enum LoaderError {
     #[error("Invalid loader data")]
     InvalidLoaderData,
 
-    #[error(
-        "Plugin was built for an incompatible API version. Please rebuild it against this Pumpkin build."
-    )]
+    #[error("Plugin was built for an incompatible API version")]
     ApiVersionMissing,
 
-    #[error(
-        "Plugin API version mismatch (plugin {plugin_version}, server {server_version}). Please rebuild it against this Pumpkin build."
-    )]
+    #[error("Plugin API version mismatch (plugin {plugin_version}, server {server_version})")]
     ApiVersionMismatch {
         plugin_version: u32,
         server_version: u32,
     },
 
-    #[error("Wasm plugin initialization error: {0}")]
+    #[error(transparent)]
     WasmInitializationError(Box<dyn std::error::Error + Send + Sync>),
 }
