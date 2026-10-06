@@ -14,7 +14,7 @@ use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::data_component_impl::{AttackRangeImpl, EquipmentSlot};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -530,17 +530,7 @@ impl MobEntity {
     }
 
     pub fn is_in_attack_range(&self, target: &dyn EntityBase) -> bool {
-        // TODO: Implement DataComponent lookup for ATTACK_RANGE when components are ready
-        let max_range = DEFAULT_ATTACK_REACH;
-        let min_range = 0.0;
-
-        let target_hitbox = target.get_entity().bounding_box.load();
-
-        if !self.get_attack_box(max_range).intersects(&target_hitbox) {
-            return false;
-        }
-
-        min_range <= 0.0 || !self.get_attack_box(min_range).intersects(&target_hitbox)
+        is_within_melee_attack_range(self, target, |range| self.get_attack_box(range))
     }
 
     pub fn is_dark_enough_to_spawn(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
@@ -651,6 +641,21 @@ impl MobEntity {
         );
 
         if damaged {
+            // Vanilla `Mob.doHurtTarget` then `LivingEntity.causeExtraKnockback`.
+            let weapon = self.living_entity.held_item(caller);
+            let knockback = crate::enchantment::EnchantmentHelper::modify_knockback(
+                &weapon,
+                self.living_entity
+                    .get_attribute_value(&Attributes::ATTACK_KNOCKBACK) as f32,
+            );
+            if knockback > 0.0 && target.get_living_entity().is_some() {
+                crate::entity::combat::handle_knockback(
+                    caller.get_entity(),
+                    target,
+                    f64::from(knockback),
+                );
+            }
+
             self.living_entity
                 .last_attacking_id
                 .store(target.get_entity().entity_id, Relaxed);
@@ -661,36 +666,7 @@ impl MobEntity {
     }
 
     fn get_attack_box(&self, attack_range: f64) -> BoundingBox {
-        let vehicle_opt = self.living_entity.entity.get_vehicle();
-
-        let base_box = vehicle_opt.as_ref().map_or_else(
-            || self.living_entity.entity.bounding_box.load(),
-            |vehicle| {
-                let vehicle_box = vehicle.get_entity().bounding_box.load();
-                let my_box = self.living_entity.entity.bounding_box.load();
-
-                BoundingBox {
-                    min: Vector3::new(
-                        my_box.min.x.min(vehicle_box.min.x),
-                        my_box.min.y,
-                        my_box.min.z.min(vehicle_box.min.z),
-                    ),
-                    max: Vector3::new(
-                        my_box.max.x.max(vehicle_box.max.x),
-                        my_box.max.y,
-                        my_box.max.z.max(vehicle_box.max.z),
-                    ),
-                }
-            },
-        );
-
-        let attack_box = base_box.expand(attack_range, 0.0, attack_range);
-        // Vanilla `Ravager.getAttackBoundingBox`
-        if self.living_entity.entity.entity_type == &EntityType::RAVAGER {
-            attack_box.expand(-0.05, 0.0, -0.05)
-        } else {
-            attack_box
-        }
+        attack_bounding_box(&self.living_entity.entity, attack_range)
     }
 
     /// Brightness at the mob's eye (sky and block light) reaches daylight.
@@ -790,9 +766,75 @@ impl MobEntity {
     }
 }
 
+/// Vanilla `Mob.getAttackBoundingBox` without the ravager shrink.
+pub(super) fn attack_bounding_box(entity: &Entity, horizontal_expansion: f64) -> BoundingBox {
+    let vehicle_opt = entity.get_vehicle();
+    let base_box = vehicle_opt.as_ref().map_or_else(
+        || entity.bounding_box.load(),
+        |vehicle| {
+            let vehicle_box = vehicle.get_entity().bounding_box.load();
+            let my_box = entity.bounding_box.load();
+            BoundingBox {
+                min: Vector3::new(
+                    my_box.min.x.min(vehicle_box.min.x),
+                    my_box.min.y,
+                    my_box.min.z.min(vehicle_box.min.z),
+                ),
+                max: Vector3::new(
+                    my_box.max.x.max(vehicle_box.max.x),
+                    my_box.max.y,
+                    my_box.max.z.max(vehicle_box.max.z),
+                ),
+            }
+        },
+    );
+    base_box.expand(horizontal_expansion, 0.0, horizontal_expansion)
+}
+
+fn melee_attack_range(mob: &MobEntity) -> (f64, f64) {
+    let weapon = mob.living_entity.held_item_from_equipment();
+    weapon
+        .get_data_component::<AttackRangeImpl>()
+        .map_or((DEFAULT_ATTACK_REACH, 0.0), |range| {
+            (
+                f64::from(range.max_reach * range.mob_factor),
+                f64::from(range.min_reach * range.mob_factor),
+            )
+        })
+}
+
+fn is_within_melee_attack_range(
+    mob: &MobEntity,
+    target: &dyn EntityBase,
+    attack_box: impl Fn(f64) -> BoundingBox,
+) -> bool {
+    let (max_range, min_range) = melee_attack_range(mob);
+    let target_hitbox = target.get_entity().get_hitbox();
+    attack_box(max_range).intersects(&target_hitbox)
+        && (min_range <= 0.0 || !attack_box(min_range).intersects(&target_hitbox))
+}
+
 pub trait Mob: EntityBase + Send + Sync {
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
+    }
+
+    /// Vanilla `LivingEntity.onClimbable`. Override for spiders (always their climb
+    /// flag) and for ghasts / horses / phantoms (never).
+    fn on_climbable(&self) -> bool {
+        self.get_mob_entity().living_entity.on_climbable()
+    }
+
+    /// Vanilla `Mob.getAttackBoundingBox`.
+    fn get_attack_bounding_box(&self, horizontal_expansion: f64) -> BoundingBox {
+        attack_bounding_box(self.get_entity(), horizontal_expansion)
+    }
+
+    /// Vanilla `Mob.isWithinMeleeAttackRange`, using `LivingEntity.getHitbox`.
+    fn is_in_attack_range(&self, target: &dyn EntityBase) -> bool {
+        is_within_melee_attack_range(self.get_mob_entity(), target, |range| {
+            self.get_attack_bounding_box(range)
+        })
     }
 
     fn can_attack(&self, target: &dyn EntityBase) -> bool {
@@ -1336,7 +1378,12 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn is_pushable(&self) -> bool {
-        self.get_mob_entity().living_entity.is_pushable()
+        let living = &self.get_mob_entity().living_entity;
+        living.health.load() > 0.0 && !living.dead.load(Relaxed) && !Mob::on_climbable(self)
+    }
+
+    fn on_climbable(&self) -> bool {
+        Mob::on_climbable(self)
     }
 
     fn on_lightning_strike(
@@ -1434,10 +1481,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
         mob_entity.living_entity.tick(caller, server);
         self.post_tick();
-    }
-
-    fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
-        true
     }
 
     fn can_hit(&self) -> bool {
@@ -1684,5 +1727,32 @@ mod tests {
         assert!(!zombie_reaches(1.0, 1.951));
         assert!(zombie_reaches(1.0, -1.79));
         assert!(!zombie_reaches(1.0, -1.801));
+    }
+
+    #[test]
+    fn riding_hitbox_clips_below_the_seat() {
+        let player = BoundingBox::new_from_pos(
+            0.0,
+            64.0,
+            0.0,
+            &Entity::get_entity_dimensions(pumpkin_data::entity::EntityPose::Standing),
+        );
+        let seat_y = 64.5_f64;
+        let hitbox = player.with_min_y(seat_y.max(player.min.y));
+        assert_eq!(hitbox.min.y, 64.5);
+        assert_eq!(hitbox.max.y, player.max.y);
+        assert_eq!(hitbox.min.x, player.min.x);
+    }
+
+    #[test]
+    fn zombie_hitbox_matches_vanilla_type_size() {
+        let size = Entity::type_dimensions(&EntityType::ZOMBIE);
+        assert_eq!(size.width, 0.6);
+        assert_eq!(size.height, 1.95);
+        assert_eq!(size.eye_height, 1.74);
+        let scaled = size.scale(2.0);
+        assert_eq!(scaled.width, 1.2);
+        assert_eq!(scaled.height, 3.9);
+        assert_eq!(scaled.eye_height, 3.48);
     }
 }

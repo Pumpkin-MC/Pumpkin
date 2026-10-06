@@ -94,6 +94,13 @@ impl BoundingBox {
         }
     }
 
+    /// Vanilla `AABB.setMinY`.
+    #[must_use]
+    pub const fn with_min_y(mut self, min_y: f64) -> Self {
+        self.min.y = min_y;
+        self
+    }
+
     /// Expands this bounding box towards a specific direction.
     ///
     /// If a provided value is negative, it extends the minimum boundary along that axis.
@@ -452,6 +459,16 @@ impl EntityDimensions {
             width,
             height,
             eye_height,
+        }
+    }
+
+    /// Vanilla `EntityDimensions.scale` for a non-fixed size.
+    #[must_use]
+    pub const fn scale(self, scale: f32) -> Self {
+        Self {
+            width: self.width * scale,
+            height: self.height * scale,
+            eye_height: self.eye_height * scale,
         }
     }
 }

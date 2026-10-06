@@ -163,6 +163,10 @@ impl Animal for HorseEntity {
 }
 
 impl Mob for HorseEntity {
+    fn on_climbable(&self) -> bool {
+        false
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

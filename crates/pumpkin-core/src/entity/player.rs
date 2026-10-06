@@ -1522,11 +1522,15 @@ impl Player {
         );
 
         if victim.get_living_entity().is_some() {
-            // Vanilla `Player.attack` adds `LivingEntity.getKnockback()` - the Knockback
-            // enchantment bonus, halved - plus 0.5 for a sprint attack, on top of the base
-            // knockback the victim's damage handling applies. A plain hit adds nothing.
-            // `handle_knockback` halves `strength`, so these are twice the vanilla amount.
-            let mut knockback_strength = f64::from(knockback_level);
+            // Vanilla `Player.attack` adds `LivingEntity.getKnockback()` - ATTACK_KNOCKBACK
+            // plus the Knockback enchantment, halved - plus 0.5 for a sprint attack, on top
+            // of the base knockback the victim's damage handling applies. A plain hit adds
+            // nothing. `handle_knockback` halves `strength`, so these are twice the vanilla
+            // amount.
+            let mut knockback_strength = f64::from(knockback_level)
+                + self
+                    .living_entity
+                    .get_attribute_value(&Attributes::ATTACK_KNOCKBACK);
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
                 AttackType::Sweeping => {
@@ -7116,9 +7120,17 @@ impl EntityBase for Player {
         }
     }
 
+    fn on_climbable(&self) -> bool {
+        // Vanilla `Player.onClimbable`.
+        !self.is_flying() && self.living_entity.on_climbable()
+    }
+
     fn is_pushable(&self) -> bool {
-        // creative players get pushed too.
-        !self.is_spectator() && self.living_entity.is_pushable()
+        // Creative players get pushed too.
+        !self.is_spectator()
+            && self.living_entity.health.load() > 0.0
+            && !self.living_entity.dead.load(Ordering::Relaxed)
+            && !self.on_climbable()
     }
 
     fn get_name(&self) -> TextComponent {

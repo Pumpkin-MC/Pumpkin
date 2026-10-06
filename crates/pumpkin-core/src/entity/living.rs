@@ -38,6 +38,7 @@ use crate::world::loot::LootContextParameters;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::AttributeModifierSlot;
 use pumpkin_data::attributes::Attributes;
+use pumpkin_data::block_properties::{LadderLikeProperties, OakTrapdoorLikeProperties};
 use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
 use pumpkin_data::data_component_impl::{
@@ -1667,62 +1668,58 @@ impl LivingEntity {
             self.entity.move_entity(caller, self.entity.velocity.load());
         }
 
-        self.check_climbing();
+        self.check_climbing(caller);
     }
 
-    fn check_climbing(&self) {
-        // If spectator: return false
+    /// Vanilla `LivingEntity.onClimbable`. Also the `lastClimbablePos` side effect.
+    pub fn on_climbable(&self) -> bool {
+        let pos = self.entity.block_pos.load();
+        let world = self.entity.world.load();
+        let (block, state_id) = world.get_block_and_state_id(&pos);
 
-        // TODO
-        // let mut pos = self.entity.block_pos.load();
+        if self.entity.fall_flying.load(Relaxed)
+            && block.has_tag(&tag::Block::MINECRAFT_CAN_GLIDE_THROUGH)
+        {
+            self.climbing.store(false, Relaxed);
+            return false;
+        }
 
-        // let world = self.entity.world.read().await;
+        if block.has_tag(&tag::Block::MINECRAFT_CLIMBABLE) {
+            self.climbing.store(true, Relaxed);
+            self.climbing_pos.store(Some(pos));
+            return true;
+        }
 
-        // let (block, state) = world.get_block_and_state(&pos);
-
-        // let name = block.properties(state.id).map(|props| props.name());
-
-        // if let Some(name) = name {
-        //     if name == "LadderLikeProperties"
-        //         || name == "ScaffoldingLikeProperties"
-        //         || name == "CaveVinesLikeProperties"
-        //         || name == "CaveVinesPlantLikeProperties"
-        //     {
-        //         self.climbing.store(true, Relaxed);
-
-        //         self.climbing_pos.store(Some(pos));
-
-        //         return;
-        //     }
-
-        //     if name == "OakTrapdoorLikeProperties" {
-        //         let trapdoor = OakTrapdoorLikeProperties::from_state_id(state.id);
-
-        //         pos.0.y -= 1;
-
-        //         let (down_block, down_state) = world.get_block_and_state(&pos);
-
-        //         let is_ladder = down_block
-        //             .properties(down_state.id)
-        //             .is_some_and(|down_props| down_props.name() == "LadderLikeProperties");
-
-        //         if is_ladder {
-        //             let ladder = LadderLikeProperties::from_state_id(down_state.id);
-
-        //             if trapdoor.r#facing == ladder.r#facing {
-        //                 self.climbing.store(true, Relaxed);
-
-        //                 self.climbing_pos.store(Some(pos));
-
-        //                 return;
-        //             }
-        //         }
-        //     }
-        // }
+        if block.has_tag(&tag::Block::MINECRAFT_TRAPDOORS) {
+            let trapdoor = OakTrapdoorLikeProperties::from_state_id(state_id);
+            if trapdoor.open {
+                let below = pos.down();
+                let (below_block, below_id) = world.get_block_and_state_id(&below);
+                if below_block == &Block::LADDER {
+                    let ladder = LadderLikeProperties::from_state_id(below_id);
+                    if ladder.facing == trapdoor.facing {
+                        self.climbing.store(true, Relaxed);
+                        self.climbing_pos.store(Some(pos));
+                        return true;
+                    }
+                }
+            }
+        }
 
         self.climbing.store(false, Relaxed);
+        false
+    }
 
-        if self.entity.on_ground.load(SeqCst) {
+    /// Vanilla `LivingEntity.isPushable` without the unloaded-chunk short circuit:
+    /// Pumpkin only ticks entities in ticking chunks.
+    pub fn is_pushable(&self) -> bool {
+        self.health.load() > 0.0 && !self.dead.load(Relaxed) && !self.on_climbable()
+    }
+
+    fn check_climbing(&self, caller: &dyn EntityBase) {
+        let climbing = caller.on_climbable();
+        self.climbing.store(climbing, Relaxed);
+        if !climbing && self.entity.on_ground.load(SeqCst) {
             self.climbing_pos.store(None);
         }
     }
@@ -2494,6 +2491,10 @@ impl LivingEntity {
         if let Some(player) = caller.get_player() {
             return player.inventory.held_item();
         }
+        self.held_item_from_equipment()
+    }
+
+    pub fn held_item_from_equipment(&self) -> ItemStack {
         let equipment = self
             .entity_equipment
             .lock()
@@ -3357,11 +3358,15 @@ impl EntityBase for LivingEntity {
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let is_player = self.entity.entity_type == &EntityType::PLAYER;
-        // Before moving, like vanilla `ServerEntity.sendChanges`, so watchers get the raw
-        // knockback from player attacks this tick. Players sync after the entity pass.
-        if !is_player && self.entity.sync_velocity.swap(false, Ordering::SeqCst) {
-            self.entity.velocity_dirty.store(false, Ordering::SeqCst);
-            self.entity.send_velocity();
+        // Vanilla `ServerEntity.sendChanges` runs after this tick's travel. Leave
+        // `velocity_dirty` / `sync_velocity` for the tracker so knockback sends
+        // post-friction motion together with the new position.
+
+        // Vanilla `LivingEntity.onAttributeUpdated(SCALE)`: resize when the attribute moves.
+        let scale = self.get_attribute_value(&Attributes::SCALE) as f32;
+        if (self.entity.scale.load() - scale).abs() > f32::EPSILON {
+            self.entity.scale.store(scale);
+            self.entity.refresh_dimensions();
         }
 
         self.entity.tick(caller, server);
@@ -3402,10 +3407,6 @@ impl EntityBase for LivingEntity {
             self.push_entities(caller);
 
             self.entity.tick_frozen(caller);
-        }
-
-        if !is_player && self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-            self.entity.send_velocity_to_watchers();
         }
 
         // Fetch supporting blocks for players or other entities
@@ -3640,7 +3641,7 @@ impl EntityBase for LivingEntity {
     }
 
     fn is_pushable(&self) -> bool {
-        self.health.load() > 0.0 && !self.dead.load(Relaxed)
+        LivingEntity::is_pushable(self)
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

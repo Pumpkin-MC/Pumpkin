@@ -536,6 +536,22 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .has_passenger(other.get_entity().entity_id)
     }
 
+    /// Vanilla `Entity.getRootVehicle`: walk up the ride chain.
+    fn root_vehicle_id(&self) -> i32 {
+        let mut current_id = self.get_entity().entity_id;
+        let mut vehicle = self.get_entity().get_vehicle();
+        while let Some(ridden) = vehicle {
+            current_id = ridden.get_entity().entity_id;
+            vehicle = ridden.get_entity().get_vehicle();
+        }
+        current_id
+    }
+
+    /// Vanilla `Entity.isPassengerOfSameVehicle`.
+    fn is_passenger_of_same_vehicle(&self, other: &dyn EntityBase) -> bool {
+        self.root_vehicle_id() == other.root_vehicle_id()
+    }
+
     fn move_entity(&self, caller: &dyn EntityBase, motion: Vector3<f64>) {
         self.get_entity().move_entity(caller, motion);
     }
@@ -544,7 +560,20 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    /// Vanilla `LivingEntity.onClimbable`.
+    fn on_climbable(&self) -> bool {
+        self.get_living_entity()
+            .is_some_and(living::LivingEntity::on_climbable)
+    }
+
     fn push(&self, entity: &dyn EntityBase) {
+        // Vanilla `LivingEntity.push`: sleeping entities neither push nor get pushed here.
+        if self.get_living_entity().is_some()
+            && self.get_entity().pose.load() == EntityPose::Sleeping
+        {
+            return;
+        }
+
         let self_entity = self.get_entity();
         let other_entity = entity.get_entity();
 
@@ -554,9 +583,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             return;
         }
 
-        if self_entity.has_passenger(other_entity.entity_id)
-            || other_entity.has_passenger(self_entity.entity_id)
-        {
+        if self.is_passenger_of_same_vehicle(entity) {
             return;
         }
 
@@ -902,6 +929,8 @@ pub struct Entity {
     pub entity_dimension: AtomicCell<EntityDimensions>,
     /// Size before the pose: the type size, or a baby or slime size. Vanilla `getDefaultDimensions`.
     pub default_dimension: AtomicCell<EntityDimensions>,
+    /// Vanilla `LivingEntity.getScale` (`Attributes.SCALE`). 1.0 for non-living.
+    pub scale: AtomicCell<f32>,
     /// Whether this entity is invulnerable to all damage
     pub invulnerable: AtomicBool,
     /// List of damage types this entity is immune to
@@ -1064,6 +1093,7 @@ impl Entity {
             )),
             entity_dimension: AtomicCell::new(bounding_box_size),
             default_dimension: AtomicCell::new(bounding_box_size),
+            scale: AtomicCell::new(1.0),
             invulnerable: AtomicBool::new(false),
             damage_immunities: std::sync::Mutex::new(Vec::new()),
             data: AtomicI32::new(0),
@@ -3084,11 +3114,32 @@ impl Entity {
 
     /// Vanilla `LivingEntity.getDimensions`: the player pose table, sleeping, or the default.
     fn dimensions_for_pose(&self, pose: EntityPose) -> EntityDimensions {
-        if self.entity_type == &EntityType::PLAYER || pose == EntityPose::Sleeping {
+        if pose == EntityPose::Sleeping {
+            return Self::get_entity_dimensions(pose);
+        }
+        let base = if self.entity_type == &EntityType::PLAYER {
             Self::get_entity_dimensions(pose)
         } else {
             self.default_dimension.load()
-        }
+        };
+        base.scale(self.scale.load())
+    }
+
+    /// Vanilla `Entity.getPassengerRidingPosition` without attachments: the top of
+    /// the vehicle's current size.
+    fn passenger_riding_y(&self) -> f64 {
+        self.pos.load().y + f64::from(self.entity_dimension.load().height)
+    }
+
+    /// Vanilla `LivingEntity.getHitbox`: the bounding box, with the bottom clipped
+    /// to the vehicle seat when riding.
+    #[must_use]
+    pub fn get_hitbox(&self) -> BoundingBox {
+        let aabb = self.bounding_box.load();
+        let Some(vehicle) = self.get_vehicle() else {
+            return aabb;
+        };
+        aabb.with_min_y(vehicle.get_entity().passenger_riding_y().max(aabb.min.y))
     }
 
     /// Vanilla `refreshDimensions`: size and bounding box for the current pose.

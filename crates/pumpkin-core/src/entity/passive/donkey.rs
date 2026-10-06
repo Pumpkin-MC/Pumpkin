@@ -153,6 +153,10 @@ impl Animal for DonkeyEntity {
 }
 
 impl Mob for DonkeyEntity {
+    fn on_climbable(&self) -> bool {
+        false
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

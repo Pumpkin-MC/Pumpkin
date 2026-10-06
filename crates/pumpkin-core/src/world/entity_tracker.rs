@@ -180,6 +180,12 @@ impl TrackedEntity {
             }
         }
 
+        // Vanilla `ServerEntity.sendChanges`: after the needsSync block, `syncVelocity`
+        // (`hurtMarked`) sends motion to tracking players (and self, for players).
+        if entity.sync_velocity.swap(false, Ordering::SeqCst) {
+            self.send_motion(entity, world);
+        }
+
         // Java `CHeadRot` is per-tick. Bedrock watchers of this entity get head yaw from
         // `send_bedrock_move` (`MoveActorDelta` HAS_HEAD_YAW), not from this packet.
         let head_yaw = pack_degrees(entity.head_yaw.load());

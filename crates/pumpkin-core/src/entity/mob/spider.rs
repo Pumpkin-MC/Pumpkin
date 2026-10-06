@@ -88,13 +88,40 @@ impl SpiderEntity {
     }
 
     pub fn set_climbing(&self, climbing: bool) {
-        if self.is_climbing.swap(climbing, Ordering::Relaxed) != climbing {
-            let flags = i8::from(climbing);
-            self.mob_entity
-                .living_entity
-                .entity
-                .set_synced_data(pumpkin_data::tracked_data::spider::DATA_FLAGS_ID, flags);
-        }
+        set_wall_climbing(
+            &self.mob_entity.living_entity.entity,
+            &self.is_climbing,
+            pumpkin_data::tracked_data::spider::DATA_FLAGS_ID,
+            climbing,
+        );
+    }
+}
+
+/// Vanilla `Spider.setClimbing`.
+pub fn set_wall_climbing(
+    entity: &Entity,
+    climbing: &AtomicBool,
+    flags: pumpkin_data::tracked_data::TrackedData,
+    next: bool,
+) {
+    if climbing.swap(next, Ordering::Relaxed) != next {
+        entity.set_synced_data(flags, i8::from(next));
+    }
+}
+
+/// Vanilla `Spider.tick`: the climb flag follows `horizontalCollision`.
+pub fn tick_wall_climbing(
+    entity: &Entity,
+    climbing: &AtomicBool,
+    flags: pumpkin_data::tracked_data::TrackedData,
+) {
+    if entity.is_alive() {
+        set_wall_climbing(
+            entity,
+            climbing,
+            flags,
+            entity.horizontal_collision.load(Ordering::Relaxed),
+        );
     }
 }
 
@@ -158,14 +185,16 @@ impl Mob for SpiderEntity {
         &self.mob_entity
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        let entity = &self.mob_entity.living_entity.entity;
-        if !entity.is_alive() {
-            return;
-        }
+    fn on_climbable(&self) -> bool {
+        // Vanilla `Spider.onClimbable`: the wall-climb flag, not climbable blocks.
+        self.is_climbing()
+    }
 
-        let vel = entity.velocity.load();
-        let is_colliding_horizontally = vel.x.abs() < 1e-4 && vel.z.abs() < 1e-4;
-        self.set_climbing(is_colliding_horizontally);
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        tick_wall_climbing(
+            &self.mob_entity.living_entity.entity,
+            &self.is_climbing,
+            pumpkin_data::tracked_data::spider::DATA_FLAGS_ID,
+        );
     }
 }

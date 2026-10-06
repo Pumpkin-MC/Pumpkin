@@ -264,6 +264,10 @@ impl Animal for LlamaEntity {
 }
 
 impl Mob for LlamaEntity {
+    fn on_climbable(&self) -> bool {
+        false
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
