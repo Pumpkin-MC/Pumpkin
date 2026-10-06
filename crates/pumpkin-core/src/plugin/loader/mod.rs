@@ -26,6 +26,16 @@ pub trait PluginLoader: Send + Sync {
     /// Load a plugin from the specified path
     fn load<'a>(&'a self, path: &'a Path) -> PluginLoadFuture<'a>;
 
+    /// Reports a failed load using the loader's error categories.
+    fn report_load_error(&self, path: &Path, error: &LoaderError) {
+        let file = path.file_name().map_or(path, Path::new).display();
+        let headline = format!("Could not load plugin file \"{file}\"; it was not loaded.");
+        let text =
+            super::error::message(&headline, &super::error::causes(error, None), error.help());
+        tracing::error!("{text}");
+        super::error::debug_details(&headline, error);
+    }
+
     /// Check if this loader can handle the given file
     fn can_load(&self, path: &Path) -> bool;
 
@@ -75,4 +85,45 @@ pub enum LoaderError {
 
     #[error(transparent)]
     WasmInitializationError(Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl LoaderError {
+    /// An action supported by this error category.
+    #[must_use]
+    pub const fn help(&self) -> Option<&'static str> {
+        match self {
+            Self::ApiVersionMissing | Self::ApiVersionMismatch { .. } => {
+                Some("Rebuild the native plugin against this Pumpkin build.")
+            }
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LoaderError;
+
+    #[test]
+    fn native_api_help_does_not_depend_on_error_text() {
+        assert!(LoaderError::ApiVersionMissing.help().is_some());
+        assert!(
+            LoaderError::ApiVersionMismatch {
+                plugin_version: 1,
+                server_version: 2
+            }
+            .help()
+            .is_some()
+        );
+        for error in [
+            LoaderError::MetadataMissing,
+            LoaderError::EntrypointMissing,
+            LoaderError::InvalidLoaderData,
+            LoaderError::InitializationFailed("API mismatch".into()),
+            LoaderError::RuntimeError("Permission denied".into()),
+            LoaderError::WasmInitializationError(Box::new(std::io::Error::other("API mismatch"))),
+        ] {
+            assert!(error.help().is_none());
+        }
+    }
 }

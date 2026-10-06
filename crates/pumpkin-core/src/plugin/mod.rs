@@ -20,6 +20,7 @@ use tracing::{debug, error, info, warn};
 
 pub mod api;
 pub mod cache;
+pub mod error;
 pub mod loader;
 /// Constants for plugin permissions.
 ///
@@ -634,7 +635,20 @@ impl PluginManager {
                 Err(e) => {
                     // Handle initialization failure
                     let error_msg = format!("Initialization failed: {e}");
-                    let _ = instance.on_unload(context).await;
+                    if let Err(error) = instance.on_unload(context).await {
+                        warn!(
+                            "{}",
+                            error::message(
+                                &format!(
+                                    "Plugin \"{}\" ({}) failed during initialization cleanup.",
+                                    error::inline(&plugin_name),
+                                    error::inline(&metadata.version)
+                                ),
+                                &error.lines().map(error::sanitize).collect::<Vec<_>>(),
+                                None,
+                            )
+                        );
+                    }
 
                     // Get the loader data before removing the plugin
                     let loader_data: Option<Box<dyn Any + Send + Sync>> = {
@@ -650,8 +664,20 @@ impl PluginManager {
                     };
 
                     // Try to unload the plugin data
-                    if let Some(data) = loader_data {
-                        loader_clone.unload(data).await.ok();
+                    if let Some(data) = loader_data
+                        && let Err(error) = loader_clone.unload(data).await
+                    {
+                        warn!(
+                            "{}",
+                            error::message(
+                                &format!(
+                                    "Could not release loader data for plugin \"{}\".",
+                                    error::inline(&plugin_name)
+                                ),
+                                &error::causes(&error, None),
+                                error.help(),
+                            )
+                        );
                     }
 
                     {
@@ -670,7 +696,18 @@ impl PluginManager {
                         .insert(plugin_name.clone(), PluginState::Failed(error_msg.clone()));
                     state_notify.notify_waiters();
 
-                    error!("Failed to initialize plugin {plugin_name}: {error_msg}",);
+                    error!(
+                        "{}",
+                        error::message(
+                            &format!(
+                                "Plugin \"{}\" ({}) could not initialize.",
+                                error::inline(&plugin_name),
+                                error::inline(&metadata.version)
+                            ),
+                            &e.lines().map(error::sanitize).collect::<Vec<_>>(),
+                            None,
+                        )
+                    );
                 }
             }
         });
@@ -752,7 +789,7 @@ impl PluginManager {
                             ));
                             loader_found = true;
                         }
-                        Err(err) => error!("Failed to load plugin from {:?}: {}", path, err),
+                        Err(err) => loader.report_load_error(&path, &err),
                     }
                     break;
                 }
@@ -923,7 +960,10 @@ impl PluginManager {
         let loaders = self.loaders.read().await.clone();
         for loader in &loaders {
             if loader.can_load(path) {
-                let (instance, metadata, loader_data) = loader.load(path).await?;
+                let (instance, metadata, loader_data) =
+                    loader.load(path).await.inspect_err(|error| {
+                        loader.report_load_error(path, error);
+                    })?;
 
                 let plugin_override = server.advanced_config.plugins.overrides.get(&metadata.name);
 
@@ -1091,8 +1131,21 @@ impl PluginManager {
         self.unregister_handlers(name);
         plugin.context.unregister_commands();
 
-        if let Some(instance) = plugin.instance.take() {
-            instance.on_unload(plugin.context.clone()).await.ok();
+        if let Some(instance) = plugin.instance.take()
+            && let Err(error) = instance.on_unload(plugin.context.clone()).await
+        {
+            warn!(
+                "{}",
+                error::message(
+                    &format!(
+                        "Plugin \"{}\" ({}) failed during on_unload.",
+                        error::inline(name),
+                        error::inline(&plugin.metadata.version)
+                    ),
+                    &error.lines().map(error::sanitize).collect::<Vec<_>>(),
+                    None,
+                )
+            );
         }
 
         if plugin.loader.can_unload() {

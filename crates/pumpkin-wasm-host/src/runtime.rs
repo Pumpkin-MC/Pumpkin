@@ -8,7 +8,7 @@ use pumpkin_core::plugin::{Context, PluginMetadata, cache::calculate_hash_for_by
 use pumpkin_plugin_runtime::RuntimeSpawner;
 use pumpkin_wasm_host_common::{
     concurrent_store::{self, LegacySyncReentry},
-    plugin::{PluginApiVersion, PluginInitError, WasmPlugin},
+    plugin::{PluginApiVersion, PluginInitError, SUPPORTED_PLUGIN_APIS, WasmPlugin},
     scheduler::TaskScheduler,
     signature,
     state::PluginHostState,
@@ -271,13 +271,19 @@ fn plugin_api_version(
             // WIT enforces semver. Will always be major.minor.patch
             // For early/unstable release: 0.major.minor
 
-            if version.starts_with("0.1.") {
-                return Ok(PluginApiVersion::V0_1);
-            } else if version.starts_with("0.2.") {
-                return v0_2_api_version(version);
+            for (supported, api) in SUPPORTED_PLUGIN_APIS {
+                if version.starts_with(&format!("{supported}.")) {
+                    return match api {
+                        PluginApiVersion::V0_1 => Ok(api),
+                        PluginApiVersion::V0_2 => v0_2_api_version(version),
+                    };
+                }
             }
 
-            return Err(PluginInitError::UnsupportedApiVersion(version.to_string()));
+            return Err(PluginInitError::UnsupportedApiVersion(
+                version.to_string(),
+                supported_api_versions(),
+            ));
         }
     }
 
@@ -294,6 +300,14 @@ fn setup_linker_v0_1(engine: &Engine) -> wasmtime::Result<Linker<PluginHostState
     Ok(linker)
 }
 
+const fn supported_api_versions() -> &'static str {
+    if cfg!(feature = "v0_2") {
+        "0.1 and 0.2"
+    } else {
+        "0.1"
+    }
+}
+
 #[cfg(feature = "v0_2")]
 #[allow(clippy::unnecessary_wraps)] // same signature as the build without the feature
 const fn v0_2_api_version(_version: &str) -> Result<PluginApiVersion, PluginInitError> {
@@ -302,9 +316,10 @@ const fn v0_2_api_version(_version: &str) -> Result<PluginApiVersion, PluginInit
 
 #[cfg(not(feature = "v0_2"))]
 fn v0_2_api_version(version: &str) -> Result<PluginApiVersion, PluginInitError> {
-    Err(PluginInitError::UnsupportedApiVersion(format!(
-        "{version} (this server was built without the `plugin-v0_2` feature)"
-    )))
+    Err(PluginInitError::UnsupportedApiVersion(
+        format!("{version} (this server was built without the `plugin-v0_2` feature)"),
+        supported_api_versions(),
+    ))
 }
 
 /// The error for the `V0_2` arms when the `v0_2` feature is off. `plugin_api_version` already

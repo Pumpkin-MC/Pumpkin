@@ -9,7 +9,7 @@ use std::{any::Any, path::Path, sync::Arc};
 use pumpkin_core::server::Server;
 use pumpkin_wasm_host_common::{
     concurrent_store::{LegacySyncReentry, TokioSpawner},
-    plugin::WasmPlugin,
+    plugin::{PluginInitError, WasmPlugin},
     scheduler::TaskScheduler,
     signature::is_wasm_signed,
 };
@@ -17,7 +17,7 @@ use runtime::PluginRuntime;
 use tracing::warn;
 
 use pumpkin_core::plugin::{
-    Context, Plugin, PluginFuture,
+    Context, Plugin, PluginFuture, error,
     loader::{LoaderError, PluginLoadFuture, PluginLoader, PluginUnloadFuture},
 };
 
@@ -30,19 +30,21 @@ struct WasmPluginHandle(Arc<WasmPlugin>);
 impl Plugin for WasmPluginHandle {
     fn on_load(&self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
         Box::pin(async move {
-            runtime::on_load(&self.0, context)
-                .await
-                .map_err(|err| err.to_string())
-                .flatten()
+            let headline = format!(
+                "Plugin \"{}\" on_load details",
+                error::inline(&context.get_metadata().name)
+            );
+            lifecycle_result(runtime::on_load(&self.0, context).await, &headline)
         })
     }
 
     fn on_unload(&self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
         Box::pin(async move {
-            runtime::on_unload(&self.0, context)
-                .await
-                .map_err(|err| err.to_string())
-                .flatten()
+            let headline = format!(
+                "Plugin \"{}\" on_unload details",
+                error::inline(&context.get_metadata().name)
+            );
+            lifecycle_result(runtime::on_unload(&self.0, context).await, &headline)
         })
     }
 
@@ -54,11 +56,26 @@ impl Plugin for WasmPluginHandle {
         let sender_own = sender.to_owned();
         let message_own = message.to_owned();
         Box::pin(async move {
-            runtime::handle_ipc_message(&self.0, &sender_own, &message_own)
-                .await
-                .map_err(|err| err.to_string())
-                .flatten()
+            lifecycle_result(
+                runtime::handle_ipc_message(&self.0, &sender_own, &message_own).await,
+                "Wasm plugin IPC details",
+            )
         })
+    }
+}
+
+fn lifecycle_result<T>(
+    result: Result<Result<T, String>, wasmtime::Error>,
+    headline: &str,
+) -> Result<T, String> {
+    match result {
+        Ok(result) => {
+            result.map_err(|text| format!("The plugin reported: \"{}\"", error::sanitize(&text)))
+        }
+        Err(failure) => {
+            error::debug_details(headline, &failure);
+            Err(pumpkin_wasm_host_common::error::causes(&failure).join("\n"))
+        }
     }
 }
 
@@ -108,6 +125,36 @@ impl PluginLoader for WasmPluginLoader {
                 Box::new(()) as Box<dyn Any + Send + Sync>,
             ))
         })
+    }
+
+    fn report_load_error(&self, path: &Path, failure: &LoaderError) {
+        let init = match failure {
+            LoaderError::WasmInitializationError(source) => {
+                source.downcast_ref::<PluginInitError>()
+            }
+            _ => None,
+        };
+        let operation = if matches!(init, Some(PluginInitError::ComponentNewFailed(_))) {
+            "compile"
+        } else {
+            "load"
+        };
+        let file = path.file_name().map_or(path, Path::new).display();
+        let headline = format!("Could not {operation} plugin file \"{file}\"; it was not loaded.");
+        let backtrace = init
+            .and_then(PluginInitError::wasmtime_error)
+            .and_then(|error| error.downcast_ref::<wasmtime::WasmBacktrace>())
+            .map(ToString::to_string);
+        let help = init
+            .and_then(PluginInitError::help)
+            .or_else(|| failure.help());
+        let text = error::message(
+            &headline,
+            &error::causes(failure, backtrace.as_deref()),
+            help,
+        );
+        tracing::error!("{text}");
+        error::debug_details(&headline, failure);
     }
 
     fn can_load(&self, path: &Path) -> bool {
