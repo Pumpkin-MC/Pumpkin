@@ -182,8 +182,12 @@ fn main() {
     let mut blocks = 0;
     let templates: Vec<StructureTemplate> = pumpkin_data::template_bytes::all_template_names()
         .iter()
-        .filter_map(|name| pumpkin_data::template_bytes::get_template_bytes(name))
-        .filter_map(|bytes| StructureTemplate::from_nbt_bytes(bytes).ok())
+        .filter_map(|name| {
+            pumpkin_data::template_bytes::get_template_bytes(name).map(|bytes| (name, bytes))
+        })
+        .map(|(name, bytes)| {
+            StructureTemplate::from_nbt_bytes(bytes).unwrap_or_else(|err| panic!("{name}: {err}"))
+        })
         .inspect(|template| {
             blocks += template
                 .palettes
