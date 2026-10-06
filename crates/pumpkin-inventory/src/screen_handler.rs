@@ -982,27 +982,6 @@ pub trait ScreenHandler: Send + Sync {
                     return;
                 }
 
-                let slot_stack = slot.get_cloned_stack();
-                let overridden = {
-                    let mut cursor_stack = self
-                        .get_behaviour()
-                        .cursor_stack
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    crate::bundle::try_item_click_behaviour_override(
-                        player,
-                        &click_type,
-                        &slot,
-                        &slot_stack,
-                        &mut cursor_stack,
-                    )
-                };
-
-                if overridden {
-                    slot.mark_dirty();
-                    return;
-                }
-
                 let mut moved_stack = self.quick_move(player, slot_index);
 
                 while !moved_stack.is_empty()
