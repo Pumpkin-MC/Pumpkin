@@ -96,6 +96,9 @@ pub struct MobEntity {
     pending_riders: std::sync::Mutex<Vec<Arc<dyn EntityBase>>>,
     mob_flags: AtomicU8,
 }
+/// Vanilla `Mob.DEFAULT_ATTACK_REACH`: `Math.sqrt(2.04F) - 0.6F`, from floats
+const DEFAULT_ATTACK_REACH: f64 = 0.828_285_648_512_600_4;
+
 impl MobEntity {
     const AI_DISABLED_FLAG: u8 = 1;
     const LEFT_HANDED_FLAG: u8 = 2;
@@ -527,10 +530,8 @@ impl MobEntity {
     }
 
     pub fn is_in_attack_range(&self, target: &dyn EntityBase) -> bool {
-        const DEFAULT_ATTACK_RANGE: f64 = 0.828_427_12; // sqrt(2.04) - 0.6
-
         // TODO: Implement DataComponent lookup for ATTACK_RANGE when components are ready
-        let max_range = DEFAULT_ATTACK_RANGE;
+        let max_range = DEFAULT_ATTACK_REACH;
         let min_range = 0.0;
 
         let target_hitbox = target.get_entity().bounding_box.load();
@@ -683,7 +684,13 @@ impl MobEntity {
             },
         );
 
-        base_box.expand(attack_range, 0.0, attack_range)
+        let attack_box = base_box.expand(attack_range, 0.0, attack_range);
+        // Vanilla `Ravager.getAttackBoundingBox`
+        if self.living_entity.entity.entity_type == &EntityType::RAVAGER {
+            attack_box.expand(-0.05, 0.0, -0.05)
+        } else {
+            attack_box
+        }
     }
 
     /// Brightness at the mob's eye (sky and block light) reaches daylight.
@@ -1638,4 +1645,44 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
 pub trait RangedAttackMob: Mob + Send + Sync {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, power: f32);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DEFAULT_ATTACK_REACH;
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::boundingbox::BoundingBox;
+
+    use crate::entity::Entity;
+
+    /// A zombie's attack box against a standing player, the way `is_in_attack_range` builds it
+    fn zombie_reaches(dx: f64, dy: f64) -> bool {
+        let zombie = BoundingBox::new_from_pos(
+            0.0,
+            64.0,
+            0.0,
+            &Entity::type_dimensions(&EntityType::ZOMBIE),
+        );
+        let player = BoundingBox::new_from_pos(
+            dx,
+            64.0 + dy,
+            0.0,
+            &Entity::get_entity_dimensions(pumpkin_data::entity::EntityPose::Standing),
+        );
+        zombie
+            .expand(DEFAULT_ATTACK_REACH, 0.0, DEFAULT_ATTACK_REACH)
+            .intersects(&player)
+    }
+
+    #[test]
+    fn zombie_reach_matches_vanilla() {
+        // Half widths 0.3 + 0.3 plus the reach: sqrt(2.04) between the centres
+        assert!(zombie_reaches(1.428, 0.0));
+        assert!(!zombie_reaches(1.429, 0.0));
+        // No vertical reach: only the zombie's own 1.95 height and the player's 1.8
+        assert!(zombie_reaches(1.0, 1.94));
+        assert!(!zombie_reaches(1.0, 1.951));
+        assert!(zombie_reaches(1.0, -1.79));
+        assert!(!zombie_reaches(1.0, -1.801));
+    }
 }

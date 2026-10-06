@@ -78,8 +78,6 @@ impl Mob for MagmaCubeEntity {
     }
 
     fn mob_player_collision(&self, player: &Arc<crate::entity::player::Player>) {
-        self.slime
-            .get_mob_entity()
-            .try_attack(&*self.slime, &**player);
+        self.slime.deal_damage(player);
     }
 }

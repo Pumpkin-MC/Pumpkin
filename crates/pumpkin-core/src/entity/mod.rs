@@ -1325,8 +1325,9 @@ impl Entity {
         }
     }
 
+    /// Vanilla `getEyeHeight`: of the current size, which follows the pose
     pub fn get_eye_height(&self) -> f64 {
-        f64::from(Self::get_entity_dimensions(self.pose.load()).eye_height)
+        f64::from(self.entity_dimension.load().eye_height)
     }
 
     /// Updates the entity's position, block position, and chunk position.
@@ -3260,11 +3261,7 @@ impl Entity {
 
     pub fn get_eye_pos(&self) -> Vector3<f64> {
         let pos = self.pos.load();
-        Vector3::new(
-            pos.x,
-            pos.y + f64::from(self.entity_dimension.load().eye_height),
-            pos.z,
-        )
+        Vector3::new(pos.x, pos.y + self.get_eye_height(), pos.z)
     }
 
     /// No solid block between the two eye positions.

@@ -2593,9 +2593,10 @@ impl Player {
         } else if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
             // Vanilla `needsSync`: watchers only, Java clients predict their own pushes
             entity.send_velocity_to_watchers();
-            // Bedrock clients don't, and apply motion at once (no rewind history). Build on
-            // the client's velocity to keep its momentum, unless a server motion may still be
-            // in flight: its deltas are stale then, the server copy already has both.
+            // Bedrock clients don't, and apply motion at once (no rewind history), so the push
+            // builds on the client's velocity to keep its momentum. While a server motion may
+            // still be in flight the deltas are stale and resending the server copy would
+            // replay that motion (e.g. knockback) each tick, so pushes wait it out.
             if let Some(client) = self.client.bedrock()
                 && push != Vector3::default()
             {
@@ -2603,25 +2604,18 @@ impl Player {
                     .world()
                     .get_world_age()
                     .saturating_sub(client.own_motion_age.load());
-                let motion = if since_motion < MOTION_IN_FLIGHT_TICKS {
-                    entity.velocity.load()
-                } else {
-                    client.client_delta.load() + push
-                };
-                self.send_own_motion(motion);
+                if since_motion >= MOTION_IN_FLIGHT_TICKS {
+                    self.send_own_motion(client.client_delta.load() + push);
+                }
             }
         }
     }
 
+    /// Vanilla `LivingEntity.knockback`, sent to the player like a hit
     pub fn apply_knockback(&self, strength: f64, x: f64, z: f64) {
-        let current_vel = self.living_entity.entity.velocity.load();
-        let norm = x.hypot(z);
-        if norm > 0.0 {
-            let vx = current_vel.x / 2.0 - (x / norm) * strength;
-            let vz = current_vel.z / 2.0 - (z / norm) * strength;
-            let vy = (current_vel.y / 2.0 + strength).min(0.4);
-            self.set_velocity(Vector3::new(vx, vy, vz));
-        }
+        let entity = &self.living_entity.entity;
+        entity.apply_knockback(strength, x, z);
+        entity.mark_hurt();
     }
 
     pub fn set_movement_locked(&self, locked: bool) {
@@ -4547,13 +4541,42 @@ impl Player {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .invulnerable
-            && damage_type != pumpkin_data::damage::DamageType::GENERIC_KILL
-            && damage_type != pumpkin_data::damage::DamageType::OUT_OF_WORLD
+            && !damage_type
+                .has_tag(&pumpkin_data::tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY)
         {
+            return false;
+        }
+        // Vanilla `Player.hurtServer`: mob damage follows the difficulty
+        let amount = if Self::scales_with_difficulty(&damage_type, cause) {
+            match self.world().level_info.load().difficulty {
+                Difficulty::Peaceful => 0.0,
+                Difficulty::Easy => (amount / 2.0 + 1.0).min(amount),
+                Difficulty::Normal => amount,
+                Difficulty::Hard => amount * 3.0 / 2.0,
+            }
+        } else {
+            amount
+        };
+        if amount == 0.0 {
             return false;
         }
         self.living_entity
             .damage_with_context(caller, amount, damage_type, position, source, cause)
+    }
+
+    /// Vanilla `DamageSource.scalesWithDifficulty`
+    fn scales_with_difficulty(
+        damage_type: &pumpkin_data::damage::DamageType,
+        cause: Option<&dyn crate::entity::EntityBase>,
+    ) -> bool {
+        use pumpkin_data::damage::DamageScaling;
+        match damage_type.scaling {
+            DamageScaling::Never => false,
+            DamageScaling::WhenCausedByLivingNonPlayer => cause.is_some_and(|cause| {
+                cause.get_living_entity().is_some() && cause.get_player().is_none()
+            }),
+            DamageScaling::Always => true,
+        }
     }
 
     pub fn damage_generic(&self, amount: f32) -> bool {

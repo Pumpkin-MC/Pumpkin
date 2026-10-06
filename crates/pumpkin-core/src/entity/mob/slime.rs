@@ -144,6 +144,14 @@ impl SlimeEntity {
         entity.set_default_dimensions(scaled_dimensions);
     }
 
+    /// Vanilla `AbstractCubeMob.dealDamage`: touching isn't enough, the player must be in
+    /// melee range and in sight
+    pub fn deal_damage(&self, player: &crate::entity::player::Player) {
+        if self.entity.is_in_attack_range(player) && self.has_line_of_sight(player.get_entity()) {
+            self.entity.try_attack(self, player);
+        }
+    }
+
     pub fn get_size(&self) -> i32 {
         self.entity
             .living_entity
@@ -337,8 +345,7 @@ impl Mob for SlimeEntity {
 
     fn mob_player_collision(&self, player: &Arc<crate::entity::player::Player>) {
         if !self.is_tiny() {
-            // dealDamage
-            self.entity.try_attack(self, &**player);
+            self.deal_damage(player);
         }
     }
 
