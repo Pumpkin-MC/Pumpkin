@@ -47,6 +47,7 @@ impl JavaClient {
         true
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn handle_position(
         &self,
         player: &Arc<Player>,
@@ -148,7 +149,11 @@ impl JavaClient {
                     );
                 }
 
-                player.do_check_fall_damage(height_difference, packet.collision & FLAG_ON_GROUND != 0);
+                player.do_check_fall_damage(
+                    pos - last_pos,
+                    packet.collision & FLAG_ON_GROUND != 0,
+                    packet.collision & FLAG_HORIZONTAL_COLLISION != 0,
+                );
                 chunker::update_position(player);
                 let delta = Vector3::new(
                     pos.x - last_pos.x,
@@ -296,7 +301,11 @@ impl JavaClient {
                 }
 
                 world.send_to_tracking_players(entity, &CHeadRot::new(entity_id.into(), yaw as u8));
-                player.do_check_fall_damage(height_difference, (packet.collision & FLAG_ON_GROUND) != 0);
+                player.do_check_fall_damage(
+                    pos - last_pos,
+                    (packet.collision & FLAG_ON_GROUND) != 0,
+                    (packet.collision & FLAG_HORIZONTAL_COLLISION) != 0,
+                );
                 chunker::update_position(player);
                 let delta = Vector3::new(
                     pos.x - last_pos.x,

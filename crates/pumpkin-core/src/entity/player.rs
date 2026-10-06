@@ -237,7 +237,9 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
-use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
+use pumpkin_data::data_component_impl::{
+    EquipmentSlot, EquippableImpl, GliderImpl, ToolImpl, WeaponImpl,
+};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::item_stack::ItemStack;
@@ -260,6 +262,7 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::SoundEvent;
 use pumpkin_protocol::bedrock::client::container_open::CContainerOpen;
+use pumpkin_protocol::bedrock::network_item::ContainerName as BedrockContainer;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventID, SActorEvent};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
@@ -371,11 +374,69 @@ pub const DATA_VERSION: i32 = 4903; // 26.2
 /// must apply the same gating.
 pub const MINE_BLOCK_EXHAUSTION: f32 = 0.005; // Vanilla: 0.005F
 
-const fn bedrock_inventory_slot(player_screen_slot: i16) -> Option<u32> {
+/// Bedrock container id, name and slot of a Java player-screen slot, like Geyser's `PlayerInventoryTranslator`
+const fn bedrock_inventory_slot(player_screen_slot: i16) -> Option<(u32, BedrockContainer, u32)> {
     match player_screen_slot {
-        9..=35 => Some(player_screen_slot as u32),
-        36..=44 => Some((player_screen_slot - 36) as u32),
+        5..=8 => Some((
+            BEDROCK_ARMOR_CONTAINER,
+            BedrockContainer::Armor,
+            (player_screen_slot - 5) as u32,
+        )),
+        9..=35 => Some((0, BedrockContainer::Inventory, player_screen_slot as u32)),
+        36..=44 => Some((
+            0,
+            BedrockContainer::Inventory,
+            (player_screen_slot - 36) as u32,
+        )),
+        45 => Some((BEDROCK_OFFHAND_CONTAINER, BedrockContainer::Offhand, 0)),
         _ => None,
+    }
+}
+
+/// Same as [`bedrock_inventory_slot`] for a `PlayerInventory` index
+const fn bedrock_player_inventory_slot(index: usize) -> Option<(u32, BedrockContainer, u32)> {
+    match index {
+        0..=35 => Some((0, BedrockContainer::Inventory, index as u32)),
+        // Feet to head here, head to feet on Bedrock
+        36..=39 => Some((
+            BEDROCK_ARMOR_CONTAINER,
+            BedrockContainer::Armor,
+            (39 - index) as u32,
+        )),
+        PlayerInventory::OFF_HAND_SLOT => {
+            Some((BEDROCK_OFFHAND_CONTAINER, BedrockContainer::Offhand, 0))
+        }
+        _ => None,
+    }
+}
+
+const BEDROCK_OFFHAND_CONTAINER: u32 = 119;
+const BEDROCK_ARMOR_CONTAINER: u32 = 120;
+
+/// Sends one slot of the Bedrock player's own containers
+fn send_bedrock_inventory_slot(
+    bedrock: &crate::net::bedrock::BedrockClient,
+    (container_id, container_name, slot): (u32, BedrockContainer, u32),
+    stack: &ItemStack,
+) {
+    use pumpkin_protocol::bedrock::{
+        client::inventory_slot::CInventorySlot,
+        network_item::{FullContainerName, NetworkItemStackDescriptor},
+    };
+    use pumpkin_protocol::codec::var_uint::VarUInt;
+
+    let packet = CInventorySlot {
+        container_id: VarUInt(container_id),
+        slot: VarUInt(slot),
+        full_container_name: Some(FullContainerName {
+            container_name,
+            dynamic_id: None,
+        }),
+        storage_item: None,
+        item: NetworkItemStackDescriptor::from(stack),
+    };
+    if let Ok(data) = bedrock.serialize_packet(&packet) {
+        bedrock.try_enqueue_packet(data);
     }
 }
 
@@ -528,6 +589,10 @@ pub struct Player {
     pub hidden_players: Mutex<std::collections::HashSet<uuid::Uuid>>,
     pub advancements: Arc<Mutex<PlayerAdvancement>>,
     pub enchantment_seed: AtomicI32,
+    /// Ticks spent gliding, vanilla `fallFlyTicks`
+    pub fall_fly_ticks: AtomicI32,
+    /// Position step of the last client move, both editions
+    pub last_move: AtomicCell<Vector3<f64>>,
     pub fishing_bobber: AtomicI32,
     pub bedrock_skin: arc_swap::ArcSwap<pumpkin_protocol::bedrock::client::Skin>,
     pub seen_credits: AtomicBool,
@@ -741,6 +806,8 @@ impl Player {
             current_block_breaking_speed: AtomicU32::new(0),
             synced_mining_efficiency_level: AtomicI32::new(-1),
             enchantment_seed: AtomicI32::new(rand::random()),
+            fall_fly_ticks: AtomicI32::new(0),
+            last_move: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
             raid_omen_position: AtomicCell::new(None),
@@ -1641,26 +1708,8 @@ impl Player {
                 }
             }
             ClientPlatform::Bedrock(bedrock) => {
-                use pumpkin_protocol::bedrock::{
-                    client::inventory_slot::CInventorySlot,
-                    network_item::{ContainerName, FullContainerName, NetworkItemStackDescriptor},
-                };
-                use pumpkin_protocol::codec::var_uint::VarUInt;
-
-                let item_stack = &*packet.item.0;
-                let item_desc = NetworkItemStackDescriptor::from(item_stack);
-                let bedrock_packet = CInventorySlot {
-                    container_id: VarUInt(0),
-                    slot: VarUInt(packet.slot.0 as u32),
-                    full_container_name: Some(FullContainerName {
-                        container_name: ContainerName::Inventory,
-                        dynamic_id: None,
-                    }),
-                    storage_item: None,
-                    item: item_desc,
-                };
-                if let Ok(data) = bedrock.serialize_packet(&bedrock_packet) {
-                    bedrock.try_enqueue_packet(data);
+                if let Some(target) = bedrock_player_inventory_slot(packet.slot.0 as usize) {
+                    send_bedrock_inventory_slot(bedrock, target, &packet.item.0);
                 }
             }
         }
@@ -1692,17 +1741,8 @@ impl Player {
             return false;
         }
 
-        // Direct PlayerInventory slot indices (matches build_equipment_slots).
-        let slot_index: usize = match slot {
-            EquipmentSlot::MainHand(_) => self.inventory.get_selected_slot() as usize,
-            EquipmentSlot::OffHand(_) => PlayerInventory::OFF_HAND_SLOT, // 40
-            EquipmentSlot::Feet(_) => 36,
-            EquipmentSlot::Legs(_) => 37,
-            EquipmentSlot::Chest(_) => 38,
-            EquipmentSlot::Head(_) => 39,
-            // Players do not have Body or Saddle equipment slots;
-            // these are only used by non-player entities (e.g. horses).
-            EquipmentSlot::Body(_) | EquipmentSlot::Saddle(_) => return false,
+        let Some(slot_index) = self.inventory.equipment_slot_index(slot) else {
+            return false;
         };
 
         let mut stack = self.inventory.get_slot(slot_index);
@@ -3038,6 +3078,7 @@ impl Player {
 
         self.hunger_manager.tick(self);
 
+        self.tick_fall_flying();
         // Vanilla updates pose in PlayerEntity#tick after super.tick().
         self.update_player_pose();
         self.check_inventory_advancements();
@@ -3143,24 +3184,127 @@ impl Player {
         }
     }
 
-    /// Vanilla `doCheckFallDamage` from the move handlers of both editions.
-    pub fn do_check_fall_damage(&self, height_difference: f64, on_ground: bool) {
+    /// Equipment slots with a glider that can still take damage, vanilla `canGlideUsing`
+    fn glider_slots(&self) -> Vec<EquipmentSlot> {
+        std::iter::once(EquipmentSlot::MAIN_HAND)
+            .chain(self.inventory.equipment_slots.values().cloned())
+            .filter(|slot| {
+                self.inventory
+                    .equipment_slot_index(slot)
+                    .is_some_and(|index| {
+                        let stack = self.inventory.get_slot(index);
+                        stack.get_data_component::<GliderImpl>().is_some()
+                            && stack
+                                .get_data_component::<EquippableImpl>()
+                                .is_some_and(|equippable| equippable.slot == slot)
+                            && !stack.next_damage_will_break()
+                    })
+            })
+            .collect()
+    }
+
+    /// Vanilla `Player.canGlide`
+    pub fn can_glide(&self) -> bool {
+        let entity = &self.living_entity.entity;
+        !self.is_flying()
+            && !entity.on_ground.load(Ordering::Relaxed)
+            && !entity.has_vehicle()
+            && !self.living_entity.has_effect(&StatusEffect::LEVITATION)
+            && !self.glider_slots().is_empty()
+    }
+
+    /// Vanilla `tryToStartFallFlying`, for the glide request of both editions
+    pub fn try_to_start_fall_flying(&self, server: &Arc<Server>) -> bool {
+        let entity = &self.living_entity.entity;
+        if entity.is_fall_flying()
+            || !self.can_glide()
+            || entity.is_in_water()
+            || entity.touching_lava.load(Ordering::Relaxed)
+        {
+            return false;
+        }
+        let mut event =
+            crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent::new(
+                entity.entity_id,
+                true,
+            );
+        server.plugin_manager.fire_blocking(server, &mut event);
+        if event.cancelled || !event.is_gliding {
+            return false;
+        }
+        entity.set_fall_flying(true);
+        true
+    }
+
+    /// Vanilla `updateFallFlying`: ends the glide once it isn't possible, wears the glider every second
+    fn tick_fall_flying(&self) {
+        let entity = &self.living_entity.entity;
+        if !entity.is_fall_flying() {
+            self.fall_fly_ticks.store(0, Ordering::Relaxed);
+            return;
+        }
+        // Vanilla `checkFallDistanceAccumulation`: only a steep dive builds it up. In the tick,
+        // so a landing move has already taken its damage.
+        if self.last_move.load().y > -0.5 && self.living_entity.fall_distance.load() > 1.0 {
+            self.living_entity.fall_distance.store(1.0);
+        }
+        if !self.can_glide() {
+            entity.set_fall_flying(false);
+            self.fall_fly_ticks.store(0, Ordering::Relaxed);
+            return;
+        }
+        let ticks = self.fall_fly_ticks.fetch_add(1, Ordering::Relaxed) + 1;
+        if ticks % 10 == 0 {
+            if ticks % 20 == 0 {
+                let slots = self.glider_slots();
+                let slot = &slots[rand::random_range(0..slots.len())];
+                self.damage_item_in_slot(slot, 1);
+            }
+            self.world().emit_game_event(
+                pumpkin_data::game_event::GameEvent::ElytraGlide.name(),
+                entity.pos.load(),
+            );
+        }
+    }
+
+    /// Vanilla `handleFallFlyingCollisions`: the speed lost into a wall is taken as damage
+    fn handle_fall_flying_collision(&self, last_speed: f64, new_speed: f64) {
+        let damage = (last_speed - new_speed).mul_add(10.0, -3.0) as f32;
+        if damage > 0.0 {
+            self.living_entity.entity.play_sound(if damage as i32 > 4 {
+                Sound::EntityPlayerBigFall
+            } else {
+                Sound::EntityPlayerSmallFall
+            });
+            self.living_entity
+                .damage(self, damage, DamageType::FLY_INTO_WALL);
+        }
+    }
+
+    /// Vanilla `doCheckFallDamage` from the move handlers of both editions, plus the
+    /// glide wall check vanilla runs in its server travel.
+    pub fn do_check_fall_damage(
+        &self,
+        movement: Vector3<f64>,
+        on_ground: bool,
+        horizontal_collision: bool,
+    ) {
+        let last_move = self.last_move.swap(movement);
         if self.is_flying()
             || self.living_entity.health.load() <= 0.0
             || self.living_entity.dead.load(Ordering::Relaxed)
         {
             return;
         }
-        // Vanilla `checkFallDistanceAccumulation` while gliding: only a steep dive builds it up
-        if self.living_entity.entity.is_fall_flying()
-            && height_difference > -0.5
-            && self.living_entity.fall_distance.load() > 1.0
-        {
-            self.living_entity.fall_distance.store(1.0);
+        if horizontal_collision && self.living_entity.entity.is_fall_flying() {
+            self.handle_fall_flying_collision(
+                last_move.horizontal_length(),
+                movement.horizontal_length(),
+            );
         }
         self.living_entity.fall(
             self,
-            height_difference,
+            movement.y,
             on_ground,
             self.gamemode.load() == GameMode::Creative,
         );
@@ -7839,6 +7983,15 @@ impl InventoryPlayer for Player {
                     if let Ok(data) = bedrock.serialize_packet(&bedrock_packet) {
                         bedrock.try_enqueue_packet(data);
                     }
+                    // Armor and off-hand are their own containers on Bedrock
+                    for (index, stack) in packet.slot_data.iter().enumerate() {
+                        if let Some(target @ (container_id, _, _)) =
+                            bedrock_inventory_slot(index as i16)
+                            && container_id != 0
+                        {
+                            send_bedrock_inventory_slot(bedrock, target, &stack.0);
+                        }
+                    }
                 } else if matches!(
                     window_type,
                     Some(
@@ -7900,21 +8053,8 @@ impl InventoryPlayer for Player {
 
                 let window_id = packet.window_id;
                 if window_id == 0 {
-                    if let Some(slot_idx) = bedrock_inventory_slot(packet.slot) {
-                        let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
-                        let bedrock_packet = CInventorySlot {
-                            container_id: VarUInt(0),
-                            slot: VarUInt(slot_idx),
-                            full_container_name: Some(FullContainerName {
-                                container_name: ContainerName::Inventory,
-                                dynamic_id: None,
-                            }),
-                            storage_item: None,
-                            item: item_desc,
-                        };
-                        if let Ok(data) = bedrock.serialize_packet(&bedrock_packet) {
-                            bedrock.try_enqueue_packet(data);
-                        }
+                    if let Some(target) = bedrock_inventory_slot(packet.slot) {
+                        send_bedrock_inventory_slot(bedrock, target, &packet.slot_data.0);
                     }
                 } else {
                     let slot_idx = packet.slot as usize;
@@ -8177,18 +8317,52 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
-    use super::{bedrock_inventory_slot, read_root_vehicle, write_root_vehicle};
+    use super::{
+        BEDROCK_ARMOR_CONTAINER, BEDROCK_OFFHAND_CONTAINER, BedrockContainer,
+        bedrock_inventory_slot, bedrock_player_inventory_slot, read_root_vehicle,
+        write_root_vehicle,
+    };
     use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
     use uuid::Uuid;
 
     #[test]
     fn player_screen_slots_map_to_bedrock_inventory() {
-        assert_eq!(bedrock_inventory_slot(9), Some(9));
-        assert_eq!(bedrock_inventory_slot(35), Some(35));
-        assert_eq!(bedrock_inventory_slot(36), Some(0));
-        assert_eq!(bedrock_inventory_slot(44), Some(8));
-        assert_eq!(bedrock_inventory_slot(8), None);
-        assert_eq!(bedrock_inventory_slot(45), None);
+        let inventory = |slot| Some((0, BedrockContainer::Inventory, slot));
+        assert_eq!(bedrock_inventory_slot(9), inventory(9));
+        assert_eq!(bedrock_inventory_slot(35), inventory(35));
+        assert_eq!(bedrock_inventory_slot(36), inventory(0));
+        assert_eq!(bedrock_inventory_slot(44), inventory(8));
+        assert_eq!(bedrock_inventory_slot(4), None);
+        assert_eq!(
+            bedrock_inventory_slot(6),
+            Some((BEDROCK_ARMOR_CONTAINER, BedrockContainer::Armor, 1))
+        );
+        assert_eq!(
+            bedrock_inventory_slot(45),
+            Some((BEDROCK_OFFHAND_CONTAINER, BedrockContainer::Offhand, 0))
+        );
+    }
+
+    #[test]
+    fn player_inventory_slots_map_to_bedrock_containers() {
+        assert_eq!(
+            bedrock_player_inventory_slot(4),
+            Some((0, BedrockContainer::Inventory, 4))
+        );
+        // Chest
+        assert_eq!(
+            bedrock_player_inventory_slot(38),
+            Some((BEDROCK_ARMOR_CONTAINER, BedrockContainer::Armor, 1))
+        );
+        // Head
+        assert_eq!(
+            bedrock_player_inventory_slot(39),
+            Some((BEDROCK_ARMOR_CONTAINER, BedrockContainer::Armor, 0))
+        );
+        assert_eq!(
+            bedrock_player_inventory_slot(40),
+            Some((BEDROCK_OFFHAND_CONTAINER, BedrockContainer::Offhand, 0))
+        );
     }
 
     #[test]

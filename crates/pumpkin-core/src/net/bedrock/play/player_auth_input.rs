@@ -19,8 +19,10 @@ impl BedrockClient {
             return;
         }
         let entity = player.get_entity();
+        // Like Geyser: the motion this tick started with was downward, the end motion can
+        // already be cleared by the landing (e.g. gliding into the ground)
         let on_ground = packet.input_data.get(InputData::VerticalCollision as usize)
-            && packet.delta.y < 0.0
+            && self.client_delta.load().y < 0.0
             && !entity.has_vehicle();
         entity.on_ground.store(on_ground, Ordering::Relaxed);
         // Velocity stays server owned like Java (vanilla `deltaMovement`). The client's
@@ -155,7 +157,13 @@ impl BedrockClient {
             }
         }
 
-        player.do_check_fall_damage(new_pos.y - old_pos.y, on_ground);
+        player.do_check_fall_damage(
+            new_pos - old_pos,
+            on_ground,
+            packet
+                .input_data
+                .get(InputData::HorizontalCollision as usize),
+        );
 
         let input_data = packet.input_data;
 
@@ -226,6 +234,15 @@ impl BedrockClient {
             }
         }
 
+        // Bedrock can stop in the same input it started, then it never glided
+        if input_data.get(InputData::StartGliding as usize)
+            && !input_data.get(InputData::StopGliding as usize)
+        {
+            Self::start_gliding(player, server);
+        } else if input_data.get(InputData::StopGliding as usize) && entity.is_fall_flying() {
+            entity.set_fall_flying(false);
+        }
+
         if let Some(block_actions) = packet.block_actions {
             for action in &block_actions {
                 self.handle_player_block_action(player, server, action);
@@ -235,6 +252,34 @@ impl BedrockClient {
 }
 
 impl BedrockClient {
+    /// The Bedrock client glides straight out of creative flight, which vanilla `canGlide`
+    /// forbids, so flight ends first and comes back if the glide is refused.
+    fn start_gliding(player: &Arc<Player>, server: &Arc<Server>) {
+        if player.get_entity().is_fall_flying() {
+            return;
+        }
+        let was_flying = player.is_flying();
+        let set_flying = |flying: bool| {
+            player
+                .abilities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .flying = flying;
+        };
+        if was_flying {
+            set_flying(false);
+        }
+        if !player.try_to_start_fall_flying(server) {
+            if was_flying {
+                set_flying(true);
+            }
+            player.get_entity().stop_fall_flying();
+        }
+        if was_flying {
+            player.send_abilities_update();
+        }
+    }
+
     /// inputs are ignored until the client reaches a pending teleport, so stale
     /// positions (e.g. the death spot before a respawn) never count as movement or a fall.
     /// Returns true while still waiting.

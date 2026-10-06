@@ -2734,14 +2734,19 @@ impl Entity {
     pub fn is_sprinting(&self) -> bool {
         self.sprinting.load(Ordering::Relaxed)
     }
-    pub fn check_fall_flying(&self) -> bool {
-        !self.on_ground.load(Relaxed)
-    }
-
     pub fn set_fall_flying(&self, fall_flying: bool) {
-        assert_ne!(self.fall_flying.load(Relaxed), fall_flying);
         self.fall_flying.store(fall_flying, Relaxed);
         self.set_flag(Flag::FallFlying, fall_flying);
+    }
+
+    /// Vanilla `stopFallFlying`: always resends the flag, so a client that predicted gliding is corrected
+    pub fn stop_fall_flying(&self) {
+        let mask = 1i8 << Flag::FallFlying as u8;
+        self.set_synced_data(
+            tracked_data::entity::DATA_SHARED_FLAGS_ID,
+            self.flags.load(Relaxed) | mask,
+        );
+        self.set_fall_flying(false);
     }
     pub fn is_fall_flying(&self) -> bool {
         self.fall_flying.load(Ordering::Relaxed)
@@ -3941,7 +3946,10 @@ impl Entity {
     pub fn reset_state(&self) {
         self.pose.store(EntityPose::Standing);
         self.refresh_dimensions();
-        self.fall_flying.store(false, Relaxed);
+        // Through the flag too, or both editions keep showing the glide after respawn
+        if self.is_fall_flying() {
+            self.set_fall_flying(false);
+        }
         self.extinguish();
         self.set_on_fire(false);
     }

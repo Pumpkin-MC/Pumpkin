@@ -30,11 +30,13 @@ use pumpkin_protocol::{
         server::{
             actor_event::SActorEvent, animate::SAnimate, block_pick_request::SBlockPickRequest,
             client_cache_blob_status::SClientCacheBlobStatus,
-            client_cache_status::SClientCacheStatus, command_request::SCommandRequest,
-            container_close::SContainerClose, emote::SEmote, emote_list::SEmoteList,
-            interact::SInteract, inventory_transaction::SInventoryTransaction,
-            item_stack_request::SItemStackRequest, loading_screen::SLoadingScreen, login::SLogin,
-            mob_equipment::SMobEquipment, modal_form_response::SModalFormResponse,
+            client_cache_status::SClientCacheStatus,
+            client_movement_prediction_sync::SClientMovementPredictionSync,
+            command_request::SCommandRequest, container_close::SContainerClose, emote::SEmote,
+            emote_list::SEmoteList, interact::SInteract,
+            inventory_transaction::SInventoryTransaction, item_stack_request::SItemStackRequest,
+            loading_screen::SLoadingScreen, login::SLogin, mob_equipment::SMobEquipment,
+            modal_form_response::SModalFormResponse,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
@@ -823,9 +825,8 @@ impl BedrockClient {
                 let form_resp = SModalFormResponse::read(reader)?;
                 self.handle_modal_form_response(player, server, form_resp);
             }
-            SLoadingScreen::PACKET_ID => {
-                // Ignore for now
-            }
+            // Ignore for now; movement is client authoritative, so there is no prediction to sync
+            SLoadingScreen::PACKET_ID | SClientMovementPredictionSync::PACKET_ID => {}
             SBlockPickRequest::PACKET_ID => {
                 let packet = SBlockPickRequest::read(reader)?;
                 self.handle_block_pick_request(player, &packet);
