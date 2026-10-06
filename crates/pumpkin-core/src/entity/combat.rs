@@ -75,7 +75,7 @@ pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f6
 
     if strength > 0.0 {
         let yaw = attacker.yaw.load();
-        victim.get_entity().knockback(
+        victim.get_entity().apply_knockback(
             strength,
             f64::from((yaw.to_radians()).sin()),
             f64::from(-(yaw.to_radians()).cos()),
@@ -84,6 +84,24 @@ pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f6
 
     let velocity = attacker.velocity.load();
     attacker.velocity.store(velocity.multiply(0.6, 1.0, 0.6));
+}
+
+/// End of vanilla `Player.causeExtraKnockback`: a hit player gets its knockback only for
+/// itself, and the server keeps the old movement.
+pub fn sync_hit_player_velocity(victim: &dyn EntityBase, old_movement: Vector3<f64>) {
+    let Some(victim_player) = victim.get_player() else {
+        return;
+    };
+    let entity = victim.get_entity();
+    if !entity.sync_velocity.swap(false, Ordering::SeqCst) {
+        return;
+    }
+    victim_player.send_own_velocity(entity.velocity.load());
+    // Bedrock velocity mirrors the client, which now has the knockback. Restoring would
+    // make a later push in this tick send the old movement and cancel it.
+    if victim_player.client.bedrock().is_none() {
+        entity.velocity.store(old_movement);
+    }
 }
 
 pub fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {

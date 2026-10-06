@@ -26,9 +26,7 @@ impl BedrockClient {
         self.input_tick.store(packet.tick.0, Ordering::Relaxed);
         // Client predicted velocity. A server impulse (knockback, push) still waiting
         // for `send_velocity_changes` wins: the client hasn't seen it yet.
-        if !entity.sync_velocity.load(Ordering::SeqCst)
-            && !entity.velocity_dirty.load(Ordering::SeqCst)
-        {
+        if !entity.sync_velocity.load(Ordering::SeqCst) && !entity.pushed.load(Ordering::SeqCst) {
             entity.velocity.store(packet.delta.to_f64());
         }
 

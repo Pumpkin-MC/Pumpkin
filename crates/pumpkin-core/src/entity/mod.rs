@@ -577,6 +577,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 vel.z -= dz;
                 self_entity.velocity.store(vel);
                 self_entity.velocity_dirty.store(true, Ordering::SeqCst);
+                self_entity.pushed.store(true, Ordering::SeqCst);
             }
 
             if !other_entity.has_passengers() && entity.is_pushable() {
@@ -585,6 +586,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 vel.z += dz;
                 other_entity.velocity.store(vel);
                 other_entity.velocity_dirty.store(true, Ordering::SeqCst);
+                other_entity.pushed.store(true, Ordering::SeqCst);
             }
         }
     }
@@ -962,6 +964,9 @@ pub struct Entity {
     pub velocity_dirty: AtomicBool,
     /// velocity goes to the own client
     pub sync_velocity: AtomicBool,
+    /// Pushed by another entity since the last sync. Bedrock clients don't predict
+    /// pushes, so a pushed Bedrock player also gets its own velocity.
+    pub pushed: AtomicBool,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
     /// The last sent yaw value (encoded as u8) for change detection
@@ -1095,6 +1100,7 @@ impl Entity {
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
             sync_velocity: AtomicBool::new(false),
+            pushed: AtomicBool::new(false),
             removed: AtomicBool::new(false),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -2506,31 +2512,6 @@ impl Entity {
 
     pub fn height(&self) -> f32 {
         self.entity_dimension.load().height
-    }
-
-    /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
-    ///
-    /// This function calculates the entity's new velocity based on the specified knockback strength and direction.
-    pub fn knockback(&self, strength: f64, x: f64, z: f64) {
-        // This has some vanilla magic
-        let mut x = x;
-        let mut z = z;
-        while x.mul_add(x, z * z) < 1.0E-5 {
-            x = (rand::random::<f64>() - rand::random::<f64>()) * 0.01;
-            z = (rand::random::<f64>() - rand::random::<f64>()) * 0.01;
-        }
-
-        let var8 = Vector3::new(x, 0.0, z).normalize() * strength;
-        let velocity = self.velocity.load();
-        self.velocity.store(Vector3::new(
-            velocity.x / 2.0 - var8.x,
-            if self.on_ground.load(Relaxed) {
-                (velocity.y / 2.0 + strength).min(0.4)
-            } else {
-                velocity.y
-            },
-            velocity.z / 2.0 - var8.z,
-        ));
     }
 
     pub fn set_sneaking(&self, sneaking: bool) {

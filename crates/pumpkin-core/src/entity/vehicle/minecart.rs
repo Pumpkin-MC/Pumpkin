@@ -653,6 +653,7 @@ impl EntityBase for MinecartEntity {
                 other_entity.velocity.store(vel);
                 // a pushed player predicts this itself.
                 other_entity.velocity_dirty.store(true, Ordering::SeqCst);
+                other_entity.pushed.store(true, Ordering::SeqCst);
             }
         }
     }

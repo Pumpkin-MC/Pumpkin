@@ -3370,6 +3370,14 @@ impl EntityBase for LivingEntity {
     /// death-animation completion.
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        let is_player = self.entity.entity_type == &EntityType::PLAYER;
+        // Before moving, like vanilla `ServerEntity.sendChanges`, so watchers get the raw
+        // knockback from player attacks this tick. Players sync after the entity pass.
+        if !is_player && self.entity.sync_velocity.swap(false, Ordering::SeqCst) {
+            self.entity.velocity_dirty.store(false, Ordering::SeqCst);
+            self.entity.send_velocity();
+        }
+
         self.entity.tick(caller, server);
 
         // Only tick movement if the entity is alive. This prevents a dead "corpse"
@@ -3377,7 +3385,6 @@ impl EntityBase for LivingEntity {
         // We allow movement during death animation (20 ticks) so knockback is applied.
         let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
         let in_death_animation = self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
-        let is_player = self.entity.entity_type == &EntityType::PLAYER;
         if (is_alive || in_death_animation) && !is_player {
             self.tick_movement(caller);
             // Vanilla-like order: freeze logic runs after movement/collisions.
@@ -3401,14 +3408,8 @@ impl EntityBase for LivingEntity {
             self.entity.tick_frozen(caller);
         }
 
-        // Coalesce velocity sends to once per tick. Players sync after the entity pass.
-        if !is_player {
-            if self.entity.sync_velocity.swap(false, Ordering::SeqCst) {
-                self.entity.velocity_dirty.store(false, Ordering::SeqCst);
-                self.entity.send_velocity();
-            } else if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-                self.entity.send_velocity_to_watchers();
-            }
+        if !is_player && self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+            self.entity.send_velocity_to_watchers();
         }
 
         // Fetch supporting blocks for players or other entities

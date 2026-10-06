@@ -1573,16 +1573,7 @@ impl Player {
             }
         }
 
-        // a hit player gets its knockback only for
-        // itself, and the server keeps the old movement. Clearing the dirty flag too keeps
-        // `send_velocity_changes` from sending that old movement back to a Bedrock hit player.
-        if let Some(victim_player) = victim.get_player()
-            && victim_entity.sync_velocity.swap(false, Ordering::SeqCst)
-        {
-            victim_entity.velocity_dirty.store(false, Ordering::SeqCst);
-            victim_player.send_own_velocity(victim_entity.velocity.load());
-            victim_entity.velocity.store(old_movement);
-        }
+        combat::sync_hit_player_velocity(victim.as_ref(), old_movement);
 
         // NOTE: TOCTOU race condition in single-player context.
         // The weapon cost is computed (cost = 1 or 2) with item_stack locked, then damage_held_item
@@ -2611,14 +2602,16 @@ impl Player {
     /// so this tick's knockback goes out before the next input packet replaces it.
     pub fn send_velocity_changes(&self) {
         let entity = self.get_entity();
+        let pushed = entity.pushed.swap(false, Ordering::SeqCst);
         if entity.sync_velocity.swap(false, Ordering::SeqCst) {
             entity.velocity_dirty.store(false, Ordering::SeqCst);
             entity.send_velocity_to_watchers();
             self.send_own_velocity(entity.velocity.load());
         } else if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
             entity.send_velocity_to_watchers();
-            // Bedrock client does not predict actor pushes
-            if self.client.bedrock().is_some() {
+            // Bedrock client does not predict actor pushes. Plain knockback stays
+            // watchers only, like vanilla `needsSync`.
+            if pushed && self.client.bedrock().is_some() {
                 self.send_own_velocity(entity.velocity.load());
             }
         }
