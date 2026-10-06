@@ -1512,7 +1512,7 @@ impl LivingEntity {
         self.entity
             .update_velocity_from_input(self.movement_input.load(), speed);
 
-        self.apply_climbing_speed();
+        self.apply_climbing_speed(caller);
 
         self.make_move(caller);
 
@@ -1525,7 +1525,7 @@ impl LivingEntity {
         };
 
         if (self.entity.horizontal_collision.load(SeqCst) || self.jumping.load(SeqCst))
-            && (self.climbing.load(Relaxed) || can_powder_snow_climb)
+            && (caller.on_climbable() || can_powder_snow_climb)
         {
             velo.y = 0.2;
         }
@@ -1598,7 +1598,7 @@ impl LivingEntity {
             self.make_move(caller);
 
             let mut velo = self.entity.velocity.load();
-            if self.entity.horizontal_collision.load(SeqCst) && self.climbing.load(Relaxed) {
+            if self.entity.horizontal_collision.load(SeqCst) && caller.on_climbable() {
                 velo.y = 0.2;
             }
 
@@ -1671,7 +1671,8 @@ impl LivingEntity {
         self.check_climbing(caller);
     }
 
-    /// Vanilla `LivingEntity.onClimbable`. Also the `lastClimbablePos` side effect.
+    /// Vanilla `LivingEntity.onClimbable` for the block at the feet. Read-only, since other
+    /// entities query it from their own tick (`is_pushable`).
     pub fn on_climbable(&self) -> bool {
         let pos = self.entity.block_pos.load();
         let world = self.entity.world.load();
@@ -1680,13 +1681,10 @@ impl LivingEntity {
         if self.entity.fall_flying.load(Relaxed)
             && block.has_tag(&tag::Block::MINECRAFT_CAN_GLIDE_THROUGH)
         {
-            self.climbing.store(false, Relaxed);
             return false;
         }
 
         if block.has_tag(&tag::Block::MINECRAFT_CLIMBABLE) {
-            self.climbing.store(true, Relaxed);
-            self.climbing_pos.store(Some(pos));
             return true;
         }
 
@@ -1698,15 +1696,12 @@ impl LivingEntity {
                 if below_block == &Block::LADDER {
                     let ladder = LadderLikeProperties::from_state_id(below_id);
                     if ladder.facing == trapdoor.facing {
-                        self.climbing.store(true, Relaxed);
-                        self.climbing_pos.store(Some(pos));
                         return true;
                     }
                 }
             }
         }
 
-        self.climbing.store(false, Relaxed);
         false
     }
 
@@ -1716,16 +1711,19 @@ impl LivingEntity {
         self.health.load() > 0.0 && !self.dead.load(Relaxed) && !self.on_climbable()
     }
 
+    /// Stores the climb state of the end position, only from this entity's own tick.
     fn check_climbing(&self, caller: &dyn EntityBase) {
         let climbing = caller.on_climbable();
         self.climbing.store(climbing, Relaxed);
-        if !climbing && self.entity.on_ground.load(SeqCst) {
+        if climbing {
+            self.climbing_pos.store(Some(self.entity.block_pos.load()));
+        } else if self.entity.on_ground.load(SeqCst) {
             self.climbing_pos.store(None);
         }
     }
 
-    fn apply_climbing_speed(&self) {
-        if self.climbing.load(Relaxed) {
+    fn apply_climbing_speed(&self, caller: &dyn EntityBase) {
+        if caller.on_climbable() {
             self.fall_distance.store(0.0);
 
             let mut velo = self.entity.velocity.load();
