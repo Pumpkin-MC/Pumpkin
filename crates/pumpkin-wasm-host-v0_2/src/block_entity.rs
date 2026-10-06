@@ -336,11 +336,11 @@ impl HostContainerBlockEntityWithStore<PluginHostState> for HasSelf<PluginHostSt
         slot: u32,
         stack_res: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
+        let inventory = accessor.get_res(&res)?.inventory.clone();
         let stack = match stack_res {
-            Some(res) => accessor.take_res(res)?.lock().await.clone(),
+            Some(stack_res) => accessor.take_res(stack_res)?.lock().await.clone(),
             None => pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
         };
-        let inventory = accessor.get_res(&res)?.inventory.clone();
 
         inventory.set_stack(slot as usize, stack);
         Ok(())

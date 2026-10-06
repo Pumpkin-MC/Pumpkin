@@ -98,10 +98,11 @@ fn from_wit_metadata(metadata: WitMetadata) -> BossbarFlags {
 }
 
 async fn remove_all_players(pbb: &Arc<Mutex<PluginBossBar>>) {
-    let pbb = pbb.lock().await;
+    let mut pbb = pbb.lock().await;
+    let players = std::mem::take(&mut pbb.players);
     if let Some(server) = pbb.server.upgrade() {
-        for uuid in &pbb.players {
-            if let Some(player) = server.get_player_by_uuid(*uuid) {
+        for uuid in players {
+            if let Some(player) = server.get_player_by_uuid(uuid) {
                 player.remove_bossbar(pbb.bossbar.uuid);
             }
         }

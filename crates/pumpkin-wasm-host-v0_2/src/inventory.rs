@@ -133,6 +133,7 @@ impl HostInventory for PluginHostState {
         Ok(total)
     }
 
+    // Fixme: this method causes an unnecessary amount of resource table lookups
     fn get_all_items(
         &mut self,
         res: Resource<WitInventory>,
@@ -271,8 +272,6 @@ impl HostInventoryWithStore<PluginHostState> for HasSelf<PluginHostState> {
     }
 
     // Fixme: this method causes an unnecessary amount of resource table lookups
-
-    // Fixme: this method causes an unnecessary amount of resource table lookups
     async fn set_all_items(
         accessor: &Accessor<PluginHostState, Self>,
         res: Resource<WitInventory>,
@@ -280,8 +279,12 @@ impl HostInventoryWithStore<PluginHostState> for HasSelf<PluginHostState> {
     ) -> wasmtime::Result<()> {
         let size =
             accessor.with(|mut host| host.get().get_size(Resource::new_borrow(res.rep())))?;
-        for (slot, item) in items.into_iter().take(size as usize).enumerate() {
+        let mut items = items.into_iter();
+        for (slot, item) in items.by_ref().take(size as usize).enumerate() {
             Self::set_item(accessor, Resource::new_borrow(res.rep()), slot as u32, item).await?;
+        }
+        for extra in items.flatten() {
+            accessor.take_res(extra)?;
         }
         Ok(())
     }
