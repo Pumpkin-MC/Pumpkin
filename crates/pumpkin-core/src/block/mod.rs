@@ -455,6 +455,7 @@ pub struct BlockEvent {
 /// Returns the block name whose loot table should be used.
 /// Some blocks (e.g. wall torches) share the loot table of their
 /// non-wall counterpart but do not have their own loot table file.
+#[must_use]
 pub fn loot_table_name(block: &Block) -> &str {
     match block.name {
         "wall_torch" => "torch",
