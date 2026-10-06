@@ -96,7 +96,7 @@ fn from_wit_metadata(metadata: WitMetadata) -> BossbarFlags {
 impl boss_bar::Host for PluginHostState {}
 
 impl boss_bar::HostBossBar for PluginHostState {
-    async fn new(
+    fn new(
         &mut self,
         title: Resource<crate::pumpkin::plugin::text::TextComponent>,
         color: WitColor,

@@ -88,9 +88,9 @@ mod sound_category;
 mod spawn_egg;
 mod statistic;
 mod structure_metadata;
+mod structure_template;
 mod structures;
 mod tag;
-mod template_bytes;
 mod template_pool;
 mod test_instance;
 mod tracked_data;
@@ -112,6 +112,22 @@ pub const OUT_DIR: &str = "../../crates/pumpkin-data/src/generated";
 pub fn main() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     std::env::set_current_dir(manifest_dir).expect("Failed to set current dir to manifest dir");
+
+    let mc_data_dir = std::path::Path::new("../../assets/datapack/data/minecraft");
+    if !mc_data_dir.is_dir() {
+        println!(
+            "Vanilla datapack missing. Triggering pumpkin-data build script to download it..."
+        );
+        let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+        let status = Command::new(cargo)
+            .args(["check", "-p", "pumpkin-data"])
+            .status()
+            .expect("Failed to run cargo check -p pumpkin-data");
+        assert!(
+            status.success(),
+            "Failed to download and extract vanilla datapack"
+        );
+    }
 
     type BuilderFn = fn() -> TokenStream;
 
@@ -152,7 +168,7 @@ pub fn main() {
         (template_pool::build, "template_pool.rs"),
         (processor_list::build, "processor_list.rs"),
         (structure_metadata::build, "structure_metadata.rs"),
-        (template_bytes::build, "template_bytes.rs"),
+        (structure_template::build, "structure_template.rs"),
         (test_instance::build, "test_instance.rs"),
         (painting_variant::build, "painting_variant.rs"),
         (context_provider::build, "context_provider.rs"),
