@@ -178,6 +178,25 @@ impl SuggestionsBuilder {
         self
     }
 
+    /// Suggests each tag id as `#id`, filtered like vanilla's
+    /// `SharedSuggestionProvider.suggestResource(tags, builder, "#")`.
+    #[must_use]
+    pub fn filter_and_suggest_tags<'a>(mut self, tags: impl IntoIterator<Item = &'a str>) -> Self {
+        let remaining = self.remaining_lowercase().to_owned();
+        // Empty input offers every tag; otherwise tags need the `#` typed first.
+        let pattern = match remaining.strip_prefix('#') {
+            Some(pattern) => pattern,
+            None if remaining.is_empty() => "",
+            None => return self,
+        };
+        for tag in tags {
+            if Self::matches_substr(pattern, tag) {
+                self = self.suggest(format!("#{tag}"));
+            }
+        }
+        self
+    }
+
     fn matches_substr(pattern: &str, input: &str) -> bool {
         let mut current_str = input;
         while !current_str.starts_with(pattern) {
