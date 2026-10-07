@@ -79,5 +79,5 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         .requires(PERMISSION)
         .then(argument("target", StringArgumentType::SingleWord).executes(PardonIpExecutor));
 
-    dispatcher.register_with_aliases(cmd, &["pardonip"]);
+    dispatcher.register(cmd);
 }
