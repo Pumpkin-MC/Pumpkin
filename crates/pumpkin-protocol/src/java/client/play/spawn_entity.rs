@@ -3,7 +3,10 @@ use std::io::{Read, Write};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::packet::clientbound::play::ADD_ENTITY;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+use pumpkin_util::{
+    math::{pack_degrees, vector3::Vector3},
+    version::JavaMinecraftVersion,
+};
 
 use crate::{
     ClientPacket, VarInt,
@@ -11,6 +14,7 @@ use crate::{
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
 };
 
+// TODO: `unpack_degrees` helper next to `pumpkin_util::math::pack_degrees`.
 const ROTATION_FACTOR: f32 = 256.0 / 360.0;
 const VELOCITY_FACTOR: f64 = 8000.0;
 
@@ -41,14 +45,41 @@ impl CSpawnEntity {
         data: VarInt,
         velocity: Vector3<f64>,
     ) -> Self {
+        Self::new_packed(
+            entity_id,
+            entity_uuid,
+            r#type,
+            position,
+            pack_degrees(pitch),
+            pack_degrees(yaw),
+            pack_degrees(head_yaw),
+            data,
+            velocity,
+        )
+    }
+
+    /// Already packed with vanilla `Mth.packDegrees` (tracker last-sent bytes).
+    #[expect(clippy::too_many_arguments)]
+    #[must_use]
+    pub const fn new_packed(
+        entity_id: VarInt,
+        entity_uuid: uuid::Uuid,
+        r#type: VarInt,
+        position: Vector3<f64>,
+        pitch: u8,
+        yaw: u8,
+        head_yaw: u8,
+        data: VarInt,
+        velocity: Vector3<f64>,
+    ) -> Self {
         Self {
             entity_id,
             entity_uuid,
             r#type,
             position,
-            pitch: (pitch * ROTATION_FACTOR).floor() as u8,
-            yaw: (yaw.rem_euclid(360.0) * ROTATION_FACTOR).floor() as u8,
-            head_yaw: (head_yaw.rem_euclid(360.0) * ROTATION_FACTOR).floor() as u8,
+            pitch,
+            yaw,
+            head_yaw,
             data,
             velocity: LpVector3d(velocity),
         }
