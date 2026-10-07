@@ -3836,7 +3836,7 @@ impl World {
             return;
         }
 
-        let block_count = explosion.explode(self);
+        let result = explosion.explode(self);
         let particle = if power < 2.0 {
             explosion.small_particle
         } else {
@@ -3850,8 +3850,8 @@ impl World {
             player.try_send_client_packet(&CExplosion::new(
                 position,
                 power,
-                block_count as i32,
-                None,
+                result.block_count as i32,
+                result.player_knockback.get(&player.entity_id()).copied(),
                 VarInt(particle as i32),
                 sound.clone(),
             ));
@@ -6706,6 +6706,25 @@ impl World {
         end_pos: Vector3<f64>,
         hit_check: impl Fn(&BlockPos, &Arc<Self>) -> bool,
     ) -> Option<(BlockPos, BlockDirection)> {
+        let adjust = -1.0e-7f64;
+        let to = end_pos.lerp(&start_pos, adjust);
+        let from = start_pos.lerp(&end_pos, adjust);
+        Self::traverse_blocks(start_pos, end_pos, |block, fallback_direction| {
+            if !hit_check(block, self) {
+                return None;
+            }
+            let (collision, direction) = self.ray_outline_check(block, from, to);
+            collision
+                .then(|| direction.or(fallback_direction).map(|dir| (*block, dir)))
+                .flatten()
+        })
+    }
+
+    pub(crate) fn traverse_blocks<T>(
+        start_pos: Vector3<f64>,
+        end_pos: Vector3<f64>,
+        hit_check: impl Fn(&BlockPos, Option<BlockDirection>) -> Option<T>,
+    ) -> Option<T> {
         if start_pos == end_pos {
             return None;
         }
@@ -6716,13 +6735,8 @@ impl World {
 
         let mut block = BlockPos::floored(from.x, from.y, from.z);
 
-        if hit_check(&block, self) {
-            let (collision, direction) = self.ray_outline_check(&block, from, to);
-            if let Some(dir) = direction
-                && collision
-            {
-                return Some((block, dir));
-            }
+        if let Some(hit) = hit_check(&block, None) {
+            return Some(hit);
         }
 
         let difference = to.sub(&from);
@@ -6799,14 +6813,8 @@ impl World {
                 }
             };
 
-            if hit_check(&block, self) {
-                let (collision, direction) = self.ray_outline_check(&block, from, to);
-                if collision {
-                    if let Some(dir) = direction {
-                        return Some((block, dir));
-                    }
-                    return Some((block, block_direction));
-                }
+            if let Some(hit) = hit_check(&block, Some(block_direction)) {
+                return Some(hit);
             }
         }
 
