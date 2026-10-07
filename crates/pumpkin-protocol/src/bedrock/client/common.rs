@@ -1,13 +1,8 @@
-use std::io::{Error, Write};
-
 use pumpkin_util::GameMode;
 
-use crate::{
-    codec::{var_int::VarInt, var_long::VarLong},
-    serial::PacketWrite,
-};
+use crate::{codec::var_long::VarLong, serial::PacketWrite};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
 #[repr(i32)]
 pub enum BuildPlatform {
     Unknown = -1,
@@ -27,14 +22,9 @@ pub enum BuildPlatform {
     Linux = 15,
 }
 
-impl PacketWrite for BuildPlatform {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as i32).write(writer)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
 #[repr(i32)]
+#[serial(varint)]
 pub enum GameType {
     Unknown = -1,
     Survival = 0,
@@ -43,12 +33,6 @@ pub enum GameType {
     Default = 5,
     Spectator = 6,
     //WorldDefault = 0,
-}
-
-impl PacketWrite for GameType {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        VarInt(*self as i32).write(writer)
-    }
 }
 
 impl From<GameMode> for GameType {
@@ -70,7 +54,7 @@ pub struct SerializedAbilitiesData {
     pub layers: Vec<SerializedAbilitiesDataSerializedLayer>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
 #[repr(i8)]
 pub enum PlayerPermissionLevel {
     Visitor = 0,
@@ -79,13 +63,7 @@ pub enum PlayerPermissionLevel {
     Custom = 3,
 }
 
-impl PacketWrite for PlayerPermissionLevel {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as i8).write(writer)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
 #[repr(u8)]
 pub enum CommandPermissionLevel {
     Any = 0,
@@ -108,12 +86,6 @@ impl ToString for CommandPermissionLevel {
             Self::Internal => "internal",
         }
         .into()
-    }
-}
-
-impl PacketWrite for CommandPermissionLevel {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as u8).write(writer)
     }
 }
 

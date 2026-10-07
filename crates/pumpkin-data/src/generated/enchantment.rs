@@ -1,7 +1,9 @@
 /* This file is generated. Do not edit manually. */
 use crate::data_component_impl::EnchantmentsImpl;
 use crate::item::Item;
+use crate::tag::DamageType as DamageTypeTag;
 use crate::tag::Enchantment as EnchantmentTag;
+use crate::tag::EntityType as EntityTypeTag;
 use crate::tag::Item as ItemTag;
 use crate::tag::{RegistryKey, Tag, Taggable};
 use pumpkin_util::text::TextComponent;
@@ -354,6 +356,7 @@ pub struct Enchantment {
     pub description: &'static str,
     pub anvil_cost: u32,
     pub supported_items: &'static Tag,
+    pub primary_items: Option<&'static Tag>,
     pub exclusive_set: Option<&'static Tag>,
     pub max_level: i32,
     pub slots: &'static [AttributeModifierSlot],
@@ -467,6 +470,7 @@ impl Enchantment {
         registry_key: "aqua_affinity",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_HEAD_ARMOR,
+        primary_items: None,
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::Head],
@@ -514,6 +518,7 @@ impl Enchantment {
         description: "enchantment.minecraft.bane_of_arthropods",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_WEAPON,
+        primary_items: Some(&ItemTag::MINECRAFT_ENCHANTABLE_MELEE_WEAPON),
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -579,6 +584,7 @@ impl Enchantment {
         registry_key: "binding_curse",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_EQUIPPABLE,
+        primary_items: None,
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::Armor],
@@ -626,6 +632,7 @@ impl Enchantment {
         description: "enchantment.minecraft.blast_protection",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_ARMOR,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_ARMOR),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
@@ -678,6 +685,7 @@ impl Enchantment {
         description: "enchantment.minecraft.breach",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MACE,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -730,6 +738,7 @@ impl Enchantment {
         registry_key: "channeling",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_TRIDENT,
+        primary_items: None,
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -799,6 +808,7 @@ impl Enchantment {
         description: "enchantment.minecraft.density",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MACE,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -851,6 +861,7 @@ impl Enchantment {
         description: "enchantment.minecraft.depth_strider",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FOOT_ARMOR,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_BOOTS),
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Feet],
@@ -898,6 +909,7 @@ impl Enchantment {
         registry_key: "efficiency",
         anvil_cost: 1u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MINING,
+        primary_items: None,
         exclusive_set: None,
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -945,6 +957,7 @@ impl Enchantment {
         registry_key: "feather_falling",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FOOT_ARMOR,
+        primary_items: None,
         exclusive_set: None,
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
@@ -997,6 +1010,7 @@ impl Enchantment {
         registry_key: "fire_aspect",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FIRE_ASPECT,
+        primary_items: Some(&ItemTag::MINECRAFT_ENCHANTABLE_MELEE_WEAPON),
         exclusive_set: None,
         max_level: 2i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -1053,6 +1067,7 @@ impl Enchantment {
         description: "enchantment.minecraft.fire_protection",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_ARMOR,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_ARMOR),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
@@ -1105,6 +1120,7 @@ impl Enchantment {
         registry_key: "flame",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_BOW,
+        primary_items: None,
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -1156,6 +1172,7 @@ impl Enchantment {
         description: "enchantment.minecraft.fortune",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MINING_LOOT,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_MINING),
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -1203,6 +1220,7 @@ impl Enchantment {
         description: "enchantment.minecraft.frost_walker",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FOOT_ARMOR,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_BOOTS),
         max_level: 2i32,
         slots: &[AttributeModifierSlot::Feet],
@@ -1282,6 +1300,7 @@ impl Enchantment {
         description: "enchantment.minecraft.impaling",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_TRIDENT,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -1334,6 +1353,7 @@ impl Enchantment {
         description: "enchantment.minecraft.infinity",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_BOW,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_BOW),
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -1383,6 +1403,7 @@ impl Enchantment {
         registry_key: "knockback",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MELEE_WEAPON,
+        primary_items: None,
         exclusive_set: None,
         max_level: 2i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -1435,6 +1456,7 @@ impl Enchantment {
         registry_key: "looting",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MELEE_WEAPON,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -1489,6 +1511,7 @@ impl Enchantment {
         registry_key: "loyalty",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_TRIDENT,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -1541,6 +1564,7 @@ impl Enchantment {
         registry_key: "luck_of_the_sea",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FISHING,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -1593,6 +1617,7 @@ impl Enchantment {
         registry_key: "lunge",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_LUNGE,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Hand],
@@ -1640,6 +1665,7 @@ impl Enchantment {
         registry_key: "lure",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FISHING,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -1692,6 +1718,7 @@ impl Enchantment {
         registry_key: "mending",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_DURABILITY,
+        primary_items: None,
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::Any],
@@ -1741,6 +1768,7 @@ impl Enchantment {
         description: "enchantment.minecraft.multishot",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_CROSSBOW,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_CROSSBOW),
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -1798,6 +1826,7 @@ impl Enchantment {
         description: "enchantment.minecraft.piercing",
         anvil_cost: 1u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_CROSSBOW,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_CROSSBOW),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -1850,6 +1879,7 @@ impl Enchantment {
         registry_key: "power",
         anvil_cost: 1u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_BOW,
+        primary_items: None,
         exclusive_set: None,
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -1902,6 +1932,7 @@ impl Enchantment {
         description: "enchantment.minecraft.projectile_protection",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_ARMOR,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_ARMOR),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
@@ -1954,6 +1985,7 @@ impl Enchantment {
         description: "enchantment.minecraft.protection",
         anvil_cost: 1u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_ARMOR,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_ARMOR),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
@@ -2006,6 +2038,7 @@ impl Enchantment {
         registry_key: "punch",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_BOW,
+        primary_items: None,
         exclusive_set: None,
         max_level: 2i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -2058,6 +2091,7 @@ impl Enchantment {
         registry_key: "quick_charge",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_CROSSBOW,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[
@@ -2111,6 +2145,7 @@ impl Enchantment {
         registry_key: "respiration",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_HEAD_ARMOR,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Head],
@@ -2158,6 +2193,7 @@ impl Enchantment {
         description: "enchantment.minecraft.riptide",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_TRIDENT,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_RIPTIDE),
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Hand],
@@ -2210,6 +2246,7 @@ impl Enchantment {
         description: "enchantment.minecraft.sharpness",
         anvil_cost: 1u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_SHARP_WEAPON,
+        primary_items: Some(&ItemTag::MINECRAFT_ENCHANTABLE_MELEE_WEAPON),
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -2262,6 +2299,7 @@ impl Enchantment {
         description: "enchantment.minecraft.silk_touch",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MINING_LOOT,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_MINING),
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -2311,6 +2349,7 @@ impl Enchantment {
         description: "enchantment.minecraft.smite",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_WEAPON,
+        primary_items: Some(&ItemTag::MINECRAFT_ENCHANTABLE_MELEE_WEAPON),
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -2363,6 +2402,7 @@ impl Enchantment {
         registry_key: "soul_speed",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FOOT_ARMOR,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Feet],
@@ -2422,6 +2462,7 @@ impl Enchantment {
         registry_key: "sweeping_edge",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_SWEEPING,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -2469,6 +2510,7 @@ impl Enchantment {
         registry_key: "swift_sneak",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_LEG_ARMOR,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Legs],
@@ -2516,6 +2558,7 @@ impl Enchantment {
         registry_key: "thorns",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_ARMOR,
+        primary_items: Some(&ItemTag::MINECRAFT_ENCHANTABLE_CHEST_ARMOR),
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Any],
@@ -2576,6 +2619,7 @@ impl Enchantment {
         registry_key: "unbreaking",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_DURABILITY,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Any],
@@ -2648,6 +2692,7 @@ impl Enchantment {
         registry_key: "vanishing_curse",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_VANISHING,
+        primary_items: None,
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::Any],
@@ -2695,6 +2740,7 @@ impl Enchantment {
         registry_key: "wind_burst",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MACE,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -2862,6 +2908,13 @@ impl Enchantment {
     pub fn can_enchant(&self, item: &'static Item) -> bool {
         self.supported_items.1.contains(&item.id)
     }
+    pub fn is_primary_item(&self, item: &'static Item) -> bool {
+        if let Some(primary) = self.primary_items {
+            primary.1.contains(&item.id)
+        } else {
+            self.can_enchant(item)
+        }
+    }
     pub fn are_compatible(&self, other: &'static Enchantment) -> bool {
         if self == other {
             return false;
@@ -3002,5 +3055,141 @@ impl Enchantment {
         &self,
     ) -> &'static [ConditionalEffect<EnchantmentEntityEffect>] {
         self.effects.location_changed
+    }
+    pub fn get_post_attack_effects(
+        &self,
+    ) -> &'static [TargetedConditionalEffect<EnchantmentEntityEffect>] {
+        self.effects.post_attack
+    }
+    pub fn modify_damage_against(
+        &self,
+        level: i32,
+        damage: &mut f64,
+        victim_type: Option<&crate::entity::EntityType>,
+    ) {
+        let is_applicable = if self == &Self::SHARPNESS {
+            true
+        } else if self == &Self::SMITE {
+            victim_type.is_some_and(|t| t.has_tag(&EntityTypeTag::MINECRAFT_SENSITIVE_TO_SMITE))
+        } else if self == &Self::BANE_OF_ARTHROPODS {
+            victim_type.is_some_and(|t| {
+                t.has_tag(&EntityTypeTag::MINECRAFT_SENSITIVE_TO_BANE_OF_ARTHROPODS)
+            })
+        } else if self == &Self::IMPALING {
+            victim_type.is_some_and(|t| t.has_tag(&EntityTypeTag::MINECRAFT_SENSITIVE_TO_IMPALING))
+        } else {
+            false
+        };
+        if is_applicable {
+            self.modify_damage(level, damage);
+        }
+    }
+    pub fn modify_damage_protection_against(
+        &self,
+        level: i32,
+        damage_type: &crate::damage::DamageType,
+        protection: &mut f32,
+    ) {
+        let is_applicable = if self == &Self::PROTECTION {
+            !damage_type.has_tag(&DamageTypeTag::MINECRAFT_BYPASSES_INVULNERABILITY)
+                && damage_type != &crate::damage::DamageType::STARVE
+                && damage_type != &crate::damage::DamageType::GENERIC_KILL
+                && damage_type != &crate::damage::DamageType::OUT_OF_WORLD
+        } else if self == &Self::FIRE_PROTECTION {
+            damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_FIRE)
+        } else if self == &Self::BLAST_PROTECTION {
+            damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_EXPLOSION)
+        } else if self == &Self::PROJECTILE_PROTECTION {
+            damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_PROJECTILE)
+        } else if self == &Self::FEATHER_FALLING {
+            damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_FALL)
+        } else {
+            false
+        };
+        if is_applicable {
+            self.modify_damage_protection(level, protection);
+        }
+    }
+    pub fn modify_durability_damage(&self, level: i32, is_armor: bool, damage: &mut f32) {
+        if self == &Self::UNBREAKING {
+            let effect = if is_armor {
+                self.effects.item_damage.first()
+            } else {
+                self.effects
+                    .item_damage
+                    .get(1)
+                    .or_else(|| self.effects.item_damage.first())
+            };
+            if let Some(effect) = effect {
+                *damage = effect.effect.process(level, *damage);
+            }
+        } else {
+            self.modify_durability_change(level, damage);
+        }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn sharpness_damage() {
+        let mut dmg = 0.0;
+        Enchantment::SHARPNESS.modify_damage_against(1, &mut dmg, None);
+        assert_eq!(dmg, 1.0);
+        let mut dmg5 = 0.0;
+        Enchantment::SHARPNESS.modify_damage_against(5, &mut dmg5, None);
+        assert_eq!(dmg5, 3.0);
+    }
+    #[test]
+    fn smite_damage() {
+        let mut dmg = 0.0;
+        Enchantment::SMITE.modify_damage_against(
+            1,
+            &mut dmg,
+            Some(&crate::entity::EntityType::ZOMBIE),
+        );
+        assert_eq!(dmg, 2.5);
+        let mut dmg_pig = 0.0;
+        Enchantment::SMITE.modify_damage_against(
+            1,
+            &mut dmg_pig,
+            Some(&crate::entity::EntityType::PIG),
+        );
+        assert_eq!(dmg_pig, 0.0);
+    }
+    #[test]
+    fn protection_absorb() {
+        let mut prot = 0.0;
+        Enchantment::PROTECTION.modify_damage_protection_against(
+            4,
+            &crate::damage::DamageType::GENERIC,
+            &mut prot,
+        );
+        assert_eq!(prot, 4.0);
+        let mut fire_prot = 0.0;
+        Enchantment::FIRE_PROTECTION.modify_damage_protection_against(
+            4,
+            &crate::damage::DamageType::IN_FIRE,
+            &mut fire_prot,
+        );
+        assert_eq!(fire_prot, 8.0);
+    }
+    #[test]
+    fn primary_items() {
+        assert!(Enchantment::SHARPNESS.primary_items.is_some());
+        assert!(Enchantment::SHARPNESS.is_primary_item(&crate::item::Item::DIAMOND_SWORD));
+        assert!(!Enchantment::SHARPNESS.is_primary_item(&crate::item::Item::BOOK));
+    }
+    #[test]
+    fn knockback() {
+        let mut kb = 0.0;
+        Enchantment::KNOCKBACK.modify_knockback(2, &mut kb);
+        assert_eq!(kb, 2.0);
+    }
+    #[test]
+    fn breach_armor_effectiveness() {
+        let mut eff = 1.0;
+        Enchantment::BREACH.modify_armor_effectiveness(4, &mut eff);
+        assert!((eff - 0.4).abs() < 1e-5);
     }
 }
