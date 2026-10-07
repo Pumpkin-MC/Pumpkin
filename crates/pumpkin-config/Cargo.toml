@@ -11,6 +11,7 @@ serde.workspace = true
 tracing.workspace = true
 uuid.workspace = true
 
+rand.workspace = true
 toml.workspace = true
 
 
