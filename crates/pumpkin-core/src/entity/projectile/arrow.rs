@@ -52,6 +52,7 @@ impl ArrowPickup {
 
 pub struct ArrowEntity {
     pub entity: Entity,
+    // TODO: Save the owner as an `Owner` UUID like vanilla, a reloaded arrow loses it.
     pub owner_id: Option<i32>,
     pub item_stack: RwLock<ItemStack>,
     pub base_damage: AtomicU64,
@@ -918,14 +919,16 @@ impl EntityBase for ArrowEntity {
                 let pierce = self.pierce_level.load(Ordering::Relaxed);
 
                 let owner_entity = owner_id.and_then(|id| world.get_entity_by_id(id));
+                // Vanilla `arrow(this, owner)`: an ownerless arrow causes its own damage
+                let cause = owner_entity.as_deref().unwrap_or(self as &dyn EntityBase);
 
                 let damage_succeeded = target.damage_with_context(
                     target.as_ref(),
                     damage as f32,
                     DamageType::ARROW,
                     Some(hit_pos),
-                    owner_entity.as_deref(),
-                    None,
+                    Some(self),
+                    Some(cause),
                 );
 
                 if let Some(living) = target.get_living_entity() {
