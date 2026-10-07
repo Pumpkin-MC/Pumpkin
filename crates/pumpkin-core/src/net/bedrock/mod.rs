@@ -4,13 +4,14 @@ pub(crate) mod recipe;
 pub mod status;
 use crossbeam::atomic::AtomicCell;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     io::{Cursor, Error, Write},
     net::SocketAddr,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
     },
+    time::Instant,
 };
 
 use tracing::{debug, error, warn};
@@ -25,6 +26,7 @@ use pumpkin_protocol::{
             client_cache_miss_response::{CClientCacheMissResponse, MissingBlobData},
             disconnect::CDisconnect,
         },
+        network_stack_latency::NetworkStackLatency,
         packet_decoder::BedrockBatchDecoder,
         packet_encoder::BedrockBatchEncoder,
         server::{
@@ -130,6 +132,11 @@ pub struct BedrockClient {
     pub client_delta: AtomicCell<pumpkin_util::math::vector3::Vector3<f64>>,
     /// World age of the last server motion sent to the own player.
     pub own_motion_age: AtomicCell<i64>,
+    /// `PlayerAuthInput` tick tagged on that last own-player `SetActorMotion`.
+    pub own_motion_tick: AtomicU64,
+    /// Send times of unanswered `NetworkStackLatency` probes, oldest first.
+    pending_latencies: std::sync::Mutex<VecDeque<Instant>>,
+    last_latency_send: AtomicCell<Instant>,
     /// Inputs since the last teleport without reaching it. Resent past a threshold.
     pub teleport_unconfirmed_inputs: AtomicU32,
     /// Network position of the last own teleport `MovePlayer`, which the client must reach.
@@ -177,6 +184,9 @@ impl BedrockClient {
             input_tick: AtomicU64::new(0),
             client_delta: AtomicCell::new(pumpkin_util::math::vector3::Vector3::default()),
             own_motion_age: AtomicCell::new(i64::MIN),
+            own_motion_tick: AtomicU64::new(0),
+            pending_latencies: std::sync::Mutex::new(VecDeque::new()),
+            last_latency_send: AtomicCell::new(Instant::now()),
             teleport_unconfirmed_inputs: AtomicU32::new(0),
             teleport_sent_pos: AtomicCell::new(pumpkin_util::math::vector3::Vector3::default()),
             last_food_rejection_tick: AtomicCell::new(None),
@@ -836,6 +846,9 @@ impl BedrockClient {
             }
             SRequestAbility::PACKET_ID => {
                 self.handle_request_ability(player, &SRequestAbility::read(reader)?);
+            }
+            NetworkStackLatency::PACKET_ID => {
+                self.handle_network_stack_latency(player, NetworkStackLatency::read(reader)?);
             }
             SMobEquipment::PACKET_ID => {
                 let packet = SMobEquipment::read(reader)?;

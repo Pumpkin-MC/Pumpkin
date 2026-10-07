@@ -2566,6 +2566,9 @@ impl Player {
     pub fn send_own_velocity(&self, velocity: Vector3<f64>) {
         if let Some(client) = self.client.bedrock() {
             client.own_motion_age.store(self.world().get_world_age());
+            client
+                .own_motion_tick
+                .store(client.input_tick.load(Ordering::Relaxed), Ordering::Relaxed);
         }
         self.send_own_motion(velocity);
     }
@@ -2585,13 +2588,20 @@ impl Player {
         );
     }
 
+    /// Ticks until a Bedrock `SetActorMotion` should show up in `PlayerAuthInput.delta`.
+    /// `ping_ms == 0` is unsampled and keeps the 10-tick cap.
+    fn bedrock_motion_in_flight_ticks(ping_ms: u32) -> i64 {
+        const MIN: i64 = 2;
+        const MAX: i64 = 10;
+        if ping_ms == 0 {
+            return MAX;
+        }
+        (i64::from(ping_ms.div_ceil(50)) + 1).clamp(MIN, MAX)
+    }
+
     /// Velocity part of vanilla `ServerEntity.sendChanges`. Runs after the entity pass,
     /// so this tick's knockback goes out before the next packets and friction.
     pub fn send_velocity_changes(&self) {
-        // Ticks a server `SetActorMotion` may take to show up in `PlayerAuthInput.delta`.
-        // A ping-based wait would be shorter; this is a fixed round-trip guess.
-        const MOTION_IN_FLIGHT_TICKS: i64 = 10;
-
         let entity = self.get_entity();
         if entity.sync_velocity.swap(false, Ordering::SeqCst) {
             entity.velocity_dirty.store(false, Ordering::SeqCst);
@@ -2618,7 +2628,11 @@ impl Player {
             .world()
             .get_world_age()
             .saturating_sub(client.own_motion_age.load());
-        if since_motion >= MOTION_IN_FLIGHT_TICKS {
+        let input_caught_up = client.input_tick.load(Ordering::Relaxed)
+            > client.own_motion_tick.load(Ordering::Relaxed);
+        if since_motion >= Self::bedrock_motion_in_flight_ticks(self.ping.load(Ordering::Relaxed))
+            && input_caught_up
+        {
             let push = entity.push_impulse.swap(Vector3::default());
             if push != Vector3::default() {
                 self.send_own_velocity(client.client_delta.load() + push);
@@ -2755,6 +2769,10 @@ impl Player {
     #[expect(clippy::too_many_lines)]
     pub fn tick<'a>(&'a self, server: &'a Server) {
         self.process_inbound_packets();
+
+        if let ClientPlatform::Bedrock(client) = self.client.as_ref() {
+            client.tick_network_latency(self);
+        }
 
         if self.is_spectator() {
             self.living_entity
@@ -8288,9 +8306,21 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
-    use super::{read_root_vehicle, write_root_vehicle};
+    use super::{read_root_vehicle, write_root_vehicle, Player};
     use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
     use uuid::Uuid;
+
+    #[test]
+    fn bedrock_motion_wait_uses_ping_and_caps() {
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(0), 10);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(1), 2);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(20), 2);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(50), 2);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(100), 3);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(250), 6);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(500), 10);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(2000), 10);
+    }
 
     #[test]
     fn root_vehicle_uuid_round_trips_with_vanilla_shape() {

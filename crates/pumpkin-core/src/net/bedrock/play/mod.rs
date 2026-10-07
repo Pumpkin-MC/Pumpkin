@@ -214,6 +214,7 @@ pub mod item_stack_request;
 pub(super) use item_stack_request::record_update;
 pub mod mob_equipment;
 pub mod modal_form_response;
+pub mod network_stack_latency;
 pub mod player_action;
 pub mod player_auth_input;
 pub mod player_block_action;
