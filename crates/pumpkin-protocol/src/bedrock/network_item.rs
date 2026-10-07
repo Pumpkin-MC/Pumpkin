@@ -10,20 +10,30 @@ use crate::{
     serial::{PacketRead, PacketWrite},
 };
 
+/// Describes a network item stack transmitted over the wire in Bedrock packets.
+///
+/// Contains the item runtime ID, count, aux/metadata value, block runtime state,
+/// and variable user data including NBT, can-place, and can-destroy block filters.
 #[derive(Default, Clone, Debug)]
 pub struct NetworkItemDescriptor {
-    // I hate mojang
-    // https://mojang.github.io/bedrock-protocol-docs/html/NetworkItemInstanceDescriptor.html
+    /// Runtime item identifier.
     pub id: VarInt,
+    /// Stack item count.
     pub stack_size: u16,
+    /// Auxiliary metadata or damage value.
     pub aux_value: VarUInt,
+    /// Block runtime ID associated with the item (for block items).
     pub block_runtime_id: VarInt,
 
     // remainder is expansion of `User Data Buffer` (ItemInstanceUserData)
+    /// NBT component data (display name, enchantments, etc.).
     pub nbt_data: Nbt,
+    /// Block identifiers this item can be placed against in Adventure mode.
     pub place_on_blocks: Vec<String>,
+    /// Block identifiers this tool can destroy in Adventure mode.
     pub destroy_blocks: Vec<String>,
 
+    /// Shield blocking tick counter used for shield cooldown sync.
     pub shield_blocking_tick: i64,
 }
 
@@ -145,16 +155,26 @@ impl From<&ItemStack> for NetworkItemDescriptor {
     }
 }
 
+/// Wrapped network item stack including its network ID for slot tracking.
 #[derive(Default, Clone, Debug)]
 pub struct ItemStackWrapper {
+    /// Item runtime ID.
     pub id: i16,
+    /// Stack count.
     pub stack_size: u16,
+    /// Auxiliary metadata or damage value.
     pub aux_value: VarUInt,
+    /// Runtime block state identifier.
     pub block_runtime_id: VarInt,
+    /// Item NBT data.
     pub nbt_data: Nbt,
+    /// Allowed block placement filter.
     pub place_on_blocks: Vec<String>,
+    /// Allowed block destruction filter.
     pub destroy_blocks: Vec<String>,
+    /// Shield blocking tick counter.
     pub shield_blocking_tick: i64,
+    /// Server-assigned unique network stack ID, if present.
     pub net_id: Option<NonZero<i32>>,
 }
 
@@ -249,13 +269,20 @@ impl From<&ItemStack> for ItemStackWrapper {
     }
 }
 
+/// Compact network item stack descriptor with unparsed raw extra data bytes.
 #[derive(Default, Clone, Debug)]
 pub struct NetworkItemStackDescriptor {
+    /// Item runtime ID.
     pub id: i16,
+    /// Stack count.
     pub stack_size: u16,
+    /// Auxiliary metadata or damage value.
     pub aux_value: VarUInt,
+    /// Runtime block state identifier.
     pub block_runtime_id: VarUInt,
+    /// Serialized user data buffer (NBT, filters).
     pub extra_data: Vec<u8>,
+    /// Unique network stack ID.
     pub net_id: Option<NonZero<i32>>,
 }
 
@@ -343,12 +370,16 @@ impl From<&ItemStack> for NetworkItemStackDescriptor {
     }
 }
 
+/// Container identifier paired with an optional dynamic session ID for complex inventories.
 #[derive(PacketWrite, PacketRead, Clone, Debug, PartialEq, Eq)]
 pub struct FullContainerName {
+    /// Specific container slot category.
     pub container_name: ContainerName,
+    /// Dynamic ID assigned to temporary containers (e.g. trading or crafting).
     pub dynamic_id: Option<u32>,
 }
 
+/// Identifies the container or inventory screen segment referenced by an item stack request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ContainerName {
@@ -515,12 +546,18 @@ impl PacketRead for ContainerName {
     }
 }
 
+/// Compact representation of an item stack in network transactions with raw extra data bytes.
 #[derive(Debug, Clone)]
 pub struct NetworkItemStack {
+    /// Runtime item ID.
     pub id: VarInt,
+    /// Stack count.
     pub count: u16,
+    /// Auxiliary metadata or damage value.
     pub aux_value: VarUInt,
+    /// Runtime block state identifier.
     pub block_runtime_id: VarInt,
+    /// Raw unparsed extra user data buffer.
     pub extra_data: Vec<u8>,
 }
 
