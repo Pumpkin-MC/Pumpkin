@@ -185,14 +185,6 @@ impl Player {
         if !self.has_client_loaded() {
             return ClientMoveOutcome::Ignored;
         }
-        if self
-            .awaiting_teleport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some()
-        {
-            return ClientMoveOutcome::Ignored;
-        }
 
         if let (Some(x), Some(y), Some(z)) = (
             requested.position.map(|p| p.x),
@@ -211,6 +203,17 @@ impl Player {
             return ClientMoveOutcome::Rejected;
         }
 
+        // Vanilla `absSnapRotationTo` while awaiting a teleport: look only.
+        if self
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
+        {
+            self.apply_and_broadcast_look(requested);
+            return ClientMoveOutcome::Ignored;
+        }
+
         let entity = self.get_entity();
         let last_pos = entity.pos.load();
         let mut target = requested.position.map(|pos| {
@@ -222,7 +225,7 @@ impl Player {
         });
 
         if self.is_movement_locked.load(Ordering::Relaxed) {
-            self.apply_look(requested);
+            self.apply_and_broadcast_look(requested);
             self.reject_client_move();
             return ClientMoveOutcome::Rejected;
         }
@@ -231,7 +234,7 @@ impl Player {
             // Vanilla passenger: rotation only, keep the vehicle's position.
             entity.on_ground.store(false, Ordering::Relaxed);
             entity.horizontal_collision.store(false, Ordering::Relaxed);
-            self.apply_look(requested);
+            self.apply_and_broadcast_look(requested);
             entity.movement.store(Vector3::default());
             return ClientMoveOutcome::Applied;
         }
@@ -295,11 +298,7 @@ impl Player {
         }
 
         let pos_changed = delta.length_squared() > 0.0;
-        let rot_changed = requested.yaw.is_some_and(|yaw| {
-            (wrap_degrees(yaw) % 360.0 - entity.yaw.load()).abs() > f32::EPSILON
-        }) || requested.pitch.is_some_and(|pitch| {
-            (wrap_degrees(pitch).clamp(-90.0, 90.0) - entity.pitch.load()).abs() > f32::EPSILON
-        });
+        let rot_changed = self.look_changed(requested);
         self.apply_look(requested);
 
         if pos_changed || rot_changed {
@@ -326,6 +325,29 @@ impl Player {
         entity.movement.store(delta);
 
         ClientMoveOutcome::Applied
+    }
+
+    fn look_changed(&self, requested: ClientMove) -> bool {
+        let entity = self.get_entity();
+        requested.yaw.is_some_and(|yaw| {
+            (wrap_degrees(yaw) % 360.0 - entity.yaw.load()).abs() > f32::EPSILON
+        }) || requested.pitch.is_some_and(|pitch| {
+            (wrap_degrees(pitch).clamp(-90.0, 90.0) - entity.pitch.load()).abs() > f32::EPSILON
+        }) || requested.head_yaw.is_some_and(|head_yaw| {
+            (wrap_degrees(head_yaw) % 360.0 - entity.head_yaw.load()).abs() > f32::EPSILON
+        })
+    }
+
+    /// Look without position: teleport pending, movement locked or riding.
+    fn apply_and_broadcast_look(&self, requested: ClientMove) {
+        let rot_changed = self.look_changed(requested);
+        self.apply_look(requested);
+        if rot_changed {
+            let entity = self.get_entity();
+            let pos = entity.pos.load();
+            let on_ground = entity.on_ground.load(Ordering::Relaxed);
+            self.broadcast_client_move(pos, pos, on_ground, false, true);
+        }
     }
 
     fn apply_look(&self, requested: ClientMove) {
