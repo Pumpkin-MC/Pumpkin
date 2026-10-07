@@ -4,6 +4,7 @@ use pumpkin_macros::packet;
 
 use crate::{codec::var_uint::VarUInt, serial::PacketWrite};
 
+/// Sends custom collision and selection voxel shapes to the client.
 #[packet(337)]
 pub struct CVoxelShapes;
 
