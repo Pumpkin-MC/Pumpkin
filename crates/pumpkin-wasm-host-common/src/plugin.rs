@@ -88,6 +88,7 @@ pub enum PluginApiVersion {
 }
 
 pub struct WasmPlugin {
+    pub name: String,
     /// The guest exports of the plugin, as generated for `api_version`.
     pub plugin_instance: Arc<dyn Any + Send + Sync>,
     pub api_version: PluginApiVersion,
@@ -96,6 +97,37 @@ pub struct WasmPlugin {
 }
 
 impl WasmPlugin {
+    /// Reports a callback that could not reach a stopped store.
+    #[must_use]
+    pub fn report_stopped(&self, operation: &str) -> bool {
+        if !self.store.state().is_terminal() {
+            return false;
+        }
+        tracing::error!(
+            "Plugin \"{}\" has stopped; {} was not delivered to it.",
+            pumpkin_core::plugin::error::inline(&self.name),
+            pumpkin_core::plugin::error::inline(operation)
+        );
+        true
+    }
+
+    /// Reports a Wasmtime callback failure with its original technical details.
+    pub fn report_failure(&self, operation: &str, failure: &wasmtime::Error) {
+        use pumpkin_core::plugin::error;
+        let headline = format!(
+            "Plugin \"{}\" failed during {}.",
+            error::inline(&self.name),
+            error::inline(operation)
+        );
+        let help =
+            self.store.state().is_terminal().then_some(
+                "The plugin has stopped. Unload and load it again, or restart the server.",
+            );
+        let text = error::message(&headline, &crate::error::causes(failure), help);
+        tracing::error!("{text}");
+        error::debug_details(&headline, failure);
+    }
+
     /// The guest exports of this plugin. Each API version's host only ever sees plugins of its own version.
     ///
     /// # Panics

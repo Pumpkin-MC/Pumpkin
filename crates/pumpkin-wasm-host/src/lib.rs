@@ -40,6 +40,9 @@ impl Plugin for WasmPluginHandle {
 
     fn on_unload(&self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
         Box::pin(async move {
+            if self.0.store.state().is_terminal() {
+                return Err("The plugin has stopped; on_unload was not delivered to it.".into());
+            }
             let headline = format!(
                 "Plugin \"{}\" on_unload details",
                 error::inline(&context.get_metadata().name)
@@ -56,10 +59,17 @@ impl Plugin for WasmPluginHandle {
         let sender_own = sender.to_owned();
         let message_own = message.to_owned();
         Box::pin(async move {
-            lifecycle_result(
-                runtime::handle_ipc_message(&self.0, &sender_own, &message_own).await,
-                "Wasm plugin IPC details",
-            )
+            let neutral = "The receiving plugin failed to handle the message.";
+            if self.0.report_stopped("IPC delivery") {
+                return Err(neutral.into());
+            }
+            match runtime::handle_ipc_message(&self.0, &sender_own, &message_own).await {
+                Ok(result) => result.map_err(|text| error::sanitize(&text)),
+                Err(failure) => {
+                    self.0.report_failure("IPC delivery", &failure);
+                    Err(neutral.into())
+                }
+            }
         })
     }
 }
