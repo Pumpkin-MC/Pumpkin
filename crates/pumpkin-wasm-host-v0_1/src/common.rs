@@ -52,14 +52,26 @@ pub fn to_wit_nbt_tree(tag: NbtTag) -> WitNbtTree {
 }
 
 pub fn from_wit_nbt_tree(tree: &WitNbtTree) -> Result<NbtTag, String> {
-    fn read_tag(index: u32, tags: &[WitNbtTag], visiting: &mut Vec<u32>) -> Result<NbtTag, String> {
-        let Some(tag) = tags.get(index as usize) else {
+    fn read_tag(
+        index: u32,
+        tags: &[WitNbtTag],
+        used: &mut [bool],
+        depth: usize,
+    ) -> Result<NbtTag, String> {
+        let (Some(tag), Some(seen)) = (tags.get(index as usize), used.get_mut(index as usize))
+        else {
             return Err(format!("NBT tag index {index} is out of bounds"));
         };
-        if visiting.contains(&index) {
-            return Err(format!("NBT tag tree contains a cycle at index {index}"));
+        // Each entry may be reached once; a repeat is a cycle or an amplifying shared node.
+        if std::mem::replace(seen, true) {
+            return Err(format!("NBT tag tree reaches index {index} more than once"));
         }
-        visiting.push(index);
+        if depth >= pumpkin_nbt::MAX_NBT_DEPTH {
+            return Err(format!(
+                "NBT tag tree is deeper than {}",
+                pumpkin_nbt::MAX_NBT_DEPTH
+            ));
+        }
         let tag = match tag {
             WitNbtTag::Byte(value) => NbtTag::Byte(*value),
             WitNbtTag::Short(value) => NbtTag::Short(*value),
@@ -72,14 +84,14 @@ pub fn from_wit_nbt_tree(tree: &WitNbtTree) -> Result<NbtTag, String> {
             WitNbtTag::ListTag(value) => NbtTag::List(
                 value
                     .iter()
-                    .map(|value| read_tag(*value, tags, visiting))
+                    .map(|value| read_tag(*value, tags, used, depth + 1))
                     .collect::<Result<Vec<_>, _>>()?,
             ),
             WitNbtTag::Compound(value) => NbtTag::Compound(NbtCompound {
                 child_tags: value
                     .iter()
                     .map(|entry| {
-                        read_tag(entry.value, tags, visiting)
+                        read_tag(entry.value, tags, used, depth + 1)
                             .map(|value| (entry.key.clone().into(), value))
                     })
                     .collect::<Result<_, _>>()?,
@@ -87,9 +99,8 @@ pub fn from_wit_nbt_tree(tree: &WitNbtTree) -> Result<NbtTag, String> {
             WitNbtTag::IntArray(value) => NbtTag::IntArray(value.clone()),
             WitNbtTag::LongArray(value) => NbtTag::LongArray(value.clone()),
         };
-        visiting.pop();
         Ok(tag)
     }
 
-    read_tag(tree.root, &tree.tags, &mut Vec::new())
+    read_tag(tree.root, &tree.tags, &mut vec![false; tree.tags.len()], 0)
 }

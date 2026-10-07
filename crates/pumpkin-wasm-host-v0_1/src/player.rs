@@ -1059,6 +1059,80 @@ const fn from_wasm_bedrock_disconnect_reason(
     }
 }
 
+/// Maps by name: WIT variants count from zero, the internal ones carry sparse protocol bytes.
+const fn from_wit_entity_status(
+    status: pumpkin::plugin::entity_statuses::EntityStatus,
+) -> pumpkin_data::entity_status::EntityStatus {
+    use pumpkin::plugin::entity_statuses::EntityStatus as Wit;
+    use pumpkin_data::entity_status::EntityStatus as Internal;
+    match status {
+        Wit::ArmadilloPeek => Internal::ArmadilloPeek,
+        Wit::ArmorstandWobble => Internal::ArmorstandWobble,
+        Wit::BoatLaunch => Internal::BoatLaunch,
+        Wit::BoatSink => Internal::BoatSink,
+        Wit::BodyBreak => Internal::BodyBreak,
+        Wit::CancelShakeWetness => Internal::CancelShakeWetness,
+        Wit::ChestBreak => Internal::ChestBreak,
+        Wit::Death => Internal::Death,
+        Wit::DolphinLookingForTreasure => Internal::DolphinLookingForTreasure,
+        Wit::DrownParticles => Internal::DrownParticles,
+        Wit::EatGrass => Internal::EatGrass,
+        Wit::EndRam => Internal::EndRam,
+        Wit::FeetBreak => Internal::FeetBreak,
+        Wit::FireworksExplode => Internal::FireworksExplode,
+        Wit::FishingRodReelIn => Internal::FishingRodReelIn,
+        Wit::FoxEat => Internal::FoxEat,
+        Wit::FullDebugInfo => Internal::FullDebugInfo,
+        Wit::GuardianAttackSound => Internal::GuardianAttackSound,
+        Wit::HeadBreak => Internal::HeadBreak,
+        Wit::HoneyJump => Internal::HoneyJump,
+        Wit::HoneySlide => Internal::HoneySlide,
+        Wit::InLoveHearts => Internal::InLoveHearts,
+        Wit::Jump => Internal::Jump,
+        Wit::KineticHit => Internal::KineticHit,
+        Wit::LegsBreak => Internal::LegsBreak,
+        Wit::LoveHearts => Internal::LoveHearts,
+        Wit::MainhandBreak => Internal::MainhandBreak,
+        Wit::OfferFlower => Internal::OfferFlower,
+        Wit::OffhandBreak => Internal::OffhandBreak,
+        Wit::PermissionLevelAdmins => Internal::PermissionLevelAdmins,
+        Wit::PermissionLevelAll => Internal::PermissionLevelAll,
+        Wit::PermissionLevelGamemasters => Internal::PermissionLevelGamemasters,
+        Wit::PermissionLevelModerators => Internal::PermissionLevelModerators,
+        Wit::PermissionLevelOwners => Internal::PermissionLevelOwners,
+        Wit::Poof => Internal::Poof,
+        Wit::ProtectedFromDeath => Internal::ProtectedFromDeath,
+        Wit::RavagerRoared => Internal::RavagerRoared,
+        Wit::RavagerStunned => Internal::RavagerStunned,
+        Wit::ReducedDebugInfo => Internal::ReducedDebugInfo,
+        Wit::SaddleBreak => Internal::SaddleBreak,
+        Wit::Shake => Internal::Shake,
+        Wit::ShakeWetness => Internal::ShakeWetness,
+        Wit::SilverfishMergeAnim => Internal::SilverfishMergeAnim,
+        Wit::SnifferDiggingSound => Internal::SnifferDiggingSound,
+        Wit::SonicCharge => Internal::SonicCharge,
+        Wit::SquidAnimSynch => Internal::SquidAnimSynch,
+        Wit::StartAttacking => Internal::StartAttacking,
+        Wit::StartRam => Internal::StartRam,
+        Wit::StopAttacking => Internal::StopAttacking,
+        Wit::StopOfferFlower => Internal::StopOfferFlower,
+        Wit::SwapHands => Internal::SwapHands,
+        Wit::TamingFailed => Internal::TamingFailed,
+        Wit::TamingSucceeded => Internal::TamingSucceeded,
+        Wit::Teleport => Internal::Teleport,
+        Wit::TendrilsShiver => Internal::TendrilsShiver,
+        Wit::TntPrime => Internal::TntPrime,
+        Wit::TrustingFailed => Internal::TrustingFailed,
+        Wit::TrustingSucceeded => Internal::TrustingSucceeded,
+        Wit::UseItemComplete => Internal::UseItemComplete,
+        Wit::VillagerAngry => Internal::VillagerAngry,
+        Wit::VillagerHappy => Internal::VillagerHappy,
+        Wit::VillagerSweat => Internal::VillagerSweat,
+        Wit::WitchHatMagic => Internal::WitchHatMagic,
+        Wit::ZombieConverting => Internal::ZombieConverting,
+    }
+}
+
 impl pumpkin::plugin::player::Host for PluginHostState {
     fn get_world_players(
         &mut self,
@@ -3620,9 +3694,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = self.get(&player)?.clone();
 
-        // SAFETY: The WIT enum variants and discriminants are 1:1 generated from entity_statuses.json
-        let internal_status: pumpkin_data::entity_status::EntityStatus =
-            unsafe { std::mem::transmute(status as u8) };
+        let internal_status = from_wit_entity_status(status);
         let packet = pumpkin_protocol::java::client::play::CEntityStatus::new(
             entity_id,
             internal_status as u8 as i8,
