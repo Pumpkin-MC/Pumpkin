@@ -34,6 +34,12 @@ pub mod anvil;
 pub mod linear;
 pub mod pump;
 
+/// Upper bound on a decompressed chunk, far above anything the game writes.
+pub const MAX_DECOMPRESSED_CHUNK_SIZE: usize = 32 * 1024 * 1024;
+
+/// Upper bound on a decompressed region, for formats that load a whole region at once.
+pub const MAX_DECOMPRESSED_REGION_SIZE: usize = 32 * MAX_DECOMPRESSED_CHUNK_SIZE;
+
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
     fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
