@@ -132,6 +132,8 @@ pub struct BedrockClient {
     pub own_motion_age: AtomicCell<i64>,
     /// Inputs since the last teleport without reaching it. Resent past a threshold.
     pub teleport_unconfirmed_inputs: AtomicU32,
+    /// Network position of the last own teleport `MovePlayer`, which the client must reach.
+    pub teleport_sent_pos: AtomicCell<pumpkin_util::math::vector3::Vector3<f32>>,
     /// Separate from normal vitals caching so the first rejected use always gets corrected.
     last_food_rejection_tick: AtomicCell<Option<i32>>,
     pub client_cache_supported: AtomicBool,
@@ -176,6 +178,7 @@ impl BedrockClient {
             client_delta: AtomicCell::new(pumpkin_util::math::vector3::Vector3::default()),
             own_motion_age: AtomicCell::new(i64::MIN),
             teleport_unconfirmed_inputs: AtomicU32::new(0),
+            teleport_sent_pos: AtomicCell::new(pumpkin_util::math::vector3::Vector3::default()),
             last_food_rejection_tick: AtomicCell::new(None),
             client_cache_supported: AtomicBool::new(false),
             blob_cache: std::sync::Mutex::new(HashMap::new()),

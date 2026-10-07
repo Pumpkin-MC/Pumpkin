@@ -138,17 +138,19 @@ impl BedrockClient {
     /// positions (e.g. the death spot before a respawn) never count as movement or a fall.
     /// Returns true while still waiting.
     fn await_teleport(&self, player: &Arc<Player>, packet: &SPlayerAuthInput) -> bool {
-        const TELEPORT_ERROR: f64 = 0.1;
+        const TELEPORT_ERROR: f32 = 0.1;
         const RESEND_INPUTS: u32 = 20;
 
         let mut awaiting = player
             .awaiting_teleport
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some((_, target)) = *awaiting else {
+        if awaiting.is_none() {
             return false;
-        };
-        let position = player.feet_from_bedrock_pos(packet.position.to_f64());
+        }
+        // The f32 position actually sent, a f64 target can sit between two f32 values.
+        let target = self.teleport_sent_pos.load();
+        let position = packet.position;
         if (position.x - target.x).abs() < TELEPORT_ERROR
             && (position.y - target.y).abs() < TELEPORT_ERROR
             && (position.z - target.z).abs() < TELEPORT_ERROR

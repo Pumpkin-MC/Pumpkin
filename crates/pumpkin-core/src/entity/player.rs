@@ -4381,11 +4381,13 @@ impl Player {
         client
             .teleport_unconfirmed_inputs
             .store(0, Ordering::Relaxed);
-        client.try_enqueue_client_packet(&self.bedrock_move_packet(
+        let packet = self.bedrock_move_packet(
             CBedrockMovePlayer::MODE_TELEPORT,
             false,
             client.input_tick.load(Ordering::Relaxed),
-        ));
+        );
+        client.teleport_sent_pos.store(packet.position);
+        client.try_enqueue_client_packet(&packet);
     }
 
     pub fn block_interaction_range(&self) -> f64 {
