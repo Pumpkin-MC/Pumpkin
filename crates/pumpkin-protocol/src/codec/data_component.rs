@@ -2215,11 +2215,11 @@ impl DataComponentCodec<Self> for MapPostProcessingImpl {
     }
 }
 
-const MAX_CHARGED_PROJECTILES: i32 = 64;
+const MAX_CHARGED_PROJECTILES: i32 = 1024;
 
 impl DataComponentCodec<Self> for ChargedProjectilesImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        // `minecraft:charged_projectiles` is a VarInt count followed by that many Slots.
+        // A VarInt count followed by that many `ItemStackTemplate`s (item id before count).
         let count = i32::try_from(self.projectiles.len())
             .map_err(|_| WritingError::Message("Too many charged projectiles".into()))?;
         if count > MAX_CHARGED_PROJECTILES {
@@ -2228,8 +2228,10 @@ impl DataComponentCodec<Self> for ChargedProjectilesImpl {
         seq.write_var_int(&VarInt(count))?;
         for projectile in &self.projectiles {
             let stack = pumpkin_data::item_stack::ItemStack::read_item_stack(projectile)
+                .filter(|stack| !stack.is_empty())
                 .ok_or_else(|| WritingError::Message("Invalid charged projectile".into()))?;
-            crate::codec::item_stack_seralizer::ItemStackSerializer::from(stack).write(seq)?;
+            crate::codec::item_stack_seralizer::ItemStackTemplateSerializer::from(stack)
+                .write(seq)?;
         }
         Ok(())
     }
@@ -2241,12 +2243,8 @@ impl DataComponentCodec<Self> for ChargedProjectilesImpl {
         }
         let mut projectiles = Vec::with_capacity(len as usize);
         for _ in 0..len {
-            let stack =
-                crate::codec::item_stack_seralizer::ItemStackSerializer::read(seq)?.to_stack();
-            // Vanilla holds non-empty templates, and an empty stack could not be written back.
-            if stack.is_empty() {
-                return Err(ReadingError::Message("Invalid charged projectile".into()));
-            }
+            let stack = crate::codec::item_stack_seralizer::ItemStackTemplateSerializer::read(seq)?
+                .to_stack();
             let mut compound = pumpkin_nbt::compound::NbtCompound::new();
             stack.write_item_stack(&mut compound);
             projectiles.push(compound);
@@ -2892,7 +2890,7 @@ mod tests {
     }
 
     #[test]
-    fn charged_crossbow_projectile_is_written_as_a_slot() {
+    fn charged_crossbow_projectile_is_written_as_a_template() {
         use pumpkin_data::item::Item;
         use pumpkin_data::item_stack::ItemStack;
 
@@ -2907,14 +2905,19 @@ mod tests {
         let mut encoded = Vec::new();
         charged.serialize(&mut encoded).unwrap();
 
-        // One projectile, stack count 1. The old writer emitted four zero VarInts
-        // after the count, which the client cannot decode as a Slot.
-        assert_eq!(&encoded[..2], &[1, 1]);
-        let intangible_at = encoded
-            .iter()
-            .position(|byte| *byte == DataComponent::IntangibleProjectile.to_id())
-            .expect("intangible projectile component");
-        assert_eq!(&encoded[intangible_at + 1..intangible_at + 3], &[10, 0]);
+        let mut expected = vec![1]; // one projectile
+        VarInt(i32::from(Item::ARROW.id))
+            .encode(&mut expected)
+            .unwrap(); // item id comes first
+        expected.extend_from_slice(&[
+            1, // count
+            1, // components added
+            0, // components removed
+            DataComponent::IntangibleProjectile.to_id(),
+            10, // empty compound
+            0,
+        ]);
+        assert_eq!(encoded, expected);
 
         let mut cursor = encoded.as_slice();
         let decoded = ChargedProjectilesImpl::deserialize(&mut cursor).unwrap();
@@ -2942,11 +2945,32 @@ mod tests {
     }
 
     #[test]
-    fn empty_charged_projectile_slot_is_rejected() {
-        // One projectile, then a Slot with item count 0.
-        let encoded = [1u8, 0];
+    fn empty_charged_projectile_template_is_rejected() {
+        use pumpkin_data::item::Item;
+
+        // One projectile, then an arrow template with count 0 and no components.
+        let mut encoded = vec![1];
+        VarInt(i32::from(Item::ARROW.id))
+            .encode(&mut encoded)
+            .unwrap();
+        encoded.extend_from_slice(&[0, 0, 0]);
         let mut cursor = encoded.as_slice();
         assert!(ChargedProjectilesImpl::deserialize(&mut cursor).is_err());
+    }
+
+    #[test]
+    fn empty_charged_projectile_stack_is_not_written() {
+        use pumpkin_data::item::Item;
+        use pumpkin_data::item_stack::ItemStack;
+
+        let mut projectile = pumpkin_nbt::compound::NbtCompound::new();
+        ItemStack::new(0, &Item::ARROW).write_item_stack(&mut projectile);
+
+        let charged = ChargedProjectilesImpl {
+            projectiles: vec![projectile],
+        };
+        let mut encoded = Vec::new();
+        assert!(charged.serialize(&mut encoded).is_err());
     }
 
     #[test]
