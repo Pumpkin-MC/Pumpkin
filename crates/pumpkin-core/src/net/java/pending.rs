@@ -74,6 +74,8 @@ pub struct PendingConnection {
     pub brand: Option<String>,
     pub packet_limiter: PacketRateLimiter,
     pub verify_token: Option<[u8; 4]>,
+    /// Whether this connection is authenticated with Mojang, decided at login start.
+    pub online_mode: bool,
     pub vine_challenge: Option<[u8; 16]>,
     /// For the connection packet events.
     server: Weak<Server>,
@@ -103,6 +105,7 @@ impl PendingConnection {
             brand: None,
             packet_limiter,
             verify_token: None,
+            online_mode: false,
             vine_challenge: None,
             server,
         }

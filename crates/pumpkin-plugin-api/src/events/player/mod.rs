@@ -92,6 +92,8 @@ pub mod player_links_send;
 pub mod player_locale_change;
 /// Player login event.
 pub mod player_login;
+/// Player login start event.
+pub mod player_login_start;
 /// Player move event.
 pub mod player_move;
 /// Player name entity event.
@@ -196,6 +198,7 @@ pub use player_level_change::*;
 pub use player_links_send::*;
 pub use player_locale_change::*;
 pub use player_login::*;
+pub use player_login_start::*;
 pub use player_move::*;
 pub use player_name_entity::*;
 pub use player_open_sign::*;
