@@ -340,7 +340,7 @@ impl WitherEntity {
         }
 
         let invul = self.get_invulnerable_ticks();
-        let tick_count = entity.age.load(Ordering::Relaxed);
+        let tick_count = entity.tick_count.load(Ordering::Relaxed);
 
         if invul > 0 {
             let new_count = invul - 1;

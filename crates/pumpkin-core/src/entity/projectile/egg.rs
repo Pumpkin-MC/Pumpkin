@@ -155,7 +155,7 @@ impl EntityBase for EggEntity {
                 let yaw = rand::random::<f32>() * 360.0;
                 let new_entity = mob.get_entity();
                 new_entity.set_rotation(yaw, 0.0);
-                new_entity.set_age(-24000);
+                mob.get_mob().map(crate::entity::mob::Mob::spawn_as_baby);
                 if let Some(name) = &variant_name {
                     mob.set_variant_name(name);
                 }

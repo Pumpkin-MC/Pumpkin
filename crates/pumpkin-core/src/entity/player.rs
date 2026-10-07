@@ -1519,7 +1519,7 @@ impl Player {
         self.living_entity.last_attack_time.store(
             self.living_entity
                 .entity
-                .age
+                .tick_count
                 .load(std::sync::atomic::Ordering::Relaxed),
             std::sync::atomic::Ordering::Relaxed,
         );

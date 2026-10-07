@@ -1,15 +1,33 @@
 //! Vanilla `EntityAttachments` for riding: where a vehicle seats its passengers and
 //! where a rider is held on its seat.
 
+use std::sync::atomic::Ordering::Relaxed;
+
 use pumpkin_util::math::vector3::Vector3;
 
 use super::Entity;
 
-/// Vanilla `EntityDimensions.scale` on attachments: the current size over the type's size.
-// TODO: Babies with their own vanilla attachments (`withAttachments`) use the scaled adult points.
-fn size_scale(entity: &Entity) -> (f64, f64) {
+/// The type's size and attachment points for the entity's age: `[width, height]`,
+/// passenger seats and the vehicle point.
+fn age_attachments(entity: &Entity) -> ([f32; 2], &'static [Vector3<f64>], Vector3<f64>) {
+    let entity_type = entity.entity_type;
+    match &entity_type.baby {
+        Some(baby) if entity.age.load(Relaxed) < 0 => (
+            baby.dimension,
+            baby.passenger_attachments,
+            baby.vehicle_attachment,
+        ),
+        _ => (
+            entity_type.dimension,
+            entity_type.passenger_attachments,
+            entity_type.vehicle_attachment,
+        ),
+    }
+}
+
+/// Vanilla `EntityDimensions.scale` on attachments: the current size over the age's size.
+fn size_scale(entity: &Entity, [width, height]: [f32; 2]) -> (f64, f64) {
     let current = entity.entity_dimension.load();
-    let [width, height] = entity.entity_type.dimension;
     let ratio = |current: f32, base: f32| {
         if base > 0.0 {
             f64::from(current / base)
@@ -46,11 +64,11 @@ pub fn passenger_index(vehicle: &Entity, passenger: &Entity) -> usize {
 /// Vanilla `getDefaultPassengerAttachmentPoint`: the seat for the rider's index.
 #[must_use]
 pub fn default_passenger_attachment(vehicle: &Entity, passenger: &Entity) -> Vector3<f64> {
-    let points = vehicle.entity_type.passenger_attachments;
+    let (dimension, points, _) = age_attachments(vehicle);
     let Some(last) = points.len().checked_sub(1) else {
         return Vector3::default();
     };
-    let (xz, y) = size_scale(vehicle);
+    let (xz, y) = size_scale(vehicle, dimension);
     let point = points[passenger_index(vehicle, passenger).min(last)].multiply(xz, y, xz);
     rotate_by_yaw(point, vehicle.yaw.load())
 }
@@ -58,6 +76,7 @@ pub fn default_passenger_attachment(vehicle: &Entity, passenger: &Entity) -> Vec
 /// Vanilla `getVehicleAttachmentPoint`: where the rider is held on its seat.
 #[must_use]
 pub fn default_vehicle_attachment(passenger: &Entity) -> Vector3<f64> {
-    let (xz, y) = size_scale(passenger);
-    passenger.entity_type.vehicle_attachment.multiply(xz, y, xz)
+    let (dimension, _, point) = age_attachments(passenger);
+    let (xz, y) = size_scale(passenger, dimension);
+    point.multiply(xz, y, xz)
 }

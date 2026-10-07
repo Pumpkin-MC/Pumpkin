@@ -3,7 +3,6 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
 use crate::entity::Entity;
 use crate::entity::mob::Mob;
-use pumpkin_util::math::boundingbox::EntityDimensions;
 
 pub const BABY_START_AGE: i32 = -24000;
 pub const FORCED_AGE_PARTICLE_TICKS: i32 = 40;
@@ -54,23 +53,11 @@ pub trait AgeableMob: Mob {
             let is_baby = new_age < 0;
             entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, is_baby);
             entity.set_default_dimensions(if is_baby {
-                self.baby_dimensions()
+                Entity::baby_dimensions(entity.entity_type)
             } else {
                 Entity::type_dimensions(entity.entity_type)
             });
         }
-    }
-
-    /// Vanilla `getDefaultDimensions` for a baby. Classes with their own `BABY_DIMENSIONS`
-    /// override this; the default is the type size scaled by `getAgeScale`.
-    fn baby_dimensions(&self) -> EntityDimensions {
-        const BABY_AGE_SCALE: f32 = 0.5;
-        let size = Entity::type_dimensions(self.get_mob_entity().living_entity.entity.entity_type);
-        EntityDimensions::new(
-            size.width * BABY_AGE_SCALE,
-            size.height * BABY_AGE_SCALE,
-            size.eye_height * BABY_AGE_SCALE,
-        )
     }
 
     fn is_age_locked(&self) -> bool {

@@ -32,8 +32,17 @@ pub struct EntityType {
     pub spawn_dimensions_scale: f32,
     pub passenger_attachments: &'static [Vector3<f64>],
     pub vehicle_attachment: Vector3<f64>,
+    pub baby: Option<BabyEntityType>,
     pub spawn_restriction: SpawnRestriction,
     pub resource_name: &'static str,
+}
+#[doc = r" Vanilla `getDefaultDimensions` of a mob while it is a baby."]
+#[derive(Debug, Clone)]
+pub struct BabyEntityType {
+    pub dimension: [f32; 2],
+    pub eye_height: f32,
+    pub passenger_attachments: &'static [Vector3<f64>],
+    pub vehicle_attachment: Vector3<f64>,
 }
 impl Hash for EntityType {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -178,6 +187,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -207,6 +217,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -266,6 +277,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.6000000238418579f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, -0.03999999910593033f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -295,6 +307,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -353,6 +366,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.6499999761581421f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.42000002f32, 0.39000002f32],
+            eye_height: 0.21875f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.3900000011920923f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -409,6 +428,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.975000023841858f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -438,6 +458,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -497,6 +518,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.41999998688697815f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.375f32, 0.21f32],
+            eye_height: 0.09375f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.1875f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -526,6 +553,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -555,6 +583,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -612,6 +641,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.8999999761581421f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -672,6 +702,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.275f32, 0.25f32],
+            eye_height: 0.15f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -701,6 +737,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -730,6 +767,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -788,6 +826,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.7999999523162842f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -817,6 +856,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -875,6 +915,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.9900000095367432f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.699999988079071f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -933,6 +974,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.7699999809265137f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -962,6 +1004,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.3125f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1020,6 +1063,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.375f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.95f32, 1.4f32],
+            eye_height: 1.38f32,
+            passenger_attachments: &[Vector3::new(0f64, 1.399999976158142f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1078,6 +1127,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.375f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1137,6 +1187,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.512499988079071f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.3f32, 0.35f32],
+            eye_height: 0.34375f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.3125f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1195,6 +1251,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1224,6 +1281,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1253,6 +1311,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1282,6 +1341,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.1875f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1340,6 +1400,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.7f64, -0.1f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.3f32, 0.4f32],
+            eye_height: 0.28125f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.375f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1397,6 +1463,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.30000001192092896f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1426,6 +1493,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.1875f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1483,6 +1551,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.9800000190734864f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1541,6 +1610,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.368749976158142f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.45f32, 0.7f32],
+            eye_height: 0.69f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.75f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1599,6 +1674,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.700000047683716f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1657,6 +1733,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.7000000476837158f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1686,6 +1763,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1715,6 +1793,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1744,6 +1823,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1802,6 +1882,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.6000000238418579f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.585f32, 0.39000002f32],
+            eye_height: 0.09375f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.3125f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1860,6 +1946,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.1124999523162842f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.6982422f32, 0.75f32],
+            eye_height: 0.7125f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.765625f64, -0.15625f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1889,6 +1981,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1948,6 +2041,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.012500047683716f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.699999988079071f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.49f32, 0.98f32],
+            eye_height: 0.775f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.9800000190734864f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0.1875f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1977,6 +2076,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2035,6 +2135,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.3506250381469727f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2064,6 +2165,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2121,6 +2223,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 3f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2150,6 +2253,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2208,6 +2312,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.8062500953674316f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2266,6 +2371,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.23749999701976776f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2324,6 +2430,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.6000000238418579f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2353,6 +2460,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.800000011920929f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2382,6 +2490,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2411,6 +2520,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2440,6 +2550,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2469,6 +2580,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.9800000190734864f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2498,6 +2610,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2527,6 +2640,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2556,6 +2670,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2615,6 +2730,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.6375f64, -0.25f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.36f32, 0.42000002f32],
+            eye_height: 0.34375f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.375f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2674,6 +2795,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.375f64, -0.25f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2703,6 +2825,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.1875f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2761,6 +2884,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 4.0625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, -0.5f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2819,6 +2943,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 12f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 3.75f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2848,6 +2973,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2905,6 +3031,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.800000011920929f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.5f32, 0.5f32],
+            eye_height: 0.37f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2964,6 +3096,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.1124999523162842f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.45f32, 0.65f32],
+            eye_height: 0.59375f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.53125f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3022,6 +3160,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.975000023841858f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3086,6 +3225,17 @@ impl EntityType {
             Vector3::new(1.7f64, 4f64, 0f64),
         ],
         vehicle_attachment: Vector3::new(0f64, -0.5f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.95f32, 0.95f32],
+            eye_height: 0.46875f32,
+            passenger_attachments: &[
+                Vector3::new(0f64, 0.949999988079071f64, 0.4037499949336052f64),
+                Vector3::new(-0.4037499949336052f64, 0.949999988079071f64, 0f64),
+                Vector3::new(0f64, 0.949999988079071f64, -0.4037499949336052f64),
+                Vector3::new(0.4037499949336052f64, 0.949999988079071f64, 0f64),
+            ],
+            vehicle_attachment: Vector3::new(0f64, -0.11874999850988388f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3144,6 +3294,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.493749976158142f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.75f32, 0.85f32],
+            eye_height: 0.625f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.875f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3173,6 +3329,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.1875f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3231,6 +3388,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.443750023841858f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.97753906f32, 1.12f32],
+            eye_height: 1.064f32,
+            passenger_attachments: &[Vector3::new(0f64, 1.03249999910593f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3290,6 +3453,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.075000047683716f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.699999988079071f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.49f32, 0.98f32],
+            eye_height: 0.825f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.9800000190734864f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0.1875f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3348,6 +3517,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.6000000238418579f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3377,6 +3547,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3435,6 +3606,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.700000047683716f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3464,6 +3636,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3493,6 +3666,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3522,6 +3696,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3551,6 +3726,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3580,6 +3756,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3609,6 +3786,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3638,6 +3816,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3667,6 +3846,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3725,6 +3905,16 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.37f64, -0.3f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.45f32, 0.935f32],
+            eye_height: 0.88825f32,
+            passenger_attachments: &[Vector3::new(
+                0f64,
+                0.8100000023841858f64,
+                -0.15000000596046448f64,
+            )],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3754,6 +3944,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3812,6 +4003,7 @@ impl EntityType {
         spawn_dimensions_scale: 4f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5199999809265137f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3841,6 +4033,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3870,6 +4063,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3926,6 +4120,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.7999999523162842f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.6f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3955,6 +4150,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3984,6 +4180,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.1875f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4042,6 +4239,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.368749976158142f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.45f32, 0.7f32],
+            eye_height: 0.69f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.75f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4100,6 +4303,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.212499976158142f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.6982422f32, 0.8f32],
+            eye_height: 0.76f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.815625011920929f64, -0.15625f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4159,6 +4368,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.1375000476837158f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.4375f32, 0.475f32],
+            eye_height: 0.13755f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4188,6 +4403,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4217,6 +4433,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4276,6 +4493,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.637499988079071f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.3f32, 0.35f32],
+            eye_height: 0.34375f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.3125f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlocking,
@@ -4305,6 +4528,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4334,6 +4558,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4363,6 +4588,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4392,6 +4618,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4451,6 +4678,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.65f32, 0.625f32],
+            eye_height: 0.28125f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4509,6 +4742,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.9900000095367432f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.699999988079071f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4569,6 +4803,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.4625000059604645f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlocking,
@@ -4627,6 +4862,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.3375000059604645f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.125f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4685,6 +4921,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.8687499761581421f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.45f32, 0.45f32],
+            eye_height: 0.40625f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4743,6 +4985,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.012500047683716f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.699999988079071f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.49f32, 0.98f32],
+            eye_height: 0.78f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.9800000190734864f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0.1875f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4801,6 +5049,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.012500047683716f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.699999988079071f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4859,6 +5108,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.6000000238418579f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4925,6 +5175,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.7999999523162842f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.6f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4984,6 +5235,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.399999976158142f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.7f32, 0.7f32],
+            eye_height: 0.34375f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.625f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5013,6 +5270,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5042,6 +5300,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5099,6 +5358,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.699999988079071f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5158,6 +5418,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.6000000238418579f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.24f32, 0.4f32],
+            eye_height: 0.39f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.4000000059604645f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5216,6 +5482,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.2625f64, -0.0625f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5273,6 +5540,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.4000000059604645f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5331,6 +5599,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.2374999523162842f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.45f32, 0.65f32],
+            eye_height: 0.65625f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5388,6 +5662,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5417,6 +5692,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.3125f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5475,6 +5751,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.23749999701976776f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5533,6 +5810,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.9900000095367432f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.699999988079071f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5591,6 +5869,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.318750023841858f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.97753906f32, 1.12f32],
+            eye_height: 1.064f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.9450000005960462f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5649,6 +5933,7 @@ impl EntityType {
         spawn_dimensions_scale: 4f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5199999809265137f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5678,6 +5963,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.3125f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5736,6 +6022,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.09375f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.95f32, 0.875f32],
+            eye_height: 0.525f32,
+            passenger_attachments: &[Vector3::new(0f64, 1.046875f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5793,6 +6085,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.899999976158142f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5822,6 +6115,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5851,6 +6145,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.1875f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5880,6 +6175,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5938,6 +6234,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.7649999856948853f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5967,6 +6264,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.25f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5996,6 +6294,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6025,6 +6324,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5625f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6082,6 +6382,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.800000011920929f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.5f32, 0.5f32],
+            eye_height: 0.37f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6140,6 +6446,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.9900000095367432f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.699999988079071f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6198,6 +6505,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.7000000476837158f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.45f32, 0.85f32],
+            eye_height: 0.4375f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.65625f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InLava,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6256,6 +6569,12 @@ impl EntityType {
         spawn_dimensions_scale: 2f32,
         passenger_attachments: &[Vector3::new(0f64, 0.4900000095367432f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.49f32, 0.49f32],
+            eye_height: 0.175f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.4900000095367432f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6314,6 +6633,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.30000001192092896f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6343,6 +6663,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6372,6 +6693,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.9800000190734864f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6401,6 +6723,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.1875f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6459,6 +6782,16 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.37f64, -0.3f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.45f32, 0.935f32],
+            eye_height: 0.88825f32,
+            passenger_attachments: &[Vector3::new(
+                0f64,
+                0.8100000023841858f64,
+                -0.15000000596046448f64,
+            )],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6488,6 +6821,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.5f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6545,6 +6879,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.4000000059604645f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6603,6 +6938,16 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.55625f64, -0.25f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.36f32, 0.120000005f32],
+            eye_height: 0.102000006f32,
+            passenger_attachments: &[Vector3::new(
+                0f64,
+                0.120000006556511f64,
+                -0.07500000298023224f64,
+            )],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6661,6 +7006,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.737500011920929f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, -0.03999999910593033f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6718,6 +7064,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.950000047683716f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.49f32, 0.98f32],
+            eye_height: 0.63f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.9800000190734864f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6776,6 +7128,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.6000000238418579f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6833,6 +7186,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.950000047683716f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.3f32, 0.975f32],
+            eye_height: 0.81f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.975000023841858f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6891,6 +7250,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 3.1500000953674316f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6920,6 +7280,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.3125f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6978,6 +7339,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.262500047683716f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7037,6 +7399,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 3.5f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7095,6 +7458,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.4000000953674316f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.875f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7124,6 +7488,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.3125f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7183,6 +7548,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 0.81875f64, -0.0625f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.3f32, 0.425f32],
+            eye_height: 0.34375f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.4375f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7241,6 +7612,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.493749976158142f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.75f32, 0.85f32],
+            eye_height: 0.625f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.875f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7300,6 +7677,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.012500047683716f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.699999988079071f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.49f32, 0.98f32],
+            eye_height: 0.775f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.9800000190734864f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0.1875f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7358,6 +7741,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.318750023841858f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.97753906f32, 1.12f32],
+            eye_height: 1.064f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.9450000005960462f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7417,6 +7806,7 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 1.1375000476837158f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0f64, 0f64),
+        baby: None,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7476,6 +7866,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2.125f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.699999988079071f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.49f32, 0.98f32],
+            eye_height: 0.67f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.9800000190734864f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0.125f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7535,6 +7931,12 @@ impl EntityType {
         spawn_dimensions_scale: 1f32,
         passenger_attachments: &[Vector3::new(0f64, 2f64, 0f64)],
         vehicle_attachment: Vector3::new(0f64, 0.699999988079071f64, 0f64),
+        baby: Some(BabyEntityType {
+            dimension: [0.49f32, 0.98f32],
+            eye_height: 0.78f32,
+            passenger_attachments: &[Vector3::new(0f64, 0.9800000190734864f64, 0f64)],
+            vehicle_attachment: Vector3::new(0f64, 0.1875f64, 0f64),
+        }),
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,

@@ -240,7 +240,7 @@ impl MobEntity {
 
     /// Vanilla `Mob.serverAiStep`: sensing, goals, navigation and controls.
     pub fn server_ai_step(&self, mob: &dyn Mob, caller: &dyn EntityBase) {
-        let age = self.living_entity.entity.age.load(Relaxed);
+        let age = self.living_entity.entity.tick_count.load(Relaxed);
         let entity_id = self.living_entity.entity.entity_id;
 
         self.sensing
@@ -661,7 +661,7 @@ impl MobEntity {
                 .store(target.get_entity().entity_id, Relaxed);
             self.living_entity
                 .last_attack_time
-                .store(self.living_entity.entity.age.load(Relaxed), Relaxed);
+                .store(self.living_entity.entity.tick_count.load(Relaxed), Relaxed);
         }
     }
 

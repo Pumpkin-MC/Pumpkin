@@ -170,7 +170,7 @@ impl Mob for HappyGhastEntity {
         let still_timeout = self.server_still_timeout.load(Ordering::Relaxed);
         if still_timeout > 0 {
             let entity = self.get_entity();
-            if entity.age.load(Ordering::Relaxed) > 60 {
+            if entity.tick_count.load(Ordering::Relaxed) > 60 {
                 self.server_still_timeout.fetch_sub(1, Ordering::Relaxed);
             }
             self.sync_stay_still_flag();

@@ -2298,7 +2298,7 @@ impl LivingEntity {
             let Ok(mut effects) = self.active_effects.try_lock() else {
                 return;
             };
-            let entity_age = self.entity.age.load(Relaxed);
+            let entity_age = self.entity.tick_count.load(Relaxed);
             for effect in effects.values_mut() {
                 if effect.duration == 0 {
                     effects_to_remove.push(effect.effect_type);
@@ -3225,7 +3225,7 @@ impl LivingEntity {
                 self.last_attacker_id
                     .store(attacker.get_entity().entity_id, Relaxed);
                 self.last_attacked_time
-                    .store(self.entity.age.load(Relaxed), Relaxed);
+                    .store(self.entity.tick_count.load(Relaxed), Relaxed);
             }
         }
 
@@ -3258,7 +3258,7 @@ impl LivingEntity {
                 let attacker_id = attacker.get_entity().entity_id;
                 self.last_attacker_id.store(attacker_id, Relaxed);
                 self.last_attacked_time
-                    .store(self.entity.age.load(Relaxed), Relaxed);
+                    .store(self.entity.tick_count.load(Relaxed), Relaxed);
 
                 let current_tick = world.level_info.load().day_time;
                 if attacker.get_player().is_some() {

@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_util::math::boundingbox::EntityDimensions;
 use rand::RngExt;
 
 use crate::entity::attributes::{Modifier, ModifierOperation};
@@ -80,13 +79,13 @@ pub fn finalize_spawn(
 impl MobEntity {
     /// Baby state kept only as a negative age and the shared baby flag (hoglins, zoglins and
     /// zombified piglins, which are not `AgeableMob`s here).
-    pub fn set_baby_by_age(&self, baby_dimensions: EntityDimensions) {
+    pub fn set_baby_by_age(&self) {
         let entity = &self.living_entity.entity;
         entity
             .age
             .store(-24000, std::sync::atomic::Ordering::Relaxed);
         entity.set_synced_data(pumpkin_data::tracked_data::ageable_mob::DATA_BABY_ID, true);
-        entity.set_default_dimensions(baby_dimensions);
+        entity.set_default_dimensions(Entity::baby_dimensions(entity.entity_type));
     }
 
     /// Baby state kept as a mob's own flag and synced key (vanilla zombies and piglins), so it
@@ -96,7 +95,6 @@ impl MobEntity {
         flag: &std::sync::atomic::AtomicBool,
         tracked: pumpkin_data::tracked_data::TrackedData,
         baby: bool,
-        baby_dimensions: EntityDimensions,
     ) {
         flag.store(baby, std::sync::atomic::Ordering::Relaxed);
         let entity = &self.living_entity.entity;
@@ -107,7 +105,7 @@ impl MobEntity {
             std::sync::atomic::Ordering::Relaxed,
         );
         entity.set_default_dimensions(if baby {
-            baby_dimensions
+            Entity::baby_dimensions(entity.entity_type)
         } else {
             Entity::type_dimensions(entity.entity_type)
         });
