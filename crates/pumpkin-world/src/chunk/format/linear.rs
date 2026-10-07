@@ -339,6 +339,31 @@ impl<S: SingleChunkDataSerializer> LinearV2File<S> {
         CHUNK_COUNT / Self::bucket_count(grid_size)
     }
 
+    /// Decompresses one bucket, within its chunks' limit and what is left of the region budget.
+    fn decompress_bucket(
+        compressed: &[u8],
+        grid_size: u8,
+        region_budget: &mut usize,
+    ) -> Result<Vec<u8>, ChunkReadingError> {
+        let max = super::MAX_DECOMPRESSED_CHUNK_SIZE
+            .saturating_mul(Self::chunks_per_bucket(grid_size))
+            .min(*region_budget);
+        let decoder =
+            StreamingDecoder::new(compressed).map_err(|_| ChunkReadingError::RegionIsInvalid)?;
+        let mut decompressed = Vec::new();
+        let read = decoder
+            .take(max as u64 + 1)
+            .read_to_end(&mut decompressed)
+            .map_err(ChunkReadingError::IoError)?;
+        if read > max {
+            return Err(ChunkReadingError::IoError(std::io::Error::other(
+                "bucket exceeds the maximum decompressed size",
+            )));
+        }
+        *region_budget -= read;
+        Ok(decompressed)
+    }
+
     /// Build the decompressed byte stream for bucket `bucket_idx`.
     fn serialise_bucket(
         chunks_data: &[Option<Bytes>; CHUNK_COUNT],
@@ -509,6 +534,7 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
         }
 
         let mut timestamps = [0u64; CHUNK_COUNT];
+        let mut region_budget = super::MAX_DECOMPRESSED_REGION_SIZE;
         let mut chunks_data: [Option<Bytes>; CHUNK_COUNT] = [const { None }; CHUNK_COUNT];
 
         for (bucket_idx, entry) in bucket_entries.iter().enumerate() {
@@ -528,15 +554,8 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
                 continue;
             }
 
-            let compressed_slice = &buf[..compressed_size];
-            let mut decompressed = Vec::new();
-            {
-                let mut decoder = StreamingDecoder::new(compressed_slice)
-                    .map_err(|_| ChunkReadingError::RegionIsInvalid)?;
-                decoder
-                    .read_to_end(&mut decompressed)
-                    .map_err(ChunkReadingError::IoError)?
-            };
+            let decompressed =
+                Self::decompress_bucket(&buf[..compressed_size], grid_size, &mut region_budget)?;
             buf.advance(compressed_size);
 
             let mut bucket_buf: Bytes = decompressed.into();
@@ -545,6 +564,15 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
             for local in 0..cpb {
                 let chunk_index = Self::global_chunk_index(bucket_idx, local, grid_size);
                 let record = BucketChunkEntry::read_from(&mut bucket_buf)?;
+                if record
+                    .data
+                    .as_ref()
+                    .is_some_and(|data| data.len() > super::MAX_DECOMPRESSED_CHUNK_SIZE)
+                {
+                    return Err(ChunkReadingError::IoError(std::io::Error::other(
+                        "chunk exceeds the maximum decompressed size",
+                    )));
+                }
                 timestamps[chunk_index] = record.timestamp;
                 chunks_data[chunk_index] = record.data;
             }
