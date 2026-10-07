@@ -674,7 +674,7 @@ impl Explosion {
 
 #[cfg(test)]
 mod tests {
-    use super::Explosion;
+    use super::{Explosion, World};
     use pumpkin_data::Block;
     use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
@@ -697,7 +697,7 @@ mod tests {
     }
 
     #[test]
-    fn exposure_uses_collision_shape_instead_of_outline() {
+    fn collision_shape_extends_above_fence_outline() {
         let pos = BlockPos::new(0, 0, 0);
         let from = Vector3::new(0.0, 1.25, 0.5);
         let to = Vector3::new(1.0, 1.25, 0.5);
@@ -713,6 +713,26 @@ mod tests {
             Vector3::new(0.0, 0.5, 0.5),
             Vector3::new(1.0, 0.5, 0.5),
         ));
+    }
+
+    #[test]
+    fn exposure_ray_only_checks_traversed_blocks_like_vanilla() {
+        let fence_pos = BlockPos::new(0, 0, 0);
+        // Official 26.3 BlockGetter.clip: the upper ray misses despite the
+        // fence's 1.5-block collision height; only the lower ray visits it.
+        for (height, expected_hit) in [(1.25, false), (0.75, true)] {
+            let from = Vector3::new(-0.5, height, 0.5);
+            let to = Vector3::new(1.5, height, 0.5);
+            let hit = World::traverse_blocks(from, to, |pos, _| {
+                let state = if *pos == fence_pos {
+                    Block::OAK_FENCE.default_state
+                } else {
+                    Block::AIR.default_state
+                };
+                Explosion::clips_collision_shape(state, pos, from, to).then_some(())
+            });
+            assert_eq!(hit.is_some(), expected_hit, "ray at Y={height}");
+        }
     }
 
     #[test]
