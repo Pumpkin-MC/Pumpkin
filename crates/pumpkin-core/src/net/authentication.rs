@@ -1,6 +1,7 @@
 use std::{collections::HashMap, net::IpAddr};
 
 use base64::{Engine, engine::general_purpose};
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use pumpkin_config::{AuthenticationConfig, networking::auth::TextureConfig};
 use pumpkin_protocol::Property;
 use reqwest::{StatusCode, Url};
@@ -66,9 +67,20 @@ fn create_client(auth_config: &AuthenticationConfig) -> reqwest::Client {
         .unwrap_or_default()
 }
 
+/// Escapes a client supplied value substituted into an authentication URL.
+///
+/// The templates put the username into a query string, and a name may contain
+/// `#`, `&` or `=`. A `#` turns the rest of the template into a fragment, so
+/// `serverId` would never reach the authentication server at all.
+fn escape_url_value(value: &str) -> String {
+    utf8_percent_encode(value, NON_ALPHANUMERIC).to_string()
+}
+
 fn format_auth_url(url_template: &str, username: &str, server_hash: &str, ip: &IpAddr) -> String {
+    // Only the username needs escaping; the hash and the address are built by
+    // the server and contain nothing a template cares about.
     url_template
-        .replace("{username}", username)
+        .replace("{username}", &escape_url_value(username))
         .replace("{server_hash}", server_hash)
         .replace("{ip}", &ip.to_string())
 }
@@ -262,7 +274,7 @@ pub async fn lookup_profile_by_name(
     let mut last_unknown_status = None;
 
     for url_template in candidate_urls {
-        let address = url_template.replace("{username}", name);
+        let address = url_template.replace("{username}", &escape_url_value(name));
 
         let response = match client.get(&address).send().await {
             Ok(resp) => resp,
@@ -468,6 +480,35 @@ mod tests {
         assert_eq!(
             formatted,
             "https://auth.example.com/hasJoined?username=Player1&serverId=hash123&ip=127.0.0.1"
+        );
+    }
+
+    // A `#` in the name used to turn `&serverId=` into a URL fragment, so the
+    // server id never reached the authentication server.
+    #[test]
+    fn format_auth_url_escapes_the_username() {
+        let template =
+            "https://auth.example.com/hasJoined?username={username}&serverId={server_hash}";
+        let formatted = super::format_auth_url(
+            template,
+            "Victim#",
+            "hash123",
+            &"127.0.0.1".parse().unwrap(),
+        );
+        assert_eq!(
+            formatted,
+            "https://auth.example.com/hasJoined?username=Victim%23&serverId=hash123"
+        );
+
+        let injected = super::format_auth_url(
+            template,
+            "V&username=other",
+            "hash123",
+            &"127.0.0.1".parse().unwrap(),
+        );
+        assert_eq!(
+            injected,
+            "https://auth.example.com/hasJoined?username=V%26username%3Dother&serverId=hash123"
         );
     }
 
