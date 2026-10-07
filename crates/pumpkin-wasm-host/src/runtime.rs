@@ -96,6 +96,7 @@ impl PluginRuntime {
         store_spawner: Arc<dyn RuntimeSpawner>,
     ) -> Result<Self, PluginInitError> {
         let mut config = wasmtime::Config::new();
+        config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
         config.wasm_component_model(true);
         config.wasm_component_model_async(true);
         config.concurrency_support(true);

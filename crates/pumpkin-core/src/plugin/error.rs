@@ -5,10 +5,16 @@ const MAX_TEXT_LENGTH: usize = 2048;
 /// Bounds untrusted log text and keeps continuation lines below the label column.
 #[must_use]
 pub fn sanitize(text: &str) -> String {
+    sanitize_with_limit(text, MAX_TEXT_LENGTH)
+}
+
+/// Sanitizes a diagnostic block with an explicit output length limit.
+#[must_use]
+pub fn sanitize_with_limit(text: &str, limit: usize) -> String {
     let mut output = String::new();
     for c in text.chars().filter(|c| !c.is_control() || *c == '\n') {
         let length = if c == '\n' { 5 } else { c.len_utf8() };
-        if output.len() + length > MAX_TEXT_LENGTH {
+        if output.len() + length > limit {
             output.push_str(" [truncated]");
             break;
         }

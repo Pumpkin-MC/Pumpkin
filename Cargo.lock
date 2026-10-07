@@ -5441,6 +5441,7 @@ dependencies = [
  "cc",
  "encoding_rs",
  "futures",
+ "gimli",
  "libc",
  "log",
  "mach2",

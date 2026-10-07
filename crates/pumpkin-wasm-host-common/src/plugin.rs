@@ -123,9 +123,14 @@ impl WasmPlugin {
             self.store.state().is_terminal().then_some(
                 "The plugin has stopped. Unload and load it again, or restart the server.",
             );
-        let text = error::message(&headline, &crate::error::causes(failure), help);
+        let text = crate::error::message(
+            &headline,
+            &crate::error::causes(failure),
+            help,
+            Some(failure),
+        );
         tracing::error!("{text}");
-        error::debug_details(&headline, failure);
+        error::debug_details(&headline, pumpkin_plugin_runtime::guest_call_error(failure));
     }
 
     /// The guest exports of this plugin. Each API version's host only ever sees plugins of its own version.

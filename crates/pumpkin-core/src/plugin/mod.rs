@@ -638,14 +638,13 @@ impl PluginManager {
                     if let Err(error) = instance.on_unload(context).await {
                         warn!(
                             "{}",
-                            error::message(
+                            loader_clone.format_lifecycle_error(
                                 &format!(
                                     "Plugin \"{}\" ({}) failed during initialization cleanup.",
                                     error::inline(&plugin_name),
                                     error::inline(&metadata.version)
                                 ),
-                                &error.lines().map(error::sanitize).collect::<Vec<_>>(),
-                                None,
+                                &error,
                             )
                         );
                     }
@@ -698,14 +697,13 @@ impl PluginManager {
 
                     error!(
                         "{}",
-                        error::message(
+                        loader_clone.format_lifecycle_error(
                             &format!(
                                 "Plugin \"{}\" ({}) could not initialize.",
                                 error::inline(&plugin_name),
                                 error::inline(&metadata.version)
                             ),
-                            &e.lines().map(error::sanitize).collect::<Vec<_>>(),
-                            None,
+                            &e,
                         )
                     );
                 }
@@ -1136,14 +1134,13 @@ impl PluginManager {
         {
             warn!(
                 "{}",
-                error::message(
+                plugin.loader.format_lifecycle_error(
                     &format!(
                         "Plugin \"{}\" ({}) failed during on_unload.",
                         error::inline(name),
                         error::inline(&plugin.metadata.version)
                     ),
-                    &error.lines().map(error::sanitize).collect::<Vec<_>>(),
-                    None,
+                    &error,
                 )
             );
         }

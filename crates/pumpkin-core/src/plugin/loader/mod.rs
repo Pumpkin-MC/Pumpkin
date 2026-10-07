@@ -36,6 +36,18 @@ pub trait PluginLoader: Send + Sync {
         super::error::debug_details(&headline, error);
     }
 
+    /// Formats an error returned by this loader's plugin lifecycle callbacks.
+    fn format_lifecycle_error(&self, headline: &str, details: &str) -> String {
+        super::error::message(
+            headline,
+            &details
+                .lines()
+                .map(super::error::sanitize)
+                .collect::<Vec<_>>(),
+            None,
+        )
+    }
+
     /// Check if this loader can handle the given file
     fn can_load(&self, path: &Path) -> bool;
 

@@ -41,7 +41,11 @@ impl Plugin for WasmPluginHandle {
     fn on_unload(&self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
         Box::pin(async move {
             if self.0.store.state().is_terminal() {
-                return Err("The plugin has stopped; on_unload was not delivered to it.".into());
+                return Err(error::message(
+                    "",
+                    &["The plugin has stopped; on_unload was not delivered to it.".into()],
+                    None,
+                ));
             }
             let headline = format!(
                 "Plugin \"{}\" on_unload details",
@@ -79,12 +83,24 @@ fn lifecycle_result<T>(
     headline: &str,
 ) -> Result<T, String> {
     match result {
-        Ok(result) => {
-            result.map_err(|text| format!("The plugin reported: \"{}\"", error::sanitize(&text)))
-        }
+        Ok(result) => result.map_err(|text| {
+            error::message(
+                "",
+                &[format!(
+                    "The plugin reported: \"{}\"",
+                    error::sanitize(&text)
+                )],
+                None,
+            )
+        }),
         Err(failure) => {
-            error::debug_details(headline, &failure);
-            Err(pumpkin_wasm_host_common::error::causes(&failure).join("\n"))
+            error::debug_details(headline, pumpkin_plugin_runtime::guest_call_error(&failure));
+            Err(pumpkin_wasm_host_common::error::message(
+                "",
+                &pumpkin_wasm_host_common::error::causes(&failure),
+                None,
+                Some(&failure),
+            ))
         }
     }
 }
@@ -153,18 +169,24 @@ impl PluginLoader for WasmPluginLoader {
         let headline = format!("Could not {operation} plugin file \"{file}\"; it was not loaded.");
         let backtrace = init
             .and_then(PluginInitError::wasmtime_error)
-            .and_then(|error| error.downcast_ref::<wasmtime::WasmBacktrace>())
+            .and_then(pumpkin_wasm_host_common::error::backtrace)
             .map(ToString::to_string);
         let help = init
             .and_then(PluginInitError::help)
             .or_else(|| failure.help());
-        let text = error::message(
+        let text = pumpkin_wasm_host_common::error::message(
             &headline,
             &error::causes(failure, backtrace.as_deref()),
             help,
+            init.and_then(PluginInitError::wasmtime_error),
         );
         tracing::error!("{text}");
         error::debug_details(&headline, failure);
+    }
+
+    fn format_lifecycle_error(&self, headline: &str, details: &str) -> String {
+        // WasmPluginHandle returns a sanitized body; retain its frame indentation.
+        format!("{}{details}", error::inline(headline))
     }
 
     fn can_load(&self, path: &Path) -> bool {
