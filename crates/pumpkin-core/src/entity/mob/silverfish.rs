@@ -239,16 +239,16 @@ impl Mob for SilverfishEntity {
         entity.head_yaw.store(yaw);
     }
 
-    fn on_damage(&self, damage_type: DamageType, source: Option<&dyn EntityBase>) {
-        if self.wake_up_friends_ticks.load(Ordering::Relaxed) != 0 {
-            return;
-        }
-
-        if source.is_some()
-            || damage_type.has_tag(&tag::DamageType::MINECRAFT_ALWAYS_TRIGGERS_SILVERFISH)
+    fn pre_damage(&self, damage_type: DamageType, source: Option<&dyn EntityBase>) -> bool {
+        if !self.get_entity().is_invulnerable_to(&damage_type, source)
+            && self.wake_up_friends_ticks.load(Ordering::Relaxed) == 0
+            && (source.is_some()
+                || damage_type.has_tag(&tag::DamageType::MINECRAFT_ALWAYS_TRIGGERS_SILVERFISH))
         {
             self.wake_up_friends_ticks
                 .store(to_goal_ticks(20), Ordering::Relaxed);
         }
+
+        true
     }
 }

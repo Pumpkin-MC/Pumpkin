@@ -70,6 +70,10 @@ impl InfestedBlock {
 
     // Vanilla `InfestedBlock.spawnInfestation`.
     pub fn spawn_infestation(world: &Arc<World>, position: &BlockPos) {
+        if !world.level_info.load().game_rules.block_drops {
+            return;
+        }
+
         let bottom = position.0.to_f64();
         let silverfish = from_type(
             &EntityType::SILVERFISH,
