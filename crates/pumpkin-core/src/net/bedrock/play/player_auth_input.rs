@@ -78,10 +78,10 @@ impl BedrockClient {
         {
             Self::start_gliding(player, server);
         } else if flags.get(InputData::StopGliding as usize) && entity.is_fall_flying() {
-            // Java cannot cancel elytra in mid-air; landing / `canGlide` already stops it.
-            if on_ground || !player.can_glide() {
-                entity.set_fall_flying(false);
-            }
+            // Java cannot cancel elytra in mid-air, landing / `canGlide` already stops it.
+            // A rejected stop resends GLIDING true, as `StopGliding` expects an answer either way.
+            let stop = on_ground || !player.can_glide();
+            entity.set_fall_flying(!stop);
         }
 
         let new_pos = player.feet_from_bedrock_pos(packet.position.to_f64());
