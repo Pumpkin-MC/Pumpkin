@@ -388,6 +388,7 @@ impl DispenserBlock {
             // Honeycombs wax copper blocks
             Self::dispense_honeycomb(ctx, item);
         } else if item.item.id == Item::BONE_MEAL.id {
+            // TODO: Support the `growWaterPlant` fallback for seagrass and sea pickles via `use_with_item`.
             // Bone meal fertilizes the block in front of the dispenser
             Self::dispense_bone_meal(ctx, item);
         } else if entity_from_egg(item.item.id).is_some() {
