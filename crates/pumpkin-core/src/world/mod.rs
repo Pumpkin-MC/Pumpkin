@@ -3783,13 +3783,13 @@ impl World {
         if let Some(calc) = damage_calculator {
             explosion = explosion.with_damage_calculator(calc);
         }
-        self.run_explosion(&explosion, position, power);
+        self.run_explosion(&explosion);
     }
 
     pub fn explode_tnt_minecart(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
         let block_interaction = self.get_block_interaction(ExplosionInteraction::Tnt);
         let explosion = Explosion::new(power, position, block_interaction).preserving_rails();
-        self.run_explosion(&explosion, position, power);
+        self.run_explosion(&explosion);
     }
 
     #[must_use]
@@ -3823,7 +3823,9 @@ impl World {
         }
     }
 
-    fn run_explosion(self: &Arc<Self>, explosion: &Explosion, position: Vector3<f64>, power: f32) {
+    pub(crate) fn run_explosion(self: &Arc<Self>, explosion: &Explosion) {
+        let position = explosion.pos;
+        let power = explosion.power;
         let mut event = crate::plugin::api::events::entity::entity_explode::EntityExplodeEvent::new(
             0, position, power,
         );
@@ -3836,11 +3838,11 @@ impl World {
 
         let block_count = explosion.explode(self);
         let particle = if power < 2.0 {
-            Particle::Explosion
+            explosion.small_particle
         } else {
-            Particle::ExplosionEmitter
+            explosion.large_particle
         };
-        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
+        let sound = IdOr::<SoundEvent>::Id(explosion.sound as u16);
         for player in self.players.load().iter() {
             if player.position().squared_distance_to_vec(&position) > 4096.0 {
                 continue;
