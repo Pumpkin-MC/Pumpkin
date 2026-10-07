@@ -216,6 +216,7 @@ impl PluginRuntime {
         .map_err(PluginInitError::InstantiationFailed)?;
         let wasm_plugin = Arc::new(WasmPlugin {
             name: metadata.name.clone(),
+            version: metadata.version.clone(),
             plugin_instance,
             api_version,
             store,

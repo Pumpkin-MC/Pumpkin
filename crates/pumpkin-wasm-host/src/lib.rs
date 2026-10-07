@@ -34,7 +34,8 @@ impl Plugin for WasmPluginHandle {
                 "Plugin \"{}\" on_load details",
                 error::inline(&context.get_metadata().name)
             );
-            lifecycle_result(runtime::on_load(&self.0, context).await, &headline)
+            let result = runtime::on_load(&self.0, context).await;
+            lifecycle_result(result, &headline, self.0.store.state().is_terminal())
         })
     }
 
@@ -51,7 +52,8 @@ impl Plugin for WasmPluginHandle {
                 "Plugin \"{}\" on_unload details",
                 error::inline(&context.get_metadata().name)
             );
-            lifecycle_result(runtime::on_unload(&self.0, context).await, &headline)
+            let result = runtime::on_unload(&self.0, context).await;
+            lifecycle_result(result, &headline, self.0.store.state().is_terminal())
         })
     }
 
@@ -81,6 +83,7 @@ impl Plugin for WasmPluginHandle {
 fn lifecycle_result<T>(
     result: Result<Result<T, String>, wasmtime::Error>,
     headline: &str,
+    stopped: bool,
 ) -> Result<T, String> {
     match result {
         Ok(result) => result.map_err(|text| {
@@ -98,7 +101,8 @@ fn lifecycle_result<T>(
             Err(pumpkin_wasm_host_common::error::message(
                 "",
                 &pumpkin_wasm_host_common::error::causes(&failure),
-                None,
+                stopped.then_some("The plugin has stopped."),
+                pumpkin_wasm_host_common::error::help(&failure),
                 Some(&failure),
             ))
         }
@@ -173,10 +177,15 @@ impl PluginLoader for WasmPluginLoader {
             .map(ToString::to_string);
         let help = init
             .and_then(PluginInitError::help)
-            .or_else(|| failure.help());
+            .or_else(|| failure.help())
+            .or_else(|| {
+                init.and_then(PluginInitError::wasmtime_error)
+                    .and_then(pumpkin_wasm_host_common::error::help)
+            });
         let text = pumpkin_wasm_host_common::error::message(
             &headline,
             &error::causes(failure, backtrace.as_deref()),
+            None,
             help,
             init.and_then(PluginInitError::wasmtime_error),
         );

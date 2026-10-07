@@ -89,6 +89,7 @@ pub enum PluginApiVersion {
 
 pub struct WasmPlugin {
     pub name: String,
+    pub version: String,
     /// The guest exports of the plugin, as generated for `api_version`.
     pub plugin_instance: Arc<dyn Any + Send + Sync>,
     pub api_version: PluginApiVersion,
@@ -104,8 +105,9 @@ impl WasmPlugin {
             return false;
         }
         tracing::error!(
-            "Plugin \"{}\" has stopped; {} was not delivered to it.",
+            "Plugin \"{}\" ({}) has stopped; {} was not delivered to it.",
             pumpkin_core::plugin::error::inline(&self.name),
+            pumpkin_core::plugin::error::inline(&self.version),
             pumpkin_core::plugin::error::inline(operation)
         );
         true
@@ -115,17 +117,19 @@ impl WasmPlugin {
     pub fn report_failure(&self, operation: &str, failure: &wasmtime::Error) {
         use pumpkin_core::plugin::error;
         let headline = format!(
-            "Plugin \"{}\" failed during {}.",
+            "Plugin \"{}\" ({}) failed during {}.",
             error::inline(&self.name),
+            error::inline(&self.version),
             error::inline(operation)
         );
-        let help =
-            self.store.state().is_terminal().then_some(
-                "The plugin has stopped. Unload and load it again, or restart the server.",
-            );
+        let stopped = self.store.state().is_terminal();
+        let help = crate::error::help(failure).or_else(|| {
+            stopped.then_some("Unload and load the plugin again, or restart the server, to retry.")
+        });
         let text = crate::error::message(
             &headline,
             &crate::error::causes(failure),
+            stopped.then_some("The plugin has stopped."),
             help,
             Some(failure),
         );
