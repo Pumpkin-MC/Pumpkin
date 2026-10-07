@@ -281,6 +281,17 @@ impl CustomSound for SlimeEntity {
 }
 
 impl Mob for SlimeEntity {
+    /// Vanilla `AbstractCubeMob.getPassengerAttachmentPoint`: sunk into the top by size.
+    fn mob_passenger_attachment_point(&self, _passenger: &Entity) -> Vector3<f64> {
+        let entity = self.get_entity();
+        let sink = 0.015_625 * f64::from(self.get_size()) * f64::from(entity.scale.load());
+        Vector3::new(
+            0.0,
+            f64::from(entity.entity_dimension.load().height) - sink,
+            0.0,
+        )
+    }
+
     fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
         Some(self)
     }

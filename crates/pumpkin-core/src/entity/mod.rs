@@ -71,6 +71,7 @@ use uuid::Uuid;
 pub mod ageable;
 pub mod ai;
 pub mod area_effect_cloud;
+pub mod attachment;
 pub mod attributes;
 pub mod boss;
 pub mod breath;
@@ -129,6 +130,39 @@ impl dyn EntityBase + '_ {
             || self.considers_entity_as_ally(other)
             || other.considers_entity_as_ally(self)
     }
+
+    /// Vanilla `getPassengerRidingPosition`: where this vehicle seats the passenger.
+    #[must_use]
+    pub fn passenger_riding_position(&self, passenger: &Entity) -> Vector3<f64> {
+        self.get_entity()
+            .pos
+            .load()
+            .add(&self.passenger_attachment_point(passenger))
+    }
+
+    /// Vanilla `rideTick` / `positionRider`: the passenger sits on its seat without motion.
+    pub fn position_rider(&self, passenger: &dyn EntityBase) {
+        let seat = self.passenger_riding_position(passenger.get_entity());
+        let offset = passenger.vehicle_attachment_point(self.get_entity());
+        let entity = passenger.get_entity();
+        entity.velocity.store(Vector3::default());
+        entity.set_pos(seat.sub(&offset));
+    }
+
+    /// Seats every passenger, then their own passengers.
+    // TODO: A player seated here keeps its chunk view, only `SMoveVehicle` updates it.
+    pub fn position_passengers(&self) {
+        let passengers = self
+            .get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        for passenger in &passengers {
+            self.position_rider(passenger.as_ref());
+            passenger.as_ref().position_passengers();
+        }
+    }
 }
 
 pub trait EntityBase: Send + Sync + std::any::Any {
@@ -183,6 +217,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
         None
+    }
+
+    /// Vanilla `getPassengerAttachmentPoint`: the seat, relative to this vehicle's position.
+    fn passenger_attachment_point(&self, passenger: &Entity) -> Vector3<f64> {
+        attachment::default_passenger_attachment(self.get_entity(), passenger)
+    }
+
+    /// Vanilla `getVehicleAttachmentPoint`: the seat, relative to this rider's position.
+    fn vehicle_attachment_point(&self, _vehicle: &Entity) -> Vector3<f64> {
+        attachment::default_vehicle_attachment(self.get_entity())
     }
 
     fn get_owner_id(&self) -> Option<i32> {
@@ -3126,12 +3170,6 @@ impl Entity {
         base.scale(self.scale.load())
     }
 
-    /// Vanilla `Entity.getPassengerRidingPosition` without attachments: the top of
-    /// the vehicle's current size.
-    fn passenger_riding_y(&self) -> f64 {
-        self.pos.load().y + f64::from(self.entity_dimension.load().height)
-    }
-
     /// Vanilla `LivingEntity.getHitbox`: the bounding box, with the bottom clipped
     /// to the vehicle seat when riding.
     #[must_use]
@@ -3140,7 +3178,7 @@ impl Entity {
         let Some(vehicle) = self.get_vehicle() else {
             return aabb;
         };
-        aabb.with_min_y(vehicle.get_entity().passenger_riding_y().max(aabb.min.y))
+        aabb.with_min_y(vehicle.passenger_riding_position(self).y.max(aabb.min.y))
     }
 
     /// Vanilla `refreshDimensions`: size and bounding box for the current pose.

@@ -12,7 +12,7 @@ use pumpkin_protocol::java::server::play::SPlayerInput;
 use rand::RngExt;
 
 use crate::{
-    entity::{Entity, EntityBase, living::LivingEntity, player::Player},
+    entity::{Entity, EntityBase, attachment, living::LivingEntity, player::Player},
     server::Server,
 };
 use pumpkin_data::Block;
@@ -111,6 +111,16 @@ impl MinecartEntity {
 }
 
 impl EntityBase for MinecartEntity {
+    /// Vanilla `AbstractMinecart.getPassengerAttachmentPoint`: villagers sit lower.
+    fn passenger_attachment_point(&self, passenger: &Entity) -> Vector3<f64> {
+        if passenger.entity_type == &EntityType::VILLAGER
+            || passenger.entity_type == &EntityType::WANDERING_TRADER
+        {
+            return Vector3::default();
+        }
+        attachment::default_passenger_attachment(&self.vehicle.entity, passenger)
+    }
+
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         match &self.kind {
             MinecartKind::Chest(minecart) => minecart.write_nbt(nbt),
@@ -438,14 +448,6 @@ impl EntityBase for MinecartEntity {
                     velocity.x.mul_add(velocity.x, velocity.z * velocity.z),
                 );
                 return;
-            }
-
-            let new_pos = self.vehicle.entity.pos.load();
-
-            if let Ok(passengers) = self.vehicle.entity.passengers.try_lock() {
-                for passenger in passengers.iter() {
-                    passenger.get_entity().set_pos(new_pos);
-                }
             }
 
             #[allow(clippy::useless_let_if_seq)]

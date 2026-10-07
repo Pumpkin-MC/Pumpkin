@@ -162,6 +162,7 @@ impl Animal for HorseEntity {
     }
 }
 
+// TODO: Vanilla moves the passenger seat with the rearing animation.
 impl Mob for HorseEntity {
     fn on_climbable(&self) -> bool {
         false

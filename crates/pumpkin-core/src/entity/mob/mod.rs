@@ -946,6 +946,14 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn mob_passenger_attachment_point(&self, passenger: &Entity) -> Vector3<f64> {
+        crate::entity::attachment::default_passenger_attachment(self.get_entity(), passenger)
+    }
+
+    fn mob_vehicle_attachment_point(&self, _vehicle: &Entity) -> Vector3<f64> {
+        crate::entity::attachment::default_vehicle_attachment(self.get_entity())
+    }
+
     fn is_saddled(&self) -> bool {
         false
     }
@@ -1396,6 +1404,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
         Mob::get_item_steerable(self)
+    }
+
+    fn passenger_attachment_point(&self, passenger: &Entity) -> Vector3<f64> {
+        self.mob_passenger_attachment_point(passenger)
+    }
+
+    fn vehicle_attachment_point(&self, vehicle: &Entity) -> Vector3<f64> {
+        self.mob_vehicle_attachment_point(vehicle)
     }
 
     fn init_data_tracker(&self) {

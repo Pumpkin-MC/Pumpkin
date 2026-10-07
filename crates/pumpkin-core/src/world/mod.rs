@@ -1605,6 +1605,12 @@ impl World {
                     touch_players(entity, *entity_chunk, &player_touches);
                 }
             });
+        // Vanilla `rideTick`: riders follow their vehicle's seat once it has moved
+        tickable.par_iter().for_each(|(entity, _)| {
+            if !entity.is_passenger() && entity.get_entity().has_passengers() {
+                entity.as_ref().position_passengers();
+            }
+        });
         // Sequential so two players can't take the same orb
         for touch in &player_touches {
             touch.touch_random_orb();

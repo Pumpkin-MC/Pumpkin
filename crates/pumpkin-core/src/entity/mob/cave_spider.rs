@@ -1,3 +1,4 @@
+use pumpkin_util::math::vector3::Vector3;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
@@ -76,6 +77,15 @@ impl CaveSpiderEntity {
 }
 
 impl Mob for CaveSpiderEntity {
+    /// Vanilla `CaveSpider.getVehicleAttachmentPoint`: higher on narrower vehicles.
+    fn mob_vehicle_attachment_point(&self, vehicle: &Entity) -> Vector3<f64> {
+        let entity = self.get_entity();
+        if vehicle.entity_dimension.load().width <= entity.entity_dimension.load().width {
+            return Vector3::new(0.0, 0.218_75 * f64::from(entity.scale.load()), 0.0);
+        }
+        crate::entity::attachment::default_vehicle_attachment(entity)
+    }
+
     fn finalize_spawn(
         &self,
         world: &Arc<crate::world::World>,

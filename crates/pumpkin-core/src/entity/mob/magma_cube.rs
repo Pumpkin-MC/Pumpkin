@@ -1,3 +1,4 @@
+use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
@@ -71,6 +72,10 @@ impl Mob for MagmaCubeEntity {
 
     fn post_tick(&self) {
         self.slime.post_tick();
+    }
+
+    fn mob_passenger_attachment_point(&self, passenger: &Entity) -> Vector3<f64> {
+        self.slime.mob_passenger_attachment_point(passenger)
     }
 
     fn mob_receives_player_touch(&self) -> bool {
