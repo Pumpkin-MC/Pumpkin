@@ -10,6 +10,9 @@ use crate::{
 
 // decrypt -> decompress -> raw
 
+/// How much payload capacity to reserve at a time while reading a packet.
+const PAYLOAD_RESERVE_STEP: usize = 64 * 1024;
+
 pub enum DecompressionReader<R: AsyncRead + Unpin> {
     Decompress(ZlibDecoder<BufReader<R>>),
     None(R),
@@ -165,10 +168,14 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
 
         let payload_len_hint = expected_packet_data_len.saturating_sub(packet_id_len);
         self.payload_scratch.clear();
-        self.payload_scratch.reserve(payload_len_hint);
 
         let mut total_read = 0;
         while total_read < payload_len_hint {
+            // The declared length is client controlled, so grow as bytes arrive.
+            let remaining = payload_len_hint - total_read;
+            self.payload_scratch
+                .reserve(remaining.min(PAYLOAD_RESERVE_STEP));
+
             let bytes_read = reader
                 .read_buf(&mut self.payload_scratch)
                 .await
