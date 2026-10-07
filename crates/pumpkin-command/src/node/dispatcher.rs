@@ -44,22 +44,41 @@ pub struct ParsingResult<'a, S: CommandSource = DummySource> {
 
 /// Structs implementing this trait are able to execute upon command completion.
 pub trait ResultConsumer<S: CommandSource = DummySource>: Sync + Send {
-    fn on_command_completion(&self, context: &CommandContext<S>, result: ReturnValue);
+    /// Reports a finished command.
+    ///
+    /// # Errors
+    ///
+    /// A callback can fail the command after it has already run.
+    fn on_command_completion(
+        &self,
+        context: &CommandContext<S>,
+        result: ReturnValue,
+    ) -> Result<(), CommandSyntaxError>;
 }
 
 /// A [`ResultConsumer`] which does nothing.
 pub struct EmptyResultConsumer;
 
 impl<S: CommandSource> ResultConsumer<S> for EmptyResultConsumer {
-    fn on_command_completion(&self, _context: &CommandContext<S>, _result: ReturnValue) {}
+    fn on_command_completion(
+        &self,
+        _context: &CommandContext<S>,
+        _result: ReturnValue,
+    ) -> Result<(), CommandSyntaxError> {
+        Ok(())
+    }
 }
 
 /// A [`ResultConsumer`] which defers the given result to the source provided.
 pub struct ResultDeferrer;
 
 impl<S: CommandSource> ResultConsumer<S> for ResultDeferrer {
-    fn on_command_completion(&self, context: &CommandContext<S>, result: ReturnValue) {
-        context.source.call_result(result);
+    fn on_command_completion(
+        &self,
+        context: &CommandContext<S>,
+        result: ReturnValue,
+    ) -> Result<(), CommandSyntaxError> {
+        context.source.call_result(result)
     }
 }
 
@@ -391,7 +410,7 @@ impl<S: CommandSource> CommandDispatcher<S> {
         match ContextChain::try_flatten(&original_context) {
             None => {
                 self.consumer
-                    .on_command_completion(&original_context, ReturnValue::Failure);
+                    .on_command_completion(&original_context, ReturnValue::Failure)?;
                 Err(Self::unknown_command_error(&parsed.reader))
             }
             Some(flat_context) => {

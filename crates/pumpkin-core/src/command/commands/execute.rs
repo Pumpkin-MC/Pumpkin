@@ -14,7 +14,7 @@
 )]
 
 use crate::command::argument_builder::{
-    ArgumentBuilder, RequiredArgumentBuilder, argument, command, literal,
+    ArgumentBuilder, LiteralArgumentBuilder, RequiredArgumentBuilder, argument, command, literal,
 };
 use crate::command::argument_types::block::BlockArgumentType;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
@@ -26,16 +26,19 @@ use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::argument_types::entity_anchor::{EntityAnchorArgumentType, EntityAnchorExt};
 use crate::command::argument_types::identifier::IdentifierArgumentType;
 use crate::command::argument_types::nbt_path::{NbtPath, NbtPathArgumentType};
-use crate::command::argument_types::objective::ObjectiveArgumentType;
+use crate::command::argument_types::objective::{ObjectiveArgumentType, criterion_is_read_only};
 use crate::command::argument_types::range::{FloatRangeArgumentType, IntRangeArgumentType};
 use crate::command::argument_types::resource::{ENTITY_TYPE_ARGUMENT, ResourceArgument};
 use crate::command::argument_types::resource_key::{BIOME_REGISTRY, ResourceKeyArgument};
 use crate::command::argument_types::resource_or_tag::{ResourceOrTag, ResourceOrTagArgument};
-use crate::command::argument_types::score_holder::ScoreHolderArgumentType;
+use crate::command::argument_types::score_holder::{ResolvedScoreHolder, ScoreHolderArgumentType};
 use crate::command::commands::data::{
     BlockDataAccessor, DataAccessor, EntityDataAccessor, StorageDataAccessor,
 };
 use crate::command::context::command_context::CommandContext;
+use crate::command::context::command_source::{
+    ResultValueTaker, ReturnValue, ReturnValueCallable, ReturnValueCallback,
+};
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::attached::{CommandNodeId, NodeId};
@@ -46,7 +49,8 @@ use crate::command::node::{
 };
 use crate::entity::EntityBase;
 use crate::entity::r#type::from_type;
-use crate::world::scoreboard::Scoreboard;
+use crate::world::World;
+use crate::world::scoreboard::{NoTarget, Scoreboard, ScoreboardObjective, ScoreboardTarget};
 use crate::world::stopwatches::Stopwatches;
 use pumpkin_data::biome::Biome;
 use pumpkin_data::tag::{self, RegistryKey};
@@ -58,6 +62,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::hover::HoverEvent;
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -460,6 +465,123 @@ fn get_score(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     get_score_value(&scoreboard, target, objective)
+}
+
+const READ_ONLY_SCORE: &str = "Cannot modify read-only score";
+
+const READ_ONLY_STORE_ERROR: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMAND_FAILED,
+    translation::java::COMMAND_FAILED,
+);
+
+struct StoreScore {
+    world: Arc<World>,
+    targets: Vec<ResolvedScoreHolder>,
+    objective: ScoreboardObjective,
+    store_result: bool,
+}
+
+impl ReturnValueCallable for StoreScore {
+    fn call(&self, result: ReturnValue) -> Result<(), CommandSyntaxError> {
+        let value = stored_amount(result, self.store_result);
+        let mut scoreboard = self
+            .world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        write_stored_score(
+            &mut scoreboard,
+            self.world.as_ref(),
+            &self.targets,
+            &self.objective,
+            value,
+        )
+    }
+}
+
+fn stored_amount(result: ReturnValue, store_result: bool) -> i32 {
+    if store_result {
+        result.result_value()
+    } else {
+        i32::from(result.success_value())
+    }
+}
+
+fn write_stored_score(
+    scoreboard: &mut Scoreboard,
+    target: &impl ScoreboardTarget,
+    targets: &[ResolvedScoreHolder],
+    objective: &ScoreboardObjective,
+    value: i32,
+) -> Result<(), CommandSyntaxError> {
+    let is_active = scoreboard
+        .get_objective(&objective.name)
+        .is_some_and(|active| objective.is_same(active));
+    if criterion_is_read_only(&objective.criterion) {
+        if is_active
+            && let Some(holder) = targets.first()
+            && scoreboard
+                .get_score(&holder.name, &objective.name)
+                .is_none()
+        {
+            scoreboard.set_score_value(&NoTarget, &holder.name, &objective.name, 0);
+        }
+        return Err(read_only_store_error());
+    }
+    if !is_active {
+        // This scoreboard cannot retain vanilla's orphan scores, so ignore a same-name replacement.
+        return Ok(());
+    }
+
+    for holder in targets {
+        scoreboard.set_score_value(target, &holder.name, &objective.name, value);
+    }
+    Ok(())
+}
+
+fn read_only_store_error() -> CommandSyntaxError {
+    #[expect(
+        deprecated,
+        reason = "vanilla reports command.failed and puts this text on the hover"
+    )]
+    let message = TextComponent::translate(translation::java::COMMAND_FAILED, Vec::new())
+        .hover_event(HoverEvent::show_text(TextComponent::text(READ_ONLY_SCORE)));
+    CommandSyntaxError::create_without_context(&READ_ONLY_STORE_ERROR, message)
+}
+
+fn store_score(context: &CommandContext, store_result: bool) -> RedirectModifierResult {
+    let targets = ScoreHolderArgumentType::get_score_holders(context, "targets")?;
+    let objective_name = ObjectiveArgumentType::get(context, "objective")?;
+    let world = context.source.world().clone();
+    let objective = {
+        let scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        ObjectiveArgumentType::objective_or_error(&scoreboard, objective_name)?.clone()
+    };
+
+    let callback: ReturnValueCallback = Arc::new(StoreScore {
+        world,
+        targets,
+        objective,
+        store_result,
+    });
+    let source = context
+        .source
+        .as_ref()
+        .clone()
+        .merge_command_result_taker(&ResultValueTaker(vec![callback]));
+    Ok(vec![Arc::new(source)])
+}
+
+fn score_store(store_result: bool) -> LiteralArgumentBuilder {
+    literal("score").then(argument("targets", ScoreHolderArgumentType::Multiple).then(
+        argument("objective", ObjectiveArgumentType).redirect_with_modifier(
+            Redirection::Root,
+            RedirectModifier::Custom(Arc::new(move |context| store_score(context, store_result))),
+        ),
+    ))
 }
 
 struct ConditionalExecutor(fn(&CommandContext) -> RedirectModifierResult);
@@ -1547,6 +1669,11 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         ),
                     )),
                 ),
+        )
+        .then(
+            literal("store")
+                .then(literal("result").then(score_store(true)))
+                .then(literal("success").then(score_store(false))),
         );
 
     let execute_node_id = dispatcher.register(builder);
@@ -1576,6 +1703,208 @@ mod tests {
     use crate::command::CommandSource;
     use crate::world::scoreboard::{NoTarget, ScoreboardObjective};
     use pumpkin_protocol::java::client::play::RenderType;
+    use pumpkin_protocol::{BClientPacket, ClientPacket};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct CountingTarget(AtomicUsize);
+
+    impl ScoreboardTarget for CountingTarget {
+        fn send_editioned<J: ClientPacket + Sync, B: BClientPacket + Sync>(
+            &self,
+            _je_packet: &J,
+            _be_packet: &B,
+        ) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
+
+        fn send_je<J: ClientPacket + Sync>(&self, _je_packet: &J) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn objective(name: &str, criterion: &str) -> ScoreboardObjective {
+        ScoreboardObjective::new(
+            name,
+            TextComponent::text(name.to_string()),
+            RenderType::Integer,
+            None,
+            criterion,
+        )
+    }
+
+    fn resolved_holder(name: &str) -> ResolvedScoreHolder {
+        ResolvedScoreHolder {
+            name: name.to_string(),
+            display_name: TextComponent::text(name.to_string()),
+        }
+    }
+
+    #[test]
+    fn store_modes_keep_command_result_separate_from_success() {
+        for (result, expected_result, expected_success) in [
+            (ReturnValue::Success(42), 42, 1),
+            (ReturnValue::Success(0), 0, 1),
+            (ReturnValue::Success(-7), -7, 1),
+            (ReturnValue::Failure, 0, 0),
+        ] {
+            assert_eq!(stored_amount(result, true), expected_result);
+            assert_eq!(stored_amount(result, false), expected_success);
+        }
+    }
+
+    #[test]
+    fn store_score_registers_result_and_success_syntax() {
+        let mut dispatcher = CommandDispatcher::new();
+        let registry = PermissionRegistry::default();
+        register(&mut dispatcher, &registry);
+        crate::command::commands::time::register(&mut dispatcher, &registry);
+        let source = Arc::new(CommandSource::dummy());
+
+        for mode in ["result", "success"] {
+            let input =
+                format!("execute store {mode} score holder objective run time query daytime");
+            let parsed = dispatcher.parse_input(&input, &source);
+            assert!(parsed.errors.is_empty(), "{input}: {:?}", parsed.errors);
+            assert_eq!(parsed.reader.remaining_length(), 0, "{input}");
+            assert!(
+                parsed
+                    .context
+                    .build(&input)
+                    .get_last_child()
+                    .command
+                    .is_some(),
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn score_store_writes_result_values_to_every_resolved_holder() {
+        let mut scoreboard = Scoreboard::new();
+        scoreboard.add_objective(&NoTarget, objective("dummy", "dummy"));
+        let holders = [resolved_holder("first"), resolved_holder("second")];
+        let objective = scoreboard.get_objective("dummy").unwrap().clone();
+
+        for value in [42, 0, -7] {
+            write_stored_score(&mut scoreboard, &NoTarget, &holders, &objective, value).unwrap();
+            for holder in &holders {
+                assert_eq!(
+                    scoreboard
+                        .get_score(&holder.name, "dummy")
+                        .map(|score| score.value.0),
+                    Some(value)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn readonly_score_store_inserts_only_the_first_missing_zero_and_fails() {
+        let mut scoreboard = Scoreboard::new();
+        scoreboard.add_objective(&NoTarget, objective("health", "health"));
+        scoreboard.add_objective(&NoTarget, objective("dummy", "dummy"));
+        let holders = [resolved_holder("missing"), resolved_holder("later")];
+        let target = CountingTarget(AtomicUsize::new(0));
+        let health = scoreboard.get_objective("health").unwrap().clone();
+
+        let error =
+            write_stored_score(&mut scoreboard, &target, &holders, &health, 42).unwrap_err();
+        assert!(error.is(&READ_ONLY_STORE_ERROR));
+        assert_eq!(
+            scoreboard.get_score("missing", "health").map(|s| s.value.0),
+            Some(0)
+        );
+        assert_eq!(scoreboard.get_score("later", "health"), None);
+        assert_eq!(target.0.load(Ordering::Relaxed), 0);
+
+        scoreboard.set_score_value(&NoTarget, "existing", "health", 7);
+        let error = write_stored_score(
+            &mut scoreboard,
+            &target,
+            &[resolved_holder("existing"), resolved_holder("later")],
+            &health,
+            42,
+        )
+        .unwrap_err();
+        assert!(error.is(&READ_ONLY_STORE_ERROR));
+        assert_eq!(
+            scoreboard
+                .get_score("existing", "health")
+                .map(|s| s.value.0),
+            Some(7)
+        );
+        assert_eq!(scoreboard.get_score("later", "health"), None);
+        assert_eq!(target.0.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn score_store_ignores_removed_and_recreated_objective() {
+        let mut scoreboard = Scoreboard::new();
+        scoreboard.add_objective(&NoTarget, objective("dummy", "dummy"));
+        let captured = scoreboard.get_objective("dummy").unwrap().clone();
+        let holders = [resolved_holder("holder")];
+
+        scoreboard.remove_objective(&NoTarget, "dummy");
+        scoreboard.add_objective(&NoTarget, objective("dummy", "dummy"));
+        let replacement = scoreboard.get_objective("dummy").unwrap();
+        assert!(!captured.is_same(replacement));
+
+        write_stored_score(&mut scoreboard, &NoTarget, &holders, &captured, 42).unwrap();
+        assert_eq!(scoreboard.get_score("holder", "dummy"), None);
+    }
+
+    #[test]
+    fn objective_update_preserves_identity_for_pending_score_store() {
+        let mut scoreboard = Scoreboard::new();
+        scoreboard.add_objective(&NoTarget, objective("dummy", "dummy"));
+        let captured = scoreboard.get_objective("dummy").unwrap().clone();
+        let updated = ScoreboardObjective::new(
+            "dummy",
+            TextComponent::text("updated"),
+            RenderType::Integer,
+            None,
+            "dummy",
+        );
+
+        scoreboard.update_objective(&NoTarget, updated);
+
+        assert!(captured.is_same(scoreboard.get_objective("dummy").unwrap()));
+        write_stored_score(
+            &mut scoreboard,
+            &NoTarget,
+            &[resolved_holder("holder")],
+            &captured,
+            42,
+        )
+        .unwrap();
+        assert_eq!(
+            scoreboard.get_score("holder", "dummy").map(|s| s.value.0),
+            Some(42)
+        );
+    }
+
+    #[test]
+    fn removed_readonly_objective_still_fails_without_touching_replacement() {
+        let mut scoreboard = Scoreboard::new();
+        scoreboard.add_objective(&NoTarget, objective("health", "health"));
+        let captured = scoreboard.get_objective("health").unwrap().clone();
+        scoreboard.remove_objective(&NoTarget, "health");
+        scoreboard.add_objective(&NoTarget, objective("health", "dummy"));
+        let target = CountingTarget(AtomicUsize::new(0));
+
+        let error = write_stored_score(
+            &mut scoreboard,
+            &target,
+            &[resolved_holder("missing")],
+            &captured,
+            42,
+        )
+        .unwrap_err();
+
+        assert!(error.is(&READ_ONLY_STORE_ERROR));
+        assert_eq!(scoreboard.get_score("missing", "health"), None);
+        assert_eq!(target.0.load(Ordering::Relaxed), 0);
+    }
 
     #[test]
     fn score_lookup_distinguishes_missing_objectives_and_scores() {

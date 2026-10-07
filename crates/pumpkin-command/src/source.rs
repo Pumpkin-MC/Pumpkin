@@ -8,7 +8,10 @@ use crate::argument_types::entity_anchor::EntityAnchor;
 use crate::errors::command_syntax_error::CommandSyntaxError;
 
 pub trait ReturnValueCallable: Send + Sync {
-    fn call(&self, value: ReturnValue);
+    /// Handles one command result.
+    ///
+    /// An error stops later callbacks and fails the command.
+    fn call(&self, value: ReturnValue) -> Result<(), CommandSyntaxError>;
 }
 
 pub type ReturnValueCallback = Arc<dyn ReturnValueCallable>;
@@ -34,10 +37,11 @@ impl ResultValueTaker {
         Self(Vec::new())
     }
 
-    pub fn call(&self, return_value: ReturnValue) {
+    pub fn call(&self, return_value: ReturnValue) -> Result<(), CommandSyntaxError> {
         for callback in &self.0 {
-            callback.call(return_value);
+            callback.call(return_value)?;
         }
+        Ok(())
     }
 }
 
@@ -76,7 +80,11 @@ pub trait CommandSource: Clone + Send + Sync + 'static {
     }
 
     /// Invokes callbacks for the command's return value.
-    fn call_result(&self, _result: ReturnValue) {}
+    ///
+    /// An error from a callback fails the command.
+    fn call_result(&self, _result: ReturnValue) -> Result<(), CommandSyntaxError> {
+        Ok(())
+    }
 
     /// Checks if this command source has the specified permission.
     fn has_permission(&self, _permission: &str) -> bool {
@@ -141,8 +149,8 @@ impl CommandSource for DummySource {
     fn entity_anchor(&self) -> EntityAnchor {
         self.entity_anchor
     }
-    fn call_result(&self, result: ReturnValue) {
-        self.command_result_taker.call(result);
+    fn call_result(&self, result: ReturnValue) -> Result<(), CommandSyntaxError> {
+        self.command_result_taker.call(result)
     }
 }
 
@@ -179,8 +187,8 @@ impl<S: CommandSource> CommandSource for Arc<S> {
         (**self).anchor_position(anchor)
     }
 
-    fn call_result(&self, result: ReturnValue) {
-        (**self).call_result(result);
+    fn call_result(&self, result: ReturnValue) -> Result<(), CommandSyntaxError> {
+        (**self).call_result(result)
     }
 
     fn check_block_loaded(&self, pos: &BlockPos) -> Result<(), CommandSyntaxError> {
