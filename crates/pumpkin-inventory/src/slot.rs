@@ -578,4 +578,21 @@ mod tests {
         assert!(player.inventory.get_slot(39).is_empty());
         assert!(player.inventory.contains_item(&Item::DIAMOND_HELMET));
     }
+
+    #[test]
+    fn throwing_all_binding_curse_armor_does_not_loop() {
+        let player = DummyPlayer::new(false);
+        let stack = cursed_helmet();
+        player.inventory.set_slot(39, stack.clone());
+        let mut handler = PlayerScreenHandler::new(&player.inventory, None, 0, None);
+
+        handler.on_slot_click(5, 1, SlotActionType::Throw, &player);
+
+        assert!(
+            player
+                .inventory
+                .get_slot(39)
+                .are_items_and_components_equal(&stack)
+        );
+    }
 }
