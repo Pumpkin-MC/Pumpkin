@@ -329,13 +329,15 @@ impl Player {
 
     fn look_changed(&self, requested: ClientMove) -> bool {
         let entity = self.get_entity();
-        requested.yaw.is_some_and(|yaw| {
-            (wrap_degrees(yaw) % 360.0 - entity.yaw.load()).abs() > f32::EPSILON
-        }) || requested.pitch.is_some_and(|pitch| {
-            (wrap_degrees(pitch).clamp(-90.0, 90.0) - entity.pitch.load()).abs() > f32::EPSILON
-        }) || requested.head_yaw.is_some_and(|head_yaw| {
-            (wrap_degrees(head_yaw) % 360.0 - entity.head_yaw.load()).abs() > f32::EPSILON
-        })
+        requested
+            .yaw
+            .is_some_and(|yaw| (wrap_degrees(yaw) % 360.0 - entity.yaw.load()).abs() > f32::EPSILON)
+            || requested.pitch.is_some_and(|pitch| {
+                (wrap_degrees(pitch).clamp(-90.0, 90.0) - entity.pitch.load()).abs() > f32::EPSILON
+            })
+            || requested.head_yaw.is_some_and(|head_yaw| {
+                (wrap_degrees(head_yaw) % 360.0 - entity.head_yaw.load()).abs() > f32::EPSILON
+            })
     }
 
     /// Look without position: teleport pending, movement locked or riding.

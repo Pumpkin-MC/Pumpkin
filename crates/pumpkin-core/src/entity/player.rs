@@ -2588,32 +2588,40 @@ impl Player {
     /// Velocity part of vanilla `ServerEntity.sendChanges`. Runs after the entity pass,
     /// so this tick's knockback goes out before the next packets and friction.
     pub fn send_velocity_changes(&self) {
-        // Ticks a server motion may take to show up in the Bedrock client's input deltas
+        // Ticks a server `SetActorMotion` may take to show up in `PlayerAuthInput.delta`.
+        // A ping-based wait would be shorter; this is a fixed round-trip guess.
         const MOTION_IN_FLIGHT_TICKS: i64 = 10;
 
         let entity = self.get_entity();
-        let push = entity.push_impulse.swap(Vector3::default());
         if entity.sync_velocity.swap(false, Ordering::SeqCst) {
             entity.velocity_dirty.store(false, Ordering::SeqCst);
+            // The server velocity already holds the pushes
+            entity.push_impulse.store(Vector3::default());
             entity.send_velocity_to_watchers();
             self.send_own_velocity(entity.velocity.load());
-        } else if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+            return;
+        }
+        if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
             // Vanilla `needsSync`: watchers only, Java clients predict their own pushes
             entity.send_velocity_to_watchers();
-            // Bedrock clients don't, and apply motion at once (no rewind history), so the push
-            // builds on the client's velocity to keep its momentum. While a server motion may
-            // still be in flight the deltas are stale and resending the server copy would
-            // replay that motion (e.g. knockback) each tick, so pushes wait it out.
-            if let Some(client) = self.client.bedrock()
-                && push != Vector3::default()
-            {
-                let since_motion = self
-                    .world()
-                    .get_world_age()
-                    .saturating_sub(client.own_motion_age.load());
-                if since_motion >= MOTION_IN_FLIGHT_TICKS {
-                    self.send_own_motion(client.client_delta.load() + push);
-                }
+        }
+        let Some(client) = self.client.bedrock() else {
+            entity.push_impulse.store(Vector3::default());
+            return;
+        };
+        // `SetActorMotion` replaces velocity; there is no add-impulse packet. Bedrock also
+        // does not predict entity pushes, so the server layers them onto the last client
+        // delta. While a previous own-player motion is in flight those deltas are stale
+        // and a new set would overwrite it (e.g. knockback), so the impulse stays pending
+        // and fades in `travel` like Java friction would.
+        let since_motion = self
+            .world()
+            .get_world_age()
+            .saturating_sub(client.own_motion_age.load());
+        if since_motion >= MOTION_IN_FLIGHT_TICKS {
+            let push = entity.push_impulse.swap(Vector3::default());
+            if push != Vector3::default() {
+                self.send_own_velocity(client.client_delta.load() + push);
             }
         }
     }

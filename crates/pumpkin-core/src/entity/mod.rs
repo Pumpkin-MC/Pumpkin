@@ -990,7 +990,8 @@ pub struct Entity {
     pub velocity_dirty: AtomicBool,
     /// velocity goes to the own client
     pub sync_velocity: AtomicBool,
-    /// Pushes on a player this tick. Bedrock clients don't predict them.
+    /// Unsent entity pushes on a player. Bedrock clients don't predict them, so they stay
+    /// pending until `SetActorMotion` can layer them on the last client delta.
     pub push_impulse: AtomicCell<Vector3<f64>>,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,

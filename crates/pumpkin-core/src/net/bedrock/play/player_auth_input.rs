@@ -39,8 +39,8 @@ impl BedrockClient {
         let horizontal_collision = flags.get(InputData::HorizontalCollision as usize);
 
         self.input_tick.store(packet.tick.0, Ordering::Relaxed);
-        // Client predicted end-of-tick velocity. Server `Entity.velocity` stays knockback/push
-        // owned; `send_velocity_changes` sends that, then later pushes layer on this delta.
+        // Client predicted end-of-tick velocity. Knockback is an absolute `SetActorMotion`.
+        // later entity pushes layer on this delta once that motion is no longer in flight.
         self.client_delta.store(packet.delta.to_f64());
 
         let sneaking = sneaking_from_auth(player, flags);

@@ -1467,8 +1467,8 @@ impl LivingEntity {
         }
     }
 
-    /// Vanilla `LivingEntity.travel`, without gliding yet
-    fn travel(&self, caller: &dyn EntityBase) {
+    /// Vanilla `LivingEntity.travel`, without gliding yet. Returns the horizontal friction.
+    fn travel(&self, caller: &dyn EntityBase) -> f64 {
         let should_swim_in_fluids = caller.get_player().is_none_or(|player| !player.is_flying());
         let touching_water = self.entity.touching_water.load(SeqCst);
         // Strider is the only entity that has canWalkOnFluid = false
@@ -1476,13 +1476,13 @@ impl LivingEntity {
             && should_swim_in_fluids
             && self.entity.entity_type != &EntityType::STRIDER
         {
-            self.travel_in_fluid(caller, touching_water);
+            self.travel_in_fluid(caller, touching_water)
         } else {
-            self.travel_in_air(caller);
+            self.travel_in_air(caller)
         }
     }
 
-    fn travel_in_air(&self, caller: &dyn EntityBase) {
+    fn travel_in_air(&self, caller: &dyn EntityBase) -> f64 {
         // applyMovementInput
 
         let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
@@ -1557,16 +1557,17 @@ impl LivingEntity {
         });
 
         self.entity.velocity.store(velo);
+        friction
     }
 
-    fn travel_in_fluid(&self, caller: &dyn EntityBase, water: bool) {
+    fn travel_in_fluid(&self, caller: &dyn EntityBase, water: bool) -> f64 {
         let movement_input = self.movement_input.load();
 
         let falling = self.entity.velocity.load().y <= 0.0;
         let gravity = self.get_effective_gravity(caller);
         let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
 
-        if water {
+        let friction = if water {
             let mut friction = if self.entity.sprinting.load(Relaxed) {
                 0.9
             } else {
@@ -1606,6 +1607,7 @@ impl LivingEntity {
 
             self.apply_fluid_moving_speed(&mut velo.y, gravity, falling);
             self.entity.velocity.store(velo);
+            friction
         } else {
             self.entity.update_velocity_from_input(movement_input, 0.02);
 
@@ -1628,7 +1630,8 @@ impl LivingEntity {
             }
 
             self.entity.velocity.store(velo);
-        }
+            0.5
+        };
 
         let mut velo = self.entity.velocity.load();
 
@@ -1643,6 +1646,7 @@ impl LivingEntity {
 
             self.entity.velocity.store(velo);
         }
+        friction
     }
 
     fn apply_fluid_moving_speed(&self, dy: &mut f64, gravity: f64, falling: bool) {
@@ -3386,7 +3390,14 @@ impl EntityBase for LivingEntity {
             // goes out undecayed.
             if !self.entity.sync_velocity.load(Ordering::SeqCst) {
                 let old_y = self.entity.velocity.load().y;
-                self.travel(caller);
+                let friction = self.travel(caller);
+                // Unsent Bedrock pushes fade like the client's motion would
+                let push = self.entity.push_impulse.load();
+                if push != Vector3::default() {
+                    self.entity
+                        .push_impulse
+                        .store(push.multiply(friction, 0.98, friction));
+                }
                 // Vanilla `Player.travel` while flying keeps 0.6 of the old vertical speed
                 if caller
                     .get_player()
