@@ -38,7 +38,7 @@ use pumpkin_util::text::{
 use pumpkin_wasm_host::WasmPluginLoader;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -59,6 +59,18 @@ async fn main() {
     // Initialize global Rayon thread pool with named worker threads
     let _ = rayon::ThreadPoolBuilder::new()
         .thread_name(|i| format!("Rayon-Worker-{i}"))
+        // Rayon aborts the process when a worker panics and no handler is set,
+        // which cuts off the shutdown the panic hook below starts. Chunk
+        // generation, lighting and chunk deserialization all run here, so the
+        // handler has to exist even though it only logs.
+        .panic_handler(|payload| {
+            let message = payload
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("<unknown>");
+            error!("Panic on a Rayon worker: {message}");
+        })
         .build_global();
 
     // Set the panic handler.
