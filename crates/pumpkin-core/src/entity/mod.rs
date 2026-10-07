@@ -1027,6 +1027,8 @@ pub struct Entity {
     pub bedrock_flags_two: std::sync::atomic::AtomicI64,
     /// If true, the entity bypasses physics, collisions, and block effects (e.g. spectator, markers, display entities)
     pub no_physics: AtomicBool,
+    /// Vanilla `firstTick`: true until the first base tick has run.
+    pub first_tick: AtomicBool,
     pub synched_data: synched_entity_data::SynchedEntityData,
     /// Multiplies movement for one tick before being reset
     pub movement_multiplier: AtomicCell<Vector3<f64>>,
@@ -1168,6 +1170,7 @@ impl Entity {
             has_no_gravity: AtomicBool::new(false),
             scoreboard_tags: std::sync::Mutex::new(HashSet::new()),
             no_physics: AtomicBool::new(false),
+            first_tick: AtomicBool::new(true),
             synched_data: synched_entity_data::SynchedEntityData::new(),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
@@ -3184,13 +3187,23 @@ impl Entity {
     /// Vanilla `refreshDimensions`: size and bounding box for the current pose.
     fn refresh_dimensions(&self) {
         let dimension = self.dimensions_for_pose(self.pose.load());
-        if self.entity_dimension.swap(dimension) == dimension {
+        let old = self.entity_dimension.swap(dimension);
+        if old == dimension {
             return;
         }
         let position = self.pos.load();
         self.bounding_box.store(BoundingBox::new_from_pos(
             position.x, position.y, position.z, &dimension,
         ));
+        if !self.first_tick.load(Ordering::Relaxed)
+            && !self.no_physics.load(Ordering::Relaxed)
+            && dimension.width <= 4.0
+            && dimension.height <= 4.0
+            && (dimension.width > old.width || dimension.height > old.height)
+            && self.entity_type != &EntityType::PLAYER
+        {
+            self.fudge_position_after_size_change(old, dimension);
+        }
         let mut bedrock_meta = SyncedActorDataList::new();
         bedrock_meta.set(
             entity_data_key::WIDTH,
@@ -3201,6 +3214,45 @@ impl Entity {
             MetadataValue::Float(dimension.height),
         );
         self.send_bedrock_actor_data(&bedrock_meta);
+    }
+
+    /// Vanilla `fudgePositionAfterSizeChange`: a grown entity moves to the closest free spot.
+    fn fudge_position_after_size_change(&self, old: EntityDimensions, new: EntityDimensions) {
+        let world = self.world.load();
+        let old_height = f64::from(old.height);
+        let (new_width, new_height) = (f64::from(new.width), f64::from(new.height));
+        let old_center = self.pos.load().add_raw(0.0, old_height / 2.0, 0.0);
+        let width_delta = f64::from((new.width - old.width).max(0.0)) + 1.0E-6;
+        let height_delta = f64::from((new.height - old.height).max(0.0)) + 1.0E-6;
+        let centers = |height: f64| {
+            let half = Vector3::new(width_delta / 2.0, height / 2.0, width_delta / 2.0);
+            BoundingBox::new(old_center.sub(&half), old_center.add(&half))
+        };
+        if let Some(free) = world.find_free_position(
+            self,
+            centers(height_delta),
+            old_center,
+            new_width,
+            new_height,
+            new_width,
+        ) {
+            self.set_pos(free.add_raw(0.0, -new_height / 2.0, 0.0));
+            return;
+        }
+        // Grown both ways: free space for the new width at the old height
+        if new.width > old.width
+            && new.height > old.height
+            && let Some(free) = world.find_free_position(
+                self,
+                centers(1.0E-6),
+                old_center,
+                new_width,
+                old_height,
+                new_width,
+            )
+        {
+            self.set_pos(free.add_raw(0.0, -old_height / 2.0 + 1.0E-6, 0.0));
+        }
     }
 
     /// Vanilla `Entity.fireImmune`: the entity type.
@@ -4349,6 +4401,7 @@ impl EntityBase for Entity {
             self.riding_cooldown
                 .store(riding_cooldown - 1, Ordering::Relaxed);
         }
+        self.first_tick.store(false, Ordering::Relaxed);
     }
 
     fn get_entity(&self) -> &Entity {
