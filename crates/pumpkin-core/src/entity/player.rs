@@ -6420,6 +6420,7 @@ impl Player {
     pub fn stop_using_item(&self) {
         self.using_item.store(false, Ordering::Relaxed);
         self.using_hand.store(None);
+        self.living_entity.clear_active_hand();
     }
 
     /// Get the number of ticks the item has been in use

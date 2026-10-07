@@ -441,7 +441,8 @@ impl BundleContentsImpl {
     }
     // Vanilla `BundleContents.getWeight`, in 64ths of a full bundle.
     pub fn weight_of(stack: &crate::item_stack::ItemStack) -> u32 {
-        (64 / stack.get_max_stack_size().max(1)) as u32
+        let max_stack_size = stack.get_max_stack_size().max(1);
+        (64.0 / f64::from(max_stack_size)).round().max(1.0) as u32
     }
     pub fn get_weight(&self) -> u32 {
         self.items
@@ -906,6 +907,7 @@ impl DataComponentImpl for RecipesImpl {
 #[cfg(test)]
 mod tests {
     use super::BundleContentsImpl;
+    use crate::data_component_impl::MaxStackSizeImpl;
     use crate::item::Item;
     use crate::item_stack::ItemStack;
 
@@ -979,5 +981,19 @@ mod tests {
             1,
             &Item::STONE
         )));
+    }
+
+    #[test]
+    fn a_stack_larger_than_a_bundle_still_weighs_something() {
+        let mut stack = ItemStack::new(1, &Item::STONE);
+        stack.set_data_component(MaxStackSizeImpl { size: 100 });
+        assert_eq!(BundleContentsImpl::weight_of(&stack), 1);
+
+        let mut contents = empty();
+        let mut big = stack;
+        big.item_count = 64;
+        assert_eq!(contents.try_insert(&mut big), 64);
+        assert_eq!(contents.get_weight(), 64);
+        assert_eq!(contents.try_insert(&mut big), 0);
     }
 }

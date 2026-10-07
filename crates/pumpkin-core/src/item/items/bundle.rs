@@ -4,6 +4,7 @@ use pumpkin_data::data_component_impl::BundleContentsImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::tag;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
@@ -94,6 +95,7 @@ impl BundleItem {
         Self::play_sound(player, Sound::ItemBundleRemoveOne);
         player.drop_item(item);
         Self::play_sound(player, Sound::ItemBundleDropContents);
+        player.increment_stat(StatisticCategory::Used, bundle.item.id as i32, 1);
     }
 
     // Vanilla `BundleItem.playRemoveOneSound` and the sounds around it.
