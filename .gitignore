@@ -108,6 +108,9 @@ wepif.yml
 # docker-compose
 data/*
 
+# Downloaded vanilla datapack
+/assets/datapack/
+
 # project's configurations
 pumpkin.toml
 nethernet-key.der

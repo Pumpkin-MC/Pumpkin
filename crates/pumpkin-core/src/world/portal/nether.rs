@@ -282,7 +282,7 @@ impl NetherPortal {
             world.set_block_state(
                 &pos,
                 state,
-                BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
+                BlockFlags::NOTIFY_LISTENERS | BlockFlags::UPDATE_KNOWN_SHAPE,
             );
             world
                 .portal_poi
@@ -844,7 +844,7 @@ impl NetherPortal {
                 world.set_block_state(
                     &pos,
                     portal_state,
-                    BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
+                    BlockFlags::NOTIFY_LISTENERS | BlockFlags::UPDATE_KNOWN_SHAPE,
                 );
                 world
                     .portal_poi
