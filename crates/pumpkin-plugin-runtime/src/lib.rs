@@ -6,6 +6,7 @@ mod spawn;
 
 pub use executor::{
     LegacyGuestScope, LegacyStore, StoreDataMut, StoreExecutor, StoreFuture, StoreHandle,
+    guest_call_error,
 };
 pub use lifecycle::{DriverError, DriverJoin, DriverState};
 pub use policy::{LegacySyncReentry, StorePolicy};
@@ -1732,6 +1733,21 @@ mod tests {
             .await
             .expect_err("a call after a guest trap should be rejected");
         assert!(
+            immediate_error
+                .root_cause()
+                .to_string()
+                .contains("unreachable")
+        );
+        assert_eq!(
+            super::guest_call_error(&immediate_error).downcast_ref::<wasmtime::Trap>(),
+            Some(&wasmtime::Trap::UnreachableCodeReached)
+        );
+        assert!(
+            super::guest_call_error(&immediate_error)
+                .downcast_ref::<wasmtime::WasmBacktrace>()
+                .is_some()
+        );
+        assert!(
             immediate_error.to_string().contains("guest call")
                 || immediate_error.to_string().contains("wasm backtrace"),
             "{immediate_error}"
@@ -1754,6 +1770,15 @@ mod tests {
             .call(|_| Box::pin(async move { Ok(()) }))
             .await
             .expect_err("later calls should retain the guest failure");
+        assert_eq!(
+            super::guest_call_error(&later_error).downcast_ref::<wasmtime::Trap>(),
+            Some(&wasmtime::Trap::UnreachableCodeReached)
+        );
+        assert!(
+            super::guest_call_error(&later_error)
+                .downcast_ref::<wasmtime::WasmBacktrace>()
+                .is_some()
+        );
         assert!(
             later_error.to_string().contains("wasm backtrace"),
             "{later_error}"
