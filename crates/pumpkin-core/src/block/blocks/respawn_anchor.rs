@@ -14,6 +14,10 @@ use crate::entity::EntityBase;
 /// Vanilla `RespawnAnchorBlock.MAX_CHARGES`.
 const MAX_CHARGES: u8 = 4;
 
+const fn should_explode_in_unsupported_dimension(charges: u8, respawn_anchor_works: bool) -> bool {
+    charges > 0 && !respawn_anchor_works
+}
+
 #[pumpkin_block("minecraft:respawn_anchor")]
 pub struct RespawnAnchorBlock;
 
@@ -53,7 +57,10 @@ impl BlockBehaviour for RespawnAnchorBlock {
         let state_id = args.world.get_block_state_id(args.position);
         let props = RespawnAnchorLikeProperties::from_state_id(state_id);
 
-        if !args.world.dimension.respawn_anchor_works {
+        if should_explode_in_unsupported_dimension(
+            props.charges,
+            args.world.dimension.respawn_anchor_works,
+        ) {
             args.world
                 .break_block(args.position, None, BlockFlags::SKIP_DROPS);
             let center_pos = args.position.to_centered_f64();
@@ -63,6 +70,10 @@ impl BlockBehaviour for RespawnAnchorBlock {
                 crate::world::ExplosionInteraction::Block,
             );
             return BlockActionResult::SuccessServer;
+        }
+
+        if !args.world.dimension.respawn_anchor_works {
+            return BlockActionResult::Pass;
         }
 
         if props.charges == 0 {
@@ -107,5 +118,18 @@ impl BlockBehaviour for RespawnAnchorBlock {
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MAX_CHARGES, should_explode_in_unsupported_dimension};
+
+    #[test]
+    fn unsupported_dimension_explodes_only_charged_anchors() {
+        assert!(!should_explode_in_unsupported_dimension(0, false));
+        assert!(should_explode_in_unsupported_dimension(1, false));
+        assert!(should_explode_in_unsupported_dimension(MAX_CHARGES, false));
+        assert!(!should_explode_in_unsupported_dimension(MAX_CHARGES, true));
     }
 }

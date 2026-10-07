@@ -13,7 +13,11 @@ use rand::RngExt;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    block::{ExplodeArgs, drop_loot},
+    block::{
+        ExplodeArgs,
+        blocks::fire::{FireBlockBase, fire::FireBlock},
+        drop_loot,
+    },
     entity::{Entity, EntityBase},
     world::loot::LootContextParameters,
 };
@@ -597,10 +601,14 @@ impl Explosion {
                             continue;
                         }
 
-                        world.set_block_state(
+                        let fire_block = FireBlockBase::get_fire_type(world, pos);
+                        let fire_state_id =
+                            FireBlock.get_state_for_position(world, &fire_block, pos);
+                        let _ = world.set_block_state_if(
                             pos,
-                            Block::FIRE.default_state.id,
+                            fire_state_id,
                             BlockFlags::NOTIFY_ALL,
+                            |state_id| state_id == Block::AIR.default_state.id,
                         );
                     }
                 }
