@@ -135,10 +135,10 @@ impl std::error::Error for SharedGuestCallError {
     }
 }
 
-/// Borrows the original Wasmtime error retained for a failed guest call.
+/// Returns the original error when a guest-call failure is wrapped for sharing.
 #[must_use]
 pub fn guest_call_error(mut error: &wasmtime::Error) -> &wasmtime::Error {
-    // Wasmtime's downcasts do not traverse a foreign std::error::Error's sources.
+    // Wasmtime does not follow `SharedGuestCallError::source` when downcasting.
     while let Some(failure) = error.downcast_ref::<SharedGuestCallError>() {
         error = &failure.0;
     }
@@ -1199,7 +1199,7 @@ async fn run_driver<T>(
         Ok(Err(error)) | Err(error) => {
             let error = guest_call_failure.record(error);
             let error = Arc::new(DriverError::new(error.to_string()));
-            tracing::debug!("Wasm plugin store driver stopped under {policy_name} after a failure");
+            tracing::debug!("Wasm plugin store driver failed under {policy_name}");
             lifecycle.transition(DriverState::Failed(error));
         }
     }

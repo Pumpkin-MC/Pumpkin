@@ -121,7 +121,7 @@ impl CommandExecutor for WasmCommandExecutor {
                         }
                         DISPATCHER_PARSE_EXCEPTION.create_without_context(
                             TextComponent::text(format!(
-                                "Command failed: plugin \"{}\" hit an error. See the server log.",
+                                "Plugin \"{}\" could not run this command. See the server log.",
                                 pumpkin_core::plugin::error::inline(&self.plugin.name)
                             ))
                             .color(Color::Named(NamedColor::Red)),

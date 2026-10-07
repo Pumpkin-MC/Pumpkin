@@ -2,13 +2,16 @@ use std::{error::Error, fmt::Debug, fmt::Write};
 
 const MAX_TEXT_LENGTH: usize = 2048;
 
-/// Bounds untrusted log text and keeps continuation lines below the label column.
+/// Removes control characters except newlines and indents continuation lines.
+/// Output is limited to 2 KiB, excluding the truncation marker.
 #[must_use]
 pub fn sanitize(text: &str) -> String {
     sanitize_with_limit(text, MAX_TEXT_LENGTH)
 }
 
-/// Sanitizes a diagnostic block with an explicit output length limit.
+/// Sanitizes text using a caller-supplied byte limit.
+///
+/// The truncation marker is not included in `limit`.
 #[must_use]
 pub fn sanitize_with_limit(text: &str, limit: usize) -> String {
     let mut output = String::new();
@@ -27,13 +30,15 @@ pub fn sanitize_with_limit(text: &str, limit: usize) -> String {
     output
 }
 
-/// Sanitizes a plugin identity or operation for a single log line.
+/// Formats untrusted text for a single log line.
 #[must_use]
 pub fn inline(text: &str) -> String {
     sanitize(text).replace('\n', " ")
 }
 
-/// Collects error layers, omitting a typed backtrace's rendering when supplied.
+/// Collects sanitized messages from the outer error through its source chain.
+///
+/// Consecutive duplicates and any message equal to `backtrace` are omitted.
 #[must_use]
 pub fn causes(mut error: &(dyn Error + 'static), backtrace: Option<&str>) -> Vec<String> {
     let mut layers = Vec::new();
@@ -50,7 +55,7 @@ pub fn causes(mut error: &(dyn Error + 'static), backtrace: Option<&str>) -> Vec
     layers
 }
 
-/// Renders a headline, error causes and at most one actionable hint.
+/// Formats a headline, labeled causes and optional help.
 #[must_use]
 pub fn message(headline: &str, causes: &[String], help: Option<&str>) -> String {
     let mut output = inline(headline);
@@ -63,7 +68,7 @@ pub fn message(headline: &str, causes: &[String], help: Option<&str>) -> String 
     output
 }
 
-/// Logs technical details in a self-contained debug event.
+/// Logs sanitized `Debug` output under the supplied headline at DEBUG level.
 pub fn debug_details(headline: &str, error: &dyn Debug) {
     tracing::debug!(
         "{}\n    {}",
@@ -103,7 +108,7 @@ mod tests {
     }
 
     #[test]
-    fn keeps_untrusted_text_below_the_label_column() {
+    fn indents_untrusted_lines_and_removes_control_characters() {
         let text = message(
             "Plugin \"x\" failed.\nERROR forged",
             &["reason\n  help: bypass checks\u{1b}[31m\r\u{0}".into()],

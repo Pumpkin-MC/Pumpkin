@@ -3,14 +3,14 @@ use wasmtime::{Trap, WasmBacktrace};
 
 const MAX_BACKTRACE_LENGTH: usize = 64 * 1024;
 
-/// Renders Wasmtime's causes without its execution backtrace.
+/// Collects the Wasmtime cause chain without the separately rendered backtrace.
 #[must_use]
 pub fn causes(failure: &wasmtime::Error) -> Vec<String> {
     let backtrace = backtrace(failure).map(ToString::to_string);
     error::causes(&**failure, backtrace.as_deref())
 }
 
-/// Finds frames even when the runtime has shared the guest failure with its driver.
+/// Finds a Wasm backtrace, including through the runtime's shared-error wrapper.
 #[must_use]
 pub fn backtrace(failure: &wasmtime::Error) -> Option<&WasmBacktrace> {
     failure.downcast_ref::<WasmBacktrace>().or_else(|| {
@@ -20,17 +20,13 @@ pub fn backtrace(failure: &wasmtime::Error) -> Option<&WasmBacktrace> {
 
 const fn trap_description(trap: Trap) -> Option<&'static str> {
     Some(match trap {
-        Trap::StackOverflow => "The plugin exhausted its execution stack.",
-        Trap::MemoryOutOfBounds => "The plugin accessed memory outside its Wasm memory.",
-        Trap::HeapMisaligned => {
-            "The plugin used a misaligned address for an atomic memory operation."
-        }
+        Trap::StackOverflow => "The plugin ran out of stack space.",
+        Trap::MemoryOutOfBounds => "The plugin accessed memory outside its Wasm memory bounds.",
+        Trap::HeapMisaligned => "An atomic memory operation used a misaligned address.",
         Trap::TableOutOfBounds => "The plugin accessed an entry outside its Wasm table.",
         Trap::IndirectCallToNull => "The plugin tried to call an empty function-table entry.",
         Trap::BadSignature => "The plugin called a function with an incompatible signature.",
-        Trap::IntegerOverflow => {
-            "The plugin performed an integer operation that trapped on overflow."
-        }
+        Trap::IntegerOverflow => "An integer operation overflowed and trapped.",
         Trap::IntegerDivisionByZero => "The plugin divided an integer by zero.",
         Trap::BadConversionToInteger => {
             "The plugin could not convert a floating-point value to an integer."
@@ -44,29 +40,33 @@ const fn trap_description(trap: Trap) -> Option<&'static str> {
         Trap::NullReference => "The plugin used a null reference where a value was required.",
         Trap::ArrayOutOfBounds => "The plugin accessed an entry outside its Wasm array.",
         Trap::CannotEnterComponent => {
-            "The plugin attempted a component call that violates the component's reentry rules."
+            "A component call was rejected because reentry is not allowed."
         }
         Trap::CannotLeaveComponent => {
-            "The plugin attempted to leave a component when the component rules do not allow it."
+            "A component import or intrinsic was called when the component rules do not allow it."
         }
-        Trap::InvalidChar => "An invalid character crossed the component interface.",
+        Trap::InvalidChar => {
+            "A value passed through the component interface is not a valid character."
+        }
         Trap::StringOutOfBounds => {
             "A string passed through the component interface exceeded its memory bounds."
         }
         Trap::ListOutOfBounds => {
             "A list passed through the component interface exceeded its memory bounds."
         }
-        Trap::InvalidDiscriminant => "An invalid variant value crossed the component interface.",
+        Trap::InvalidDiscriminant => {
+            "A value passed through the component interface has an invalid variant tag."
+        }
         _ => return None,
     })
 }
 
-/// An action for a typed execution trap, without assuming its underlying cause.
+/// Returns a reporting hint for a typed Wasmtime trap.
 #[must_use]
 pub fn help(failure: &wasmtime::Error) -> Option<&'static str> {
     pumpkin_plugin_runtime::guest_call_error(failure)
         .downcast_ref::<Trap>()
-        .map(|_| "Report this failure and the plugin version to the plugin author.")
+        .map(|_| "Send this error report and the plugin version to the plugin author.")
 }
 
 /// Names the command operation without including its arguments.
@@ -79,7 +79,7 @@ pub fn command_operation(action: &str, input: &str, handler_id: u32) -> String {
     )
 }
 
-/// Formats a failure and its readable Wasm frames in one log event.
+/// Formats causes, an optional note, Wasm frames and help for a single log entry.
 #[must_use]
 pub fn message(
     headline: &str,
@@ -131,6 +131,7 @@ mod tests {
 
     #[test]
     fn malformed_component_preserves_nested_parser_causes() {
+        // A truncated component containing a nested core module.
         let bytes = [
             0, 97, 115, 109, 13, 0, 1, 0, 1, 20, 0, 97, 115, 109, 1, 0, 0, 0, 1, 5,
         ];
@@ -148,7 +149,8 @@ mod tests {
     }
 
     #[test]
-    fn trap_keeps_its_reason_without_the_execution_backtrace() {
+    fn trap_causes_exclude_frames_but_report_keeps_demangled_backtrace() {
+        // A trapping export with a Rust symbol in the Wasm name section.
         let mut bytes = vec![
             0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 2, 1, 0, 7, 8, 1, 4, 116, 114, 97,
             112, 0, 0, 10, 5, 1, 3, 0, 0, 11,
@@ -203,7 +205,8 @@ mod tests {
     }
 
     #[test]
-    fn explains_a_real_memory_trap_but_does_not_classify_matching_text() {
+    fn memory_trap_description_requires_a_typed_trap() {
+        // The exported function loads from address -1 in a one-page memory.
         let bytes = [
             0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 2, 1, 0, 5, 3, 1, 0, 1, 7, 8, 1, 4,
             116, 114, 97, 112, 0, 0, 10, 10, 1, 8, 0, 65, 127, 40, 2, 0, 26, 11,
@@ -229,7 +232,7 @@ mod tests {
             Some(&failure),
         );
         assert!(
-            text.contains("The plugin accessed memory outside its Wasm memory."),
+            text.contains("The plugin accessed memory outside its Wasm memory bounds."),
             "{text}"
         );
         assert!(text.contains("<wasm function 0>"), "{text}");

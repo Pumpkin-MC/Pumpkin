@@ -4,6 +4,41 @@ use tracing_serde_structured::AsSerde;
 
 use crate::wit;
 
+#[cfg(target_arch = "wasm32")]
+const MAX_PANIC_TEXT_LENGTH: usize = 1024;
+
+#[cfg(target_arch = "wasm32")]
+fn panic_text(text: &str) -> &str {
+    let mut end = text.len().min(MAX_PANIC_TEXT_LENGTH);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        use std::fmt::Write;
+
+        let payload = info.payload_as_str().unwrap_or("non-string panic payload");
+        let mut message = format!("Rust panic\n  caused by: {}", panic_text(payload));
+        if payload.len() > MAX_PANIC_TEXT_LENGTH {
+            message.push_str(" [truncated]");
+        }
+        if let Some(location) = info.location() {
+            let _ = write!(
+                message,
+                "\n  at: {}:{}:{}",
+                panic_text(location.file()),
+                location.line(),
+                location.column(),
+            );
+        }
+        log(LogLevel::Error, &message);
+    }));
+}
+
 /// A [`tracing::Subscriber`] that forwards events to the host server over WIT.
 ///
 /// Installed automatically as the global subscriber when the plugin is loaded.

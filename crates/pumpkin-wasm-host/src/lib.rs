@@ -44,7 +44,7 @@ impl Plugin for WasmPluginHandle {
             if self.0.store.state().is_terminal() {
                 return Err(error::message(
                     "",
-                    &["The plugin has stopped; on_unload was not delivered to it.".into()],
+                    &["The plugin is stopped; skipped on_unload.".into()],
                     None,
                 ));
             }
@@ -194,7 +194,7 @@ impl PluginLoader for WasmPluginLoader {
     }
 
     fn format_lifecycle_error(&self, headline: &str, details: &str) -> String {
-        // WasmPluginHandle returns a sanitized body; retain its frame indentation.
+        // The body is already sanitized. Sanitizing it again would change frame indentation.
         format!("{}{details}", error::inline(headline))
     }
 

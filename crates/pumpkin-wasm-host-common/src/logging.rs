@@ -1,5 +1,43 @@
 use tracing_serde_structured::{DebugRecord, SerializeValue};
 
+use crate::state::PluginHostState;
+use pumpkin_core::plugin::error;
+
+/// Adds the available plugin identity and sanitizes the message.
+///
+/// Uses the filename until plugin metadata is available.
+#[must_use]
+pub fn format_plugin_message(state: &PluginHostState, text: &str) -> String {
+    let identity = state
+        .plugin
+        .as_ref()
+        .and_then(std::sync::Weak::upgrade)
+        .map_or_else(
+            || match (&state.name, &state.plugin_file) {
+                (Some(name), _) => format!("\"{}\"", error::inline(name)),
+                (_, Some(file)) => format!(
+                    "file \"{}\"",
+                    error::inline(
+                        &file
+                            .file_name()
+                            .map_or(file.as_path(), std::path::Path::new)
+                            .display()
+                            .to_string()
+                    )
+                ),
+                _ => "being initialized".into(),
+            },
+            |plugin| {
+                format!(
+                    "\"{}\" ({})",
+                    error::inline(&plugin.name),
+                    error::inline(&plugin.version)
+                )
+            },
+        );
+    format!("Plugin {identity} reported: {}", error::sanitize(text))
+}
+
 pub fn log_tracing(event_bytes: &[u8]) {
     let event: tracing_serde_structured::SerializeEvent<'_> =
         match postcard::from_bytes(event_bytes) {
@@ -110,5 +148,30 @@ fn format_value(v: &tracing_serde_structured::SerializeValue) -> String {
         SerializeValue::U64(u) => u.to_string(),
         SerializeValue::Bool(b) => b.to_string(),
         _ => String::from("<unknown>"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plugin_logs_identify_the_source_and_indent_untrusted_lines() {
+        let mut state = PluginHostState::new();
+        state.plugin_file = Some("probe.wasm".into());
+        assert_eq!(
+            format_plugin_message(&state, "Rust panic"),
+            "Plugin file \"probe.wasm\" reported: Rust panic"
+        );
+        state.name = Some("probe\nERROR forged\u{1b}[31m".into());
+        let text = format_plugin_message(&state, "Rust panic\nERROR forged\r\u{0}");
+        assert!(!text.contains("\nERROR"), "{text}");
+        assert!(
+            text.contains("reported: Rust panic\n    ERROR forged"),
+            "{text}"
+        );
+        assert!(!text.chars().any(|c| c.is_control() && c != '\n'));
+        let text = format_plugin_message(&state, &"x".repeat(10_000));
+        assert!(text.ends_with("[truncated]"), "{text}");
     }
 }

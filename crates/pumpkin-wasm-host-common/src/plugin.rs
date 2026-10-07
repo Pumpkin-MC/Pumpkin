@@ -9,12 +9,12 @@ pub enum PluginInitError {
     EngineCreationFailed(#[source] wasmtime::Error),
     #[error("Could not set up the plugin linker")]
     LinkerSetupFailed(#[source] wasmtime::Error),
-    #[error("Could not identify the plugin API version (does not export pumpkin:plugin/metadata?)")]
+    #[error("The plugin has no versioned pumpkin:plugin/metadata export")]
     UnknownApiVersion(),
     #[error("The plugin targets API {0}; this server supports {1}")]
     UnsupportedApiVersion(String, &'static str),
-    #[error("The plugin does not match the expected Pumpkin API")]
-    ApiMismatch(#[source] wasmtime::Error),
+    #[error("The plugin does not match the expected Pumpkin API ({0})")]
+    ApiMismatch(PluginApiVersion, #[source] wasmtime::Error),
     #[error("Could not read the plugin file")]
     FileReadFailed(#[source] std::io::Error),
     #[error("Could not compile the plugin component")]
@@ -41,14 +41,14 @@ pub const SUPPORTED_PLUGIN_APIS: [(&str, PluginApiVersion); 2] = [
 ];
 
 impl PluginInitError {
-    /// An action supported by this error category.
+    /// Returns a hint when the error identifies a specific action.
     #[must_use]
     pub fn help(&self) -> Option<&'static str> {
         match self {
             Self::UnsupportedApiVersion(..) => {
-                Some("Install a plugin release targeting a supported Pumpkin API.")
+                Some("Install a plugin built for one of the supported Pumpkin API versions.")
             }
-            Self::ApiMismatch(_) => {
+            Self::ApiMismatch(..) => {
                 Some("Install a plugin release built for this Pumpkin version.")
             }
             Self::FileReadFailed(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
@@ -63,13 +63,13 @@ impl PluginInitError {
         }
     }
 
-    /// The original Wasmtime error, when this failure came from Wasmtime.
+    /// Returns the original Wasmtime error, if this variant contains one.
     #[must_use]
     pub const fn wasmtime_error(&self) -> Option<&wasmtime::Error> {
         match self {
             Self::EngineCreationFailed(error)
             | Self::LinkerSetupFailed(error)
-            | Self::ApiMismatch(error)
+            | Self::ApiMismatch(_, error)
             | Self::ComponentNewFailed(error)
             | Self::ComponentCacheSerializeFailed(error)
             | Self::InstantiationFailed(error)
@@ -81,10 +81,19 @@ impl PluginInitError {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum PluginApiVersion {
     V0_1,
     V0_2,
+}
+
+impl std::fmt::Display for PluginApiVersion {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::V0_1 => "0.1.0",
+            Self::V0_2 => "0.2.0",
+        })
+    }
 }
 
 pub struct WasmPlugin {
@@ -98,14 +107,14 @@ pub struct WasmPlugin {
 }
 
 impl WasmPlugin {
-    /// Reports a callback that could not reach a stopped store.
+    /// Logs the skipped callback and returns `true` if the plugin store is stopped.
     #[must_use]
     pub fn report_stopped(&self, operation: &str) -> bool {
         if !self.store.state().is_terminal() {
             return false;
         }
         tracing::error!(
-            "Plugin \"{}\" ({}) has stopped; {} was not delivered to it.",
+            "Plugin \"{}\" ({}) is stopped; skipped {}.",
             pumpkin_core::plugin::error::inline(&self.name),
             pumpkin_core::plugin::error::inline(&self.version),
             pumpkin_core::plugin::error::inline(operation)
@@ -113,7 +122,7 @@ impl WasmPlugin {
         true
     }
 
-    /// Reports a Wasmtime callback failure with its original technical details.
+    /// Logs a callback failure at ERROR and its original Wasmtime details at DEBUG.
     pub fn report_failure(&self, operation: &str, failure: &wasmtime::Error) {
         use pumpkin_core::plugin::error;
         let headline = format!(
@@ -123,9 +132,8 @@ impl WasmPlugin {
             error::inline(operation)
         );
         let stopped = self.store.state().is_terminal();
-        let help = crate::error::help(failure).or_else(|| {
-            stopped.then_some("Unload and load the plugin again, or restart the server, to retry.")
-        });
+        let help = crate::error::help(failure)
+            .or_else(|| stopped.then_some("Reload the plugin or restart the server to retry."));
         let text = crate::error::message(
             &headline,
             &crate::error::causes(failure),
@@ -157,7 +165,7 @@ impl Drop for WasmPlugin {
 
 #[cfg(test)]
 mod tests {
-    use super::PluginInitError;
+    use super::{PluginApiVersion, PluginInitError};
     use std::io::{Error, ErrorKind};
 
     #[test]
@@ -168,9 +176,12 @@ mod tests {
                 .is_some()
         );
         assert!(
-            PluginInitError::ApiMismatch(wasmtime::Error::msg("type mismatch"))
-                .help()
-                .is_some()
+            PluginInitError::ApiMismatch(
+                PluginApiVersion::V0_1,
+                wasmtime::Error::msg("type mismatch")
+            )
+            .help()
+            .is_some()
         );
         for kind in [ErrorKind::PermissionDenied, ErrorKind::NotFound] {
             let expected = kind == ErrorKind::PermissionDenied;

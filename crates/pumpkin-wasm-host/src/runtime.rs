@@ -158,53 +158,50 @@ impl PluginRuntime {
         let component = load_component(&self.engine, &wasm_bytes, &self.cache_dir)?;
 
         let api_version = plugin_api_version(&self.engine, &component)?;
+        let api_mismatch = |error| PluginInitError::ApiMismatch(api_version, error);
 
         let (plugin_instance, store, metadata) = match api_version {
             PluginApiVersion::V0_1 => {
                 let instance_pre = self
                     .linker_v0_1
                     .instantiate_pre(&component)
-                    .map_err(PluginInitError::ApiMismatch)?;
+                    .map_err(api_mismatch)?;
 
-                let plugin_pre = pumpkin_wasm_host_v0_1::prepare_plugin(&instance_pre)
-                    .map_err(PluginInitError::ApiMismatch)?;
+                let plugin_pre =
+                    pumpkin_wasm_host_v0_1::prepare_plugin(&instance_pre).map_err(api_mismatch)?;
 
                 let (plugin, store, metadata) = pumpkin_wasm_host_v0_1::init_plugin(
                     &self.engine,
+                    path.as_ref(),
                     plugin_pre,
                     &self.legacy_sync_reentry,
                 )
                 .await?;
-                (
-                    Arc::new(plugin) as Arc<dyn Any + Send + Sync>,
-                    store,
-                    metadata,
-                )
+                let plugin_instance: Arc<dyn Any + Send + Sync> = Arc::new(plugin);
+                (plugin_instance, store, metadata)
             }
             #[cfg(feature = "v0_2")]
             PluginApiVersion::V0_2 => {
                 let instance_pre = self
                     .linker_v0_2
                     .instantiate_pre(&component)
-                    .map_err(PluginInitError::ApiMismatch)?;
+                    .map_err(api_mismatch)?;
 
-                let plugin_pre = pumpkin_wasm_host_v0_2::prepare_plugin(&instance_pre)
-                    .map_err(PluginInitError::ApiMismatch)?;
+                let plugin_pre =
+                    pumpkin_wasm_host_v0_2::prepare_plugin(&instance_pre).map_err(api_mismatch)?;
 
                 let (plugin, store, metadata) = pumpkin_wasm_host_v0_2::init_plugin(
                     &self.engine,
+                    path.as_ref(),
                     plugin_pre,
                     &self.legacy_sync_reentry,
                 )
                 .await?;
-                (
-                    Arc::new(plugin) as Arc<dyn Any + Send + Sync>,
-                    store,
-                    metadata,
-                )
+                let plugin_instance: Arc<dyn Any + Send + Sync> = Arc::new(plugin);
+                (plugin_instance, store, metadata)
             }
             #[cfg(not(feature = "v0_2"))]
-            PluginApiVersion::V0_2 => return Err(PluginInitError::ApiMismatch(v0_2_disabled())),
+            PluginApiVersion::V0_2 => return Err(api_mismatch(v0_2_disabled())),
         };
 
         let store = concurrent_store::start_legacy_store(
@@ -797,7 +794,8 @@ mod tests {
     fn v0_2_plugins_are_rejected_without_the_feature() {
         assert!(matches!(
             super::v0_2_api_version("0.2.0"),
-            Err(super::PluginInitError::UnsupportedApiVersion(version)) if version.contains("plugin-v0_2")
+            Err(super::PluginInitError::UnsupportedApiVersion(version, supported))
+                if version.contains("plugin-v0_2") && supported == "0.1"
         ));
     }
 }
