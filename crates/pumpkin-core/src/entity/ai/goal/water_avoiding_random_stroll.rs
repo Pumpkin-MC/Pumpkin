@@ -60,8 +60,15 @@ impl Goal for WaterAvoidingRandomStrollGoal {
             return false;
         }
 
-        let in_water = mob.get_entity().is_in_water();
-        let interval = if in_water { 10 } else { self.interval };
+        if mob
+            .get_mob_entity()
+            .get_target()
+            .is_some_and(|t| t.get_entity().is_alive())
+        {
+            return false;
+        }
+
+        let interval = self.interval;
 
         if !self.force_trigger
             && mob

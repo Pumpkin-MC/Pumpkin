@@ -1386,9 +1386,7 @@ impl LivingEntity {
                 velo.y += 0.04;
 
                 self.entity.velocity.store(velo);
-            } else if (on_ground || in_water && fluid_height <= swim_height)
-                && self.jumping_cooldown.load(SeqCst) == 0
-            {
+            } else if on_ground && self.jumping_cooldown.load(SeqCst) == 0 {
                 self.jump();
 
                 self.jumping_cooldown.store(10, SeqCst);
