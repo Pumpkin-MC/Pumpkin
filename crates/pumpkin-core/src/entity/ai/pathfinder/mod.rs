@@ -1802,10 +1802,12 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         }
 
         if let Some(goal) = self.inner.current_goal.take() {
-            // Without a budget slot the navigation keeps following its current
-            // path and retries next tick.
-            self.inner
-                .search_path_with_budget(entity, goal.destination, 1, world_age);
+            if self.inner.needs_new_path(&goal) {
+                // Without a budget slot the navigation keeps following its current
+                // path and retries next tick.
+                self.inner
+                    .search_path_with_budget(entity, goal.destination, 1, world_age);
+            }
             self.inner.current_goal = Some(goal);
         }
 
