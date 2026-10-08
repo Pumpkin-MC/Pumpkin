@@ -5315,6 +5315,9 @@ impl World {
                 let mut neighbour_update_flags = flags;
                 neighbour_update_flags.remove(BlockFlags::NOTIFY_NEIGHBORS);
                 neighbour_update_flags.remove(BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT);
+                // Suppressing drops for the changed block must not suppress drops
+                // from dependent blocks that lose their support (e.g. in Creative).
+                neighbour_update_flags.remove(BlockFlags::SKIP_DROPS);
                 self.block_registry.prepare(
                     self,
                     position,

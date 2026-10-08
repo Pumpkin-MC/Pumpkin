@@ -452,6 +452,14 @@ pub struct BlockEvent {
     pub data: u8,
 }
 
+fn loot_table_block(block: &Block) -> &Block {
+    if let Some(color) = block.name.strip_suffix("_wall_banner") {
+        Block::from_name(&format!("{color}_banner")).unwrap_or(block)
+    } else {
+        block
+    }
+}
+
 pub fn drop_loot(
     world: &Arc<World>,
     block: &Block,
@@ -459,7 +467,8 @@ pub fn drop_loot(
     experience: bool,
     params: &LootContextParameters,
 ) {
-    let key = format!("minecraft:blocks/{}", block.name);
+    let loot_block = loot_table_block(block);
+    let key = format!("minecraft:blocks/{}", loot_block.name);
     if let Some(loot_table) = world.get_loot_table(&key) {
         let seed: i64 = rand::random();
         let items = crate::world::loot::generate_loot_from_handle(&loot_table, seed, params);
@@ -478,7 +487,7 @@ pub fn drop_loot(
                 let block_entity = world.get_block_entity(pos);
                 for mut stack in event.items {
                     if let Some(block_entity) = &block_entity
-                        && Block::from_item_id(stack.item.id) == Some(block)
+                        && Block::from_item_id(stack.item.id) == Some(loot_block)
                     {
                         block_entity.collect_item_components(&mut stack);
                     }
