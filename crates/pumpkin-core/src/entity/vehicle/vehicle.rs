@@ -2,6 +2,7 @@ use crossbeam::atomic::AtomicCell;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::entity::Entity;
+use pumpkin_data::{data_component_impl::CustomNameImpl, item::Item, item_stack::ItemStack};
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::EntityBase;
@@ -167,9 +168,35 @@ impl VehicleEntity {
         );
     }
 
+    fn get_drop_item(&self) -> Option<&'static Item> {
+        let name = self.entity.entity_type.resource_name;
+        // Vanilla boats and rafts have no loot table; their item and entity keys match.
+        if name.ends_with("_boat") || name.ends_with("_raft") {
+            Item::from_registry_key(name)
+        } else {
+            None
+        }
+    }
+
     pub fn kill_and_drop_self(&self) {
         let world = self.entity.world.load();
         let entity_drops = world.level_info.load().game_rules.entity_drops;
+
+        if let Some(item) = self.get_drop_item() {
+            // Claim once, then remove before spawn callbacks can re-enter damage.
+            if self.entity.removed.swap(true, Ordering::AcqRel) {
+                return;
+            }
+            self.entity.remove();
+            if entity_drops {
+                let mut stack = ItemStack::new(1, item);
+                if let Some(name) = &**self.entity.custom_name.load() {
+                    stack.set_data_component(CustomNameImpl { name: name.clone() });
+                }
+                world.drop_stack(&self.entity.block_pos.load(), stack);
+            }
+            return;
+        }
 
         if entity_drops {
             let resource_name = self.entity.entity_type.resource_name;
@@ -254,6 +281,9 @@ impl VehicleEntity {
         new_strength
     }
 }
+
+#[cfg(test)]
+mod drop_tests;
 
 #[cfg(test)]
 mod tests {
