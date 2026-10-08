@@ -98,7 +98,12 @@ impl TntMinecart {
         if primed {
             world.explode_tnt_minecart(pos, power);
         } else {
-            world.explode(pos, power, crate::world::ExplosionInteraction::Tnt);
+            world.explode_with_source(
+                pos,
+                power,
+                crate::world::ExplosionInteraction::Tnt,
+                Some(entity),
+            );
         }
     }
 

@@ -120,10 +120,11 @@ impl CreeperEntity {
             .store(true, Ordering::Relaxed);
         let world = entity.world.load();
         let pos = entity.pos.load();
-        world.explode(
+        world.explode_with_source(
             pos,
             radius * multiplier,
             crate::world::ExplosionInteraction::Mob,
+            Some(entity),
         );
         // TODO: spawn area effect cloud with potion effects
         entity.remove();

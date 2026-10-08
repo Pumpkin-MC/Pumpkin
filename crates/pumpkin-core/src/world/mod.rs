@@ -3771,6 +3771,19 @@ impl World {
         self.explode_with_calculator(position, power, interaction, None);
     }
 
+    pub fn explode_with_source(
+        self: &Arc<Self>,
+        position: Vector3<f64>,
+        power: f32,
+        interaction: ExplosionInteraction,
+        source: Option<&Entity>,
+    ) {
+        let block_interaction = self.get_block_interaction(interaction);
+        let explosion = Explosion::new(power, position, block_interaction)
+            .with_source_entity(source.map(|entity| entity.entity_type));
+        self.run_explosion(&explosion, position, power);
+    }
+
     pub fn explode_with_calculator(
         self: &Arc<Self>,
         position: Vector3<f64>,
@@ -3788,7 +3801,9 @@ impl World {
 
     pub fn explode_tnt_minecart(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
         let block_interaction = self.get_block_interaction(ExplosionInteraction::Tnt);
-        let explosion = Explosion::new(power, position, block_interaction).preserving_rails();
+        let explosion = Explosion::new(power, position, block_interaction)
+            .with_source_entity(Some(&EntityType::TNT_MINECART))
+            .preserving_rails();
         self.run_explosion(&explosion, position, power);
     }
 
@@ -5286,6 +5301,7 @@ impl World {
                 block_state: Some(broken_block_state),
                 position: Some(position.to_f64()),
                 killed_by_player: Some(cause.is_some()),
+                this_entity: cause.map(|player| player.get_entity().entity_type),
                 ..Default::default()
             };
             crate::block::drop_loot(self, broken_block, position, true, &params);

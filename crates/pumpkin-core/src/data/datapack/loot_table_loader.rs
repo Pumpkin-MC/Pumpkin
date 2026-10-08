@@ -279,19 +279,7 @@ fn parse_condition(val: &Value) -> DynamicLootCondition {
                 DynamicLootCondition::None
             }
         }
-        "entity_properties" => {
-            let on_fire = val
-                .get("predicate")
-                .and_then(|p| p.get("flags"))
-                .and_then(|f| f.get("is_on_fire"))
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
-            if on_fire {
-                DynamicLootCondition::EntityOnFire
-            } else {
-                DynamicLootCondition::None
-            }
-        }
+        "entity_properties" => parse_entity_properties(val),
         "weather_check" => {
             let raining = val.get("raining").and_then(Value::as_bool);
             let thundering = val.get("thundering").and_then(Value::as_bool);
@@ -301,6 +289,28 @@ fn parse_condition(val: &Value) -> DynamicLootCondition {
             }
         }
         _ => DynamicLootCondition::None,
+    }
+}
+
+fn parse_entity_properties(val: &Value) -> DynamicLootCondition {
+    if val.get("entity").and_then(Value::as_str) == Some("this")
+        && val
+            .get("predicate")
+            .and_then(Value::as_object)
+            .is_some_and(serde_json::Map::is_empty)
+    {
+        return DynamicLootCondition::ThisEntityPresent;
+    }
+    let on_fire = val
+        .get("predicate")
+        .and_then(|p| p.get("flags"))
+        .and_then(|f| f.get("is_on_fire"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if on_fire {
+        DynamicLootCondition::EntityOnFire
+    } else {
+        DynamicLootCondition::None
     }
 }
 

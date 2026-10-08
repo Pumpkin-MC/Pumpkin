@@ -346,6 +346,11 @@ impl CommandExecutor for LootExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let mut drops = Vec::new();
         let mut table_id_for_callback: Option<String> = None;
+        let source_entity = context
+            .source
+            .entity
+            .as_ref()
+            .map(|entity| entity.get_entity().entity_type);
 
         match self.source {
             Source::Fish { tool } => {
@@ -374,6 +379,7 @@ impl CommandExecutor for LootExecutor {
                     })?;
 
                 let params = LootContextParameters {
+                    this_entity: source_entity,
                     position: Some(Vector3::new(
                         f64::from(pos.0.x) + 0.5,
                         f64::from(pos.0.y) + 0.5,
@@ -403,6 +409,7 @@ impl CommandExecutor for LootExecutor {
                     })?;
 
                 let params = LootContextParameters {
+                    this_entity: source_entity,
                     position: context.source.as_player().map(|p| p.position()),
                     ..Default::default()
                 };
@@ -416,7 +423,7 @@ impl CommandExecutor for LootExecutor {
                     p.inventory()
                         .get_stack(p.inventory().get_selected_slot() as usize)
                 });
-                let params = LootContextParameters {
+                let mut params = LootContextParameters {
                     killed_by_player: Some(killer.is_some()),
                     tool: killer_tool,
                     position: killer.as_ref().map(|p| p.position()),
@@ -425,6 +432,7 @@ impl CommandExecutor for LootExecutor {
 
                 let mut last_key = None;
                 for entity in &target_entities {
+                    params.this_entity = Some(entity.get_entity().entity_type);
                     let resource_name = entity.get_entity().entity_type.resource_name;
                     let key = format!("minecraft:entities/{resource_name}");
                     if let Some(loot_table) = context.server().datapack_manager.get_loot_table(&key)
@@ -473,6 +481,7 @@ impl CommandExecutor for LootExecutor {
 
                 let params = LootContextParameters {
                     block_state: Some(block_state),
+                    this_entity: source_entity,
                     tool: tool_stack,
                     position: Some(Vector3::new(
                         f64::from(pos.0.x) + 0.5,

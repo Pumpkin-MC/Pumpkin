@@ -190,6 +190,7 @@ pub struct Explosion {
     block_interaction: BlockInteraction,
     damage_calculator: Option<Arc<dyn ExplosionDamageCalculator>>,
     preserve_rails: bool,
+    source_entity: Option<&'static EntityType>,
 }
 
 impl Explosion {
@@ -201,7 +202,14 @@ impl Explosion {
             block_interaction,
             damage_calculator: None,
             preserve_rails: false,
+            source_entity: None,
         }
+    }
+
+    #[must_use]
+    pub const fn with_source_entity(mut self, source: Option<&'static EntityType>) -> Self {
+        self.source_entity = source;
+        self
     }
 
     #[must_use]
@@ -545,6 +553,7 @@ impl Explosion {
                         let params = LootContextParameters {
                             block_state: Some(state),
                             explosion_radius,
+                            this_entity: self.source_entity,
                             position: Some(pumpkin_util::math::vector3::Vector3::new(
                                 pos.0.x as f64,
                                 pos.0.y as f64,

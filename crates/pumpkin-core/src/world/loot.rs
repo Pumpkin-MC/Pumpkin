@@ -45,6 +45,7 @@ fn check_dynamic_condition(
         DynamicLootCondition::SilkTouchOrShears => has_silk_touch || has_shears,
         DynamicLootCondition::NoSilkTouchOrShears => !has_silk_touch && !has_shears,
         DynamicLootCondition::KilledByPlayer => params.killed_by_player.unwrap_or(false),
+        DynamicLootCondition::ThisEntityPresent => params.this_entity.is_some(),
         DynamicLootCondition::SurvivesExplosion => params
             .explosion_radius
             .is_none_or(|radius| rng.next_f32() <= 1.0 / radius),
@@ -113,6 +114,7 @@ fn check_condition(
         LootCondition::SilkTouchOrShears => has_silk_touch || has_shears,
         LootCondition::NoSilkTouchOrShears => !has_silk_touch && !has_shears,
         LootCondition::KilledByPlayer => params.killed_by_player.unwrap_or(false),
+        LootCondition::ThisEntityPresent => params.this_entity.is_some(),
         LootCondition::SurvivesExplosion => params
             .explosion_radius
             .is_none_or(|radius| rng.next_f32() <= 1.0 / radius),
@@ -594,5 +596,60 @@ fn shuffle_and_split_items(
     for i in (1..n).rev() {
         let j = rng.next_bounded_i32((i + 1) as i32) as usize;
         result.swap(i, j);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::{
+        Block,
+        block_properties::SnowLikeProperties,
+        loot_table::{BLOCKS_CHORUS_FLOWER, BLOCKS_SNOW},
+    };
+
+    #[test]
+    fn chorus_flower_requires_a_breaking_entity() {
+        let params = LootContextParameters::default();
+        assert!(generate_loot_with_context(&BLOCKS_CHORUS_FLOWER, 0, &params).is_empty());
+        for entity in [&EntityType::PLAYER, &EntityType::TNT] {
+            let params = LootContextParameters {
+                this_entity: Some(entity),
+                ..Default::default()
+            };
+            let drops = generate_loot_with_context(&BLOCKS_CHORUS_FLOWER, 0, &params);
+            assert_eq!(drops.len(), 1);
+            assert_eq!(drops[0].item, &Item::CHORUS_FLOWER);
+        }
+    }
+
+    #[test]
+    fn unsupported_snow_does_not_drop_items() {
+        let dynamic_table = crate::data::datapack::loot_table_loader::parse_loot_table(
+            r#"{"pools":[{"conditions":[{"condition":"minecraft:entity_properties","entity":"this","predicate":{}}],"entries":[{"type":"minecraft:item","name":"minecraft:snowball"}]}]}"#,
+        ).expect("valid snow entity-presence condition");
+        for layers in 1..=8 {
+            let mut properties = SnowLikeProperties::default(&Block::SNOW);
+            properties.layers = layers;
+            let state = BlockState::from_id(properties.to_state_id(&Block::SNOW));
+            let params = LootContextParameters {
+                block_state: Some(state),
+                ..Default::default()
+            };
+            for seed in 0..32 {
+                assert!(generate_loot_with_context(&BLOCKS_SNOW, seed, &params).is_empty());
+                assert!(
+                    generate_dynamic_loot_with_context(&dynamic_table, seed, &params,).is_empty()
+                );
+            }
+            let player_params = LootContextParameters {
+                this_entity: Some(&EntityType::PLAYER),
+                ..params
+            };
+            assert!(!generate_loot_with_context(&BLOCKS_SNOW, 0, &player_params).is_empty());
+            assert!(
+                !generate_dynamic_loot_with_context(&dynamic_table, 0, &player_params).is_empty()
+            );
+        }
     }
 }

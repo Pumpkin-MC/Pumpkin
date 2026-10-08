@@ -72,12 +72,12 @@ impl super::EnchantmentEntityEffectExt for ExplodeEffect {
         world: &std::sync::Arc<crate::world::World>,
         enchantment_level: i32,
         _owner: Option<&std::sync::Arc<crate::entity::player::Player>>,
-        _entity: Option<&crate::entity::Entity>,
+        entity: Option<&crate::entity::Entity>,
         position: Vector3<f64>,
     ) {
         let r = self.calculate_radius(enchantment_level);
         let center = position + self.offset;
-        world.explode(
+        world.explode_with_source(
             center,
             r,
             if self.create_fire {
@@ -85,6 +85,7 @@ impl super::EnchantmentEntityEffectExt for ExplodeEffect {
             } else {
                 ExplosionInteraction::None
             },
+            entity.filter(|_| self.attribute_to_user),
         );
     }
 }

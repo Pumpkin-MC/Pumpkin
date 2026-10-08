@@ -76,6 +76,8 @@ struct PredicateStruct {
     items: Option<serde_json::Value>,
     #[serde(default)]
     predicates: Option<serde_json::Value>,
+    #[serde(flatten)]
+    extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -103,6 +105,8 @@ enum ConditionValue {
 struct ConditionStruct {
     #[serde(rename = "type", default)]
     condition: String,
+    #[serde(default)]
+    entity: Option<String>,
     #[allow(dead_code)]
     #[serde(default)]
     enchantment: Option<String>,
@@ -141,6 +145,17 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
     match cond.condition.as_str() {
         "minecraft:survives_explosion" => LootCondition::SurvivesExplosion,
         "minecraft:killed_by_player" => LootCondition::KilledByPlayer,
+        "minecraft:entity_properties"
+            if cond.entity.as_deref() == Some("this")
+                && cond.predicate.as_ref().is_some_and(|predicate| {
+                    predicate.items.is_none()
+                        && predicate.predicates.is_none()
+                        && predicate.extra.is_empty()
+                }) =>
+        {
+            LootCondition::ThisEntityPresent
+        }
+
         "minecraft:random_chance" => {
             let chance = cond
                 .chance
@@ -610,6 +625,7 @@ fn condition_to_tokens(cond: LootCondition) -> TokenStream {
         LootCondition::NoSilkTouchOrShears => quote! { LootCondition::NoSilkTouchOrShears },
         LootCondition::SurvivesExplosion => quote! { LootCondition::SurvivesExplosion },
         LootCondition::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
+        LootCondition::ThisEntityPresent => quote! { LootCondition::ThisEntityPresent },
         LootCondition::RandomChance { chance } => {
             quote! { LootCondition::RandomChance { chance: #chance } }
         }
@@ -822,5 +838,23 @@ pub fn build() -> TokenStream {
     quote! {
         pub use pumpkin_util::loot_table::*;
         #all_tokens
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn snow_pool_requires_a_breaking_entity() {
+        let value: ConditionValue = serde_json::from_str(
+            r#"{"type":"minecraft:entity_properties","entity":"this","predicate":{}}"#,
+        )
+        .expect("valid vanilla snow condition");
+        assert_eq!(resolve_condition(&value), LootCondition::ThisEntityPresent);
+        let absent_predicate: ConditionValue =
+            serde_json::from_str(r#"{"type":"minecraft:entity_properties","entity":"this"}"#)
+                .expect("valid entity condition");
+        assert_eq!(resolve_condition(&absent_predicate), LootCondition::None);
     }
 }

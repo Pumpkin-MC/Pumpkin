@@ -148,6 +148,11 @@ impl EntityBase for WitherSkullEntity {
         }
 
         let hit_pos = hit.hit_pos();
-        world.explode(hit_pos, 1.0, ExplosionInteraction::Mob);
+        world.explode_with_source(
+            hit_pos,
+            1.0,
+            ExplosionInteraction::Mob,
+            Some(self.get_entity()),
+        );
     }
 }

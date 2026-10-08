@@ -10,6 +10,7 @@ pub enum LootCondition {
     NoSilkTouchOrShears,
     SurvivesExplosion,
     KilledByPlayer,
+    ThisEntityPresent,
     RandomChance {
         chance: f32,
     },
@@ -88,6 +89,7 @@ pub enum DynamicLootCondition {
     NoSilkTouchOrShears,
     SurvivesExplosion,
     KilledByPlayer,
+    ThisEntityPresent,
     RandomChance {
         chance: f32,
     },
@@ -120,6 +122,7 @@ impl From<LootCondition> for DynamicLootCondition {
             LootCondition::NoSilkTouchOrShears => Self::NoSilkTouchOrShears,
             LootCondition::SurvivesExplosion => Self::SurvivesExplosion,
             LootCondition::KilledByPlayer => Self::KilledByPlayer,
+            LootCondition::ThisEntityPresent => Self::ThisEntityPresent,
             LootCondition::RandomChance { chance } => Self::RandomChance { chance },
             LootCondition::RandomChanceWithEnchantedBonus {
                 unenchanted_chance,

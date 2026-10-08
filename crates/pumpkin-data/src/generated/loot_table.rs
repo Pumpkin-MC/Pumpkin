@@ -4619,7 +4619,10 @@ static BLOCKS_CHORUS_FLOWER_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::SurvivesExplosion,
+    condition: LootCondition::AllOf(&[
+        LootCondition::SurvivesExplosion,
+        LootCondition::ThisEntityPresent,
+    ]),
     bonus_formula: None,
 }];
 static BLOCKS_CHORUS_FLOWER_POOLS: &[LootPool] = &[LootPool {
@@ -19893,7 +19896,7 @@ static BLOCKS_SNOW_POOLS: &[LootPool] = &[LootPool {
     min_rolls: 1i32,
     max_rolls: 1i32,
     empty_weight: 0i32,
-    condition: LootCondition::None,
+    condition: LootCondition::ThisEntityPresent,
 }];
 pub static BLOCKS_SNOW: LootTable = LootTable {
     pools: BLOCKS_SNOW_POOLS,
