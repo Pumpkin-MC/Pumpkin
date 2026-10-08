@@ -6,9 +6,12 @@ use crate::{
 };
 use pumpkin_macros::packet;
 
+/// Updates or removes scoreboard entries displayed to the client.
 #[packet(108)]
 pub struct CSetScore {
+    /// Action type determining whether scores are modified (0) or removed (1).
     pub action: VarInt, // 0 = change, 1 = remove
+    /// Score entries affected by this update.
     pub entries: Vec<ScoreEntry>,
 }
 
@@ -35,12 +38,19 @@ impl PacketWrite for CSetScore {
     }
 }
 
+/// A single score line or entry on a scoreboard.
 pub struct ScoreEntry {
+    /// Unique scoreboard identifier for this entry.
     pub scoreboard_id: i64,
+    /// Associated objective identifier.
     pub objective_name: String,
+    /// Score value displayed alongside the entry.
     pub score: VarInt,
+    /// Target type (1: player, 2: entity, 3: fake player).
     pub entry_type: VarInt, // 1 = player, 2 = entity, 3 = fake player
+    /// Unique entity identifier when entry type is player or entity.
     pub entity_unique_id: i64,
+    /// Custom label when entry type is a fake player.
     pub custom_name: String,
 }
 
