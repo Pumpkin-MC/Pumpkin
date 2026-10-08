@@ -233,6 +233,7 @@ fn invalid_structure(message: impl Into<String>) -> GameTestError {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use std::io::Cursor;
 
