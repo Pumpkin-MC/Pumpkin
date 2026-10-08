@@ -70,12 +70,7 @@ impl Goal for WaterAvoidingRandomStrollGoal {
 
         let interval = self.interval;
 
-        if !self.force_trigger
-            && mob
-                .get_random()
-                .random_range(0..to_goal_ticks(interval))
-                != 0
-        {
+        if !self.force_trigger && mob.get_random().random_range(0..to_goal_ticks(interval)) != 0 {
             return false;
         }
 

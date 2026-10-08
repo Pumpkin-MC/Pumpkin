@@ -579,13 +579,16 @@ impl PathNavigation {
         let mut mob_data = MobData::new(start_pos_f, self.mob_width, self.mob_height, 1.0);
         mob_data.on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
         mob_data.can_swim = self.can_float;
-        mob_data.is_in_water = entity.entity.touching_water.load(Ordering::Relaxed)
-            || entity.entity.is_in_water();
+        mob_data.is_in_water =
+            entity.entity.touching_water.load(Ordering::Relaxed) || entity.entity.is_in_water();
 
         mob_data.set_pathfinding_malus(PathType::DangerFire, 16.0);
         mob_data.set_pathfinding_malus(PathType::DamageFire, -1.0);
         mob_data.set_pathfinding_malus(PathType::Water, if self.can_float { 0.0 } else { 8.0 });
-        mob_data.set_pathfinding_malus(PathType::WaterBorder, if self.can_float { 0.0 } else { 8.0 });
+        mob_data.set_pathfinding_malus(
+            PathType::WaterBorder,
+            if self.can_float { 0.0 } else { 8.0 },
+        );
         mob_data.set_pathfinding_malus(PathType::Lava, -1.0);
         mob_data.set_pathfinding_malus(PathType::DangerOther, 8.0);
 
