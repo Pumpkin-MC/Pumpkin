@@ -54,8 +54,9 @@ impl BlockBehaviour for FarmlandBlock {
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
-        // TODO: add rain check. Remember to check which one is most optimized.
-        if is_water_nearby(args.world, args.position) {
+        if args.world.is_raining_at(&args.position.up())
+            || is_water_nearby(args.world, args.position)
+        {
             let mut props = FarmlandProperties::default(args.block);
             let mut new_moisture = 7;
             if let Some(server) = args.world.server.upgrade() {
