@@ -245,15 +245,25 @@ impl CatEntity {
         );
     }
 
-    pub fn play_eating_sound(&self) {
-        let mob_entity = self.get_mob_entity();
-        let entity = &mob_entity.living_entity.entity;
-        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+    fn interact_with_parent(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        if self.get_entity().is_leashed() {
+            return self.mob_entity.mob_interact(player, item_stack);
+        }
+        self.animal_interact(player, item_stack, self.get_eating_sound())
+    }
+
+    fn get_eating_sound(&self) -> pumpkin_data::sound::Sound {
+        let is_baby = self.get_entity().age.load(Ordering::Relaxed) < 0;
         let sound_variant = CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
             .unwrap_or_default();
+        sound_variant.eat_sound(is_baby)
+    }
+
+    pub fn play_eating_sound(&self) {
+        let entity = self.get_entity();
         let world = entity.world.load();
         world.play_sound(
-            sound_variant.eat_sound(is_baby),
+            self.get_eating_sound(),
             pumpkin_data::sound::SoundCategory::Neutral,
             &entity.pos.load(),
         );
@@ -416,7 +426,7 @@ impl Mob for CatEntity {
                     return true;
                 }
 
-                let parent_interaction = self.mob_entity.mob_interact(player, item_stack);
+                let parent_interaction = self.interact_with_parent(player, item_stack);
                 if !parent_interaction {
                     self.set_sitting(!self.is_sitting());
                     return true;
@@ -447,6 +457,9 @@ impl Mob for CatEntity {
             return true;
         }
 
-        self.mob_entity.mob_interact(player, item_stack)
+        self.interact_with_parent(player, item_stack)
     }
 }
+
+#[cfg(test)]
+mod tests;
