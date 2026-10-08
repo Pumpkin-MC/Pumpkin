@@ -6102,6 +6102,8 @@ impl World {
         self: &Arc<Self>,
         block_pos: &BlockPos,
         direction: BlockDirection,
+        neighbor_pos: &BlockPos,
+        neighbor_state_id: BlockStateId,
         flags: BlockFlags,
     ) {
         let (block, block_state_id) = self.get_block_and_state_id(block_pos);
@@ -6112,16 +6114,13 @@ impl World {
             return;
         }
 
-        let neighbor_pos = block_pos.offset(direction.to_offset());
-        let neighbor_state_id = self.get_block_state_id(&neighbor_pos);
-
         let new_state_id = self.block_registry.get_state_for_neighbor_update(
             self,
             block,
             block_state_id,
             block_pos,
             direction,
-            &neighbor_pos,
+            neighbor_pos,
             neighbor_state_id,
         );
 

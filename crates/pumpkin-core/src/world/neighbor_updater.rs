@@ -1,13 +1,14 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockDirection, BlockId};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use tracing::error;
 
 use super::World;
 
+/// Default limit for Vanilla for updating neighbors
 const MAX_CHAINED_UPDATES: usize = 1_000_000;
 
 #[derive(Clone, Copy)]
@@ -21,6 +22,8 @@ enum UpdateKind {
     Shape {
         position: BlockPos,
         direction: BlockDirection,
+        neighbor_position: BlockPos,
+        neighbor_state_id: BlockStateId,
         flags: BlockFlags,
     },
 }
@@ -63,7 +66,7 @@ impl<W: Clone> UpdateStack<W> {
                 if !self.gave_up {
                     self.gave_up = true;
                     error!(
-                        "Skipping block updates chained beyond {}, starting at {}",
+                        "block updates chained beyond {}, updates starting at {} have been skipped",
                         self.limit,
                         kind.position()
                     );
@@ -79,10 +82,12 @@ impl<W: Clone> UpdateStack<W> {
     }
 
     fn promote_staged(&mut self) {
+        // pass in newly submitted updates to be run before older siblings
         self.remaining.extend(self.staged.drain(..).rev());
     }
 }
 
+// allow each Rayon worker to drain its cascade
 thread_local! {
     static PENDING_UPDATES: RefCell<Option<UpdateStack<Arc<World>>>> =
         const { RefCell::new(None) };
@@ -136,11 +141,16 @@ pub(super) fn update_shape(
     direction: BlockDirection,
     flags: BlockFlags,
 ) {
+    let neighbor_position = position.offset(direction.to_offset());
+    // captures the source state when an update is submitted
+    let neighbor_state_id = world.get_block_state_id(&neighbor_position);
     submit(
         world,
         std::iter::once(UpdateKind::Shape {
             position: *position,
             direction,
+            neighbor_position,
+            neighbor_state_id,
             flags,
         }),
     );
@@ -211,16 +221,27 @@ fn execute(update: QueuedUpdate<Arc<World>>) {
         UpdateKind::Shape {
             position,
             direction,
+            neighbor_position,
+            neighbor_state_id,
             flags,
         } => {
-            world.execute_shape_update(&position, direction, flags);
+            world.execute_shape_update(
+                &position,
+                direction,
+                &neighbor_position,
+                neighbor_state_id,
+                flags,
+            );
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_CHAINED_UPDATES, UpdateKind, UpdateStack};
+    use super::{
+        CascadeGuard, MAX_CHAINED_UPDATES, PENDING_UPDATES, UpdateKind, UpdateStack,
+        cascade_in_progress,
+    };
     use pumpkin_data::{BlockDirection, BlockId};
     use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector3::Vector3;
@@ -288,8 +309,13 @@ mod tests {
         stack.stage(&OVERWORLD, [neighbor_at(1), neighbor_at(2)].into_iter());
         stack.promote_staged();
 
-        let running = stack.remaining.pop().expect("staged update");
-        assert_eq!((running.world, running.kind.position().0.x), (OVERWORLD, 1));
+        assert_eq!(
+            stack
+                .remaining
+                .pop()
+                .map(|update| (update.world, update.kind.position().0.x)),
+            Some((OVERWORLD, 1)),
+        );
 
         stack.stage(&NETHER, std::iter::once(neighbor_at(10)));
         stack.promote_staged();
@@ -310,6 +336,8 @@ mod tests {
             std::iter::once(UpdateKind::Shape {
                 position: BlockPos(Vector3::new(4, 0, 0)),
                 direction: BlockDirection::Up,
+                neighbor_position: BlockPos(Vector3::new(4, 1, 0)),
+                neighbor_state_id: pumpkin_data::BlockStateId::AIR,
                 flags: BlockFlags::NOTIFY_ALL,
             }),
         );
@@ -317,5 +345,19 @@ mod tests {
 
         assert!(stack.gave_up);
         assert_eq!(remaining_positions(&stack), vec![2, 1]);
+    }
+
+    #[test]
+    #[expect(clippy::panic, reason = "Checks that unwinding resets the cascade")]
+    fn panic_does_not_leave_a_cascade_running() {
+        let result = std::panic::catch_unwind(|| {
+            PENDING_UPDATES.with(|pending| {
+                *pending.borrow_mut() = Some(UpdateStack::new(MAX_CHAINED_UPDATES));
+            });
+            let _guard = CascadeGuard;
+            panic!("block callback panicked");
+        });
+        assert!(result.is_err());
+        assert!(!cascade_in_progress());
     }
 }
