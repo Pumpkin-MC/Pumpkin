@@ -55,17 +55,21 @@ pub fn compute_biggest_craftable(
     ingredients: &[GenericIngredient<'_>],
     inventory: &PlayerInventory,
 ) -> u8 {
-    let mut available: Vec<(&'static Item, u32)> = Vec::new();
+    let mut available: Vec<(&'static Item, u32, u32)> = Vec::new();
     let main_inventory = inventory
         .main_inventory
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     for stack in main_inventory.iter() {
         if !stack.is_empty() {
-            if let Some(e) = available.iter_mut().find(|(i, _)| i.id == stack.item.id) {
+            if let Some(e) = available.iter_mut().find(|(i, _, _)| i.id == stack.item.id) {
                 e.1 += u32::from(stack.item_count);
             } else {
-                available.push((stack.item, u32::from(stack.item_count)));
+                available.push((
+                    stack.item,
+                    u32::from(stack.item_count),
+                    u32::from(stack.get_max_stack_size()),
+                ));
             }
         }
     }
@@ -73,10 +77,9 @@ pub fn compute_biggest_craftable(
     'outer: for amount in (1u32..=64).rev() {
         let mut budget = available.clone();
         for ing in ingredients {
-            let Some(idx) = budget
-                .iter()
-                .position(|(item, count)| *count >= amount && ing.match_item(item))
-            else {
+            let Some(idx) = budget.iter().position(|(item, count, max_stack_size)| {
+                *count >= amount && amount <= *max_stack_size && ing.match_item(item)
+            }) else {
                 continue 'outer;
             };
             budget[idx].1 -= amount;
