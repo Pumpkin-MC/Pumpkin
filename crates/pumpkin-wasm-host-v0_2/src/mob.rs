@@ -889,7 +889,7 @@ impl HostMob for PluginHostState {
         let entity = self.get(&this)?.clone();
         match holder {
             Some(h) => {
-                let holder = self.get(&h)?.clone();
+                let holder = self.take(h)?;
                 entity.get_entity().leash_to(holder);
             }
             None => entity.get_entity().unleash(),

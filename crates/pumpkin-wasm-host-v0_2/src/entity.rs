@@ -493,14 +493,10 @@ impl HostEntity for PluginHostState {
             }
             let is_leashed_to_holder = ent
                 .leashed_to
-                .try_lock()
-                .ok()
-                .and_then(|guard| {
-                    guard
-                        .as_ref()
-                        .map(|h| h.get_entity().entity_id == holder_id)
-                })
-                .unwrap_or(false);
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_ref()
+                .is_some_and(|h| h.get_entity().entity_id == holder_id);
             if is_leashed_to_holder {
                 result.push(
                     self.add(e)
