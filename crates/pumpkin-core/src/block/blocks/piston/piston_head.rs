@@ -24,7 +24,8 @@ impl BlockBehaviour for PistonHeadBlock {
             let props = PistonProps::from_state_id(new_state);
             if props.extended {
                 // TODO: use player
-                args.world.break_block(&pos, None, BlockFlags::SKIP_DROPS);
+                args.world
+                    .break_block(&pos, None, BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS);
             }
         }
     }
