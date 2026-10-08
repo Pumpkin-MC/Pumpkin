@@ -3318,6 +3318,28 @@ impl LivingEntity {
         true
     }
 
+    fn tick_block_step(&self, caller: &dyn EntityBase) {
+        if !self.entity.is_affected_by_blocks() || !self.entity.on_ground.load(Relaxed) {
+            return;
+        }
+
+        let supporting_pos = caller.get_player().map_or_else(
+            || self.entity.get_supporting_block_pos(),
+            super::player::Player::get_supporting_block_pos,
+        );
+        let effect_pos = self.entity.get_on_pos_legacy(supporting_pos);
+        let world = self.entity.world.load_full();
+        let (block, state) = world.get_block_and_state(&effect_pos);
+        world.block_registry.on_entity_step(
+            block,
+            &world,
+            caller,
+            &effect_pos,
+            state,
+            supporting_pos.is_some_and(|supporting| effect_pos.0.y < supporting.0.y),
+        );
+    }
+
     pub fn damage(&self, caller: &dyn EntityBase, amount: f32, damage_type: DamageType) -> bool {
         self.damage_with_context(caller, amount, damage_type, None, None, None)
     }
@@ -3383,39 +3405,7 @@ impl EntityBase for LivingEntity {
             self.entity.send_velocity();
         }
 
-        // Fetch supporting blocks for players or other entities
-        let supporting_pos = caller.get_player().map_or_else(
-            || self.entity.get_supporting_block_pos(),
-            super::player::Player::get_supporting_block_pos,
-        );
-
-        // Notify the block under the entity each tick if a supporting block position is found
-        if self.entity.is_affected_by_blocks()
-            && let Some(supporting) = supporting_pos
-        {
-            let world = self.entity.world.load_full();
-            let (block, state) = world.get_block_and_state(&supporting);
-
-            world
-                .block_registry
-                .on_entity_step(block, &world, caller, &supporting, state, false);
-
-            // Check slightly below supporting_pos for additional supporting blocks (blocks under carpets and the like)
-            if !block.is_solid() {
-                let below_supporting = supporting.down();
-                let (below_block, below_state) = world.get_block_and_state(&below_supporting);
-
-                // If block is not air, notify it as well
-                world.block_registry.on_entity_step(
-                    below_block,
-                    &world,
-                    caller,
-                    &below_supporting,
-                    below_state,
-                    true, // below supporting block
-                );
-            }
-        }
+        self.tick_block_step(caller);
 
         let current_block_pos = self.entity.block_pos.load();
         if is_alive && self.last_block_pos.load() != Some(current_block_pos) {
@@ -3912,6 +3902,9 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
         | (1u64 << DamageType::OUTSIDE_BORDER.id);
     (damage_type.id < 64) && ((BYPASS_MASK >> damage_type.id) & 1 == 1)
 }
+
+#[cfg(test)]
+mod step_tests;
 
 #[cfg(test)]
 mod tests {

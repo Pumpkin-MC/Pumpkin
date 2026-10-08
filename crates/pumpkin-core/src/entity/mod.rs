@@ -1392,6 +1392,78 @@ impl Entity {
         self.supporting_block_pos.load()
     }
 
+    /// Finds the supporting block beneath client-authoritative movement.
+    fn find_supporting_block_pos(&self, caller: &dyn EntityBase) -> Option<BlockPos> {
+        if !self.on_ground.load(Relaxed) {
+            return None;
+        }
+
+        let entity_pos = self.pos.load();
+        let aabb = self.bounding_box.load();
+        let world = self.world.load_full();
+
+        // Create the thin bounding box directly underneath the entity's feet
+        let footprint = BoundingBox::new(
+            Vector3::new(aabb.min.x, aabb.min.y - 1.0e-6, aabb.min.z),
+            Vector3::new(aabb.max.x, aabb.min.y, aabb.max.z),
+        );
+
+        let (_, positions) = world.get_block_collisions(footprint, caller);
+
+        let mut closest_candidate = None;
+        let mut min_dist_sq = f64::MAX;
+
+        for (_, pos) in positions {
+            // Calculate distance squared from the block's center to the entity's position
+            let block_center_x = f64::from(pos.0.x) + 0.5;
+            let block_center_y = f64::from(pos.0.y) + 0.5;
+            let block_center_z = f64::from(pos.0.z) + 0.5;
+
+            let dx = block_center_x - entity_pos.x;
+            let dy = block_center_y - entity_pos.y;
+            let dz = block_center_z - entity_pos.z;
+            let dist_sq = dx * dx + dy * dy + dz * dz;
+
+            // Pick the block with the smallest distance
+            if dist_sq < min_dist_sq {
+                min_dist_sq = dist_sq;
+                closest_candidate = Some(pos);
+            } else if (dist_sq - min_dist_sq).abs() < f64::EPSILON {
+                // If the distance is the same, pick the block with the smallest y, then z, then x
+                if let Some(best_pos) = closest_candidate {
+                    let is_smaller = pos.0.y < best_pos.0.y
+                        || (pos.0.y == best_pos.0.y && pos.0.z < best_pos.0.z)
+                        || (pos.0.y == best_pos.0.y
+                            && pos.0.z == best_pos.0.z
+                            && pos.0.x < best_pos.0.x);
+
+                    if is_smaller {
+                        closest_candidate = Some(pos);
+                    }
+                }
+            }
+        }
+
+        closest_candidate
+    }
+
+    /// Returns the legacy step-effect position, as in vanilla `Entity.getOnPosLegacy`.
+    fn get_on_pos_legacy(&self, supporting_pos: Option<BlockPos>) -> BlockPos {
+        let pos = self.pos.load();
+        let y = (pos.y - f64::from(0.2f32)).floor() as i32;
+        if let Some(supporting) = supporting_pos {
+            let block = self.world.load().get_block(&supporting);
+            if block.has_tag(&tag::Block::MINECRAFT_FENCES)
+                || block.has_tag(&tag::Block::MINECRAFT_WALLS)
+                || block.has_tag(&tag::Block::MINECRAFT_FENCE_GATES)
+            {
+                return supporting;
+            }
+            return BlockPos::new(supporting.0.x, y, supporting.0.z);
+        }
+        BlockPos::new(pos.x.floor() as i32, y, pos.z.floor() as i32)
+    }
+
     #[expect(clippy::float_cmp)]
     fn adjust_movement_for_collisions(
         &self,
