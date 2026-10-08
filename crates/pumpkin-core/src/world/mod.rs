@@ -5564,10 +5564,6 @@ impl World {
     }
 
     pub fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
-        if stack.is_empty() {
-            return;
-        }
-
         let half_height = f64::from(EntityType::ITEM.dimension[1]) / 2.0;
         let spawn_pos = {
             let mut r = rand::rng();
@@ -5578,10 +5574,19 @@ impl World {
             )
         };
 
-        let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
+        self.drop_stack_at(spawn_pos, stack);
+    }
+
+    /// Spawns an item entity at an exact position, firing a single `ItemSpawnEvent`.
+    pub fn drop_stack_at(self: &Arc<Self>, pos: Vector3<f64>, stack: ItemStack) {
+        if stack.is_empty() {
+            return;
+        }
+
+        let entity = Entity::new(self.clone(), pos, &EntityType::ITEM);
         let mut item_event = crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
             entity.entity_id,
-            spawn_pos,
+            pos,
             stack.item.registry_key.to_string(),
         );
         if let Some(server) = self.server.upgrade() {
