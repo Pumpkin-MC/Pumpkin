@@ -4,14 +4,18 @@ use std::io::{Error, ErrorKind, Read};
 
 use crate::{MAX_PACKET_DATA_SIZE, codec::var_uint::VarUInt, serial::PacketRead};
 
+/// Sent by the client to initiate the login handshake, containing authentication tokens and device information.
 #[packet(1)]
 pub struct SLogin {
     // https://mojang.github.io/bedrock-protocol-docs/html/LoginPacket.html
     //#[serial(big_endian)]
+    /// Protocol version spoken by the connecting client.
     pub protocol_version: i32,
 
     // https://mojang.github.io/bedrock-protocol-docs/html/connectionRequest.html
+    /// Chain of JSON Web Tokens containing identity and Xbox Live authentication claims.
     pub jwt: Vec<u8>,
+    /// Raw client data JWT carrying skin parameters, device details, and locale settings.
     pub raw_token: Vec<u8>,
 }
 
