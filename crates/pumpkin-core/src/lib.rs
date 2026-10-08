@@ -476,6 +476,10 @@ impl PumpkinServer {
             .fire(&self.server, &mut ServerLoadEvent::new(LoadType::Startup))
             .await;
 
+        // Close registration before players can connect.
+        pumpkin_data::item::Item::freeze_dynamic_registry();
+        pumpkin_data::Block::freeze_dynamic_registry();
+
         self.server.start_telemetry();
         self.server.management_hub.broadcast_server_started();
 

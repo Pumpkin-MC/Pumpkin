@@ -97,8 +97,8 @@ impl BrewingStandBlockEntity {
             // 2. Check dynamic brewing recipes from loaded datapacks
             if let Some(server) = world.server.upgrade() {
                 let dynamic_recipes = server.recipe_manager.get_dynamic_recipes_internal();
-                let slot_key = format!("minecraft:{}", slot.get_item().registry_key);
-                let ing_key = format!("minecraft:{}", ingredient.get_item().registry_key);
+                let slot_key = slot.get_item().resource_location();
+                let ing_key = ingredient.get_item().resource_location();
                 for dyn_recipe in &dynamic_recipes {
                     if let DynamicRecipe::Brewing(r) = dyn_recipe
                         && r.input_item == slot_key
@@ -195,8 +195,8 @@ impl BrewingStandBlockEntity {
                 // 2. Try dynamic brewing recipes from loaded datapacks
                 if let Some(server) = world.server.upgrade() {
                     let dynamic_recipes = server.recipe_manager.get_dynamic_recipes_internal();
-                    let slot_key = format!("minecraft:{}", slot.get_item().registry_key);
-                    let ing_key = format!("minecraft:{}", ingredient.get_item().registry_key);
+                    let slot_key = slot.get_item().resource_location();
+                    let ing_key = ingredient.get_item().resource_location();
                     for dyn_recipe in &dynamic_recipes {
                         if let DynamicRecipe::Brewing(r) = dyn_recipe
                             && r.input_item == slot_key

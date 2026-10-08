@@ -227,7 +227,7 @@ impl IDSetContent for Block {
     }
 
     fn from_id(id: u16) -> Option<&'static Self> {
-        BlockId::new(id).map(Self::from_id)
+        BlockId::from_raw(id).map(Self::from_id)
     }
 
     fn from_str(name: &str) -> Option<&'static Self> {

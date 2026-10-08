@@ -51,8 +51,9 @@ pub const ENDERMAN_BODY_Y_OFFSET: f64 = 1.45;
 pub const PLAYER_EYE_HEIGHT: f64 = 1.62;
 
 fn is_projectile_damage(dt: DamageType) -> bool {
-    let (names, _) = pumpkin_data::tag::DamageType::MINECRAFT_IS_PROJECTILE;
-    names.contains(&dt.message_id)
+    pumpkin_data::tag::DamageType::MINECRAFT_IS_PROJECTILE
+        .0
+        .contains(&dt.message_id)
 }
 
 pub struct EndermanEntity {
@@ -407,7 +408,7 @@ impl Mob for EndermanEntity {
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         if let Some(block_state) = nbt.get_int("carriedBlockState") {
-            self.set_carried_block(BlockStateId::new(block_state as u16));
+            self.set_carried_block(BlockStateId::from_raw(block_state as u16));
         }
     }
 

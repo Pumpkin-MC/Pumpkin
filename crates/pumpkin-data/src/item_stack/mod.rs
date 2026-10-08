@@ -802,7 +802,7 @@ impl ItemStack {
 
     pub fn write_item_stack(&self, compound: &mut NbtCompound) {
         // Minecraft 1.21.4 uses "id" as string with namespaced ID (minecraft:diamond_sword)
-        compound.put_string("id", format!("minecraft:{}", self.item.registry_key));
+        compound.put_string("id", self.item.resource_location().into_owned());
         compound.put_int("count", self.item_count as i32);
 
         // Create a tag compound for additional data
@@ -826,11 +826,11 @@ impl ItemStack {
         // Get ID, which is a string like "minecraft:diamond_sword"
         let full_id = compound.get_string("id")?;
 
-        // Remove the "minecraft:" prefix if present
-        let registry_key = full_id.strip_prefix("minecraft:").unwrap_or(full_id);
-
-        // Try to get item by registry key
-        let item = Item::from_registry_key(registry_key)?;
+        // Items of a plugin that is no longer loaded are dropped instead of failing the whole read.
+        let Some(item) = Item::from_registry_key(full_id) else {
+            tracing::warn!("Skipping item stack with unknown item '{full_id}'");
+            return None;
+        };
 
         let count = compound.get_int("count")? as u8;
 

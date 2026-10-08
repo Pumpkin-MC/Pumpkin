@@ -116,7 +116,7 @@ impl Taggable for Block {
 
 impl ToResourceLocation for &'static Block {
     fn to_resource_location(&self) -> ResourceLocation {
-        format!("minecraft:{}", self.name)
+        self.resource_location().into_owned()
     }
 }
 
@@ -322,11 +322,13 @@ impl BlockId {
     // depends on generated impl:
     // pub(crate) const BLOCK_COUNT: u16;
 
-    /// The total count of all registered blocks.
+    /// The count of the generated (vanilla) blocks. Plugin blocks' ids follow them.
     pub const COUNT: u16 = Self::BLOCK_COUNT;
 
-    // SAFETY: There must never be a BlockId where self.0 >= BlockId::BLOCK_COUNT
+    // SAFETY: A BlockId must be a generated block (< BLOCK_COUNT) or a registered dynamic one
+    // (checked by `from_raw`); the generated lookups rely on it.
 
+    /// A generated block id. Cannot see registered blocks, use [`Self::from_raw`] for external ids.
     #[inline]
     #[must_use]
     pub const fn new(inner: u16) -> Option<Self> {
@@ -336,6 +338,7 @@ impl BlockId {
         None
     }
 
+    /// A generated block id, air for anything else. See [`Self::new`].
     #[inline]
     #[must_use]
     pub const fn new_or_air(inner: u16) -> Self {
@@ -345,9 +348,37 @@ impl BlockId {
         Self::AIR
     }
 
+    /// The id of a registered dynamic block. Only for ids the dynamic registry handed out.
     #[inline]
     #[must_use]
-    pub const fn to_block(self) -> &'static Block {
+    pub(crate) const fn from_dynamic_raw(inner: u16) -> Self {
+        Self(inner)
+    }
+
+    /// Number of generated and registered blocks. Ids are `0..total_count()`.
+    #[inline]
+    #[must_use]
+    pub fn total_count() -> u32 {
+        crate::block_registry::total_block_count()
+    }
+
+    /// A block id of a generated or registered block.
+    #[inline]
+    #[must_use]
+    pub fn from_raw(inner: u16) -> Option<Self> {
+        (u32::from(inner) < Self::total_count()).then_some(Self(inner))
+    }
+
+    /// Like [`Self::from_raw`], air for an id that does not exist.
+    #[inline]
+    #[must_use]
+    pub fn from_raw_or_air(inner: u16) -> Self {
+        Self::from_raw(inner).unwrap_or(Self::AIR)
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn to_block(self) -> &'static Block {
         Block::from_id(self)
     }
 
@@ -361,6 +392,8 @@ impl BlockId {
     #[must_use]
     pub fn has_tag(self, tag: Tag) -> bool {
         tag.1.contains(&self.0)
+            || crate::dynamic_tag::contains_id(crate::tag::RegistryKey::Block, tag.2, self.0)
+                .unwrap_or(false)
     }
 }
 

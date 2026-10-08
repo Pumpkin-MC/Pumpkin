@@ -5,8 +5,10 @@ use std::borrow::Cow;
 use crate::codec::var_int::VarInt;
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 use pumpkin_data::Enchantment;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::*;
+use pumpkin_data::enchantment::AttributeModifierSlot;
 
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -1592,6 +1594,77 @@ impl DataComponentCodec<Self> for CanBreakImpl {
     }
 }
 
+/// Upper bound on the entries of one attribute modifier component (vanilla items carry < 10).
+const MAX_ATTRIBUTE_MODIFIERS: usize = 256;
+/// Upper bound on distinct modifier ids leaked by [`intern_modifier_id`], so a client cannot grow
+/// memory with fresh ids.
+const MAX_INTERNED_MODIFIER_IDS: usize = 4096;
+
+fn intern_modifier_id(id: &str) -> Result<&'static str, ReadingError> {
+    static INTERNED: std::sync::LazyLock<
+        std::sync::Mutex<std::collections::HashSet<&'static str>>,
+    > = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+    let mut interned = INTERNED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(existing) = interned.get(id) {
+        return Ok(*existing);
+    }
+    if interned.len() >= MAX_INTERNED_MODIFIER_IDS {
+        return Err(ReadingError::Message(
+            "Too many distinct attribute modifier ids".to_string(),
+        ));
+    }
+    let leaked: &'static str = Box::leak(id.to_owned().into_boxed_str());
+    interned.insert(leaked);
+    Ok(leaked)
+}
+
+/// Wire id of an `AttributeModifierSlot`.
+const fn attribute_slot_to_id(slot: &AttributeModifierSlot) -> i32 {
+    match slot {
+        AttributeModifierSlot::Any => 0,
+        AttributeModifierSlot::MainHand => 1,
+        AttributeModifierSlot::OffHand => 2,
+        AttributeModifierSlot::Hand => 3,
+        AttributeModifierSlot::Feet => 4,
+        AttributeModifierSlot::Legs => 5,
+        AttributeModifierSlot::Chest => 6,
+        AttributeModifierSlot::Head => 7,
+        AttributeModifierSlot::Armor => 8,
+        AttributeModifierSlot::Body => 9,
+        AttributeModifierSlot::Saddle => 10,
+    }
+}
+
+const fn attribute_slot_from_id(id: i32) -> Option<AttributeModifierSlot> {
+    Some(match id {
+        0 => AttributeModifierSlot::Any,
+        1 => AttributeModifierSlot::MainHand,
+        2 => AttributeModifierSlot::OffHand,
+        3 => AttributeModifierSlot::Hand,
+        4 => AttributeModifierSlot::Feet,
+        5 => AttributeModifierSlot::Legs,
+        6 => AttributeModifierSlot::Chest,
+        7 => AttributeModifierSlot::Head,
+        8 => AttributeModifierSlot::Armor,
+        9 => AttributeModifierSlot::Body,
+        10 => AttributeModifierSlot::Saddle,
+        _ => return None,
+    })
+}
+
+const fn attribute_operation_from_id(id: i32) -> Option<Operation> {
+    match id {
+        0 => Some(Operation::AddValue),
+        1 => Some(Operation::AddMultipliedBase),
+        2 => Some(Operation::AddMultipliedTotal),
+        _ => None,
+    }
+}
+
+/// Vanilla `AttributeModifiersComponent.Entry` layout. `Modifier` has no tooltip display field, so
+/// it is dropped when read and written as the default.
 impl DataComponentCodec<Self> for AttributeModifiersImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         seq.write_var_int(&VarInt::from(self.attribute_modifiers.len() as i32))?;
@@ -1600,40 +1673,61 @@ impl DataComponentCodec<Self> for AttributeModifiersImpl {
             seq.write_string(modifier.id)?;
             seq.write_f64(modifier.amount)?;
             seq.write_var_int(&VarInt::from(modifier.operation as i32))?;
-            let slot_id = match modifier.slot {
-                pumpkin_data::enchantment::AttributeModifierSlot::Any => 0,
-                pumpkin_data::enchantment::AttributeModifierSlot::MainHand => 1,
-                pumpkin_data::enchantment::AttributeModifierSlot::OffHand => 2,
-                pumpkin_data::enchantment::AttributeModifierSlot::Hand => 3,
-                pumpkin_data::enchantment::AttributeModifierSlot::Feet => 4,
-                pumpkin_data::enchantment::AttributeModifierSlot::Legs => 5,
-                pumpkin_data::enchantment::AttributeModifierSlot::Chest => 6,
-                pumpkin_data::enchantment::AttributeModifierSlot::Head => 7,
-                pumpkin_data::enchantment::AttributeModifierSlot::Armor => 8,
-                pumpkin_data::enchantment::AttributeModifierSlot::Body => 9,
-                pumpkin_data::enchantment::AttributeModifierSlot::Saddle => 10,
-            };
-            seq.write_var_int(&VarInt(slot_id))?;
+            seq.write_var_int(&VarInt(attribute_slot_to_id(&modifier.slot)))?;
             seq.write_var_int(&VarInt(0))?;
         }
         Ok(())
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
+        let len = seq.get_var_int()?.0;
+        let len = usize::try_from(len)
+            .ok()
+            .filter(|len| *len <= MAX_ATTRIBUTE_MODIFIERS)
+            .ok_or_else(|| {
+                ReadingError::Message(format!("Invalid attribute modifier count {len}"))
+            })?;
+        let mut modifiers = Vec::with_capacity(len);
         for _ in 0..len {
-            let _attr_id = seq.get_var_int()?;
-            let _id = seq.get_str()?;
-            let _amount = seq.get_f64()?;
-            let _operation = seq.get_var_int()?;
-            let _slot = seq.get_var_int()?;
+            let attribute_id = seq.get_var_int()?.0;
+            let r#type = Attributes::ALL
+                .iter()
+                .find(|attribute| i32::from(attribute.id) == attribute_id)
+                .ok_or_else(|| {
+                    ReadingError::Message(format!("Invalid attribute id {attribute_id}"))
+                })?;
+            let id = intern_modifier_id(&seq.get_str_bounded(256)?)?;
+            let amount = seq.get_f64()?;
+            let operation_id = seq.get_var_int()?.0;
+            let operation = attribute_operation_from_id(operation_id).ok_or_else(|| {
+                ReadingError::Message(format!("Invalid attribute operation {operation_id}"))
+            })?;
+            let slot_id = seq.get_var_int()?.0;
+            let slot = attribute_slot_from_id(slot_id).ok_or_else(|| {
+                ReadingError::Message(format!("Invalid attribute modifier slot {slot_id}"))
+            })?;
             let display_type = seq.get_var_int()?.0;
-            if display_type == 2 {
-                let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+            match display_type {
+                0 | 1 => {}
+                2 => {
+                    let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+                }
+                _ => {
+                    return Err(ReadingError::Message(format!(
+                        "Invalid attribute display type {display_type}"
+                    )));
+                }
             }
+            modifiers.push(Modifier {
+                r#type,
+                id,
+                amount,
+                operation,
+                slot,
+            });
         }
         Ok(Self {
-            attribute_modifiers: Cow::Borrowed(&[]),
+            attribute_modifiers: Cow::Owned(modifiers),
         })
     }
 }
@@ -2883,5 +2977,49 @@ mod tests {
         let decoded = ProfileImpl::deserialize(&mut encoded.as_slice()).unwrap();
         assert_eq!(decoded.name.as_deref(), Some("Notch"));
         assert_eq!(decoded.id, Some([1, 2, 3, 4]));
+    }
+
+    #[test]
+    fn attribute_modifiers_round_trip() {
+        let original = AttributeModifiersImpl {
+            attribute_modifiers: Cow::Owned(vec![
+                Modifier {
+                    r#type: &Attributes::ATTACK_DAMAGE,
+                    id: "test_mod:base_attack_damage",
+                    amount: 7.5,
+                    operation: Operation::AddValue,
+                    slot: AttributeModifierSlot::MainHand,
+                },
+                Modifier {
+                    r#type: &Attributes::ARMOR_TOUGHNESS,
+                    id: "test_mod:toughness",
+                    amount: 0.25,
+                    operation: Operation::AddMultipliedTotal,
+                    slot: AttributeModifierSlot::Head,
+                },
+            ]),
+        };
+        let mut encoded = Vec::new();
+        original.serialize(&mut encoded).unwrap();
+        let decoded = AttributeModifiersImpl::deserialize(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded, original);
+        assert_eq!(decoded.attribute_modifiers[0].amount, 7.5);
+    }
+
+    #[test]
+    fn attribute_modifiers_skip_display_and_reject_bad_ids() {
+        // One entry: attack damage, id "a:b", amount 1.0, add_value, any slot, hidden display.
+        let mut encoded = vec![1, Attributes::ATTACK_DAMAGE.id, 3];
+        encoded.extend_from_slice(b"a:b");
+        encoded.extend_from_slice(&1.0f64.to_be_bytes());
+        encoded.extend_from_slice(&[0, 0, 1]);
+        let decoded = AttributeModifiersImpl::deserialize(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded.attribute_modifiers.len(), 1);
+        assert_eq!(decoded.attribute_modifiers[0].id, "a:b");
+
+        // An unknown slot id is an error, not a silent default.
+        let last = encoded.len() - 2;
+        encoded[last] = 99;
+        assert!(AttributeModifiersImpl::deserialize(&mut encoded.as_slice()).is_err());
     }
 }

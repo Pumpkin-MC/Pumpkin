@@ -446,11 +446,12 @@ pub(crate) fn build() -> TokenStream {
 
                 if is_latest {
                     tag_entries.push(quote! {
-                        pub const #tag_const_name: Tag = (&[#(#values),*], &[#(#ids),*]);
+                        pub const #tag_const_name: Tag = (&[#(#values),*], &[#(#ids),*], #tag_name);
                     });
                     tag_map_entries.push(quote! { #tag_name => &#key_pascal::#tag_const_name });
                 } else {
-                    tag_map_entries.push(quote! { #tag_name => &(&[#(#values),*], &[#(#ids),*]) });
+                    tag_map_entries
+                        .push(quote! { #tag_name => &(&[#(#values),*], &[#(#ids),*], #tag_name) });
                 }
             }
 
@@ -513,7 +514,9 @@ pub(crate) fn build() -> TokenStream {
     quote! {
         use pumpkin_util::version::JavaMinecraftVersion;
 
-        pub type Tag = (&'static [&'static str], &'static [u16]);
+        /// The entries of a tag by name, by registry id, and the name of the tag (`namespace:path`).
+        /// The name lets membership checks find runtime additions to the tag, see `dynamic_tag`.
+        pub type Tag = (&'static [&'static str], &'static [u16], &'static str);
 
         #registry_key_enum
 
@@ -555,7 +558,7 @@ pub(crate) fn build() -> TokenStream {
             #[must_use]
             fn is_tagged_with(&self, tag: &str) -> Option<bool> {
                 let tag = tag.strip_prefix('#').unwrap_or(tag);
-                let items = get_tag_ids(Self::tag_key(), tag).or_else(|| {
+                let generated = get_tag_ids(Self::tag_key(), tag).or_else(|| {
                     if !tag.contains(':') {
                         let mut full = String::with_capacity(10 + tag.len());
                         full.push_str("minecraft:");
@@ -566,13 +569,24 @@ pub(crate) fn build() -> TokenStream {
                     } else {
                         None
                     }
-                })?;
-                Some(items.contains(&self.registry_id()))
+                }).map(|items| items.contains(&self.registry_id()));
+                let runtime = crate::dynamic_tag::is_member(
+                    Self::tag_key(),
+                    tag,
+                    self.registry_key(),
+                    self.registry_id(),
+                );
+                if generated.is_none() && runtime.is_none() {
+                    return None;
+                }
+                Some(generated.unwrap_or(false) || runtime.unwrap_or(false))
             }
 
             #[must_use]
             fn has_tag(&self, tag: &'static Tag) -> bool {
-                tag.1.contains(&self.registry_id())
+                let id = self.registry_id();
+                tag.1.contains(&id)
+                    || crate::dynamic_tag::contains_id(Self::tag_key(), tag.2, id).unwrap_or(false)
             }
 
             #[must_use]

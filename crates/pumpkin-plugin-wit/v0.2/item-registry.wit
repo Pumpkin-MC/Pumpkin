@@ -1,0 +1,52 @@
+/// Registration of custom items.
+///
+/// Vanilla items have the ids `0..get-vanilla-item-count()`, custom items get
+/// `get-vanilla-item-count() + n` where `n` is the registration order. Ids follow registration
+/// order on this server.
+///
+/// Registration closes when the server starts accepting connections (after plugin load and
+/// `server-load-event`) and needs the `registry.items` permission.
+interface item-registry {
+    use item-stack.{data-component-value};
+
+    /// An item to add to the item registry.
+    record item-definition {
+        /// Full resource location, `namespace:path`, lowercase, `a-z 0-9 _ - .` (and `/` in the
+        /// path). The `minecraft` namespace is reserved.
+        key: string,
+        /// Default components, encoded like `item-stack.set-component`. Vanilla defaults fill the
+        /// ones left out.
+        components: list<data-component-value>,
+        /// Maximum stack size. Replaces a max-stack-size component if both are given.
+        max-stack-size: option<u8>,
+    }
+
+    /// An item and its network id.
+    record item-entry {
+        key: string,
+        id: u32,
+    }
+
+    /// Registers an item and returns its id. Fails for an invalid or duplicate key, a component
+    /// that does not decode, or when registration is closed.
+    register-item: func(definition: item-definition) -> result<u32, string>;
+
+    /// Adds entries (item keys or `#tag` references) to an item tag, creating it if needed. Used by
+    /// the server for repairing, recipes and tool checks, not sent to clients.
+    register-item-tag: func(tag: string, entries: list<string>) -> result<_, string>;
+
+    /// Returns the id of an item by key, vanilla (`minecraft:` prefix optional) or custom.
+    get-item-id: func(key: string) -> option<u32>;
+
+    /// Returns the full resource location (`minecraft:` prefixed for vanilla) of an item id.
+    get-item-key: func(id: u32) -> option<string>;
+
+    /// Returns the number of vanilla items. This is also the id of the first custom item.
+    get-vanilla-item-count: func() -> u32;
+
+    /// Returns all vanilla items in id order.
+    get-vanilla-items: func() -> list<item-entry>;
+
+    /// Returns all custom items in id order.
+    get-registered-items: func() -> list<item-entry>;
+}

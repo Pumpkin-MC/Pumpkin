@@ -3486,7 +3486,7 @@ impl EntityBase for LivingEntity {
                 if let Some(player) = caller.get_player() {
                     player.trigger_advancement(
                         crate::entity::player::advancement::trigger::AdvancementTrigger::ConsumeItem {
-                            item_id: format!("minecraft:{}", item.item.registry_key),
+                            item_id: item.item.resource_location().into_owned(),
                         },
                     );
 

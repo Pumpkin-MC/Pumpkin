@@ -807,7 +807,7 @@ impl HostMob for PluginHostState {
                     enderman.set_carried_block(
                         enderman_data
                             .carried_block_state
-                            .and_then(pumpkin_data::BlockStateId::new),
+                            .and_then(pumpkin_data::BlockStateId::from_raw),
                     );
                     enderman.set_creepy(enderman_data.is_screaming || enderman_data.is_staring);
                     return Ok(true);

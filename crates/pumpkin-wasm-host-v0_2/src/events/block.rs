@@ -91,7 +91,7 @@ impl ToFromWasmEvent for BlockRedstoneEvent {
         match event {
             Event::BlockRedstoneEvent(data) => Self {
                 world: consume_world(state, &data.target_world),
-                block_state_id: BlockStateId::new_or_air(data.state_id),
+                block_state_id: BlockStateId::from_raw_or_air(data.state_id),
                 block_pos: from_wasm_block_position(data.block_pos),
                 old_current: data.old_current,
                 new_current: data.new_current,
@@ -214,9 +214,9 @@ impl ToFromWasmEvent for BlockGrowEvent {
             Event::BlockGrowEvent(data) => Self {
                 world: consume_world(state, &data.target_world),
                 old_block: from_wasm_block_name(&data.old_block),
-                old_state_id: BlockStateId::new_or_air(data.old_state_id),
+                old_state_id: BlockStateId::from_raw_or_air(data.old_state_id),
                 new_block: from_wasm_block_name(&data.new_block),
-                new_state_id: BlockStateId::new_or_air(data.new_state_id),
+                new_state_id: BlockStateId::from_raw_or_air(data.new_state_id),
                 block_pos: from_wasm_block_position(data.block_pos),
                 cancelled: data.cancelled,
             },
@@ -1033,7 +1033,7 @@ impl ToFromWasmEvent for BlockSpreadEvent {
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
         cleanup_event(&event, state);
         if let Event::BlockSpreadEvent(data) = event {
-            self.new_state_id = BlockStateId::new_or_air(data.new_state_id);
+            self.new_state_id = BlockStateId::from_raw_or_air(data.new_state_id);
             self.cancelled = data.cancelled;
         }
     }
@@ -1044,7 +1044,7 @@ impl ToFromWasmEvent for BlockSpreadEvent {
                 source_pos: from_wasm_block_position(data.source_pos),
                 target_pos: from_wasm_block_position(data.target_pos),
                 world: consume_world(state, &data.target_world),
-                new_state_id: BlockStateId::new_or_air(data.new_state_id),
+                new_state_id: BlockStateId::from_raw_or_air(data.new_state_id),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -1202,7 +1202,7 @@ impl ToFromWasmEvent for EntityBlockFormEvent {
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
         cleanup_event(&event, state);
         if let Event::EntityBlockFormEvent(data) = event {
-            self.new_state_id = BlockStateId::new_or_air(data.new_state_id);
+            self.new_state_id = BlockStateId::from_raw_or_air(data.new_state_id);
             self.cancelled = data.cancelled;
         }
     }
@@ -1233,7 +1233,7 @@ impl ToFromWasmEvent for FluidLevelChangeEvent {
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
         cleanup_event(&event, state);
         if let Event::FluidLevelChangeEvent(data) = event {
-            self.new_state_id = BlockStateId::new_or_air(data.new_state_id);
+            self.new_state_id = BlockStateId::from_raw_or_air(data.new_state_id);
             self.cancelled = data.cancelled;
         }
     }
@@ -1243,7 +1243,7 @@ impl ToFromWasmEvent for FluidLevelChangeEvent {
             Event::FluidLevelChangeEvent(data) => Self {
                 block_pos: from_wasm_block_position(data.block_pos),
                 world: consume_world(state, &data.target_world),
-                new_state_id: BlockStateId::new_or_air(data.new_state_id),
+                new_state_id: BlockStateId::from_raw_or_air(data.new_state_id),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

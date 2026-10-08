@@ -79,6 +79,9 @@ pub struct ChunkData {
     pub light_populated: AtomicBool,
     pub status: ChunkStatus,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
+    /// Set when the chunk names a block that is not registered (yet) while registration is still
+    /// open. Such a chunk is never reported as dirty, so it is not saved with air in its place.
+    pub holds_unregistered_blocks: AtomicBool,
     pub dirty: AtomicBool,
     pub inhabited_time: AtomicU64,
     pub custom_data: std::sync::Mutex<NbtCompound>,
@@ -639,6 +642,7 @@ impl ChunkData {
             light_populated: std::sync::atomic::AtomicBool::new(false),
             status: ChunkStatus::Full,
             blending_data: None,
+            holds_unregistered_blocks: std::sync::atomic::AtomicBool::new(false),
             dirty: std::sync::atomic::AtomicBool::new(false),
             inhabited_time: std::sync::atomic::AtomicU64::new(0),
             custom_data: std::sync::Mutex::new(NbtCompound::new()),

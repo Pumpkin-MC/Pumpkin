@@ -1987,23 +1987,35 @@ pub fn build() -> TokenStream {
                 TextComponent::translate(name, &[])
             }
 
-            #[doc = "Try to parse an item from a resource location string."]
+            #[doc = "Try to parse a generated item from a resource location string without the `minecraft:` prefix."]
             #[must_use]
-            pub fn from_registry_key(name: &str) -> Option<&'static Self> {
-                let name = name.strip_prefix("minecraft:").unwrap_or(name);
+            pub fn from_vanilla_registry_key(name: &str) -> Option<&'static Self> {
                 match name {
                     #type_from_name
                     _ => None
                 }
             }
 
-            #[doc = "Try to parse an item from a raw id."]
+            #[doc = "Try to parse an item from a resource location string. Items registered at runtime are looked up after the generated ones."]
             #[must_use]
-            pub const fn from_id(id: u16) -> Option<&'static Self> {
+            pub fn from_registry_key(name: &str) -> Option<&'static Self> {
+                let name = name.strip_prefix("minecraft:").unwrap_or(name);
+                Self::from_vanilla_registry_key(name).or_else(|| Self::from_dynamic_registry_key(name))
+            }
+
+            #[doc = "Try to get a generated item from a raw id."]
+            #[must_use]
+            pub const fn from_vanilla_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #type_from_raw_id_arms
                     _ => None
                 }
+            }
+
+            #[doc = "Try to parse an item from a raw id. Items registered at runtime are looked up after the generated ones."]
+            #[must_use]
+            pub fn from_id(id: u16) -> Option<&'static Self> {
+                Self::from_vanilla_id(id).or_else(|| Self::from_dynamic_id(id))
             }
         }
 

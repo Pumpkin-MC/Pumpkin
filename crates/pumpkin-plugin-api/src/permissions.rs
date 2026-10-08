@@ -60,3 +60,13 @@ pub const SYS_INFO_RAM: &str = "sys.info.ram";
 
 /// Allows the plugin to read OS information.
 pub const SYS_INFO_OS: &str = "sys.info.os";
+
+/// Allows the plugin to register custom items and item tags with `item_registry`.
+///
+/// Registration is only possible while the server starts, before players can connect.
+pub const REGISTRY_ITEMS: &str = "registry.items";
+
+/// Allows the plugin to register custom blocks and block tags with `block_registry`.
+///
+/// Registration is only possible while the server starts, before players can connect.
+pub const REGISTRY_BLOCKS: &str = "registry.blocks";

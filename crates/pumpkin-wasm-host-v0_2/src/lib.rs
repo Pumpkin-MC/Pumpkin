@@ -15,6 +15,8 @@ mod bindings;
 
 pub mod advancement;
 pub mod block_entity;
+pub mod block_placement;
+pub mod block_registry;
 pub mod boss_bar;
 pub mod commands;
 pub mod common;
@@ -32,6 +34,7 @@ pub mod gui;
 pub mod i18n;
 pub mod inventory;
 pub mod ipc;
+pub mod item_registry;
 pub mod item_stack;
 pub mod java_dialogs;
 pub mod living_entity;

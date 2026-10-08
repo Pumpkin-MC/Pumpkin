@@ -734,7 +734,7 @@ impl BlockPalette {
             Self::Heterogeneous(data) => {
                 let raw_bits_per_entry = encompassing_bits(data.counts.len());
                 if raw_bits_per_entry > BLOCK_NETWORK_MAX_MAP_BITS {
-                    let bits_per_entry = BLOCK_NETWORK_MAX_BITS;
+                    let bits_per_entry = block_network_max_bits();
                     let values_per_i64 = 64 / bits_per_entry;
                     let mut packed_data =
                         Vec::with_capacity(Self::VOLUME.div_ceil(values_per_i64 as usize));
@@ -994,7 +994,16 @@ pub type BlockPalette = PalettedContainer<BlockStateId, 16>;
 const BLOCK_DISK_MIN_BITS: u8 = 4;
 const BLOCK_NETWORK_MIN_MAP_BITS: u8 = 4;
 const BLOCK_NETWORK_MAX_MAP_BITS: u8 = 8;
-pub(crate) const BLOCK_NETWORK_MAX_BITS: u8 = 16;
+
+/// Bits per entry of the global block palette, covering the generated and registered block states.
+pub(crate) fn block_network_max_bits() -> u8 {
+    global_palette_bits(BlockStateId::total_count())
+}
+
+/// Bits per entry of the global block palette for `state_count` block states.
+pub(crate) fn global_palette_bits(state_count: u32) -> u8 {
+    encompassing_bits(state_count as usize).max(BLOCK_NETWORK_MAX_MAP_BITS + 1)
+}
 
 pub type BiomePalette = PalettedContainer<u8, 4>;
 const BIOME_DISK_MIN_BITS: u8 = 0;
