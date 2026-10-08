@@ -129,22 +129,9 @@ impl JavaClient {
                 }
             }}
         } else {
-            // Entity not found
-            send_cancellable_blocking! {{
-                server;
-                PlayerInteractUnknownEntityEvent::new(player, entity_id.0, action);
-
-                'after: {
-                    if event.action == ActionType::Attack {
-                        error!(
-                            "Player id {} interacted with entity id {}, which was not found.",
-                            player.entity_id(),
-                            event.entity_id
-                        );
-                        self.try_kick(&TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, []));
-                    }
-                }
-            }}
+            // Keep the plugin notification, but a removed target has no default interaction.
+            let mut event = PlayerInteractUnknownEntityEvent::new(player, entity_id.0, action);
+            server.plugin_manager.fire_blocking(server, &mut event);
         }
     }
 }

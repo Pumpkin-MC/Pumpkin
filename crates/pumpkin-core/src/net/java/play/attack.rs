@@ -1,6 +1,9 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
+#[cfg(test)]
+mod tests;
+
 impl JavaClient {
     pub fn handle_attack(&self, player: &Arc<Player>, attack: &SAttack, server: &Arc<Server>) {
         if !player.has_client_loaded() {
@@ -31,11 +34,7 @@ impl JavaClient {
             .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
             .or_else(|| world.get_entity_by_id(entity_id.0));
         let Some(target) = target else {
-            self.try_kick(&TextComponent::translate_cross(
-                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                [],
-            ));
+            // The target may have been removed while this attack was queued.
             return;
         };
         if let Some(player_victim) = &player_target {
