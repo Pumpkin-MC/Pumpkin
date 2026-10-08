@@ -1,0 +1,111 @@
+interface scoreboard {
+    use text.{text-component};
+    use common.{named-color};
+
+    enum render-type {
+        integer,
+        hearts
+    }
+
+    variant number-format {
+        blank,
+        fixed(text-component),
+    }
+
+    enum display-slot {
+        player-list,
+        sidebar,
+        below-name,
+        sidebar-team-black,
+        sidebar-team-dark-blue,
+        sidebar-team-dark-green,
+        sidebar-team-dark-aqua,
+        sidebar-team-dark-red,
+        sidebar-team-dark-purple,
+        sidebar-team-gold,
+        sidebar-team-gray,
+        sidebar-team-dark-gray,
+        sidebar-team-blue,
+        sidebar-team-green,
+        sidebar-team-aqua,
+        sidebar-team-red,
+        sidebar-team-light-purple,
+        sidebar-team-yellow,
+        sidebar-team-white,
+    }
+
+    enum nametag-visibility {
+        always,
+        never,
+        hide-for-other-teams,
+        hide-for-own-team
+    }
+
+    enum collision-rule {
+        always,
+        never,
+        push-other-teams,
+        push-own-team
+    }
+
+    record team-settings {
+        display-name: text-component,
+        friendly-fire: bool,
+        see-friendly-invisibles: bool,
+        nametag-visibility: nametag-visibility,
+        collision-rule: collision-rule,
+        color: named-color,
+        prefix: text-component,
+        suffix: text-component
+    }
+
+    resource scoreboard {
+        add-objective: func(name: string, display-name: text-component, render-type: render-type, number-format: option<number-format>);
+        update-objective: func(name: string, display-name: text-component, render-type: render-type, number-format: option<number-format>);
+        remove-objective: func(name: string);
+        set-display-slot: func(slot: display-slot, objective-name: string);
+        clear-display-slot: func(slot: display-slot);
+
+        update-score: func(entity-name: string, objective-name: string, value: s32, number-format: option<number-format>);
+        add-score: func(entity-name: string, objective-name: string, delta: s32) -> s32;
+        remove-score: func(entity-name: string, objective-name: string);
+        reset-entity-scores: func(entity-name: string);
+
+        create-team: func(name: string, settings: team-settings);
+        remove-team: func(name: string);
+        update-team: func(name: string, settings: team-settings);
+
+        add-player-to-team: func(team-name: string, player-name: string);
+        remove-player-from-team: func(team-name: string, player-name: string);
+        clear-team-players: func(team-name: string);
+
+        get-teams: func() -> list<string>;
+        get-team: func(name: string) -> option<team-settings>;
+        get-team-players: func(team-name: string) -> list<string>;
+        get-player-team: func(player-name: string) -> option<string>;
+    }
+
+    enum bedrock-sort-order {
+        ascending,
+        descending
+    }
+
+    enum bedrock-display-slot {
+        player-list,
+        sidebar,
+        below-name
+    }
+
+    resource bedrock-scoreboard {
+        add-objective: func(name: string, display-name: string, sort-order: bedrock-sort-order);
+        update-objective: func(name: string, display-name: string, sort-order: bedrock-sort-order);
+        remove-objective: func(name: string);
+        set-display-slot: func(slot: bedrock-display-slot, objective-name: string);
+        clear-display-slot: func(slot: bedrock-display-slot);
+
+        update-score: func(entity-name: string, objective-name: string, value: s32);
+        add-score: func(entity-name: string, objective-name: string, delta: s32) -> s32;
+        remove-score: func(entity-name: string, objective-name: string);
+        reset-entity-scores: func(entity-name: string);
+    }
+}

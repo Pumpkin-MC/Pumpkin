@@ -70,6 +70,39 @@ impl Dirtiable for ChunkData {
     }
 }
 
+/// The section stores `Y` as a byte, short, int or long depending on who wrote
+/// the file. The datafixer writes ints. Reading only bytes would map every int
+/// section to `Y = 0`, and they would overwrite each other.
+fn section_y(section: &NbtCompound) -> i32 {
+    use pumpkin_nbt::tag::NbtTag;
+
+    match section.get("Y") {
+        Some(NbtTag::Byte(value)) => i32::from(*value),
+        Some(NbtTag::Short(value)) => i32::from(*value),
+        Some(NbtTag::Int(value)) => *value,
+        Some(NbtTag::Long(value)) => i32::try_from(*value).unwrap_or(0),
+        _ => 0,
+    }
+}
+
+/// What vanilla does when `yPos` is missing, for example after it upgrades a
+/// world in place: the lowest section that stores biomes, and never above 0.
+/// That gives `-4` in the Overworld and `0` in the Nether and End, which are
+/// the section minimums of those dimensions.
+fn lowest_biome_section_y(root_tag: &NbtCompound) -> Option<i32> {
+    let sections = root_tag.get_list("sections")?;
+    sections
+        .iter()
+        .filter_map(|tag| match tag {
+            pumpkin_nbt::tag::NbtTag::Compound(compound) if compound.has("biomes") => {
+                Some(section_y(compound))
+            }
+            _ => None,
+        })
+        .min()
+        .map(|y| y.min(0))
+}
+
 fn extract_u16_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[BlockStateId]>> {
     match tag {
         pumpkin_nbt::tag::NbtTag::IntArray(arr) => Some(
@@ -198,15 +231,21 @@ impl ChunkData {
             )));
         }
 
-        let min_y_section = root_tag.get_int("yPos").ok_or_else(|| {
-            ChunkParsingError::ErrorDeserializingChunk("Missing yPos".to_string())
-        })?;
+        // Vanilla omits yPos when it upgrades a world in place. It uses the
+        // dimension minimum for such chunks, which is the lowest section that
+        // stores biomes. Do the same instead of rejecting the chunk.
+        let min_y_section = match root_tag.get_int("yPos") {
+            Some(y_pos) => y_pos,
+            None => lowest_biome_section_y(&root_tag).ok_or_else(|| {
+                ChunkParsingError::ErrorDeserializingChunk("Missing yPos".to_string())
+            })?,
+        };
 
         let mut max_y_section = min_y_section as i8;
         if let Some(sections_list) = root_tag.get_list("sections") {
             for section_tag in sections_list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(section_compound) = section_tag {
-                    let y = section_compound.get_byte("Y").unwrap_or(0);
+                    let y = section_y(section_compound) as i8;
                     if y > max_y_section {
                         max_y_section = y;
                     }
@@ -223,8 +262,8 @@ impl ChunkData {
         if let Some(sections_list) = root_tag.get_list("sections") {
             for section_tag in sections_list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(section_compound) = section_tag {
-                    let y = section_compound.get_byte("Y").unwrap_or(0);
-                    let index = (y as i32 - min_y_section) as usize;
+                    let y = section_y(section_compound);
+                    let index = (y - min_y_section) as usize;
                     if index >= section_count {
                         continue;
                     }
@@ -929,6 +968,177 @@ mod tests {
     use pumpkin_data::Block;
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_nbt::tag::NbtTag;
+
+    fn test_section(y: i32, block: &str, with_biomes: bool) -> NbtCompound {
+        let mut block_states = NbtCompound::new();
+        let mut air = NbtCompound::new();
+        air.put_string("Name", "minecraft:air".to_string());
+        let mut solid = NbtCompound::new();
+        solid.put_string("Name", block.to_string());
+        block_states.put(
+            "palette",
+            NbtTag::List(vec![NbtTag::Compound(air), NbtTag::Compound(solid)]),
+        );
+        block_states.put("data", NbtTag::LongArray(vec![1; 256]));
+
+        let mut section = NbtCompound::new();
+        section.put_int("Y", y);
+        section.put("block_states", NbtTag::Compound(block_states));
+        if with_biomes {
+            let mut biomes = NbtCompound::new();
+            biomes.put(
+                "palette",
+                NbtTag::List(vec![NbtTag::String("minecraft:plains".into())]),
+            );
+            section.put("biomes", NbtTag::Compound(biomes));
+        }
+        section
+    }
+
+    fn test_chunk(sections: Vec<NbtCompound>) -> pumpkin_nbt::Nbt {
+        let mut root = NbtCompound::new();
+        root.put_int("DataVersion", 4903);
+        root.put_int("xPos", 0);
+        root.put_int("zPos", 0);
+        root.put_string("Status", "minecraft:full".to_string());
+        root.put(
+            "sections",
+            NbtTag::List(sections.into_iter().map(NbtTag::Compound).collect()),
+        );
+        pumpkin_nbt::Nbt::new(String::new(), root)
+    }
+
+    #[test]
+    fn chunk_without_y_pos_uses_the_lowest_biome_section() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        // The datafixer writes Y as an int, so the test must too.
+        let bytes = test_chunk(vec![test_section(-4, "minecraft:stone", true)]).write();
+        let chunk =
+            ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("chunk without yPos parses");
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, -64, 0),
+            Some(Block::STONE.default_state.id)
+        );
+    }
+
+    #[test]
+    fn chunk_with_int_y_sections_keeps_every_section() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let bytes = test_chunk(vec![
+            test_section(-4, "minecraft:stone", true),
+            test_section(0, "minecraft:dirt", true),
+        ])
+        .write();
+        let chunk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("int Y chunk parses");
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, -64, 0),
+            Some(Block::STONE.default_state.id)
+        );
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, 0, 0),
+            Some(Block::DIRT.default_state.id)
+        );
+    }
+
+    #[test]
+    fn chunk_with_mixed_numeric_y_tags_keeps_sections() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        // What a real upgraded chunk looks like: the map's own sections store Y
+        // as a byte, the datafixer writes ints. The int section must still land
+        // at its own height instead of collapsing to Y = 0.
+        let mut byte_section = test_section(-4, "minecraft:air", true);
+        byte_section.put_byte("Y", -4);
+
+        let bytes = test_chunk(vec![
+            byte_section,
+            test_section(0, "minecraft:stone", true),
+            test_section(4, "minecraft:dirt", true),
+        ])
+        .write();
+        let chunk =
+            ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("mixed Y chunk parses");
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, 0, 0),
+            Some(Block::STONE.default_state.id)
+        );
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, 64, 0),
+            Some(Block::DIRT.default_state.id)
+        );
+    }
+
+    #[test]
+    fn fallback_ignores_light_only_sections_below_zero() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        // Old worlds keep a light grid at Y = -1 after the upgrade. It has no
+        // biomes and must not decide where the chunk starts.
+        let mut light_section = NbtCompound::new();
+        light_section.put_byte("Y", -1);
+        light_section.put(
+            "BlockLight",
+            NbtTag::ByteArray(vec![0x0Fi8; 2048].into_boxed_slice()),
+        );
+
+        let bytes = test_chunk(vec![
+            light_section,
+            test_section(0, "minecraft:stone", true),
+        ])
+        .write();
+        let chunk =
+            ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("light section ignored");
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, 0, 0),
+            Some(Block::STONE.default_state.id)
+        );
+        assert_eq!(chunk.section.get_block_absolute_y(0, -1, 0), None);
+    }
+
+    #[test]
+    fn fallback_never_goes_above_zero() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let bytes = test_chunk(vec![test_section(1, "minecraft:stone", true)]).write();
+        let chunk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("caps at zero");
+        // The only section sits at Y=1, so the cap has to bring the chunk down
+        // to Y=0. Without the cap the chunk would start at Y=1 and a block at
+        // Y=0 would be out of range.
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, 0, 0),
+            Some(Block::AIR.default_state.id)
+        );
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, 16, 0),
+            Some(Block::STONE.default_state.id)
+        );
+    }
+
+    #[test]
+    fn chunk_without_y_pos_or_biomes_still_fails() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let mut light_section = NbtCompound::new();
+        light_section.put_byte("Y", -1);
+        light_section.put(
+            "BlockLight",
+            NbtTag::ByteArray(vec![0x0Fi8; 2048].into_boxed_slice()),
+        );
+
+        let bytes = test_chunk(vec![light_section]).write();
+        let Err(error) = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)) else {
+            panic!("chunk without yPos and without biomes must fail");
+        };
+        assert!(format!("{error:?}").contains("Missing yPos"));
+    }
 
     #[test]
     fn extract_u16_array_from_vanilla_compound_palette() {
