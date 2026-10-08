@@ -26,7 +26,11 @@ fn try_claim_respawn(player_id: uuid::Uuid) -> Option<RespawnClaim> {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(player_id);
-    inserted.then_some(RespawnClaim(player_id))
+    if inserted {
+        Some(RespawnClaim(player_id))
+    } else {
+        None
+    }
 }
 
 /// Forces the mandatory hardcore spectator state without firing a cancellable gamemode event.
@@ -195,18 +199,56 @@ impl JavaClient {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        sync::{
+            Arc, Barrier,
+            atomic::{AtomicUsize, Ordering},
+        },
+        thread,
+    };
+
     use super::*;
     use uuid::Uuid;
 
     #[test]
-    fn respawn_claim_allows_only_one_in_flight_respawn() {
+    fn duplicate_respawn_claims_do_not_release_the_original_claim() {
         let player_id = Uuid::from_u128(1);
         let claim = try_claim_respawn(player_id).expect("first respawn should be claimed");
 
         assert!(try_claim_respawn(player_id).is_none());
+        assert!(try_claim_respawn(player_id).is_none());
 
         drop(claim);
         assert!(try_claim_respawn(player_id).is_some());
+    }
+
+    #[test]
+    fn concurrent_respawn_claims_allow_only_one_in_flight_respawn() {
+        const WORKERS: usize = 32;
+
+        let player_id = Uuid::from_u128(2);
+        let start = Arc::new(Barrier::new(WORKERS));
+        let all_claimed = Arc::new(Barrier::new(WORKERS));
+        let winners = Arc::new(AtomicUsize::new(0));
+
+        thread::scope(|scope| {
+            for _ in 0..WORKERS {
+                let start = Arc::clone(&start);
+                let all_claimed = Arc::clone(&all_claimed);
+                let winners = Arc::clone(&winners);
+                scope.spawn(move || {
+                    start.wait();
+                    let claim = try_claim_respawn(player_id);
+                    if claim.is_some() {
+                        winners.fetch_add(1, Ordering::Relaxed);
+                    }
+                    all_claimed.wait();
+                    drop(claim);
+                });
+            }
+        });
+
+        assert_eq!(winners.load(Ordering::Relaxed), 1);
     }
 
     #[test]
