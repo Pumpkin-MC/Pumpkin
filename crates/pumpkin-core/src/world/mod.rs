@@ -301,10 +301,10 @@ pub struct World {
     /// A floor height at `pos` is computed from the block at `pos - 1`, so a
     /// block change at `pos` invalidates the entry for `pos + 1`.
     floor_level_cache: DashMap<BlockPos, f64>,
-    /// A* path searches left in this world's tick. `World::tick` refills it;
-    /// navigations take a slot before searching so a large crowd all retargeting
-    /// in the same tick can't blow out the tick budget at once.
-    pathfinding_budget: std::sync::atomic::AtomicU32,
+    /// Wall time spent on A* searches during this world's tick. `World::tick`
+    /// resets it; navigations check it before searching so a large crowd all
+    /// retargeting in the same tick can't exceed the search time budget.
+    pathfinding_time_spent: std::sync::atomic::AtomicU64,
     pending_block_entity_migrations: crossbeam::queue::SegQueue<Vector2<i32>>,
     /// Persistent custom data for the world (matching Bukkit's `PersistentDataHolder`)
     pub custom_data: std::sync::Mutex<NbtCompound>,
@@ -328,6 +328,10 @@ impl PartialEq for World {
 }
 
 impl Eq for World {}
+
+/// Wall time pathfinding may use per world tick. Bounds only search startups;
+/// a burst of concurrent searches can overshoot by their own durations.
+const PATHFINDING_TIME_BUDGET_PER_TICK: u64 = 2_000_000;
 
 impl World {
     /// Reads the shared path-type cache. Falls back to `compute` for uncached
@@ -354,17 +358,17 @@ impl World {
         path_type
     }
 
-    /// Takes one A* search slot from this tick's budget, `false` when exhausted.
-    pub fn take_pathfinding_slot(&self) -> bool {
-        self.pathfinding_budget
-            .fetch_update(
-                std::sync::atomic::Ordering::Relaxed,
-                std::sync::atomic::Ordering::Relaxed,
-                |left| {
-                    if left == 0 { None } else { Some(left - 1) }
-                },
-            )
-            .is_ok()
+    /// `true` while this tick's pathfinding searches have not yet used up the
+    /// wall-time budget. Starting a search barely over the budget never aborts
+    /// it, so a burst can overshoot by the few in-flight searches' time.
+    pub fn can_start_path_search(&self) -> bool {
+        self.pathfinding_time_spent.load(Ordering::Relaxed) < PATHFINDING_TIME_BUDGET_PER_TICK
+    }
+
+    /// Accounts one finished A* search's wall time against this tick's budget.
+    pub fn add_path_search_time(&self, nanos: u64) {
+        self.pathfinding_time_spent
+            .fetch_add(nanos, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Reads the shared floor-level cache, same contract as
@@ -506,7 +510,7 @@ impl World {
             block_entities: DashMap::new(),
             path_type_cache: DashMap::new(),
             floor_level_cache: DashMap::new(),
-            pathfinding_budget: std::sync::atomic::AtomicU32::new(0),
+            pathfinding_time_spent: std::sync::atomic::AtomicU64::new(0),
             pending_block_entity_migrations: crossbeam::queue::SegQueue::new(),
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
@@ -1600,18 +1604,12 @@ impl World {
 
     #[expect(clippy::too_many_lines)]
     pub fn tick(self: &Arc<Self>, server: &Arc<Server>) {
-        // A per-tick path-search budget; navigations pick from this so a crowd
-        // of mobs retargeting together cannot exceed the tick time at once.
-        const PATHFINDING_BUDGET_PER_TICK: u32 = 32;
-
         const ENTITY_TICK_BATCH_SIZE: usize = 16;
 
         let start = std::time::Instant::now();
 
-        self.pathfinding_budget.store(
-            PATHFINDING_BUDGET_PER_TICK,
-            std::sync::atomic::Ordering::Relaxed,
-        );
+        self.pathfinding_time_spent
+            .store(0, std::sync::atomic::Ordering::Relaxed);
 
         self.flush_block_updates();
         self.flush_synced_block_events();

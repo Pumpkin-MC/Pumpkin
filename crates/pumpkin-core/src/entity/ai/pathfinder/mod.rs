@@ -721,10 +721,11 @@ impl PathNavigation {
         None
     }
 
-    /// Runs one A* search when the world's per-tick budget has a slot, then
-    /// resets the path-following bookkeeping like vanilla after `createPath`.
-    /// Returns `false` (path untouched) when the budget is exhausted; callers
-    /// just keep following the current path and retry next tick.
+    /// Runs one A* search while this tick's world pathfinding time budget
+    /// still has room, then resets the path-following bookkeeping like vanilla
+    /// after `createPath`. Returns `false` (path untouched) when the budget is
+    /// exhausted; callers just keep following the current path and retry next
+    /// tick.
     fn search_path_with_budget(
         &mut self,
         entity: &LivingEntity,
@@ -733,10 +734,14 @@ impl PathNavigation {
         world_age: u64,
     ) -> bool {
         let world = entity.entity.world.load();
-        if !world.take_pathfinding_slot() {
+        if !world.can_start_path_search() {
             return false;
         }
+        let search_start = std::time::Instant::now();
         self.path = self.compute_path(entity, destination, reach_range);
+        world.add_path_search_time(
+            u64::try_from(search_start.elapsed().as_nanos()).unwrap_or(u64::MAX),
+        );
         if self.path.is_some() {
             // vanilla `createPath` resets the stuck bookkeeping on a new path
             self.reset_stuck_timeout();
@@ -1006,8 +1011,12 @@ impl PathNavigation {
                 f64::from(target_pos.0.z) + 0.5,
             );
             let world = entity.entity.world.load();
-            if world.take_pathfinding_slot() {
+            if world.can_start_path_search() {
+                let search_start = std::time::Instant::now();
                 self.path = self.compute_path(entity, target_v, self.reach_range);
+                world.add_path_search_time(
+                    u64::try_from(search_start.elapsed().as_nanos()).unwrap_or(u64::MAX),
+                );
                 if self.path.is_some() {
                     // vanilla `createPath` resets the stuck bookkeeping on a new path
                     self.reset_stuck_timeout();
