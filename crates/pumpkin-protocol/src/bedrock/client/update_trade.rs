@@ -12,15 +12,25 @@ use crate::{
 #[derive(PacketWrite)]
 #[packet(80)]
 pub struct CUpdateTrade {
+    /// Window identifier of the active trade screen.
     pub container_id: u8,
+    /// Window type identifier (typically 15 for villager trading).
     pub r#type: u8,
+    /// Count of trading options available.
     pub size: VarInt,
+    /// Experience or progression tier of the trading merchant.
     pub trader_tier: VarInt,
+    /// Unique identifier of the merchant entity.
     pub entity_unique_id: VarLong,
+    /// Unique entity identifier of the last player to interact with this merchant.
     pub last_trading_player: VarLong,
+    /// Visible title displayed at the top of the trading interface.
     pub display_name: String,
+    /// Whether to display the modern villager trading UI.
     pub use_new_trade_screen: bool,
+    /// Whether offer pricing incorporates demand and supply economics.
     pub using_economy_trade: bool,
+    /// Network NBT compound containing full recipe and trade offer definitions.
     pub data: NbtCompound,
 }
 
