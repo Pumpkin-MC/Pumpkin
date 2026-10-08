@@ -23,6 +23,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
+use pumpkin_data::translation;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
@@ -87,6 +88,8 @@ pub mod lightning;
 pub mod living;
 pub mod marker;
 pub mod mob;
+#[cfg(test)]
+mod name_tests;
 pub mod passive;
 pub mod player;
 pub mod projectile;
@@ -744,27 +747,18 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .load()
             .as_ref()
             .clone()
-            .unwrap_or(TextComponent::translate_cross(
-                format!("entity.minecraft.{}", entity.entity_type.resource_name),
-                format!("entity.minecraft.{}", entity.entity_type.resource_name),
-                [],
-            ))
+            .unwrap_or_else(|| entity.get_type_name())
     }
 
     fn get_display_name(&self) -> TextComponent {
         // TODO: team color
         let entity = self.get_entity();
-        let mut name =
-            entity
-                .custom_name
-                .load()
-                .as_ref()
-                .clone()
-                .unwrap_or(TextComponent::translate_cross(
-                    format!("entity.minecraft.{}", entity.entity_type.resource_name),
-                    format!("entity.minecraft.{}", entity.entity_type.resource_name),
-                    [],
-                ));
+        let mut name = entity
+            .custom_name
+            .load()
+            .as_ref()
+            .clone()
+            .unwrap_or_else(|| entity.get_type_name());
         let name_clone = name.clone();
         name = name.hover_event(HoverEvent::show_entity(
             entity.entity_uuid.to_string(),
@@ -978,6 +972,20 @@ impl Entity {
         entity_type: &'static EntityType,
     ) -> Self {
         Self::from_uuid(Uuid::new_v4(), world, position, entity_type)
+    }
+
+    fn get_type_name(&self) -> TextComponent {
+        if self.entity_type == &EntityType::WOLF {
+            TextComponent::translate_cross(
+                translation::java::ENTITY_MINECRAFT_WOLF,
+                translation::bedrock::ENTITY_WOLF_NAME,
+                [],
+            )
+        } else {
+            // Bedrock entity names do not all follow the same naming convention.
+            let key = format!("entity.minecraft.{}", self.entity_type.resource_name);
+            TextComponent::translate_cross(key.clone(), key, [])
+        }
     }
 
     pub fn reserve_ids(count: i32) -> i32 {
