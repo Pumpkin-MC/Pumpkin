@@ -1784,6 +1784,7 @@ impl World {
     }
 
     pub fn register_block_change(&self, position: BlockPos, block_state_id: BlockStateId) {
+        self.invalidate_path_caches(&position);
         self.unsent_block_changes
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -1794,6 +1795,9 @@ impl World {
     ///
     /// Call [`flush_block_updates`](Self::flush_block_updates) afterward to send the packets.
     pub fn queue_block_updates(&self, changes: &[(BlockPos, BlockStateId)]) {
+        for (pos, _) in changes {
+            self.invalidate_path_caches(pos);
+        }
         let mut guard = self
             .unsent_block_changes
             .lock()
@@ -1801,6 +1805,16 @@ impl World {
         for (pos, state_id) in changes {
             guard.insert(*pos, *state_id);
         }
+    }
+
+    /// Drops shared pathfinding cache entries affected by a block change: the
+    /// path type at the position itself, and the floor height above it, which
+    /// is computed from the block below (`pos - 1`). Covers every write path
+    /// that records a change: `on_block_state_set`, direct chunk writes from
+    /// `/fill` and `/place`, and single `register_block_change` calls.
+    fn invalidate_path_caches(&self, position: &BlockPos) {
+        self.path_type_cache.remove(&position.0);
+        self.floor_level_cache.remove(&position.up());
     }
 
     #[expect(clippy::too_many_lines)]
@@ -5198,10 +5212,7 @@ impl World {
             return block_state_id;
         }
 
-        // Shared pathfinding caches: a path type depends only on the block at its
-        // position; a floor height at `pos + 1` is computed from the block at `pos`.
-        self.path_type_cache.remove(&position.0);
-        self.floor_level_cache.remove(&position.up());
+        self.invalidate_path_caches(position);
 
         let old_block = Block::from_state_id(replaced_block_state_id);
         let new_block = Block::from_state_id(block_state_id);
