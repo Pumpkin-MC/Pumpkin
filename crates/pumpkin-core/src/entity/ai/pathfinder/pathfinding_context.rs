@@ -21,6 +21,10 @@ pub struct PathfindingContext {
     mob_position: Vector3<i32>,
     world: Arc<World>,
     collision_cache: FxHashMap<[u64; 6], bool>,
+    /// Per-search floor-height cache. A floor height at `pos` is computed from
+    /// the block state at `pos - 1` and stays valid for the whole search, so
+    /// repeats within one pathfinding run skip the block read entirely.
+    floor_cache: FxHashMap<BlockPos, f64>,
 }
 
 impl PathfindingContext {
@@ -31,6 +35,7 @@ impl PathfindingContext {
             mob_position,
             world,
             collision_cache: FxHashMap::default(),
+            floor_cache: FxHashMap::default(),
         }
     }
 
@@ -41,6 +46,7 @@ impl PathfindingContext {
             mob_position,
             world,
             collision_cache: FxHashMap::default(),
+            floor_cache: FxHashMap::default(),
         }
     }
 
@@ -71,7 +77,9 @@ impl PathfindingContext {
             return pt;
         }
 
-        let pt = self.compute_path_type_from_state(pos);
+        let pt = self
+            .world
+            .path_type_get_or_compute(pos, || self.compute_path_type_from_state(pos));
 
         if let Some(ref mut cache) = self.path_type_cache {
             cache.insert(pos, pt);
@@ -241,15 +249,21 @@ impl PathfindingContext {
         fallback
     }
 
-    #[must_use]
-    pub fn get_floor_level(&self, pos: &BlockPos) -> f64 {
-        let target = pos.down();
-        let state = self.world.get_block_state(&target);
-        let max_y = state
-            .get_block_collision_shapes_at(&target)
-            .map(|s| s.max.y)
-            .fold(0.0f64, f64::max);
-        f64::from(target.0.y) + max_y
+    pub fn get_floor_level(&mut self, pos: &BlockPos) -> f64 {
+        if let Some(&level) = self.floor_cache.get(pos) {
+            return level;
+        }
+        let level = self.world.floor_level_get_or_compute(*pos, || {
+            let target = pos.down();
+            let state = self.world.get_block_state(&target);
+            let max_y = state
+                .get_block_collision_shapes_at(&target)
+                .map(|s| s.max.y)
+                .fold(0.0f64, f64::max);
+            f64::from(target.0.y) + max_y
+        });
+        self.floor_cache.insert(*pos, level);
+        level
     }
 
     pub fn has_collision(&mut self, bb: &BoundingBox) -> bool {
@@ -321,5 +335,6 @@ impl PathfindingContext {
             cache.clear();
         }
         self.collision_cache.clear();
+        self.floor_cache.clear();
     }
 }

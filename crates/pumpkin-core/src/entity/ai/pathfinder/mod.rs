@@ -439,7 +439,6 @@ pub struct PathNavigation {
     pub path_type_overrides: FxHashMap<PathType, f32>,
     pub mob_width: f32,
     pub mob_height: f32,
-    pub repath_cooldown: u32,
     pub can_float: bool,
     pub can_walk_over_fences: bool,
     pub can_open_doors: bool,
@@ -487,7 +486,6 @@ impl PathNavigation {
             path_type_overrides: FxHashMap::default(),
             mob_width: 0.6,
             mob_height: 1.95,
-            repath_cooldown: 0,
             can_float: false,
             can_walk_over_fences: false,
             can_open_doors: false,
@@ -500,14 +498,17 @@ impl PathNavigation {
         }
     }
 
+    /// Sets the navigation goal without discarding an in-progress path.
+    /// `tick_ground` re-evaluates through `needs_new_path` (with its cooldown
+    /// and the per-tick search budget): goals like `TemptGoal` re-issue
+    /// `set_progress` every tick, and nulling the path here would trigger a
+    /// full A* search every tick per mob.
     pub fn set_progress(&mut self, goal: NavigatorGoal) {
         self.is_idle.store(false, Ordering::Relaxed);
         self.speed_modifier = goal.speed;
         self.last_stuck_check = self.tick_count;
         self.last_stuck_check_pos = goal.current_progress;
         self.current_goal = Some(goal);
-        self.path = None;
-        self.reset_stuck_timeout();
     }
 
     pub const fn set_speed(&mut self, speed: f64) {
@@ -631,7 +632,6 @@ impl PathNavigation {
             let Some(current) = self.open_set.pop() else {
                 break;
             };
-
             if current.distance_manhattan(&target) <= reach_range as f32 {
                 target.reached = true;
                 reached = true;
@@ -721,23 +721,42 @@ impl PathNavigation {
         None
     }
 
+    /// Runs one A* search when the world's per-tick budget has a slot, then
+    /// resets the path-following bookkeeping like vanilla after `createPath`.
+    /// Returns `false` (path untouched) when the budget is exhausted; callers
+    /// just keep following the current path and retry next tick.
+    fn search_path_with_budget(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        world_age: u64,
+    ) -> bool {
+        let world = entity.entity.world.load();
+        if !world.take_pathfinding_slot() {
+            return false;
+        }
+        self.path = self.compute_path(entity, destination, reach_range);
+        if self.path.is_some() {
+            // vanilla `createPath` resets the stuck bookkeeping on a new path
+            self.reset_stuck_timeout();
+        }
+        self.ticks_on_current_node = 0;
+        self.last_node_index = 0;
+        self.path_start_pos = Some(entity.entity.pos.load());
+        self.time_last_recompute = world_age;
+        true
+    }
+
     pub fn needs_new_path(&self, goal: &NavigatorGoal) -> bool {
         if self.path.is_none() {
             return true;
         }
-        if self.repath_cooldown > 0 {
-            return false;
-        }
+        // vanilla `createPath` reuses the in-progress path only while its
+        // target block still matches the requested one and it is not done
+        // (`this.path != null && !this.path.isDone() && targets.contains(this.targetPos)`).
         self.path.as_ref().is_some_and(|p| {
-            let path_target = p.get_target();
-            let goal_target = BlockPos::floored_v(goal.destination).0;
-            let dx = f64::from(path_target.0.x - goal_target.x);
-            let dy = f64::from(path_target.0.y - goal_target.y);
-            let dz = f64::from(path_target.0.z - goal_target.z);
-            let distance_sq = dx * dx + dy * dy + dz * dz;
-            let remaining = p.get_remaining_distance().clamp(4.0, 16.0);
-            let threshold = remaining * 0.5;
-            distance_sq > f64::from(threshold * threshold)
+            p.is_done() || p.get_target().0 != BlockPos::floored_v(goal.destination).0
         })
     }
 
@@ -986,9 +1005,19 @@ impl PathNavigation {
                 f64::from(target_pos.0.y),
                 f64::from(target_pos.0.z) + 0.5,
             );
-            self.path = self.compute_path(entity, target_v, self.reach_range);
-            self.time_last_recompute = world_age;
-            self.has_delayed_recomputation = false;
+            let world = entity.entity.world.load();
+            if world.take_pathfinding_slot() {
+                self.path = self.compute_path(entity, target_v, self.reach_range);
+                if self.path.is_some() {
+                    // vanilla `createPath` resets the stuck bookkeeping on a new path
+                    self.reset_stuck_timeout();
+                }
+                self.time_last_recompute = world_age;
+                // released only when the recompute actually ran, so a
+                // budget-short tick retries it next tick like vanilla's
+                // `hasDelayedRecomputation`
+                self.has_delayed_recomputation = false;
+            }
         }
 
         let Some(goal) = self.current_goal.take() else {
@@ -1003,9 +1032,6 @@ impl PathNavigation {
         }
 
         self.total_ticks += 1;
-        if self.repath_cooldown > 0 {
-            self.repath_cooldown -= 1;
-        }
 
         if self.needs_new_path(&goal) {
             let mut dest_pos = BlockPos::floored_v(goal.destination);
@@ -1018,12 +1044,9 @@ impl PathNavigation {
                 f64::from(dest_pos.0.y),
                 f64::from(dest_pos.0.z) + 0.5,
             );
-            self.path = self.compute_path(entity, dest_v, self.reach_range);
-            self.ticks_on_current_node = 0;
-            self.last_node_index = 0;
-            self.path_start_pos = Some(entity.entity.pos.load());
-            self.repath_cooldown = 15;
-            self.time_last_recompute = world_age;
+            // Without a slot the navigation keeps following its current path and
+            // retries next tick; `needs_new_path` stays true for the new goal.
+            self.search_path_with_budget(entity, dest_v, self.reach_range, world_age);
         }
 
         if self.path.is_none() {
@@ -1481,12 +1504,10 @@ impl PathNavigationTrait for FlyingPathNavigation {
 
         if let Some(goal) = self.inner.current_goal.take() {
             if self.inner.needs_new_path(&goal) {
-                self.inner.path = self.inner.compute_path(entity, goal.destination, 1);
-                self.inner.ticks_on_current_node = 0;
-                self.inner.last_node_index = 0;
-                self.inner.path_start_pos = Some(entity.entity.pos.load());
-                self.inner.repath_cooldown = 15;
-                self.inner.time_last_recompute = world_age;
+                // Without a budget slot the navigation keeps following its current
+                // path and retries next tick.
+                self.inner
+                    .search_path_with_budget(entity, goal.destination, 1, world_age);
             }
             self.inner.current_goal = Some(goal);
         }
@@ -1781,14 +1802,10 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         }
 
         if let Some(goal) = self.inner.current_goal.take() {
-            if self.inner.needs_new_path(&goal) {
-                self.inner.path = self.inner.compute_path(entity, goal.destination, 1);
-                self.inner.ticks_on_current_node = 0;
-                self.inner.last_node_index = 0;
-                self.inner.path_start_pos = Some(entity.entity.pos.load());
-                self.inner.repath_cooldown = 15;
-                self.inner.time_last_recompute = world_age;
-            }
+            // Without a budget slot the navigation keeps following its current
+            // path and retries next tick.
+            self.inner
+                .search_path_with_budget(entity, goal.destination, 1, world_age);
             self.inner.current_goal = Some(goal);
         }
 
@@ -2309,12 +2326,10 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
 
             if let Some(goal) = self.inner.current_goal.take() {
                 if self.inner.needs_new_path(&goal) {
-                    self.inner.path = self.inner.compute_path(entity, goal.destination, 1);
-                    self.inner.ticks_on_current_node = 0;
-                    self.inner.last_node_index = 0;
-                    self.inner.path_start_pos = Some(entity.entity.pos.load());
-                    self.inner.repath_cooldown = 15;
-                    self.inner.time_last_recompute = world_age;
+                    // Without a budget slot the navigation keeps following its current
+                    // path and retries next tick.
+                    self.inner
+                        .search_path_with_budget(entity, goal.destination, 1, world_age);
                 }
                 self.inner.current_goal = Some(goal);
             }

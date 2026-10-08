@@ -35,6 +35,7 @@ pub mod time;
 pub mod villager_poi;
 
 use crate::block::RandomTickArgs;
+use crate::entity::ai::pathfinder::node::PathType;
 use crate::world::chunker::is_within_chebyshev_distance;
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use crate::{
@@ -291,6 +292,19 @@ pub struct World {
     /// Block entities indexed by chunk, so ticking only visits the currently
     /// active chunks instead of scanning every loaded block entity each tick.
     pub block_entities: DashMap<Vector2<i32>, FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
+    /// Shared pathfinding block classification cache, consulted by every mob's
+    /// pathfinder before re-reading block states. Entries depend only on the
+    /// block state at their position, so a block change invalidates exactly the
+    /// cached entry for that position (see `on_block_state_set`).
+    path_type_cache: DashMap<Vector3<i32>, PathType>,
+    /// Shared floor-height cache (`pos` → height of the collision top below it).
+    /// A floor height at `pos` is computed from the block at `pos - 1`, so a
+    /// block change at `pos` invalidates the entry for `pos + 1`.
+    floor_level_cache: DashMap<BlockPos, f64>,
+    /// A* path searches left in this world's tick. `World::tick` refills it;
+    /// navigations take a slot before searching so a large crowd all retargeting
+    /// in the same tick can't blow out the tick budget at once.
+    pathfinding_budget: std::sync::atomic::AtomicU32,
     pending_block_entity_migrations: crossbeam::queue::SegQueue<Vector2<i32>>,
     /// Persistent custom data for the world (matching Bukkit's `PersistentDataHolder`)
     pub custom_data: std::sync::Mutex<NbtCompound>,
@@ -316,6 +330,69 @@ impl PartialEq for World {
 impl Eq for World {}
 
 impl World {
+    /// Reads the shared path-type cache. Falls back to `compute` for uncached
+    /// positions and stores the result; two concurrent touches may both
+    /// classify one position and one insert wins, which is harmless.
+    /// Positions in chunks that are not loaded are never stored, because a
+    /// block read there is not backed by a loaded chunk.
+    pub fn path_type_get_or_compute(
+        &self,
+        pos: Vector3<i32>,
+        compute: impl FnOnce() -> PathType,
+    ) -> PathType {
+        if let Some(path_type) = self.path_type_cache.get(&pos) {
+            return *path_type;
+        }
+        let path_type = compute();
+        if self
+            .level
+            .is_chunk_loaded(&Vector2::new(pos.x >> 4, pos.z >> 4))
+        {
+            Self::maintain_shared_path_cache(&self.path_type_cache);
+            self.path_type_cache.insert(pos, path_type);
+        }
+        path_type
+    }
+
+    /// Takes one A* search slot from this tick's budget, `false` when exhausted.
+    pub fn take_pathfinding_slot(&self) -> bool {
+        self.pathfinding_budget
+            .fetch_update(
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+                |left| {
+                    if left == 0 { None } else { Some(left - 1) }
+                },
+            )
+            .is_ok()
+    }
+
+    /// Reads the shared floor-level cache, same contract as
+    /// [`World::path_type_get_or_compute`].
+    pub fn floor_level_get_or_compute(&self, pos: BlockPos, compute: impl FnOnce() -> f64) -> f64 {
+        if let Some(height) = self.floor_level_cache.get(&pos) {
+            return *height;
+        }
+        let height = compute();
+        if self
+            .level
+            .is_chunk_loaded(&Vector2::new(pos.0.x >> 4, pos.0.z >> 4))
+        {
+            Self::maintain_shared_path_cache(&self.floor_level_cache);
+            self.floor_level_cache.insert(pos, height);
+        }
+        height
+    }
+
+    /// Shared pathfinding caches only ever cover chunks that were loaded and
+    /// queried, so they grow with explored terrain. Cap them to stay bounded;
+    /// losing entries just means a few block reads happen again.
+    fn maintain_shared_path_cache<T>(cache: &DashMap<impl std::hash::Hash + Eq, T>) {
+        const SHARED_PATH_CACHE_SOFT_CAP: usize = 1 << 19;
+        if cache.len() >= SHARED_PATH_CACHE_SOFT_CAP {
+            cache.clear();
+        }
+    }
     const TAB_LIST_ADD_FLAGS: u8 = PlayerInfoFlags::ADD_PLAYER.bits()
         | PlayerInfoFlags::UPDATE_LISTED.bits()
         | PlayerInfoFlags::UPDATE_GAME_MODE.bits()
@@ -427,6 +504,9 @@ impl World {
             forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
             server,
             block_entities: DashMap::new(),
+            path_type_cache: DashMap::new(),
+            floor_level_cache: DashMap::new(),
+            pathfinding_budget: std::sync::atomic::AtomicU32::new(0),
             pending_block_entity_migrations: crossbeam::queue::SegQueue::new(),
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
@@ -1520,9 +1600,18 @@ impl World {
 
     #[expect(clippy::too_many_lines)]
     pub fn tick(self: &Arc<Self>, server: &Arc<Server>) {
+        // A per-tick path-search budget; navigations pick from this so a crowd
+        // of mobs retargeting together cannot exceed the tick time at once.
+        const PATHFINDING_BUDGET_PER_TICK: u32 = 32;
+
         const ENTITY_TICK_BATCH_SIZE: usize = 16;
 
         let start = std::time::Instant::now();
+
+        self.pathfinding_budget.store(
+            PATHFINDING_BUDGET_PER_TICK,
+            std::sync::atomic::Ordering::Relaxed,
+        );
 
         self.flush_block_updates();
         self.flush_synced_block_events();
@@ -5108,6 +5197,11 @@ impl World {
         if !flags.contains(BlockFlags::FORCE_STATE) && replaced_block_state_id == block_state_id {
             return block_state_id;
         }
+
+        // Shared pathfinding caches: a path type depends only on the block at its
+        // position; a floor height at `pos + 1` is computed from the block at `pos`.
+        self.path_type_cache.remove(&position.0);
+        self.floor_level_cache.remove(&position.up());
 
         let old_block = Block::from_state_id(replaced_block_state_id);
         let new_block = Block::from_state_id(block_state_id);
