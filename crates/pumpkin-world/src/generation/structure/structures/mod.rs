@@ -797,6 +797,20 @@ impl StructurePiecesCollector {
     }
 
     #[must_use]
+    pub fn get_adjusted_bounding_box(
+        &mut self,
+        key: &pumpkin_data::structures::StructureKeys,
+    ) -> BlockBox {
+        let bb = self.get_bounding_box();
+        let structure = pumpkin_data::structures::Structure::get(key);
+        if structure.terrain_adaptation == pumpkin_data::structures::TerrainAdaptation::None {
+            bb
+        } else {
+            bb.expand(12, 12, 12)
+        }
+    }
+
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.pieces.is_empty()
     }
@@ -819,6 +833,17 @@ impl StructurePosition {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get_bounding_box()
+    }
+
+    #[must_use]
+    pub fn get_adjusted_bounding_box(
+        &self,
+        key: &pumpkin_data::structures::StructureKeys,
+    ) -> BlockBox {
+        self.collector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_adjusted_bounding_box(key)
     }
 }
 
