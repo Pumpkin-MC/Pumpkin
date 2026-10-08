@@ -176,21 +176,19 @@ impl JavaClient {
         };
 
         // Read minimum count from occupied slots before clearing (needed for stacking).
-        let (current_min, max_stack_size) = if recipe_matches && !use_max {
+        let current_min = if recipe_matches && !use_max {
             let mut min = u8::MAX;
-            let mut max_stack_size = u8::MAX;
             for (idx, ing) in ingredient_slots.iter().enumerate() {
                 if ing.is_some() {
                     let stack = crafting_inv.get_stack(idx);
                     if !stack.is_empty() {
                         min = min.min(stack.item_count);
-                        max_stack_size = max_stack_size.min(stack.get_max_stack_size());
                     }
                 }
             }
-            (if min == u8::MAX { 0 } else { min }, max_stack_size)
+            if min == u8::MAX { 0 } else { min }
         } else {
-            (0, u8::MAX)
+            0
         };
 
         // Always clear the grid first, returning items to inventory.
@@ -207,7 +205,10 @@ impl JavaClient {
         let amount_to_craft = if use_max {
             compute_biggest_craftable(&active_ingredients, &player.inventory)
         } else if recipe_matches {
-            current_min.saturating_add(1).min(max_stack_size)
+            current_min.saturating_add(1).min(compute_biggest_craftable(
+                &active_ingredients,
+                &player.inventory,
+            ))
         } else {
             1
         };

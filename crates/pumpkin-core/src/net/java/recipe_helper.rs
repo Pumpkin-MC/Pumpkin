@@ -33,7 +33,10 @@ pub fn take_n_ingredient(
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     for stack in main_inventory.iter_mut() {
-        if !stack.is_empty() && ingredient.match_item(stack.item) {
+        if !stack.is_empty()
+            && ingredient.match_item(stack.item)
+            && stack.get_max_stack_size() >= count
+        {
             let to_take = (count - taken).min(stack.item_count);
             let sub_stack = stack.split(to_take);
             taken += sub_stack.item_count;
@@ -62,14 +65,14 @@ pub fn compute_biggest_craftable(
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     for stack in main_inventory.iter() {
         if !stack.is_empty() {
-            if let Some(e) = available.iter_mut().find(|(i, _, _)| i.id == stack.item.id) {
+            let max_stack_size = u32::from(stack.get_max_stack_size());
+            if let Some(e) = available
+                .iter_mut()
+                .find(|(i, _, max)| i.id == stack.item.id && *max == max_stack_size)
+            {
                 e.1 += u32::from(stack.item_count);
             } else {
-                available.push((
-                    stack.item,
-                    u32::from(stack.item_count),
-                    u32::from(stack.get_max_stack_size()),
-                ));
+                available.push((stack.item, u32::from(stack.item_count), max_stack_size));
             }
         }
     }
