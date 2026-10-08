@@ -20,74 +20,93 @@ impl GenericIngredient<'_> {
     }
 }
 
-pub fn take_n_ingredient(
-    inventory: &PlayerInventory,
-    ingredient: &GenericIngredient<'_>,
-    count: u8,
-) -> ItemStack {
-    let mut taken = 0u8;
-    let mut result: Option<ItemStack> = None;
+/// Groups identical stacks, so each placed stack comes from a single item with the same components.
+fn group_stacks(stacks: &[ItemStack]) -> Vec<(&ItemStack, u32)> {
+    let mut groups: Vec<(&ItemStack, u32)> = Vec::new();
+    for stack in stacks.iter().filter(|stack| !stack.is_empty()) {
+        if let Some(group) = groups
+            .iter_mut()
+            .find(|(other, _)| other.are_items_and_components_equal(stack))
+        {
+            group.1 += u32::from(stack.item_count);
+        } else {
+            groups.push((stack, u32::from(stack.item_count)));
+        }
+    }
+    groups
+}
 
+/// Picks a group for every ingredient that can supply `amount` items without going over its max stack size.
+fn pick_groups(
+    groups: &[(&ItemStack, u32)],
+    ingredients: &[GenericIngredient<'_>],
+    amount: u32,
+) -> Option<Vec<usize>> {
+    let mut budget: Vec<u32> = groups.iter().map(|(_, count)| *count).collect();
+    ingredients
+        .iter()
+        .map(|ing| {
+            let idx = groups.iter().zip(&budget).position(|((stack, _), count)| {
+                *count >= amount
+                    && amount <= u32::from(stack.get_max_stack_size())
+                    && ing.match_item(stack.item)
+            })?;
+            budget[idx] -= amount;
+            Some(idx)
+        })
+        .collect()
+}
+
+/// Takes `amount` items for every ingredient, or nothing if the inventory can't supply all of them.
+pub fn take_ingredients(
+    inventory: &PlayerInventory,
+    ingredients: &[GenericIngredient<'_>],
+    amount: u8,
+) -> Option<Vec<ItemStack>> {
     let mut main_inventory = inventory
         .main_inventory
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    for stack in main_inventory.iter_mut() {
-        if !stack.is_empty()
-            && ingredient.match_item(stack.item)
-            && stack.get_max_stack_size() >= count
-        {
-            let to_take = (count - taken).min(stack.item_count);
-            let sub_stack = stack.split(to_take);
-            taken += sub_stack.item_count;
+    let templates: Vec<ItemStack> = {
+        let groups = group_stacks(main_inventory.as_slice());
+        pick_groups(&groups, ingredients, u32::from(amount))?
+            .into_iter()
+            .map(|idx| groups[idx].0.clone())
+            .collect()
+    };
 
-            match &mut result {
-                None => result = Some(sub_stack),
-                Some(r) => r.item_count += sub_stack.item_count,
-            }
-
-            if taken >= count {
+    let mut taken_stacks = Vec::with_capacity(templates.len());
+    for template in &templates {
+        let mut result = ItemStack::EMPTY.clone();
+        for stack in main_inventory.iter_mut() {
+            if result.item_count >= amount {
                 break;
             }
+            if !stack.is_empty() && stack.are_items_and_components_equal(template) {
+                let sub_stack = stack.split(amount - result.item_count);
+                if result.is_empty() {
+                    result = sub_stack;
+                } else {
+                    result.item_count += sub_stack.item_count;
+                }
+            }
         }
+        taken_stacks.push(result);
     }
-    result.unwrap_or_else(|| ItemStack::EMPTY.clone())
+    Some(taken_stacks)
 }
 
 pub fn compute_biggest_craftable(
     ingredients: &[GenericIngredient<'_>],
     inventory: &PlayerInventory,
 ) -> u8 {
-    let mut available: Vec<(&'static Item, u32, u32)> = Vec::new();
     let main_inventory = inventory
         .main_inventory
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    for stack in main_inventory.iter() {
-        if !stack.is_empty() {
-            let max_stack_size = u32::from(stack.get_max_stack_size());
-            if let Some(e) = available
-                .iter_mut()
-                .find(|(i, _, max)| i.id == stack.item.id && *max == max_stack_size)
-            {
-                e.1 += u32::from(stack.item_count);
-            } else {
-                available.push((stack.item, u32::from(stack.item_count), max_stack_size));
-            }
-        }
-    }
-
-    'outer: for amount in (1u32..=64).rev() {
-        let mut budget = available.clone();
-        for ing in ingredients {
-            let Some(idx) = budget.iter().position(|(item, count, max_stack_size)| {
-                *count >= amount && amount <= *max_stack_size && ing.match_item(item)
-            }) else {
-                continue 'outer;
-            };
-            budget[idx].1 -= amount;
-        }
-        return amount as u8;
-    }
-    0
+    let groups = group_stacks(main_inventory.as_slice());
+    (1u8..=64)
+        .rev()
+        .find(|amount| pick_groups(&groups, ingredients, u32::from(*amount)).is_some())
+        .unwrap_or(0)
 }
