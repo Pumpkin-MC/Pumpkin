@@ -1529,7 +1529,11 @@ impl Player {
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
                 AttackType::Sweeping => {
-                    combat::spawn_sweep_particle(attacker_entity, &world, &pos);
+                    combat::spawn_sweep_particle(
+                        attacker_entity,
+                        &world,
+                        &attacker_entity.pos.load(),
+                    );
 
                     let mut sweep_damage = 1.0;
                     if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>()
