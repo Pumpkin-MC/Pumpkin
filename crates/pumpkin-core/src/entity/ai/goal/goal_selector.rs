@@ -2,6 +2,9 @@ use crate::entity::ai::goal::{Controls, Goal, PrioritizedGoal};
 use crate::entity::mob::Mob;
 use std::any::TypeId;
 
+#[cfg(test)]
+mod drowned_tests;
+
 /// `GoalSelector` manages a set of goals and decides which ones can run.
 ///
 /// Important: `GoalSelector` is intentionally not `Send`/`Sync`.

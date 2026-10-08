@@ -63,7 +63,10 @@ impl ZombieEntityBase {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // Vanilla Drowned omits the generic float goal.
+            if mob_arc.mob_entity.living_entity.entity.entity_type != &EntityType::DROWNED {
+                goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            }
             if can_break_doors {
                 goal_selector.add_goal(1, Box::new(BreakDoorGoal::default()));
             }
