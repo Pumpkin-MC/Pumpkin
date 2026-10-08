@@ -1,6 +1,12 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
+fn interaction_hand(hand_id: Option<i32>) -> Hand {
+    hand_id
+        .and_then(|id| Hand::from_packet_id(id).ok())
+        .unwrap_or(Hand::Right)
+}
+
 impl JavaClient {
     #[expect(clippy::too_many_lines)]
     pub fn handle_interact(
@@ -98,7 +104,8 @@ impl JavaClient {
                                     return;
                                 }
                             }
-                            let mut stack = player.inventory().held_item();
+                            let hand = interaction_hand(interact.hand.map(|hand| hand.0));
+                            let mut stack = player.inventory().get_stack_in_hand(hand);
 
                             let item_id = stack.item.id;
                             let before = stack.clone();
@@ -130,13 +137,17 @@ impl JavaClient {
                                         );
                                         player.world().send_entity_status(
                                             player.get_entity(),
-                                            equipment_break_status(&EquipmentSlot::MAIN_HAND),
+                                            equipment_break_status(if hand == Hand::Right {
+                                                &EquipmentSlot::MAIN_HAND
+                                            } else {
+                                                &EquipmentSlot::OFF_HAND
+                                            }),
                                             None,
                                         );
                                     }
                                 }
                             }
-                            player.inventory().set_held_item(stack);
+                            player.inventory().set_stack_in_hand(hand, stack);
                         }
                     }
                 }
@@ -159,5 +170,48 @@ impl JavaClient {
                 }
             }}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_inventory::{
+        build_equipment_slots, entity_equipment::EntityEquipment,
+        player::player_inventory::PlayerInventory,
+    };
+    use pumpkin_util::Hand;
+
+    use super::interaction_hand;
+
+    #[test]
+    fn offhand_entity_interaction_uses_and_updates_only_offhand_stack() {
+        let inventory = PlayerInventory::new(
+            Arc::new(Mutex::new(EntityEquipment::new())),
+            Arc::new(build_equipment_slots()),
+        );
+        let sword = ItemStack::new(1, &Item::IRON_SWORD);
+        inventory.set_held_item(sword.clone());
+        inventory.set_stack_in_hand(Hand::Left, ItemStack::new(2, &Item::WATER_BUCKET));
+
+        let hand = interaction_hand(Some(1));
+        let mut stack = inventory.get_stack_in_hand(hand);
+        stack.decrement(1);
+        inventory.set_stack_in_hand(hand, stack);
+
+        let held_after = inventory.held_item();
+        assert!(std::ptr::eq(held_after.item, sword.item));
+        assert_eq!(held_after.item_count, sword.item_count);
+        assert_eq!(inventory.off_hand_item().item_count, 1);
+    }
+
+    #[test]
+    fn missing_or_invalid_interaction_hand_defaults_to_main_hand() {
+        assert_eq!(interaction_hand(None), Hand::Right);
+        assert_eq!(interaction_hand(Some(0)), Hand::Right);
+        assert_eq!(interaction_hand(Some(1)), Hand::Left);
+        assert_eq!(interaction_hand(Some(i32::MAX)), Hand::Right);
     }
 }
