@@ -85,7 +85,10 @@ impl PressurePlate for PressurePlateBlock {
     fn calculate_redstone_output(&self, world: &World, _block: &Block, pos: &BlockPos) -> u8 {
         let aabb = detection_box_at(pos);
         if !world.get_entities_at_box(&aabb).is_empty()
-            || !world.get_players_at_box(&aabb).is_empty()
+            || world
+                .get_players_at_box(&aabb)
+                .iter()
+                .any(|player| !player.is_spectator())
         {
             return 15;
         }

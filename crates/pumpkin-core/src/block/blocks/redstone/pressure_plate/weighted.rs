@@ -101,7 +101,12 @@ impl PressurePlate for WeightedPressurePlateBlock {
             150
         };
         let aabb = detection_box_at(pos);
-        let len = world.get_entities_at_box(&aabb).len() + world.get_players_at_box(&aabb).len();
+        let len = world.get_entities_at_box(&aabb).len()
+            + world
+                .get_players_at_box(&aabb)
+                .iter()
+                .filter(|player| !player.is_spectator())
+                .count();
         signal_strength(len, weight)
     }
 
