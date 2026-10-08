@@ -94,10 +94,14 @@ mod tests {
     use crate::chunk_system::{
         StagedChunkEnum, generate_single_chunk, generation::generate_single_chunk_with_radius,
     };
-    use crate::generation::get_world_gen;
+    use crate::generation::feature::configured_features::{CONFIGURED_FEATURES, ConfiguredFeature};
+    use crate::generation::feature::features::tree::TreeFeature;
+    use crate::generation::{get_world_gen, proto_chunk::ProtoChunk};
     use crate::world::WorldPortalExt;
-    use pumpkin_data::BlockStateId;
     use pumpkin_data::dimension::Dimension;
+    use pumpkin_data::{Block, BlockStateId};
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::random::{RandomGenerator, RandomImpl, worldgen_random::WorldgenRandom};
     use pumpkin_util::world_seed::Seed;
     use std::sync::Arc;
 
@@ -139,6 +143,100 @@ mod tests {
             _chunk_z: i32,
         ) {
         }
+    }
+
+    fn spruce_fixture() -> (ProtoChunk, &'static TreeFeature, BlockPos) {
+        let generator = get_world_gen(
+            Seed(0),
+            Dimension::OVERWORLD,
+            true,
+            Vec::new(),
+            String::new(),
+        );
+        let mut chunk = ProtoChunk::new(0, 0, &generator);
+        let origin = BlockPos::new(8, 64, 8);
+        chunk.set_block_state(8, 63, 8, Block::DIRT.default_state);
+        let Some(ConfiguredFeature::Tree(tree)) =
+            CONFIGURED_FEATURES.get(&pumpkin_data::configured_feature::ConfiguredFeature::Spruce)
+        else {
+            panic!("missing configured spruce tree");
+        };
+        (chunk, tree, origin)
+    }
+
+    fn spruce_random() -> RandomGenerator {
+        RandomGenerator::Worldgen(WorldgenRandom::from_seed(0))
+    }
+
+    fn advance_rejected_spruce(random: &mut RandomGenerator) {
+        // Vanilla TreeFeatures.SPRUCE and TreeFeature.doPlace: two trunk-height
+        // draws, foliage trunk height, then radius, all before obstruction checks.
+        for bound in [3, 2, 2, 2] {
+            random.next_bounded_i32(bound);
+        }
+    }
+
+    #[test]
+    fn obstructed_spruce_consumes_foliage_draws() {
+        let (mut chunk, tree, origin) = spruce_fixture();
+        chunk.set_block_state(8, 65, 8, Block::STONE.default_state);
+        let before = chunk.flat_block_map.clone();
+        let mut random = spruce_random();
+        let mut expected = spruce_random();
+        advance_rejected_spruce(&mut expected);
+
+        assert!(!tree.generate(&BlockRegistry, &mut chunk, &mut random, origin));
+        assert!(
+            chunk.flat_block_map == before,
+            "rejected tree changed blocks"
+        );
+        assert_eq!(random.next_i64(), expected.next_i64());
+    }
+
+    #[test]
+    fn spruce_after_obstruction_uses_vanilla_random_stream() {
+        let (mut chunk, tree, origin) = spruce_fixture();
+        let (mut expected_chunk, _, _) = spruce_fixture();
+        let mut random = spruce_random();
+        let mut expected = spruce_random();
+        advance_rejected_spruce(&mut expected);
+
+        chunk.set_block_state(8, 65, 8, Block::STONE.default_state);
+        assert!(!tree.generate(&BlockRegistry, &mut chunk, &mut random, origin));
+        chunk.set_block_state(8, 65, 8, Block::AIR.default_state);
+        assert!(tree.generate(&BlockRegistry, &mut chunk, &mut random, origin));
+        assert!(tree.generate(&BlockRegistry, &mut expected_chunk, &mut expected, origin));
+        // Compare placement, not leaf-distance updates, which are outside this RNG test.
+        assert!(
+            chunk
+                .flat_block_map
+                .iter()
+                .map(|state| state.to_block_id())
+                .eq(expected_chunk
+                    .flat_block_map
+                    .iter()
+                    .map(|state| state.to_block_id())),
+            "preceding rejected spruce changed the following tree"
+        );
+        assert_eq!(random.next_i64(), expected.next_i64());
+    }
+
+    #[test]
+    fn unobstructed_spruce_preserves_vanilla_draw_count() {
+        let (mut chunk, tree, origin) = spruce_fixture();
+        let mut random = spruce_random();
+        let mut expected = spruce_random();
+        advance_rejected_spruce(&mut expected);
+        // FoliagePlacer samples the offset; SpruceFoliagePlacer samples its initial radius.
+        expected.next_bounded_i32(3);
+        expected.next_bounded_i32(2);
+
+        assert!(tree.generate(&BlockRegistry, &mut chunk, &mut random, origin));
+        assert_eq!(
+            chunk.get_block_state(&origin.0),
+            Block::SPRUCE_LOG.default_state.id
+        );
+        assert_eq!(random.next_i64(), expected.next_i64());
     }
 
     #[test]

@@ -205,6 +205,13 @@ impl TreeFeature {
         pos: BlockPos,
     ) -> (Vec<BlockPos>, Vec<BlockPos>, Vec<BlockPos>) {
         let height = self.trunk_placer.get_height(random);
+        // Vanilla samples foliage even when the tree cannot be placed.
+        let foliage_height = self
+            .foliage_placer
+            .r#type
+            .get_random_height(random, height as i32);
+        let base_height = height as i32 - foliage_height;
+        let foliage_radius = self.foliage_placer.get_random_radius(random, base_height);
 
         let trunk_start = self
             .root_placer
@@ -238,12 +245,6 @@ impl TreeFeature {
             trunk_state,
         );
 
-        let foliage_height = self
-            .foliage_placer
-            .r#type
-            .get_random_height(random, height as i32);
-        let base_height = height as i32 - foliage_height;
-        let foliage_radius = self.foliage_placer.get_random_radius(random, base_height);
         let foliage_state = self
             .foliage_provider
             .get(random, pos, chunk, block_registry);
