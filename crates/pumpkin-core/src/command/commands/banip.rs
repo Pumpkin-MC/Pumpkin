@@ -146,5 +146,5 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             ),
     );
 
-    dispatcher.register_with_aliases(cmd, &["banip"]);
+    dispatcher.register(cmd);
 }

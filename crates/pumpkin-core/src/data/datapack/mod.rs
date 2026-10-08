@@ -703,12 +703,10 @@ impl DatapackManager {
         // Fall back to compile-time embedded structures.
         let structure_id = format!("{namespace}:{path}");
 
-        if let Some(bytes) =
-            pumpkin_world::generation::structure::template::template_bytes(&structure_id)
+        if let Some(template) =
+            pumpkin_world::generation::structure::template::get_template(&structure_id)
         {
-            return read_gzip_compound_tag(std::io::Cursor::new(bytes)).map_err(|error| {
-                format!("Failed to parse embedded structure '{structure_id}': {error}")
-            });
+            return Ok(template.save());
         }
 
         Err(format!(

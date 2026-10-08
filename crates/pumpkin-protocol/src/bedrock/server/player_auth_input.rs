@@ -11,29 +11,51 @@ use crate::{
     serial::PacketRead,
 };
 
+/// Sent by the client every tick to transmit player movement, view orientation, and input state under server authoritative movement.
 #[derive(Debug)]
 #[packet(144)]
 pub struct SPlayerAuthInput {
+    /// Pitch rotation angle in degrees.
     pub pitch: f32,
+    /// Yaw rotation angle in degrees.
     pub yaw: f32,
+    /// Absolute player position in world space.
     pub position: Vector3<f32>,
+    /// Movement vector created from directional input controls (WASD / analog stick).
     pub move_vec: Vector2<f32>,
+    /// Horizontal head yaw rotation angle in degrees.
     pub head_yaw: f32,
+    /// Bitset of active input flags for the current tick.
     pub input_data: Bitset<66>,
+    /// Input device mode used by the client (mouse, touch, gamepad).
     pub input_mode: VarUInt,
+    /// Client play mode (screen, VR, etc.).
     pub play_mode: VarUInt,
+    /// Touch or crosshair interaction model.
     pub interaction_model: VarInt,
+    /// Pitch angle when an interaction occurred.
     pub interact_pitch: f32,
+    /// Yaw angle when an interaction occurred.
     pub interact_yaw: f32,
+    /// Client world simulation tick number.
     pub tick: VarULong,
+    /// Positional delta since the previous input tick.
     pub delta: Vector3<f32>,
+    /// Optional block destruction or interaction actions executed during this tick.
     pub block_actions: Option<Vec<PlayerBlockAction>>,
+    /// Optional item use action performed during this tick.
     pub item_interaction: Option<PlayerInventoryAction>,
+    /// Optional item stack request embedded into the movement tick.
     pub item_stack_request: Option<crate::bedrock::server::item_stack_request::ItemStackRequest>,
+    /// Predicted vehicle rotation if riding an entity.
     pub vehicle_rotation: Option<Vector2<f32>>,
+    /// Unique entity ID of the ridden vehicle.
     pub vehicle_unique_id: Option<VarLong>,
+    /// Analog movement stick input values.
     pub analog_move: Vector2<f32>,
+    /// Camera orientation vector for camera-relative movement.
     pub camera_orientation: Vector3<f32>,
+    /// Unclamped raw movement input vector.
     pub raw_move: Vector2<f32>,
 }
 
@@ -230,25 +252,36 @@ impl PacketRead for PlayerUseItemTransactionData {
     }
 }
 
+/// A block action (e.g. start/stop breaking) executed within a player input tick.
 #[derive(Debug, PacketRead)]
 pub struct PlayerBlockAction {
+    /// Action category performed on the block.
     pub action: PlayerActionType,
+    /// Targeted block coordinates.
     pub block_pos: BlockPos,
+    /// Face of the block targeted.
     pub face: VarInt,
 }
 
+/// Primary physical input peripheral used by the client.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum InputMode {
+    /// Standard desktop mouse and keyboard.
     Mouse = 1,
+    /// Mobile touchscreen controls.
     Touch = 2,
+    /// Console gamepad or controller.
     GamePad = 3,
+    /// Motion controller (VR / AR).
     MotionController = 4,
 }
 
+/// Client rendering / gameplay mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PlayMode {
+    /// Standard full-screen desktop or mobile play.
     Normal = 0,
     Teaser = 1,
     Screen = 2,
@@ -256,11 +289,15 @@ pub enum PlayMode {
     NumModes = 9,
 }
 
+/// Client control interaction model style.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum InteractionModel {
+    /// Touch drag and tap interaction.
     Touch = 0,
+    /// Centered crosshair interaction.
     Crosshair = 1,
+    /// Classic D-pad and tap controls.
     Classic = 2,
 }
 
