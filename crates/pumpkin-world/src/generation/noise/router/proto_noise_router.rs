@@ -296,6 +296,26 @@ impl DoublePerlinNoiseBuilder {
         let mut random = base_random_deriver.from_lo_and_hi(parameters.lo, parameters.hi);
         DoublePerlinNoiseSampler::from_params(&mut random, parameters, false)
     }
+
+    #[must_use]
+    pub fn get_noise_sampler(
+        base_random_deriver: &XoroshiroSplitter,
+        legacy_random_source: bool,
+        world_seed: u64,
+        parameters: &DoublePerlinNoiseParameters,
+    ) -> DoublePerlinNoiseSampler {
+        if legacy_random_source {
+            use pumpkin_util::random::RandomImpl;
+            use pumpkin_util::random::legacy_rand::LegacyRand;
+            let mut root = LegacyRand::from_seed(world_seed);
+            let factory_seed = root.next_i64() as u64;
+            let mut noise_rand =
+                LegacyRand::from_seed((parameters.string_hash as i64 ^ factory_seed as i64) as u64);
+            DoublePerlinNoiseSampler::from_params(&mut noise_rand, parameters, false)
+        } else {
+            Self::get_noise_sampler_for_id(base_random_deriver, parameters)
+        }
+    }
 }
 
 fn build_spline_recursive(spline: &SplineRepr) -> SplineValue {
@@ -367,17 +387,42 @@ impl ProtoNoiseRouters {
                     )),
                 ),
                 BaseNoiseFunctionComponent::Noise { data } => {
-                    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
-                        base_random_deriver,
-                        &data.noise_id,
-                    );
+                    let sampler = if data.noise_id.id
+                        == DoublePerlinNoiseParameters::NETHER_TEMPERATURE.id
+                    {
+                        let mut legacy_rand =
+                            LegacyRand::from_seed(random_config.seed.wrapping_add(0));
+                        DoublePerlinNoiseSampler::from_params(
+                            &mut legacy_rand,
+                            &data.noise_id,
+                            true,
+                        )
+                    } else if data.noise_id.id == DoublePerlinNoiseParameters::NETHER_VEGETATION.id
+                    {
+                        let mut legacy_rand =
+                            LegacyRand::from_seed(random_config.seed.wrapping_add(1));
+                        DoublePerlinNoiseSampler::from_params(
+                            &mut legacy_rand,
+                            &data.noise_id,
+                            true,
+                        )
+                    } else {
+                        DoublePerlinNoiseBuilder::get_noise_sampler(
+                            base_random_deriver,
+                            random_config.legacy_random_source,
+                            random_config.seed,
+                            &data.noise_id,
+                        )
+                    };
                     ProtoNoiseFunctionComponent::Independent(
                         IndependentProtoNoiseFunctionComponent::Noise(Noise::new(sampler, data)),
                     )
                 }
                 BaseNoiseFunctionComponent::ShiftA { noise_id } => {
-                    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler(
                         base_random_deriver,
+                        random_config.legacy_random_source,
+                        random_config.seed,
                         noise_id,
                     );
                     ProtoNoiseFunctionComponent::Independent(
@@ -385,8 +430,10 @@ impl ProtoNoiseRouters {
                     )
                 }
                 BaseNoiseFunctionComponent::ShiftB { noise_id } => {
-                    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler(
                         base_random_deriver,
+                        random_config.legacy_random_source,
+                        random_config.seed,
                         noise_id,
                     );
                     ProtoNoiseFunctionComponent::Independent(
@@ -420,29 +467,32 @@ impl ProtoNoiseRouters {
                     shift_z_index,
                     data,
                 } => {
-                    let sampler = match data.noise_id.id {
-                        id if id == DoublePerlinNoiseParameters::NETHER_TEMPERATURE.id => {
-                            let mut legacy_rand =
-                                LegacyRand::from_seed(random_config.seed.wrapping_add(0));
-                            DoublePerlinNoiseSampler::from_params(
-                                &mut legacy_rand,
-                                &data.noise_id,
-                                true,
-                            )
-                        }
-                        id if id == DoublePerlinNoiseParameters::NETHER_VEGETATION.id => {
-                            let mut legacy_rand =
-                                LegacyRand::from_seed(random_config.seed.wrapping_add(1));
-                            DoublePerlinNoiseSampler::from_params(
-                                &mut legacy_rand,
-                                &data.noise_id,
-                                true,
-                            )
-                        }
-                        _ => DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
-                            base_random_deriver,
+                    let sampler = if data.noise_id.id
+                        == DoublePerlinNoiseParameters::NETHER_TEMPERATURE.id
+                    {
+                        let mut legacy_rand =
+                            LegacyRand::from_seed(random_config.seed.wrapping_add(0));
+                        DoublePerlinNoiseSampler::from_params(
+                            &mut legacy_rand,
                             &data.noise_id,
-                        ),
+                            true,
+                        )
+                    } else if data.noise_id.id == DoublePerlinNoiseParameters::NETHER_VEGETATION.id
+                    {
+                        let mut legacy_rand =
+                            LegacyRand::from_seed(random_config.seed.wrapping_add(1));
+                        DoublePerlinNoiseSampler::from_params(
+                            &mut legacy_rand,
+                            &data.noise_id,
+                            true,
+                        )
+                    } else {
+                        DoublePerlinNoiseBuilder::get_noise_sampler(
+                            base_random_deriver,
+                            random_config.legacy_random_source,
+                            random_config.seed,
+                            &data.noise_id,
+                        )
                     };
                     ProtoNoiseFunctionComponent::Dependent(
                         DependentProtoNoiseFunctionComponent::ShiftedNoise(ShiftedNoise::new(
