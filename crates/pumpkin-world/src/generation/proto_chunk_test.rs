@@ -401,6 +401,7 @@ mod test {
         chunk_z: i32,
         expected_data: &[u16],
         test_name: &str,
+        allowed_mismatches: usize,
     ) {
         let seed = Seed(seed);
         let world_gen = get_world_gen(seed, dimension, false, Vec::new(), String::new());
@@ -417,7 +418,6 @@ mod test {
 
         let mismatches = count_dump_mismatches(&chunk, expected_data, test_name);
         assert_air_above_dumped_window(&chunk, expected_data, test_name);
-        let allowed_mismatches = 6000;
         assert!(
             mismatches <= allowed_mismatches,
             "[{test_name}] Chunk surface generation mismatches vanilla! (got {mismatches} mismatches, allowed {allowed_mismatches})"
@@ -616,6 +616,7 @@ mod test {
             0,
             &expected,
             "no_blend_no_beard_surface_0_0",
+            0,
         );
     }
 
@@ -631,6 +632,7 @@ mod test {
             544,
             &expected,
             "no_blend_no_beard_surface_badlands_minus595_544",
+            6000,
         );
     }
 
@@ -646,6 +648,7 @@ mod test {
             183,
             &expected,
             "no_blend_no_beard_surface_frozen_ocean_minus119_183",
+            6000,
         );
     }
 
@@ -661,6 +664,7 @@ mod test {
             0,
             &expected,
             "nether_surface_no_blend_no_beard_0_0",
+            6000,
         );
     }
 
@@ -676,6 +680,7 @@ mod test {
             4,
             &expected,
             "nether_surface_no_blend_no_beard_7_4",
+            6000,
         );
     }
 
@@ -691,6 +696,7 @@ mod test {
             0,
             &expected,
             "end_surface_no_blend_no_beard_0_0",
+            6000,
         );
     }
 
@@ -706,6 +712,7 @@ mod test {
             4,
             &expected,
             "end_surface_no_blend_no_beard_7_4",
+            6000,
         );
     }
 }
