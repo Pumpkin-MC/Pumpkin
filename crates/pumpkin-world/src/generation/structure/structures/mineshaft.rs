@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use pumpkin_data::{
     Block, BlockState,
@@ -75,35 +75,22 @@ impl StructureGenerator for MineshaftGenerator {
             MineshaftType::Normal
         };
 
-        let mut start_room = MineShaftRoom::new(0, &mut context.random, room_x, room_z, shaft_type);
-
-        let mut collector = StructurePiecesCollector::default();
+        let start_room = MineShaftRoom::new(0, &mut context.random, room_x, room_z, shaft_type);
+        let entrances = start_room.child_entrance_boxes.clone();
         let start_piece_box = start_room.piece.bounding_box;
 
-        let mut children = Vec::new();
-        start_room.add_children_to_list(
-            &start_piece_box,
-            shaft_type,
-            &collector,
-            &mut context.random,
-            &mut children,
-        );
-
+        let mut collector = StructurePiecesCollector::default();
         collector.add_piece(Box::new(start_room));
 
-        while !children.is_empty() {
-            let next_piece = children.remove(0);
-            next_piece.build_children(
-                &start_piece_box,
-                shaft_type,
-                &collector,
-                &mut context.random,
-                &mut children,
-            );
-            collector.add_piece(next_piece.into_piece_base());
-        }
+        MineShaftRoom::add_room_children(
+            &start_piece_box,
+            shaft_type,
+            &mut collector,
+            &mut context.random,
+            &entrances,
+        );
 
-        if self.is_mesa {
+        let dy = if self.is_mesa {
             let bbox = collector.get_bounding_box();
             let center_x = i32::midpoint(bbox.min.x, bbox.max.x);
             let center_z = i32::midpoint(bbox.min.z, bbox.max.z);
@@ -123,12 +110,13 @@ impl StructureGenerator for MineshaftGenerator {
 
             let dy = target_y - center_y;
             collector.shift(dy);
+            dy
         } else {
-            collector.shift_into(context.sea_level, context.min_y, &mut context.random, 10);
-        }
+            collector.shift_into(context.sea_level, context.min_y, &mut context.random, 10)
+        };
 
         Some(StructurePosition {
-            start_pos: BlockPos::new(start_x + 8, 50, start_z),
+            start_pos: BlockPos::new(start_x + 8, 50 + dy, start_z),
             collector: Arc::new(collector.into()),
         })
     }
@@ -141,32 +129,11 @@ enum GeneratedPiece {
 }
 
 impl GeneratedPiece {
-    fn build_children(
-        &self,
-        start_piece_box: &BlockBox,
-        shaft_type: MineshaftType,
-        collector: &StructurePiecesCollector,
-        random: &mut RandomGenerator,
-        children: &mut Vec<Self>,
-    ) {
+    const fn bounding_box(&self) -> BlockBox {
         match self {
-            Self::Corridor(c) => {
-                c.add_children_to_list(start_piece_box, shaft_type, collector, random, children);
-            }
-            Self::Crossing(cr) => {
-                cr.add_children_to_list(start_piece_box, shaft_type, collector, random, children);
-            }
-            Self::Stairs(s) => {
-                s.add_children_to_list(start_piece_box, shaft_type, collector, random, children);
-            }
-        }
-    }
-
-    fn into_piece_base(self) -> Box<dyn StructurePieceBase> {
-        match self {
-            Self::Corridor(c) => Box::new(c),
-            Self::Crossing(cr) => Box::new(cr),
-            Self::Stairs(s) => Box::new(s),
+            Self::Corridor(c) => c.piece.bounding_box,
+            Self::Crossing(cr) => cr.piece.bounding_box,
+            Self::Stairs(s) => s.piece.bounding_box,
         }
     }
 }
@@ -219,7 +186,7 @@ fn create_random_shaft_piece(
 #[expect(clippy::too_many_arguments)]
 fn generate_and_add_piece(
     start_piece_box: &BlockBox,
-    collector: &StructurePiecesCollector,
+    collector: &mut StructurePiecesCollector,
     random: &mut RandomGenerator,
     foot_x: i32,
     foot_y: i32,
@@ -227,10 +194,12 @@ fn generate_and_add_piece(
     direction: BlockDirection,
     depth: u32,
     shaft_type: MineshaftType,
-    children: &mut Vec<GeneratedPiece>,
-) {
-    if depth <= 8
-        && (foot_x - start_piece_box.min.x).abs() <= 80
+) -> Option<BlockBox> {
+    if depth > 8 {
+        return None;
+    }
+
+    if (foot_x - start_piece_box.min.x).abs() <= 80
         && (foot_z - start_piece_box.min.z).abs() <= 80
         && let Some(new_piece) = create_random_shaft_piece(
             collector,
@@ -243,14 +212,63 @@ fn generate_and_add_piece(
             shaft_type,
         )
     {
-        children.push(new_piece);
+        let piece_box = new_piece.bounding_box();
+        match new_piece {
+            GeneratedPiece::Corridor(corridor) => {
+                let bb = corridor.piece.bounding_box;
+                let orientation = corridor.piece.facing.unwrap_or(BlockDirection::North);
+                collector.add_piece(Box::new(corridor));
+                MineShaftCorridor::add_corridor_children(
+                    &bb,
+                    depth + 1,
+                    orientation,
+                    start_piece_box,
+                    shaft_type,
+                    collector,
+                    random,
+                );
+            }
+            GeneratedPiece::Crossing(crossing) => {
+                let bb = crossing.piece.bounding_box;
+                let dir = crossing.direction;
+                let is_two_floored = crossing.is_two_floored;
+                collector.add_piece(Box::new(crossing));
+                MineShaftCrossing::add_crossing_children(
+                    &bb,
+                    depth + 1,
+                    dir,
+                    is_two_floored,
+                    start_piece_box,
+                    shaft_type,
+                    collector,
+                    random,
+                );
+            }
+            GeneratedPiece::Stairs(stairs) => {
+                let bb = stairs.piece.bounding_box;
+                let facing = stairs.piece.facing;
+                collector.add_piece(Box::new(stairs));
+                MineShaftStairs::add_stairs_children(
+                    &bb,
+                    depth + 1,
+                    facing,
+                    start_piece_box,
+                    shaft_type,
+                    collector,
+                    random,
+                );
+            }
+        }
+        Some(piece_box)
+    } else {
+        None
     }
 }
 
 pub struct MineShaftRoom {
     pub piece: StructurePiece,
     pub shaft_type: MineshaftType,
-    pub child_entrance_boxes: Vec<BlockBox>,
+    pub child_entrance_boxes: Arc<Mutex<Vec<BlockBox>>>,
 }
 
 impl MineShaftRoom {
@@ -269,28 +287,27 @@ impl MineShaftRoom {
         Self {
             piece: StructurePiece::new(StructurePieceType::MineshaftRoom, bounding_box, gen_depth),
             shaft_type,
-            child_entrance_boxes: Vec::new(),
+            child_entrance_boxes: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
     #[expect(clippy::too_many_lines)]
-    fn add_children_to_list(
-        &mut self,
+    fn add_room_children(
         start_piece_box: &BlockBox,
         shaft_type: MineshaftType,
-        collector: &StructurePiecesCollector,
+        collector: &mut StructurePiecesCollector,
         random: &mut RandomGenerator,
-        children: &mut Vec<GeneratedPiece>,
+        child_entrance_boxes: &Arc<Mutex<Vec<BlockBox>>>,
     ) {
-        let depth = self.piece.chain_length;
-        let y_span = self.piece.bounding_box.max.y - self.piece.bounding_box.min.y + 1;
+        let depth = 0;
+        let y_span = start_piece_box.max.y - start_piece_box.min.y + 1;
         let mut height_space = y_span - 4;
         if height_space <= 0 {
             height_space = 1;
         }
 
-        let x_span = self.piece.bounding_box.max.x - self.piece.bounding_box.min.x + 1;
-        let z_span = self.piece.bounding_box.max.z - self.piece.bounding_box.min.z + 1;
+        let x_span = start_piece_box.max.x - start_piece_box.min.x + 1;
+        let z_span = start_piece_box.max.z - start_piece_box.min.z + 1;
 
         let mut pos = 0;
         while pos < x_span {
@@ -298,12 +315,11 @@ impl MineShaftRoom {
             if pos + 3 > x_span {
                 break;
             }
-            let child_x = self.piece.bounding_box.min.x + pos;
-            let child_y = self.piece.bounding_box.min.y + random.next_bounded_i32(height_space) + 1;
-            let child_z = self.piece.bounding_box.min.z - 1;
+            let child_x = start_piece_box.min.x + pos;
+            let child_y = start_piece_box.min.y + random.next_bounded_i32(height_space) + 1;
+            let child_z = start_piece_box.min.z - 1;
 
-            let prev_len = children.len();
-            generate_and_add_piece(
+            if let Some(child_box) = generate_and_add_piece(
                 start_piece_box,
                 collector,
                 random,
@@ -313,22 +329,18 @@ impl MineShaftRoom {
                 BlockDirection::North,
                 depth,
                 shaft_type,
-                children,
-            );
-            if children.len() > prev_len {
-                let bb = match &children[prev_len] {
-                    GeneratedPiece::Corridor(c) => c.piece.bounding_box,
-                    GeneratedPiece::Crossing(c) => c.piece.bounding_box,
-                    GeneratedPiece::Stairs(s) => s.piece.bounding_box,
-                };
-                self.child_entrance_boxes.push(BlockBox::new(
-                    bb.min.x,
-                    bb.min.y,
-                    self.piece.bounding_box.min.z,
-                    bb.max.x,
-                    bb.max.y,
-                    self.piece.bounding_box.min.z + 1,
-                ));
+            ) {
+                child_entrance_boxes
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(BlockBox::new(
+                        child_box.min.x,
+                        child_box.min.y,
+                        start_piece_box.min.z,
+                        child_box.max.x,
+                        child_box.max.y,
+                        start_piece_box.min.z + 1,
+                    ));
             }
             pos += 4;
         }
@@ -339,12 +351,11 @@ impl MineShaftRoom {
             if pos + 3 > x_span {
                 break;
             }
-            let child_x = self.piece.bounding_box.min.x + pos;
-            let child_y = self.piece.bounding_box.min.y + random.next_bounded_i32(height_space) + 1;
-            let child_z = self.piece.bounding_box.max.z + 1;
+            let child_x = start_piece_box.min.x + pos;
+            let child_y = start_piece_box.min.y + random.next_bounded_i32(height_space) + 1;
+            let child_z = start_piece_box.max.z + 1;
 
-            let prev_len = children.len();
-            generate_and_add_piece(
+            if let Some(child_box) = generate_and_add_piece(
                 start_piece_box,
                 collector,
                 random,
@@ -354,22 +365,18 @@ impl MineShaftRoom {
                 BlockDirection::South,
                 depth,
                 shaft_type,
-                children,
-            );
-            if children.len() > prev_len {
-                let bb = match &children[prev_len] {
-                    GeneratedPiece::Corridor(c) => c.piece.bounding_box,
-                    GeneratedPiece::Crossing(c) => c.piece.bounding_box,
-                    GeneratedPiece::Stairs(s) => s.piece.bounding_box,
-                };
-                self.child_entrance_boxes.push(BlockBox::new(
-                    bb.min.x,
-                    bb.min.y,
-                    self.piece.bounding_box.max.z - 1,
-                    bb.max.x,
-                    bb.max.y,
-                    self.piece.bounding_box.max.z,
-                ));
+            ) {
+                child_entrance_boxes
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(BlockBox::new(
+                        child_box.min.x,
+                        child_box.min.y,
+                        start_piece_box.max.z - 1,
+                        child_box.max.x,
+                        child_box.max.y,
+                        start_piece_box.max.z,
+                    ));
             }
             pos += 4;
         }
@@ -380,12 +387,11 @@ impl MineShaftRoom {
             if pos + 3 > z_span {
                 break;
             }
-            let child_x = self.piece.bounding_box.min.x - 1;
-            let child_y = self.piece.bounding_box.min.y + random.next_bounded_i32(height_space) + 1;
-            let child_z = self.piece.bounding_box.min.z + pos;
+            let child_x = start_piece_box.min.x - 1;
+            let child_y = start_piece_box.min.y + random.next_bounded_i32(height_space) + 1;
+            let child_z = start_piece_box.min.z + pos;
 
-            let prev_len = children.len();
-            generate_and_add_piece(
+            if let Some(child_box) = generate_and_add_piece(
                 start_piece_box,
                 collector,
                 random,
@@ -395,22 +401,18 @@ impl MineShaftRoom {
                 BlockDirection::West,
                 depth,
                 shaft_type,
-                children,
-            );
-            if children.len() > prev_len {
-                let bb = match &children[prev_len] {
-                    GeneratedPiece::Corridor(c) => c.piece.bounding_box,
-                    GeneratedPiece::Crossing(c) => c.piece.bounding_box,
-                    GeneratedPiece::Stairs(s) => s.piece.bounding_box,
-                };
-                self.child_entrance_boxes.push(BlockBox::new(
-                    self.piece.bounding_box.min.x,
-                    bb.min.y,
-                    bb.min.z,
-                    self.piece.bounding_box.min.x + 1,
-                    bb.max.y,
-                    bb.max.z,
-                ));
+            ) {
+                child_entrance_boxes
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(BlockBox::new(
+                        start_piece_box.min.x,
+                        child_box.min.y,
+                        child_box.min.z,
+                        start_piece_box.min.x + 1,
+                        child_box.max.y,
+                        child_box.max.z,
+                    ));
             }
             pos += 4;
         }
@@ -421,12 +423,11 @@ impl MineShaftRoom {
             if pos + 3 > z_span {
                 break;
             }
-            let child_x = self.piece.bounding_box.max.x + 1;
-            let child_y = self.piece.bounding_box.min.y + random.next_bounded_i32(height_space) + 1;
-            let child_z = self.piece.bounding_box.min.z + pos;
+            let child_x = start_piece_box.max.x + 1;
+            let child_y = start_piece_box.min.y + random.next_bounded_i32(height_space) + 1;
+            let child_z = start_piece_box.min.z + pos;
 
-            let prev_len = children.len();
-            generate_and_add_piece(
+            if let Some(child_box) = generate_and_add_piece(
                 start_piece_box,
                 collector,
                 random,
@@ -436,22 +437,18 @@ impl MineShaftRoom {
                 BlockDirection::East,
                 depth,
                 shaft_type,
-                children,
-            );
-            if children.len() > prev_len {
-                let bb = match &children[prev_len] {
-                    GeneratedPiece::Corridor(c) => c.piece.bounding_box,
-                    GeneratedPiece::Crossing(c) => c.piece.bounding_box,
-                    GeneratedPiece::Stairs(s) => s.piece.bounding_box,
-                };
-                self.child_entrance_boxes.push(BlockBox::new(
-                    self.piece.bounding_box.max.x - 1,
-                    bb.min.y,
-                    bb.min.z,
-                    self.piece.bounding_box.max.x,
-                    bb.max.y,
-                    bb.max.z,
-                ));
+            ) {
+                child_entrance_boxes
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(BlockBox::new(
+                        start_piece_box.max.x - 1,
+                        child_box.min.y,
+                        child_box.min.z,
+                        start_piece_box.max.x,
+                        child_box.max.y,
+                        child_box.max.z,
+                    ));
             }
             pos += 4;
         }
@@ -473,7 +470,11 @@ impl StructurePieceBase for MineShaftRoom {
 
     fn translate(&mut self, x: i32, y: i32, z: i32) {
         self.piece.translate(x, y, z);
-        for bb in &mut self.child_entrance_boxes {
+        for bb in &mut *self
+            .child_entrance_boxes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        {
             bb.move_pos(x, y, z);
         }
     }
@@ -500,7 +501,11 @@ impl StructurePieceBase for MineShaftRoom {
             }
         }
 
-        for entrance in &self.child_entrance_boxes {
+        for entrance in &*self
+            .child_entrance_boxes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        {
             for y in (entrance.max.y - 2)..=entrance.max.y {
                 for x in entrance.min.x..=entrance.max.x {
                     for z in entrance.min.z..=entrance.max.z {
@@ -607,18 +612,17 @@ impl MineShaftCorridor {
     }
 
     #[expect(clippy::too_many_lines)]
-    fn add_children_to_list(
-        &self,
+    fn add_corridor_children(
+        bb: &BlockBox,
+        depth: u32,
+        orientation: BlockDirection,
         start_piece_box: &BlockBox,
         shaft_type: MineshaftType,
-        collector: &StructurePiecesCollector,
+        collector: &mut StructurePiecesCollector,
         random: &mut RandomGenerator,
-        children: &mut Vec<GeneratedPiece>,
     ) {
-        let depth = self.piece.chain_length;
         let end_selection = random.next_bounded_i32(4);
-        let orientation = self.piece.facing.unwrap_or(BlockDirection::North);
-        let rand_y = self.piece.bounding_box.min.y - 1 + random.next_bounded_i32(3);
+        let rand_y = bb.min.y - 1 + random.next_bounded_i32(3);
 
         match orientation {
             BlockDirection::North => {
@@ -627,39 +631,36 @@ impl MineShaftCorridor {
                         start_piece_box,
                         collector,
                         random,
-                        self.piece.bounding_box.min.x,
+                        bb.min.x,
                         rand_y,
-                        self.piece.bounding_box.min.z - 1,
+                        bb.min.z - 1,
                         orientation,
                         depth,
                         shaft_type,
-                        children,
                     );
                 } else if end_selection == 2 {
                     generate_and_add_piece(
                         start_piece_box,
                         collector,
                         random,
-                        self.piece.bounding_box.min.x - 1,
+                        bb.min.x - 1,
                         rand_y,
-                        self.piece.bounding_box.min.z,
+                        bb.min.z,
                         BlockDirection::West,
                         depth,
                         shaft_type,
-                        children,
                     );
                 } else {
                     generate_and_add_piece(
                         start_piece_box,
                         collector,
                         random,
-                        self.piece.bounding_box.max.x + 1,
+                        bb.max.x + 1,
                         rand_y,
-                        self.piece.bounding_box.min.z,
+                        bb.min.z,
                         BlockDirection::East,
                         depth,
                         shaft_type,
-                        children,
                     );
                 }
             }
@@ -669,39 +670,36 @@ impl MineShaftCorridor {
                         start_piece_box,
                         collector,
                         random,
-                        self.piece.bounding_box.min.x,
+                        bb.min.x,
                         rand_y,
-                        self.piece.bounding_box.max.z + 1,
+                        bb.max.z + 1,
                         orientation,
                         depth,
                         shaft_type,
-                        children,
                     );
                 } else if end_selection == 2 {
                     generate_and_add_piece(
                         start_piece_box,
                         collector,
                         random,
-                        self.piece.bounding_box.min.x - 1,
+                        bb.min.x - 1,
                         rand_y,
-                        self.piece.bounding_box.max.z - 3,
+                        bb.max.z - 3,
                         BlockDirection::West,
                         depth,
                         shaft_type,
-                        children,
                     );
                 } else {
                     generate_and_add_piece(
                         start_piece_box,
                         collector,
                         random,
-                        self.piece.bounding_box.max.x + 1,
+                        bb.max.x + 1,
                         rand_y,
-                        self.piece.bounding_box.max.z - 3,
+                        bb.max.z - 3,
                         BlockDirection::East,
                         depth,
                         shaft_type,
-                        children,
                     );
                 }
             }
@@ -711,39 +709,36 @@ impl MineShaftCorridor {
                         start_piece_box,
                         collector,
                         random,
-                        self.piece.bounding_box.min.x - 1,
+                        bb.min.x - 1,
                         rand_y,
-                        self.piece.bounding_box.min.z,
+                        bb.min.z,
                         orientation,
                         depth,
                         shaft_type,
-                        children,
                     );
                 } else if end_selection == 2 {
                     generate_and_add_piece(
                         start_piece_box,
                         collector,
                         random,
-                        self.piece.bounding_box.min.x,
+                        bb.min.x,
                         rand_y,
-                        self.piece.bounding_box.min.z - 1,
+                        bb.min.z - 1,
                         BlockDirection::North,
                         depth,
                         shaft_type,
-                        children,
                     );
                 } else {
                     generate_and_add_piece(
                         start_piece_box,
                         collector,
                         random,
-                        self.piece.bounding_box.min.x,
+                        bb.min.x,
                         rand_y,
-                        self.piece.bounding_box.max.z + 1,
+                        bb.max.z + 1,
                         BlockDirection::South,
                         depth,
                         shaft_type,
-                        children,
                     );
                 }
             }
@@ -753,39 +748,36 @@ impl MineShaftCorridor {
                         start_piece_box,
                         collector,
                         random,
-                        self.piece.bounding_box.max.x + 1,
+                        bb.max.x + 1,
                         rand_y,
-                        self.piece.bounding_box.min.z,
+                        bb.min.z,
                         orientation,
                         depth,
                         shaft_type,
-                        children,
                     );
                 } else if end_selection == 2 {
                     generate_and_add_piece(
                         start_piece_box,
                         collector,
                         random,
-                        self.piece.bounding_box.max.x - 3,
+                        bb.max.x - 3,
                         rand_y,
-                        self.piece.bounding_box.min.z - 1,
+                        bb.min.z - 1,
                         BlockDirection::North,
                         depth,
                         shaft_type,
-                        children,
                     );
                 } else {
                     generate_and_add_piece(
                         start_piece_box,
                         collector,
                         random,
-                        self.piece.bounding_box.max.x - 3,
+                        bb.max.x - 3,
                         rand_y,
-                        self.piece.bounding_box.max.z + 1,
+                        bb.max.z + 1,
                         BlockDirection::South,
                         depth,
                         shaft_type,
-                        children,
                     );
                 }
             }
@@ -794,8 +786,8 @@ impl MineShaftCorridor {
 
         if depth < 8 {
             if orientation != BlockDirection::North && orientation != BlockDirection::South {
-                let mut x = self.piece.bounding_box.min.x + 3;
-                while x + 3 <= self.piece.bounding_box.max.x {
+                let mut x = bb.min.x + 3;
+                while x + 3 <= bb.max.x {
                     let sel = random.next_bounded_i32(5);
                     if sel == 0 {
                         generate_and_add_piece(
@@ -803,12 +795,11 @@ impl MineShaftCorridor {
                             collector,
                             random,
                             x,
-                            self.piece.bounding_box.min.y,
-                            self.piece.bounding_box.min.z - 1,
+                            bb.min.y,
+                            bb.min.z - 1,
                             BlockDirection::North,
                             depth + 1,
                             shaft_type,
-                            children,
                         );
                     } else if sel == 1 {
                         generate_and_add_piece(
@@ -816,45 +807,42 @@ impl MineShaftCorridor {
                             collector,
                             random,
                             x,
-                            self.piece.bounding_box.min.y,
-                            self.piece.bounding_box.max.z + 1,
+                            bb.min.y,
+                            bb.max.z + 1,
                             BlockDirection::South,
                             depth + 1,
                             shaft_type,
-                            children,
                         );
                     }
                     x += 5;
                 }
             } else {
-                let mut z = self.piece.bounding_box.min.z + 3;
-                while z + 3 <= self.piece.bounding_box.max.z {
+                let mut z = bb.min.z + 3;
+                while z + 3 <= bb.max.z {
                     let sel = random.next_bounded_i32(5);
                     if sel == 0 {
                         generate_and_add_piece(
                             start_piece_box,
                             collector,
                             random,
-                            self.piece.bounding_box.min.x - 1,
-                            self.piece.bounding_box.min.y,
+                            bb.min.x - 1,
+                            bb.min.y,
                             z,
                             BlockDirection::West,
                             depth + 1,
                             shaft_type,
-                            children,
                         );
                     } else if sel == 1 {
                         generate_and_add_piece(
                             start_piece_box,
                             collector,
                             random,
-                            self.piece.bounding_box.max.x + 1,
-                            self.piece.bounding_box.min.y,
+                            bb.max.x + 1,
+                            bb.min.y,
                             z,
                             BlockDirection::East,
                             depth + 1,
                             shaft_type,
-                            children,
                         );
                     }
                     z += 5;
@@ -1178,17 +1166,18 @@ impl MineShaftCrossing {
             .then_some(box_cand)
     }
 
-    #[expect(clippy::too_many_lines)]
-    fn add_children_to_list(
-        &self,
+    #[expect(clippy::too_many_arguments, clippy::too_many_lines)]
+    fn add_crossing_children(
+        bb: &BlockBox,
+        depth: u32,
+        direction: Option<BlockDirection>,
+        is_two_floored: bool,
         start_piece_box: &BlockBox,
         shaft_type: MineshaftType,
-        collector: &StructurePiecesCollector,
+        collector: &mut StructurePiecesCollector,
         random: &mut RandomGenerator,
-        children: &mut Vec<GeneratedPiece>,
     ) {
-        let depth = self.piece.chain_length;
-        let dir = self.direction.unwrap_or(BlockDirection::North);
+        let dir = direction.unwrap_or(BlockDirection::North);
 
         match dir {
             BlockDirection::North => {
@@ -1196,37 +1185,34 @@ impl MineShaftCrossing {
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x + 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.min.z - 1,
+                    bb.min.x + 1,
+                    bb.min.y,
+                    bb.min.z - 1,
                     BlockDirection::North,
                     depth,
                     shaft_type,
-                    children,
                 );
                 generate_and_add_piece(
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x - 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.min.z + 1,
+                    bb.min.x - 1,
+                    bb.min.y,
+                    bb.min.z + 1,
                     BlockDirection::West,
                     depth,
                     shaft_type,
-                    children,
                 );
                 generate_and_add_piece(
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.max.x + 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.min.z + 1,
+                    bb.max.x + 1,
+                    bb.min.y,
+                    bb.min.z + 1,
                     BlockDirection::East,
                     depth,
                     shaft_type,
-                    children,
                 );
             }
             BlockDirection::South => {
@@ -1234,37 +1220,34 @@ impl MineShaftCrossing {
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x + 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.max.z + 1,
+                    bb.min.x + 1,
+                    bb.min.y,
+                    bb.max.z + 1,
                     BlockDirection::South,
                     depth,
                     shaft_type,
-                    children,
                 );
                 generate_and_add_piece(
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x - 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.min.z + 1,
+                    bb.min.x - 1,
+                    bb.min.y,
+                    bb.min.z + 1,
                     BlockDirection::West,
                     depth,
                     shaft_type,
-                    children,
                 );
                 generate_and_add_piece(
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.max.x + 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.min.z + 1,
+                    bb.max.x + 1,
+                    bb.min.y,
+                    bb.min.z + 1,
                     BlockDirection::East,
                     depth,
                     shaft_type,
-                    children,
                 );
             }
             BlockDirection::West => {
@@ -1272,37 +1255,34 @@ impl MineShaftCrossing {
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x + 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.min.z - 1,
+                    bb.min.x + 1,
+                    bb.min.y,
+                    bb.min.z - 1,
                     BlockDirection::North,
                     depth,
                     shaft_type,
-                    children,
                 );
                 generate_and_add_piece(
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x + 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.max.z + 1,
+                    bb.min.x + 1,
+                    bb.min.y,
+                    bb.max.z + 1,
                     BlockDirection::South,
                     depth,
                     shaft_type,
-                    children,
                 );
                 generate_and_add_piece(
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x - 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.min.z + 1,
+                    bb.min.x - 1,
+                    bb.min.y,
+                    bb.min.z + 1,
                     BlockDirection::West,
                     depth,
                     shaft_type,
-                    children,
                 );
             }
             BlockDirection::East => {
@@ -1310,55 +1290,51 @@ impl MineShaftCrossing {
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x + 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.min.z - 1,
+                    bb.min.x + 1,
+                    bb.min.y,
+                    bb.min.z - 1,
                     BlockDirection::North,
                     depth,
                     shaft_type,
-                    children,
                 );
                 generate_and_add_piece(
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x + 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.max.z + 1,
+                    bb.min.x + 1,
+                    bb.min.y,
+                    bb.max.z + 1,
                     BlockDirection::South,
                     depth,
                     shaft_type,
-                    children,
                 );
                 generate_and_add_piece(
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.max.x + 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.min.z + 1,
+                    bb.max.x + 1,
+                    bb.min.y,
+                    bb.min.z + 1,
                     BlockDirection::East,
                     depth,
                     shaft_type,
-                    children,
                 );
             }
             _ => {}
         }
 
-        if self.is_two_floored {
+        if is_two_floored {
             if random.next_bool() {
                 generate_and_add_piece(
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x + 1,
-                    self.piece.bounding_box.min.y + 4,
-                    self.piece.bounding_box.min.z - 1,
+                    bb.min.x + 1,
+                    bb.min.y + 4,
+                    bb.min.z - 1,
                     BlockDirection::North,
                     depth,
                     shaft_type,
-                    children,
                 );
             }
             if random.next_bool() {
@@ -1366,13 +1342,12 @@ impl MineShaftCrossing {
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x - 1,
-                    self.piece.bounding_box.min.y + 4,
-                    self.piece.bounding_box.min.z + 1,
+                    bb.min.x - 1,
+                    bb.min.y + 4,
+                    bb.min.z + 1,
                     BlockDirection::West,
                     depth,
                     shaft_type,
-                    children,
                 );
             }
             if random.next_bool() {
@@ -1380,13 +1355,12 @@ impl MineShaftCrossing {
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.max.x + 1,
-                    self.piece.bounding_box.min.y + 4,
-                    self.piece.bounding_box.min.z + 1,
+                    bb.max.x + 1,
+                    bb.min.y + 4,
+                    bb.min.z + 1,
                     BlockDirection::East,
                     depth,
                     shaft_type,
-                    children,
                 );
             }
             if random.next_bool() {
@@ -1394,13 +1368,12 @@ impl MineShaftCrossing {
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x + 1,
-                    self.piece.bounding_box.min.y + 4,
-                    self.piece.bounding_box.max.z + 1,
+                    bb.min.x + 1,
+                    bb.min.y + 4,
+                    bb.max.z + 1,
                     BlockDirection::South,
                     depth,
                     shaft_type,
-                    children,
                 );
             }
         }
@@ -1564,16 +1537,16 @@ impl MineShaftStairs {
             .then_some(box_cand)
     }
 
-    fn add_children_to_list(
-        &self,
+    fn add_stairs_children(
+        bb: &BlockBox,
+        depth: u32,
+        direction: Option<BlockDirection>,
         start_piece_box: &BlockBox,
         shaft_type: MineshaftType,
-        collector: &StructurePiecesCollector,
+        collector: &mut StructurePiecesCollector,
         random: &mut RandomGenerator,
-        children: &mut Vec<GeneratedPiece>,
     ) {
-        let depth = self.piece.chain_length;
-        let dir = self.piece.facing.unwrap_or(BlockDirection::North);
+        let dir = direction.unwrap_or(BlockDirection::North);
 
         match dir {
             BlockDirection::North => {
@@ -1581,13 +1554,12 @@ impl MineShaftStairs {
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.min.z - 1,
+                    bb.min.x,
+                    bb.min.y,
+                    bb.min.z - 1,
                     BlockDirection::North,
                     depth,
                     shaft_type,
-                    children,
                 );
             }
             BlockDirection::South => {
@@ -1595,13 +1567,12 @@ impl MineShaftStairs {
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.max.z + 1,
+                    bb.min.x,
+                    bb.min.y,
+                    bb.max.z + 1,
                     BlockDirection::South,
                     depth,
                     shaft_type,
-                    children,
                 );
             }
             BlockDirection::West => {
@@ -1609,13 +1580,12 @@ impl MineShaftStairs {
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.min.x - 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.min.z,
+                    bb.min.x - 1,
+                    bb.min.y,
+                    bb.min.z,
                     BlockDirection::West,
                     depth,
                     shaft_type,
-                    children,
                 );
             }
             BlockDirection::East => {
@@ -1623,13 +1593,12 @@ impl MineShaftStairs {
                     start_piece_box,
                     collector,
                     random,
-                    self.piece.bounding_box.max.x + 1,
-                    self.piece.bounding_box.min.y,
-                    self.piece.bounding_box.min.z,
+                    bb.max.x + 1,
+                    bb.min.y,
+                    bb.min.z,
                     BlockDirection::East,
                     depth,
                     shaft_type,
-                    children,
                 );
             }
             _ => {}
