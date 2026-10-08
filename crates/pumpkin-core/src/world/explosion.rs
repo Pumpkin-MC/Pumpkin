@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockDirection, BlockState, BlockStateId,
+    Block, BlockState, BlockStateId,
     damage::DamageType,
     entity::EntityType,
     fluid::Fluid,
@@ -108,6 +108,10 @@ pub trait ExplosionDamageCalculator: Send + Sync {
             * explosion.power as f64
             + 1.0) as f32
     }
+}
+
+const fn should_create_fire(roll: u8, state: &BlockState, below: &BlockState) -> bool {
+    roll == 0 && state.is_air() && below.is_solid_render()
 }
 
 /// Default explosion damage calculator implementing vanilla standard explosion rules.
@@ -241,6 +245,29 @@ impl Explosion {
             || block.id == Block::POWERED_RAIL.id
             || block.id == Block::DETECTOR_RAIL.id
             || block.id == Block::ACTIVATOR_RAIL.id
+    }
+
+    fn place_fire(
+        world: &Arc<World>,
+        affected_positions: &FxHashSet<BlockPos>,
+        fire_roll: &mut impl FnMut() -> u8,
+    ) {
+        for pos in affected_positions {
+            if !should_create_fire(
+                fire_roll(),
+                world.get_block_state(pos),
+                world.get_block_state(&pos.down()),
+            ) {
+                continue;
+            }
+
+            let fire_block = FireBlockBase::get_fire_type(world, pos);
+            let fire_state_id = FireBlock.get_state_for_position(world, &fire_block, pos);
+            let _ =
+                world.set_block_state_if(pos, fire_state_id, BlockFlags::NOTIFY_ALL, |state_id| {
+                    state_id == Block::AIR.default_state.id
+                });
+        }
     }
 
     #[allow(clippy::too_many_lines)]
@@ -517,12 +544,22 @@ impl Explosion {
 
     /// Returns the removed block count
     pub fn explode(&self, world: &Arc<World>) -> u32 {
+        self.explode_with_fire_roll(world, || rand::rng().random_range(0..3))
+    }
+
+    fn explode_with_fire_roll(&self, world: &Arc<World>, mut fire_roll: impl FnMut() -> u8) -> u32 {
         self.damage_entities(world);
 
         match self.block_interaction {
-            BlockInteraction::Keep => 0,
+            BlockInteraction::Keep => {
+                if self.create_fire {
+                    let (_, affected_positions) = self.get_blocks_to_destroy(world);
+                    Self::place_fire(world, &affected_positions, &mut fire_roll);
+                }
+                0
+            }
             BlockInteraction::TriggerBlock => {
-                let (blocks, _) = self.get_blocks_to_destroy(world);
+                let (blocks, affected_positions) = self.get_blocks_to_destroy(world);
                 for (pos, (block, _state)) in &blocks {
                     let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
                     if let Some(pumpkin_block) = pumpkin_block {
@@ -532,6 +569,9 @@ impl Explosion {
                             position: pos,
                         });
                     }
+                }
+                if self.create_fire {
+                    Self::place_fire(world, &affected_positions, &mut fire_roll);
                 }
                 0
             }
@@ -591,26 +631,7 @@ impl Explosion {
                     }
                 }
                 if self.create_fire {
-                    for pos in &affected_positions {
-                        if rand::rng().random_range(0..3) != 0
-                            || !world.get_block_state(pos).is_air()
-                            || !world
-                                .get_block_state(&pos.down())
-                                .is_side_solid(BlockDirection::Up)
-                        {
-                            continue;
-                        }
-
-                        let fire_block = FireBlockBase::get_fire_type(world, pos);
-                        let fire_state_id =
-                            FireBlock.get_state_for_position(world, &fire_block, pos);
-                        let _ = world.set_block_state_if(
-                            pos,
-                            fire_state_id,
-                            BlockFlags::NOTIFY_ALL,
-                            |state_id| state_id == Block::AIR.default_state.id,
-                        );
-                    }
+                    Self::place_fire(world, &affected_positions, &mut fire_roll);
                 }
 
                 blocks.len() as u32
@@ -621,9 +642,47 @@ impl Explosion {
 
 #[cfg(test)]
 mod tests {
-    use super::{BlockInteraction, Explosion};
-    use pumpkin_data::Block;
-    use pumpkin_util::math::vector3::Vector3;
+    use std::sync::{Arc, Weak};
+
+    use arc_swap::ArcSwap;
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::{Block, BlockDirection, dimension::Dimension};
+    use pumpkin_util::{
+        math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
+        world_seed::Seed,
+    };
+    use pumpkin_world::{chunk::ChunkData, level::Level};
+
+    use crate::{
+        block::registry::default_registry,
+        world::{LevelData, World},
+    };
+
+    use super::{BlockFlags, BlockInteraction, Explosion, should_create_fire};
+
+    type TestWorld = (Arc<World>, Arc<Level>, tempfile::TempDir);
+
+    fn test_world() -> Result<TestWorld, Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let level_info = Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0))));
+        let world = Arc::new(World::load(
+            level.clone(),
+            level_info,
+            Dimension::OVERWORLD,
+            default_registry(),
+            Weak::new(),
+        ));
+        level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+        Ok((world, level, folder))
+    }
 
     #[test]
     fn explosions_are_non_incendiary_by_default() {
@@ -636,6 +695,52 @@ mod tests {
         let explosion =
             Explosion::new(5.0, Vector3::new(0.0, 0.0, 0.0), BlockInteraction::Destroy).with_fire();
         assert!(explosion.create_fire);
+    }
+
+    #[test]
+    fn fire_requires_air_a_zero_roll_and_solid_render_support() {
+        let air = &Block::AIR.default_state;
+        let stone = &Block::STONE.default_state;
+
+        assert!(should_create_fire(0, air, stone));
+        assert!(!should_create_fire(1, air, stone));
+        assert!(!should_create_fire(2, air, stone));
+        assert!(!should_create_fire(u8::MAX, air, stone));
+        assert!(!should_create_fire(0, Block::FIRE.default_state, stone));
+        assert!(!should_create_fire(0, air, Block::AIR.default_state));
+        let glass = &Block::GLASS.default_state;
+        assert!(glass.is_side_solid(BlockDirection::Up));
+        assert!(!glass.is_solid_render());
+        assert!(!should_create_fire(0, air, glass));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn keep_explosion_ignites_affected_air_without_destroying_blocks()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (world, level, _folder) = test_world()?;
+        for x in 4..=11 {
+            for z in 4..=11 {
+                world.set_block_state(
+                    &BlockPos::new(x, 63, z),
+                    Block::STONE.default_state.id,
+                    BlockFlags::empty(),
+                );
+            }
+        }
+
+        let explosion =
+            Explosion::new(4.0, Vector3::new(8.5, 64.0, 8.5), BlockInteraction::Keep).with_fire();
+        let destroyed = explosion.explode_with_fire_roll(&world, || 0);
+        let fire_was_created = (4..=11)
+            .any(|x| (4..=11).any(|z| world.get_block(&BlockPos::new(x, 64, z)) == &Block::FIRE));
+        let floor_remains = (4..=11)
+            .all(|x| (4..=11).all(|z| world.get_block(&BlockPos::new(x, 63, z)) == &Block::STONE));
+        level.shutdown().await;
+
+        assert_eq!(destroyed, 0);
+        assert!(fire_was_created);
+        assert!(floor_remains);
+        Ok(())
     }
 
     #[test]
