@@ -1545,13 +1545,15 @@ impl GenerationSchedule {
                         let pos = node.pos;
                         let stage = node.stage;
                         let send_chunk = self.send_chunk.clone();
-                        let level = level.clone();
+                        let generate = crate::chunk_system::worker_logic::prepare_generation(
+                            pos,
+                            cache,
+                            stage,
+                            level.clone(),
+                        );
 
                         self.generation_pool.spawn(move || {
-                            let result = crate::chunk_system::worker_logic::run_generation(
-                                pos, cache, stage, &level,
-                            );
-                            let _ = send_chunk.send((pos, result));
+                            let _ = send_chunk.send((pos, generate()));
                         });
                     }
                 }

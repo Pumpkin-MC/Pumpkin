@@ -6,6 +6,7 @@ use crate::chunk::format::LightContainer;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::io::{FileIO, LoadedData, run_blocking};
 use crate::level::Level;
+use crate::world::WorldPortalExt;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
 use std::collections::hash_map::Entry;
@@ -254,9 +255,27 @@ pub async fn io_write_work(
     }
 }
 
+pub(super) fn prepare_generation(
+    pos: ChunkPos,
+    cache: Cache,
+    stage: StagedChunkEnum,
+    level: Arc<Level>,
+) -> impl FnOnce() -> RecvChunk + Send {
+    // Queued work must keep its portal even if the level detaches it during shutdown.
+    let portal = level.world_portal.load_full();
+    move || {
+        if let Some(portal) = portal.as_deref() {
+            run_generation_with_portal(pos, cache, stage, &level, portal)
+        } else {
+            // Standalone levels may install their portal between dispatch and execution.
+            run_generation(pos, cache, stage, &level)
+        }
+    }
+}
+
 pub fn run_generation(
     pos: ChunkPos,
-    mut cache: Cache,
+    cache: Cache,
     stage: StagedChunkEnum,
     level: &Level,
 ) -> RecvChunk {
@@ -269,12 +288,22 @@ pub fn run_generation(
             error: "World portal is not initialized".to_string(),
         };
     };
+    run_generation_with_portal(pos, cache, stage, level, portal_ref)
+}
+
+fn run_generation_with_portal(
+    pos: ChunkPos,
+    mut cache: Cache,
+    stage: StagedChunkEnum,
+    level: &Level,
+    portal: &dyn WorldPortalExt,
+) -> RecvChunk {
     // Run generation with panic catching
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         cache.advance(
             stage,
             &level.world_gen.load(),
-            portal_ref,
+            portal,
             &level.lighting_config,
         );
         cache // Return cache on success
@@ -301,5 +330,112 @@ pub fn run_generation(
                 error: msg.to_string(),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::world::BlockAccessor;
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_data::{Block, BlockState, BlockStateId, Mirror, Rotation};
+    use pumpkin_util::math::position::BlockPos;
+
+    struct TestPortal;
+
+    impl WorldPortalExt for TestPortal {
+        fn can_place_at(
+            &self,
+            _block: &Block,
+            _state: &BlockState,
+            _block_accessor: &dyn BlockAccessor,
+            _block_pos: &BlockPos,
+        ) -> bool {
+            true
+        }
+
+        fn mirror(
+            &self,
+            block: &Block,
+            state_id: BlockStateId,
+            mirror: Mirror,
+        ) -> &'static BlockState {
+            block.mirror(state_id, mirror)
+        }
+
+        fn rotate(
+            &self,
+            block: &Block,
+            state_id: BlockStateId,
+            rotation: Rotation,
+        ) -> &'static BlockState {
+            block.rotate(state_id, rotation)
+        }
+
+        fn spawn_mobs_for_chunk_generation(
+            &self,
+            _cache: &mut dyn crate::generation::proto_chunk::GenerationCache,
+            _biome: &'static pumpkin_data::chunk::Biome,
+            _chunk_x: i32,
+            _chunk_z: i32,
+        ) {
+        }
+    }
+
+    fn biome_cache(level: &Level) -> Cache {
+        let mut cache = Cache::new(0, 0, 1);
+        cache.chunks.push(Chunk::Proto(Box::new(ProtoChunk::new(
+            0,
+            0,
+            &level.world_gen.load(),
+        ))));
+        cache
+    }
+
+    #[tokio::test]
+    async fn prepared_generation_keeps_detached_portal_and_allows_late_initialization()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for initialized_at_dispatch in [true, false] {
+            let directory = tempfile::tempdir()?;
+            let level = Level::from_root_folder(
+                &LevelConfig::default(),
+                directory.path().to_path_buf(),
+                0,
+                Dimension::OVERWORLD,
+            );
+            let portal: Arc<dyn WorldPortalExt> = Arc::new(TestPortal);
+            let weak_portal = Arc::downgrade(&portal);
+            if initialized_at_dispatch {
+                level.world_portal.store(Arc::new(Some(portal.clone())));
+            }
+            let generate = prepare_generation(
+                ChunkPos::new(0, 0),
+                biome_cache(&level),
+                StagedChunkEnum::Biomes,
+                level.clone(),
+            );
+            if initialized_at_dispatch {
+                level.world_portal.store(Arc::new(None));
+            } else {
+                level.world_portal.store(Arc::new(Some(portal.clone())));
+            }
+            drop(portal);
+            let retained_before_execution = weak_portal.upgrade().is_some();
+            // Execute one already-prepared job; no worker is stalled to manufacture a queue.
+            let result = generate();
+            let generated_stage = match result {
+                RecvChunk::Generation(cache) => cache.chunks.first().map(Chunk::get_stage_id),
+                _ => None,
+            };
+            level.world_portal.store(Arc::new(None));
+            let released_after_execution = weak_portal.upgrade().is_none();
+            level.shutdown().await;
+
+            assert!(retained_before_execution);
+            assert_eq!(generated_stage, Some(StagedChunkEnum::Biomes as u8));
+            assert!(released_after_execution);
+        }
+        Ok(())
     }
 }

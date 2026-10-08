@@ -62,6 +62,9 @@ pub mod server_test_manager;
 pub mod tick_rate_manager;
 pub mod ticker;
 
+#[cfg(test)]
+mod world_lifetime_tests;
+
 pub use recipe::RecipeManager;
 
 use crate::data::advancement_data::AdvancementManager;
@@ -521,6 +524,8 @@ impl Server {
 
         world_to_unload.shutdown().await;
         world_to_unload.unload().await;
+        // Save and unload handlers still need the portal; queued generation owns its snapshot.
+        world_to_unload.level.world_portal.store(Arc::new(None));
 
         self.worlds.rcu(|w_list| {
             let mut new_list = (**w_list).clone();
