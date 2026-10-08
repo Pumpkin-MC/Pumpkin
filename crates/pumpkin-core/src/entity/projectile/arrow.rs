@@ -676,27 +676,6 @@ impl EntityBase for ArrowEntity {
             );
         }
 
-        if self.is_critical.load(Ordering::Relaxed) {
-            for i in 0..4 {
-                let factor = f64::from(i) / 4.0;
-                world.spawn_particle(
-                    Vector3::new(
-                        start_pos.x + velocity.x * factor,
-                        start_pos.y + velocity.y * factor,
-                        start_pos.z + velocity.z * factor,
-                    ),
-                    Vector3::new(
-                        -velocity.x as f32,
-                        (-velocity.y + 0.2) as f32,
-                        -velocity.z as f32,
-                    ),
-                    0.0,
-                    1,
-                    Particle::Crit,
-                );
-            }
-        }
-
         // Broadcast velocity update
         let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
 

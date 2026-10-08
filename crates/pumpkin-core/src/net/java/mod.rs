@@ -51,6 +51,9 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, warn};
 
+#[cfg(test)]
+mod arrow_particle_tests;
+
 pub mod chunk_data;
 pub mod handshake;
 pub mod login;
