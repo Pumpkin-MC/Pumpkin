@@ -20,7 +20,6 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
@@ -57,7 +56,6 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::version::JavaMinecraftVersion;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::{
     Arc,
@@ -374,15 +372,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
-    fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
-        if version < JavaMinecraftVersion::V_1_9 {
-            let entity = self.get_entity();
-            let shared_flags = entity.flags.load(Ordering::Relaxed);
-            return (shared_flags != 0).then(|| {
-                // (0 << 5) | 0 = 0 (type: byte, index: 0 flags), value, 127 (terminator)
-                Box::<[u8]>::from([0x00u8, shared_flags as u8, 127u8])
-            });
-        }
+    fn java_spawn_metadata(&self) -> Option<Box<[u8]>> {
         self.get_mob().map_or_else(
             || {
                 let entity = self.get_entity();
@@ -393,12 +383,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                         pumpkin_data::tracked_data::entity::DATA_SHARED_FLAGS_ID,
                         shared_flags,
                     )
-                    .write(&mut buf, &version);
+                    .write(&mut buf);
                     buf.put_u8(255);
                     buf.into_boxed_slice()
                 })
             },
-            |mob| mob.mob_java_spawn_metadata(version),
+            mob::Mob::mob_java_spawn_metadata,
         )
     }
 
@@ -442,7 +432,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn send_java_spawn_packet(&self, client: &JavaClient) {
         let entity = self.get_entity();
-        let metadata = self.java_spawn_metadata(CURRENT_MC_VERSION);
+        let metadata = self.java_spawn_metadata();
         let spawn_packet = entity.create_spawn_packet();
         if let Ok(data) = client.serialize_packet(&spawn_packet) {
             client.try_enqueue_packet(data);
@@ -2906,24 +2896,14 @@ impl Entity {
 
         let java_recipients = self.java_metadata_recipients(&world, &players);
 
-        let recipients_by_version =
-            World::collect_java_recipients_by_version(java_recipients.into_iter());
-
-        for (version, recipients) in recipients_by_version {
-            let mut buf = Vec::new();
-            for m in meta {
-                let _ = m.write(&mut buf, &version);
-            }
-            if buf.is_empty() {
-                continue;
-            }
+        let mut buf = Vec::new();
+        for m in meta {
+            let _ = m.write(&mut buf);
+        }
+        if !buf.is_empty() {
             buf.put_u8(255);
             let packet = CSetEntityMetadata::new(self.entity_id.into(), buf.into());
-            if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version) {
-                for recipient in recipients {
-                    recipient.try_enqueue_packet(packet_data.clone());
-                }
-            }
+            World::broadcast_java_players(&packet, java_recipients.into_iter());
         }
 
         if let Some(bedrock_meta) = bedrock_meta {
@@ -2960,19 +2940,9 @@ impl Entity {
             return;
         }
 
-        let recipients_by_version =
-            World::collect_java_recipients_by_version(java_recipients.into_iter());
-
-        for (version, recipients) in recipients_by_version {
-            if let Some(buf) = self.synched_data.pack_dirty_for_version(&version) {
-                let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
-                if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
-                {
-                    for recipient in recipients {
-                        recipient.try_enqueue_packet(packet_data.clone());
-                    }
-                }
-            }
+        if let Some(buf) = self.synched_data.pack_dirty() {
+            let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
+            World::broadcast_java_players(&packet, java_recipients.into_iter());
         }
         self.synched_data.clear_dirty();
     }
@@ -2994,22 +2964,9 @@ impl Entity {
             return;
         }
 
-        let recipients_by_version =
-            World::collect_java_recipients_by_version(java_recipients.into_iter());
-
-        for (version, recipients) in recipients_by_version {
-            if let Some(buf) = self
-                .synched_data
-                .get_non_default_values_for_version(&version)
-            {
-                let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
-                if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
-                {
-                    for recipient in recipients {
-                        recipient.try_enqueue_packet(packet_data.clone());
-                    }
-                }
-            }
+        if let Some(buf) = self.synched_data.get_non_default_values() {
+            let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
+            World::broadcast_java_players(&packet, java_recipients.into_iter());
         }
         self.synched_data.clear_dirty();
     }
@@ -4017,8 +3974,7 @@ impl Entity {
         }
         nbt.put_int("TicksFrozen", self.frozen_ticks.load(Relaxed));
         if let Some(custom_name) = &**self.custom_name.load() {
-            let mut tag = custom_name
-                .to_nbt_tag_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_3);
+            let mut tag = custom_name.to_nbt_tag();
             // A literal string starting with '{' would read back as legacy JSON, so keep it a compound.
             if let NbtTag::String(text) = &tag
                 && text.starts_with('{')

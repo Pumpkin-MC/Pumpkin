@@ -1,11 +1,10 @@
 /* This file is generated. Do not edit manually. */
 use crate::meta_data_type::MetaDataType;
-use pumpkin_util::version::JavaMinecraftVersion;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct TrackedId(pub u8);
 impl TrackedId {
     #[must_use]
-    pub const fn get(&self, _version: &JavaMinecraftVersion) -> u8 {
+    pub const fn get(&self) -> u8 {
         self.0
     }
 }
@@ -25,7 +24,7 @@ impl TrackedData {
         Self { id, r#type }
     }
     #[must_use]
-    pub const fn get(&self, _version: &JavaMinecraftVersion) -> u8 {
+    pub const fn get(&self) -> u8 {
         self.id.0
     }
 }

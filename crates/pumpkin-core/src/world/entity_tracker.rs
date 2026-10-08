@@ -4,12 +4,10 @@ use std::sync::atomic::{
     Ordering::{self, Relaxed},
 };
 
-use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
 use dashmap::DashMap;
 use dashmap::DashSet;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::bedrock::client::CSetActorMotion;
 use pumpkin_protocol::bedrock::client::move_actor_delta::{
     CMoveActorDelta, MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW, MOVE_ACTOR_DELTA_FLAG_HAS_PITCH,
@@ -24,7 +22,6 @@ use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
     CEntityPositionSync, CEntityVelocity, CHeadRot, CRemoveEntities, CSetEntityMetadata,
     CSetEquipment, CSetPassengers, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot,
-    Metadata,
 };
 use pumpkin_protocol::{BClientPacket, ClientPacket};
 use pumpkin_util::GameMode;
@@ -37,7 +34,6 @@ use uuid::Uuid;
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase};
 use crate::net::ClientPlatform;
-use crate::net::java::JavaClient;
 use crate::world::World;
 use crate::world::chunker::get_view_distance;
 
@@ -461,27 +457,7 @@ impl TrackedEntity {
             let target_id = target_entity.entity_id;
 
             if let ClientPlatform::Java(client) = player.client.as_ref() {
-                let version = CURRENT_MC_VERSION;
-                let mut buf = Vec::new();
-                for meta in [
-                    Metadata::new(
-                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
-                        skin_parts,
-                    ),
-                    Metadata::new(
-                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
-                        skin_parts,
-                    ),
-                ] {
-                    let _ = meta.write(&mut buf, &version);
-                }
-                buf.put_u8(255);
-                let meta_packet = CSetEntityMetadata::new(target_id.into(), buf.into());
-                if let Ok(packet_data) =
-                    JavaClient::serialize_packet_for_version(&meta_packet, version)
-                {
-                    client.try_enqueue_packet(packet_data);
-                }
+                client.try_send_packet(&World::skin_parts_metadata(target_id, skin_parts));
 
                 let head_yaw = target_entity.head_yaw.load();
                 // TODO: use `pumpkin_util::math::pack_degrees`.
@@ -517,20 +493,14 @@ impl TrackedEntity {
             }
         }
 
-        if let ClientPlatform::Java(client) = player.client.as_ref() {
-            let version = CURRENT_MC_VERSION;
-            if let Some(non_default) = self
+        if let ClientPlatform::Java(client) = player.client.as_ref()
+            && let Some(non_default) = self
                 .entity
                 .get_entity()
                 .synched_data
-                .get_non_default_values_for_version(&version)
-            {
-                let packet = CSetEntityMetadata::new(self.entity_id.into(), non_default);
-                if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
-                {
-                    client.try_enqueue_packet(packet_data);
-                }
-            }
+                .get_non_default_values()
+        {
+            client.try_send_packet(&CSetEntityMetadata::new(self.entity_id.into(), non_default));
         }
 
         if let Some(living) = self.entity.get_living_entity()
@@ -628,9 +598,7 @@ impl TrackedEntity {
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
             }
         }
-        let recipients_by_version =
-            World::collect_java_recipients_by_version(java_recipients.into_iter());
-        World::broadcast_java_grouped(&je_packet, recipients_by_version);
+        World::broadcast_java_players(&je_packet, java_recipients.into_iter());
         World::broadcast_bedrock_grouped(&be_packet, bedrock_recipients.into_iter());
 
         self.seen_by.clear();
@@ -664,8 +632,7 @@ impl TrackedEntity {
         let recipients = players
             .iter()
             .filter(|p| self.seen_by.contains(&p.gameprofile.id));
-        let recipients_by_version = World::collect_java_recipients_by_version(recipients);
-        World::broadcast_java_grouped(packet, recipients_by_version);
+        World::broadcast_java_players(packet, recipients);
     }
 
     pub fn send_to_tracking_players_bedrock<P: BClientPacket + Sync>(
@@ -710,9 +677,7 @@ impl TrackedEntity {
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
             }
         }
-        let recipients_by_version =
-            World::collect_java_recipients_by_version(java_recipients.into_iter());
-        World::broadcast_java_grouped(je_packet, recipients_by_version);
+        World::broadcast_java_players(je_packet, java_recipients.into_iter());
         World::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
     }
 
@@ -752,8 +717,7 @@ impl TrackedEntity {
         let recipients = players
             .iter()
             .filter(|p| self.seen_by.contains(&p.gameprofile.id) && filter(p));
-        let recipients_by_version = World::collect_java_recipients_by_version(recipients);
-        World::broadcast_java_grouped(packet, recipients_by_version);
+        World::broadcast_java_players(packet, recipients);
     }
 
     pub fn send_to_tracking_players_filtered_editioned<
@@ -780,9 +744,7 @@ impl TrackedEntity {
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
             }
         }
-        let recipients_by_version =
-            World::collect_java_recipients_by_version(java_recipients.into_iter());
-        World::broadcast_java_grouped(je_packet, recipients_by_version);
+        World::broadcast_java_players(je_packet, java_recipients.into_iter());
         World::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
     }
 }

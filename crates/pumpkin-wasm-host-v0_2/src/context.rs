@@ -1338,7 +1338,10 @@ fn register_server_event(
 ) {
     use pumpkin_core::plugin::server::{
         list_ping::ServerListPingEvent,
-        packet::{PacketReceivedEvent, PacketSentEvent},
+        packet::{
+            ConnectionPacketReceivedEvent, ConnectionPacketSentEvent, PacketReceivedEvent,
+            PacketSentEvent,
+        },
         server_broadcast::ServerBroadcastEvent,
         server_command::ServerCommandEvent,
         server_load::ServerLoadEvent,
@@ -1352,6 +1355,16 @@ fn register_server_event(
         }
         EventType::PacketSentEvent => {
             register_typed_event::<PacketSentEvent>(resource, handler, priority, blocking);
+        }
+        EventType::ConnectionPacketReceivedEvent => {
+            register_typed_event::<ConnectionPacketReceivedEvent>(
+                resource, handler, priority, blocking,
+            );
+        }
+        EventType::ConnectionPacketSentEvent => {
+            register_typed_event::<ConnectionPacketSentEvent>(
+                resource, handler, priority, blocking,
+            );
         }
         EventType::ServerCommandEvent => {
             register_typed_event::<ServerCommandEvent>(resource, handler, priority, blocking);
@@ -1445,6 +1458,8 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         match event_type {
             event_type @ (EventType::PacketReceivedEvent
             | EventType::PacketSentEvent
+            | EventType::ConnectionPacketReceivedEvent
+            | EventType::ConnectionPacketSentEvent
             | EventType::ServerCommandEvent
             | EventType::ServerListPingEvent
             | EventType::ServerBroadcastEvent
@@ -1684,6 +1699,19 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         let node = command.builder.build();
         context.register_command_with_aliases(node, &aliases, permission);
 
+        Ok(())
+    }
+
+    fn register_java_versions(
+        &mut self,
+        context: Resource<WitContext>,
+        versions: Vec<pumpkin::plugin::player::JavaMinecraftVersion>,
+    ) -> wasmtime::Result<()> {
+        self.get(&context)?.register_java_versions(
+            versions
+                .into_iter()
+                .map(super::player::from_wasm_java_version),
+        );
         Ok(())
     }
 

@@ -204,12 +204,12 @@ pub mod logging;
 pub mod wit {
     wit_bindgen::generate!({
         skip: ["init-plugin"],
-        path: "../pumpkin-plugin-wit/v0.1",
+        path: "../pumpkin-plugin-wit/v0.2",
         world: "plugin",
         chainable_methods: [
-            "pumpkin:plugin/command@0.1.0#command",
-            "pumpkin:plugin/command@0.1.0#command-node",
-            "pumpkin:plugin/text@0.1.0#text-component"
+            "pumpkin:plugin/command@0.2.0#command",
+            "pumpkin:plugin/command@0.2.0#command-node",
+            "pumpkin:plugin/text@0.2.0#text-component"
         ]
     });
 
@@ -247,6 +247,38 @@ impl wit::exports::pumpkin::plugin::metadata::Guest for Component {
             dependencies: metadata.dependencies,
             permissions: metadata.permissions,
         }
+    }
+}
+
+/// No gametest callbacks can be registered through this crate yet, so none are ever invoked.
+// TODO: dispatch to registered handlers once the gametest API is wrapped here.
+impl wit::exports::pumpkin::plugin::gametest_callbacks::Guest for Component {
+    fn invoke_void(_callback: wit::pumpkin::plugin::gametest::VoidCallbackId) {}
+
+    fn invoke_test(
+        _callback: wit::pumpkin::plugin::gametest::TestCallbackId,
+        _test: wit::pumpkin::plugin::gametest::Test,
+    ) {
+    }
+
+    async fn invoke_async_test(
+        _callback: wit::pumpkin::plugin::gametest::AsyncTestCallbackId,
+        _test: wit::pumpkin::plugin::gametest::Test,
+    ) {
+    }
+
+    fn invoke_block_predicate(
+        _callback: wit::pumpkin::plugin::gametest::BlockPredicateCallbackId,
+        _permutation: wit::pumpkin::plugin::gametest::BlockPermutation,
+    ) -> bool {
+        false
+    }
+
+    fn invoke_entity_predicate(
+        _callback: wit::pumpkin::plugin::gametest::EntityPredicateCallbackId,
+        _entity: &wit::pumpkin::plugin::world::Entity,
+    ) -> bool {
+        false
     }
 }
 

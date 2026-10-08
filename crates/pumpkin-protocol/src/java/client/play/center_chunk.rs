@@ -3,7 +3,6 @@ use crate::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_data::packet::clientbound::play::SET_CHUNK_CACHE_CENTER;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Updates the center of the player's loaded chunk radius (the "view center").
 ///
@@ -22,7 +21,6 @@ impl ClientPacket for CCenterChunk {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.chunk_x)?;
         write.write_var_int(&self.chunk_z)?;

@@ -6,7 +6,6 @@ use pumpkin_macros::java_packet;
 use crate::ClientPacket;
 use crate::VarInt;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Instructs the client to open a specific type of GUI (inventory, chest, etc.).
 ///
@@ -46,10 +45,9 @@ impl ClientPacket for COpenScreen<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.sync_id)?;
         write.write_var_int(&self.window_type)?;
-        write.write_component(self.window_title, version)
+        write.write_component(self.window_title)
     }
 }

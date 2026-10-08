@@ -103,7 +103,7 @@ pub(crate) fn from_wit_server_link(
     Ok((label, link.url))
 }
 
-const fn to_wasm_java_version(
+pub(crate) const fn to_wasm_java_version(
     version: JavaMinecraftVersion,
 ) -> pumpkin::plugin::player::JavaMinecraftVersion {
     match version {
@@ -160,6 +160,66 @@ const fn to_wasm_java_version(
         JavaMinecraftVersion::V_26_2 => pumpkin::plugin::player::JavaMinecraftVersion::V262,
         JavaMinecraftVersion::V_26_3 => pumpkin::plugin::player::JavaMinecraftVersion::V263,
         JavaMinecraftVersion::Unknown => pumpkin::plugin::player::JavaMinecraftVersion::Unknown,
+    }
+}
+
+pub(crate) const fn from_wasm_java_version(
+    version: pumpkin::plugin::player::JavaMinecraftVersion,
+) -> JavaMinecraftVersion {
+    match version {
+        pumpkin::plugin::player::JavaMinecraftVersion::V172 => JavaMinecraftVersion::V_1_7_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V176 => JavaMinecraftVersion::V_1_7_6,
+        pumpkin::plugin::player::JavaMinecraftVersion::V18 => JavaMinecraftVersion::V_1_8,
+        pumpkin::plugin::player::JavaMinecraftVersion::V19 => JavaMinecraftVersion::V_1_9,
+        pumpkin::plugin::player::JavaMinecraftVersion::V191 => JavaMinecraftVersion::V_1_9_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V192 => JavaMinecraftVersion::V_1_9_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V193 => JavaMinecraftVersion::V_1_9_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V110 => JavaMinecraftVersion::V_1_10,
+        pumpkin::plugin::player::JavaMinecraftVersion::V111 => JavaMinecraftVersion::V_1_11,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1111 => JavaMinecraftVersion::V_1_11_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V112 => JavaMinecraftVersion::V_1_12,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1121 => JavaMinecraftVersion::V_1_12_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1122 => JavaMinecraftVersion::V_1_12_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V113 => JavaMinecraftVersion::V_1_13,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1131 => JavaMinecraftVersion::V_1_13_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1132 => JavaMinecraftVersion::V_1_13_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V114 => JavaMinecraftVersion::V_1_14,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1141 => JavaMinecraftVersion::V_1_14_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1142 => JavaMinecraftVersion::V_1_14_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1143 => JavaMinecraftVersion::V_1_14_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1144 => JavaMinecraftVersion::V_1_14_4,
+        pumpkin::plugin::player::JavaMinecraftVersion::V115 => JavaMinecraftVersion::V_1_15,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1151 => JavaMinecraftVersion::V_1_15_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1152 => JavaMinecraftVersion::V_1_15_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V116 => JavaMinecraftVersion::V_1_16,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1161 => JavaMinecraftVersion::V_1_16_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1162 => JavaMinecraftVersion::V_1_16_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1163 => JavaMinecraftVersion::V_1_16_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1164 => JavaMinecraftVersion::V_1_16_4,
+        pumpkin::plugin::player::JavaMinecraftVersion::V117 => JavaMinecraftVersion::V_1_17,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1171 => JavaMinecraftVersion::V_1_17_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V118 => JavaMinecraftVersion::V_1_18,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1182 => JavaMinecraftVersion::V_1_18_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V119 => JavaMinecraftVersion::V_1_19,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1191 => JavaMinecraftVersion::V_1_19_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1193 => JavaMinecraftVersion::V_1_19_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1194 => JavaMinecraftVersion::V_1_19_4,
+        pumpkin::plugin::player::JavaMinecraftVersion::V120 => JavaMinecraftVersion::V_1_20,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1202 => JavaMinecraftVersion::V_1_20_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1203 => JavaMinecraftVersion::V_1_20_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1205 => JavaMinecraftVersion::V_1_20_5,
+        pumpkin::plugin::player::JavaMinecraftVersion::V121 => JavaMinecraftVersion::V_1_21,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1212 => JavaMinecraftVersion::V_1_21_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1214 => JavaMinecraftVersion::V_1_21_4,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1215 => JavaMinecraftVersion::V_1_21_5,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1216 => JavaMinecraftVersion::V_1_21_6,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1217 => JavaMinecraftVersion::V_1_21_7,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1219 => JavaMinecraftVersion::V_1_21_9,
+        pumpkin::plugin::player::JavaMinecraftVersion::V12111 => JavaMinecraftVersion::V_1_21_11,
+        pumpkin::plugin::player::JavaMinecraftVersion::V261 => JavaMinecraftVersion::V_26_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V262 => JavaMinecraftVersion::V_26_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V263 => JavaMinecraftVersion::V_26_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::Unknown => JavaMinecraftVersion::Unknown,
     }
 }
 
@@ -3494,10 +3554,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .client
             .java()
             .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
-        if let Some(bytes) = crate::generated_packets::serialize_java_packet(
-            &packet,
-            pumpkin_data::packet::CURRENT_MC_VERSION,
-        ) {
+        if let Some(bytes) = crate::generated_packets::serialize_java_packet(&packet) {
             client.send_packet_now_data(bytes).await;
         }
         Ok(())

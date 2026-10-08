@@ -273,7 +273,7 @@ axum = { version = "0.8.9", default-features = false, features = ["http1", "toki
 subtle = { version = "2.6", default-features = false }
 webrtc = { version = "0.21.0" }
 async-trait = "0.1"
-wit-bindgen = { version = "0.62", default-features = false, features = ["macros"] }
+wit-bindgen = { version = "0.62", default-features = false, features = ["macros", "async"] }
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }

@@ -7,7 +7,6 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(PICK_ITEM_FROM_BLOCK)]
 pub struct SPickItemFromBlock {
@@ -16,9 +15,9 @@ pub struct SPickItemFromBlock {
 }
 
 impl<'a> ServerPacket<'a> for SPickItemFromBlock {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
-            pos: bytebuf.get_block_pos(version)?,
+            pos: bytebuf.get_block_pos()?,
             include_data: bytebuf.get_bool()?,
         })
     }
@@ -28,10 +27,9 @@ impl crate::ClientPacket for SPickItemFromBlock {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_block_pos(&self.pos, version)?;
+        write.write_block_pos(&self.pos)?;
         write.write_bool(self.include_data)?;
         Ok(())
     }
@@ -44,7 +42,7 @@ pub struct SPickItemFromEntity {
 }
 
 impl<'a> ServerPacket<'a> for SPickItemFromEntity {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
             id: bytebuf.get_var_int()?,
             include_data: bytebuf.get_bool()?,
@@ -56,7 +54,6 @@ impl crate::ClientPacket for SPickItemFromEntity {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_var_int(&self.id)?;

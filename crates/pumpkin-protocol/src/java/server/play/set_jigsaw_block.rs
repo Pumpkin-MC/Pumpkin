@@ -5,7 +5,6 @@ use crate::{
 use pumpkin_data::packet::serverbound::play::SET_JIGSAW_BLOCK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::codec::var_int::VarInt;
 
@@ -22,27 +21,15 @@ pub struct SSetJigsawBlock<'a> {
 }
 
 impl<'a> ServerPacket<'a> for SSetJigsawBlock<'a> {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let pos = bytebuf.get_block_pos(version)?;
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
+        let pos = bytebuf.get_block_pos()?;
         let name = bytebuf.get_str_bounded_borrowed(32767)?;
-        let target = if *version >= JavaMinecraftVersion::V_1_16 {
-            bytebuf.get_str_bounded_borrowed(32767)?
-        } else {
-            ""
-        };
+        let target = bytebuf.get_str_bounded_borrowed(32767)?;
         let pool = bytebuf.get_str_bounded_borrowed(32767)?;
         let final_state = bytebuf.get_str_bounded_borrowed(32767)?;
-        let joint = if *version >= JavaMinecraftVersion::V_1_16 {
-            bytebuf.get_str_bounded_borrowed(32767)?
-        } else {
-            "aligned"
-        };
-        let (selection_priority, placement_priority) = if *version >= JavaMinecraftVersion::V_1_20_3
-        {
-            (bytebuf.get_var_int()?, bytebuf.get_var_int()?)
-        } else {
-            (VarInt(0), VarInt(0))
-        };
+        let joint = bytebuf.get_str_bounded_borrowed(32767)?;
+        let (selection_priority, placement_priority) =
+            (bytebuf.get_var_int()?, bytebuf.get_var_int()?);
 
         Ok(Self {
             pos,
@@ -61,23 +48,16 @@ impl crate::ClientPacket for SSetJigsawBlock<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_block_pos(&self.pos, version)?;
+        write.write_block_pos(&self.pos)?;
         write.write_string_bounded(self.name, 32767)?;
-        if *version >= JavaMinecraftVersion::V_1_16 {
-            write.write_string_bounded(self.target, 32767)?;
-        }
+        write.write_string_bounded(self.target, 32767)?;
         write.write_string_bounded(self.pool, 32767)?;
         write.write_string_bounded(self.final_state, 32767)?;
-        if *version >= JavaMinecraftVersion::V_1_16 {
-            write.write_string_bounded(self.joint, 32767)?;
-        }
-        if *version >= JavaMinecraftVersion::V_1_20_3 {
-            write.write_var_int(&self.selection_priority)?;
-            write.write_var_int(&self.placement_priority)?;
-        }
+        write.write_string_bounded(self.joint, 32767)?;
+        write.write_var_int(&self.selection_priority)?;
+        write.write_var_int(&self.placement_priority)?;
         Ok(())
     }
 }

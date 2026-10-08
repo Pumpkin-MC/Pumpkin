@@ -2,7 +2,6 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::login::CUSTOM_QUERY;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ClientPacket, VarInt,
@@ -37,11 +36,7 @@ impl<'a> CLoginPluginRequest<'a> {
 }
 
 impl ClientPacket for CLoginPluginRequest<'_> {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_var_int(&self.message_id)?;

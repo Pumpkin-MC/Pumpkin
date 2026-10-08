@@ -5,7 +5,7 @@ This repository contains data files, protocol mappings, and game assets necessar
 ---
 
 ### 1. Minecraft Assets & Data Packs
-* **Files**: `assets/blocks.json`, `assets/items.json`, `assets/entities.json`, `assets/fluids.json`, `assets/properties.json`, and `assets/en_us_java.json`.
+* **Files**: `assets/legacy_packets/`, `assets/blocks.json`, `assets/items.json`, `assets/entities.json`, `assets/fluids.json`, `assets/properties.json`, and `assets/en_us_java.json`.
 * **Copyright**: © Mojang Studios / Microsoft Corporation.
 * **Terms**: These files are extracted or derived from Minecraft client and server releases. They are provided solely for compatibility, server emulation, and interoperability under the terms of the [Minecraft End User License Agreement (EULA)](https://www.minecraft.net/en-us/eula) and [Mojang Brand and Assets Guidelines](https://www.minecraft.net/en-us/usage-guidelines).
 * **Note**: Vanilla Minecraft data packs and structures are not distributed in this repository; they are downloaded on demand at build and codegen time directly from Mojang's official release servers. These files are **not** licensed under Pumpkin's GPLv3 license and remain the intellectual property of Mojang Studios.

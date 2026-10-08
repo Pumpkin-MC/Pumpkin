@@ -4,7 +4,6 @@ use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(SERVER_LINKS)]
 pub struct CConfigServerLinks<'a> {
@@ -22,7 +21,6 @@ impl ClientPacket for CConfigServerLinks<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&crate::VarInt(self.links.len() as i32))?;
         for link in self.links {

@@ -5,7 +5,6 @@ use crate::{
     ClientPacket, ServerPacket, VarInt,
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Rotates an entity's head to a specific yaw.
 ///
@@ -36,25 +35,16 @@ impl ClientPacket for CHeadRot {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        if *version <= JavaMinecraftVersion::V_1_7_6 {
-            write.write_i32_be(self.entity_id.0)?;
-        } else {
-            write.write_var_int(&self.entity_id)?;
-        }
+        write.write_var_int(&self.entity_id)?;
         write.write_u8(self.head_yaw)?;
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CHeadRot {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let entity_id = if *version <= JavaMinecraftVersion::V_1_7_6 {
-            VarInt(bytebuf.get_i32_be()?)
-        } else {
-            bytebuf.get_var_int()?
-        };
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
+        let entity_id = bytebuf.get_var_int()?;
         let head_yaw = bytebuf.get_u8()?;
         Ok(Self {
             entity_id,

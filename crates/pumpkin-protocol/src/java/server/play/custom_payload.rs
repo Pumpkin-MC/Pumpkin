@@ -1,6 +1,5 @@
 use pumpkin_data::packet::serverbound::play::CUSTOM_PAYLOAD;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{ReadingError, ServerPacket, ser::NetworkReadSliceExt};
 
@@ -21,7 +20,7 @@ pub struct SCustomPayload<'a> {
 }
 
 impl<'a> ServerPacket<'a> for SCustomPayload<'a> {
-    fn read(read: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(read: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
             channel: read.get_str_borrowed()?,
             data: read.read_remaining_slice_borrowed(MAX_PAYLOAD_SIZE)?,
@@ -33,7 +32,6 @@ impl crate::ClientPacket for SCustomPayload<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_string(self.channel)?;
