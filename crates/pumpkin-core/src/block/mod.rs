@@ -453,11 +453,12 @@ pub struct BlockEvent {
 }
 
 fn loot_table_block(block: &Block) -> &Block {
-    if let Some(color) = block.name.strip_suffix("_wall_banner") {
-        Block::from_name(&format!("{color}_banner")).unwrap_or(block)
-    } else {
-        block
-    }
+    block
+        .name
+        .strip_suffix("_wall_banner")
+        .map_or(block, |color| {
+            Block::from_name(&format!("{color}_banner")).unwrap_or(block)
+        })
 }
 
 pub fn drop_loot(
