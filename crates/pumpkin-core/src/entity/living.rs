@@ -3301,6 +3301,21 @@ impl LivingEntity {
             }
         }
 
+        // Pumpkin clears effects in on_death; keep the hurt callbacks for lethal hits too.
+        let hurt_effects: Vec<_> = {
+            let effects = self
+                .active_effects
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            effects
+                .values()
+                .filter_map(|effect| {
+                    crate::entity::effect::get_mob_effect(effect.effect_type)
+                        .map(|mob_effect| (mob_effect, effect.amplifier))
+                })
+                .collect()
+        };
+
         if new_health <= 0.0 {
             let mut death_event =
                 crate::plugin::api::events::entity::entity_death::EntityDeathEvent::new(
@@ -3313,6 +3328,11 @@ impl LivingEntity {
                     .fire_blocking(&server, &mut death_event);
             }
             self.on_death(damage_type, source, cause);
+        }
+
+        // Vanilla hurtServer passes the hit amount, not the health loss or cooldown delta.
+        for (mob_effect, amplifier) in hurt_effects {
+            mob_effect.on_mob_hurt(self, amplifier, &damage_type, amount);
         }
 
         true

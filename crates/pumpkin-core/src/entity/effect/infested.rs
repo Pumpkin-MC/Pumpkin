@@ -9,6 +9,9 @@ use crate::entity::effect::MobEffect;
 use crate::entity::living::LivingEntity;
 use crate::entity::r#type::from_type;
 
+#[cfg(test)]
+mod tests;
+
 pub struct InfestedMobEffect;
 
 impl MobEffect for InfestedMobEffect {
@@ -19,6 +22,13 @@ impl MobEffect for InfestedMobEffect {
         _damage_type: &DamageType,
         _damage_amount: f32,
     ) {
+        #[cfg(test)]
+        #[expect(
+            clippy::used_underscore_binding,
+            reason = "These arguments are observed only in tests"
+        )]
+        tests::observe_hurt(living, _amplifier, _damage_type, _damage_amount);
+
         // Wither, ender dragon and silverfish are immune
         if living.entity.entity_type == &EntityType::WITHER
             || living.entity.entity_type == &EntityType::ENDER_DRAGON
