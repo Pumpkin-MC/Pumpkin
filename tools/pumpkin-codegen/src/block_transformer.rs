@@ -1,13 +1,11 @@
-use std::{
-    collections::{BTreeMap, HashSet},
-    fs,
-    path::Path,
-};
+use std::{collections::HashSet, fs, path::Path};
 
 use heck::{ToPascalCase, ToShoutySnakeCase};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
+
+use crate::block::BlockAssets;
 
 #[derive(Deserialize, Debug)]
 struct TransformerEntryJson {
@@ -230,12 +228,21 @@ fn state_provider_to_tokens(provider: &StateProviderJson) -> TokenStream {
 }
 
 pub fn build() -> TokenStream {
-    let blocks_file: BTreeMap<String, serde_json::Value> =
-        serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
-            .expect("Failed to parse blocks.json");
-    let valid_blocks: HashSet<String> = blocks_file.into_keys().collect();
+    build_from_assets(
+        &fs::read_to_string("../../assets/blocks.json").unwrap(),
+        Path::new("../../assets/datapack/data/minecraft/block_transformer"),
+    )
+}
 
-    let dir = Path::new("../../assets/datapack/data/minecraft/block_transformer");
+fn build_from_assets(blocks_json: &str, dir: &Path) -> TokenStream {
+    let blocks_file: BlockAssets =
+        serde_json::from_str(blocks_json).expect("Failed to parse blocks.json");
+    let valid_blocks: HashSet<String> = blocks_file
+        .blocks
+        .into_iter()
+        .map(|block| block.name)
+        .collect();
+
     let mut files: Vec<(String, Vec<TransformerEntryJson>)> = Vec::new();
 
     if dir.is_dir() {
@@ -499,6 +506,203 @@ pub fn build() -> TokenStream {
                 #(#lookup_arms)*
                 _ => None,
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_from_assets;
+    use proc_macro2::TokenStream;
+    use quote::{ToTokens, quote};
+    use std::path::Path;
+    use syn::{Expr, Item, ItemStatic, Member};
+
+    // Four complete records from blocks.json at f1c0871f492182a228fa585e9d7c74e683e242f9.
+    // Keep the shape prefix through index 142 and all block entity types, without remapping.
+    const BLOCKS: &str = include_str!("../tests/fixtures/block_transformer/blocks.json");
+
+    fn generated_hoe(blocks: &str) -> ItemStatic {
+        // Unmodified 26.3 hoe.json, SHA-256 a4c6294366b9a4c9c847e3e48c8896686efdfce1e6273f8053168934aed25e69.
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/block_transformer/transformers");
+        syn::parse2::<syn::File>(build_from_assets(blocks, &dir))
+            .unwrap()
+            .items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Static(item) if item.ident == "HOE" => Some(item),
+                _ => None,
+            })
+            .expect("emitted HOE static")
+    }
+
+    fn field<'a>(expr: &'a Expr, name: &str) -> &'a Expr {
+        let Expr::Struct(value) = expr else {
+            panic!("expected a struct expression");
+        };
+        &value
+            .fields
+            .iter()
+            .find(|field| matches!(&field.member, Member::Named(ident) if ident == name))
+            .unwrap_or_else(|| panic!("missing field {name}"))
+            .expr
+    }
+
+    fn array(expr: &Expr) -> Vec<&Expr> {
+        let Expr::Reference(reference) = expr else {
+            panic!("expected a borrowed array");
+        };
+        let Expr::Array(array) = reference.expr.as_ref() else {
+            panic!("expected an array");
+        };
+        array.elems.iter().collect()
+    }
+
+    fn assert_field(expr: &Expr, name: &str, expected: TokenStream) {
+        assert_eq!(
+            field(expr, name).to_token_stream().to_string(),
+            expected.to_string(),
+            "{name}",
+        );
+    }
+
+    fn all_of(rule: &Expr) -> Vec<&Expr> {
+        let Expr::Call(call) = field(rule, "predicate") else {
+            panic!("expected an all_of predicate");
+        };
+        assert_eq!(
+            call.func.to_token_stream().to_string(),
+            quote!(BlockPredicate::AllOf).to_string(),
+        );
+        assert_eq!(call.args.len(), 1);
+        array(&call.args[0])
+    }
+
+    #[test]
+    fn hoe_rules_use_nested_block_names() {
+        let hoe = generated_hoe(BLOCKS);
+        let entries = array(field(&hoe.expr, "entries"));
+        assert_eq!(entries.len(), 2);
+        let first = array(field(entries[0], "rules"));
+        let second = array(field(entries[1], "rules"));
+        assert_eq!(
+            first.len(),
+            2,
+            "farmland and coarse dirt rules must survive"
+        );
+        assert_eq!(second.len(), 1, "rooted dirt rule must survive");
+
+        let farmland = all_of(first[0]);
+        let coarse_dirt = all_of(first[1]);
+        assert_eq!(farmland.len(), 2);
+        assert_eq!(coarse_dirt.len(), 2);
+        assert_field(
+            farmland[0],
+            "tag",
+            quote!(tag::Block::MINECRAFT_TURNS_INTO_FARMLAND),
+        );
+        assert_field(farmland[0], "offset", quote!((0i8, 0i8, 0i8)));
+        assert_field(coarse_dirt[0], "blocks", quote!(&[BlockId::COARSE_DIRT]));
+        assert_field(coarse_dirt[0], "offset", quote!((0i8, 0i8, 0i8)));
+        for air in [farmland[1], coarse_dirt[1]] {
+            assert_field(air, "tag", quote!(tag::Block::MINECRAFT_AIR));
+            assert_field(air, "offset", quote!((0i8, 1i8, 0i8)));
+        }
+        let rooted_dirt = field(second[0], "predicate");
+        assert_field(rooted_dirt, "blocks", quote!(&[BlockId::ROOTED_DIRT]));
+        assert_field(rooted_dirt, "offset", quote!((0i8, 0i8, 0i8)));
+
+        // Explicit state properties remain unsupported; this checks target IDs only.
+        assert_field(
+            first[0],
+            "provider",
+            quote!(BlockTransformerStateProvider::SimpleState(
+                BlockId::FARMLAND
+            )),
+        );
+        for rule in [first[1], second[0]] {
+            assert_field(
+                rule,
+                "provider",
+                quote!(BlockTransformerStateProvider::SimpleState(BlockId::DIRT)),
+            );
+        }
+        assert_field(
+            entries[0],
+            "disallowed_faces",
+            quote!(&[BlockDirection::Down]),
+        );
+        assert_field(entries[1], "disallowed_faces", quote!(&[]));
+        for entry in &entries {
+            assert_field(entry, "item_damage_per_use", quote!(1u16));
+            assert_field(
+                entry,
+                "sound",
+                quote!(Some(crate::sound::Sound::ItemHoeTill)),
+            );
+            assert_field(entry, "particle", quote!(None));
+            assert_field(entry, "transform_type", quote!(None));
+            assert_field(entry, "update_from_neighbors", quote!(true));
+        }
+        assert_field(entries[0], "loot", quote!(None));
+        assert_field(entries[0], "drop_strategy", quote!(None));
+        assert_field(
+            entries[1],
+            "loot",
+            quote!(Some("minecraft:till/rooted_dirt")),
+        );
+        assert_field(
+            entries[1],
+            "drop_strategy",
+            quote!(Some(DropStrategy::ClickedFace)),
+        );
+    }
+
+    #[test]
+    fn rules_with_unknown_predicate_or_target_blocks_are_filtered() {
+        for (removed, expected) in [
+            ("farmland", [1, 1]),
+            ("coarse_dirt", [1, 1]),
+            ("rooted_dirt", [2, 0]),
+            ("dirt", [1, 0]),
+        ] {
+            let mut blocks: serde_json::Value = serde_json::from_str(BLOCKS).unwrap();
+            blocks["blocks"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|block| block["name"] != removed);
+            let hoe = generated_hoe(&blocks.to_string());
+            let entries = array(field(&hoe.expr, "entries"));
+            let counts: Vec<_> = entries
+                .iter()
+                .map(|entry| array(field(entry, "rules")).len())
+                .collect();
+            assert_eq!(counts, expected, "removed {removed}");
+        }
+    }
+
+    #[test]
+    fn malformed_block_inventory_is_rejected() {
+        let blocks: serde_json::Value = serde_json::from_str(BLOCKS).unwrap();
+        let mut missing_blocks = blocks.clone();
+        missing_blocks.as_object_mut().unwrap().remove("blocks");
+        let mut non_array_blocks = blocks.clone();
+        non_array_blocks["blocks"] = serde_json::json!({});
+        let mut missing_name = blocks.clone();
+        missing_name["blocks"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("name");
+        let mut non_string_name = blocks;
+        non_string_name["blocks"][0]["name"] = serde_json::json!(1);
+        for malformed in [
+            missing_blocks,
+            non_array_blocks,
+            missing_name,
+            non_string_name,
+        ] {
+            assert!(std::panic::catch_unwind(|| generated_hoe(&malformed.to_string())).is_err());
         }
     }
 }

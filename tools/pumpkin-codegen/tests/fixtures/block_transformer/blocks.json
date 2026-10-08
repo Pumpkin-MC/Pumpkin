@@ -1,0 +1,442 @@
+{
+  "block_entity_types": [
+    "furnace",
+    "chest",
+    "trapped_chest",
+    "ender_chest",
+    "jukebox",
+    "dispenser",
+    "dropper",
+    "sign",
+    "hanging_sign",
+    "mob_spawner",
+    "creaking_heart",
+    "piston",
+    "brewing_stand",
+    "enchanting_table",
+    "end_portal",
+    "beacon",
+    "skull",
+    "daylight_detector",
+    "hopper",
+    "comparator",
+    "banner",
+    "structure_block",
+    "end_gateway",
+    "command_block",
+    "shulker_box",
+    "conduit",
+    "barrel",
+    "smoker",
+    "blast_furnace",
+    "lectern",
+    "bell",
+    "jigsaw",
+    "campfire",
+    "beehive",
+    "sculk_sensor",
+    "calibrated_sculk_sensor",
+    "sculk_catalyst",
+    "sculk_shrieker",
+    "chiseled_bookshelf",
+    "shelf",
+    "brushable_block",
+    "decorated_pot",
+    "crafter",
+    "trial_spawner",
+    "vault",
+    "test_block",
+    "test_instance_block",
+    "copper_golem_statue",
+    "potent_sulfur"
+  ],
+  "shapes": [
+    {"min":[0,0,0],"max":[1,1,1]},
+    {"min":[0.125,0,0.125],"max":[0.875,0.75,0.875]},
+    {"min":[0.1875,0.8125,0.1875],"max":[0.3125,1,0.3125]},
+    {"min":[0.1875,0,0.1875],"max":[0.3125,1,0.3125]},
+    {"min":[0.1875,0.625,0.1875],"max":[0.3125,1,0.3125]},
+    {"min":[0.1875,0.4375,0.1875],"max":[0.3125,1,0.3125]},
+    {"min":[0.1875,0.1875,0.1875],"max":[0.3125,1,0.3125]},
+    {"min":[0,0,0],"max":[0.1875,0.5625,0.1875]},
+    {"min":[0.8125,0,0],"max":[1,0.5625,0.1875]},
+    {"min":[0,0.1875,0.1875],"max":[1,0.5625,1]},
+    {"min":[0.1875,0.1875,0],"max":[0.8125,0.5625,0.1875]},
+    {"min":[0,0,0.8125],"max":[0.1875,0.5625,1]},
+    {"min":[0.8125,0,0.8125],"max":[1,0.5625,1]},
+    {"min":[0,0.1875,0],"max":[1,0.5625,0.8125]},
+    {"min":[0.1875,0.1875,0.8125],"max":[0.8125,0.5625,1]},
+    {"min":[0,0.1875,0.1875],"max":[1,0.5625,0.8125]},
+    {"min":[0.1875,0.1875,0],"max":[1,0.5625,0.1875]},
+    {"min":[0.1875,0.1875,0.8125],"max":[1,0.5625,1]},
+    {"min":[0,0.1875,0],"max":[0.8125,0.5625,1]},
+    {"min":[0.8125,0.1875,0.1875],"max":[1,0.5625,0.8125]},
+    {"min":[0,0,0],"max":[1,0.25,1]},
+    {"min":[0,0.25,0],"max":[1,0.3125,0.5]},
+    {"min":[0,0.25,0.5],"max":[1,0.3125,1]},
+    {"min":[0,0.25,0],"max":[0.5,0.3125,1]},
+    {"min":[0.5,0.25,0],"max":[1,0.3125,1]},
+    {"min":[0,0,0],"max":[1,0.125,1]},
+    {"min":[0,0,0],"max":[1,0.5,1]},
+    {"min":[0,0,0.25],"max":[1,1,1]},
+    {"min":[0,0,0],"max":[0.75,1,1]},
+    {"min":[0,0,0],"max":[1,1,0.75]},
+    {"min":[0.25,0,0],"max":[1,1,1]},
+    {"min":[0,0,0],"max":[1,0.75,1]},
+    {"min":[0,0.25,0],"max":[1,1,1]},
+    {"min":[0.125,0,0.125],"max":[0.875,0.8125,0.875]},
+    {"min":[0,0,0],"max":[1,0.8125,1]},
+    {"min":[0.125,0,0.125],"max":[0.875,0.625,0.875]},
+    {"min":[0.0625,0,0.0625],"max":[0.9375,1,0.9375]},
+    {"min":[0.125,0,0.125],"max":[0.875,1,0.875]},
+    {"min":[0,0,0],"max":[1,1,0.25]},
+    {"min":[0.375,0.375,0.25],"max":[0.625,0.625,1]},
+    {"min":[0.375,0.375,0.25],"max":[0.625,0.625,1.25]},
+    {"min":[0.75,0,0],"max":[1,1,1]},
+    {"min":[0,0.375,0.375],"max":[0.75,0.625,0.625]},
+    {"min":[-0.25,0.375,0.375],"max":[0.75,0.625,0.625]},
+    {"min":[0,0,0.75],"max":[1,1,1]},
+    {"min":[0.375,0.375,0],"max":[0.625,0.625,0.75]},
+    {"min":[0.375,0.375,-0.25],"max":[0.625,0.625,0.75]},
+    {"min":[0,0,0],"max":[0.25,1,1]},
+    {"min":[0.25,0.375,0.375],"max":[1,0.625,0.625]},
+    {"min":[0.25,0.375,0.375],"max":[1.25,0.625,0.625]},
+    {"min":[0.375,0,0.375],"max":[0.625,1,0.625]},
+    {"min":[0,0.75,0],"max":[0.375,1,1]},
+    {"min":[0.375,0.75,0],"max":[1,1,0.375]},
+    {"min":[0.375,0.75,0.625],"max":[1,1,1]},
+    {"min":[0.625,0.75,0.375],"max":[1,1,0.625]},
+    {"min":[0.375,-0.25,0.375],"max":[0.625,1,0.625]},
+    {"min":[0.375,0.25,0.375],"max":[0.625,1,0.625]},
+    {"min":[0.375,0.25,0.375],"max":[0.625,1.25,0.625]},
+    {"min":[0,0,0],"max":[1,1,0.5]},
+    {"min":[0,0.5,0.5],"max":[1,1,1]},
+    {"min":[0,0,0],"max":[0.5,1,1]},
+    {"min":[0.5,0,0],"max":[1,1,0.5]},
+    {"min":[0.5,0.5,0.5],"max":[1,1,1]},
+    {"min":[0.5,0,0.5],"max":[1,1,1]},
+    {"min":[0,0.5,0.5],"max":[0.5,1,1]},
+    {"min":[0,0,0],"max":[0.5,1,0.5]},
+    {"min":[0.5,0.5,0],"max":[1,1,0.5]},
+    {"min":[0,0.5,0],"max":[0.5,1,1]},
+    {"min":[0,0.5,0],"max":[1,1,0.5]},
+    {"min":[0,0.5,0],"max":[0.5,1,0.5]},
+    {"min":[0,0,0.5],"max":[1,1,1]},
+    {"min":[0,0,0.5],"max":[0.5,1,1]},
+    {"min":[0.5,0.5,0],"max":[1,1,1]},
+    {"min":[0.5,0,0],"max":[1,1,1]},
+    {"min":[0,0.5,0],"max":[1,1,1]},
+    {"min":[0.0625,0,0.0625],"max":[0.4375,0.625,0.4375]},
+    {"min":[0.3125,0,0.3125],"max":[0.6875,0.375,0.6875]},
+    {"min":[0,0,0.6875],"max":[1,0.25,1]},
+    {"min":[0,0.25,0.8125],"max":[1,1,1]},
+    {"min":[0,0.75,0.6875],"max":[1,1,0.8125]},
+    {"min":[0,0,0],"max":[1,0.25,0.3125]},
+    {"min":[0,0.25,0],"max":[1,1,0.1875]},
+    {"min":[0,0.75,0.1875],"max":[1,1,0.3125]},
+    {"min":[0.6875,0,0],"max":[1,0.25,1]},
+    {"min":[0.8125,0.25,0],"max":[1,1,1]},
+    {"min":[0.6875,0.75,0],"max":[0.8125,1,1]},
+    {"min":[0,0,0],"max":[0.3125,0.25,1]},
+    {"min":[0,0.25,0],"max":[0.1875,1,1]},
+    {"min":[0.1875,0.75,0],"max":[0.3125,1,1]},
+    {"min":[0.375,0,0.375],"max":[0.625,0.625,0.625]},
+    {"min":[0.34375,0.1875,0.6875],"max":[0.65625,0.8125,1]},
+    {"min":[0.34375,0.1875,0],"max":[0.65625,0.8125,0.3125]},
+    {"min":[0.6875,0.1875,0.34375],"max":[1,0.8125,0.65625]},
+    {"min":[0,0.1875,0.34375],"max":[0.3125,0.8125,0.65625]},
+    {"min":[0,0,0],"max":[0.0625,1,1]},
+    {"min":[0.0625,0,0],"max":[1,1,0.0625]},
+    {"min":[0.0625,0,0.9375],"max":[1,1,1]},
+    {"min":[0.9375,0,0.0625],"max":[1,1,0.9375]},
+    {"min":[0.0625,0.9375,0.0625],"max":[0.9375,1,0.9375]},
+    {"min":[0,0,0],"max":[1,1,0.0625]},
+    {"min":[0,0,0.9375],"max":[1,1,1]},
+    {"min":[0,0.9375,0.0625],"max":[0.9375,1,0.9375]},
+    {"min":[0.9375,0,0.0625],"max":[1,1,1]},
+    {"min":[0.0625,0.9375,0.0625],"max":[0.9375,1,1]},
+    {"min":[0,0.9375,0.0625],"max":[0.9375,1,1]},
+    {"min":[0.9375,0,0],"max":[1,1,0.9375]},
+    {"min":[0.0625,0.9375,0],"max":[0.9375,1,0.9375]},
+    {"min":[0,0.9375,0],"max":[0.9375,1,0.9375]},
+    {"min":[0.9375,0,0],"max":[1,1,1]},
+    {"min":[0.0625,0.9375,0],"max":[0.9375,1,1]},
+    {"min":[0,0.9375,0],"max":[0.9375,1,1]},
+    {"min":[0.0625,0.9375,0.0625],"max":[1,1,0.9375]},
+    {"min":[0,0.9375,0.0625],"max":[1,1,0.9375]},
+    {"min":[0.0625,0.9375,0.0625],"max":[1,1,1]},
+    {"min":[0,0.9375,0.0625],"max":[1,1,1]},
+    {"min":[0.0625,0.9375,0],"max":[1,1,0.9375]},
+    {"min":[0,0.9375,0],"max":[1,1,0.9375]},
+    {"min":[0.0625,0.9375,0],"max":[1,1,1]},
+    {"min":[0,0.9375,0],"max":[1,1,1]},
+    {"min":[0,0,0],"max":[1,0.0625,1]},
+    {"min":[0.0625,0,0.0625],"max":[0.9375,0.875,0.9375]},
+    {"min":[0.0625,0,0.0625],"max":[1,0.875,0.9375]},
+    {"min":[0,0,0.0625],"max":[0.9375,0.875,0.9375]},
+    {"min":[0.0625,0,0],"max":[0.9375,0.875,0.9375]},
+    {"min":[0.0625,0,0.0625],"max":[0.9375,0.875,1]},
+    {"min":[0,0,0.1875],"max":[1,0.0625,0.8125]},
+    {"min":[0.1875,0,0],"max":[0.8125,0.0625,0.1875]},
+    {"min":[0.1875,0,0.8125],"max":[0.8125,0.0625,1]},
+    {"min":[0,0.0625,0.1875],"max":[0.0625,1,0.8125]},
+    {"min":[0.1875,0.0625,0],"max":[0.8125,1,0.0625]},
+    {"min":[0.1875,0.0625,0.9375],"max":[0.8125,1,1]},
+    {"min":[0.9375,0.0625,0.1875],"max":[1,1,0.8125]},
+    {"min":[0.1875,0,0],"max":[0.8125,0.0625,1]},
+    {"min":[0.8125,0,0.1875],"max":[1,0.0625,0.8125]},
+    {"min":[0.1875,0,0],"max":[0.8125,0.0625,0.8125]},
+    {"min":[0.1875,0,0.1875],"max":[0.8125,0.0625,1]},
+    {"min":[0.1875,0,0.1875],"max":[1,0.0625,0.8125]},
+    {"min":[0,0,0.1875],"max":[0.8125,0.0625,0.8125]},
+    {"min":[0.1875,0,0.1875],"max":[0.8125,0.0625,0.8125]},
+    {"min":[0,0,0],"max":[1,0.375,1]},
+    {"min":[0,0,0],"max":[1,0.625,1]},
+    {"min":[0,0,0],"max":[1,0.875,1]},
+    {"min":[0,0,0],"max":[1,0.9375,1]}
+  ],
+  "blocks": [
+    {
+      "id": 9,
+      "name": "dirt",
+      "translation_key": "block.minecraft.dirt",
+      "slipperiness": 0.6,
+      "velocity_multiplier": 1,
+      "jump_velocity_multiplier": 1,
+      "hardness": 0.5,
+      "blast_resistance": 0.5,
+      "map_color": 10,
+      "item_id": 55,
+      "properties": [],
+      "default_state_id": 10,
+      "states": [
+        {
+          "id": 10,
+          "state_flags": 3520,
+          "side_flags": 255,
+          "instrument": "harp",
+          "luminance": 0,
+          "piston_behavior": "PUSH_PULL",
+          "hardness": 0.5,
+          "opacity": 15,
+          "collision_shapes": [
+            0
+          ],
+          "outline_shapes": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "name": "coarse_dirt",
+      "translation_key": "block.minecraft.coarse_dirt",
+      "slipperiness": 0.6,
+      "velocity_multiplier": 1,
+      "jump_velocity_multiplier": 1,
+      "hardness": 0.5,
+      "blast_resistance": 0.5,
+      "map_color": 10,
+      "item_id": 56,
+      "properties": [],
+      "default_state_id": 11,
+      "states": [
+        {
+          "id": 11,
+          "state_flags": 3520,
+          "side_flags": 255,
+          "instrument": "harp",
+          "luminance": 0,
+          "piston_behavior": "PUSH_PULL",
+          "hardness": 0.5,
+          "opacity": 15,
+          "collision_shapes": [
+            0
+          ],
+          "outline_shapes": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": 252,
+      "name": "farmland",
+      "translation_key": "block.minecraft.farmland",
+      "slipperiness": 0.6,
+      "velocity_multiplier": 1,
+      "jump_velocity_multiplier": 1,
+      "hardness": 0.6,
+      "blast_resistance": 0.6,
+      "map_color": 10,
+      "item_id": 406,
+      "properties": [
+        -1069698476
+      ],
+      "default_state_id": 6875,
+      "states": [
+        {
+          "id": 6875,
+          "state_flags": 2632,
+          "side_flags": 65,
+          "instrument": "harp",
+          "luminance": 0,
+          "piston_behavior": "PUSH_PULL",
+          "hardness": 0.6,
+          "opacity": 0,
+          "collision_shapes": [
+            142
+          ],
+          "outline_shapes": [
+            142
+          ]
+        },
+        {
+          "id": 6876,
+          "state_flags": 2632,
+          "side_flags": 65,
+          "instrument": "harp",
+          "luminance": 0,
+          "piston_behavior": "PUSH_PULL",
+          "hardness": 0.6,
+          "opacity": 0,
+          "collision_shapes": [
+            142
+          ],
+          "outline_shapes": [
+            142
+          ]
+        },
+        {
+          "id": 6877,
+          "state_flags": 2632,
+          "side_flags": 65,
+          "instrument": "harp",
+          "luminance": 0,
+          "piston_behavior": "PUSH_PULL",
+          "hardness": 0.6,
+          "opacity": 0,
+          "collision_shapes": [
+            142
+          ],
+          "outline_shapes": [
+            142
+          ]
+        },
+        {
+          "id": 6878,
+          "state_flags": 2632,
+          "side_flags": 65,
+          "instrument": "harp",
+          "luminance": 0,
+          "piston_behavior": "PUSH_PULL",
+          "hardness": 0.6,
+          "opacity": 0,
+          "collision_shapes": [
+            142
+          ],
+          "outline_shapes": [
+            142
+          ]
+        },
+        {
+          "id": 6879,
+          "state_flags": 2632,
+          "side_flags": 65,
+          "instrument": "harp",
+          "luminance": 0,
+          "piston_behavior": "PUSH_PULL",
+          "hardness": 0.6,
+          "opacity": 0,
+          "collision_shapes": [
+            142
+          ],
+          "outline_shapes": [
+            142
+          ]
+        },
+        {
+          "id": 6880,
+          "state_flags": 2632,
+          "side_flags": 65,
+          "instrument": "harp",
+          "luminance": 0,
+          "piston_behavior": "PUSH_PULL",
+          "hardness": 0.6,
+          "opacity": 0,
+          "collision_shapes": [
+            142
+          ],
+          "outline_shapes": [
+            142
+          ]
+        },
+        {
+          "id": 6881,
+          "state_flags": 2632,
+          "side_flags": 65,
+          "instrument": "harp",
+          "luminance": 0,
+          "piston_behavior": "PUSH_PULL",
+          "hardness": 0.6,
+          "opacity": 0,
+          "collision_shapes": [
+            142
+          ],
+          "outline_shapes": [
+            142
+          ]
+        },
+        {
+          "id": 6882,
+          "state_flags": 2632,
+          "side_flags": 65,
+          "instrument": "harp",
+          "luminance": 0,
+          "piston_behavior": "PUSH_PULL",
+          "hardness": 0.6,
+          "opacity": 0,
+          "collision_shapes": [
+            142
+          ],
+          "outline_shapes": [
+            142
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1239,
+      "name": "rooted_dirt",
+      "translation_key": "block.minecraft.rooted_dirt",
+      "slipperiness": 0.6,
+      "velocity_multiplier": 1,
+      "jump_velocity_multiplier": 1,
+      "hardness": 0.5,
+      "blast_resistance": 0.5,
+      "map_color": 10,
+      "item_id": 58,
+      "properties": [],
+      "default_state_id": 33771,
+      "states": [
+        {
+          "id": 33771,
+          "state_flags": 3520,
+          "side_flags": 255,
+          "instrument": "harp",
+          "luminance": 0,
+          "piston_behavior": "PUSH_PULL",
+          "hardness": 0.5,
+          "opacity": 15,
+          "collision_shapes": [
+            0
+          ],
+          "outline_shapes": [
+            0
+          ]
+        }
+      ]
+    }
+  ]
+}

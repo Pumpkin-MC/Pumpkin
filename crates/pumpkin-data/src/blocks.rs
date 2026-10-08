@@ -483,3 +483,313 @@ mod tests {
         assert_eq!(Block::STONE.shape_offset_delta(&positive_extreme).x, 0.0);
     }
 }
+
+#[cfg(all(test, feature = "block_transformer"))]
+mod block_transformer_tests {
+    use super::Block;
+    use crate::{
+        BlockDirection, BlockStateId,
+        block_transformer::{
+            AXE, BlockTransformer, DropStrategy, HOE, SHOVEL, TransformResult, TransformType,
+        },
+        sound::Sound,
+        world::WorldEvent,
+    };
+
+    fn transform(
+        transformer: &BlockTransformer,
+        block: &'static Block,
+        state_id: BlockStateId,
+        above: &'static Block,
+        face: BlockDirection,
+    ) -> Option<TransformResult> {
+        transformer.transform(block, state_id, face, &|dx, dy, dz| {
+            assert!(
+                dx == 0 && dz == 0 && (dy == 0 || dy == 1),
+                "unexpected block lookup: ({dx}, {dy}, {dz})",
+            );
+            if dy == 0 { block } else { above }
+        })
+    }
+
+    fn assert_properties(
+        block: &Block,
+        state_id: BlockStateId,
+        expected: &[(&str, &str)],
+    ) -> Result<(), String> {
+        let properties = block
+            .properties(state_id)
+            .ok_or_else(|| format!("{} has no state properties", block.name))?
+            .to_props();
+        for property in expected {
+            assert!(
+                properties.contains(property),
+                "{}: missing {property:?} in {properties:?}",
+                block.name,
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn hoe_transformer_obeys_air_faces_and_rooted_dirt_rule() -> Result<(), String> {
+        // Exercise the three rules from the extracted hoe.json, not copied rule tables.
+        for (block, above, face, target) in [
+            (
+                &Block::GRASS_BLOCK,
+                &Block::AIR,
+                BlockDirection::Up,
+                &Block::FARMLAND,
+            ),
+            (
+                &Block::DIRT,
+                &Block::AIR,
+                BlockDirection::Up,
+                &Block::FARMLAND,
+            ),
+            (
+                &Block::DIRT_PATH,
+                &Block::AIR,
+                BlockDirection::Up,
+                &Block::FARMLAND,
+            ),
+            (
+                &Block::COARSE_DIRT,
+                &Block::AIR,
+                BlockDirection::Up,
+                &Block::DIRT,
+            ),
+            (
+                &Block::ROOTED_DIRT,
+                &Block::STONE,
+                BlockDirection::Down,
+                &Block::DIRT,
+            ),
+            (
+                &Block::DIRT,
+                &Block::CAVE_AIR,
+                BlockDirection::Up,
+                &Block::FARMLAND,
+            ),
+            (
+                &Block::DIRT,
+                &Block::VOID_AIR,
+                BlockDirection::Up,
+                &Block::FARMLAND,
+            ),
+        ] {
+            let result =
+                transform(&HOE, block, block.default_state.id, above, face).ok_or_else(|| {
+                    format!(
+                        "hoe did not transform {} with {} above on {face:?}",
+                        block.name, above.name
+                    )
+                })?;
+            assert_eq!(result.target_block, target);
+            // SimpleState uses the target default; explicit provider properties are not covered.
+            assert_eq!(result.new_state_id, target.default_state.id);
+            assert_eq!(result.entry.sound, Some(Sound::ItemHoeTill));
+            assert_eq!(result.entry.item_damage_per_use, 1);
+            if block == &Block::ROOTED_DIRT {
+                assert_eq!(result.entry.loot, Some("minecraft:till/rooted_dirt"));
+                assert_eq!(result.entry.drop_strategy, Some(DropStrategy::ClickedFace));
+            } else {
+                assert_eq!(result.entry.loot, None);
+                assert_eq!(result.entry.drop_strategy, None);
+            }
+        }
+
+        for (block, above, face) in [
+            (&Block::DIRT, &Block::STONE, BlockDirection::Up),
+            (&Block::DIRT, &Block::WATER, BlockDirection::Up),
+            (&Block::COARSE_DIRT, &Block::STONE, BlockDirection::Up),
+            (&Block::COARSE_DIRT, &Block::WATER, BlockDirection::Up),
+            (&Block::DIRT, &Block::AIR, BlockDirection::Down),
+            (&Block::COARSE_DIRT, &Block::AIR, BlockDirection::Down),
+            (&Block::STONE, &Block::AIR, BlockDirection::Up),
+            (&Block::PODZOL, &Block::AIR, BlockDirection::Up),
+            (&Block::MYCELIUM, &Block::AIR, BlockDirection::Up),
+        ] {
+            assert!(
+                transform(&HOE, block, block.default_state.id, above, face).is_none(),
+                "hoe transformed {} with {} above on {face:?}",
+                block.name,
+                above.name,
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn axe_transformer_preserves_properties_across_entry_families() -> Result<(), String> {
+        let log_properties: &[(&str, &str)] = &[("axis", "x")];
+        let chest_properties: &[(&str, &str)] = &[
+            ("facing", "east"),
+            ("type", "left"),
+            ("waterlogged", "true"),
+        ];
+        let upper_door_properties: &[(&str, &str)] = &[
+            ("facing", "east"),
+            ("half", "upper"),
+            ("hinge", "right"),
+            ("open", "true"),
+            ("powered", "true"),
+        ];
+        let lower_door_properties: &[(&str, &str)] = &[
+            ("facing", "east"),
+            ("half", "lower"),
+            ("hinge", "right"),
+            ("open", "true"),
+            ("powered", "true"),
+        ];
+
+        for (block, target, properties, sound, particle, transform_type, update_from_neighbors) in [
+            (
+                &Block::OAK_LOG,
+                &Block::STRIPPED_OAK_LOG,
+                log_properties,
+                Sound::ItemAxeStrip,
+                None,
+                None,
+                true,
+            ),
+            (
+                &Block::EXPOSED_COPPER,
+                &Block::COPPER_BLOCK,
+                &[],
+                Sound::ItemAxeScrape,
+                Some(WorldEvent::ParticlesScrape),
+                None,
+                true,
+            ),
+            (
+                &Block::EXPOSED_COPPER_CHEST,
+                &Block::COPPER_CHEST,
+                chest_properties,
+                Sound::ItemAxeScrape,
+                Some(WorldEvent::ParticlesScrape),
+                Some(TransformType::CopperChest),
+                false,
+            ),
+            (
+                &Block::EXPOSED_COPPER_DOOR,
+                &Block::COPPER_DOOR,
+                upper_door_properties,
+                Sound::ItemAxeScrape,
+                Some(WorldEvent::ParticlesScrape),
+                None,
+                false,
+            ),
+            (
+                &Block::WAXED_COPPER_BLOCK,
+                &Block::COPPER_BLOCK,
+                &[],
+                Sound::ItemAxeWaxOff,
+                Some(WorldEvent::ParticlesWaxOff),
+                None,
+                true,
+            ),
+            (
+                &Block::WAXED_COPPER_CHEST,
+                &Block::COPPER_CHEST,
+                chest_properties,
+                Sound::ItemAxeWaxOff,
+                Some(WorldEvent::ParticlesWaxOff),
+                Some(TransformType::CopperChest),
+                false,
+            ),
+            (
+                &Block::WAXED_COPPER_DOOR,
+                &Block::COPPER_DOOR,
+                lower_door_properties,
+                Sound::ItemAxeWaxOff,
+                Some(WorldEvent::ParticlesWaxOff),
+                None,
+                false,
+            ),
+        ] {
+            let state_id = if properties.is_empty() {
+                block.default_state.id
+            } else {
+                let state_id = block.from_properties(properties).to_state_id(block);
+                assert_properties(block, state_id, properties)?;
+                state_id
+            };
+            let result = transform(&AXE, block, state_id, &Block::STONE, BlockDirection::Down)
+                .ok_or_else(|| format!("axe did not transform {}", block.name))?;
+            assert_eq!(result.target_block, target);
+            if properties.is_empty() {
+                assert_eq!(result.new_state_id, target.default_state.id);
+            } else {
+                assert_properties(target, result.new_state_id, properties)?;
+            }
+            assert_eq!(result.entry.sound, Some(sound));
+            assert_eq!(result.entry.particle, particle);
+            assert_eq!(result.entry.item_damage_per_use, 1);
+            assert_eq!(result.entry.transform_type, transform_type);
+            assert_eq!(result.entry.update_from_neighbors, update_from_neighbors);
+        }
+        assert!(
+            transform(
+                &AXE,
+                &Block::STONE,
+                Block::STONE.default_state.id,
+                &Block::AIR,
+                BlockDirection::Up,
+            )
+            .is_none(),
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn shovel_transformer_keeps_campfire_fallback_available() -> Result<(), String> {
+        for block in [&Block::DIRT, &Block::ROOTED_DIRT] {
+            let result = transform(
+                &SHOVEL,
+                block,
+                block.default_state.id,
+                &Block::AIR,
+                BlockDirection::Up,
+            )
+            .ok_or_else(|| format!("shovel did not transform {}", block.name))?;
+            assert_eq!(result.target_block, &Block::DIRT_PATH);
+            assert_eq!(result.new_state_id, Block::DIRT_PATH.default_state.id);
+            assert_eq!(result.entry.sound, Some(Sound::ItemShovelFlatten));
+            assert_eq!(result.entry.item_damage_per_use, 1);
+        }
+        for (block, above, face) in [
+            (&Block::DIRT, &Block::STONE, BlockDirection::Up),
+            (&Block::DIRT, &Block::WATER, BlockDirection::Up),
+            (&Block::DIRT, &Block::AIR, BlockDirection::Down),
+            (&Block::STONE, &Block::AIR, BlockDirection::Up),
+            (&Block::DIRT_PATH, &Block::AIR, BlockDirection::Up),
+        ] {
+            assert!(
+                transform(&SHOVEL, block, block.default_state.id, above, face).is_none(),
+                "shovel transformed {} with {} above on {face:?}",
+                block.name,
+                above.name,
+            );
+        }
+
+        // None is the consumer's fallback prerequisite, not proof of extinguishing or damage.
+        for block in [&Block::CAMPFIRE, &Block::SOUL_CAMPFIRE] {
+            for (lit, face) in [
+                ("true", BlockDirection::Up),
+                ("false", BlockDirection::Up),
+                ("true", BlockDirection::Down),
+            ] {
+                let properties = [("lit", lit)];
+                let state_id = block.from_properties(&properties).to_state_id(block);
+                assert_properties(block, state_id, &properties)?;
+                assert!(
+                    transform(&SHOVEL, block, state_id, &Block::AIR, face).is_none(),
+                    "shovel transformer consumed {} fallback with lit={lit} on {face:?}",
+                    block.name,
+                );
+            }
+        }
+        Ok(())
+    }
+}
