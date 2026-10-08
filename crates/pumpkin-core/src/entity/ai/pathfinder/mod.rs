@@ -436,6 +436,11 @@ pub struct PathNavigation {
     pub last_node_index: usize,
     pub total_ticks: u32,
     pub path_start_pos: Option<Vector3<f64>>,
+    /// The block the last search was charged against, `None` until the first
+    /// search. `needs_new_path` compares this against the current goal
+    /// because the path's own target can differ from what goals request when
+    /// below-surface destinations get raised to the surface.
+    requested_target: Option<Vector3<i32>>,
     pub path_type_overrides: FxHashMap<PathType, f32>,
     pub mob_width: f32,
     pub mob_height: f32,
@@ -483,6 +488,7 @@ impl PathNavigation {
             last_node_index: 0,
             total_ticks: 0,
             path_start_pos: None,
+            requested_target: None,
             path_type_overrides: FxHashMap::default(),
             mob_width: 0.6,
             mob_height: 1.95,
@@ -723,13 +729,16 @@ impl PathNavigation {
 
     /// Runs one A* search while this tick's world pathfinding time budget
     /// still has room, then resets the path-following bookkeeping like vanilla
-    /// after `createPath`. Returns `false` (path untouched) when the budget is
-    /// exhausted; callers just keep following the current path and retry next
-    /// tick.
+    /// after `createPath`. `destination` is the block the search is charged
+    /// against; `search_origin` is the f64 origin that had been normalized from it
+    /// for the search itself, when the two differ (below-surface goals).
+    /// Returns `false` when the budget is exhausted; the path is untouched and
+    /// callers must keep the goal pending and retry next tick.
     fn search_path_with_budget(
         &mut self,
         entity: &LivingEntity,
         destination: Vector3<f64>,
+        search_origin: Vector3<f64>,
         reach_range: i32,
         world_age: u64,
     ) -> bool {
@@ -738,10 +747,14 @@ impl PathNavigation {
             return false;
         }
         let search_start = std::time::Instant::now();
-        self.path = self.compute_path(entity, destination, reach_range);
+        self.path = self.compute_path(entity, search_origin, reach_range);
         world.add_path_search_time(
             u64::try_from(search_start.elapsed().as_nanos()).unwrap_or(u64::MAX),
         );
+        // Remember what the search was for so `needs_new_path` can tell the
+        // next goal apart without relying on the path's own target, which the
+        // below-surface normalization moves up from the requested block.
+        self.requested_target = Some(BlockPos::floored_v(destination).0);
         if self.path.is_some() {
             // vanilla `createPath` resets the stuck bookkeeping on a new path
             self.reset_stuck_timeout();
@@ -757,11 +770,16 @@ impl PathNavigation {
         if self.path.is_none() {
             return true;
         }
-        // vanilla `createPath` reuses the in-progress path only while its
-        // target block still matches the requested one and it is not done
+        // vanilla `createPath` reuses the in-progress path only while it is
+        // not done and the requested target block is unchanged
         // (`this.path != null && !this.path.isDone() && targets.contains(this.targetPos)`).
-        self.path.as_ref().is_some_and(|p| {
-            p.is_done() || p.get_target().0 != BlockPos::floored_v(goal.destination).0
+        // The comparison uses the block the search was charged against, not
+        // the path's target node, because below-surface destinations are
+        // raised to the surface before searching.
+        self.requested_target.as_ref().is_none_or(|requested| {
+            self.path.as_ref().is_some_and(|p| {
+                p.is_done() || *requested != BlockPos::floored_v(goal.destination).0
+            })
         })
     }
 
@@ -1042,7 +1060,7 @@ impl PathNavigation {
 
         self.total_ticks += 1;
 
-        if self.needs_new_path(&goal) {
+        let search_denied = self.needs_new_path(&goal) && {
             let mut dest_pos = BlockPos::floored_v(goal.destination);
             if !self.can_path_to_targets_below_surface {
                 let world = entity.entity.world.load();
@@ -1053,12 +1071,18 @@ impl PathNavigation {
                 f64::from(dest_pos.0.y),
                 f64::from(dest_pos.0.z) + 0.5,
             );
-            // Without a slot the navigation keeps following its current path and
-            // retries next tick; `needs_new_path` stays true for the new goal.
-            self.search_path_with_budget(entity, dest_v, self.reach_range, world_age);
-        }
+            // Without time left in the budget the search is postponed; the goal
+            // stays pending instead of being finished off with no path.
+            !self.search_path_with_budget(
+                entity,
+                goal.destination,
+                dest_v,
+                self.reach_range,
+                world_age,
+            )
+        };
 
-        if self.path.is_none() {
+        if self.path.is_none() && !search_denied {
             self.finish_navigation(entity);
             return;
         }
@@ -1303,6 +1327,7 @@ impl PathNavigationTrait for GroundPathNavigation {
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
         if let Some(new_path) = path {
+            self.inner.requested_target = Some(new_path.get_target().0);
             self.inner.path = Some(new_path);
             if self.is_done() {
                 return false;
@@ -1511,12 +1536,19 @@ impl PathNavigationTrait for FlyingPathNavigation {
             self.recompute_path(entity);
         }
 
+        let mut search_denied = false;
         if let Some(goal) = self.inner.current_goal.take() {
             if self.inner.needs_new_path(&goal) {
-                // Without a budget slot the navigation keeps following its current
-                // path and retries next tick.
-                self.inner
-                    .search_path_with_budget(entity, goal.destination, 1, world_age);
+                // Without time left in the budget the search is postponed; the
+                // goal stays pending so a goal that only fired once gets its
+                // search next tick instead.
+                search_denied = !self.inner.search_path_with_budget(
+                    entity,
+                    goal.destination,
+                    goal.destination,
+                    1,
+                    world_age,
+                );
             }
             self.inner.current_goal = Some(goal);
         }
@@ -1524,7 +1556,7 @@ impl PathNavigationTrait for FlyingPathNavigation {
         let mob_pos = entity.entity.pos.load();
         self.inner.do_stuck_detection(mob_pos, entity);
 
-        if self.is_done() {
+        if self.is_done() && !search_denied {
             self.inner.finish_navigation(entity);
         } else {
             if let Some(path) = &mut self.inner.path
@@ -1622,6 +1654,7 @@ impl PathNavigationTrait for FlyingPathNavigation {
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
         if let Some(new_path) = path {
+            self.inner.requested_target = Some(new_path.get_target().0);
             self.inner.path = Some(new_path);
             if self.is_done() {
                 return false;
@@ -1810,12 +1843,19 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
             self.recompute_path(entity);
         }
 
+        let mut search_denied = false;
         if let Some(goal) = self.inner.current_goal.take() {
             if self.inner.needs_new_path(&goal) {
-                // Without a budget slot the navigation keeps following its current
-                // path and retries next tick.
-                self.inner
-                    .search_path_with_budget(entity, goal.destination, 1, world_age);
+                // Without time left in the budget the search is postponed; the
+                // goal stays pending so a goal that only fired once gets its
+                // search next tick instead.
+                search_denied = !self.inner.search_path_with_budget(
+                    entity,
+                    goal.destination,
+                    goal.destination,
+                    1,
+                    world_age,
+                );
             }
             self.inner.current_goal = Some(goal);
         }
@@ -1827,7 +1867,7 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         );
         self.inner.do_stuck_detection(mob_pos, entity);
 
-        if self.is_done() {
+        if self.is_done() && !search_denied {
             self.inner.finish_navigation(entity);
         } else {
             if let Some(path) = &mut self.inner.path
@@ -1919,6 +1959,7 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
         if let Some(new_path) = path {
+            self.inner.requested_target = Some(new_path.get_target().0);
             self.inner.path = Some(new_path);
             if self.is_done() {
                 return false;
@@ -2335,12 +2376,19 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
                 self.recompute_path(entity);
             }
 
+            let mut search_denied = false;
             if let Some(goal) = self.inner.current_goal.take() {
                 if self.inner.needs_new_path(&goal) {
-                    // Without a budget slot the navigation keeps following its current
-                    // path and retries next tick.
-                    self.inner
-                        .search_path_with_budget(entity, goal.destination, 1, world_age);
+                    // Without time left in the budget the search is postponed; the
+                    // goal stays pending so a goal that only fired once gets its
+                    // search next tick instead.
+                    search_denied = !self.inner.search_path_with_budget(
+                        entity,
+                        goal.destination,
+                        goal.destination,
+                        1,
+                        world_age,
+                    );
                 }
                 self.inner.current_goal = Some(goal);
             }
@@ -2352,7 +2400,7 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
             );
             self.inner.do_stuck_detection(mob_pos, entity);
 
-            if self.is_done() {
+            if self.is_done() && !search_denied {
                 self.inner.finish_navigation(entity);
             } else {
                 if let Some(path) = &mut self.inner.path
@@ -2447,6 +2495,7 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
         if let Some(new_path) = path {
+            self.inner.requested_target = Some(new_path.get_target().0);
             self.inner.path = Some(new_path);
             if self.is_done() {
                 return false;

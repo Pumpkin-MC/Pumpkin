@@ -77,9 +77,12 @@ impl PathfindingContext {
             return pt;
         }
 
-        let pt = self
-            .world
-            .path_type_get_or_compute(pos, || self.compute_path_type_from_state(pos));
+        let pt = self.world.path_type_get_or_compute(pos, || {
+            // Capture the state id the classification is based on so the
+            // world cache can validate entries against the live block.
+            let state_id = self.world.get_block_state_id(&pos.as_blockpos());
+            (self.compute_path_type_from_state(pos), state_id)
+        });
 
         if let Some(ref mut cache) = self.path_type_cache {
             cache.insert(pos, pt);
@@ -255,12 +258,13 @@ impl PathfindingContext {
         }
         let level = self.world.floor_level_get_or_compute(*pos, || {
             let target = pos.down();
+            let state_id = self.world.get_block_state_id(&target);
             let state = self.world.get_block_state(&target);
             let max_y = state
                 .get_block_collision_shapes_at(&target)
                 .map(|s| s.max.y)
                 .fold(0.0f64, f64::max);
-            f64::from(target.0.y) + max_y
+            (f64::from(target.0.y) + max_y, state_id)
         });
         self.floor_cache.insert(*pos, level);
         level

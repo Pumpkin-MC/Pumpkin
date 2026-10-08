@@ -296,11 +296,11 @@ pub struct World {
     /// pathfinder before re-reading block states. Entries depend only on the
     /// block state at their position, so a block change invalidates exactly the
     /// cached entry for that position (see `on_block_state_set`).
-    path_type_cache: DashMap<Vector3<i32>, PathType>,
+    path_type_cache: DashMap<Vector3<i32>, (PathType, BlockStateId)>,
     /// Shared floor-height cache (`pos` → height of the collision top below it).
     /// A floor height at `pos` is computed from the block at `pos - 1`, so a
     /// block change at `pos` invalidates the entry for `pos + 1`.
-    floor_level_cache: DashMap<BlockPos, f64>,
+    floor_level_cache: DashMap<BlockPos, (f64, BlockStateId)>,
     /// Wall time spent on A* searches during this world's tick. `World::tick`
     /// resets it; navigations check it before searching so a large crowd all
     /// retargeting in the same tick can't exceed the search time budget.
@@ -334,26 +334,30 @@ impl Eq for World {}
 const PATHFINDING_TIME_BUDGET_PER_TICK: u64 = 2_000_000;
 
 impl World {
-    /// Reads the shared path-type cache. Falls back to `compute` for uncached
-    /// positions and stores the result; two concurrent touches may both
-    /// classify one position and one insert wins, which is harmless.
-    /// Positions in chunks that are not loaded are never stored, because a
-    /// block read there is not backed by a loaded chunk.
+    /// Reads the shared path-type cache. Entries carry the block state id the
+    /// classification consumed and are validated against the live state on
+    /// every read, so a block write that lands while a concurrent search
+    /// classifies the position can never keep serving its stale value.
+    /// Falls back to `compute`, which also returns the state id it used.
+    /// Positions in chunks that are not loaded are never stored.
     pub fn path_type_get_or_compute(
         &self,
         pos: Vector3<i32>,
-        compute: impl FnOnce() -> PathType,
+        compute: impl FnOnce() -> (PathType, BlockStateId),
     ) -> PathType {
-        if let Some(path_type) = self.path_type_cache.get(&pos) {
-            return *path_type;
+        let cached = self.path_type_cache.get(&pos).map(|e| *e.value());
+        if let Some((path_type, stored_id)) = cached
+            && self.get_block_state_id(&BlockPos::new(pos.x, pos.y, pos.z)) == stored_id
+        {
+            return path_type;
         }
-        let path_type = compute();
+        let (path_type, used_id) = compute();
         if self
             .level
             .is_chunk_loaded(&Vector2::new(pos.x >> 4, pos.z >> 4))
         {
             Self::maintain_shared_path_cache(&self.path_type_cache);
-            self.path_type_cache.insert(pos, path_type);
+            self.path_type_cache.insert(pos, (path_type, used_id));
         }
         path_type
     }
@@ -371,19 +375,27 @@ impl World {
             .fetch_add(nanos, std::sync::atomic::Ordering::Relaxed);
     }
 
-    /// Reads the shared floor-level cache, same contract as
-    /// [`World::path_type_get_or_compute`].
-    pub fn floor_level_get_or_compute(&self, pos: BlockPos, compute: impl FnOnce() -> f64) -> f64 {
-        if let Some(height) = self.floor_level_cache.get(&pos) {
-            return *height;
+    /// Reads the shared floor-level cache, same contract and validation as
+    /// [`World::path_type_get_or_compute`]. The paired state id is the one of
+    /// `pos - 1`, which the floor height is computed from.
+    pub fn floor_level_get_or_compute(
+        &self,
+        pos: BlockPos,
+        compute: impl FnOnce() -> (f64, BlockStateId),
+    ) -> f64 {
+        let cached = self.floor_level_cache.get(&pos).map(|e| *e.value());
+        if let Some((height, stored_id)) = cached
+            && self.get_block_state_id(&pos.down()) == stored_id
+        {
+            return height;
         }
-        let height = compute();
+        let (height, used_id) = compute();
         if self
             .level
             .is_chunk_loaded(&Vector2::new(pos.0.x >> 4, pos.0.z >> 4))
         {
             Self::maintain_shared_path_cache(&self.floor_level_cache);
-            self.floor_level_cache.insert(pos, height);
+            self.floor_level_cache.insert(pos, (height, used_id));
         }
         height
     }
