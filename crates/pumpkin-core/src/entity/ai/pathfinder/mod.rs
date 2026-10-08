@@ -1094,7 +1094,11 @@ impl PathNavigation {
             entity.entity.pos.load().z,
         );
 
-        self.do_stuck_detection(mob_pos, entity);
+        // A denied search leaves the navigation waiting for a slot
+        // without a path; the stuck check is about the following itself.
+        if !(search_denied && self.path.is_none()) {
+            self.do_stuck_detection(mob_pos, entity);
+        }
 
         if let Some(path) = &mut self.path {
             if path.is_done() {
@@ -1554,7 +1558,11 @@ impl PathNavigationTrait for FlyingPathNavigation {
         }
 
         let mob_pos = entity.entity.pos.load();
-        self.inner.do_stuck_detection(mob_pos, entity);
+        // A denied search leaves the navigation waiting for a slot
+        // without a path; the stuck check is about the following itself.
+        if !(search_denied && self.inner.path.is_none()) {
+            self.inner.do_stuck_detection(mob_pos, entity);
+        }
 
         if self.is_done() && !search_denied {
             self.inner.finish_navigation(entity);
@@ -1865,7 +1873,11 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
             entity.entity.pos.load().y + f64::from(self.inner.mob_height) * 0.5,
             entity.entity.pos.load().z,
         );
-        self.inner.do_stuck_detection(mob_pos, entity);
+        // A denied search leaves the navigation waiting for a slot
+        // without a path; the stuck check is about the following itself.
+        if !(search_denied && self.inner.path.is_none()) {
+            self.inner.do_stuck_detection(mob_pos, entity);
+        }
 
         if self.is_done() && !search_denied {
             self.inner.finish_navigation(entity);
@@ -2398,7 +2410,11 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
                 entity.entity.pos.load().y + f64::from(self.inner.mob_height) * 0.5,
                 entity.entity.pos.load().z,
             );
-            self.inner.do_stuck_detection(mob_pos, entity);
+            // A denied search leaves the navigation waiting for a slot
+            // without a path; the stuck check is about the following itself.
+            if !(search_denied && self.inner.path.is_none()) {
+                self.inner.do_stuck_detection(mob_pos, entity);
+            }
 
             if self.is_done() && !search_denied {
                 self.inner.finish_navigation(entity);
