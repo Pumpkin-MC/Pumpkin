@@ -276,8 +276,8 @@ impl MansionTemplatePiece {
         random: &mut RandomGenerator,
         chunk_box: &BlockBox,
     ) {
-        for template_block in &self.template.blocks {
-            let palette = &self.template.palette[template_block.state as usize];
+        for template_block in self.template.blocks() {
+            let palette = &template_block.state;
             let position = self.world_position(template_block.pos);
             if !chunk_box.contains_pos(&position) {
                 continue;
@@ -288,7 +288,7 @@ impl MansionTemplatePiece {
             if palette.name == "minecraft:structure_block" {
                 if let Some(marker) = template_block
                     .nbt
-                    .as_ref()
+                    .as_deref()
                     .and_then(|nbt| nbt.get_string("metadata"))
                 {
                     self.handle_marker(chunk, random, marker, position);
@@ -296,7 +296,7 @@ impl MansionTemplatePiece {
                 continue;
             }
 
-            let mut placed_entry = palette.clone();
+            let mut placed_entry = PaletteEntry::clone(palette);
             if chunk.get_block_state(&position).to_block_id() == Block::WATER.id
                 && property(&placed_entry, "waterlogged").is_some()
             {
@@ -313,7 +313,7 @@ impl MansionTemplatePiece {
             Self::place_block_entity(
                 chunk,
                 palette,
-                template_block.nbt.as_ref(),
+                template_block.nbt.as_deref(),
                 position,
                 random,
             );

@@ -663,7 +663,14 @@ mod tests {
             "tower_top",
         ] {
             let template = get_template(&format!("end_city/{name}")).unwrap();
-            for palette in &template.palette {
+            let states: std::collections::HashSet<
+                &crate::generation::structure::template::PaletteEntry,
+            > = template
+                .blocks()
+                .iter()
+                .map(|block| &*block.state)
+                .collect();
+            for palette in states {
                 for rotation in [
                     Rotation::None,
                     Rotation::Clockwise90,

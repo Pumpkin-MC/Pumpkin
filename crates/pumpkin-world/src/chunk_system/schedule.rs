@@ -18,10 +18,25 @@ use std::cmp::{Ordering, max};
 use std::collections::{BinaryHeap, HashMap};
 use std::mem::swap;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::thread;
 use std::time::Duration;
 use tracing::{debug, error, info, trace, warn};
+
+/// The chunk generation pool shared by every level, like vanilla's `Util.backgroundExecutor()`.
+/// Each worker keeps thread-local density buffers of a few MiB, so a pool per level would
+/// multiply them by the number of dimensions.
+static GENERATION_POOL: LazyLock<Arc<rayon::ThreadPool>> = LazyLock::new(|| {
+    let cpus = thread::available_parallelism().map_or(1, std::num::NonZero::get);
+    let gen_threads = (cpus / 2).clamp(2, 16);
+    Arc::new(
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(gen_threads)
+            .thread_name(|i| format!("ChunkGen-{i}"))
+            .build()
+            .expect("Failed to build Chunk Generation ThreadPool"),
+    )
+});
 
 pub(crate) struct TaskHeapNode(i8, NodeKey);
 impl PartialEq for TaskHeapNode {
@@ -132,16 +147,8 @@ impl GenerationSchedule {
             io_lock.clone(),
         ));
 
-        let cpus = thread::available_parallelism().map_or(1, std::num::NonZero::get);
-        let gen_threads = (cpus / 2).clamp(2, 16);
-        let generation_pool = Arc::new(
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(gen_threads)
-                .thread_name(|i| format!("ChunkGen-{i}"))
-                .build()
-                .expect("Failed to build Chunk Generation ThreadPool"),
-        );
-        let max_in_flight = (gen_threads * 2) as u16;
+        let generation_pool = GENERATION_POOL.clone();
+        let max_in_flight = (generation_pool.current_num_threads() * 2) as u16;
 
         let level_sched = level;
         let lighting_config = level_sched.lighting_config;

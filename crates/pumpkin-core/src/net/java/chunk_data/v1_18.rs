@@ -225,6 +225,8 @@ pub fn write_chunk_data(
         let mut block_light_empty_mask = 0u64;
         let mut sky_light_mask = 0u64;
         let mut block_light_mask = 0u64;
+        let mut sky_light_arrays = Vec::new();
+        let mut block_light_arrays = Vec::new();
 
         // Bit 0 represents the section below the world (always empty)
         sky_light_empty_mask |= 1 << 0;
@@ -234,14 +236,16 @@ pub fn write_chunk_data(
         for section_index in 0..num_sections {
             let bit_index = section_index + 1; // Offset by 1 for the below-world section
 
-            if let LightContainer::Full(_) = &light_engine.sky_light[section_index] {
+            if let Some(data) = light_engine.sky_light[section_index].nibbles() {
                 sky_light_mask |= 1 << bit_index;
+                sky_light_arrays.push(data);
             } else {
                 sky_light_empty_mask |= 1 << bit_index;
             }
 
-            if let LightContainer::Full(_) = &light_engine.block_light[section_index] {
+            if let Some(data) = light_engine.block_light[section_index].nibbles() {
                 block_light_mask |= 1 << bit_index;
+                block_light_arrays.push(data);
             } else {
                 block_light_empty_mask |= 1 << bit_index;
             }
@@ -269,21 +273,17 @@ pub fn write_chunk_data(
         let light_data_size: VarInt = VarInt(LightContainer::ARRAY_SIZE as i32);
 
         // Write Sky Light arrays
-        write.write_var_int(&VarInt(sky_light_mask.count_ones() as i32))?;
-        for section_index in 0..num_sections {
-            if let LightContainer::Full(data) = &light_engine.sky_light[section_index] {
-                write.write_var_int(&light_data_size)?;
-                write.write_slice(data.as_ref())?;
-            }
+        write.write_var_int(&VarInt(sky_light_arrays.len() as i32))?;
+        for data in &sky_light_arrays {
+            write.write_var_int(&light_data_size)?;
+            write.write_slice(data)?;
         }
 
         // Write Block Light arrays
-        write.write_var_int(&VarInt(block_light_mask.count_ones() as i32))?;
-        for section_index in 0..num_sections {
-            if let LightContainer::Full(data) = &light_engine.block_light[section_index] {
-                write.write_var_int(&light_data_size)?;
-                write.write_slice(data.as_ref())?;
-            }
+        write.write_var_int(&VarInt(block_light_arrays.len() as i32))?;
+        for data in &block_light_arrays {
+            write.write_var_int(&light_data_size)?;
+            write.write_slice(data)?;
         }
     }
 

@@ -12,6 +12,7 @@ use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 use rustc_hash::FxHashMap;
+use tracing::warn;
 
 use crate::{
     chunk::{
@@ -268,36 +269,31 @@ impl ChunkData {
                         continue;
                     }
 
-                    let block_light = section_compound
-                        .get("BlockLight")
-                        .and_then(|tag| tag.extract_byte_array())
-                        .map(|arr| {
-                            // SAFETY: `arr` is an `i8` slice (`&[i8]`). `u8` and `i8` have identical memory layout, alignment (1 byte), and lifetime.
-                            unsafe {
-                                Box::from(std::slice::from_raw_parts(
-                                    arr.as_ptr().cast::<u8>(),
-                                    arr.len(),
-                                ))
-                            }
-                        });
-
-                    let sky_light = section_compound
-                        .get("SkyLight")
-                        .and_then(|tag| tag.extract_byte_array())
-                        .map(|arr| {
-                            // SAFETY: `arr` is an `i8` slice (`&[i8]`). `u8` and `i8` have identical memory layout, alignment (1 byte), and lifetime.
-                            unsafe {
-                                Box::from(std::slice::from_raw_parts(
-                                    arr.as_ptr().cast::<u8>(),
-                                    arr.len(),
-                                ))
-                            }
-                        });
+                    let light_array = |tag: &str| {
+                        let arr = section_compound.get(tag)?.extract_byte_array()?;
+                        if arr.len() != LightContainer::ARRAY_SIZE {
+                            warn!(
+                                "Section {y} of chunk {},{} has a {tag} array of {} bytes instead of {}; ignoring it",
+                                position.x,
+                                position.y,
+                                arr.len(),
+                                LightContainer::ARRAY_SIZE
+                            );
+                            return None;
+                        }
+                        // SAFETY: `arr` is an `i8` slice (`&[i8]`). `u8` and `i8` have identical memory layout, alignment (1 byte), and lifetime.
+                        let data = unsafe {
+                            Box::from(std::slice::from_raw_parts(
+                                arr.as_ptr().cast::<u8>(),
+                                arr.len(),
+                            ))
+                        };
+                        Some(LightContainer::Full(data))
+                    };
 
                     block_lights[index] =
-                        block_light.map_or(LightContainer::Empty(0), LightContainer::Full);
-                    sky_lights[index] =
-                        sky_light.map_or(LightContainer::Empty(0), LightContainer::Full);
+                        light_array("BlockLight").unwrap_or(LightContainer::Empty(0));
+                    sky_lights[index] = light_array("SkyLight").unwrap_or(LightContainer::Empty(0));
 
                     if let Some(bs_compound) = section_compound.get_compound("block_states") {
                         let data = bs_compound
@@ -333,10 +329,11 @@ impl ChunkData {
         }
 
         // Assemble the LightEngine
-        let light_engine = ChunkLight {
+        let mut light_engine = ChunkLight {
             block_light: block_lights.into_boxed_slice(),
             sky_light: sky_lights.into_boxed_slice(),
         };
+        light_engine.compact();
 
         // Assemble the ChunkSections
         let min_y = section_coords::section_to_block(min_y_section);
@@ -450,13 +447,6 @@ impl ChunkData {
     #[allow(clippy::too_many_lines)]
     fn internal_to_bytes(&self) -> Bytes {
         use pumpkin_nbt::tag::NbtTag;
-
-        fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
-            match light {
-                Some(LightContainer::Full(data)) => Some(data.as_ref()),
-                _ => None,
-            }
-        }
 
         let is_light_correct = self
             .light_populated
@@ -587,13 +577,21 @@ impl ChunkData {
             section_comp.put_compound("biomes", b_comp);
 
             // block_light
-            if let Some(light_data) = extract_light_ref(light_lock.block_light.get(i)) {
+            if let Some(light_data) = light_lock
+                .block_light
+                .get(i)
+                .and_then(LightContainer::nibbles)
+            {
                 let bytes: Box<[i8]> = light_data.iter().map(|&x| x as i8).collect();
                 section_comp.put("BlockLight", NbtTag::ByteArray(bytes));
             }
 
             // sky_light
-            if let Some(light_data) = extract_light_ref(light_lock.sky_light.get(i)) {
+            if let Some(light_data) = light_lock
+                .sky_light
+                .get(i)
+                .and_then(LightContainer::nibbles)
+            {
                 let bytes: Box<[i8]> = light_data.iter().map(|&x| x as i8).collect();
                 section_comp.put("SkyLight", NbtTag::ByteArray(bytes));
             }
@@ -883,6 +881,53 @@ impl LightContainer {
         matches!(self, Self::Empty(_))
     }
 
+    /// The packed nibble array, or a shared filled array for a uniform section.
+    ///
+    /// Returns `None` for an all-zero section, which the chunk packet and the region file
+    /// leave out.
+    #[must_use]
+    pub fn nibbles(&self) -> Option<&[u8]> {
+        const fn filled(level: u8) -> [u8; LightContainer::ARRAY_SIZE] {
+            [level << 4 | level; LightContainer::ARRAY_SIZE]
+        }
+        static FILLED: [[u8; LightContainer::ARRAY_SIZE]; 16] = [
+            filled(0),
+            filled(1),
+            filled(2),
+            filled(3),
+            filled(4),
+            filled(5),
+            filled(6),
+            filled(7),
+            filled(8),
+            filled(9),
+            filled(10),
+            filled(11),
+            filled(12),
+            filled(13),
+            filled(14),
+            filled(15),
+        ];
+        match self {
+            Self::Full(data) => Some(data),
+            Self::Empty(0) => None,
+            Self::Empty(level) => Some(&FILLED[usize::from(*level & 0x0F)]),
+        }
+    }
+
+    /// Drops the array again when every nibble holds the same level.
+    ///
+    /// Lighting writes 15 into the sections above the surface one column at a time, which
+    /// turns an `Empty` section into a full array of one value.
+    pub fn compact(&mut self) {
+        if let Self::Full(data) = self {
+            let first = data[0];
+            if first >> 4 == first & 0x0F && data.iter().all(|&byte| byte == first) {
+                *self = Self::Empty(first & 0x0F);
+            }
+        }
+    }
+
     #[inline]
     const fn index(x: usize, y: usize, z: usize) -> usize {
         y * 16 * 16 + z * 16 + x
@@ -952,7 +997,7 @@ impl LightContainer {
 
     #[inline]
     pub fn fill(&mut self, value: u8) {
-        *self = Self::new_filled(value);
+        *self = Self::new_empty(value);
     }
 }
 
@@ -1006,6 +1051,41 @@ mod tests {
             NbtTag::List(sections.into_iter().map(NbtTag::Compound).collect()),
         );
         pumpkin_nbt::Nbt::new(String::new(), root)
+    }
+
+    #[test]
+    fn light_array_of_the_wrong_length_is_ignored() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let mut section = test_section(-4, "minecraft:stone", true);
+        section.put("SkyLight", NbtTag::ByteArray(Box::new([])));
+        let bytes = test_chunk(vec![section]).write();
+        let chunk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("chunk parses");
+        let light = chunk.light_engine.lock().expect("light lock");
+        assert!(light.sky_light.iter().all(LightContainer::is_empty));
+    }
+
+    #[test]
+    fn uniform_light_sections_compact_to_empty() {
+        let mut lit = LightContainer::new_filled(15);
+        lit.compact();
+        assert!(matches!(lit, LightContainer::Empty(15)));
+
+        let mut mixed = LightContainer::new_filled(15);
+        mixed.set(3, 4, 5, 7);
+        mixed.compact();
+        assert!(matches!(mixed, LightContainer::Full(_)));
+        assert_eq!(mixed.get(3, 4, 5), 7);
+
+        // The same byte everywhere with two different nibbles is not uniform.
+        let mut striped = LightContainer::Full(vec![0xF0; LightContainer::ARRAY_SIZE].into());
+        striped.compact();
+        assert!(matches!(striped, LightContainer::Full(_)));
+
+        assert!(LightContainer::Empty(0).nibbles().is_none());
+        let nibbles = LightContainer::Empty(15).nibbles().unwrap();
+        assert!(nibbles.len() == LightContainer::ARRAY_SIZE && nibbles.iter().all(|&b| b == 0xFF));
     }
 
     #[test]

@@ -155,6 +155,15 @@ pub struct ChunkLight {
     pub block_light: Box<[LightContainer]>,
 }
 
+impl ChunkLight {
+    /// Replaces every uniform section array with its single level.
+    pub fn compact(&mut self) {
+        for container in self.sky_light.iter_mut().chain(self.block_light.iter_mut()) {
+            container.compact();
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum ChunkHeightmapType {
     WorldSurface = 0,

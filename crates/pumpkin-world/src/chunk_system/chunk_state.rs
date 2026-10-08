@@ -5,7 +5,6 @@ use crate::chunk::{
 use crate::generation::biome_coords;
 use crate::tick::scheduler::ChunkTickScheduler;
 use pumpkin_config::lighting::LightingEngineConfig;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -211,21 +210,10 @@ impl Chunk {
         }
     }
 
-    fn build_level_sections(proto_chunk: &ProtoChunk, dimension: &Dimension) -> ChunkSections {
+    fn build_level_sections(proto_chunk: &mut ProtoChunk, dimension: &Dimension) -> ChunkSections {
         let total_sections = dimension.height as usize / BlockPalette::SIZE;
         let biome_min_y = biome_coords::from_block(dimension.min_y);
-        let block_sections = (0..total_sections)
-            .map(|section_index| {
-                if section_index * BlockPalette::VOLUME >= proto_chunk.flat_block_map.len() {
-                    return BlockPalette::Homogeneous(BlockStateId::AIR);
-                }
-                BlockPalette::from_fn(|x, y, z| {
-                    let y = section_index * BlockPalette::SIZE + y;
-                    proto_chunk.get_block_state_raw(x as i32, y as i32, z as i32)
-                })
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
+        let block_sections = proto_chunk.take_sections();
         let biome_sections = (0..total_sections)
             .map(|section_index| {
                 BiomePalette::from_fn(|x, y, z| {
@@ -295,9 +283,9 @@ impl Chunk {
             Self::Level(_) => panic!("Cannot upgrade a Level chunk"),
         };
 
-        let proto_chunk = *proto_chunk_box;
+        let mut proto_chunk = *proto_chunk_box;
 
-        let sections = Self::build_level_sections(&proto_chunk, dimension);
+        let sections = Self::build_level_sections(&mut proto_chunk, dimension);
         let heightmaps = Self::build_level_heightmaps(&proto_chunk, dimension.min_y);
 
         // Move the light data instead of cloning it
