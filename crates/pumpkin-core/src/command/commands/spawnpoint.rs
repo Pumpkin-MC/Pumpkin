@@ -13,6 +13,9 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
+#[cfg(test)]
+mod tests;
+
 const DESCRIPTION: &str = "Sets the spawn point for a player.";
 const PERMISSION: &str = "minecraft:command.spawnpoint";
 
@@ -71,7 +74,7 @@ impl CommandExecutor for SpawnpointExecutor {
         if targets.len() == 1 {
             context.source.send_feedback(
                 TextComponent::translate_cross(
-                    translation::java::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
+                    translation::java::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE_NEW,
                     translation::bedrock::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
                     [
                         TextComponent::text(pos.0.x.to_string()),
@@ -88,7 +91,7 @@ impl CommandExecutor for SpawnpointExecutor {
         } else {
             context.source.send_feedback(
                 TextComponent::translate_cross(
-                    translation::java::COMMANDS_SPAWNPOINT_SUCCESS_MULTIPLE,
+                    translation::java::COMMANDS_SPAWNPOINT_SUCCESS_MULTIPLE_NEW,
                     translation::java::COMMANDS_SPAWNPOINT_SUCCESS_MULTIPLE,
                     [
                         TextComponent::text(pos.0.x.to_string()),
