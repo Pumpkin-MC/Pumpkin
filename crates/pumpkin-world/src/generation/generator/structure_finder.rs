@@ -111,7 +111,7 @@ pub fn find_nearest_structure_start(
     generator: &WorldGenerator,
 ) -> Option<(BlockPos, pumpkin_data::structures::StructureKeys)> {
     use crate::{
-        biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
+        biome::BiomeSupplier,
         generation::{
             noise::router::{
                 multi_noise_sampler::MultiNoiseSampler,
@@ -185,7 +185,7 @@ pub fn find_nearest_structure_start(
                                 &noise_generator.base_router.multi_noise,
                             );
                             let biome_supplier: &dyn BiomeSupplier =
-                                &MultiNoiseBiomeSupplier::OVERWORLD;
+                                &noise_generator.biome_supplier;
                             let context = StructureGeneratorContext {
                                 seed: world_seed,
                                 chunk_x,
@@ -312,4 +312,163 @@ fn find_nearest_random_spread_at_radius(
     }
 
     best
+}
+
+#[cfg(test)]
+mod configured_biome_regression {
+    use super::find_nearest_structure_start;
+    use crate::{
+        generation::{
+            generator::{VanillaGenerator, WorldGenerator},
+            positions::chunk_pos::{start_block_x, start_block_z},
+            proto_chunk::ProtoChunk,
+            structure::{
+                placement::{get_structure_chunk_in_region, should_generate_structure},
+                structures::{StructureInstance, StructurePosition},
+            },
+        },
+        world_info::BiomeSource,
+    };
+    use pumpkin_data::{
+        chunk::Biome,
+        dimension::Dimension,
+        structures::{StructureKeys, StructurePlacementType, StructureSet},
+    };
+    use pumpkin_util::{math::position::BlockPos, world_seed::Seed};
+
+    const KEY: StructureKeys = StructureKeys::SwampHut;
+    const SEED: u64 = 0;
+    type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
+    type Shape = ([i32; 3], Vec<[i32; 6]>);
+    type Located = Option<([i32; 3], StructureKeys)>;
+
+    fn noise(world: &WorldGenerator) -> TestResult<&VanillaGenerator> {
+        let WorldGenerator::Noise(generator) = world else {
+            return Err("fixture requires a Noise generator".into());
+        };
+        Ok(generator)
+    }
+
+    fn world(biome: &str) -> WorldGenerator {
+        let source = BiomeSource::Fixed {
+            biome: biome.to_owned(),
+            biome_type: "minecraft:fixed".to_owned(),
+        };
+        let enabled = ["minecraft:swamp_huts".to_owned()];
+        WorldGenerator::Noise(Box::new(VanillaGenerator::new_with_all_settings(
+            Seed(SEED),
+            Dimension::OVERWORLD,
+            None,
+            Some(&source),
+            Some(&enabled),
+        )))
+    }
+
+    fn shape(start: &StructurePosition) -> TestResult<Shape> {
+        let position = &start.start_pos.0;
+        let collector = start
+            .collector
+            .lock()
+            .map_err(|_| "structure collector lock poisoned")?;
+        let boxes = collector
+            .pieces
+            .iter()
+            .map(|piece| {
+                let bounds = piece.bounding_box();
+                [
+                    bounds.min.x,
+                    bounds.min.y,
+                    bounds.min.z,
+                    bounds.max.x,
+                    bounds.max.y,
+                    bounds.max.z,
+                ]
+            })
+            .collect();
+        Ok(([position.x, position.y, position.z], boxes))
+    }
+
+    fn generate(
+        world: &WorldGenerator,
+        chunk_pos: (i32, i32),
+        biome_id: u8,
+    ) -> TestResult<Option<Shape>> {
+        let generator = noise(world)?;
+        let mut chunk = ProtoChunk::new(chunk_pos.0, chunk_pos.1, world);
+        chunk.step_to_biomes(generator);
+        assert!(!chunk.flat_biome_map.is_empty());
+        assert!(chunk.flat_biome_map.iter().all(|&id| id == biome_id));
+        chunk.set_structure_starts(generator);
+        match chunk.structure_starts.get(&KEY) {
+            Some(StructureInstance::Start(position)) => Ok(Some(shape(position)?)),
+            Some(StructureInstance::Reference(_)) => {
+                Err("start stage unexpectedly stored a reference".into())
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn locate(world: &WorldGenerator, chunk_pos: (i32, i32)) -> Located {
+        find_nearest_structure_start(
+            BlockPos::new(start_block_x(chunk_pos.0), 0, start_block_z(chunk_pos.1)),
+            &StructureSet::SWAMP_HUTS,
+            &[KEY],
+            0,
+            world,
+        )
+        .map(|(position, key)| ([position.0.x, position.0.y, position.0.z], key))
+    }
+
+    #[test]
+    fn locate_preserves_configured_biome_start_and_order() -> TestResult<()> {
+        let set = &StructureSet::SWAMP_HUTS;
+        assert_eq!(set.structures.len(), 1);
+        assert_eq!(set.structures[0].structure, KEY);
+        let StructurePlacementType::RandomSpread(spread) = &set.placement.placement_type else {
+            return Err("fixture requires a random-spread structure set".into());
+        };
+        let candidate =
+            get_structure_chunk_in_region(spread, SEED as i64, 0, 0, set.placement.salt);
+        let allowed = ProtoChunk::get_allowed_biomes(set);
+        assert!(allowed.contains(&u16::from(Biome::SWAMP.id)));
+        assert!(!allowed.contains(&u16::from(Biome::PLAINS.id)));
+        let mut expected = Vec::new();
+        let mut actual = Vec::new();
+
+        for (name, id, valid) in [
+            ("minecraft:swamp", Biome::SWAMP.id, true),
+            ("minecraft:plains", Biome::PLAINS.id, false),
+        ] {
+            let generation_first = world(name);
+            let generator = noise(&generation_first)?;
+            assert!(should_generate_structure(
+                &set.placement,
+                &generator.structure_calculator,
+                candidate.0,
+                candidate.1,
+                &generator.global_structure_cache,
+            ));
+            let baseline = generate(&generation_first, candidate, id)?;
+            assert_eq!(baseline.is_some(), valid);
+            if let Some((_, boxes)) = &baseline {
+                assert_eq!(boxes.len(), 1);
+            }
+            // Current locate reports a chunk origin, not the structure generation stub.
+            let warm_found = locate(&generation_first, candidate);
+            assert_eq!(warm_found.is_some(), valid);
+
+            let locate_first = world(name);
+            let cold_found = locate(&locate_first, candidate);
+            let after_locate = generate(&locate_first, candidate, id)?;
+            expected.push((warm_found, baseline));
+            actual.push((cold_found, after_locate));
+        }
+
+        // Run both nonvacuous generation controls before checking the two histories.
+        assert_eq!(
+            actual, expected,
+            "locate changed configured-biome starts/order"
+        );
+        Ok(())
+    }
 }
