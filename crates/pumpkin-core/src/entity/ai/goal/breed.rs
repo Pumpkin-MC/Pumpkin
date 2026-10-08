@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
@@ -9,6 +9,12 @@ use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob, r#type::from_type};
 
 use super::{Controls, Goal};
+
+#[cfg(test)]
+mod tests;
+
+// Protect both parents, including overlapping pairs, without taking goal-selector locks.
+static BREEDING_COMPLETION: Mutex<()> = Mutex::new(());
 
 pub struct BreedGoal {
     speed: f64,
@@ -69,6 +75,27 @@ impl BreedGoal {
         let entity = mob.get_entity();
         let world = entity.world.load();
 
+        {
+            let _completion = BREEDING_COMPLETION
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // A different goal may have completed after should_continue checked the mate.
+            if !mob_entity.is_in_love()
+                || !mob_entity.is_breeding_ready()
+                || !mate.is_in_love()
+                || !mate.is_breeding_ready()
+            {
+                return;
+            }
+
+            mob_entity.reset_love_ticks();
+            mob_entity
+                .breeding_cooldown
+                .store(6000, std::sync::atomic::Ordering::Relaxed);
+            mate.reset_love();
+            mate.set_breeding_cooldown(6000);
+        };
+        // Stats, advancements and spawning can invoke plugins; never hold the lock across them.
         let player_opt = mob_entity
             .breeder
             .load()
@@ -90,14 +117,6 @@ impl BreedGoal {
                 &format!("minecraft:{entity_type_name}"),
             );
         }
-
-        mob_entity.reset_love_ticks();
-        mob_entity
-            .breeding_cooldown
-            .store(6000, std::sync::atomic::Ordering::Relaxed);
-
-        mate.reset_love();
-        mate.set_breeding_cooldown(6000);
 
         let parent_pos = entity.pos.load();
         let baby = from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4());
