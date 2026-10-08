@@ -881,6 +881,22 @@ impl HostMob for PluginHostState {
         Ok(entity.get_entity().get_frozen_ticks())
     }
 
+    fn set_leash_holder(
+        &mut self,
+        this: Resource<WitMob>,
+        holder: Option<Resource<Entity>>,
+    ) -> wasmtime::Result<()> {
+        let entity = self.get(&this)?.clone();
+        match holder {
+            Some(h) => {
+                let holder = self.get(&h)?.clone();
+                entity.get_entity().leash_to(holder);
+            }
+            None => entity.get_entity().unleash(),
+        }
+        Ok(())
+    }
+
     fn drop(&mut self, rep: Resource<WitMob>) -> wasmtime::Result<()> {
         self.drop(rep)
     }

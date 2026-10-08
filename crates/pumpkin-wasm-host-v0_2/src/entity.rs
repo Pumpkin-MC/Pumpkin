@@ -443,6 +443,74 @@ impl HostEntity for PluginHostState {
         Ok(result)
     }
 
+    fn is_leashed(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = self.get(&entity)?;
+        Ok(entity.get_entity().is_leashed())
+    }
+
+    fn get_leash_holder(
+        &mut self,
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Option<Resource<Entity>>> {
+        let entity = self.get(&entity)?.clone();
+        let holder = entity
+            .get_entity()
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        match holder {
+            Some(h) => {
+                Ok(Some(self.add(h).map_err(|_| {
+                    wasmtime::Error::msg("failed to add entity resource")
+                })?))
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn get_leashed_entities(
+        &mut self,
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Vec<Resource<Entity>>> {
+        let holder = self.get(&entity)?.clone();
+        let holder_id = holder.get_entity().entity_id;
+        let world = holder.get_entity().world.load_full();
+
+        let mut candidates: Vec<Arc<dyn pumpkin_core::entity::EntityBase>> = Vec::new();
+        for e in world.entities.load().iter() {
+            candidates.push(Arc::clone(e));
+        }
+        for p in world.players.load().iter() {
+            candidates.push(p.clone() as Arc<dyn pumpkin_core::entity::EntityBase>);
+        }
+
+        let mut result = Vec::new();
+        for e in candidates {
+            let ent = e.get_entity();
+            if ent.entity_id == holder_id {
+                continue;
+            }
+            let is_leashed_to_holder = ent
+                .leashed_to
+                .try_lock()
+                .ok()
+                .and_then(|guard| {
+                    guard
+                        .as_ref()
+                        .map(|h| h.get_entity().entity_id == holder_id)
+                })
+                .unwrap_or(false);
+            if is_leashed_to_holder {
+                result.push(
+                    self.add(e)
+                        .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?,
+                );
+            }
+        }
+        Ok(result)
+    }
+
     fn get_bounding_box(&mut self, entity: Resource<Entity>) -> wasmtime::Result<WitBoundingBox> {
         let entity = self.get(&entity)?;
         let bb = entity.get_entity().bounding_box.load();
