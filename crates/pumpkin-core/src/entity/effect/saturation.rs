@@ -13,11 +13,12 @@ impl MobEffect for SaturationMobEffect {
         if let Some(entity) = world.get_entity_by_id(living.entity.entity_id)
             && let Some(player) = entity.get_player()
         {
-            let hunger = amplifier + 1;
+            // Food is capped, but saturation must retain the full gain at amplifier 255.
+            let hunger = amplifier.saturating_add(1);
             player.hunger_manager.add_hunger(hunger);
             player
                 .hunger_manager
-                .add_saturation(f32::from(hunger) * 2.0);
+                .add_saturation((f32::from(amplifier) + 1.0) * 2.0);
         }
     }
 }
