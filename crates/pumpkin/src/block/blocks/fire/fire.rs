@@ -34,7 +34,6 @@ impl FireBlock {
         30 + rand::rng().random_range(0..10)
     }
 
-
     fn is_flammable(id: BlockStateId) -> bool {
         let block = id.to_block();
 
@@ -259,11 +258,7 @@ impl BlockBehaviour for FireBlock {
             player: None,
             use_item_on: None,
         }) {
-            world.set_block_state(
-                pos,
-                Block::AIR.default_state.id,
-                BlockFlags::NOTIFY_ALL,
-            );
+            world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
             return;
         }
 
@@ -291,11 +286,7 @@ impl BlockBehaviour for FireBlock {
         if !infiniburn && Self::is_near_rain(world.as_ref(), pos) {
             let rain_chance = 0.2 + (age as f32) * 0.03;
             if rand::random::<f32>() < rain_chance {
-                world.set_block_state(
-                    pos,
-                    Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                );
+                world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
                 return;
             }
         }
@@ -314,11 +305,7 @@ impl BlockBehaviour for FireBlock {
             if !Self::are_blocks_around_flammable(world.as_ref(), pos) {
                 let block_below_state = world.get_block_state(&pos.down());
                 if !block_below_state.is_side_solid(BlockDirection::Up) || new_age > 3 {
-                    world.set_block_state(
-                        pos,
-                        Block::AIR.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    );
+                    world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
                     return;
                 }
             }
@@ -328,11 +315,7 @@ impl BlockBehaviour for FireBlock {
                 && rand::rng().random_range(0..4) == 0
                 && !Self::is_flammable(world.get_block_state_id(&pos.down()))
             {
-                world.set_block_state(
-                    pos,
-                    Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                );
+                world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
                 return;
             }
         }
@@ -470,4 +453,3 @@ impl BlockBehaviour for FireBlock {
         }
     }
 }
-
