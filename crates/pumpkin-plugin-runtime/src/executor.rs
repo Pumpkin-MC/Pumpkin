@@ -670,7 +670,9 @@ where
         F: Future<Output = R> + Send,
     {
         let context = self.next_reentry_context()?;
-        self.pump_reentry_with_context(store, context, future).await
+        let (registration, receiver) = self.shared.reentry.register(context);
+        self.pump_reentry_with_context(store, context, registration, receiver, future)
+            .await
     }
 
     fn next_reentry_context(&self) -> wasmtime::Result<ReentryContext> {
@@ -688,13 +690,14 @@ where
         &self,
         store: &mut S,
         context: ReentryContext,
+        mut registration: ReentryRegistration<T>,
+        mut receiver: mpsc::Receiver<Box<dyn GuestStoreJob<T>>>,
         future: F,
     ) -> wasmtime::Result<R>
     where
         S: AsContextMut<Data = T> + Send,
         F: Future<Output = R> + Send,
     {
-        let (mut registration, mut receiver) = self.shared.reentry.register(context);
         let scoped_future = scope(context, future);
         tokio::pin!(scoped_future);
 
@@ -724,6 +727,10 @@ where
         F: FnOnce() -> R + Send + 'static,
     {
         let context = self.next_reentry_context()?;
+        // The operation can call back into this Store as soon as it is spawned,
+        // so the scope has to exist before then or the callback is queued
+        // behind the guest call that is waiting for it.
+        let (registration, reentry_receiver) = self.shared.reentry.register(context);
         let (result, receiver) = oneshot::channel();
         self.shared
             .spawner
@@ -738,7 +745,7 @@ where
                 ))
             })?;
 
-        self.pump_reentry_with_context(store, context, receiver)
+        self.pump_reentry_with_context(store, context, registration, reentry_receiver, receiver)
             .await?
             .map_err(|_| {
                 wasmtime::Error::msg("Synchronous Wasm plugin host operation did not complete")
