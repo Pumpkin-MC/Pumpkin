@@ -1,5 +1,6 @@
 use pumpkin_data::{Block, BlockStateId};
 use pumpkin_nbt::NbtCompound;
+use pumpkin_world::{CURRENT_MC_DATA_VERSION, CURRENT_MC_VERSION};
 
 use crate::error::{GameTestError, GameTestResult};
 
@@ -56,6 +57,15 @@ struct PaletteEntry {
 
 impl GameTestStructureTemplate {
     pub fn from_nbt(structure: &NbtCompound) -> GameTestResult<Self> {
+        let data_version = structure
+            .get_int("DataVersion")
+            .ok_or_else(|| invalid_structure("Structure is missing integer 'DataVersion'"))?;
+        if data_version != CURRENT_MC_DATA_VERSION {
+            return Err(invalid_structure(format!(
+                "Unsupported structure DataVersion {data_version}; expected {CURRENT_MC_DATA_VERSION} for Minecraft {CURRENT_MC_VERSION}"
+            )));
+        }
+
         let size = read_vec3(structure, "size")?;
         if size.iter().any(|axis| *axis <= 0) {
             return Err(invalid_structure(format!(
@@ -166,14 +176,14 @@ fn resolve_palette(structure: &NbtCompound) -> GameTestResult<Vec<PaletteEntry>>
             .extract_compound()
             .ok_or_else(|| invalid_structure(format!("Palette entry {index} is not a compound")))?;
         let name = entry
-            .get_string("Name")
-            .ok_or_else(|| invalid_structure(format!("Palette entry {index} is missing 'Name'")))?;
+            .get_string("id")
+            .ok_or_else(|| invalid_structure(format!("Palette entry {index} is missing 'id'")))?;
         let block = Block::from_name(name).ok_or_else(|| {
             invalid_structure(format!("Unknown block '{name}' in structure palette"))
         })?;
 
         let mut test_mode = None;
-        let state = if let Some(properties) = entry.get_compound("Properties") {
+        let state = if let Some(properties) = entry.get_compound("properties") {
             let mut property_pairs = Vec::with_capacity(properties.child_tags.len());
             for (property_name, property_value) in &properties.child_tags {
                 let property_value = property_value.extract_string().ok_or_else(|| {
@@ -220,4 +230,55 @@ fn resolve_palette(structure: &NbtCompound) -> GameTestResult<Vec<PaletteEntry>>
 
 fn invalid_structure(message: impl Into<String>) -> GameTestError {
     GameTestError::InvalidStructure(message.into())
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use std::io::Cursor;
+
+    use pumpkin_nbt::nbt_compress::read_gzip_compound_tag;
+    use pumpkin_world::generation::structure::template::get_template;
+
+    use super::*;
+
+    #[test]
+    fn validates_structure_data_version() {
+        let bytes = include_bytes!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/structure/summon_cat.nbt"
+        );
+        let mut structure = read_gzip_compound_tag(Cursor::new(bytes))
+            .expect("test structure should contain valid NBT");
+        assert!(GameTestStructureTemplate::from_nbt(&structure).is_ok());
+
+        let creeper_bytes = include_bytes!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/structure/creeper_should_run_from_cat.nbt"
+        );
+        let creeper_structure = read_gzip_compound_tag(Cursor::new(creeper_bytes))
+            .expect("creeper structure should contain valid NBT");
+        assert!(GameTestStructureTemplate::from_nbt(&creeper_structure).is_ok());
+
+        structure.put_int("DataVersion", CURRENT_MC_DATA_VERSION - 1);
+        assert!(matches!(
+            GameTestStructureTemplate::from_nbt(&structure),
+            Err(GameTestError::InvalidStructure(message)) if message.contains("Unsupported structure DataVersion")
+        ));
+
+        structure.child_tags.remove("DataVersion");
+        assert!(matches!(
+            GameTestStructureTemplate::from_nbt(&structure),
+            Err(GameTestError::InvalidStructure(message)) if message.contains("DataVersion")
+        ));
+    }
+
+    #[test]
+    fn embedded_structure_uses_current_data_version() {
+        let template = get_template("pumpkin:summon_cat").expect("embedded structure should exist");
+        let structure = template.save();
+        assert_eq!(
+            structure.get_int("DataVersion"),
+            Some(CURRENT_MC_DATA_VERSION)
+        );
+        assert!(GameTestStructureTemplate::from_nbt(&structure).is_ok());
+    }
 }

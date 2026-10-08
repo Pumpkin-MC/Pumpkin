@@ -1360,7 +1360,7 @@ impl StructureTemplate {
         ];
         tag.put_list(Self::SIZE_TAG, size_tags);
 
-        tag.put_int("DataVersion", 4189);
+        tag.put_int("DataVersion", crate::CURRENT_MC_DATA_VERSION);
 
         tag
     }
