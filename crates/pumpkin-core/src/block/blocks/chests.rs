@@ -33,7 +33,11 @@ use crate::world::World;
 use crate::world::loot::fill_chest_inventory;
 use pumpkin_data::BlockState;
 
-struct ChestScreenFactory(Arc<dyn Inventory>);
+struct ChestScreenFactory {
+    inventory: Arc<dyn Inventory>,
+    first_chest: Arc<dyn BlockEntity>,
+    second_chest: Option<Arc<dyn BlockEntity>>,
+}
 
 impl ScreenHandlerFactory for ChestScreenFactory {
     fn create_screen_handler(
@@ -42,10 +46,20 @@ impl ScreenHandlerFactory for ChestScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
-        let concrete_handler = if self.0.size() > 27 {
-            create_generic_9x6(sync_id, player_inventory, self.0.clone(), player)
+        if player.is_spectator()
+            && (self.first_chest.has_loot_table()
+                || self
+                    .second_chest
+                    .as_ref()
+                    .is_some_and(|chest| chest.has_loot_table()))
+        {
+            return None;
+        }
+
+        let concrete_handler = if self.inventory.size() > 27 {
+            create_generic_9x6(sync_id, player_inventory, self.inventory.clone(), player)
         } else {
-            create_generic_9x3(sync_id, player_inventory, self.0.clone(), player)
+            create_generic_9x3(sync_id, player_inventory, self.inventory.clone(), player)
         };
 
         let concrete_arc = Arc::new(Mutex::new(concrete_handler));
@@ -54,7 +68,7 @@ impl ScreenHandlerFactory for ChestScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        if self.0.size() > 27 {
+        if self.inventory.size() > 27 {
             pumpkin_macros::translate_cross!(
                 translation::java::CONTAINER_CHESTDOUBLE,
                 translation::bedrock::CONTAINER_CHESTDOUBLE
@@ -173,7 +187,7 @@ fn get_chest_screen_handler_factory(
     args: GetScreenHandlerFactoryArgs<'_>,
 ) -> Option<Box<dyn ScreenHandlerFactory>> {
     let state = args.world.get_block_state_id(args.position);
-    let first_chest = args.world.get_block_entity(args.position);
+    let first_chest = args.world.get_block_entity(args.position)?;
 
     let player_is_spectator = args.player.gamemode.load() == GameMode::Spectator;
 
@@ -195,11 +209,11 @@ fn get_chest_screen_handler_factory(
     };
 
     // Unpack deferred loot table on first open (non-spectator only).
-    if !player_is_spectator && let Some(ref entity) = first_chest {
-        unpack(entity);
+    if !player_is_spectator {
+        unpack(&first_chest);
     }
 
-    let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
+    let first_inventory = first_chest.clone().get_inventory()?;
 
     if is_chest_blocked(args.world, args.position) {
         return None;
@@ -212,33 +226,33 @@ fn get_chest_screen_handler_factory(
         }
     }
 
-    // Both halves of a double chest are unpacked at once, like vanilla's CompoundContainer.
-    if !player_is_spectator
-        && let Some(direction) = connected_towards
-        && let Some(second) = args
-            .world
+    let second_chest = connected_towards.and_then(|direction| {
+        args.world
             .get_block_entity(&args.position.offset(direction.to_offset()))
-    {
-        unpack(&second);
+    });
+
+    // Both halves of a double chest are unpacked at once, like vanilla's CompoundContainer.
+    if !player_is_spectator && let Some(second) = &second_chest {
+        unpack(second);
     }
 
-    let inventory = if let Some(direction) = connected_towards
-        && let Some(second_inventory) = args
-            .world
-            .get_block_entity(&args.position.offset(direction.to_offset()))
-            .and_then(BlockEntity::get_inventory)
-    {
-        // Vanilla: chestType == ChestType.RIGHT ? DoubleBlockProperties.Type.FIRST : DoubleBlockProperties.Type.SECOND;
-        if matches!(chest_props.r#type, ChestType::Right) {
-            DoubleInventory::new(first_inventory, second_inventory)
+    let inventory =
+        if let Some(second_inventory) = second_chest.clone().and_then(BlockEntity::get_inventory) {
+            // Vanilla: chestType == ChestType.RIGHT ? DoubleBlockProperties.Type.FIRST : DoubleBlockProperties.Type.SECOND;
+            if matches!(chest_props.r#type, ChestType::Right) {
+                DoubleInventory::new(first_inventory, second_inventory)
+            } else {
+                DoubleInventory::new(second_inventory, first_inventory)
+            }
         } else {
-            DoubleInventory::new(second_inventory, first_inventory)
-        }
-    } else {
-        first_inventory
-    };
+            first_inventory
+        };
 
-    Some(Box::new(ChestScreenFactory(inventory)))
+    Some(Box::new(ChestScreenFactory {
+        inventory,
+        first_chest,
+        second_chest,
+    }))
 }
 
 fn normal_use_chest_impl(args: &NormalUseArgs<'_>) -> BlockActionResult {

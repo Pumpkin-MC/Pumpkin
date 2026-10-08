@@ -45,6 +45,7 @@ use pumpkin_protocol::bedrock::server::{
     text::SText,
 };
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::translation::Locale;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
@@ -5843,7 +5844,13 @@ impl Player {
             self.open_container_pos.store(block_pos);
             Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
         } else {
-            //TODO: Send message if spectator
+            if self.is_spectator() && self.client.java().is_some() {
+                self.send_system_message_raw(
+                    &TextComponent::translate(translation::java::CONTAINER_SPECTATORCANTOPEN, [])
+                        .color_named(NamedColor::Red),
+                    true,
+                );
+            }
 
             None
         }
