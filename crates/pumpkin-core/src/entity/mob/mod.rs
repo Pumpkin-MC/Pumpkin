@@ -750,7 +750,7 @@ impl MobEntity {
         let pos = entity.pos.load();
         let players = world.players.load();
 
-        let nearest_dist_sq = players
+        let Some(nearest_dist_sq) = players
             .iter()
             .filter(|p| p.gamemode.load() != pumpkin_util::GameMode::Spectator)
             .map(|p| {
@@ -760,15 +760,13 @@ impl MobEntity {
                 let dz = pp.z - pos.z;
                 dx * dx + dy * dy + dz * dz
             })
-            .fold(f64::MAX, f64::min);
+            .reduce(f64::min)
+        else {
+            return;
+        };
 
         // Mobs like a converting zombie villager refuse to despawn (`removeWhenFarAway`).
         if !mob.remove_when_far_away(nearest_dist_sq) {
-            return;
-        }
-
-        if nearest_dist_sq == f64::MAX {
-            mob.get_entity().remove();
             return;
         }
 

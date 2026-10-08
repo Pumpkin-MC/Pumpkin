@@ -52,6 +52,8 @@ use tokio_util::task::TaskTracker;
 use tracing::{debug, error, warn};
 
 pub mod chunk_data;
+#[cfg(test)]
+mod despawn_tests;
 pub mod handshake;
 pub mod login;
 mod outgoing;
