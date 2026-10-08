@@ -52,7 +52,7 @@ impl AttackType {
             return Self::Critical;
         }
 
-        if sword && is_strong && !is_bedrock {
+        if sword && is_strong && on_ground && !is_bedrock {
             return Self::Sweeping;
         }
 
