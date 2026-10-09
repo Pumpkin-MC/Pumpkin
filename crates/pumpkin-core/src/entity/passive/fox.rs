@@ -8,8 +8,8 @@ use pumpkin_data::Block;
 use pumpkin_data::block_properties::{
     CaveVinesLikeProperties, CaveVinesPlantLikeProperties, NetherWartLikeProperties,
 };
-use pumpkin_data::data_component_impl::EquipmentSlot;
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::data_component_impl::{EquipmentSlot, FoodImpl};
+use pumpkin_data::entity::{EntityType, MobCategory};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -26,7 +26,6 @@ use uuid::Uuid;
 
 use crate::entity::ageable::AgeableMob;
 use crate::entity::ai::goal::active_target::ActiveTargetGoal;
-use crate::entity::ai::goal::avoid_entity::AvoidEntityGoal;
 use crate::entity::ai::goal::breed::BreedGoal;
 use crate::entity::ai::goal::escape_danger::EscapeDangerGoal;
 use crate::entity::ai::goal::follow_parent::FollowParentGoal;
@@ -144,6 +143,7 @@ impl FoxEntity {
 
         mob_arc.init_goals(fox_weak, dyn_mob_weak);
         mob_arc.set_target_goals();
+        mob_arc.mob_entity.set_can_pick_up_loot(true);
         mob_arc.populate_default_equipment();
 
         mob_arc
@@ -453,6 +453,8 @@ impl FoxEntity {
             .insert(EquipmentSlot::MAIN_HAND, item.clone());
         drop(equipment);
         self.mob_entity
+            .set_guaranteed_drop(&EquipmentSlot::MAIN_HAND);
+        self.mob_entity
             .living_entity
             .send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, item)]);
     }
@@ -532,10 +534,33 @@ impl FoxEntity {
             SoundCategory::Neutral,
             &self.get_entity().pos.load(),
         );
+        self.mob_entity
+            .living_entity
+            .apply_consumable_effects(self, item);
+
+        if let Some(food) = item.get_data_component::<FoodImpl>() {
+            self.mob_entity.living_entity.heal(food.nutrition as f32);
+        }
+
         let mut next_item = item.clone();
         next_item.item_count = next_item.item_count.saturating_sub(1);
         if next_item.item_count == 0 {
-            self.set_mouth_item(ItemStack::EMPTY.clone());
+            let remainder_item = match item.get_item().id {
+                id if id == Item::MUSHROOM_STEW.id
+                    || id == Item::BEETROOT_SOUP.id
+                    || id == Item::RABBIT_STEW.id
+                    || id == Item::SUSPICIOUS_STEW.id =>
+                {
+                    Some(&Item::BOWL)
+                }
+                id if id == Item::HONEY_BOTTLE.id => Some(&Item::GLASS_BOTTLE),
+                _ => None,
+            };
+            if let Some(remainder) = remainder_item {
+                self.set_mouth_item(ItemStack::new(1, remainder));
+            } else {
+                self.set_mouth_item(ItemStack::EMPTY.clone());
+            }
         } else {
             self.set_mouth_item(next_item);
         }
@@ -565,6 +590,96 @@ impl FoxEntity {
         }
     }
 
+    fn tick_eating(&self, world: &World) {
+        let mouth_item = self.get_mouth_item();
+        if self.can_eat(&mouth_item) {
+            let ticks = self.ticks_since_eaten.fetch_add(1, Ordering::Relaxed) + 1;
+            if ticks > 600 {
+                self.eat_food_in_mouth(world, &mouth_item);
+                self.ticks_since_eaten.store(0, Ordering::Relaxed);
+            } else if ticks > 560 && rand::rng().random_range(0..10) == 0 {
+                world.play_sound(
+                    Sound::EntityFoxEat,
+                    SoundCategory::Neutral,
+                    &self.get_entity().pos.load(),
+                );
+                world.send_entity_status(
+                    self.get_entity(),
+                    pumpkin_data::entity::EntityStatus::FoxEat,
+                    None,
+                );
+            }
+        } else {
+            self.ticks_since_eaten.store(0, Ordering::Relaxed);
+        }
+    }
+
+    fn tick_touch_item_pickup(&self, world: &World) {
+        if !self.can_move() {
+            return;
+        }
+        let fox_pos = self.get_entity().pos.load();
+        let entities = world.entities.load();
+        for candidate in entities.iter() {
+            let Some(item_ent) = candidate.get_item_entity() else {
+                continue;
+            };
+            if item_ent.get_pickup_delay() > 0 || !item_ent.get_entity().is_alive() {
+                continue;
+            }
+            let item_pos = item_ent.get_entity().pos.load();
+            if fox_pos.squared_distance_to_vec(&item_pos) <= 2.25 {
+                let stack = item_ent
+                    .get_item_stack()
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if !stack.is_empty() && self.can_hold_item(&stack) {
+                    let prev_item = self.get_mouth_item();
+                    if !prev_item.is_empty() {
+                        self.spit_out_item(&prev_item);
+                    }
+                    if stack.item_count > 1 {
+                        let mut remainder = stack.clone();
+                        remainder.item_count = remainder.item_count.saturating_sub(1);
+                        let dropped_item = crate::entity::item::ItemEntity::new(
+                            Entity::new(world.clone(), fox_pos, &EntityType::ITEM),
+                            remainder,
+                        );
+                        world.spawn_entity(Arc::new(dropped_item));
+                    }
+                    let mut single = stack;
+                    single.item_count = 1;
+                    self.set_mouth_item(single);
+                    self.ticks_since_eaten.store(0, Ordering::Relaxed);
+                    item_ent.get_entity().remove();
+                    break;
+                }
+            }
+        }
+    }
+
+    fn tick_crouch_and_interest(&self) {
+        let target = self.mob_entity.get_target();
+        if target.as_ref().is_none_or(|t| !t.is_alive()) {
+            self.set_crouching(false);
+            self.set_interested(false);
+        }
+
+        if self.is_crouching() {
+            let amount = self.crouch_amount.load();
+            let next = (amount + 0.2).min(5.0);
+            self.crouch_amount.store(next);
+        } else {
+            self.crouch_amount.store(0.0);
+        }
+
+        let curr_angle = self.interested_angle.load();
+        let target_angle = if self.is_interested() { 1.0 } else { 0.0 };
+        self.interested_angle
+            .store(curr_angle + (target_angle - curr_angle) * 0.4);
+    }
+
     fn fox_tick(&self) {
         let entity = self.get_entity();
         if !entity.is_alive() {
@@ -590,25 +705,11 @@ impl FoxEntity {
             living.set_speed(0.0);
         }
 
-        let mouth_item = self.get_mouth_item();
-        if self.can_eat(&mouth_item) {
-            let ticks = self.ticks_since_eaten.fetch_add(1, Ordering::Relaxed) + 1;
-            if ticks > 600 {
-                self.eat_food_in_mouth(&world, &mouth_item);
-                self.ticks_since_eaten.store(0, Ordering::Relaxed);
-            } else if ticks > 560 && rand::rng().random_range(0..10) == 0 {
-                world.play_sound(
-                    Sound::EntityFoxEat,
-                    SoundCategory::Neutral,
-                    &entity.pos.load(),
-                );
-                world.send_entity_status(entity, pumpkin_data::entity::EntityStatus::FoxEat, None);
-            }
-        } else {
-            self.ticks_since_eaten.store(0, Ordering::Relaxed);
-        }
+        self.tick_eating(&world);
 
         if entity.is_alive() {
+            self.tick_touch_item_pickup(&world);
+
             let sound_time = self.ambient_sound_time.fetch_add(1, Ordering::Relaxed);
             if sound_time > 0 && rand::rng().random_range(0..1000) < sound_time {
                 self.ambient_sound_time.store(-80, Ordering::Relaxed);
@@ -616,24 +717,7 @@ impl FoxEntity {
             }
         }
 
-        let target = self.mob_entity.get_target();
-        if target.as_ref().is_none_or(|t| !t.is_alive()) {
-            self.set_crouching(false);
-            self.set_interested(false);
-        }
-
-        if self.is_crouching() {
-            let amount = self.crouch_amount.load();
-            let next = (amount + 0.2).min(5.0);
-            self.crouch_amount.store(next);
-        } else {
-            self.crouch_amount.store(0.0);
-        }
-
-        let curr_angle = self.interested_angle.load();
-        let target_angle = if self.is_interested() { 1.0 } else { 0.0 };
-        self.interested_angle
-            .store(curr_angle + (target_angle - curr_angle) * 0.4);
+        self.tick_crouch_and_interest();
 
         if self.is_sleeping() {
             let vel = entity.velocity.load();
@@ -751,10 +835,22 @@ impl Mob for FoxEntity {
 
         let mut trusted_list = Vec::new();
         if let Some(uuid) = self.trusted_0.load() {
-            trusted_list.push(pumpkin_nbt::tag::NbtTag::String(uuid.to_string().into()));
+            let u = uuid.as_u128();
+            trusted_list.push(pumpkin_nbt::tag::NbtTag::IntArray(vec![
+                (u >> 96) as i32,
+                (u >> 64) as i32,
+                (u >> 32) as i32,
+                u as i32,
+            ]));
         }
         if let Some(uuid) = self.trusted_1.load() {
-            trusted_list.push(pumpkin_nbt::tag::NbtTag::String(uuid.to_string().into()));
+            let u = uuid.as_u128();
+            trusted_list.push(pumpkin_nbt::tag::NbtTag::IntArray(vec![
+                (u >> 96) as i32,
+                (u >> 64) as i32,
+                (u >> 32) as i32,
+                u as i32,
+            ]));
         }
         if !trusted_list.is_empty() {
             nbt.put_list("Trusted", trusted_list);
@@ -772,10 +868,20 @@ impl Mob for FoxEntity {
         self.clear_trusted();
         if let Some(list) = nbt.get_list("Trusted") {
             for entry in list {
-                if let pumpkin_nbt::tag::NbtTag::String(s) = entry
-                    && let Ok(uuid) = Uuid::parse_str(s)
-                {
-                    self.add_trusted(uuid);
+                match entry {
+                    pumpkin_nbt::tag::NbtTag::IntArray(arr) if arr.len() == 4 => {
+                        let value = ((arr[0] as u128) << 96)
+                            | (((arr[1] as u32) as u128) << 64)
+                            | (((arr[2] as u32) as u128) << 32)
+                            | ((arr[3] as u32) as u128);
+                        self.add_trusted(Uuid::from_u128(value));
+                    }
+                    pumpkin_nbt::tag::NbtTag::String(s) => {
+                        if let Ok(uuid) = Uuid::parse_str(s) {
+                            self.add_trusted(uuid);
+                        }
+                    }
+                    _ => {}
                 }
             }
         }
@@ -821,34 +927,63 @@ pub fn is_alertable(fox: &FoxEntity, world: &World) -> bool {
         if candidate.get_entity().entity_uuid == fox.get_entity().entity_uuid {
             continue;
         }
+        if !candidate.is_alive() {
+            continue;
+        }
         let c_entity = candidate.get_entity();
-        let dist_sq = pos.squared_distance_to_vec(&c_entity.pos.load());
+        let c_pos = c_entity.pos.load();
+        let dx = c_pos.x - pos.x;
+        let dy = c_pos.y - pos.y;
+        let dz = c_pos.z - pos.z;
 
-        if (*c_entity.entity_type == EntityType::CHICKEN
-            || *c_entity.entity_type == EntityType::RABBIT)
-            && dist_sq <= 144.0
+        // Java: boundingBox.inflate(12.0D, 6.0D, 12.0D)
+        if (dx * dx + dz * dz) > 144.0 || dy.abs() > 6.0 {
+            continue;
+        }
+
+        // Foxes do not alert each other
+        if *c_entity.entity_type == EntityType::FOX {
+            continue;
+        }
+
+        // Monsters, chickens, and rabbits always alert
+        if c_entity.entity_type.category == &MobCategory::MONSTER
+            || *c_entity.entity_type == EntityType::CHICKEN
+            || *c_entity.entity_type == EntityType::RABBIT
         {
             return true;
         }
-        if *c_entity.entity_type == EntityType::POLAR_BEAR && dist_sq <= 256.0 {
+
+        // Polar bears alert
+        if *c_entity.entity_type == EntityType::POLAR_BEAR {
             return true;
         }
-        if *c_entity.entity_type == EntityType::WOLF && dist_sq <= 196.0 {
-            return true;
+
+        // Tamable animals (e.g. wolves): tame animals do not alert, untamed do
+        if let Some(mob) = candidate.get_mob()
+            && let Some(tamable) = mob.as_tamable()
+        {
+            if !tamable.is_tame() {
+                return true;
+            }
+            continue;
         }
+
+        // Players: check spectator/creative, trusted, sneaking, sleeping
         if *c_entity.entity_type == EntityType::PLAYER
-            && dist_sq <= 256.0
             && let Some(player) = candidate.get_player()
         {
             let gm = player.gamemode.load();
             if gm == GameMode::Creative || gm == GameMode::Spectator {
                 continue;
             }
-            if !fox.trusts(&player.gameprofile.id)
-                && !player.living_entity.entity.sneaking.load(Ordering::Relaxed)
+            if fox.trusts(&player.gameprofile.id)
+                || player.living_entity.entity.sneaking.load(Ordering::Relaxed)
+                || player.is_sleeping()
             {
-                return true;
+                continue;
             }
+            return true;
         }
     }
     false
@@ -1142,6 +1277,7 @@ impl Goal for FoxAvoidPlayerGoal {
             gm != GameMode::Creative
                 && gm != GameMode::Spectator
                 && !player.living_entity.entity.sneaking.load(Ordering::Relaxed)
+                && !player.is_sleeping()
                 && !fox.trusts(&player.gameprofile.id)
         });
 
@@ -1210,7 +1346,12 @@ impl Goal for FoxAvoidPlayerGoal {
 
 pub struct FoxAvoidEntityGoal {
     fox: Weak<FoxEntity>,
-    inner: AvoidEntityGoal,
+    target_type: &'static EntityType,
+    flee_distance: f64,
+    slow_speed: f64,
+    fast_speed: f64,
+    target: Option<Arc<dyn EntityBase>>,
+    flee_pos: Option<Vector3<f64>>,
 }
 
 impl FoxAvoidEntityGoal {
@@ -1224,8 +1365,49 @@ impl FoxAvoidEntityGoal {
     ) -> Self {
         Self {
             fox,
-            inner: AvoidEntityGoal::new(target_type, distance, slow_speed, fast_speed),
+            target_type,
+            flee_distance: distance,
+            slow_speed,
+            fast_speed,
+            target: None,
+            flee_pos: None,
         }
+    }
+
+    fn find_threat(&self, fox: &FoxEntity) -> Option<Arc<dyn EntityBase>> {
+        let pos = fox.get_entity().pos.load();
+        let world = fox.get_entity().world.load();
+        let entities = world.entities.load();
+        let mut closest: Option<(f64, Arc<dyn EntityBase>)> = None;
+
+        for candidate in entities.iter() {
+            let c_entity = candidate.get_entity();
+            if c_entity.entity_uuid == fox.get_entity().entity_uuid {
+                continue;
+            }
+            if !candidate.is_alive() {
+                continue;
+            }
+            if c_entity.entity_type != self.target_type {
+                continue;
+            }
+            // If wolf, ignore tamed wolves
+            if self.target_type == &EntityType::WOLF
+                && let Some(mob) = candidate.get_mob()
+                && let Some(tamable) = mob.as_tamable()
+                && tamable.is_tame()
+            {
+                continue;
+            }
+            let dist_sq = pos.squared_distance_to_vec(&c_entity.pos.load());
+            if dist_sq <= self.flee_distance * self.flee_distance {
+                match &closest {
+                    Some((best, _)) if dist_sq >= *best => {}
+                    _ => closest = Some((dist_sq, candidate.clone())),
+                }
+            }
+        }
+        closest.map(|(_, e)| e)
     }
 }
 
@@ -1237,7 +1419,21 @@ impl Goal for FoxAvoidEntityGoal {
         if fox.is_defending() {
             return false;
         }
-        self.inner.can_start(mob)
+        let Some(threat) = self.find_threat(&fox) else {
+            return false;
+        };
+        let pos = fox.get_entity().pos.load();
+        let threat_pos = threat.get_entity().pos.load();
+        let Some(flee_pos) = default_random_pos::get_pos_away(mob, 16, 7, threat_pos) else {
+            return false;
+        };
+        if threat_pos.squared_distance_to_vec(&flee_pos) < threat_pos.squared_distance_to_vec(&pos)
+        {
+            return false;
+        }
+        self.target = Some(threat);
+        self.flee_pos = Some(flee_pos);
+        true
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
@@ -1247,26 +1443,51 @@ impl Goal for FoxAvoidEntityGoal {
         if fox.is_defending() {
             return false;
         }
-        self.inner.should_continue(mob)
+        !mob.is_navigator_idle()
     }
 
     fn start(&mut self, mob: &dyn Mob) {
         if let Some(fox) = self.fox.upgrade() {
             fox.clear_states();
         }
-        self.inner.start(mob);
+        if let Some(flee_pos) = self.flee_pos {
+            let mob_pos = mob.get_entity().pos.load();
+            let mut nav = mob
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            nav.set_progress(NavigatorGoal::new(mob_pos, flee_pos, self.slow_speed));
+        }
     }
 
-    fn stop(&mut self, mob: &dyn Mob) {
-        self.inner.stop(mob);
+    fn stop(&mut self, _mob: &dyn Mob) {
+        self.target = None;
+        self.flee_pos = None;
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        self.inner.tick(mob);
+        if let Some(target) = &self.target {
+            let mob_pos = mob.get_entity().pos.load();
+            let threat_pos = target.get_entity().pos.load();
+            let dist_sq = mob_pos.squared_distance_to_vec(&threat_pos);
+            let speed = if dist_sq < 49.0 {
+                self.fast_speed
+            } else {
+                self.slow_speed
+            };
+
+            let mut nav = mob
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            nav.set_speed(speed);
+        }
     }
 
     fn controls(&self) -> Controls {
-        self.inner.controls()
+        Controls::MOVE
     }
 }
 
@@ -1446,6 +1667,17 @@ impl Goal for FoxPounceGoal {
             fox.set_crouching(false);
             fox.set_interested(false);
             return false;
+        }
+
+        // Vanilla: target.getMotionDirection() == target.getDirection()
+        let target_vel = target.get_entity().velocity.load();
+        if target_vel.x.hypot(target_vel.z) > 0.05 {
+            let movement_yaw = (target_vel.z.atan2(target_vel.x).to_degrees() as f32) - 90.0;
+            let facing_yaw = target.get_entity().yaw.load();
+            let yaw_diff = ((movement_yaw - facing_yaw + 180.0).rem_euclid(360.0) - 180.0).abs();
+            if yaw_diff > 45.0 {
+                return false;
+            }
         }
 
         let world = fox.get_entity().world.load();
@@ -2297,7 +2529,13 @@ impl Goal for FoxSearchForItemsGoal {
         let Some(fox) = self.fox.upgrade() else {
             return false;
         };
-        if !fox.get_mouth_item().is_empty() {
+        let mouth_item = fox.get_mouth_item();
+        let mouth_has_food = !mouth_item.is_empty()
+            && mouth_item.has_data_component(pumpkin_data::data_component::DataComponent::Food);
+        if mouth_has_food {
+            return false;
+        }
+        if !mouth_item.is_empty() && fox.ticks_since_eaten.load(Ordering::Relaxed) <= 0 {
             return false;
         }
         if fox.mob_entity.get_target().is_some() || !fox.can_move() {
@@ -2349,10 +2587,10 @@ impl Goal for FoxSearchForItemsGoal {
         let Some(fox) = self.fox.upgrade() else {
             return false;
         };
-        if !fox.get_mouth_item().is_empty() {
-            return false;
-        }
-        if !fox.can_move() {
+        let mouth_item = fox.get_mouth_item();
+        let mouth_has_food = !mouth_item.is_empty()
+            && mouth_item.has_data_component(pumpkin_data::data_component::DataComponent::Food);
+        if mouth_has_food || !fox.can_move() {
             return false;
         }
         self.target_item.as_ref().is_some_and(|item| {
