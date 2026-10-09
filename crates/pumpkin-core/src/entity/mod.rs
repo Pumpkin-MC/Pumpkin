@@ -368,6 +368,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         )
     }
 
+    fn is_alive(&self) -> bool {
+        self.get_living_entity()
+            .map_or_else(|| self.get_entity().is_alive(), LivingEntity::is_alive)
+    }
+
     /// Custom Y-axis velocity drag multiplier applied during `travel_in_air`.
     /// Bats return `Some(0.6)` to match vanilla's `travel()` override.
     fn get_y_velocity_drag(&self) -> Option<f64> {

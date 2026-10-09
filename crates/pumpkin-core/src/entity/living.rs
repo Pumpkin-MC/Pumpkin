@@ -2601,12 +2601,17 @@ impl LivingEntity {
         *last
     }
 
+    #[must_use]
+    pub fn is_alive(&self) -> bool {
+        !self.entity.is_removed() && !self.dead.load(Relaxed) && self.health.load() > 0.0
+    }
+
     pub fn can_take_damage(&self) -> bool {
         !self.entity.invulnerable.load(Ordering::Relaxed) && self.is_part_of_game()
     }
 
     pub fn is_part_of_game(&self) -> bool {
-        !self.is_spectator() && self.entity.is_alive()
+        !self.is_spectator() && self.is_alive()
     }
 
     pub fn can_attack(&self, target: &dyn EntityBase) -> bool {

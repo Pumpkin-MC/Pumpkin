@@ -72,7 +72,7 @@ impl Goal for MeleeAttackGoal {
         let Some(target) = target.as_ref() else {
             return false;
         };
-        if !target.get_entity().is_alive() {
+        if !target.is_alive() {
             return false;
         }
         // TODO: add path when is implemented Navigation
@@ -88,7 +88,7 @@ impl Goal for MeleeAttackGoal {
         let Some(target) = target else {
             return false;
         };
-        if !target.get_entity().is_alive() {
+        if !target.is_alive() {
             return false;
         }
 

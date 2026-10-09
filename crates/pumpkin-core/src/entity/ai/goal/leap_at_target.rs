@@ -37,7 +37,7 @@ impl Goal for LeapAtTargetGoal {
             return false;
         };
 
-        if !target.get_entity().is_alive() {
+        if !target.is_alive() {
             return false;
         }
 

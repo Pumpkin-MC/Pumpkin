@@ -479,19 +479,50 @@ impl MobEntity {
             .add_goal(priority, Box::new(goal));
     }
 
+    pub fn can_attack(&self, target: &dyn EntityBase) -> bool {
+        if !target.is_alive() {
+            return false;
+        }
+        if target.get_entity().entity_type == &EntityType::GHAST {
+            return false;
+        }
+        self.living_entity.can_attack(target)
+    }
+
+    pub fn as_valid_target(
+        &self,
+        target: Option<Arc<dyn EntityBase>>,
+    ) -> Option<Arc<dyn EntityBase>> {
+        let target = target?;
+        if !target.is_alive() {
+            return None;
+        }
+        if !EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity()) {
+            return None;
+        }
+        self.can_attack(target.as_ref()).then_some(target)
+    }
+
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let mut t = self
             .target
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *t = target;
+        *t = self.as_valid_target(target);
     }
 
     pub fn get_target(&self) -> Option<Arc<dyn EntityBase>> {
-        self.target
+        let mut guard = self
+            .target
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(target) = guard.as_ref() {
+            if self.as_valid_target(Some(target.clone())).is_none() {
+                *guard = None;
+                return None;
+            }
+        }
+        guard.clone()
     }
 
     fn set_mob_flag(&self, flag: u8, value: bool) {
@@ -791,6 +822,9 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn can_attack(&self, target: &dyn EntityBase) -> bool {
+        if !target.is_alive() {
+            return false;
+        }
         let target_entity = target.get_entity();
         if target_entity.entity_type == &EntityType::GHAST {
             return false;
@@ -1140,6 +1174,9 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Drops a target the mob is not allowed to attack, such as a creative player.
     fn as_valid_target(&self, target: Option<Arc<dyn EntityBase>>) -> Option<Arc<dyn EntityBase>> {
         let target = target?;
+        if !target.is_alive() {
+            return None;
+        }
         if !EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity()) {
             return None;
         }

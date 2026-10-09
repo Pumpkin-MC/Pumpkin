@@ -240,8 +240,6 @@ impl FoxEntity {
             .target_selector
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        // Remove previous variant target goals
         target_selector.remove_goals::<ActiveTargetGoal>();
 
         let (land_priority, fish_priority) = match self.get_variant() {
@@ -577,7 +575,6 @@ impl FoxEntity {
         let in_water = entity.is_in_water();
         let target = self.mob_entity.get_target();
 
-        // 1:1 Vanilla Fox.java:565-573
         if in_water || target.is_some() || world.is_thundering() {
             self.wake_up();
         }
@@ -619,14 +616,12 @@ impl FoxEntity {
             }
         }
 
-        // Vanilla Fox.java:241-244 — only clear when target is gone or dead
         let target = self.mob_entity.get_target();
-        if target.as_ref().is_none_or(|t| !t.get_entity().is_alive()) {
+        if target.as_ref().is_none_or(|t| !t.is_alive()) {
             self.set_crouching(false);
             self.set_interested(false);
         }
 
-        // Vanilla Fox.java:591-598 — crouch animation
         if self.is_crouching() {
             let amount = self.crouch_amount.load();
             let next = (amount + 0.2).min(5.0);
@@ -1301,10 +1296,10 @@ impl Goal for StalkPreyGoal {
         let Some(target) = mob.get_mob_entity().get_target() else {
             return false;
         };
-        let target_entity = target.get_entity();
-        if !target_entity.is_alive() {
+        if !target.is_alive() {
             return false;
         }
+        let target_entity = target.get_entity();
         let target_type = target_entity.entity_type;
         if target_type != &EntityType::CHICKEN && target_type != &EntityType::RABBIT {
             return false;
@@ -1447,7 +1442,7 @@ impl Goal for FoxPounceGoal {
             fox.set_interested(false);
             return false;
         };
-        if !target.get_entity().is_alive() {
+        if !target.is_alive() {
             fox.set_crouching(false);
             fox.set_interested(false);
             return false;
@@ -1479,7 +1474,7 @@ impl Goal for FoxPounceGoal {
             return false;
         };
         let entity = fox.get_entity();
-        if !target.get_entity().is_alive() || fox.is_faceplanted() {
+        if !target.is_alive() || fox.is_faceplanted() {
             return false;
         }
         let vel = entity.velocity.load();
@@ -1513,7 +1508,6 @@ impl Goal for FoxPounceGoal {
                 (0.0, 0.0)
             };
 
-            // Align entity yaw with the leap trajectory so it faces the target
             let jump_yaw = (uv_z.atan2(uv_x).to_degrees() as f32) - 90.0;
             entity.yaw.store(jump_yaw);
             entity.head_yaw.store(jump_yaw);
@@ -1599,8 +1593,6 @@ impl Goal for FoxPounceGoal {
         let dy = target_pos.y - fox_pos.y;
         let dz = target_pos.z - fox_pos.z;
         let dist_3d_sq = dx * dx + dy * dy + dz * dz;
-
-        // Bite hit check (matches vanilla distanceTo <= 2.0F)
         if dist_3d_sq <= 4.0 {
             mob.get_mob_entity()
                 .try_attack(mob.get_entity(), target.as_ref());
@@ -1793,14 +1785,14 @@ impl Goal for FoxMeleeAttackGoal {
         }
         mob.get_mob_entity()
             .get_target()
-            .is_some_and(|t| t.get_entity().is_alive())
+            .is_some_and(|t| t.is_alive())
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let Some(target) = mob.get_mob_entity().get_target() else {
             return false;
         };
-        target.get_entity().is_alive()
+        target.is_alive()
     }
 
     fn start(&mut self, mob: &dyn Mob) {
@@ -1852,8 +1844,6 @@ impl Goal for FoxMeleeAttackGoal {
         self.update_countdown_ticks = (self.update_countdown_ticks - 1).max(0);
         let in_range = mob.get_mob_entity().is_in_attack_range(target.as_ref());
 
-        // Vanilla MeleeAttackGoal path recalculation throttling:
-        // Updates if countdown expired and target moved >= 1.0 block (or 5% rng)
         let should_update = self.update_countdown_ticks <= 0
             && (self
                 .last_target_pos
@@ -2274,12 +2264,9 @@ impl Goal for FoxEatBerriesGoal {
                 }
                 self.target_block = None;
             }
-        } else {
-            // Vanilla Fox.java:1327-1329: 5% chance per tick to sniff while traveling to berry bush
-            if rand::random::<f32>() < 0.05 {
-                let world = mob.get_entity().world.load();
-                world.play_sound(Sound::EntityFoxSniff, SoundCategory::Neutral, &fox_pos);
-            }
+        } else if rand::random::<f32>() < 0.05 {
+            let world = mob.get_entity().world.load();
+            world.play_sound(Sound::EntityFoxSniff, SoundCategory::Neutral, &fox_pos);
         }
     }
 
@@ -2665,7 +2652,7 @@ impl Goal for DefendTrustedTargetGoal {
                     && let Some(attacker_ent) = world.get_entity_by_id(attacker_id)
                 {
                     let att = attacker_ent.get_entity();
-                    if att.is_alive() && !fox.trusts(&att.entity_uuid) {
+                    if attacker_ent.is_alive() && !fox.trusts(&att.entity_uuid) {
                         self.target_attacker = Some(attacker_ent);
                         return true;
                     }
@@ -2681,7 +2668,7 @@ impl Goal for DefendTrustedTargetGoal {
                                 && let Some(attacker_ent) = world.get_entity_by_id(attacker_id)
                             {
                                 let att = attacker_ent.get_entity();
-                                if att.is_alive() && !fox.trusts(&att.entity_uuid) {
+                                if attacker_ent.is_alive() && !fox.trusts(&att.entity_uuid) {
                                     self.target_attacker = Some(attacker_ent);
                                     return true;
                                 }
@@ -2698,7 +2685,7 @@ impl Goal for DefendTrustedTargetGoal {
     fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         self.target_attacker
             .as_ref()
-            .is_some_and(|t| t.get_entity().is_alive())
+            .is_some_and(|t| t.is_alive())
     }
 
     fn start(&mut self, mob: &dyn Mob) {
@@ -2768,7 +2755,6 @@ impl Goal for FoxStrollThroughVillageGoal {
 
         let entity = fox.get_entity();
         let world = entity.world.load();
-        // Vanilla: stroll through village only when not bright outside (!isBrightOutside)
         let is_day = (world.get_time_of_day() % 24000) < 12000;
         if is_day {
             return false;
