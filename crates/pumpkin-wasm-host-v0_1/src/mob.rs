@@ -654,7 +654,9 @@ impl HostMob for PluginHostState {
             }));
         }
 
-        if let Some(slime) = any.downcast_ref::<pumpkin_core::entity::mob::slime::SlimeEntity>() {
+        if let Some(slime) =
+            any.downcast_ref::<pumpkin_core::entity::mob::cube_mob::CubeMobEntity>()
+        {
             return Ok(WitMobData::Slime(WitSlimeData {
                 size: slime.get_size(),
             }));
@@ -794,7 +796,7 @@ impl HostMob for PluginHostState {
             }
             WitMobData::Slime(slime_data) => {
                 if let Some(slime) =
-                    any.downcast_ref::<pumpkin_core::entity::mob::slime::SlimeEntity>()
+                    any.downcast_ref::<pumpkin_core::entity::mob::cube_mob::CubeMobEntity>()
                 {
                     slime.set_size(slime_data.size, false);
                     return Ok(true);

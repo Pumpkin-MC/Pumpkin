@@ -6,7 +6,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::effect::MobEffect;
 use crate::entity::living::LivingEntity;
-use crate::entity::mob::slime::SlimeEntity;
+use crate::entity::mob::cube_mob::CubeMobEntity;
 use crate::entity::r#type::from_type;
 
 pub struct OozingMobEffect;
@@ -30,7 +30,7 @@ impl MobEffect for OozingMobEffect {
             entity.yaw.store(rand::random::<f32>() * 360.0);
             entity.pitch.store(0.0);
 
-            if let Some(slime) = entity_arc.cast_any().downcast_ref::<SlimeEntity>() {
+            if let Some(slime) = entity_arc.cast_any().downcast_ref::<CubeMobEntity>() {
                 slime.set_size(2, true);
             }
 

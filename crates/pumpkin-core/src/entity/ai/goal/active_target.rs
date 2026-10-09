@@ -18,7 +18,7 @@ use uuid::Uuid;
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
 
 /// Extra gate on top of the target predicate, for mobs that pick targets conditionally.
-#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
 pub enum TargetCondition {
     #[default]
     Always,
@@ -28,6 +28,8 @@ pub enum TargetCondition {
     NoDaylight,
     /// Nothing at all while the mob is a baby. (Polar bears hunting foxes)
     Adult,
+    /// Only candidates at most this many blocks above or below the mob. Slimes.
+    MaxHeightDifference(f64),
 }
 
 impl TargetCondition {
@@ -40,7 +42,7 @@ impl TargetCondition {
                 neutral.get_persistent_anger_target().is_some() || neutral.is_angry()
             }),
             Self::Adult => !mob.as_ageable().is_some_and(AgeableMob::is_baby),
-            Self::Always => true,
+            Self::Always | Self::MaxHeightDifference(_) => true,
         }
     }
 
@@ -51,7 +53,7 @@ impl TargetCondition {
             Self::AngryAt => mob
                 .as_neutral()
                 .and_then(NeutralMob::get_persistent_anger_target),
-            Self::Always | Self::NoDaylight | Self::Adult => None,
+            Self::Always | Self::NoDaylight | Self::Adult | Self::MaxHeightDifference(_) => None,
         }
     }
 
@@ -62,6 +64,9 @@ impl TargetCondition {
             Self::AngryAt => mob
                 .as_neutral()
                 .is_some_and(|neutral| neutral.is_angry_at(target, world)),
+            Self::MaxHeightDifference(max) => {
+                (target.get_entity().pos.load().y - mob.get_entity().pos.load().y).abs() <= max
+            }
             Self::Always | Self::NoDaylight | Self::Adult => true,
         }
     }
