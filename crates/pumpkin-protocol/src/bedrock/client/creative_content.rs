@@ -6,9 +6,12 @@ use crate::{
     bedrock::network_item::NetworkItemDescriptor, codec::var_uint::VarUInt, serial::PacketWrite,
 };
 
+/// Sent by the server to populate the creative inventory menu with item categories, groups, and items.
 #[packet(145)]
 pub struct CCreativeContent<'a> {
+    /// Creative tab groups with category icons and display names.
     pub groups: &'a [CreativeGroupInfoPayload],
+    /// Individual creative item stack entries.
     pub entries: &'a [CreativeItemEntryPayload],
 }
 
