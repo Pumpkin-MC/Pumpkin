@@ -1,14 +1,14 @@
 use crate::block::blocks::falling::FallingBlock;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, NormalUseArgs, OnScheduledTickArgs, PathComputationType, PlacedArgs,
+    BlockBehaviour, BrokenArgs, GetStateForNeighborUpdateArgs, NormalUseArgs, OnScheduledTickArgs,
+    PathComputationType, PlacedArgs,
 };
 use crate::world::World;
-use pumpkin_data::BlockState;
 use pumpkin_data::world::WorldEvent;
+use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 use rand::{RngExt, rng};
 use std::sync::Arc;
 
@@ -16,6 +16,8 @@ use std::sync::Arc;
 pub struct DragonEggBlock;
 
 impl DragonEggBlock {
+    // DragonEggBlock.getDelayAfterPlace
+    const DELAY_AFTER_PLACE: u8 = 5;
     const TELEPORT_RADIUS_XZ: i32 = 16;
     const TELEPORT_RADIUS_Y: i32 = 8;
 
@@ -60,8 +62,14 @@ impl DragonEggBlock {
 
 impl BlockBehaviour for DragonEggBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
-        args.world
-            .schedule_block_tick(args.block, *args.position, 5, TickPriority::Normal);
+        FallingBlock::placed_with_delay(&args, Self::DELAY_AFTER_PLACE);
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        FallingBlock::get_state_for_neighbor_update_with_delay(&args, Self::DELAY_AFTER_PLACE)
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {

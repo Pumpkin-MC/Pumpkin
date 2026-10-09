@@ -167,13 +167,20 @@ pub struct ReleaseItemTransactionData {
 }
 
 #[derive(Debug)]
+/// Sent by the client when performing complex inventory interactions, item usages, and entity attacks.
 #[packet(30)]
 pub struct SInventoryTransaction {
+    /// Legacy transaction request ID used for rollback tracking.
     pub legacy_request_id: VarInt,
+    /// Legacy slot modification entries.
     pub legacy_set_item_slots: Vec<LegacySetItemSlot>,
+    /// Whether action elements are present in the transaction.
     pub has_value: bool,
+    /// List of slot modification actions composing this transaction.
     pub actions: Vec<InventoryAction>,
+    /// Transaction category type (`Normal`, `Mismatch`, `ItemUse`, `ItemUseOnEntity`, `ItemRelease`).
     pub transaction_type: VarUInt,
+    /// Specialized transaction payload corresponding to the transaction type.
     pub transaction_data: TransactionData,
 }
 
