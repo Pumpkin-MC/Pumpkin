@@ -1,4 +1,8 @@
-use super::{Entity, EntityBase, ai::pathfinder::Navigator, living::LivingEntity};
+use super::{
+    Entity, EntityBase,
+    ai::pathfinder::{Navigator, NavigatorGoal},
+    living::LivingEntity,
+};
 use crate::entity::ai::brain::Brain;
 use crate::entity::ai::brain::memory::PackedMemories;
 use crate::entity::ai::control::MoveControlTrait;
@@ -233,6 +237,30 @@ impl MobEntity {
 
     pub fn is_no_ai(&self) -> bool {
         (self.mob_flags.load(Relaxed) & Self::AI_DISABLED_FLAG) != 0
+    }
+
+    pub fn navigate_to(&self, from: Vector3<f64>, to: Vector3<f64>, speed: f64) {
+        let mut nav = self
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        nav.set_progress(NavigatorGoal::new(from, to, speed));
+    }
+
+    pub fn stop_navigation(&self) {
+        let mut nav = self
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        nav.stop();
+    }
+
+    pub fn set_navigation_speed(&self, speed: f64) {
+        let mut nav = self
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        nav.set_speed(speed);
     }
 
     /// Vanilla `Mob.serverAiStep`: sensing, goals, navigation and controls.
@@ -844,6 +872,18 @@ pub trait Mob: EntityBase + Send + Sync {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .is_idle()
+    }
+
+    fn navigate_to(&self, from: Vector3<f64>, to: Vector3<f64>, speed: f64) {
+        self.get_mob_entity().navigate_to(from, to, speed);
+    }
+
+    fn stop_navigation(&self) {
+        self.get_mob_entity().stop_navigation();
+    }
+
+    fn set_navigation_speed(&self, speed: f64) {
+        self.get_mob_entity().set_navigation_speed(speed);
     }
 
     fn has_line_of_sight(&self, target: &crate::entity::Entity) -> bool {
