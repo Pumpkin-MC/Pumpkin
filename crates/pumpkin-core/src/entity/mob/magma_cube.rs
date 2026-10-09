@@ -77,5 +77,6 @@ impl Mob for MagmaCubeEntity {
         self.slime
             .get_mob_entity()
             .try_attack(&*self.slime, &**player);
+        self.slime.on_attack(&**player);
     }
 }

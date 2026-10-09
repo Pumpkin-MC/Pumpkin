@@ -116,6 +116,8 @@ impl Goal for OcelotAttackGoal {
             mob.get_mob_entity().living_entity.swing_hand();
             mob.get_mob_entity()
                 .try_attack(mob.get_entity(), target.as_ref());
+            // Call on_attack hook after the attack
+            mob.on_attack(target.as_ref());
         }
     }
 

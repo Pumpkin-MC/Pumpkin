@@ -120,6 +120,15 @@ impl IronGolemEntity {
     pub fn get_offer_flower_tick(&self) -> i32 {
         self.offer_flower_tick.load(Ordering::Relaxed)
     }
+
+    /// Trigger the attack animation for the iron golem.
+    /// This sends `EntityStatus::StartAttacking` to clients and sets the `attack_animation_tick` counter.
+    pub fn trigger_attack_animation(&self) {
+        self.attack_animation_tick.store(10, Ordering::Relaxed);
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        world.send_entity_status(entity, EntityStatus::StartAttacking, None);
+    }
 }
 
 impl NeutralMob for IronGolemEntity {
@@ -156,6 +165,11 @@ impl Mob for IronGolemEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn on_attack(&self, _target: &dyn EntityBase) {
+        // Trigger the attack animation when the iron golem attacks
+        self.trigger_attack_animation();
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {

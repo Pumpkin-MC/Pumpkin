@@ -339,6 +339,7 @@ impl Mob for SlimeEntity {
         if !self.is_tiny() {
             // dealDamage
             self.entity.try_attack(self, &**player);
+            self.on_attack(&**player);
         }
     }
 
