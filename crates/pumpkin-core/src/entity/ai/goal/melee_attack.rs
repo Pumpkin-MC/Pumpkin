@@ -208,6 +208,12 @@ impl Goal for MeleeAttackGoal {
             && mob.has_line_of_sight(target.get_entity())
         {
             self.cooldown = self.get_max_cooldown();
+
+            // Iron golem animation plays on every swing, even when blocked
+            if let Some(golem) = mob.as_iron_golem() {
+                golem.trigger_attack_animation();
+            }
+
             mob.get_mob_entity().living_entity.swing_hand();
             let damaged = mob
                 .get_mob_entity()

@@ -167,9 +167,8 @@ impl Mob for IronGolemEntity {
         &self.mob_entity
     }
 
-    fn on_attack(&self, _target: &dyn EntityBase) {
-        // Trigger the attack animation when the iron golem attacks
-        self.trigger_attack_animation();
+    fn as_iron_golem(&self) -> Option<&crate::entity::passive::iron_golem::IronGolemEntity> {
+        Some(self)
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
