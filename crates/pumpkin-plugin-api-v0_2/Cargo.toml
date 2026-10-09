@@ -1,0 +1,21 @@
+[package]
+name = "pumpkin-plugin-api-v0_2"
+version.workspace = true
+edition.workspace = true
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+wit-bindgen = { workspace = true, features = ["async"] }
+
+# DO NOT BUILD FOR WASM / HOST ONLY
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }
+wasmtime = { workspace = true }
+
+[[example]]
+name = "component_fixture"
+path = "tests/fixture/component.rs"
+crate-type = ["cdylib"]
+
+[lints]
+workspace = true
