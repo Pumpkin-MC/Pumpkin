@@ -2,12 +2,6 @@ use crate::pumpkin::plugin::uuid::{Host, Uuid};
 use pumpkin_wasm_host_common::state::PluginHostState;
 
 impl Host for PluginHostState {
-    fn generate(&mut self) -> wasmtime::Result<Uuid> {
-        let u = uuid::Uuid::new_v4();
-        let (high, low) = u.as_u64_pair();
-        Ok(Uuid { high, low })
-    }
-
     fn parse(&mut self, s: String) -> wasmtime::Result<Option<Uuid>> {
         uuid::Uuid::parse_str(&s).map_or_else(
             |_| Ok(None),
@@ -19,8 +13,13 @@ impl Host for PluginHostState {
     }
 
     fn to_string(&mut self, id: Uuid) -> wasmtime::Result<String> {
-        let u = uuid::Uuid::from_u64_pair(id.high, id.low);
-        Ok(u.to_string())
+        Ok(uuid::Uuid::from_u64_pair(id.high, id.low).to_string())
+    }
+
+    fn generate(&mut self) -> wasmtime::Result<Uuid> {
+        let u = uuid::Uuid::new_v4();
+        let (high, low) = u.as_u64_pair();
+        Ok(Uuid { high, low })
     }
 }
 

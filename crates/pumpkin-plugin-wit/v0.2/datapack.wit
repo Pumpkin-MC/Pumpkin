@@ -38,17 +38,17 @@ interface datapack {
         is-enabled: func(name: string) -> bool;
 
         /// Enables a datapack with a specific priority position.
-        enable-pack: func(name: string, position: enable-position) -> result<_, string>;
+        enable-pack: async func(name: string, position: enable-position) -> result<_, string>;
 
         /// Disables an enabled datapack.
-        disable-pack: func(name: string) -> result<_, string>;
+        disable-pack: async func(name: string) -> result<_, string>;
 
         /// Reloads all enabled datapacks, recipes, and function tags,
         /// synchronizes recipes with online players, and triggers `#minecraft:load`.
-        reload: func() -> result<_, string>;
+        reload: async func() -> result<_, string>;
 
         /// Executes a datapack function or function tag (e.g. "namespace:fn" or "#namespace:tag").
         /// Returns the number of commands executed.
-        execute-function: func(name: string) -> result<u32, string>;
+        execute-function: async func(name: string) -> result<u32, string>;
     }
 }

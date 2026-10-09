@@ -65,16 +65,16 @@ interface enchantments {{
   /// Global manager for registering and querying custom enchantments.
   resource enchantment-manager {{
     /// Registers a new custom enchantment with the server.
-    register-enchantment: func(enchantment: custom-enchantment) -> result<_, string>;
+    register-enchantment: async func(enchantment: custom-enchantment) -> result<_, string>;
 
     /// Gets an enchantment definition by its ID.
-    get-enchantment: func(id: string) -> option<custom-enchantment>;
+    get-enchantment: async func(id: string) -> option<custom-enchantment>;
 
     /// Checks if an enchantment ID is registered.
-    has-enchantment: func(id: string) -> bool;
+    has-enchantment: async func(id: string) -> bool;
 
     /// Returns all registered custom enchantment IDs.
-    get-all-enchantment-ids: func() -> list<string>;
+    get-all-enchantment-ids: async func() -> list<string>;
   }}
 }}
 "##

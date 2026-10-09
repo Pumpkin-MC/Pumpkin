@@ -30,10 +30,10 @@ interface server {
         get-permission-level: func(id: uuid) -> permission-level;
 
         /// Grants operator status to a player (online or offline) with the specified level and bypass setting.
-        op-player: func(name: string, id: uuid, level: permission-level, bypasses-player-limit: bool);
+        op-player: async func(name: string, id: uuid, level: permission-level, bypasses-player-limit: bool);
 
         /// Revokes operator status from a player (online or offline). Returns true if the player was previously op.
-        deop-player: func(id: uuid) -> bool;
+        deop-player: async func(id: uuid) -> bool;
 
         /// Returns a list of all operator entries on the server.
         list-ops: func() -> list<op-entry>;
@@ -67,7 +67,7 @@ interface server {
         get-player-ban: func(id: uuid) -> option<banned-player-entry>;
 
         /// Bans a player by name and UUID with the specified options (works for online and offline players).
-        ban-player: func(name: string, id: uuid, options: ban-player-options);
+        ban-player: async func(name: string, id: uuid, options: ban-player-options);
 
         /// Removes a player ban by UUID. Returns true if the player was banned.
         unban-player: func(id: uuid) -> bool;
@@ -82,7 +82,7 @@ interface server {
         get-ip-ban: func(ip: string) -> option<banned-ip-entry>;
 
         /// Bans an IP address with the specified options.
-        ban-ip: func(ip: string, options: ban-ip-options);
+        ban-ip: async func(ip: string, options: ban-ip-options);
 
         /// Removes an IP ban. Returns true if the IP was banned.
         unban-ip: func(ip: string) -> bool;
@@ -103,7 +103,7 @@ interface server {
         is-enabled: func() -> bool;
 
         /// Enables or disables the server whitelist. If enabled and enforce-whitelist is set, kicks non-whitelisted players.
-        set-enabled: func(enabled: bool);
+        set-enabled: async func(enabled: bool);
 
         /// Checks if a player UUID is on the whitelist.
         is-whitelisted: func(id: uuid) -> bool;
@@ -189,18 +189,18 @@ interface server {
         /// Checks if a world exists by name or dimension.
         has-world: func(name: string) -> bool;
 
-        execute-command: func(command: string, sender: command-sender);
+        execute-command: async func(command: string, sender: command-sender);
 
         /// Creates or loads a world by its name and dimension.
         /// If a world with the given name already exists, it will be returned.
-        create-world: func(name: string, dimension: dimension) -> %world;
+        create-world: async func(name: string, dimension: dimension) -> %world;
 
         /// Unloads and saves a world by its name or dimension.
         /// Returns an error if the world cannot be found, is the primary/default world, or still has players inside.
-        unload-world: func(name: string) -> result<_, string>;
+        unload-world: async func(name: string) -> result<_, string>;
 
         /// Saves all players, player advancements, and loaded worlds to disk.
-        save-all: func() -> result<_, string>;
+        save-all: async func() -> result<_, string>;
 
         /// Returns a list of all online players in a specific world.
         get-players-in-world: func(world-ref: %world) -> list<player>;
@@ -209,7 +209,7 @@ interface server {
         get-player-count-in-world: func(world-ref: %world) -> u32;
 
         /// Broadcasts a system chat message to all players.
-        broadcast: func(message: string);
+        broadcast: async func(message: string);
 
         /// Deletes a signed chat message from all players' chat windows using its 256-byte signature.
         delete-message-by-signature: func(signature: list<u8>);
@@ -272,10 +272,10 @@ interface server {
         get-enchantment-manager: func() -> enchantment-manager;
 
         /// Returns information about an enchantment by its ID (vanilla or custom).
-        get-enchantment: func(id: string) -> option<custom-enchantment>;
+        get-enchantment: async func(id: string) -> option<custom-enchantment>;
 
         /// Returns a list of all registered enchantment IDs (custom and vanilla) on the server.
-        get-all-enchantment-ids: func() -> list<string>;
+        get-all-enchantment-ids: async func() -> list<string>;
 
         /// Returns the global datapack manager for inspecting, enabling, disabling, and reloading datapacks.
         get-datapack-manager: func() -> datapack-manager;

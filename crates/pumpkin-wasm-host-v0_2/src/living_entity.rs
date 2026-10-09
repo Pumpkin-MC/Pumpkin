@@ -1,6 +1,4 @@
-use std::sync::Arc;
-use wasmtime::component::{Access, HasSelf, Resource};
-
+use super::{AccessorExt, run_blocking};
 use crate::pumpkin::plugin::{
     attributes::{
         Attribute, AttributeModifier as WitAttributeModifier,
@@ -10,21 +8,14 @@ use crate::pumpkin::plugin::{
     item_stack::ItemStack as WitHostItemStack,
     text::TextComponent,
     world::{
-        Entity, EquipmentSlot as WitEquipmentSlot, HostLivingEntity,
+        Entity, EquipmentSlot as WitEquipmentSlot, HostLivingEntity, HostLivingEntityWithStore,
         LivingEntity as WitLivingEntity, Mob as WitMob,
     },
 };
+use crate::{LockIgnorePoison, RwLockIgnorePoison};
 use pumpkin_wasm_host_common::state::PluginHostState;
-
-fn active_plugin(
-    state: &PluginHostState,
-) -> wasmtime::Result<Arc<pumpkin_wasm_host_common::plugin::WasmPlugin>> {
-    state
-        .plugin
-        .as_ref()
-        .and_then(std::sync::Weak::upgrade)
-        .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))
-}
+use std::sync::Arc;
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 #[must_use]
 pub const fn from_wit_attribute(attr: Attribute) -> &'static pumpkin_data::attributes::Attributes {
@@ -133,6 +124,10 @@ pub fn from_wit_damage_type(wit: WitDamageType) -> pumpkin_data::damage::DamageT
 }
 
 impl HostLivingEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn as_entity(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<Resource<Entity>> {
         self.add(self.get(&this)?.clone())
     }
@@ -311,10 +306,7 @@ impl HostLivingEntity for PluginHostState {
         let entity = self.get(&this)?;
         let attribute = from_wit_attribute(attr);
         if let Some(living) = entity.get_living_entity() {
-            let map = living
-                .attributes
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let map = living.attributes.read_ignore_poison();
             if let Some(inst) = map.get(&attribute.id) {
                 return Ok(inst
                     .modifiers
@@ -339,10 +331,7 @@ impl HostLivingEntity for PluginHostState {
         let attribute = from_wit_attribute(attr);
         if let Some(living) = entity.get_living_entity() {
             {
-                let mut map = living
-                    .attributes
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut map = living.attributes.write_ignore_poison();
                 map.remove(&attribute.id);
             };
             pumpkin_core::entity::attributes::send_attribute_updates_for_living(
@@ -369,10 +358,7 @@ impl HostLivingEntity for PluginHostState {
         let entity = self.get(&this)?.clone();
         if let Some(living) = entity.get_living_entity() {
             let slot = from_wit_equipment_slot(slot);
-            let equipment = living
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let equipment = living.entity_equipment.lock_ignore_poison();
             let stack = equipment.get(&slot);
             if !stack.is_empty() {
                 return Ok(Some(self.add(Arc::new(tokio::sync::Mutex::new(stack)))?));
@@ -381,41 +367,10 @@ impl HostLivingEntity for PluginHostState {
         Ok(None)
     }
 
-    async fn set_equipment(
-        &mut self,
-        this: Resource<WitLivingEntity>,
-        slot: WitEquipmentSlot,
-        stack: Option<Resource<WitHostItemStack>>,
-    ) -> wasmtime::Result<()> {
-        let item_stack = if let Some(stack_res) = stack {
-            self.take(stack_res)?.lock().await.clone()
-        } else {
-            pumpkin_data::item_stack::ItemStack::EMPTY.clone()
-        };
-
-        let entity = self.get(&this)?;
-        if let Some(living) = entity.get_living_entity() {
-            let slot = from_wit_equipment_slot(slot);
-            {
-                let mut equipment = living
-                    .entity_equipment
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                equipment.put(&slot, item_stack.clone());
-            };
-
-            living.send_equipment_changes(&[(slot, item_stack)]);
-        }
-        Ok(())
-    }
-
     fn clear_equipment(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
         let entity = self.get(&this)?;
         if let Some(living) = entity.get_living_entity() {
-            let mut equipment = living
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut equipment = living.entity_equipment.lock_ignore_poison();
             let slots_to_clear: Vec<(
                 pumpkin_data::data_component_impl::EquipmentSlot,
                 pumpkin_data::item_stack::ItemStack,
@@ -460,31 +415,45 @@ impl HostLivingEntity for PluginHostState {
         }
         Ok(())
     }
-
-    fn drop(&mut self, rep: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
-impl crate::pumpkin::plugin::world::HostLivingEntityWithStore<PluginHostState>
-    for HasSelf<PluginHostState>
-{
+impl HostLivingEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn set_equipment(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+        slot: WitEquipmentSlot,
+        stack: Option<Resource<WitHostItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let item_stack = if let Some(stack_res) = stack {
+            accessor.take_res(stack_res)?.lock().await.clone()
+        } else {
+            pumpkin_data::item_stack::ItemStack::EMPTY.clone()
+        };
+
+        let entity = accessor.get_res(&this)?;
+        if let Some(living) = entity.get_living_entity() {
+            let slot = from_wit_equipment_slot(slot);
+            {
+                let mut equipment = living.entity_equipment.lock_ignore_poison();
+                equipment.put(&slot, item_stack.clone());
+            };
+
+            living.send_equipment_changes(&[(slot, item_stack)]);
+        }
+        Ok(())
+    }
+
     async fn damage(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitLivingEntity>,
         amount: f32,
         damage_type: WitDamageType,
     ) -> wasmtime::Result<()> {
-        let (entity, plugin) = {
-            let state = host.get();
-            (state.get(&this)?.clone(), active_plugin(state)?)
-        };
+        let entity = accessor.get_res(&this)?;
         let damage_type = from_wit_damage_type(damage_type);
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                entity.damage(&*entity, amount, damage_type);
-            })
-            .await
+        run_blocking(accessor, move || {
+            entity.damage(&*entity, amount, damage_type);
+        })
+        .await
     }
 }

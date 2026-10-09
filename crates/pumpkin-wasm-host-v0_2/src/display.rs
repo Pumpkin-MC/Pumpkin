@@ -1,15 +1,12 @@
-use std::sync::Arc;
-use wasmtime::component::Resource;
-
-use pumpkin_util::math::vector3::Vector3;
-
+use super::AccessorExt;
 use crate::{
     pumpkin::plugin::{
         display::{
             BillboardMode, BlockDisplayEntity, DisplayEntity, DisplayTransformation, Host,
             HostBlockDisplayEntity, HostDisplayEntity, HostInteractionEntity,
-            HostItemDisplayEntity, HostTextDisplayEntity, InteractionEntity, ItemDisplayEntity,
-            ItemDisplayMode, Quaternionf, TextAlignment, TextDisplayEntity, Vector3f,
+            HostItemDisplayEntity, HostItemDisplayEntityWithStore, HostTextDisplayEntity,
+            InteractionEntity, ItemDisplayEntity, ItemDisplayMode, Quaternionf, TextAlignment,
+            TextDisplayEntity, Vector3f,
         },
         item_stack::ItemStack as WitHostItemStack,
         text::TextComponent,
@@ -22,7 +19,10 @@ use pumpkin_core::entity::decoration::display::{
     BlockDisplayEntity as InternalBlockDisplayEntity, DisplayEntity as InternalDisplayEntity,
     ItemDisplayEntity as InternalItemDisplayEntity, TextDisplayEntity as InternalTextDisplayEntity,
 };
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_wasm_host_common::state::PluginHostState;
+use std::sync::Arc;
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 impl Host for PluginHostState {}
 
@@ -104,15 +104,19 @@ fn get_display_entity<'a>(
 }
 
 impl HostDisplayEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<DisplayEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn from_entity(
         &mut self,
-        entity: /* borrow */ Resource<Entity>,
-    ) -> wasmtime::Result<Option<Resource<DisplayEntity>>> {
-        let entity = self.get(&entity)?.clone();
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Result<Resource<DisplayEntity>, Resource<Entity>>> {
+        let entity = self.take(entity)?;
         if get_display_entity(entity.as_ref()).is_some() {
-            Ok(Some(self.add(entity.clone())?))
+            Ok(Ok(self.add(entity)?))
         } else {
-            Ok(None)
+            Ok(Err(self.add(entity)?))
         }
     }
 
@@ -252,9 +256,9 @@ impl HostDisplayEntity for PluginHostState {
     ) -> wasmtime::Result<i32> {
         let display_res = self.get(&display)?;
         Ok(get_display_entity(display_res.as_ref()).map_or(
-            0,
-            pumpkin_core::entity::decoration::display::DisplayEntity::get_interpolation_start_delta_ticks,
-        ))
+                0,
+                pumpkin_core::entity::decoration::display::DisplayEntity::get_interpolation_start_delta_ticks,
+            ))
     }
 
     fn set_interpolation_start(
@@ -444,21 +448,21 @@ impl HostDisplayEntity for PluginHostState {
         }
         Ok(())
     }
-
-    fn drop(&mut self, rep: Resource<DisplayEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostBlockDisplayEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<BlockDisplayEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn from_entity(
         &mut self,
-        entity: /* borrow */ Resource<Entity>,
-    ) -> wasmtime::Result<Option<Resource<BlockDisplayEntity>>> {
-        if let Ok(entity) = Arc::downcast(self.get(&entity)?.clone()) {
-            Ok(Some(self.add(entity)?))
-        } else {
-            Ok(None)
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Result<Resource<BlockDisplayEntity>, Resource<Entity>>> {
+        let entity = self.take(entity)?;
+        match Arc::downcast(entity.clone()) {
+            Ok(display) => Ok(Ok(self.add(display)?)),
+            Err(_) => Ok(Err(self.add(entity)?)),
         }
     }
 
@@ -491,21 +495,21 @@ impl HostBlockDisplayEntity for PluginHostState {
         self.get(&block_display)?.set_block_state(state_id as i32);
         Ok(())
     }
-
-    fn drop(&mut self, rep: Resource<BlockDisplayEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostItemDisplayEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<ItemDisplayEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn from_entity(
         &mut self,
-        entity: /* borrow */ Resource<Entity>,
-    ) -> wasmtime::Result<Option<Resource<ItemDisplayEntity>>> {
-        if let Ok(entity) = Arc::downcast(self.get(&entity)?.clone()) {
-            Ok(Some(self.add(entity)?))
-        } else {
-            Ok(None)
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Result<Resource<ItemDisplayEntity>, Resource<Entity>>> {
+        let entity = self.take(entity)?;
+        match Arc::downcast(entity.clone()) {
+            Ok(display) => Ok(Ok(self.add(display)?)),
+            Err(_) => Ok(Err(self.add(entity)?)),
         }
     }
 
@@ -536,21 +540,6 @@ impl HostItemDisplayEntity for PluginHostState {
         }
     }
 
-    async fn set_item(
-        &mut self,
-        item_display: Resource<ItemDisplayEntity>,
-        item: Option<Resource<WitHostItemStack>>,
-    ) -> wasmtime::Result<()> {
-        let stack = if let Some(item_res_val) = item {
-            self.take(item_res_val)?.lock().await.clone()
-        } else {
-            pumpkin_data::item_stack::ItemStack::new(0, &pumpkin_data::item::Item::AIR)
-        };
-
-        self.get(&item_display)?.set_item(stack);
-        Ok(())
-    }
-
     fn get_item_display_mode(
         &mut self,
         item_display: Resource<ItemDisplayEntity>,
@@ -570,21 +559,38 @@ impl HostItemDisplayEntity for PluginHostState {
 
         Ok(())
     }
+}
 
-    fn drop(&mut self, rep: Resource<ItemDisplayEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
+impl HostItemDisplayEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn set_item(
+        accessor: &Accessor<PluginHostState, Self>,
+        item_display: Resource<ItemDisplayEntity>,
+        item: Option<Resource<WitHostItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let stack = if let Some(item_res_val) = item {
+            accessor.take_res(item_res_val)?.lock().await.clone()
+        } else {
+            pumpkin_data::item_stack::ItemStack::new(0, &pumpkin_data::item::Item::AIR)
+        };
+
+        accessor.get_res(&item_display)?.set_item(stack);
+        Ok(())
     }
 }
 
 impl HostTextDisplayEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<TextDisplayEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn from_entity(
         &mut self,
-        entity: /* borrow */ Resource<Entity>,
-    ) -> wasmtime::Result<Option<Resource<TextDisplayEntity>>> {
-        if let Ok(entity) = Arc::downcast(self.get(&entity)?.clone()) {
-            Ok(Some(self.add(entity)?))
-        } else {
-            Ok(None)
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Result<Resource<TextDisplayEntity>, Resource<Entity>>> {
+        let entity = self.take(entity)?;
+        match Arc::downcast(entity.clone()) {
+            Ok(display) => Ok(Ok(self.add(display)?)),
+            Err(_) => Ok(Err(self.add(entity)?)),
         }
     }
 
@@ -729,21 +735,21 @@ impl HostTextDisplayEntity for PluginHostState {
             .set_alignment(map_text_alignment_rev(alignment));
         Ok(())
     }
-
-    fn drop(&mut self, rep: Resource<TextDisplayEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostInteractionEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<InteractionEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn from_entity(
         &mut self,
-        entity: /* borrow */ Resource<Entity>,
-    ) -> wasmtime::Result<Option<Resource<InteractionEntity>>> {
-        if let Ok(entity) = Arc::downcast(self.get(&entity)?.clone()) {
-            Ok(Some(self.add(entity)?))
-        } else {
-            Ok(None)
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Result<Resource<InteractionEntity>, Resource<Entity>>> {
+        let entity = self.take(entity)?;
+        match Arc::downcast(entity.clone()) {
+            Ok(display) => Ok(Ok(self.add(display)?)),
+            Err(_) => Ok(Err(self.add(entity)?)),
         }
     }
 
@@ -807,9 +813,5 @@ impl HostInteractionEntity for PluginHostState {
     ) -> wasmtime::Result<Option<Uuid>> {
         let action = self.get(&interaction)?.get_target();
         Ok(action.map(|a| Uuid::to_wit(&a.player)))
-    }
-
-    fn drop(&mut self, rep: Resource<InteractionEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
     }
 }

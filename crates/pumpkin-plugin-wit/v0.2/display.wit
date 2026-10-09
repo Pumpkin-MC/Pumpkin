@@ -57,7 +57,9 @@ interface display {
 
     /// Common base resource for all display entities.
     resource display-entity {
-        from-entity: static func(entity: borrow<entity>) -> option<display-entity>;
+        /// Converts an owned entity handle to a display entity, if possible.
+        /// On failure, returns the original entity handle.
+        from-entity: static func(entity: entity) -> result<display-entity, entity>;
         get-entity: func() -> entity;
 
         get-transformation: func() -> display-transformation;
@@ -99,7 +101,9 @@ interface display {
 
     /// Resource specifically for Block Display entities.
     resource block-display-entity {
-        from-entity: static func(entity: borrow<entity>) -> option<block-display-entity>;
+        /// Converts an owned entity handle to a block display, if possible.
+        /// On failure, returns the original entity handle.
+        from-entity: static func(entity: entity) -> result<block-display-entity, entity>;
         get-display: func() -> display-entity;
         get-entity: func() -> entity;
 
@@ -109,12 +113,14 @@ interface display {
 
     /// Resource specifically for Item Display entities.
     resource item-display-entity {
-        from-entity: static func(entity: borrow<entity>) -> option<item-display-entity>;
+        /// Converts an owned entity handle to an item display, if possible.
+        /// On failure, returns the original entity handle.
+        from-entity: static func(entity: entity) -> result<item-display-entity, entity>;
         get-display: func() -> display-entity;
         get-entity: func() -> entity;
 
         get-item: func() -> option<item-stack>;
-        set-item: func(item: option<item-stack>);
+        set-item: async func(item: option<item-stack>);
 
         get-item-display-mode: func() -> item-display-mode;
         set-item-display-mode: func(mode: item-display-mode);
@@ -122,7 +128,9 @@ interface display {
 
     /// Resource specifically for Text Display entities.
     resource text-display-entity {
-        from-entity: static func(entity: borrow<entity>) -> option<text-display-entity>;
+        /// Converts an owned entity handle to a text display, if possible.
+        /// On failure, returns the original entity handle.
+        from-entity: static func(entity: entity) -> result<text-display-entity, entity>;
         get-display: func() -> display-entity;
         get-entity: func() -> entity;
 
@@ -153,7 +161,9 @@ interface display {
 
     /// Resource specifically for Interaction entities.
     resource interaction-entity {
-        from-entity: static func(entity: borrow<entity>) -> option<interaction-entity>;
+        /// Converts an owned entity handle to an interaction entity, if possible.
+        /// On failure, returns the original entity handle.
+        from-entity: static func(entity: entity) -> result<interaction-entity, entity>;
         get-entity: func() -> entity;
 
         get-width: func() -> f32;

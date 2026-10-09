@@ -6,34 +6,35 @@ interface gui {
     use inventory.{inventory};
 
     resource gui {
+        /// Creates a GUI with the specified screen type and title.
         constructor(%type: screen, title: text-component);
         /// Returns the underlying inventory handle for this GUI.
-        get-inventory: func() -> inventory;
-        set-item: func(slot: u32, item: item-stack);
-        get-item: func(slot: u32) -> option<item-stack>;
+        get-inventory: async func() -> inventory;
+        set-item: async func(slot: u32, item: item-stack);
+        get-item: async func(slot: u32) -> option<item-stack>;
         
         /// Returns the type of this GUI.
-        get-type: func() -> screen;
+        get-type: async func() -> screen;
         
         /// Returns the title of this GUI.
-        get-title: func() -> text-component;
+        get-title: async func() -> text-component;
         
         /// Returns the number of slots in this GUI.
-        get-size: func() -> u32;
+        get-size: async func() -> u32;
         
         /// Clears all items from the GUI.
-        clear-items: func();
+        clear-items: async func();
 
         /// Sets whether players can grab items out of the inventory.
-        set-allow-grab-items: func(allow: bool);
+        set-allow-grab-items: async func(allow: bool);
 
         /// Returns whether players can grab items out of the inventory.
-        get-allow-grab-items: func() -> bool;
+        get-allow-grab-items: async func() -> bool;
 
         /// Sets whether players can put items into the inventory from their own.
-        set-allow-put-items: func(allow: bool);
+        set-allow-put-items: async func(allow: bool);
 
         /// Returns whether players can put items into the inventory from their own.
-        get-allow-put-items: func() -> bool;
+        get-allow-put-items: async func() -> bool;
     }
 }

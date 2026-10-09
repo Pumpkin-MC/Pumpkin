@@ -1,7 +1,5 @@
-use std::sync::Arc;
-use std::sync::atomic::Ordering;
-use wasmtime::component::Resource;
-
+use super::AccessorExt;
+use crate::LockIgnorePoison;
 use crate::pumpkin::{
     self,
     plugin::{
@@ -21,35 +19,39 @@ use crate::pumpkin::{
             HostBlockEntity, HostBrewingStandBlockEntity, HostBrushableBlockBlockEntity,
             HostCalibratedSculkSensorBlockEntity, HostCampfireBlockEntity, HostChestBlockEntity,
             HostChiseledBookshelfBlockEntity, HostCommandBlockEntity, HostComparatorBlockEntity,
-            HostConduitBlockEntity, HostContainerBlockEntity, HostCopperGolemStatueBlockEntity,
-            HostCrafterBlockEntity, HostCreakingHeartBlockEntity, HostDaylightDetectorBlockEntity,
-            HostDecoratedPotBlockEntity, HostDispenserBlockEntity, HostDropperBlockEntity,
-            HostEnchantingTableBlockEntity, HostEndGatewayBlockEntity, HostEndPortalBlockEntity,
-            HostEnderChestBlockEntity, HostFurnaceBlockEntity, HostHangingSignBlockEntity,
-            HostHopperBlockEntity, HostJigsawBlockEntity, HostJukeboxBlockEntity,
-            HostLecternBlockEntity, HostMapBlockEntity, HostMobSpawnerBlockEntity,
-            HostPistonBlockEntity, HostPotentSulfurBlockEntity, HostSculkCatalystBlockEntity,
-            HostSculkSensorBlockEntity, HostSculkShriekerBlockEntity, HostShelfBlockEntity,
-            HostShulkerBoxBlockEntity, HostSignBlockEntity, HostSkullBlockEntity,
-            HostSmokerBlockEntity, HostStructureBlockBlockEntity, HostTestBlockBlockEntity,
-            HostTestInstanceBlockBlockEntity, HostTrappedChestBlockEntity,
-            HostTrialSpawnerBlockEntity, HostVaultBlockEntity, JigsawBlockEntity,
-            JukeboxBlockEntity, LecternBlockEntity, MapBlockEntity, MobSpawnerBlockEntity,
-            PistonBlockEntity, PotentSulfurBlockEntity, SculkCatalystBlockEntity,
-            SculkSensorBlockEntity, SculkShriekerBlockEntity, ShelfBlockEntity,
-            ShulkerBoxBlockEntity, SignBlockEntity, SignText, SkullBlockEntity, SmokerBlockEntity,
-            StructureBlockBlockEntity, TestBlockBlockEntity, TestInstanceBlockBlockEntity,
-            TrappedChestBlockEntity, TrialSpawnerBlockEntity, VaultBlockEntity,
+            HostConduitBlockEntity, HostContainerBlockEntity, HostContainerBlockEntityWithStore,
+            HostCopperGolemStatueBlockEntity, HostCrafterBlockEntity, HostCreakingHeartBlockEntity,
+            HostDaylightDetectorBlockEntity, HostDecoratedPotBlockEntity, HostDispenserBlockEntity,
+            HostDropperBlockEntity, HostEnchantingTableBlockEntity, HostEndGatewayBlockEntity,
+            HostEndPortalBlockEntity, HostEnderChestBlockEntity, HostFurnaceBlockEntity,
+            HostHangingSignBlockEntity, HostHopperBlockEntity, HostJigsawBlockEntity,
+            HostJukeboxBlockEntity, HostLecternBlockEntity, HostMapBlockEntity,
+            HostMobSpawnerBlockEntity, HostPistonBlockEntity, HostPotentSulfurBlockEntity,
+            HostSculkCatalystBlockEntity, HostSculkSensorBlockEntity, HostSculkShriekerBlockEntity,
+            HostShelfBlockEntity, HostShulkerBoxBlockEntity, HostSignBlockEntity,
+            HostSkullBlockEntity, HostSmokerBlockEntity, HostStructureBlockBlockEntity,
+            HostTestBlockBlockEntity, HostTestInstanceBlockBlockEntity,
+            HostTrappedChestBlockEntity, HostTrialSpawnerBlockEntity, HostVaultBlockEntity,
+            JigsawBlockEntity, JukeboxBlockEntity, LecternBlockEntity, MapBlockEntity,
+            MobSpawnerBlockEntity, PistonBlockEntity, PotentSulfurBlockEntity,
+            SculkCatalystBlockEntity, SculkSensorBlockEntity, SculkShriekerBlockEntity,
+            ShelfBlockEntity, ShulkerBoxBlockEntity, SignBlockEntity, SignText, SkullBlockEntity,
+            SmokerBlockEntity, StructureBlockBlockEntity, TestBlockBlockEntity,
+            TestInstanceBlockBlockEntity, TrappedChestBlockEntity, TrialSpawnerBlockEntity,
+            VaultBlockEntity,
         },
         common::BlockPos as WitBlockPos,
         item_stack::ItemStack as WitHostItemStack,
     },
 };
-use pumpkin_core::block::entities::BlockEntity as InternalBlockEntity;
-use pumpkin_core::block::entities::furnace_like_block_entity::CookingBlockEntityBase;
-use pumpkin_core::block::entities::sign::{DyeColor as InternalDyeColor, Text as InternalText};
-use pumpkin_wasm_host_common::state::PluginHostState;
-use pumpkin_wasm_host_common::state::{self, FromResource};
+use pumpkin_core::block::entities::{
+    BlockEntity as InternalBlockEntity,
+    furnace_like_block_entity::CookingBlockEntityBase,
+    sign::{DyeColor as InternalDyeColor, Text as InternalText},
+};
+use pumpkin_wasm_host_common::state::{self, FromResource, PluginHostState};
+use std::sync::{Arc, atomic::Ordering};
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 impl pumpkin::plugin::block_entity::Host for PluginHostState {}
 
@@ -99,8 +101,7 @@ fn to_wasm_sign_text(text: &InternalText) -> SignText {
     SignText {
         messages: text
             .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .lock_ignore_poison()
             .clone()
             .map(str::into_string)
             .to_vec(),
@@ -130,6 +131,10 @@ fn from_wasm_sign_text(text: SignText) -> InternalText {
 }
 
 impl HostBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<BlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn resource_location(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<String> {
         let entity = self.get(&res)?;
         Ok(entity.resource_location().to_string())
@@ -240,10 +245,6 @@ impl HostBlockEntity for PluginHostState {
         }
         Ok(false)
     }
-
-    fn drop(&mut self, rep: Resource<BlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 fn get_container_from_be(
@@ -264,6 +265,10 @@ fn get_container_from_be(
 }
 
 impl HostContainerBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<ContainerBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<ContainerBlockEntity>,
@@ -303,22 +308,6 @@ impl HostContainerBlockEntity for PluginHostState {
         }
     }
 
-    async fn set_stack(
-        &mut self,
-        res: Resource<ContainerBlockEntity>,
-        slot: u32,
-        stack_res: Option<Resource<WitHostItemStack>>,
-    ) -> wasmtime::Result<()> {
-        let stack = match stack_res {
-            Some(res) => self.take(res)?.lock().await.clone(),
-            None => pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
-        };
-        let inventory = self.get(&res)?.inventory.clone();
-
-        inventory.set_stack(slot as usize, stack);
-        Ok(())
-    }
-
     fn remove_stack(
         &mut self,
         res: Resource<ContainerBlockEntity>,
@@ -338,13 +327,31 @@ impl HostContainerBlockEntity for PluginHostState {
         inventory.clear();
         Ok(())
     }
+}
 
-    fn drop(&mut self, rep: Resource<ContainerBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
+impl HostContainerBlockEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn set_stack(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<ContainerBlockEntity>,
+        slot: u32,
+        stack_res: Option<Resource<WitHostItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let inventory = accessor.get_res(&res)?.inventory.clone();
+        let stack = match stack_res {
+            Some(stack_res) => accessor.take_res(stack_res)?.lock().await.clone(),
+            None => pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
+        };
+
+        inventory.set_stack(slot as usize, stack);
+        Ok(())
     }
 }
 
 impl HostCommandBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<CommandBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<CommandBlockEntity>,
@@ -353,12 +360,7 @@ impl HostCommandBlockEntity for PluginHostState {
     }
 
     fn last_output(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<String> {
-        Ok(self
-            .get(&res)?
-            .last_output
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone())
+        Ok(self.get(&res)?.last_output.lock_ignore_poison().clone())
     }
 
     fn track_output(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<bool> {
@@ -370,12 +372,7 @@ impl HostCommandBlockEntity for PluginHostState {
     }
 
     fn command(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<String> {
-        Ok(self
-            .get(&res)?
-            .command
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone())
+        Ok(self.get(&res)?.command.lock_ignore_poison().clone())
     }
 
     fn auto(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<bool> {
@@ -389,13 +386,13 @@ impl HostCommandBlockEntity for PluginHostState {
     fn powered(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<bool> {
         Ok(self.get(&res)?.powered.load(Ordering::Relaxed))
     }
-
-    fn drop(&mut self, rep: Resource<CommandBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostSignBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<SignBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<SignBlockEntity>,
@@ -419,17 +416,8 @@ impl HostSignBlockEntity for PluginHostState {
             Ordering::Relaxed,
         );
         sign.front_text.set_color(new_text.get_color());
-        (*sign
-            .front_text
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner))
-        .clone_from(
-            &new_text
-                .messages
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        (*sign.front_text.messages.lock_ignore_poison())
+            .clone_from(&new_text.messages.lock_ignore_poison());
         Ok(())
     }
 
@@ -449,17 +437,8 @@ impl HostSignBlockEntity for PluginHostState {
             Ordering::Relaxed,
         );
         sign.back_text.set_color(new_text.get_color());
-        (*sign
-            .back_text
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner))
-        .clone_from(
-            &new_text
-                .messages
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        (*sign.back_text.messages.lock_ignore_poison())
+            .clone_from(&new_text.messages.lock_ignore_poison());
         Ok(())
     }
 
@@ -471,13 +450,13 @@ impl HostSignBlockEntity for PluginHostState {
         self.get(&res)?.is_waxed.store(waxed, Ordering::Relaxed);
         Ok(())
     }
-
-    fn drop(&mut self, rep: Resource<SignBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostJukeboxBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<JukeboxBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<JukeboxBlockEntity>,
@@ -509,13 +488,13 @@ impl HostJukeboxBlockEntity for PluginHostState {
         self.get(&res)?.start_playing(length_in_ticks);
         Ok(())
     }
-
-    fn drop(&mut self, rep: Resource<JukeboxBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostChestBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<ChestBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<ChestBlockEntity>,
@@ -533,13 +512,13 @@ impl HostChestBlockEntity for PluginHostState {
     fn viewer_count(&mut self, res: Resource<ChestBlockEntity>) -> wasmtime::Result<u32> {
         Ok(self.get(&res)?.get_viewer_count() as u32)
     }
-
-    fn drop(&mut self, rep: Resource<ChestBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostMobSpawnerBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<MobSpawnerBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<MobSpawnerBlockEntity>,
@@ -558,13 +537,13 @@ impl HostMobSpawnerBlockEntity for PluginHostState {
     fn get_delay(&mut self, res: Resource<MobSpawnerBlockEntity>) -> wasmtime::Result<i32> {
         Ok(self.get(&res)?.delay.load(Ordering::Relaxed))
     }
-
-    fn drop(&mut self, rep: Resource<MobSpawnerBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostMapBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<MapBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<MapBlockEntity>,
@@ -627,13 +606,13 @@ impl HostMapBlockEntity for PluginHostState {
         self.get(&res)?.stream_frame(&frame_data, server_opt);
         Ok(())
     }
-
-    fn drop(&mut self, rep: Resource<MapBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostHangingSignBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<HangingSignBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<HangingSignBlockEntity>,
@@ -660,17 +639,8 @@ impl HostHangingSignBlockEntity for PluginHostState {
             Ordering::Relaxed,
         );
         sign.front_text.set_color(new_text.get_color());
-        (*sign
-            .front_text
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner))
-        .clone_from(
-            &new_text
-                .messages
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        (*sign.front_text.messages.lock_ignore_poison())
+            .clone_from(&new_text.messages.lock_ignore_poison());
         Ok(())
     }
 
@@ -693,17 +663,8 @@ impl HostHangingSignBlockEntity for PluginHostState {
             Ordering::Relaxed,
         );
         sign.back_text.set_color(new_text.get_color());
-        (*sign
-            .back_text
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner))
-        .clone_from(
-            &new_text
-                .messages
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        (*sign.back_text.messages.lock_ignore_poison())
+            .clone_from(&new_text.messages.lock_ignore_poison());
         Ok(())
     }
 
@@ -719,13 +680,13 @@ impl HostHangingSignBlockEntity for PluginHostState {
         self.get(&res)?.is_waxed.store(waxed, Ordering::Relaxed);
         Ok(())
     }
-
-    fn drop(&mut self, rep: Resource<HangingSignBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostTrappedChestBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<TrappedChestBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<TrappedChestBlockEntity>,
@@ -743,24 +704,20 @@ impl HostTrappedChestBlockEntity for PluginHostState {
     fn viewer_count(&mut self, res: Resource<TrappedChestBlockEntity>) -> wasmtime::Result<u32> {
         Ok(self.get(&res)?.get_viewer_count() as u32)
     }
-
-    fn drop(&mut self, rep: Resource<TrappedChestBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 macro_rules! impl_basic_block_entity {
     ($trait_name:ident, $resource_name:ident, $name_str:expr) => {
         impl $trait_name for PluginHostState {
+            fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
+                self.drop(rep)
+            }
+
             fn get_block_entity(
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<Resource<BlockEntity>> {
                 self.add(self.get(&res)?.clone() as _)
-            }
-
-            fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
-                self.drop(rep)
             }
         }
     };
@@ -769,6 +726,10 @@ macro_rules! impl_basic_block_entity {
 macro_rules! impl_container_basic_block_entity {
     ($trait_name:ident, $resource_name:ident, $name_str:expr) => {
         impl $trait_name for PluginHostState {
+            fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
+                self.drop(rep)
+            }
+
             fn get_block_entity(
                 &mut self,
                 res: Resource<$resource_name>,
@@ -780,11 +741,7 @@ macro_rules! impl_container_basic_block_entity {
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<Resource<ContainerBlockEntity>> {
-                get_container_from_be(self, &res)
-            }
-
-            fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
-                self.drop(rep)
+                get_container_from_be(&mut *self, &res)
             }
         }
     };
@@ -793,6 +750,10 @@ macro_rules! impl_container_basic_block_entity {
 macro_rules! impl_cooking_host_block_entity {
     ($trait_name:ident, $resource_name:ident, $internal_type:ty, $name_str:expr) => {
         impl $trait_name for PluginHostState {
+            fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
+                self.drop(rep)
+            }
+
             fn get_block_entity(
                 &mut self,
                 res: Resource<$resource_name>,
@@ -804,7 +765,7 @@ macro_rules! impl_cooking_host_block_entity {
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<Resource<ContainerBlockEntity>> {
-                get_container_from_be(self, &res)
+                get_container_from_be(&mut *self, &res)
             }
 
             fn get_cooking_time_spent(
@@ -838,10 +799,6 @@ macro_rules! impl_cooking_host_block_entity {
             fn is_burning(&mut self, res: Resource<$resource_name>) -> wasmtime::Result<bool> {
                 Ok(self.get(&res)?.is_burning())
             }
-
-            fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
-                self.drop(rep)
-            }
         }
     };
 }
@@ -866,6 +823,10 @@ impl_cooking_host_block_entity!(
 );
 
 impl HostBannerBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<BannerBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<BannerBlockEntity>,
@@ -884,13 +845,13 @@ impl HostBannerBlockEntity for PluginHostState {
             .ok()
             .and_then(|g| g.clone()))
     }
-
-    fn drop(&mut self, rep: Resource<BannerBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostBarrelBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<BarrelBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<BarrelBlockEntity>,
@@ -908,13 +869,13 @@ impl HostBarrelBlockEntity for PluginHostState {
     fn viewer_count(&mut self, _res: Resource<BarrelBlockEntity>) -> wasmtime::Result<u32> {
         Ok(0)
     }
-
-    fn drop(&mut self, rep: Resource<BarrelBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostBeaconBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<BeaconBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<BeaconBlockEntity>,
@@ -940,13 +901,13 @@ impl HostBeaconBlockEntity for PluginHostState {
     fn get_levels(&mut self, res: Resource<BeaconBlockEntity>) -> wasmtime::Result<i32> {
         Ok(self.get(&res)?.levels.load(Ordering::Relaxed))
     }
-
-    fn drop(&mut self, rep: Resource<BeaconBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostBeehiveBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<BeehiveBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<BeehiveBlockEntity>,
@@ -963,13 +924,13 @@ impl HostBeehiveBlockEntity for PluginHostState {
             .and_then(|g| g.as_ref().map(|v| v.len() as u32))
             .unwrap_or(0))
     }
-
-    fn drop(&mut self, rep: Resource<BeehiveBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostBellBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<BellBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<BellBlockEntity>,
@@ -984,13 +945,13 @@ impl HostBellBlockEntity for PluginHostState {
     fn get_ring_ticks(&mut self, res: Resource<BellBlockEntity>) -> wasmtime::Result<i32> {
         Ok(self.get(&res)?.ring_ticks.load())
     }
-
-    fn drop(&mut self, rep: Resource<BellBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostBrewingStandBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<BrewingStandBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<BrewingStandBlockEntity>,
@@ -1012,13 +973,13 @@ impl HostBrewingStandBlockEntity for PluginHostState {
     fn get_fuel(&mut self, res: Resource<BrewingStandBlockEntity>) -> wasmtime::Result<i32> {
         Ok(self.get(&res)?.fuel.load(Ordering::Relaxed))
     }
-
-    fn drop(&mut self, rep: Resource<BrewingStandBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostChiseledBookshelfBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<ChiseledBookshelfBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<ChiseledBookshelfBlockEntity>,
@@ -1039,13 +1000,13 @@ impl HostChiseledBookshelfBlockEntity for PluginHostState {
     ) -> wasmtime::Result<i8> {
         Ok(self.get(&res)?.last_interacted_slot.load(Ordering::Relaxed))
     }
-
-    fn drop(&mut self, rep: Resource<ChiseledBookshelfBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostComparatorBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<ComparatorBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<ComparatorBlockEntity>,
@@ -1056,13 +1017,13 @@ impl HostComparatorBlockEntity for PluginHostState {
     fn get_output_signal(&mut self, res: Resource<ComparatorBlockEntity>) -> wasmtime::Result<u8> {
         Ok(self.get(&res)?.output_signal.load(Ordering::Relaxed))
     }
-
-    fn drop(&mut self, rep: Resource<ComparatorBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostCrafterBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<CrafterBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<CrafterBlockEntity>,
@@ -1090,13 +1051,13 @@ impl HostCrafterBlockEntity for PluginHostState {
     fn is_triggered(&mut self, res: Resource<CrafterBlockEntity>) -> wasmtime::Result<bool> {
         Ok(self.get(&res)?.triggered.load(Ordering::Relaxed))
     }
-
-    fn drop(&mut self, rep: Resource<CrafterBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostCreakingHeartBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<CreakingHeartBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<CreakingHeartBlockEntity>,
@@ -1110,13 +1071,13 @@ impl HostCreakingHeartBlockEntity for PluginHostState {
     ) -> wasmtime::Result<Option<String>> {
         Ok(self.get(&res)?.creaking_uuid.load().map(|u| u.to_string()))
     }
-
-    fn drop(&mut self, rep: Resource<CreakingHeartBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostEndGatewayBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<EndGatewayBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<EndGatewayBlockEntity>,
@@ -1134,13 +1095,13 @@ impl HostEndGatewayBlockEntity for PluginHostState {
     ) -> wasmtime::Result<bool> {
         Ok(self.get(&res)?.exact_teleport.try_lock().is_ok_and(|g| *g))
     }
-
-    fn drop(&mut self, rep: Resource<EndGatewayBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostEnderChestBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<EnderChestBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<EnderChestBlockEntity>,
@@ -1151,13 +1112,13 @@ impl HostEnderChestBlockEntity for PluginHostState {
     fn viewer_count(&mut self, _res: Resource<EnderChestBlockEntity>) -> wasmtime::Result<u32> {
         Ok(0)
     }
-
-    fn drop(&mut self, rep: Resource<EnderChestBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostShulkerBoxBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<ShulkerBoxBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<ShulkerBoxBlockEntity>,
@@ -1175,13 +1136,13 @@ impl HostShulkerBoxBlockEntity for PluginHostState {
     fn viewer_count(&mut self, _res: Resource<ShulkerBoxBlockEntity>) -> wasmtime::Result<u32> {
         Ok(0)
     }
-
-    fn drop(&mut self, rep: Resource<ShulkerBoxBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostHopperBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<HopperBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<HopperBlockEntity>,
@@ -1199,13 +1160,13 @@ impl HostHopperBlockEntity for PluginHostState {
     fn get_cooldown(&mut self, res: Resource<HopperBlockEntity>) -> wasmtime::Result<i32> {
         Ok(self.get(&res)?.cooldown_time.load(Ordering::Relaxed))
     }
-
-    fn drop(&mut self, rep: Resource<HopperBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostJigsawBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<JigsawBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<JigsawBlockEntity>,
@@ -1262,13 +1223,13 @@ impl HostJigsawBlockEntity for PluginHostState {
     ) -> wasmtime::Result<i32> {
         Ok(self.get(&res)?.placement_priority.load(Ordering::Relaxed))
     }
-
-    fn drop(&mut self, rep: Resource<JigsawBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostLecternBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<LecternBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<LecternBlockEntity>,
@@ -1286,13 +1247,13 @@ impl HostLecternBlockEntity for PluginHostState {
     fn get_page(&mut self, res: Resource<LecternBlockEntity>) -> wasmtime::Result<u32> {
         Ok(self.get(&res)?.page.load(Ordering::Relaxed) as u32)
     }
-
-    fn drop(&mut self, rep: Resource<LecternBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostPistonBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<PistonBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<PistonBlockEntity>,
@@ -1311,13 +1272,13 @@ impl HostPistonBlockEntity for PluginHostState {
     fn is_source(&mut self, res: Resource<PistonBlockEntity>) -> wasmtime::Result<bool> {
         Ok(self.get(&res)?.source)
     }
-
-    fn drop(&mut self, rep: Resource<PistonBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostSculkShriekerBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<SculkShriekerBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<SculkShriekerBlockEntity>,
@@ -1331,13 +1292,13 @@ impl HostSculkShriekerBlockEntity for PluginHostState {
     ) -> wasmtime::Result<i32> {
         Ok(self.get(&res)?.warning_level.try_lock().map_or(0, |g| *g))
     }
-
-    fn drop(&mut self, rep: Resource<SculkShriekerBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostSkullBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<SkullBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<SkullBlockEntity>,
@@ -1356,13 +1317,13 @@ impl HostSkullBlockEntity for PluginHostState {
             .ok()
             .and_then(|g| g.clone()))
     }
-
-    fn drop(&mut self, rep: Resource<SkullBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
 impl HostStructureBlockBlockEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<StructureBlockBlockEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_block_entity(
         &mut self,
         res: Resource<StructureBlockBlockEntity>,
@@ -1403,10 +1364,6 @@ impl HostStructureBlockBlockEntity for PluginHostState {
 
     fn get_seed(&mut self, res: Resource<StructureBlockBlockEntity>) -> wasmtime::Result<i64> {
         Ok(self.get(&res)?.seed.try_lock().map_or(0, |g| *g))
-    }
-
-    fn drop(&mut self, rep: Resource<StructureBlockBlockEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
     }
 }
 

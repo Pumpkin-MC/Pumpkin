@@ -1,6 +1,7 @@
-/// The main entry point for a Pumpkin plugin.
-/// This world defines the exports that the plugin must provide to the host
-/// and the imports that the host provides to the plugin.
+/// The main entry point for a Pumpkin plugin using the v0.2 async ABI.
+///
+/// This world defines the callbacks the plugin exports and the host functions
+/// it imports. The host selects this ABI by the package version.
 package pumpkin:plugin@0.2.0;
 
 world plugin {
@@ -84,42 +85,53 @@ world plugin {
 
     /// Called by the host once to initialize the plugin.
     /// Internal use only; plugins should use the `register_plugin!` macro.
-    export init-plugin: func();
+    export init-plugin: async func();
 
     /// Called when the plugin is being loaded.
     /// Use this to register commands, events, and perform initial setup.
-    export on-load: func(context: context) -> result<_, string>;
+    export on-load: async func(context: context) -> result<_, string>;
 
     /// Called when the plugin is being unloaded.
     /// Use this to save data and clean up resources.
-    export on-unload: func(context: context) -> result<_, string>;
+    export on-unload: async func(context: context) -> result<_, string>;
 
     /// Provides plugin metadata (name, version, etc.) to the host.
+    /// This is a pure snapshot callback and must never call host imports.
     export metadata;
 
-    /// Dispatches an event to the plugin for handling.
-    export handle-event: func(event-id: u32, server: server-instance, event: event) -> event;
+    /// Dispatches an event to the plugin and returns the updated event.
+    ///
+    /// The event is transferred by value. The host applies the returned value
+    /// for blocking handlers and ignores it for nonblocking handlers.
+    /// If the returned variant case differs from the dispatched case, the host
+    /// treats the result as a handler error and keeps the original event.
+    export handle-event: async func(event-id: u32, server: server-instance, event: event) -> event;
 
     /// Dispatches a command execution to the plugin.
-    export handle-command: func(command-id: u32, sender: command-sender, server: server-instance, args: consumed-args) -> result<s32, command-error>;
+    export handle-command: async func(command-id: u32, sender: command-sender, server: server-instance, args: consumed-args) -> result<s32, command-error>;
 
     /// Dispatches a command suggestion request to the plugin.
-    export handle-command-suggestion: func(handler-id: u32, sender: command-sender, server: server-instance, request: suggestion-request) -> command-suggestions;
+    export handle-command-suggestion: async func(handler-id: u32, sender: command-sender, server: server-instance, request: suggestion-request) -> command-suggestions;
 
     /// Dispatches a scheduled task execution to the plugin.
-    export handle-task: func(handler-id: u32, server: server-instance);
+    export handle-task: async func(handler-id: u32, server: server-instance);
 
     /// Processes an incoming message from another plugin if possible, and returns (a possibly empty) response.
-    export handle-ipc-message: func(sender: plugin-id, message: ipc-message) -> result<ipc-message, string>;
+    export handle-ipc-message: async func(sender: plugin-id, message: ipc-message) -> result<ipc-message, string>;
 
-    export handle-ai-goal-can-start: func(goal-id: u32, server: server-instance, entity: entity) -> bool;
-    export handle-ai-goal-should-continue: func(goal-id: u32, server: server-instance, entity: entity) -> bool;
-    export handle-ai-goal-start: func(goal-id: u32, server: server-instance, entity: entity);
-    export handle-ai-goal-tick: func(goal-id: u32, server: server-instance, entity: entity);
-    export handle-ai-goal-stop: func(goal-id: u32, server: server-instance, entity: entity);
+    /// Checks whether an AI goal can start.
+    export handle-ai-goal-can-start: async func(goal-id: u32, server: server-instance, entity: entity) -> bool;
+    /// Checks whether an active AI goal should continue.
+    export handle-ai-goal-should-continue: async func(goal-id: u32, server: server-instance, entity: entity) -> bool;
+    /// Starts an AI goal.
+    export handle-ai-goal-start: async func(goal-id: u32, server: server-instance, entity: entity);
+    /// Runs one tick of an active AI goal.
+    export handle-ai-goal-tick: async func(goal-id: u32, server: server-instance, entity: entity);
+    /// Stops an AI goal.
+    export handle-ai-goal-stop: async func(goal-id: u32, server: server-instance, entity: entity);
 
     /// Dispatches a chunk generation phase to the plugin.
-    export handle-generate-phase: func(generator-id: u32, phase: generation-phase, chunk: chunk-buffer);
+    export handle-generate-phase: async func(generator-id: u32, phase: generation-phase, chunk: chunk-buffer);
 
     /// Dispatches gametest callbacks to the plugin.
     export gametest-callbacks;

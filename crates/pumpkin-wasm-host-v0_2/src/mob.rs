@@ -1,8 +1,5 @@
-use std::sync::Arc;
-use wasmtime::component::{Access, HasSelf, Resource};
-
-use pumpkin_util::math::vector3::Vector3;
-
+use super::run_blocking;
+use crate::LockIgnorePoison;
 use crate::{
     pumpkin::plugin::{
         common::Position,
@@ -11,20 +8,23 @@ use crate::{
             AgeableData as WitAgeableData, BlockDirection as WitBlockDirection,
             CatData as WitCatData, CreeperData as WitCreeperData, DyeColor as WitDyeColor,
             EndermanData as WitEndermanData, Entity, FoxData as WitFoxData, HostMob,
-            IronGolemData as WitIronGolemData, LivingEntity as WitLivingEntity, Mob as WitMob,
-            MobData as WitMobData, PathNodeType as WitPathNodeType, SheepData as WitSheepData,
-            ShulkerData as WitShulkerData, SlimeData as WitSlimeData,
+            HostMobWithStore, IronGolemData as WitIronGolemData, LivingEntity as WitLivingEntity,
+            Mob as WitMob, MobData as WitMobData, PathNodeType as WitPathNodeType,
+            SheepData as WitSheepData, ShulkerData as WitShulkerData, SlimeData as WitSlimeData,
             VillagerData as WitVillagerData, VillagerProfession as WitVillagerProfession,
             WolfData as WitWolfData, ZombieData as WitZombieData,
         },
     },
     uuid::UuidExt,
 };
-use pumpkin_core::entity::ai::goal::Goal;
-use pumpkin_core::entity::mob::Mob as InternalMob;
-use pumpkin_core::entity::passive::tamable::TamableAnimal;
-use pumpkin_core::server::Server;
+use pumpkin_core::{
+    entity::{ai::goal::Goal, mob::Mob as InternalMob, passive::tamable::TamableAnimal},
+    server::Server,
+};
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_wasm_host_common::{plugin::WasmPlugin, state::PluginHostState};
+use std::sync::Arc;
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 #[must_use]
 pub const fn from_wit_path_node_type(
@@ -289,6 +289,10 @@ impl Goal for CustomWasmGoal {
 }
 
 impl HostMob for PluginHostState {
+    fn drop(&mut self, rep: Resource<WitMob>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn as_entity(&mut self, this: Resource<WitMob>) -> wasmtime::Result<Resource<Entity>> {
         self.add(self.get(&this)?.clone())
     }
@@ -332,12 +336,12 @@ impl HostMob for PluginHostState {
                 }
                 crate::pumpkin::plugin::world::BuiltinAiGoal::LookAtPlayer(range) => {
                     mob_entity.add_goal(priority, pumpkin_core::entity::ai::goal::look_at_entity::LookAtEntityGoal::new(
-                        std::sync::Weak::<pumpkin_core::entity::mob::zombie::zombie::ZombieEntity>::new() as std::sync::Weak<dyn pumpkin_core::entity::mob::Mob>,
-                        &pumpkin_data::entity::EntityType::PLAYER,
-                        range,
-                        0.02,
-                        false,
-                    ));
+                            std::sync::Weak::<pumpkin_core::entity::mob::zombie::zombie::ZombieEntity>::new() as std::sync::Weak<dyn pumpkin_core::entity::mob::Mob>,
+                            &pumpkin_data::entity::EntityType::PLAYER,
+                            range,
+                            0.02,
+                            false,
+                        ));
                 }
                 crate::pumpkin::plugin::world::BuiltinAiGoal::LookAround => {
                     mob_entity.add_goal(
@@ -428,8 +432,7 @@ impl HostMob for PluginHostState {
             let dest = Vector3::new(pos.0, pos.1, pos.2);
             mob.get_mob_entity()
                 .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .set_progress(pumpkin_core::entity::ai::pathfinder::NavigatorGoal::new(
                     mob_pos, dest, speed,
                 ));
@@ -450,15 +453,13 @@ impl HostMob for PluginHostState {
             let target_pos = target_entity.get_entity().pos.load();
             mob.get_mob_entity()
                 .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .set_progress(pumpkin_core::entity::ai::pathfinder::NavigatorGoal::new(
                     mob_pos, target_pos, speed,
                 ));
             mob.get_mob_entity()
                 .look_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .look_at_entity(mob, &target_entity);
             true
         }))
@@ -467,11 +468,7 @@ impl HostMob for PluginHostState {
     fn stop_navigation(&mut self, this: Resource<WitMob>) -> wasmtime::Result<()> {
         let entity = self.get(&this)?;
         if let Some(mob) = entity.get_mob() {
-            mob.get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .stop();
+            mob.get_mob_entity().navigator.lock_ignore_poison().stop();
         }
         Ok(())
     }
@@ -482,8 +479,7 @@ impl HostMob for PluginHostState {
             let is_idle = mob
                 .get_mob_entity()
                 .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .is_idle();
             !is_idle
         }))
@@ -494,8 +490,7 @@ impl HostMob for PluginHostState {
         Ok(entity.get_mob().is_none_or(|mob| {
             mob.get_mob_entity()
                 .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .is_idle()
         }))
     }
@@ -505,8 +500,7 @@ impl HostMob for PluginHostState {
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity()
                 .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .set_speed(speed);
         }
         Ok(())
@@ -524,8 +518,7 @@ impl HostMob for PluginHostState {
             let dest = Vector3::new(pos.0, pos.1, pos.2);
             mob.get_mob_entity()
                 .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .can_reach_within(living, dest, max_distance)
         }))
     }
@@ -541,8 +534,7 @@ impl HostMob for PluginHostState {
             let internal_type = from_wit_path_node_type(node_type);
             mob.get_mob_entity()
                 .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .set_pathfinding_malus(internal_type, malus);
         }
         Ok(())
@@ -558,8 +550,7 @@ impl HostMob for PluginHostState {
             let internal_type = from_wit_path_node_type(node_type);
             mob.get_mob_entity()
                 .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .get_pathfinding_malus(internal_type)
         }))
     }
@@ -569,8 +560,7 @@ impl HostMob for PluginHostState {
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity()
                 .look_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .look_at(mob, pos.0, pos.1, pos.2);
         }
         Ok(())
@@ -586,8 +576,7 @@ impl HostMob for PluginHostState {
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity()
                 .look_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .look_at_entity(mob, &target_entity);
         }
         Ok(())
@@ -629,10 +618,7 @@ impl HostMob for PluginHostState {
         if let Some(villager) =
             any.downcast_ref::<pumpkin_core::entity::passive::villager::VillagerEntity>()
         {
-            let data = *villager
-                .villager_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let data = *villager.villager_data.lock_ignore_poison();
             return Ok(WitMobData::Villager(WitVillagerData {
                 profession: to_wit_villager_profession(data.profession.0),
                 level: (data.level.0).clamp(0, 255) as u8,
@@ -763,10 +749,7 @@ impl HostMob for PluginHostState {
                     any.downcast_ref::<pumpkin_core::entity::passive::villager::VillagerEntity>()
                 {
                     {
-                        let mut vdata = villager
-                            .villager_data
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let mut vdata = villager.villager_data.lock_ignore_poison();
                         vdata.profession = pumpkin_protocol::codec::var_int::VarInt(
                             from_wit_villager_profession(villager_data.profession) as i32,
                         );
@@ -880,34 +863,23 @@ impl HostMob for PluginHostState {
         let entity = self.get(&this)?;
         Ok(entity.get_entity().get_frozen_ticks())
     }
-
-    fn drop(&mut self, rep: Resource<WitMob>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
 }
 
-impl crate::pumpkin::plugin::world::HostMobWithStore<PluginHostState> for HasSelf<PluginHostState> {
+impl HostMobWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn clear_ai_goals(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         this: Resource<WitMob>,
     ) -> wasmtime::Result<()> {
-        let (entity, plugin) = {
+        let entity = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
             let entity = state.get(&this)?.clone();
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
-            (entity, plugin)
-        };
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                if let Some(mob) = entity.get_mob() {
-                    mob.get_mob_entity().clear_ai_goals(mob);
-                }
-            })
-            .await
+            Ok(entity)
+        })?;
+        run_blocking(accessor, move || {
+            if let Some(mob) = entity.get_mob() {
+                mob.get_mob_entity().clear_ai_goals(mob);
+            }
+        })
+        .await
     }
 }
