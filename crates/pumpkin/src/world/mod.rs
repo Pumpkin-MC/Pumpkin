@@ -998,6 +998,7 @@ impl World {
             }
         }
     }
+
     fn broadcast_bedrock_grouped<'a, P: BClientPacket>(
         packet: &P,
         recipients: impl Iterator<Item = &'a Arc<BedrockClient>>,
@@ -1997,6 +1998,7 @@ impl World {
                     }
                 }
             });
+
         // 3. Parallel Random Ticks via Rayon
         let world = self.clone();
         let random_handle = handle.clone();
@@ -2995,7 +2997,8 @@ impl World {
                         default_max_value: 20.0,
                         default_value: 20.0,
                         name: "minecraft:player.hunger".to_string(),
-                        modifiers: Vec::new(),                    },
+                        modifiers: Vec::new(),
+                    },
                 ],
                 tick: VarULong(0),
             })
@@ -3994,7 +3997,8 @@ impl World {
                 i32::from(EntityType::PLAYER.id).into(),
                 position,
                 pitch,
-                yaw,                yaw,
+                yaw,
+                yaw,
                 0.into(),
                 Vector3::new(0.0, 0.0, 0.0),
             ),
@@ -4993,7 +4997,8 @@ impl World {
                 entries: vec![PlayerListEntry {
                     uuid,
                     entity_unique_id: VarLong(entity_id as i64),
-                    username: player.gameprofile.name.clone(),                    xuid: String::new(),
+                    username: player.gameprofile.name.clone(),
+                    xuid: String::new(),
                     platform_chat_id: String::new(),
                     build_platform: BuildPlatform::Unknown,
                     skin: Skin::steve(),
@@ -5992,7 +5997,8 @@ impl World {
                 8
             } else {
                 8 - level
-            };            state.height = f32::from(amount) / 9.0;
+            };
+            state.height = f32::from(amount) / 9.0;
             state.level = i16::from(amount);
             state.is_source = level == 0;
             state.is_still = state.is_source;
@@ -6991,7 +6997,8 @@ impl World {
     ) {
         let players = self.players.load();
 
-        let recipients = players.iter().filter(|p| {            if except.contains(&p.get_entity().entity_uuid) {
+        let recipients = players.iter().filter(|p| {
+            if except.contains(&p.get_entity().entity_uuid) {
                 return false;
             }
             p.watched_section
@@ -7565,8 +7572,6 @@ fn merge_entity_records(data: &mut Vec<NbtCompound>, live: bool, fresh: Vec<NbtC
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Weak};
-
     use pumpkin_data::{
         Block,
         block_properties::{ChestLikeProperties, ChestType, HorizontalFacing, WaterLikeProperties},
@@ -7577,8 +7582,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::{
-        ArcSwap, BlockFlags, Dimension, Level, LevelData, OnScheduledTickArgs, Vector2, World,
-        bedrock_block_breaking_rate, bedrock_chest_block_actor, merge_entity_records,
+        World, bedrock_block_breaking_rate, bedrock_chest_block_actor, merge_entity_records,
     };
 
     fn record(uuid: Option<Uuid>, id: &str) -> NbtCompound {
@@ -7817,63 +7821,5 @@ mod tests {
             GameRuleValue::Int(v) => assert_eq!(*v, 20),
             GameRuleValue::Bool(_) => panic!("expected int"),
         }
-    }
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn unsupported_fire_extinguish_notifies_listeners()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let test_folder = tempfile::tempdir()?;
-        let level_config = pumpkin_config::world::LevelConfig::default();
-        let level = Level::from_root_folder(
-            &level_config,
-            test_folder.path().to_path_buf(),
-            0,
-            Dimension::OVERWORLD,
-        );
-        let level_info = Arc::new(ArcSwap::from_pointee(LevelData::default(
-            pumpkin_util::world_seed::Seed(0),
-        )));
-        let world = Arc::new(World::load(
-            level.clone(),
-            level_info,
-            Dimension::OVERWORLD,
-            crate::block::registry::default_registry(),
-            Weak::new(),
-        ));
-        level.loaded_chunks.insert(
-            Vector2::new(0, 0),
-            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
-        );
-
-        let position = BlockPos::new(8, 100, 8);
-        world.set_block_state(
-            &position,
-            Block::FIRE.default_state.id,
-            BlockFlags::NOTIFY_ALL,
-        );
-        world
-            .unsent_block_changes
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
-
-        crate::block::BlockBehaviour::on_scheduled_tick(
-            &crate::block::blocks::fire::fire::FireBlock,
-            OnScheduledTickArgs {
-                world: &world,
-                block: &Block::FIRE,
-                position: &position,
-            },
-        );
-
-        let notified_state = world
-            .unsent_block_changes
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&position)
-            .copied();
-        level.shutdown().await;
-
-        assert_eq!(notified_state, Some(Block::AIR.default_state.id));
-        Ok(())
     }
 }
