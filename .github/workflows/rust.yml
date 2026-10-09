@@ -171,6 +171,8 @@ jobs:
         with:
           python-version: "3.x"
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
+      # The v0.2 guest SDK tests build a fixture component for this target
+      - run: rustup target add wasm32-wasip2
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
         with:
