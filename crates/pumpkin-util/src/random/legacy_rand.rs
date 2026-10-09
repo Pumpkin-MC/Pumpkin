@@ -129,7 +129,7 @@ impl RandomImpl for LegacyRand {
         let i = self.next(26);
         let j = self.next(27);
         let l = (i64::from(i) << 27).wrapping_add(i64::from(j));
-        l as f64 * f64::from(1.110223E-16f32)
+        l as f64 * 1.1102230246251565e-16f64
     }
 
     fn next_gaussian(&mut self) -> f64 {
