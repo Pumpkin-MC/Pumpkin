@@ -83,6 +83,13 @@ impl Goal for WaterAvoidingRandomStrollGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        if mob
+            .get_mob_entity()
+            .get_target()
+            .is_some_and(|t| t.get_entity().is_alive())
+        {
+            return false;
+        }
         !mob.is_navigator_idle() && !mob.get_entity().has_passengers()
     }
 

@@ -68,7 +68,10 @@ impl Goal for LeapAtTargetGoal {
         };
 
         let mob_entity = mob.get_mob_entity();
-        let entity = &mob_entity.living_entity.entity;
+        let living = &mob_entity.living_entity;
+        living.set_speed(0.0);
+        living.movement_input.store(Vector3::default());
+        let entity = &living.entity;
         let mob_pos = entity.pos.load();
         let target_pos = target.get_entity().pos.load();
         let movement = entity.velocity.load();
@@ -91,8 +94,11 @@ impl Goal for LeapAtTargetGoal {
         entity.set_velocity(delta);
     }
 
-    fn stop(&mut self, _mob: &dyn Mob) {
+    fn stop(&mut self, mob: &dyn Mob) {
         self.target = None;
+        let living = &mob.get_mob_entity().living_entity;
+        living.set_speed(0.0);
+        living.movement_input.store(Vector3::default());
     }
 
     fn controls(&self) -> Controls {

@@ -67,6 +67,7 @@ impl BreedGoal {
     fn breed(mob: &dyn Mob, mate: &dyn EntityBase) {
         let mob_entity = mob.get_mob_entity();
         let entity = mob.get_entity();
+        let parent_pos = entity.pos.load();
         let world = entity.world.load();
 
         let player_opt = mob_entity
@@ -99,9 +100,37 @@ impl BreedGoal {
         mate.reset_love();
         mate.set_breeding_cooldown(6000);
 
-        let parent_pos = entity.pos.load();
         let baby = from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4());
         baby.get_entity().set_age(-24000);
+        if let Some(fox_baby) = baby
+            .cast_any()
+            .downcast_ref::<crate::entity::passive::fox::FoxEntity>()
+        {
+            let parent_fox = mob
+                .cast_any()
+                .downcast_ref::<crate::entity::passive::fox::FoxEntity>();
+            let partner_fox = mate
+                .cast_any()
+                .downcast_ref::<crate::entity::passive::fox::FoxEntity>();
+            if let (Some(p1), Some(p2)) = (parent_fox, partner_fox) {
+                let v = if mob.get_random().random_range(0..2) == 0 {
+                    p1.get_variant()
+                } else {
+                    p2.get_variant()
+                };
+                fox_baby.set_variant(v);
+            }
+            if let Some(b1) = mob_entity.breeder.load() {
+                fox_baby.add_trusted(b1);
+            }
+            if let Some(b2) = mate
+                .get_mob()
+                .and_then(|m| m.get_mob_entity().breeder.load())
+                && Some(b2) != mob_entity.breeder.load()
+            {
+                fox_baby.add_trusted(b2);
+            }
+        }
         let world_full = entity.world.load_full();
         world_full.spawn_entity(baby);
 

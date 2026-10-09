@@ -97,6 +97,7 @@ pub struct LivingEntity {
     pub entity_equipment: Arc<std::sync::Mutex<EntityEquipment>>,
     pub equipment_drop_chances: Arc<std::sync::Mutex<FxHashMap<EquipmentSlot, f32>>>,
     pub movement_input: AtomicCell<Vector3<f64>>,
+    pub speed: AtomicCell<f64>,
     pub equipment_slots: Arc<FxHashMap<usize, EquipmentSlot>>,
 
     pub jumping: AtomicBool,
@@ -312,6 +313,7 @@ impl LivingEntity {
             last_hurt_by_mob_id: AtomicI32::new(0),
             last_hurt_by_mob_time: AtomicI64::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
+            speed: AtomicCell::new(0.0),
             water_movement_speed_multiplier,
             last_block_pos: AtomicCell::new(None),
             equipment_attribute_modifier_ids: std::sync::Mutex::new(FxHashMap::default()),
@@ -356,6 +358,15 @@ impl LivingEntity {
         }
 
         None
+    }
+
+    #[must_use]
+    pub fn get_speed(&self) -> f64 {
+        self.speed.load()
+    }
+
+    pub fn set_speed(&self, speed: f64) {
+        self.speed.store(speed);
     }
 
     /// Triggers location-based enchantment effects (e.g. Frost Walker) when the entity's block position changes.
@@ -1504,7 +1515,16 @@ impl LivingEntity {
     fn travel_in_air(&self, caller: &dyn EntityBase) {
         // applyMovementInput
 
-        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+        let effective_speed = if caller.get_player().is_some() {
+            self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
+        } else {
+            let current_speed = self.get_speed();
+            if current_speed > 0.0 {
+                current_speed
+            } else {
+                self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
+            }
+        };
 
         let (speed, friction) = if self.entity.on_ground.load(Relaxed) {
             // getVelocityAffectingPos
@@ -1583,7 +1603,16 @@ impl LivingEntity {
 
         let falling = self.entity.velocity.load().y <= 0.0;
         let gravity = self.get_effective_gravity(caller);
-        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+        let effective_speed = if caller.get_player().is_some() {
+            self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
+        } else {
+            let current_speed = self.get_speed();
+            if current_speed > 0.0 {
+                current_speed
+            } else {
+                self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
+            }
+        };
 
         if water {
             let mut friction = if self.entity.sprinting.load(Relaxed) {
@@ -1611,8 +1640,14 @@ impl LivingEntity {
                 friction = 0.96;
             }
 
-            self.entity
-                .update_velocity_from_input(movement_input, speed);
+            let fluid_input =
+                if caller.get_player().is_none() && movement_input.length_squared() > 1.0e-7 {
+                    movement_input.normalize()
+                } else {
+                    movement_input
+                };
+
+            self.entity.update_velocity_from_input(fluid_input, speed);
 
             self.make_move(caller);
 
@@ -1626,7 +1661,14 @@ impl LivingEntity {
             self.apply_fluid_moving_speed(&mut velo.y, gravity, falling);
             self.entity.velocity.store(velo);
         } else {
-            self.entity.update_velocity_from_input(movement_input, 0.02);
+            let fluid_input =
+                if caller.get_player().is_none() && movement_input.length_squared() > 1.0e-7 {
+                    movement_input.normalize()
+                } else {
+                    movement_input
+                };
+
+            self.entity.update_velocity_from_input(fluid_input, 0.02);
 
             self.make_move(caller);
 
