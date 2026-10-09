@@ -10,6 +10,7 @@ use pumpkin_data::{
     item::Item,
     particle::Particle,
     sound::{Sound, SoundCategory},
+    tag::{self, Taggable},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::{euler_angle::EulerAngle, vector3::Vector3};
@@ -328,28 +329,22 @@ impl EntityBase for ArmorStandEntity {
             game_rules.mob_griefing
         };
 
-        if !mob_griefing_gamerule && source.is_some_and(|source| source.get_player().is_none()) {
+        // Vanilla: only mob attackers are stopped by `mobGriefing`.
+        if !mob_griefing_gamerule && cause.is_some_and(|cause| cause.get_mob().is_some()) {
             return false;
         }
 
-        let bypasses_invulnerability =
-            damage_type == DamageType::OUT_OF_WORLD || damage_type == DamageType::GENERIC_KILL;
-
-        if bypasses_invulnerability {
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY) {
             entity.remove();
             return false;
         }
 
-        if entity.is_invulnerable_to(&damage_type) || self.is_invisible() || self.is_marker() {
+        if entity.is_invulnerable_to(&damage_type, cause) || self.is_invisible() || self.is_marker()
+        {
             return false;
         }
 
-        let is_explosion = damage_type == DamageType::FIREWORKS
-            || damage_type == DamageType::EXPLOSION
-            || damage_type == DamageType::PLAYER_EXPLOSION
-            || damage_type == DamageType::BAD_RESPAWN_POINT;
-
-        if is_explosion {
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION) {
             Self::on_break(entity);
             entity.remove();
             return false;
@@ -358,16 +353,9 @@ impl EntityBase for ArmorStandEntity {
         // TODO: IGNITES_ARMOR_STANDS (in_fire, campfire) - set on fire
         // TODO: BURNS_ARMOR_STANDS (on_fire) - reduce health
 
-        let can_break = damage_type == DamageType::PLAYER_EXPLOSION
-            || damage_type == DamageType::PLAYER_ATTACK
-            || damage_type == DamageType::SPEAR
-            || damage_type == DamageType::MACE_SMASH;
-
-        let always_kills = damage_type == DamageType::ARROW
-            || damage_type == DamageType::TRIDENT
-            || damage_type == DamageType::FIREBALL
-            || damage_type == DamageType::WITHER_SKULL
-            || damage_type == DamageType::WIND_CHARGE;
+        let can_break = damage_type.has_tag(&tag::DamageType::MINECRAFT_CAN_BREAK_ARMOR_STAND);
+        let always_kills =
+            damage_type.has_tag(&tag::DamageType::MINECRAFT_ALWAYS_KILLS_ARMOR_STANDS);
 
         if !can_break && !always_kills {
             return false;

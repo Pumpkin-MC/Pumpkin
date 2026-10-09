@@ -5,14 +5,23 @@ use crate::{
     serial::{PacketRead, PacketWrite},
 };
 
+/// Displays the boss bar to the player.
 pub const BOSS_EVENT_SHOW: u8 = 0;
+/// Registers a player to view the boss bar.
 pub const BOSS_EVENT_REGISTER_PLAYER: u8 = 1;
+/// Hides the boss bar from the player.
 pub const BOSS_EVENT_HIDE: u8 = 2;
+/// Unregisters a player from viewing the boss bar.
 pub const BOSS_EVENT_UNREGISTER_PLAYER: u8 = 3;
+/// Updates the boss bar health percentage.
 pub const BOSS_EVENT_HEALTH_PERCENTAGE: u8 = 4;
+/// Updates the boss bar title text.
 pub const BOSS_EVENT_TITLE: u8 = 5;
+/// Updates color and overlay styling properties.
 pub const BOSS_EVENT_APPEARANCE_PROPERTIES: u8 = 6;
+/// Updates the texture styling of the boss bar.
 pub const BOSS_EVENT_TEXTURE: u8 = 7;
+/// Requests boss bar state information from the client.
 pub const BOSS_EVENT_REQUEST: u8 = 8;
 
 pub const BOSS_EVENT_COLOUR_PINK: u8 = 0;
