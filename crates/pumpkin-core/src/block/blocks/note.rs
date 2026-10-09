@@ -6,7 +6,8 @@ use crate::block::{
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{Axis, NoteblockInstrument};
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, block_properties::NoteBlockLikeProperties};
+use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::{Block, BlockDirection, block_properties::NoteBlockLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -115,8 +116,16 @@ impl BlockBehaviour for NoteBlock {
         );
     }
 
-    fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
-        // TODO
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        // NoteBlock.useItemOn: heads clicked onto the top get placed instead of tuning the block
+        if args.hit.face == &BlockDirection::Up
+            && args
+                .item_stack
+                .item
+                .has_tag(&tag::Item::MINECRAFT_NOTEBLOCK_TOP_INSTRUMENTS)
+        {
+            return BlockActionResult::Pass;
+        }
         BlockActionResult::PassToDefaultBlockAction
     }
 
