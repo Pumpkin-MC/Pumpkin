@@ -1,0 +1,29 @@
+[package]
+name = "pumpkin-wasm-host"
+version.workspace = true
+description = "WebAssembly plugin host for the Pumpkin server."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+pumpkin-core.workspace = true
+pumpkin-wasm-host-common.workspace = true
+pumpkin-wasm-host-v0_1.workspace = true
+pumpkin-wasm-host-v0_2.workspace = true
+pumpkin-plugin-runtime.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tracing.workspace = true
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true }
+wasmtime-wasi-http = { workspace = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true
