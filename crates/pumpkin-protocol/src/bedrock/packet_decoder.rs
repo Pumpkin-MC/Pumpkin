@@ -8,8 +8,7 @@ use crate::{
     bedrock::BEDROCK_GAME_PACKET, codec::var_uint::VarUInt, ser::ReadingError,
 };
 
-/// Decoder: Client -> Server
-/// Supports Zlib decompression.
+/// Decodes incoming Bedrock game packets and decompresses batched network frames.
 pub struct BedrockBatchDecoder {
     compression: Option<CompressionThreshold>,
 }
@@ -21,15 +20,18 @@ impl Default for BedrockBatchDecoder {
 }
 
 impl BedrockBatchDecoder {
+    /// Creates a new uncompressed batch decoder.
     #[must_use]
     pub const fn new() -> Self {
         Self { compression: None }
     }
 
+    /// Sets the decompression threshold for incoming batch frames.
     pub const fn set_compression(&mut self, threshold: CompressionThreshold) {
         self.compression = Some(threshold);
     }
 
+    /// Validates the frame header, handles decompression if active, and extracts the raw batch payload.
     pub async fn get_packet_payload(
         &mut self,
         full_packet: Vec<u8>,
@@ -94,6 +96,7 @@ impl BedrockBatchDecoder {
         }
     }
 
+    /// Reads the next game packet header and payload from a decompressed batch frame reader.
     pub fn get_game_packet(
         &mut self,
         decompressed_reader: &mut Cursor<Vec<u8>>,

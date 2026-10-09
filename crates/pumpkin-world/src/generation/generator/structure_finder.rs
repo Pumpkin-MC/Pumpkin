@@ -97,8 +97,10 @@ pub fn find_nearest_structure(
 }
 
 /// Finds the nearest candidate that actually produces one of `target_structures`.
-/// Explorer maps use this instead of pointing at a placement-only candidate whose
-/// biome may reject the requested structure.
+///
+/// Returns the position along with which of the targets was found. Explorer maps
+/// and `/locate structure` use this instead of pointing at a placement-only
+/// candidate whose biome may reject the requested structure.
 #[must_use]
 #[expect(clippy::too_many_lines)]
 pub fn find_nearest_structure_start(
@@ -107,7 +109,7 @@ pub fn find_nearest_structure_start(
     target_structures: &[pumpkin_data::structures::StructureKeys],
     max_search_radius: i32,
     generator: &WorldGenerator,
-) -> Option<BlockPos> {
+) -> Option<(BlockPos, pumpkin_data::structures::StructureKeys)> {
     use crate::{
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
         generation::{
@@ -142,7 +144,7 @@ pub fn find_nearest_structure_start(
     let global_cache = &noise_generator.global_structure_cache;
 
     for radius in 0..=max_search_radius {
-        let mut nearest: Option<FoundStructure> = None;
+        let mut nearest: Option<(FoundStructure, pumpkin_data::structures::StructureKeys)> = None;
         for region_x_offset in -radius..=radius {
             for region_z_offset in -radius..=radius {
                 if region_x_offset.abs() != radius && region_z_offset.abs() != radius {
@@ -207,10 +209,13 @@ pub fn find_nearest_structure_start(
                                 &mut biome_sampler,
                             )
                         });
-                    let Some(start) = start else {
+                    let Some(_start) = start else {
                         continue;
                     };
-                    let position = start.start_pos;
+                    // Vanilla getLocatePos: chunkPos.getMinBlockX(), 0, chunkPos.getMinBlockZ()
+                    let locate_x = chunk_x << 4;
+                    let locate_z = chunk_z << 4;
+                    let position = BlockPos::new(locate_x, 0, locate_z);
                     let dx = f64::from(position.0.x - origin.0.x);
                     let dz = f64::from(position.0.z - origin.0.z);
                     let found = FoundStructure {
@@ -219,15 +224,15 @@ pub fn find_nearest_structure_start(
                     };
                     if nearest
                         .as_ref()
-                        .is_none_or(|current| found.distance_sq < current.distance_sq)
+                        .is_none_or(|(current, _)| found.distance_sq < current.distance_sq)
                     {
-                        nearest = Some(found);
+                        nearest = Some((found, key));
                     }
                 }
             }
         }
-        if let Some(found) = nearest {
-            return Some(found.pos);
+        if let Some((found, key)) = nearest {
+            return Some((found.pos, key));
         }
     }
     None
@@ -250,9 +255,9 @@ fn find_nearest_concentric(
     strongholds
         .iter()
         .map(|(cx, cz)| {
-            // Centre of the chunk in block coords.
-            let bx = (cx << 4) + 8;
-            let bz = (cz << 4) + 8;
+            // Vanilla getLocatePos: chunkPos.getMinBlockX(), 0, chunkPos.getMinBlockZ()
+            let bx = cx << 4;
+            let bz = cz << 4;
             let dx = bx as f64 - ox;
             let dz = bz as f64 - oz;
             FoundStructure {
@@ -290,8 +295,9 @@ fn find_nearest_random_spread_at_radius(
             let (struct_cx, struct_cz) =
                 get_structure_chunk_in_region(placement, world_seed, rx, rz, salt);
 
-            let bx = (struct_cx << 4) + 8;
-            let bz = (struct_cz << 4) + 8;
+            // Vanilla getLocatePos: chunkPos.getMinBlockX(), 0, chunkPos.getMinBlockZ()
+            let bx = struct_cx << 4;
+            let bz = struct_cz << 4;
             let dx = bx as f64 - ox;
             let dz = bz as f64 - oz;
             let dist_sq = dx * dx + dz * dz;
