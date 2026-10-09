@@ -1076,7 +1076,7 @@ impl ArrowEntity {
         }
 
         // Skip other arrows, item entities, falling block entities, and area effect clouds
-	// Avoids coliding with self because it is an arrow and thus won't collide with arrows
+	// Avoids colliding with self because it is an arrow and thus won't collide with arrows
         if (other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::SPECTRAL_ARROW)
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::ITEM

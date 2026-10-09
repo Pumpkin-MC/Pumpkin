@@ -134,8 +134,8 @@ impl TridentEntity {
         let other_ent = other.get_entity();
 
         // Skip other projectiles and item entities
-	// Will not colide with self because will not colide with any tridents
-	// Check for trident first to take advantage of short-circut evaluation
+	// Will not collide with self because will not collide with any tridents
+	// Check for trident first to take advantage of short-circuit evaluation
         if other_ent.entity_type == &pumpkin_data::entity::EntityType::TRIDENT
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::ITEM
