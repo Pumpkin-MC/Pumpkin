@@ -125,24 +125,11 @@ pub struct NormalTransactionData;
 #[derive(Debug, PacketRead)]
 pub struct MismatchTransactionData;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PacketRead)]
 #[repr(u8)]
 pub enum HandSlot {
     Mainhand,
     Offhand,
-}
-
-impl PacketRead for HandSlot {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        match u8::read(reader)? {
-            0 => Ok(Self::Mainhand),
-            1 => Ok(Self::Offhand),
-            value => Err(Error::new(
-                ErrorKind::InvalidData,
-                format!("Invalid hand slot: {value}"),
-            )),
-        }
-    }
 }
 
 #[derive(Debug, PacketRead)]
@@ -180,13 +167,20 @@ pub struct ReleaseItemTransactionData {
 }
 
 #[derive(Debug)]
+/// Sent by the client when performing complex inventory interactions, item usages, and entity attacks.
 #[packet(30)]
 pub struct SInventoryTransaction {
+    /// Legacy transaction request ID used for rollback tracking.
     pub legacy_request_id: VarInt,
+    /// Legacy slot modification entries.
     pub legacy_set_item_slots: Vec<LegacySetItemSlot>,
+    /// Whether action elements are present in the transaction.
     pub has_value: bool,
+    /// List of slot modification actions composing this transaction.
     pub actions: Vec<InventoryAction>,
+    /// Transaction category type (`Normal`, `Mismatch`, `ItemUse`, `ItemUseOnEntity`, `ItemRelease`).
     pub transaction_type: VarUInt,
+    /// Specialized transaction payload corresponding to the transaction type.
     pub transaction_data: TransactionData,
 }
 
