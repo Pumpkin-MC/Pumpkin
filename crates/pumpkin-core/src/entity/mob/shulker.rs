@@ -396,16 +396,12 @@ impl Goal for ShulkerAttackGoal {
 
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let target = mob.get_mob_entity().get_target();
-        target
-            .as_ref()
-            .is_some_and(|t| t.get_living_entity().is_some_and(|l| l.entity.is_alive()))
+        target.as_ref().is_some_and(|t| t.is_alive())
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let target = mob.get_mob_entity().get_target();
-        target
-            .as_ref()
-            .is_some_and(|t| t.get_living_entity().is_some_and(|l| l.entity.is_alive()))
+        target.as_ref().is_some_and(|t| t.is_alive())
     }
 
     fn start(&mut self, _mob: &dyn Mob) {
@@ -429,7 +425,7 @@ impl Goal for ShulkerAttackGoal {
             return;
         };
 
-        if !target.get_entity().is_alive() {
+        if !target.is_alive() {
             return;
         }
 

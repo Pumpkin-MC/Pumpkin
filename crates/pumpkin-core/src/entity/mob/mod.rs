@@ -516,11 +516,11 @@ impl MobEntity {
             .target
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(target) = guard.as_ref() {
-            if self.as_valid_target(Some(target.clone())).is_none() {
-                *guard = None;
-                return None;
-            }
+        if let Some(target) = guard.as_ref()
+            && self.as_valid_target(Some(target.clone())).is_none()
+        {
+            *guard = None;
+            return None;
         }
         guard.clone()
     }

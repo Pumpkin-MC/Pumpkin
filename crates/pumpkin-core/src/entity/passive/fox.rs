@@ -2683,9 +2683,7 @@ impl Goal for DefendTrustedTargetGoal {
     }
 
     fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
-        self.target_attacker
-            .as_ref()
-            .is_some_and(|t| t.is_alive())
+        self.target_attacker.as_ref().is_some_and(|t| t.is_alive())
     }
 
     fn start(&mut self, mob: &dyn Mob) {
