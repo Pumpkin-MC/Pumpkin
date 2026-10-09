@@ -135,7 +135,7 @@ pub struct ProtoChunk {
     pub flat_ocean_floor_height_map: [i16; CHUNK_AREA],
     pub flat_motion_blocking_height_map: [i16; CHUNK_AREA],
     pub flat_motion_blocking_no_leaves_height_map: [i16; CHUNK_AREA],
-    structure_starts: FxHashMap<StructureKeys, StructureInstance>,
+    pub(crate) structure_starts: FxHashMap<StructureKeys, StructureInstance>,
 
     height: u16,
     bottom_y: i8,
@@ -160,12 +160,16 @@ impl TerrainCache {
     pub fn from_random(random_config: &GlobalRandomConfig) -> Self {
         let random = &random_config.base_random_deriver;
         let terrain_builder = SurfaceTerrainBuilder::new(random);
-        let surface_noise = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+        let surface_noise = DoublePerlinNoiseBuilder::get_noise_sampler(
             &random_config.base_random_deriver,
+            random_config.legacy_random_source,
+            random_config.seed,
             &DoublePerlinNoiseParameters::SURFACE,
         );
-        let secondary_noise = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+        let secondary_noise = DoublePerlinNoiseBuilder::get_noise_sampler(
             &random_config.base_random_deriver,
+            random_config.legacy_random_source,
+            random_config.seed,
             &DoublePerlinNoiseParameters::SURFACE_SECONDARY,
         );
         Self {
@@ -498,7 +502,7 @@ impl ProtoChunk {
     }
 
     #[inline]
-    const fn local_position_to_height_map_index(x: i32, z: i32) -> usize {
+    pub(crate) const fn local_position_to_height_map_index(x: i32, z: i32) -> usize {
         x as usize * CHUNK_DIM as usize + z as usize
     }
 
@@ -742,7 +746,7 @@ impl ProtoChunk {
             generation_shape,
             sampler,
             settings.aquifers_enabled,
-            settings.ore_veins_enabled,
+            false,
             beardifier_structures,
             beardifier_junctions,
             affected_box,
@@ -978,6 +982,8 @@ impl ProtoChunk {
             self.generation_bottom_y(),
             self.generation_height(),
             random,
+            random_config.legacy_random_source,
+            random_config.seed,
             &terrain_cache.terrain_builder,
             &terrain_cache.surface_noise,
             &terrain_cache.secondary_noise,
@@ -1001,9 +1007,6 @@ impl ProtoChunk {
                 else {
                     panic!("surface biome neighborhood must cover fuzzy biome lookup");
                 };
-                // The pillar is filled with the default block above the surface, and vanilla keeps
-                // scanning from the pre-pillar height, so the pillar itself is never run through
-                // the material rules and stays stone instead of being banded like the terrain.
                 if this_biome == Biome::ERODED_BADLANDS {
                     terrain_cache
                         .terrain_builder
@@ -1015,7 +1018,7 @@ impl ProtoChunk {
                 let mut stone_depth_above = 0;
                 let mut min = i32::MAX;
                 let mut fluid_height = i32::MIN;
-                for y in (min_y as i32..top_block).rev() {
+                for y in (min_y as i32..=top_block).rev() {
                     let pos = Vector3::new(x, y, z);
                     let state = self.get_block_state(&pos).to_state();
                     if state.is_air() {
@@ -1057,7 +1060,7 @@ impl ProtoChunk {
                     let stone_depth_below = y - min + 1;
                     context.init_vertical(stone_depth_above, stone_depth_below, y, fluid_height);
 
-                    if state.id == self.default_block.id {
+                    if !state.is_air() && !state.is_liquid() {
                         let Some(biome_id) = self.get_terrain_gen_biome_id_from_neighborhood(
                             surface_biomes,
                             context.block_pos_x,
@@ -1546,7 +1549,7 @@ impl ProtoChunk {
 
                         if let Some(start_data) = start_data {
                             if start_data
-                                .get_bounding_box()
+                                .get_adjusted_bounding_box(&entry.structure)
                                 .intersects_raw_xz(start_x, start_z, end_x, end_z)
                             {
                                 references.push((entry.structure, start_data.collector.clone()));
@@ -1676,7 +1679,8 @@ impl GenerationCache for ProtoChunk {
         self.is_air(local_pos)
     }
     fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome {
-        Self::get_biome(self, x, y, z)
+        let biome_pos = self.get_terrain_gen_biome_pos(x, y, z);
+        Self::get_biome(self, biome_pos.x, biome_pos.y, biome_pos.z)
     }
     fn get_blending_data(
         &self,
