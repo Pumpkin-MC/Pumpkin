@@ -19,6 +19,7 @@ pub fn build() -> String {
     let mut interface = Interface::new("java-packets");
 
     interface.use_type("uuid", "uuid", None);
+    interface.use_type("common", "nbt-tree", None);
 
     let mut serverbound_variant = Variant::empty();
     let mut clientbound_variant = Variant::empty();
@@ -216,6 +217,7 @@ fn has_java_packet_attr(attrs: &[syn::Attribute]) -> bool {
 fn register_wit_type(
     wit_name: String,
     fields_list: Vec<Field>,
+    docs: Option<String>,
     interface: &mut Interface,
     variant: &mut Variant,
     wit_sub_name: Option<String>,
@@ -226,13 +228,23 @@ fn register_wit_type(
         } else {
             wit_name
         };
-        interface.type_def(TypeDef::new(
-            name.clone(),
-            TypeDefKind::Record(Record::new(fields_list)),
-        ));
-        variant.case(VariantCase::value(name.clone(), WitType::named(name)));
+        let mut type_def =
+            TypeDef::new(name.clone(), TypeDefKind::Record(Record::new(fields_list)));
+        if let Some(d) = &docs {
+            type_def.set_docs(Some(d.clone()));
+        }
+        interface.type_def(type_def);
+        let mut case = VariantCase::value(name.clone(), WitType::named(name));
+        if let Some(d) = docs {
+            case.set_docs(Some(d));
+        }
+        variant.case(case);
     } else {
-        variant.case(VariantCase::empty(wit_name));
+        let mut case = VariantCase::empty(wit_name);
+        if let Some(d) = docs {
+            case.set_docs(Some(d));
+        }
+        variant.case(case);
     }
 }
 
@@ -257,7 +269,11 @@ fn collect_fields(
         .map(|field| {
             let field_name = field.ident.as_ref().unwrap().to_string().to_kebab_case();
             let field_type = map_type_with_defined(&field.ty, Some(defined_types));
-            Field::new(field_name, field_type)
+            let mut wit_field = Field::new(field_name, field_type);
+            if let Some(docs) = crate::wit::utils::extract_doc_comments(&field.attrs) {
+                wit_field.set_docs(Some(docs));
+            }
+            wit_field
         })
         .collect()
 }
@@ -282,12 +298,13 @@ fn process_struct(
     if !defined_cases.insert(wit_name.clone()) {
         return;
     }
+    let docs = crate::wit::utils::extract_doc_comments(&s.attrs);
     let fields_list = match s.fields {
         Fields::Named(fields) => collect_fields(fields.named, defined_types),
         _ => Vec::new(),
     };
 
-    register_wit_type(wit_name, fields_list, interface, variant, None);
+    register_wit_type(wit_name, fields_list, docs, interface, variant, None);
 }
 
 fn process_helper_struct(
@@ -300,16 +317,18 @@ fn process_helper_struct(
     if !defined_cases.insert(wit_name.clone()) {
         return;
     }
+    let docs = crate::wit::utils::extract_doc_comments(&s.attrs);
     let fields_list = match s.fields {
         Fields::Named(fields) => collect_fields(fields.named, defined_types),
         _ => Vec::new(),
     };
 
     if !fields_list.is_empty() {
-        interface.type_def(TypeDef::new(
-            wit_name,
-            TypeDefKind::Record(Record::new(fields_list)),
-        ));
+        let mut type_def = TypeDef::new(wit_name, TypeDefKind::Record(Record::new(fields_list)));
+        if let Some(d) = docs {
+            type_def.set_docs(Some(d));
+        }
+        interface.type_def(type_def);
     }
 }
 
@@ -325,64 +344,88 @@ fn process_enum(
     if !defined_cases.insert(enum_wit_name.clone()) {
         return;
     }
+    let enum_docs = crate::wit::utils::extract_doc_comments(&e.attrs);
     let mut cases = Vec::new();
 
     for v in e.variants {
         let variant_wit_name = v.ident.to_string().to_kebab_case();
+        let variant_docs = crate::wit::utils::extract_doc_comments(&v.attrs);
 
         match v.fields {
             Fields::Named(fields) => {
                 let sub_record_name = format!("{}-{}", enum_wit_name, variant_wit_name);
                 let fields_list = collect_fields(fields.named, defined_types);
                 if !fields_list.is_empty() && defined_cases.insert(sub_record_name.clone()) {
-                    interface.type_def(TypeDef::new(
+                    let mut type_def = TypeDef::new(
                         sub_record_name.clone(),
                         TypeDefKind::Record(Record::new(fields_list)),
-                    ));
+                    );
+                    if let Some(d) = &variant_docs {
+                        type_def.set_docs(Some(d.clone()));
+                    }
+                    interface.type_def(type_def);
                 }
-                cases.push(VariantCase::value(
-                    variant_wit_name,
-                    WitType::named(sub_record_name),
-                ));
+                let mut case =
+                    VariantCase::value(variant_wit_name, WitType::named(sub_record_name));
+                if let Some(d) = variant_docs {
+                    case.set_docs(Some(d));
+                }
+                cases.push(case);
             }
 
             Fields::Unnamed(fields) => {
                 let types = collect_types(fields.unnamed, defined_types);
-                match types.len() {
-                    0 => cases.push(VariantCase::empty(variant_wit_name)),
-                    1 => cases.push(VariantCase::value(
-                        variant_wit_name,
-                        types.into_iter().next().unwrap(),
-                    )),
-                    _ => cases.push(VariantCase::value(variant_wit_name, WitType::tuple(types))),
+                let mut case = match types.len() {
+                    0 => VariantCase::empty(variant_wit_name),
+                    1 => VariantCase::value(variant_wit_name, types.into_iter().next().unwrap()),
+                    _ => VariantCase::value(variant_wit_name, WitType::tuple(types)),
+                };
+                if let Some(d) = variant_docs {
+                    case.set_docs(Some(d));
                 }
+                cases.push(case);
             }
 
             Fields::Unit => {
-                cases.push(VariantCase::empty(variant_wit_name));
+                let mut case = VariantCase::empty(variant_wit_name);
+                if let Some(d) = variant_docs {
+                    case.set_docs(Some(d));
+                }
+                cases.push(case);
             }
         }
     }
 
-    variant.case(VariantCase::value(
-        enum_wit_name.clone(),
-        WitType::named(enum_wit_name.clone()),
-    ));
+    let mut variant_case =
+        VariantCase::value(enum_wit_name.clone(), WitType::named(enum_wit_name.clone()));
+    if let Some(d) = &enum_docs {
+        variant_case.set_docs(Some(d.clone()));
+    }
+    variant.case(variant_case);
 
     // define whether to use Enum or Variant
     let all_empty = cases.iter().all(|c| c.type_().is_none());
     if all_empty {
-        interface.type_def(TypeDef::new(
+        let mut type_def = TypeDef::new(
             enum_wit_name,
-            TypeDefKind::Enum(Enum::from_iter(
-                cases.into_iter().map(|c| EnumCase::new(c.name().clone())),
-            )),
-        ));
+            TypeDefKind::Enum(Enum::from_iter(cases.into_iter().map(|c| {
+                let mut ec = EnumCase::new(c.name().clone());
+                if let Some(d) = c.docs() {
+                    ec.set_docs(Some(d.contents().to_string()));
+                }
+                ec
+            }))),
+        );
+        if let Some(d) = enum_docs {
+            type_def.set_docs(Some(d));
+        }
+        interface.type_def(type_def);
     } else {
-        interface.type_def(TypeDef::new(
-            enum_wit_name,
-            TypeDefKind::Variant(Variant::from(cases)),
-        ));
+        let mut type_def = TypeDef::new(enum_wit_name, TypeDefKind::Variant(Variant::from(cases)));
+        if let Some(d) = enum_docs {
+            type_def.set_docs(Some(d));
+        }
+        interface.type_def(type_def);
     }
 }
 
@@ -396,58 +439,80 @@ fn process_helper_enum(
     if !defined_cases.insert(enum_wit_name.clone()) {
         return;
     }
+    let enum_docs = crate::wit::utils::extract_doc_comments(&e.attrs);
     let mut cases = Vec::new();
 
     for v in e.variants {
         let variant_wit_name = v.ident.to_string().to_kebab_case();
+        let variant_docs = crate::wit::utils::extract_doc_comments(&v.attrs);
 
         match v.fields {
             Fields::Named(fields) => {
                 let sub_record_name = format!("{}-{}", enum_wit_name, variant_wit_name);
                 let fields_list = collect_fields(fields.named, defined_types);
                 if !fields_list.is_empty() && defined_cases.insert(sub_record_name.clone()) {
-                    interface.type_def(TypeDef::new(
+                    let mut type_def = TypeDef::new(
                         sub_record_name.clone(),
                         TypeDefKind::Record(Record::new(fields_list)),
-                    ));
+                    );
+                    if let Some(d) = &variant_docs {
+                        type_def.set_docs(Some(d.clone()));
+                    }
+                    interface.type_def(type_def);
                 }
-                cases.push(VariantCase::value(
-                    variant_wit_name,
-                    WitType::named(sub_record_name),
-                ));
+                let mut case =
+                    VariantCase::value(variant_wit_name, WitType::named(sub_record_name));
+                if let Some(d) = variant_docs {
+                    case.set_docs(Some(d));
+                }
+                cases.push(case);
             }
 
             Fields::Unnamed(fields) => {
                 let types = collect_types(fields.unnamed, defined_types);
-                match types.len() {
-                    0 => cases.push(VariantCase::empty(variant_wit_name)),
-                    1 => cases.push(VariantCase::value(
-                        variant_wit_name,
-                        types.into_iter().next().unwrap(),
-                    )),
-                    _ => cases.push(VariantCase::value(variant_wit_name, WitType::tuple(types))),
+                let mut case = match types.len() {
+                    0 => VariantCase::empty(variant_wit_name),
+                    1 => VariantCase::value(variant_wit_name, types.into_iter().next().unwrap()),
+                    _ => VariantCase::value(variant_wit_name, WitType::tuple(types)),
+                };
+                if let Some(d) = variant_docs {
+                    case.set_docs(Some(d));
                 }
+                cases.push(case);
             }
 
             Fields::Unit => {
-                cases.push(VariantCase::empty(variant_wit_name));
+                let mut case = VariantCase::empty(variant_wit_name);
+                if let Some(d) = variant_docs {
+                    case.set_docs(Some(d));
+                }
+                cases.push(case);
             }
         }
     }
 
     let all_empty = cases.iter().all(|c| c.type_().is_none());
     if all_empty {
-        interface.type_def(TypeDef::new(
+        let mut type_def = TypeDef::new(
             enum_wit_name,
-            TypeDefKind::Enum(Enum::from_iter(
-                cases.into_iter().map(|c| EnumCase::new(c.name().clone())),
-            )),
-        ));
+            TypeDefKind::Enum(Enum::from_iter(cases.into_iter().map(|c| {
+                let mut ec = EnumCase::new(c.name().clone());
+                if let Some(d) = c.docs() {
+                    ec.set_docs(Some(d.contents().to_string()));
+                }
+                ec
+            }))),
+        );
+        if let Some(d) = enum_docs {
+            type_def.set_docs(Some(d));
+        }
+        interface.type_def(type_def);
     } else {
-        interface.type_def(TypeDef::new(
-            enum_wit_name,
-            TypeDefKind::Variant(Variant::from(cases)),
-        ));
+        let mut type_def = TypeDef::new(enum_wit_name, TypeDefKind::Variant(Variant::from(cases)));
+        if let Some(d) = enum_docs {
+            type_def.set_docs(Some(d));
+        }
+        interface.type_def(type_def);
     }
 }
 
