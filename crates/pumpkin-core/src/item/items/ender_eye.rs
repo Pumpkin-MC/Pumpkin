@@ -17,6 +17,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::structures::StructureSet;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::generation::generator::structure_finder::find_nearest_structure;
@@ -69,7 +70,7 @@ impl ItemBehaviour for EnderEyeItem {
         BlockActionResult::Success
     }
 
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let world = player.world();
 
         let (start_pos, end_pos) = self.get_start_and_end_pos(player);

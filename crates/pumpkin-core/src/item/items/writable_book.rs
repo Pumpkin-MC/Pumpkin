@@ -15,14 +15,7 @@ impl ItemMetadata for WritableBookItem {
 }
 
 impl ItemBehaviour for WritableBookItem {
-    fn normal_use_with_hand(
-        &self,
-        item: &Item,
-        player: &Player,
-        _yaw: f32,
-        _pitch: f32,
-        hand: Hand,
-    ) {
+    fn normal_use(&self, item: &Item, player: &Player, hand: Hand) {
         // The client opens a book and quill by itself when the player uses it.
         // Sending the open-book packet for it makes the client open the book
         // again and it lands in the read-only view, where nothing can be

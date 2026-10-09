@@ -14,7 +14,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_util::{
-    GameMode,
+    GameMode, Hand,
     math::{position::BlockPos, vector3::Vector3},
 };
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
@@ -285,12 +285,19 @@ pub(crate) fn try_place_filled_bucket(
 }
 
 impl ItemBehaviour for EmptyBucketItem {
-    fn normal_use(&self, item: &Item, player: &Player) {
+    fn normal_use(&self, item: &Item, player: &Player, hand: Hand) {
         let (yaw, pitch) = player.rotation();
-        self.normal_use_with_rotation(item, player, yaw, pitch);
+        self.normal_use_with_rotation(item, player, yaw, pitch, hand);
     }
 
-    fn normal_use_with_rotation(&self, _block: &Item, player: &Player, yaw: f32, pitch: f32) {
+    fn normal_use_with_rotation(
+        &self,
+        _block: &Item,
+        player: &Player,
+        yaw: f32,
+        pitch: f32,
+        _hand: Hand,
+    ) {
         let world = player.world();
         let (start_pos, end_pos) = get_start_and_end_pos(player, yaw, pitch);
 
@@ -373,12 +380,19 @@ impl ItemBehaviour for EmptyBucketItem {
 }
 
 impl ItemBehaviour for FilledBucketItem {
-    fn normal_use(&self, item: &Item, player: &Player) {
+    fn normal_use(&self, item: &Item, player: &Player, hand: Hand) {
         let (yaw, pitch) = player.rotation();
-        self.normal_use_with_rotation(item, player, yaw, pitch);
+        self.normal_use_with_rotation(item, player, yaw, pitch, hand);
     }
 
-    fn normal_use_with_rotation(&self, item: &Item, player: &Player, yaw: f32, pitch: f32) {
+    fn normal_use_with_rotation(
+        &self,
+        item: &Item,
+        player: &Player,
+        yaw: f32,
+        pitch: f32,
+        _hand: Hand,
+    ) {
         let world = player.world();
         let (start_pos, end_pos) = get_start_and_end_pos(player, yaw, pitch);
         let checker = |pos: &BlockPos, world_inner: &Arc<World>| {
@@ -482,7 +496,7 @@ impl ItemBehaviour for FilledBucketItem {
 }
 
 impl ItemBehaviour for MilkBucketItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let stack = player.inventory().held_item();
         player
             .living_entity

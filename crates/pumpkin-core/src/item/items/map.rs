@@ -7,6 +7,7 @@ use pumpkin_data::data_component_impl::MapIdImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::GameMode;
+use pumpkin_util::Hand;
 use std::any::Any;
 
 pub struct MapItem;
@@ -18,7 +19,7 @@ impl ItemMetadata for MapItem {
 }
 
 impl ItemBehaviour for MapItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         let Some(server) = player.world().server.upgrade() else {
             return;
         };

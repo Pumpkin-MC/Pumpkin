@@ -15,6 +15,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockId};
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
@@ -54,7 +55,7 @@ fn get_archaeology_loot(is_sand: bool, location: BlockPos, world: &World) -> Ite
 }
 
 impl ItemBehaviour for BrushItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, _item: &Item, player: &Player, _hand: Hand) {
         player.world().play_sound(
             Sound::ItemBrushBrushingGeneric,
             SoundCategory::Players,

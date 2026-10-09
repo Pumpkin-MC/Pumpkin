@@ -4,6 +4,7 @@ use crate::entity::player::Player;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
+use pumpkin_util::Hand;
 
 use crate::entity::Entity;
 use crate::entity::EntityBase;
@@ -22,7 +23,7 @@ impl ItemMetadata for WindChargeItem {
 const POWER: f32 = 1.5;
 
 impl ItemBehaviour for WindChargeItem {
-    fn normal_use(&self, _block: &Item, player: &Player) {
+    fn normal_use(&self, _block: &Item, player: &Player, _hand: Hand) {
         let world = player.world();
         let position = player.position();
 

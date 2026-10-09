@@ -23,6 +23,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
@@ -157,7 +158,7 @@ pub(crate) fn prepare_egg_mob(
 }
 
 impl ItemBehaviour for SpawnEggItem {
-    fn normal_use(&self, item: &Item, player: &Player) {
+    fn normal_use(&self, item: &Item, player: &Player, _hand: Hand) {
         if let Some(entity_type) = entity_from_egg(item.id) {
             let world = player.world();
             let (start_pos, end_pos) = self.get_start_and_end_pos(player);
