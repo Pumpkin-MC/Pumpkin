@@ -2,9 +2,12 @@ use crate::{codec::var_int::VarInt, serial::PacketRead};
 use pumpkin_macros::packet;
 use std::io::{Error, Read};
 
+/// Typed value payload for an ability toggle request.
 #[derive(Clone, Debug)]
 pub enum AbilityValue {
+    /// Boolean flag value (e.g. enabling or disabling flight).
     Bool(bool),
+    /// Floating point value (e.g. fly speed modification).
     Float(f32),
 }
 
@@ -24,10 +27,13 @@ impl PacketRead for AbilityValue {
     }
 }
 
+/// Sent by the client to request permission to modify a player ability (such as flying).
 #[derive(PacketRead)]
 #[packet(184)]
 pub struct SRequestAbility {
+    /// Identifier of the requested ability.
     pub ability: VarInt,
+    /// Requested ability state or value.
     pub value: AbilityValue,
 }
 
