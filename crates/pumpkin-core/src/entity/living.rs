@@ -3120,9 +3120,8 @@ impl LivingEntity {
             cause.or(source),
         );
 
-        // These damage types bypass the hurt cooldown and death protection
         let bypasses_cooldown_protection =
-            damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
+            damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_COOLDOWN);
 
         // Apply hurt cooldown logic
         let last_damage = self.last_damage_taken.load();

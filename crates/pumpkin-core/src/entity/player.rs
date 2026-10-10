@@ -4391,9 +4391,8 @@ impl Player {
 
     pub fn kill(&self) {
         use pumpkin_data::damage::DamageType;
-        let health = self.living_entity.health.load();
         self.living_entity
-            .damage(self, health + 10.0, DamageType::OUT_OF_WORLD);
+            .damage(self, f32::MAX, DamageType::GENERIC_KILL);
     }
 
     pub fn send_health(&self) {
