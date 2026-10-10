@@ -5174,7 +5174,7 @@ impl World {
             if !flags.intersects(BlockFlags::MOVED | BlockFlags::UPDATE_KNOWN_SHAPE) {
                 let mut neighbour_update_flags = flags;
                 neighbour_update_flags.remove(BlockFlags::NOTIFY_NEIGHBORS);
-                neighbour_update_flags.remove(BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT);
+                neighbour_update_flags.remove(BlockFlags::SKIP_DROPS);
                 self.block_registry.prepare(
                     self,
                     position,
@@ -5298,8 +5298,7 @@ impl World {
             Block::AIR.default_state.id
         };
 
-        let broken_state_id =
-            self.set_block_state(position, new_state_id, flags - BlockFlags::SKIP_DROPS);
+        let broken_state_id = self.set_block_state(position, new_state_id, flags);
         let broken_block = Block::from_state_id(broken_state_id);
         if !broken_block.is_air()
             && broken_state_id != new_state_id
