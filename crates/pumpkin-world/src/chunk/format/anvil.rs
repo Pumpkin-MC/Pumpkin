@@ -126,9 +126,16 @@ impl Compression {
     const CUSTOM_ID: u8 = 127;
 
     fn decompress_data(self, compressed_data: &[u8]) -> Result<Box<[u8]>, CompressionError> {
-        fn decode<R: std::io::Read>(mut reader: R, capacity: usize) -> std::io::Result<Box<[u8]>> {
-            let mut buf = Vec::with_capacity(capacity);
-            reader.read_to_end(&mut buf)?;
+        fn decode<R: std::io::Read>(reader: R, capacity: usize) -> std::io::Result<Box<[u8]>> {
+            // Read through a limit; compressed data can expand without bound.
+            let max = super::MAX_DECOMPRESSED_CHUNK_SIZE;
+            let mut buf = Vec::with_capacity(capacity.min(max));
+            let read = reader.take(max as u64 + 1).read_to_end(&mut buf)?;
+            if read > max {
+                return Err(std::io::Error::other(
+                    "chunk exceeds the maximum decompressed size",
+                ));
+            }
             Ok(buf.into_boxed_slice())
         }
 
