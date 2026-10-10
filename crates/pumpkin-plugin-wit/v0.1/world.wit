@@ -900,6 +900,11 @@ interface %world {
         /// Spawns an entity of the specified type at the given position.
         spawn-entity: func(entity-type: entity-type, pos: position) -> entity;
 
+        /// Spawns a falling block with the given block state.
+        /// Obtain a state ID with `resolve-block-state`; resolving
+        /// `minecraft:pumpkin` with no properties produces a falling pumpkin.
+        spawn-falling-block: func(pos: position, block-state: u16) -> entity;
+
         /// Returns a list of all entities in this world.
         get-entities: func() -> list<entity>;
 
