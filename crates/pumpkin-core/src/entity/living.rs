@@ -1838,6 +1838,10 @@ impl LivingEntity {
         ground: bool,
         dont_damage: bool,
     ) {
+        // Vanilla does this in `LivingEntity.updateFallFlying`; the movement delta stands in for velocity.
+        if self.entity.is_fall_flying() {
+            self.check_fall_distance_accumulation(height_difference);
+        }
         if ground {
             let fall_distance = self.fall_distance.swap(0.0);
             if fall_distance > 0.0 {
@@ -1873,6 +1877,13 @@ impl LivingEntity {
                 0f32
             };
             self.fall_distance.store(new_fall_distance);
+        }
+    }
+
+    /// Mirrors vanilla `Entity.checkFallDistanceAccumulation`.
+    fn check_fall_distance_accumulation(&self, velocity_y: f64) {
+        if velocity_y > -0.5 && self.fall_distance.load() > 1.0 {
+            self.fall_distance.store(1.0);
         }
     }
 
