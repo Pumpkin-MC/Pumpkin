@@ -5159,7 +5159,7 @@ impl Player {
             (EquipmentSlot::OFF_HAND, off_hand_item),
         ];
         self.living_entity.send_equipment_changes(equipment);
-        // todo this.player.stopUsingItem();
+        self.stop_using_item();
     }
 
     #[must_use]
@@ -6420,6 +6420,7 @@ impl Player {
     pub fn stop_using_item(&self) {
         self.using_item.store(false, Ordering::Relaxed);
         self.using_hand.store(None);
+        self.living_entity.clear_active_hand();
     }
 
     /// Get the number of ticks the item has been in use
@@ -7938,6 +7939,17 @@ impl InventoryPlayer for Player {
 
     fn increment_stat(&self, category: StatisticCategory, stat_id: i32, amount: i32) {
         self.increment_stat(category, stat_id, amount);
+    }
+
+    // Vanilla `Entity.playSound`, for the item overrides that play their own sounds.
+    fn play_item_sound(&self, sound: Sound, volume: f32, pitch: f32) {
+        self.world().play_sound_fine(
+            sound,
+            SoundCategory::Players,
+            &self.position(),
+            volume,
+            pitch,
+        );
     }
 
     fn play_block_sound(&self, sound: Sound, pitch: f32) {
