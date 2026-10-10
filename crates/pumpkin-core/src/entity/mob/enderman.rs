@@ -399,6 +399,10 @@ impl Mob for EndermanEntity {
         Some(self)
     }
 
+    fn is_sensitive_to_water(&self) -> bool {
+        true
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         if let Some(block_state) = self.carried_block.load() {
             nbt.put_int("carriedBlockState", block_state.as_u16() as i32);
