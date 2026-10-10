@@ -2783,6 +2783,11 @@ impl Player {
     #[expect(clippy::too_many_lines)]
     pub fn tick<'a>(&'a self, server: &'a Server) {
         self.process_inbound_packets();
+        // Players are ticked here, not in the entity pass, so they never reach `tick_count` there
+        self.living_entity
+            .entity
+            .tick_count
+            .fetch_add(1, Ordering::Relaxed);
 
         if let ClientPlatform::Bedrock(client) = self.client.as_ref() {
             client.tick_network_latency(self);
