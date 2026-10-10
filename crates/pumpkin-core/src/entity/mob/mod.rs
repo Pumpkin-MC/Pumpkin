@@ -631,9 +631,9 @@ impl MobEntity {
         Self::check_surface_water_animal_spawn_rules(world, pos)
     }
 
-    pub fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
+    pub fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) -> bool {
         if self.living_entity.dead.load(Relaxed) {
-            return;
+            return false;
         }
 
         let attack_damage: f32 =
@@ -657,6 +657,8 @@ impl MobEntity {
                 .last_attack_time
                 .store(self.living_entity.entity.age.load(Relaxed), Relaxed);
         }
+
+        damaged
     }
 
     fn get_attack_box(&self, attack_range: f64) -> BoundingBox {
