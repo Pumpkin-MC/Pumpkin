@@ -4,6 +4,7 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::Taggable;
 use pumpkin_util::Difficulty;
 
 use crate::entity::{
@@ -64,7 +65,12 @@ impl SkeletonEntityBase {
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(
+                1,
+                Box::new(RevengeGoal::new(true).ignoring(|entity_type| {
+                    entity_type.has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_SKELETONS)
+                })),
+            );
             target_selector.add_goal(
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
