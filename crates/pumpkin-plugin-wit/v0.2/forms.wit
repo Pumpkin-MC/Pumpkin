@@ -1,0 +1,51 @@
+interface forms {
+    use text.{text-component};
+
+    enum image-type {
+        url,
+        path,
+    }
+
+    record form-image {
+        %type: image-type,
+        data: string,
+    }
+
+    record simple-form-button {
+        text: text-component,
+        image: option<form-image>,
+    }
+
+    record simple-form {
+        title: text-component,
+        content: text-component,
+        buttons: list<simple-form-button>,
+    }
+
+    record modal-form {
+        title: text-component,
+        content: text-component,
+        button1: text-component,
+        button2: text-component,
+    }
+
+    variant custom-form-element {
+        label(text-component),
+        toggle(tuple<text-component, bool>),
+        slider(tuple<text-component, f32, f32, f32, f32>), // text, min, max, step, default
+        step-slider(tuple<text-component, list<string>, u32>), // text, steps, default
+        dropdown(tuple<text-component, list<string>, u32>), // text, options, default
+        input(tuple<text-component, string, string>), // text, placeholder, default
+    }
+
+    record custom-form {
+        title: text-component,
+        elements: list<custom-form-element>,
+    }
+
+    variant form {
+        simple(simple-form),
+        modal(modal-form),
+        custom(custom-form),
+    }
+}

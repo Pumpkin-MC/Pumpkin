@@ -8,8 +8,8 @@ Keep Alive is a small example that touches every layer:
 
 1. **Packet ids** come from `assets/packets.json` through codegen. The packet struct uses `#[java_packet(KEEP_ALIVE)]` with the generated constant, never a literal id.
 2. **Serverbound packets** (`S...`, client to server) live in `src/java/server/<phase>/` and implement `ServerPacket::read()`. **Clientbound packets** (`C...`) live in `src/java/client/<phase>/` and implement `ClientPacket::write_packet_data()`. Both have to be exported from the phase's `mod.rs`.
-3. **Dispatch** of play packets happens in `handle_play_packet()` in `crates/pumpkin/src/net/java/mod.rs`, which matches on `to_id(version)`. Earlier phases (handshake, status, login, configuration) are handled in `crates/pumpkin/src/net/java/pending.rs`, not in the play dispatcher.
-4. **The handler** goes in its own file under `crates/pumpkin/src/net/java/play/`.
+3. **Dispatch** of play packets happens in `handle_play_packet()` in `crates/pumpkin-core/src/net/java/mod.rs`, which matches on `to_id(version)`. Earlier phases (handshake, status, login, configuration) are handled in `crates/pumpkin-core/src/net/java/pending.rs`, not in the play dispatcher.
+4. **The handler** goes in its own file under `crates/pumpkin-core/src/net/java/play/`.
 
 ## Changing a packet
 

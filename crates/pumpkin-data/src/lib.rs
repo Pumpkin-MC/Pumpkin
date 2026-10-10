@@ -312,8 +312,8 @@ pub mod structure_metadata;
 
 #[cfg(feature = "structures")]
 #[rustfmt::skip]
-#[path = "generated/template_bytes.rs"]
-pub mod template_bytes;
+#[path = "generated/structure_template.rs"]
+pub mod structure_template;
 
 #[cfg(feature = "test_instance")]
 #[rustfmt::skip]

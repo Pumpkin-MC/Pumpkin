@@ -1,0 +1,427 @@
+// API design inspired by the MIT-licensed @minecraft/server-gametest npm package:
+// https://www.npmjs.com/package/@minecraft/server-gametest/v/1.0.0-beta.1.26.60-preview.23
+// Copyright (c) Microsoft Corporation. MIT terms: ../LICENSE-MIT-MICROSOFT.
+
+interface gametest {
+    use common.{game-mode as server-game-mode, block-pos, position};
+    use item-stack.{item-stack};
+    use player.{player};
+    use %world.{
+        %world as dimension,
+        entity,
+        block-direction as server-direction,
+        block-state as server-block-permutation,
+    };
+
+    /// One-to-one structural mapping of @minecraft/server.Vector2.
+    record vector2 {
+        x: f64,
+        y: f64,
+    }
+
+    /// One-to-one structural mapping of @minecraft/server.Vector3.
+    record vector3 {
+        x: f64,
+        y: f64,
+        z: f64,
+    }
+
+    /// @minecraft/server.Direction.
+    type direction = server-direction;
+
+    /// @minecraft/server.GameMode.
+    type game-mode = server-game-mode;
+
+    /// @minecraft/server.BlockPermutation, mapped to Pumpkin's detailed block-state value.
+    type block-permutation = server-block-permutation;
+
+    /// @minecraft/server.ItemType.
+    record item-type {
+        id: string,
+    }
+
+    /// @minecraft/server.DimensionType.
+    record dimension-type {
+        type-id: string,
+    }
+
+    /// @minecraft/server.FluidType.
+    enum fluid-type {
+        lava,
+        potion,
+        powder-snow,
+        water,
+    }
+
+    /// @minecraft/server.DimensionLocation.
+    record dimension-location {
+        dimension: dimension,
+        x: f64,
+        y: f64,
+        z: f64,
+    }
+
+    /// TypeScript union: `ItemType | string`.
+    variant item-type-or-id {
+        item-type(item-type),
+        id(string),
+    }
+
+    /// TypeScript union: `DimensionType | string`.
+    variant dimension-type-or-id {
+        dimension-type(dimension-type),
+        id(string),
+    }
+
+    record void-callback-id {
+        id: u32,
+    }
+
+    record test-callback-id {
+        id: u32,
+    }
+
+    record async-test-callback-id {
+        id: u32,
+    }
+
+    record block-predicate-callback-id {
+        id: u32,
+    }
+
+    record entity-predicate-callback-id {
+        id: u32,
+    }
+
+    enum look-duration {
+        continuous,
+        instant,
+        until-move,
+    }
+
+    record move-to-options {
+        face-target: option<bool>,
+        speed: option<f64>,
+    }
+
+    /// @minecraft/server-gametest.FenceConnectivity.
+    flags fence-connectivity {
+        east,
+        north,
+        south,
+        west,
+    }
+
+    /// @minecraft/server-gametest.NavigationResult.
+    record navigation-result {
+        is-full-path: bool,
+        path: list<position>,
+    }
+
+    /// @minecraft/server-gametest.SculkSpreader.
+    resource sculk-spreader {
+        get-max-charge: func() -> u32;
+        add-cursors-with-offset: func(offset: vector3, charge: u32) -> result<_, string>;
+        get-cursor-position: func(index: u32) -> result<block-pos, string>;
+        get-number-of-cursors: func() -> u32;
+        get-total-charge: func() -> u32;
+    }
+
+    /// @minecraft/server-gametest.RegistrationBuilder.
+    resource registration-builder {
+        batch: func(batch-name: string) -> result<_, string>;
+        max-attempts: func(attempt-count: u32) -> result<_, string>;
+        max-ticks: func(tick-count: u32) -> result<_, string>;
+        padding: func(padding-blocks: u32) -> result<_, string>;
+        required: func(is-required: bool) -> result<_, string>;
+        required-successful-attempts: func(attempt-count: u32) -> result<_, string>;
+        rotate-test: func(rotate: bool) -> result<_, string>;
+        setup-ticks: func(tick-count: u32) -> result<_, string>;
+        structure-location: func(
+            structure-location: block-pos,
+            structure-dimension: option<dimension-type-or-id>,
+        ) -> result<_, string>;
+        structure-name: func(structure-name: string) -> result<_, string>;
+        /// Suite tags: "suite:all", "suite:debug", "suite:default", "suite:disabled", "suite:nextupdate".
+        tag: func(tag: string) -> result<_, string>;
+    }
+
+    /// @minecraft/server-gametest.GameTestSequence.
+    resource game-test-sequence {
+        then-execute: func(callback: void-callback-id) -> result<_, string>;
+        then-execute-after: func(delay-ticks: u32, callback: void-callback-id) -> result<_, string>;
+        then-execute-for: func(tick-count: u32, callback: void-callback-id) -> result<_, string>;
+        then-fail: func(error-message: string) -> result<_, string>;
+        then-idle: func(delay-ticks: u32) -> result<_, string>;
+        then-succeed: func() -> result<_, string>;
+        then-wait: func(callback: void-callback-id) -> result<_, string>;
+        then-wait-after: func(delay-ticks: u32, callback: void-callback-id) -> result<_, string>;
+    }
+
+    /// @minecraft/server-gametest.SimulatedPlayer.
+    resource simulated-player {
+        as-player: func() -> result<player, string>;
+
+        get-head-rotation: func() -> vector2;
+        get-is-sprinting: func() -> bool;
+        set-is-sprinting: func(value: bool) -> result<_, string>;
+
+        attack: func() -> result<bool, string>;
+        attack-entity: func(entity: borrow<entity>) -> result<bool, string>;
+        break-block: func(block-location: block-pos, direction: option<direction>) -> result<bool, string>;
+        chat: func(message: string) -> result<_, string>;
+        disconnect: func() -> result<_, string>;
+        drop-selected-item: func() -> result<bool, string>;
+        fly: func() -> result<_, string>;
+        give-item: func(item-stack: borrow<item-stack>, select-slot: option<bool>) -> result<bool, string>;
+        glide: func() -> result<bool, string>;
+        interact: func() -> result<bool, string>;
+        interact-with-block: func(block-location: block-pos, direction: option<direction>) -> result<bool, string>;
+        interact-with-entity: func(entity: borrow<entity>) -> result<bool, string>;
+        jump: func() -> result<bool, string>;
+        look-at-block: func(block-location: block-pos, duration: option<look-duration>) -> result<_, string>;
+        look-at-entity: func(entity: borrow<entity>, duration: option<look-duration>) -> result<_, string>;
+        look-at-location: func(location: position, duration: option<look-duration>) -> result<_, string>;
+        move: func(west-east: f64, north-south: f64, speed: option<f64>) -> result<_, string>;
+        move-relative: func(left-right: f64, backward-forward: f64, speed: option<f64>) -> result<_, string>;
+        move-to-block: func(block-location: block-pos, options: option<move-to-options>) -> result<_, string>;
+        move-to-location: func(location: position, options: option<move-to-options>) -> result<_, string>;
+        navigate-to-block: func(block-location: block-pos, speed: option<f64>) -> result<navigation-result, string>;
+        navigate-to-entity: func(entity: borrow<entity>, speed: option<f64>) -> result<navigation-result, string>;
+        navigate-to-location: func(location: position, speed: option<f64>) -> result<navigation-result, string>;
+        navigate-to-locations: func(locations: list<position>, speed: option<f64>) -> result<_, string>;
+        respawn: func() -> result<bool, string>;
+        rotate-body: func(angle-in-degrees: f64) -> result<_, string>;
+        set-body-rotation: func(angle-in-degrees: f64) -> result<_, string>;
+        set-item: func(item-stack: borrow<item-stack>, slot: u8, select-slot: option<bool>) -> result<bool, string>;
+        start-build: func(slot: option<u8>) -> result<_, string>;
+        stop-breaking-block: func() -> result<_, string>;
+        stop-build: func() -> result<_, string>;
+        stop-flying: func() -> result<_, string>;
+        stop-gliding: func() -> result<_, string>;
+        stop-interacting: func() -> result<_, string>;
+        stop-moving: func() -> result<_, string>;
+        stop-swimming: func() -> result<_, string>;
+        stop-using-item: func() -> result<option<item-stack>, string>;
+        swim: func() -> result<_, string>;
+        use-item: func(item-stack: borrow<item-stack>) -> result<bool, string>;
+        use-item-in-slot: func(slot: u8) -> result<bool, string>;
+        use-item-in-slot-on-block: func(
+            slot: u8,
+            block-location: block-pos,
+            direction: option<direction>,
+            face-location: option<position>,
+        ) -> result<bool, string>;
+        use-item-on-block: func(
+            item-stack: borrow<item-stack>,
+            block-location: block-pos,
+            direction: option<direction>,
+            face-location: option<position>,
+        ) -> result<bool, string>;
+    }
+
+    /// @minecraft/server-gametest.Test.
+    resource test {
+        assert: func(condition: bool, message: string) -> result<_, string>;
+        assert-block-present: func(
+            block-type-id: string,
+            block-location: block-pos,
+            is-present: option<bool>,
+        ) -> result<_, string>;
+        /// Passes the block's permutation to the predicate.
+        assert-block-state: func(
+            block-location: block-pos,
+            callback: block-predicate-callback-id,
+        ) -> result<_, string>;
+        assert-can-reach-location: func(
+            mob: borrow<entity>,
+            block-location: block-pos,
+            can-reach: option<bool>,
+        ) -> result<_, string>;
+        assert-container-contains: func(item-stack: borrow<item-stack>, block-location: block-pos) -> result<_, string>;
+        assert-container-empty: func(block-location: block-pos) -> result<_, string>;
+        assert-entity-has-armor: func(
+            entity-type-identifier: string,
+            armor-slot: u8,
+            armor-name: string,
+            armor-data: u32,
+            block-location: block-pos,
+            has-armor: option<bool>,
+        ) -> result<_, string>;
+        assert-entity-has-component: func(
+            entity-type-identifier: string,
+            component-identifier: string,
+            block-location: block-pos,
+            has-component: option<bool>,
+        ) -> result<_, string>;
+        assert-entity-instance-present: func(
+            entity: borrow<entity>,
+            block-location: block-pos,
+            is-present: option<bool>,
+        ) -> result<_, string>;
+        assert-entity-instance-present-in-area: func(
+            entity: borrow<entity>,
+            is-present: option<bool>,
+        ) -> result<_, string>;
+        assert-entity-present: func(
+            entity-type-identifier: string,
+            block-location: block-pos,
+            search-distance: option<f64>,
+            is-present: option<bool>,
+        ) -> result<_, string>;
+        assert-entity-present-in-area: func(
+            entity-type-identifier: string,
+            is-present: option<bool>,
+        ) -> result<_, string>;
+        assert-entity-state: func(
+            block-location: block-pos,
+            entity-type-identifier: string,
+            callback: entity-predicate-callback-id,
+        ) -> result<_, string>;
+        assert-entity-touching: func(
+            entity-type-identifier: string,
+            location: position,
+            is-touching: option<bool>,
+        ) -> result<_, string>;
+        assert-is-waterlogged: func(block-location: block-pos, is-waterlogged: option<bool>) -> result<_, string>;
+        assert-item-entity-count-is: func(
+            item-type: item-type-or-id,
+            block-location: block-pos,
+            search-distance: f64,
+            count: u32,
+        ) -> result<_, string>;
+        assert-item-entity-present: func(
+            item-type: item-type-or-id,
+            block-location: block-pos,
+            search-distance: option<f64>,
+            is-present: option<bool>,
+        ) -> result<_, string>;
+        assert-redstone-power: func(block-location: block-pos, power: u32) -> result<_, string>;
+        destroy-block: func(block-location: block-pos, drop-resources: option<bool>) -> result<_, string>;
+        fail: func(error-message: string) -> result<_, string>;
+        fail-if: func(callback: void-callback-id) -> result<_, string>;
+        get-dimension: func() -> dimension;
+        get-fence-connectivity: func(block-location: block-pos) -> result<fence-connectivity, string>;
+        get-sculk-spreader: func(block-location: block-pos) -> result<option<sculk-spreader>, string>;
+        get-test-direction: func() -> direction;
+        idle: func(tick-delay: u32) -> result<future, string>;
+        is-cleaning-up: func() -> bool;
+        is-completed: func() -> bool;
+        kill-all-entities: func() -> result<_, string>;
+        on-player-jump: func(mob: borrow<entity>, jump-amount: f64) -> result<_, string>;
+        press-button: func(block-location: block-pos) -> result<_, string>;
+        print: func(text: string) -> result<_, string>;
+        pull-lever: func(block-location: block-pos) -> result<_, string>;
+        pulse-redstone: func(block-location: block-pos, duration: u32) -> result<_, string>;
+        relative-block-location: func(world-block-location: block-pos) -> block-pos;
+        relative-location: func(world-location: position) -> position;
+        remove-simulated-player: func(simulated-player: borrow<simulated-player>) -> result<_, string>;
+        rotate-direction: func(direction: direction) -> direction;
+        rotate-vector: func(vector: vector3) -> vector3;
+        run-after-delay: func(delay-ticks: u32, callback: void-callback-id) -> result<_, string>;
+        run-at-tick-time: func(tick: u32, callback: void-callback-id) -> result<_, string>;
+        run-on-finish: func(callback: void-callback-id) -> result<_, string>;
+        set-block-permutation: func(block-data: block-permutation, block-location: block-pos) -> result<_, string>;
+        set-block-type: func(block-type-id: string, block-location: block-pos) -> result<_, string>;
+        set-fluid-container: func(location: block-pos, %type: fluid-type) -> result<_, string>;
+        set-tnt-fuse: func(entity: borrow<entity>, fuse-length: u32) -> result<_, string>;
+        spawn: func(entity-type-identifier: string, block-location: block-pos) -> result<entity, string>;
+        spawn-at-location: func(entity-type-identifier: string, location: position) -> result<entity, string>;
+        spawn-item: func(item-stack: borrow<item-stack>, location: position) -> result<entity, string>;
+        spawn-simulated-player: func(
+            block-location: block-pos,
+            name: option<string>,
+            game-mode: option<game-mode>,
+        ) -> result<simulated-player, string>;
+        spawn-without-behaviors: func(entity-type-identifier: string, block-location: block-pos) -> result<entity, string>;
+        spawn-without-behaviors-at-location: func(
+            entity-type-identifier: string,
+            location: position,
+        ) -> result<entity, string>;
+        spread-from-face-toward-direction: func(
+            block-location: block-pos,
+            from-face: direction,
+            direction: direction,
+        ) -> result<_, string>;
+        start-sequence: func() -> result<game-test-sequence, string>;
+        succeed: func() -> result<_, string>;
+        succeed-if: func(callback: void-callback-id) -> result<_, string>;
+        succeed-on-tick: func(tick: u32) -> result<_, string>;
+        succeed-on-tick-when: func(tick: u32, callback: void-callback-id) -> result<_, string>;
+        succeed-when: func(callback: void-callback-id) -> result<_, string>;
+        succeed-when-block-present: func(
+            block-type-id: string,
+            block-location: block-pos,
+            is-present: option<bool>,
+        ) -> result<_, string>;
+        succeed-when-entity-has-component: func(
+            entity-type-identifier: string,
+            component-identifier: string,
+            block-location: block-pos,
+            has-component: bool,
+        ) -> result<_, string>;
+        succeed-when-entity-present: func(
+            entity-type-identifier: string,
+            block-location: block-pos,
+            is-present: option<bool>,
+        ) -> result<_, string>;
+        trigger-internal-block-event: func(
+            block-location: block-pos,
+            event: string,
+            event-parameters: option<list<f64>>,
+        ) -> result<_, string>;
+
+        until: func(callback: void-callback-id) -> result<future, string>;
+
+        walk-to: func(mob: borrow<entity>, block-location: block-pos, speed-modifier: option<f64>) -> result<_, string>;
+        walk-to-location: func(mob: borrow<entity>, location: position, speed-modifier: option<f64>) -> result<_, string>;
+        world-block-location: func(relative-block-location: block-pos) -> block-pos;
+        world-location: func(relative-location: position) -> position;
+    }
+
+    register: func(
+        test-class-name: string,
+        test-name: string,
+        test-function: test-callback-id,
+    ) -> result<registration-builder, string>;
+
+    register-async: func(
+        test-class-name: string,
+        test-name: string,
+        test-function: async-test-callback-id,
+    ) -> result<registration-builder, string>;
+
+    set-after-batch-callback: func(batch-name: string, batch-callback: void-callback-id) -> result<_, string>;
+
+    set-before-batch-callback: func(batch-name: string, batch-callback: void-callback-id) -> result<_, string>;
+
+    spawn-simulated-player: func(
+        location: dimension-location,
+        name: string,
+        game-mode: game-mode,
+    ) -> result<simulated-player, string>;
+}
+
+interface gametest-callbacks {
+    use gametest.{
+        test,
+        block-permutation,
+        void-callback-id,
+        test-callback-id,
+        async-test-callback-id,
+        block-predicate-callback-id,
+        entity-predicate-callback-id,
+    };
+    use %world.{entity};
+
+    invoke-void: func(callback: void-callback-id);
+
+    /// The plugin can retain this handle for callbacks scheduled after invocation.
+    invoke-test: func(callback: test-callback-id, test: test);
+
+    invoke-async-test: async func(callback: async-test-callback-id, test: test);
+
+    invoke-block-predicate: func(callback: block-predicate-callback-id, permutation: block-permutation) -> bool;
+
+    invoke-entity-predicate: func(callback: entity-predicate-callback-id, entity: borrow<entity>) -> bool;
+}

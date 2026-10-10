@@ -1,3 +1,5 @@
+//! Clientbound Bedrock protocol packets sent to clients.
+
 pub mod add_actor;
 pub mod add_item_actor;
 pub mod add_player;
