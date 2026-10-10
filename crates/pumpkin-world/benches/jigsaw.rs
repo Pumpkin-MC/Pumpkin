@@ -19,7 +19,7 @@ fn bench_jigsaw_pool_elements(c: &mut Criterion) {
 
     for id in POOLS {
         let pool = TemplatePool::discover(id).expect("pool should load");
-        let kind = &pool.elements[0].kind;
+        let kind = &pool.elements()[0].kind;
 
         c.bench_function(&format!("jigsaw/get_shuffled_blocks/{id}"), |b| {
             b.iter(|| {

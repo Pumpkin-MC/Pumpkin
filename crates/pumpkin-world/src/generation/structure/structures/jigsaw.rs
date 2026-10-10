@@ -12,7 +12,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomDeriverImpl, RandomImpl};
 use serde::Deserialize;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum JigsawProjection {
@@ -61,6 +61,7 @@ pub fn register_dynamic_template_pool_json(
         id: key.clone(),
         fallback: raw.fallback,
         elements,
+        max_size: OnceLock::new(),
     });
     DYNAMIC_POOLS.insert(key, Arc::clone(&pool));
     Ok(pool)
@@ -74,7 +75,8 @@ pub fn clear_dynamic_template_pools() {
 pub struct TemplatePool {
     pub id: String,
     pub fallback: String,
-    pub elements: Vec<Arc<PoolElement>>,
+    elements: Vec<Arc<PoolElement>>,
+    max_size: OnceLock<i32>,
 }
 
 pub struct PoolElement {
@@ -485,13 +487,22 @@ impl PoolElement {
 }
 
 impl TemplatePool {
+    /// The pool's weighted elements, read-only since `get_max_size` caches a value from them.
+    #[must_use]
+    pub fn elements(&self) -> &[Arc<PoolElement>] {
+        &self.elements
+    }
+
     #[must_use]
     pub fn get_max_size(&self) -> i32 {
-        self.elements
-            .iter()
-            .filter_map(|element| element.get_y_size())
-            .max()
-            .unwrap_or(0)
+        // Vanilla `StructureTemplatePool.getMaxSize` computes this once per pool.
+        *self.max_size.get_or_init(|| {
+            self.elements
+                .iter()
+                .filter_map(|element| element.get_y_size())
+                .max()
+                .unwrap_or(0)
+        })
     }
     pub fn get_random_element(
         &self,
@@ -540,6 +551,7 @@ impl TemplatePool {
             id: static_pool.id.to_string(),
             fallback: static_pool.fallback.to_string(),
             elements,
+            max_size: OnceLock::new(),
         }
     }
 
@@ -605,6 +617,7 @@ impl TemplatePool {
                 id: "minecraft:empty".to_string(),
                 fallback: "minecraft:empty".to_string(),
                 elements: Vec::new(),
+                max_size: OnceLock::new(),
             });
             CACHE.insert(canonical_id, Arc::clone(&pool));
             return Some(pool);
