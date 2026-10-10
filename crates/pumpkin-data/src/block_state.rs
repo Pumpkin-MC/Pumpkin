@@ -113,6 +113,12 @@ impl BlockState {
         self.state_flags & IS_FULL_CUBE != 0
     }
 
+    /// Static suffocation predicate extracted from vanilla; block entities may override it.
+    #[must_use]
+    pub const fn is_suffocating(&self) -> bool {
+        self.state_flags & IS_SUFFOCATING != 0
+    }
+
     /// Returns whether the block is solid.
     /// Solid blocks conduct redstone and block redstone wire.
     /// Non-solid blocks don't allow redstone wire on top to propagate their signal downwards in java.
@@ -218,17 +224,23 @@ impl BlockState {
         &self,
         pos: &BlockPos,
     ) -> impl Iterator<Item = BoundingBox> + '_ {
-        let offset = Block::from_state_id(self.id).shape_offset_delta(pos);
-        let base_shapes = self
-            .outline_shapes
-            .iter()
-            .map(move |&id| COLLISION_SHAPES[id as usize].shift(offset));
-
         let water_shape = self
             .is_waterlogged()
             .then(|| BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0)));
 
-        base_shapes.chain(water_shape)
+        self.get_block_outline_shapes_without_fluid_at(pos)
+            .chain(water_shape)
+    }
+
+    /// Returns the block's outline with its position offset, excluding fluid.
+    pub fn get_block_outline_shapes_without_fluid_at(
+        &self,
+        pos: &BlockPos,
+    ) -> impl Iterator<Item = BoundingBox> + '_ {
+        let offset = Block::from_state_id(self.id).shape_offset_delta(pos);
+        self.outline_shapes
+            .iter()
+            .map(move |&id| COLLISION_SHAPES[id as usize].shift(offset))
     }
 
     #[must_use]
@@ -363,6 +375,7 @@ const HAS_RANDOM_TICKS: u16 = 1 << 9;
 const IS_SOLID_RENDER: u16 = 1 << 10;
 const CAN_OCCLUDE: u16 = 1 << 11;
 const HAS_ANALOG_OUTPUT_SIGNAL: u16 = 1 << 12;
+const IS_SUFFOCATING: u16 = 1 << 13;
 
 // side_flags
 const DOWN_SIDE_SOLID: u8 = 1 << 0;

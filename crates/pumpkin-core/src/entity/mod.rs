@@ -1657,10 +1657,8 @@ impl Entity {
                 continue;
             }
 
-            // TODO: this is default predicate, vanilla overwrites it for some blocks,
-            // see .suffocates(...) in Blocks.java
             let check_suffocation =
-                !suffocating && blocks_movement(state, block.id) && state.is_full_cube();
+                !suffocating && crate::block::is_suffocating(&world, &pos, block, state);
 
             World::check_collision(
                 &bounding_box,
