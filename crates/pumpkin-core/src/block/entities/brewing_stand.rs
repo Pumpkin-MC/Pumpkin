@@ -6,6 +6,7 @@ use std::sync::{
 };
 
 use crate::block::entities::PropertyDelegate;
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::data_component_impl::BrewingFuelImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -639,39 +640,49 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             }
         }
 
-        // If potion presence changed, update last_potion_count and update block state so clients
-        let mut needs_update = false;
-        {
-            let mut last_guard = self
+        // If potion presence changed, update block state so clients see the new bottles.
+        // `last_potion_count` is only recorded once the state is actually written below, so a
+        // stale entity that bails out at the block-id guard will retry on a later tick instead of
+        // believing the update was already applied.
+        let needs_update = {
+            let last_guard = self
                 .last_potion_count
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if last_guard.as_ref() != Some(&current) {
-                *last_guard = Some(current);
-                needs_update = true;
-            }
-        }
+            last_guard.as_ref() != Some(&current)
+        };
 
         if needs_update {
             // Update the block state properties for the brewing stand to reflect bottle presence
             let (block, state) = world.get_block_and_state(&self.position);
             // Use generated block properties helper to produce a new state id with the bits set
-            let mut props =
-                pumpkin_data::block_properties::BrewingStandLikeProperties::from_state_id(state.id);
-            // Generated field names use raw identifiers for clarity
-            props.r#has_bottle_0 = current[0];
-            props.r#has_bottle_1 = current[1];
-            props.r#has_bottle_2 = current[2];
+            if pumpkin_data::block_properties::BrewingStandLikeProperties::handles_block_id(
+                block.id,
+            ) {
+                let mut props =
+                    pumpkin_data::block_properties::BrewingStandLikeProperties::from_state_id(
+                        state.id,
+                    );
+                // Generated field names use raw identifiers for clarity
+                props.r#has_bottle_0 = current[0];
+                props.r#has_bottle_1 = current[1];
+                props.r#has_bottle_2 = current[2];
 
-            world.set_block_state(
-                &self.position,
-                props.to_state_id(block),
-                crate::world::BlockFlags::NOTIFY_ALL,
-            );
+                world.set_block_state(
+                    &self.position,
+                    props.to_state_id(block),
+                    crate::world::BlockFlags::NOTIFY_ALL,
+                );
 
-            // Also mark dirty so inventory/container updates are sent to open screens.
-            // The slot change that flipped these bits already flagged the comparator.
-            self.mark_timer_dirty();
+                *self
+                    .last_potion_count
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(current);
+
+                // Also mark dirty so inventory/container updates are sent to open screens.
+                // The slot change that flipped these bits already flagged the comparator.
+                self.mark_timer_dirty();
+            }
         }
     }
 

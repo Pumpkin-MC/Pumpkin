@@ -36,4 +36,4 @@ impl_block_entity_for_chest!(ChestBlockEntity);
 impl_inventory_for_chest!(ChestBlockEntity);
 impl_clearable_for_chest!(ChestBlockEntity);
 impl_viewer_count_listener_for_chest!(ChestBlockEntity);
-impl_chest_helper_methods!(ChestBlockEntity);
+impl_chest_helper_methods!(ChestBlockEntity, pumpkin_data::Block::CHEST);
