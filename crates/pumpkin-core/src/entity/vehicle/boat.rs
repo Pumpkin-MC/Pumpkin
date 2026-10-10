@@ -88,7 +88,7 @@ impl BoatEntity {
             let custom_name = self.vehicle.entity.custom_name.load().as_ref().clone();
             return boat.interact(custom_name, self.get_chest_boat_translation(), player);
         }
-        return true;
+        false
     }
 
     fn get_chest_boat_translation(&self) -> TextComponent {
