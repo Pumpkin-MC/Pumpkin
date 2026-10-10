@@ -1083,6 +1083,8 @@ pub trait Mob: EntityBase + Send + Sync {
         _world: &Arc<World>,
         group_data: Option<spawn::SpawnGroupData>,
     ) -> Option<spawn::SpawnGroupData> {
+        // TODO: vanilla `AgeableMob.finalizeSpawn` makes every ageable mob after the first of a
+        // spawn group a baby with 5% chance (`AgeableMobGroupData`).
         self.get_mob_entity().finalize_spawn_base();
         group_data
     }

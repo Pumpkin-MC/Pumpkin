@@ -185,6 +185,7 @@ impl AgeableMob for HoglinEntity {
     }
 }
 
+// TODO: vanilla hoglins are `Animal`s: crimson fungus breeds adults and grows babies.
 impl Mob for HoglinEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
