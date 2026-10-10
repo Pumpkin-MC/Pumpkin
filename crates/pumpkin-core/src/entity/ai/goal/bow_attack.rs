@@ -136,7 +136,18 @@ impl BowAttackGoal {
             divergence,
         );
 
-        world.play_sound(Sound::EntityArrowShoot, SoundCategory::Hostile, &mob_pos);
+        let shoot_sound = if entity.entity_type == &EntityType::SKELETON
+            || entity.entity_type == &EntityType::BOGGED
+            || entity.entity_type == &EntityType::STRAY
+            || entity.entity_type == &EntityType::WITHER_SKELETON
+            || entity.entity_type == &EntityType::PARCHED
+        {
+            Sound::EntitySkeletonShoot
+        } else {
+            Sound::EntityArrowShoot
+        };
+        let pitch = 1.0 / rand::random_range(0.8f32..1.2f32);
+        world.play_sound_fine(shoot_sound, SoundCategory::Hostile, &mob_pos, 1.0, pitch);
 
         let arrow: Arc<dyn EntityBase> = Arc::new(arrow);
         let entity_id = entity.entity_id;

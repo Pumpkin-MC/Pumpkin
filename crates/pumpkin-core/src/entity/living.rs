@@ -243,7 +243,7 @@ impl LivingEntity {
         entity_type.death_sound.unwrap_or(Sound::EntityGenericDeath)
     }
 
-    fn get_pitch(&self) -> f32 {
+    pub(crate) fn get_pitch(&self) -> f32 {
         let is_baby = self
             .get_mob()
             .and_then(|x| x.as_ageable())
@@ -2016,9 +2016,18 @@ impl LivingEntity {
             self.update_death_stats(&*dyn_self, killer);
 
             // Plays the death sound
+            let category = if dyn_self.get_player().is_some() {
+                SoundCategory::Players
+            } else if self.entity.entity_type.category
+                == &pumpkin_data::entity::MobCategory::MONSTER
+            {
+                SoundCategory::Hostile
+            } else {
+                SoundCategory::Neutral
+            };
             world.play_sound_fine(
                 self.death_sound(&*dyn_self),
-                SoundCategory::Players,
+                category,
                 &self.entity.pos.load(),
                 1.0,
                 self.get_pitch(),
@@ -3183,13 +3192,29 @@ impl LivingEntity {
         );
 
         if play_sound {
+            let category = if caller.get_player().is_some() {
+                SoundCategory::Players
+            } else if self.entity.entity_type.category
+                == &pumpkin_data::entity::MobCategory::MONSTER
+            {
+                SoundCategory::Hostile
+            } else {
+                SoundCategory::Neutral
+            };
             world.play_sound_fine(
                 self.hurt_sound(caller),
-                SoundCategory::Players,
+                category,
                 &self.entity.pos.load(),
                 1.0,
                 self.get_pitch(),
             );
+
+            if let Some(mob) = caller.get_mob() {
+                let interval = mob.get_ambient_sound_interval();
+                mob.get_mob_entity()
+                    .ambient_sound_time
+                    .store(-interval, Relaxed);
+            }
 
             if let Some(source) = source {
                 let source_pos = source.get_entity().pos.load();

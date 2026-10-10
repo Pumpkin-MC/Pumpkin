@@ -42,6 +42,10 @@ impl Mob for BoggedSkeletonEntity {
         &self.entity.mob_entity
     }
 
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityBoggedAmbient)
+    }
+
     fn get_arrow_projectile(&self) -> Option<ItemStack> {
         // Vanilla Bogged.getArrow calls arrow.addEffect(new MobEffectInstance(POISON, 100))
         // directly on the AbstractArrow, bypassing any PotionDurationScale.

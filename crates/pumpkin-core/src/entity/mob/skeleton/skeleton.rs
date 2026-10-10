@@ -1,3 +1,4 @@
+use pumpkin_data::sound::Sound;
 use std::sync::Arc;
 
 use crate::entity::{
@@ -21,6 +22,10 @@ impl SkeletonEntity {
 impl Mob for SkeletonEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(Sound::EntitySkeletonAmbient)
     }
 
     fn populate_default_equipment_slots(
