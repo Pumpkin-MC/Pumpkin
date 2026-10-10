@@ -53,8 +53,7 @@ impl SkeletonEntityBase {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, Box::new(RestrictSunGoal::new()));
             goal_selector.add_goal(3, Box::new(FleeSunGoal::new(1.0)));
-            goal_selector.add_goal(3, Box::new(BowAttackGoal::new(1.0, 20, 15.0)));
-            // Removed MeleeAttackGoal - skeletons should only use bow
+            goal_selector.add_goal(4, Box::new(BowAttackGoal::new(1.0, 20, 15.0)));
             goal_selector.add_goal(
                 5,
                 Box::new(AvoidEntityGoal::new(&EntityType::WOLF, 6.0, 1.0, 1.2)),
