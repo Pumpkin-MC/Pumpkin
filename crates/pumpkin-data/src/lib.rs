@@ -502,6 +502,27 @@ pub mod dye_color;
 #[path = "generated/block_transformer.rs"]
 pub mod block_transformer;
 
+#[cfg(all(test, feature = "block_transformer"))]
+mod block_transformer_tests {
+    use crate::Block;
+    use crate::BlockDirection;
+    use crate::block_transformer::HOE;
+
+    #[test]
+    fn hoe_tills_dirt_with_air_above() {
+        let get_block = |_: i8, dy: i8, _: i8| if dy == 1 { &Block::AIR } else { &Block::DIRT };
+        let result = HOE
+            .transform(
+                &Block::DIRT,
+                Block::DIRT.default_state.id,
+                BlockDirection::Up,
+                &get_block,
+            )
+            .unwrap();
+        assert_eq!(result.target_block.id, Block::FARMLAND.id);
+    }
+}
+
 #[cfg(feature = "trial_spawner")]
 #[rustfmt::skip]
 #[path = "generated/trial_spawner.rs"]
