@@ -861,6 +861,43 @@ mod tests {
     }
 
     #[test]
+    fn custom_model_data_reads_snbt_numeric_floats() {
+        // `/give ...[custom_model_data={floats:[1]}]` and `{floats:[1.0]}` use Int/Double.
+        let mut compound = NbtCompound::new();
+        compound.put_list(
+            "floats",
+            vec![NbtTag::Int(1), NbtTag::Double(2.5), NbtTag::Float(3.0)],
+        );
+        compound.put_list("flags", vec![NbtTag::Byte(1)]);
+        compound.put_list("strings", vec![NbtTag::String("model".into())]);
+        compound.put_list(
+            "colors",
+            vec![
+                NbtTag::Int(0x00FF00),
+                NbtTag::List(vec![
+                    NbtTag::Double(1.0),
+                    NbtTag::Double(0.0),
+                    NbtTag::Double(0.0),
+                ]),
+                NbtTag::List(vec![
+                    NbtTag::Double(2.0),
+                    NbtTag::Double(0.0),
+                    NbtTag::Double(0.0),
+                ]),
+                NbtTag::Double(-0.5),
+            ],
+        );
+
+        let parsed = CustomModelDataImpl::read_data(&NbtTag::Compound(compound)).unwrap();
+        assert_eq!(parsed.floats, vec![1.0, 2.5, 3.0]);
+        assert_eq!(parsed.flags, vec![true]);
+        assert_eq!(parsed.strings, vec!["model".to_string()]);
+        // Vectors pack as opaque ARGB with masked (not clamped) channels: [1,0,0] is 0xFFFF0000
+        // and [2,0,0] is 0xFFFE0000. Plain numbers truncate, so -0.5 is 0.
+        assert_eq!(parsed.colors, vec![0x00FF00, -65536, -131_072, 0]);
+    }
+
+    #[test]
     fn lodestone_tracker_round_trip() {
         assert_round_trip(
             LodestoneTrackerImpl {
