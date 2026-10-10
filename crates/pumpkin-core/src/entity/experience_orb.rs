@@ -1,10 +1,11 @@
 use core::f32;
 use std::sync::{
     Arc,
-    atomic::{AtomicU32, Ordering},
+    atomic::{AtomicI32, AtomicU32, Ordering},
 };
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::{damage::DamageType, entity::EntityType};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{server::Server, world::World};
@@ -14,26 +15,62 @@ use super::{Entity, EntityBase, living::LivingEntity, player::Player};
 pub struct ExperienceOrbEntity {
     entity: Entity,
     amount: u32,
+    health: AtomicI32,
     orb_age: AtomicU32,
 }
 
 impl ExperienceOrbEntity {
+    const AIR_DRAG: f32 = 0.98;
+    const DEFAULT_HEALTH: i32 = 5;
+
     pub fn new(entity: Entity, amount: u32) -> Self {
         entity.yaw.store(rand::random::<f32>() * 360.0);
         Self {
             entity,
             amount,
+            health: AtomicI32::new(Self::DEFAULT_HEALTH),
             orb_age: AtomicU32::new(0),
         }
     }
 
     pub fn spawn(world: &Arc<World>, position: Vector3<f64>, amount: u32) {
+        Self::spawn_with_direction(world, position, Vector3::new(0.0, 0.0, 0.0), amount);
+    }
+
+    fn new_with_direction(
+        world: &Arc<World>,
+        position: Vector3<f64>,
+        direction: Vector3<f64>,
+        amount: u32,
+    ) -> Self {
+        let entity = Entity::new(world.clone(), position, &EntityType::EXPERIENCE_ORB);
+        let orb = Self::new(entity, amount);
+        let mut velocity = Vector3::new(
+            (rand::random::<f64>() * 0.2 - 0.1) * 2.0,
+            rand::random::<f64>() * 0.2 * 2.0,
+            (rand::random::<f64>() * 0.2 - 0.1) * 2.0,
+        );
+        if direction.length_squared() > 0.0 && direction.dot(&velocity) < 0.0 {
+            velocity = velocity.multiply(-1.0, -1.0, -1.0);
+        }
+        let size = orb.entity.bounding_box.load().get_average_side_length();
+        let offset = direction.normalize() * (size * 0.5);
+        orb.entity.set_pos(position.add(&offset));
+        orb.entity.set_velocity(velocity);
+        orb
+    }
+
+    pub fn spawn_with_direction(
+        world: &Arc<World>,
+        position: Vector3<f64>,
+        direction: Vector3<f64>,
+        amount: u32,
+    ) {
         let mut amount = amount;
         while amount > 0 {
             let i = Self::round_to_orb_size(amount);
             amount -= i;
-            let entity = Entity::new(world.clone(), position, &EntityType::EXPERIENCE_ORB);
-            let orb = Arc::new(Self::new(entity, i));
+            let orb = Arc::new(Self::new_with_direction(world, position, direction, i));
             world.spawn_entity(orb);
         }
     }
@@ -66,6 +103,18 @@ impl ExperienceOrbEntity {
 }
 
 impl EntityBase for ExperienceOrbEntity {
+    fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_short("Health", self.health.load(Ordering::Relaxed) as i16);
+    }
+
+    fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        self.health.store(
+            nbt.get_short("Health")
+                .map_or(Self::DEFAULT_HEALTH, i32::from),
+            Ordering::Relaxed,
+        );
+    }
+
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = &self.entity;
         entity.tick(caller, server);
@@ -92,6 +141,18 @@ impl EntityBase for ExperienceOrbEntity {
 
         entity.tick_block_collisions(caller);
 
+        let on_ground = entity.on_ground.load(Ordering::Relaxed);
+        let mut friction = Self::AIR_DRAG;
+        if on_ground {
+            let block = entity.get_block_with_y_offset(0.500_001).1;
+            friction *= block.slipperiness;
+        }
+        let mut velocity = entity.velocity.load() * f64::from(friction);
+        if on_ground && velo.y < -self.get_gravity() {
+            velocity.y = -velo.y * 0.4;
+        }
+        entity.velocity.store(velocity);
+
         let age = self.orb_age.fetch_add(1, Ordering::Relaxed);
         if age >= 6000 {
             entity.remove();
@@ -100,6 +161,52 @@ impl EntityBase for ExperienceOrbEntity {
 
     fn get_entity(&self) -> &Entity {
         &self.entity
+    }
+
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        if self.entity.is_invulnerable_to(&damage_type, cause) {
+            return false;
+        }
+
+        let mut event = crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
+            self.entity.entity_id,
+            damage_type,
+            amount,
+        );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled {
+            return false;
+        }
+
+        self.entity.velocity_dirty.store(true, Ordering::Relaxed);
+        let mut health = self.health.load(Ordering::Relaxed);
+        loop {
+            let remaining = (health as f32 - event.damage) as i32;
+            match self.health.compare_exchange_weak(
+                health,
+                remaining,
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => {
+                    if remaining <= 0 {
+                        self.entity.remove();
+                    }
+                    return true;
+                }
+                Err(current) => health = current,
+            }
+        }
     }
 
     fn on_player_collision(&self, player: &Arc<Player>) {
