@@ -3014,7 +3014,24 @@ impl Entity {
         self.synched_data.clear_dirty();
     }
 
+    /// Sets the pose, resizing the entity to the pose table when it changes.
     pub fn set_pose(&self, pose: EntityPose) {
+        self.set_pose_inner(pose, true);
+    }
+
+    /// Vanilla `Entity.setPose` shape: sync the pose without recalculating dimensions.
+    ///
+    /// Vanilla refreshes dimensions in a separate `refreshDimensions` call, and
+    /// `LivingEntity.getDimensions` only swaps boxes for `Sleeping` — so a mob whose pose is
+    /// cosmetic (the feline crouch) keeps its species dimensions instead of the player-sized
+    /// pose table.
+    pub fn set_pose_keep_dimensions(&self, pose: EntityPose) {
+        self.set_pose_inner(pose, false);
+    }
+
+    /// Shared body of the two pose setters; `refresh_dimensions` decides whether the bounding
+    /// box and stored dimensions follow the pose table.
+    fn set_pose_inner(&self, pose: EntityPose, refresh_dimensions: bool) {
         if self.pose.load() == pose {
             return;
         }
@@ -3033,12 +3050,17 @@ impl Entity {
             }
         }
 
-        let dimension = Self::get_entity_dimensions(pose);
-        let position = self.pos.load();
-        let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
+        let dimension = if refresh_dimensions {
+            let dimension = Self::get_entity_dimensions(pose);
+            let position = self.pos.load();
+            let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
+            self.bounding_box.store(aabb);
+            self.entity_dimension.store(dimension);
+            dimension
+        } else {
+            self.entity_dimension.load()
+        };
         self.pose.store(pose);
-        self.bounding_box.store(aabb);
-        self.entity_dimension.store(dimension);
         let pose = pose as i32;
         let mut bedrock_meta = SyncedActorDataList::new();
         bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
