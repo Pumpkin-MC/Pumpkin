@@ -5,10 +5,12 @@ pub mod registry;
 use std::any::Any;
 use std::sync::Arc;
 
+use crate::block::BlockPlaceContext;
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
+use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
@@ -79,6 +81,22 @@ pub trait ItemBehaviour: Send + Sync {
     }
 
     fn can_mine(&self, _player: &Player) -> bool {
+        true
+    }
+
+    /// `BlockItem.updatePlacementContext`: where this item places its block. `None` cancels
+    /// the placement.
+    fn update_placement_context(
+        &self,
+        _world: &World,
+        _player: &Player,
+        context: BlockPlaceContext,
+    ) -> Option<BlockPlaceContext> {
+        Some(context)
+    }
+
+    /// `BlockItem.mustSurvive`: whether the placed block has to be able to survive where it goes.
+    fn must_survive(&self) -> bool {
         true
     }
 
