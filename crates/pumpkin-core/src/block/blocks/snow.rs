@@ -4,14 +4,11 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    tick::TickPriority,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::{
-    BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
-    PathComputationType, RandomTickArgs, UseWithItemArgs, registry::BlockActionResult,
+    BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
+    RandomTickArgs, UseWithItemArgs, registry::BlockActionResult,
 };
 
 #[pumpkin_block("minecraft:snow")]
@@ -66,13 +63,6 @@ impl BlockBehaviour for LayeredSnowBlock {
         }
     }
 
-    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !can_place_at(args.world.as_ref(), args.position) {
-            args.world
-                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
-        }
-    }
-
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         // Snow layers melt when lit by block light above level 11,
         // e.g. from a nearby torch.
@@ -87,8 +77,7 @@ impl BlockBehaviour for LayeredSnowBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         if !can_place_at(args.world, args.position) {
-            args.world
-                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
+            return Block::AIR.default_state.id;
         }
         args.state_id
     }
