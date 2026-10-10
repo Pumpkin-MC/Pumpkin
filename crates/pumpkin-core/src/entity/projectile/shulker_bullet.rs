@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use crossbeam::atomic::AtomicCell;
@@ -441,16 +440,7 @@ impl EntityBase for ShulkerBulletEntity {
 
         // Check for entity collisions
         let bullet_bb = entity.bounding_box.load().expand(0.1, 0.1, 0.1);
-        let nearby_entities = world.get_entities_and_players_at_box(&bullet_bb);
-        let nearby_players = world.get_players_at_box(&bullet_bb);
-        let nearby: Vec<Arc<dyn crate::entity::EntityBase>> = nearby_entities
-            .into_iter()
-            .chain(
-                nearby_players
-                    .into_iter()
-                    .map(|p| p as Arc<dyn crate::entity::EntityBase>),
-            )
-            .collect();
+        let nearby = world.get_entities_and_players_at_box(&bullet_bb);
         for hit_entity in nearby {
             let he = hit_entity.get_entity();
             // Skip self

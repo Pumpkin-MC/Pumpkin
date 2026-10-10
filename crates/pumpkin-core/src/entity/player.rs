@@ -7143,7 +7143,8 @@ impl EntityBase for Player {
             .abilities
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        // Read saved NBT first so flying state and speeds are restored.
+        // Read saved NBT first so speeds (and Creative flying state) are restored.
+        // `set_for_gamemode` then overrides `flying` for Survival, Adventure and Spectator.
         abilities.read_nbt(nbt);
         // Re-apply gamemode flags after NBT so the gamemode always wins
         // over stale saved values (e.g. invulnerable saved from a prior

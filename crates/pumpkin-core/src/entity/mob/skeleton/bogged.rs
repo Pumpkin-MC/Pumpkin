@@ -19,6 +19,7 @@ pub struct BoggedSkeletonEntity {
 
 impl BoggedSkeletonEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
+        entity.set_synced_data(pumpkin_data::tracked_data::bogged::DATA_SHEARED, false);
         let entity = SkeletonEntityBase::new(entity);
         let bogged = Self {
             entity,
@@ -32,8 +33,14 @@ impl BoggedSkeletonEntity {
     }
 
     pub fn set_sheared(&self, sheared: bool) {
-        self.sheared.store(sheared, Ordering::Relaxed);
-        // TODO: Update entity visual (remove mushrooms)
+        let old = self.sheared.swap(sheared, Ordering::Relaxed);
+        if old != sheared {
+            self.entity
+                .mob_entity
+                .living_entity
+                .entity
+                .set_synced_data(pumpkin_data::tracked_data::bogged::DATA_SHEARED, sheared);
+        }
     }
 }
 

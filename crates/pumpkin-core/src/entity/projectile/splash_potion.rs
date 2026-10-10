@@ -223,11 +223,7 @@ impl EntityBase for SplashPotionEntity {
         let aabb = BoundingBox::new(min, max);
 
         // Gather entity and player candidates
-        let mut candidates = world.get_entities_and_players_at_box(&aabb);
-        let players = world.get_players_at_box(&aabb);
-        for p in players {
-            candidates.push(p.clone() as Arc<dyn EntityBase>);
-        }
+        let candidates = world.get_entities_and_players_at_box(&aabb);
 
         let mut affected: Vec<(Arc<dyn EntityBase>, f32)> = Vec::new();
         for cand in candidates {
