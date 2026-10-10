@@ -17,7 +17,7 @@ pub struct DragonEggBlock;
 
 impl DragonEggBlock {
     // DragonEggBlock.getDelayAfterPlace
-    const DELAY_AFTER_PLACE: u8 = 5;
+    const DELAY_AFTER_PLACE: u32 = 5;
     const TELEPORT_RADIUS_XZ: i32 = 16;
     const TELEPORT_RADIUS_Y: i32 = 8;
 

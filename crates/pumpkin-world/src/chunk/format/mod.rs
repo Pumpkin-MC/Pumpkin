@@ -21,7 +21,7 @@ use crate::{
     },
     generation::section_coords,
     level::LevelFolder,
-    tick::{ScheduledTick, TickPriority, scheduler::ChunkTickScheduler},
+    tick::{ScheduledTick, TickPriority, saved_tick_delay, scheduler::ChunkTickScheduler},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -182,7 +182,7 @@ where
     let x = nbt.get_int("x")?;
     let y = nbt.get_int("y")?;
     let z = nbt.get_int("z")?;
-    let delay = nbt.get_int("t")? as u8;
+    let delay = saved_tick_delay(nbt.get_int("t")?);
     let priority = TickPriority::try_from(nbt.get_int("p")?).ok()?;
     let res_loc_str = nbt.get_string("i")?;
     let res_loc = ResourceLocation::from_str(res_loc_str).ok()?;
@@ -1192,6 +1192,24 @@ mod tests {
             ])
             .to_state_id(&Block::REPEATER);
         assert_eq!(result[1], repeater_state);
+    }
+
+    #[test]
+    fn scheduled_tick_delay_is_not_truncated_on_load() {
+        let load = |t: i32| {
+            let mut nbt = NbtCompound::new();
+            nbt.put_int("x", 0);
+            nbt.put_int("y", 0);
+            nbt.put_int("z", 0);
+            nbt.put_int("t", t);
+            nbt.put_int("p", 0);
+            nbt.put_string("i", "minecraft:frogspawn".to_string());
+            parse_scheduled_tick::<&'static Block>(&nbt).expect("should parse scheduled tick")
+        };
+
+        assert_eq!(load(3600).delay, 3600);
+        // Vanilla saves overdue ticks with a negative delay.
+        assert_eq!(load(-1).delay, 0);
     }
 
     #[test]

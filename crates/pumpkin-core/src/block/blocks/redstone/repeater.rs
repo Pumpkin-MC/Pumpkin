@@ -210,9 +210,9 @@ impl RedstoneGateBlock<RepeaterProperties> for RepeaterBlock {
         }
     }
 
-    fn get_update_delay_internal(&self, state_id: BlockStateId, _block: &Block) -> u8 {
+    fn get_update_delay_internal(&self, state_id: BlockStateId, _block: &Block) -> u32 {
         let props = RepeaterProperties::from_state_id(state_id);
-        props.delay * 2
+        u32::from(props.delay) * 2
     }
 }
 
