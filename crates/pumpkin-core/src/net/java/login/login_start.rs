@@ -63,7 +63,26 @@ impl PendingConnection {
                 None
             }
         } else {
-            let id = if server.advanced_config.networking.java.online_mode {
+            let mut login_start_event = PlayerLoginStartEvent {
+                player_name: login_start.name.to_string(),
+                player_uuid: login_start.uuid,
+                ip_address: self.address,
+                protocol_version: self.version.load().protocol_version(),
+                online_mode: server.advanced_config.networking.java.online_mode,
+                kick_message: TextComponent::text("Disconnected"),
+                cancelled: false,
+            };
+            server
+                .plugin_manager
+                .fire(server, &mut login_start_event)
+                .await;
+            if login_start_event.cancelled {
+                self.kick(login_start_event.kick_message).await;
+                return Some(PacketHandlerResult::Stop);
+            }
+            self.online_mode = login_start_event.online_mode;
+
+            let id = if self.online_mode {
                 login_start.uuid
             } else {
                 offline_uuid(&login_start.name).unwrap_or_else(|_| uuid::Uuid::nil())
@@ -82,15 +101,13 @@ impl PendingConnection {
 
             self.gameprofile = Some(profile.clone());
 
-            if server.advanced_config.networking.java.encryption {
+            // Authentication needs encryption, even when it is off for everyone else.
+            if server.advanced_config.networking.java.encryption || self.online_mode {
                 let verify_token: [u8; 4] = rand::random();
                 self.verify_token = Some(verify_token);
                 self.send_packet_now(
                     &server
-                        .encryption_request(
-                            &verify_token,
-                            server.advanced_config.networking.java.online_mode,
-                        )
+                        .encryption_request(&verify_token, self.online_mode)
                         .await,
                 )
                 .await;

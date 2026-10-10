@@ -972,6 +972,21 @@ interface event {
         cancelled: bool
     }
 
+    /// Fired when a direct Java connection sends Login Start, before the server decides
+    /// whether to authenticate it with Mojang. Not fired behind a proxy.
+    record player-login-start-event-data {
+        player-name: string,
+        /// The UUID sent by the client. It is not verified.
+        player-uuid: uuid,
+        ip-address: string,
+        protocol-version: s32,
+        /// Starts as the configured `online_mode`. When true, this connection gets the
+        /// player's online UUID, is encrypted and has its session checked with Mojang.
+        online-mode: bool,
+        kick-message: text-component,
+        cancelled: bool
+    }
+
     record player-advancement-done-event-data {
         player: player,
         advancement-id: string,
@@ -2158,6 +2173,7 @@ interface event {
         raid-stop-event,
         raid-trigger-event,
         lightning-strike-event,
+        player-login-start-event,
     }
 
     variant event {
@@ -2434,5 +2450,6 @@ interface event {
         raid-stop-event(raid-stop-event-data),
         raid-trigger-event(raid-trigger-event-data),
         lightning-strike-event(lightning-strike-event-data),
+        player-login-start-event(player-login-start-event-data),
     }
 }

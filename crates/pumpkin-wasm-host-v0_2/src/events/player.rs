@@ -32,17 +32,18 @@ use crate::{
             PlayerItemHeldEventData, PlayerItemMendEventData, PlayerJoinEventData,
             PlayerKickEventData, PlayerLeashEntityEventData, PlayerLeaveEventData,
             PlayerLevelChangeEventData, PlayerLinksSendEventData, PlayerLocaleChangeEventData,
-            PlayerLoginEventData, PlayerMoveEventData, PlayerNameEntityEventData,
-            PlayerOpenSignEventData, PlayerPermissionCheckEventData, PlayerPickupArrowEventData,
-            PlayerPortalEventData, PlayerPreLoginEventData, PlayerRecipeBookClickEventData,
-            PlayerRecipeBookSettingsChangeEventData, PlayerRecipeDiscoverEventData,
-            PlayerRegisterChannelEventData, PlayerResourcePackStatusEventData,
-            PlayerRespawnEventData, PlayerRiptideEventData, PlayerShearEntityEventData,
-            PlayerShowEntityEventData, PlayerSpawnChangeEventData, PlayerSpawnLocationEventData,
-            PlayerStatisticIncrementEventData, PlayerSwapHandsEventData,
-            PlayerTakeLecternBookEventData, PlayerTeleportEventData, PlayerToggleFlightEventData,
-            PlayerToggleSneakEventData, PlayerToggleSprintEventData, PlayerUnleashEntityEventData,
-            PlayerUnregisterChannelEventData, PlayerVelocityEventData,
+            PlayerLoginEventData, PlayerLoginStartEventData, PlayerMoveEventData,
+            PlayerNameEntityEventData, PlayerOpenSignEventData, PlayerPermissionCheckEventData,
+            PlayerPickupArrowEventData, PlayerPortalEventData, PlayerPreLoginEventData,
+            PlayerRecipeBookClickEventData, PlayerRecipeBookSettingsChangeEventData,
+            PlayerRecipeDiscoverEventData, PlayerRegisterChannelEventData,
+            PlayerResourcePackStatusEventData, PlayerRespawnEventData, PlayerRiptideEventData,
+            PlayerShearEntityEventData, PlayerShowEntityEventData, PlayerSpawnChangeEventData,
+            PlayerSpawnLocationEventData, PlayerStatisticIncrementEventData,
+            PlayerSwapHandsEventData, PlayerTakeLecternBookEventData, PlayerTeleportEventData,
+            PlayerToggleFlightEventData, PlayerToggleSneakEventData, PlayerToggleSprintEventData,
+            PlayerUnleashEntityEventData, PlayerUnregisterChannelEventData,
+            PlayerVelocityEventData,
         },
         uuid::Uuid as WitUuid,
     },
@@ -92,6 +93,7 @@ use pumpkin_core::plugin::player::{
     player_links_send::PlayerLinksSendEvent,
     player_locale_change::PlayerLocaleChangeEvent,
     player_login::PlayerLoginEvent,
+    player_login_start::PlayerLoginStartEvent,
     player_move::PlayerMoveEvent,
     player_name_entity::PlayerNameEntityEvent,
     player_open_sign::PlayerOpenSignEvent,
@@ -1892,6 +1894,55 @@ impl ToFromWasmEvent for PlayerPortalEvent {
                 player: consume_player(state, &data.player),
                 from_pos: from_wasm_block_position(data.from_pos),
                 to_pos: data.to_pos.map(from_wasm_block_position),
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for PlayerLoginStartEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let kick_message = state
+            .add(self.kick_message.clone())
+            .expect("failed to add text-component resource");
+        Event::PlayerLoginStartEvent(PlayerLoginStartEventData {
+            player_name: self.player_name.clone(),
+            player_uuid: WitUuid::to_wit(&self.player_uuid),
+            ip_address: self.ip_address.to_string(),
+            protocol_version: self.protocol_version,
+            online_mode: self.online_mode,
+            kick_message,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        if !matches!(&event, Event::PlayerLoginStartEvent(_)) {
+            cleanup_event(&event, state);
+            return;
+        }
+
+        let returned = Self::from_wasm_event(event, state);
+        self.online_mode = returned.online_mode;
+        self.cancelled = returned.cancelled;
+        self.kick_message = returned.kick_message;
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerLoginStartEvent(data) => Self {
+                player_name: data.player_name,
+                player_uuid: WitUuid::from_wit(&data.player_uuid),
+                ip_address: data.ip_address.parse().unwrap_or_else(|_| {
+                    std::net::SocketAddr::new(
+                        std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                        0,
+                    )
+                }),
+                protocol_version: data.protocol_version,
+                online_mode: data.online_mode,
+                kick_message: consume_text_component(state, &data.kick_message),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

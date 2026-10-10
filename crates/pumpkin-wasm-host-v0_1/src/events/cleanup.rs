@@ -569,6 +569,9 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
         Event::AsyncPlayerPreLoginEvent(data) => {
             cleanup_text_component(state, &data.kick_message);
         }
+        Event::PlayerLoginStartEvent(data) => {
+            cleanup_text_component(state, &data.kick_message);
+        }
         Event::PlayerAdvancementDoneEvent(data) => {
             cleanup_player(state, &data.player);
         }

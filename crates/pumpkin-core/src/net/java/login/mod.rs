@@ -27,6 +27,7 @@ use crate::{
         offline_uuid,
         proxy::{bungeecord, velocity, vine},
     },
+    plugin::api::events::player::player_login_start::PlayerLoginStartEvent,
     server::Server,
 };
 

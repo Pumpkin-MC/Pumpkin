@@ -181,6 +181,11 @@ fn register_player_event(
             >(ctx, handler, priority, blocking)
             ;
         }
+        EventType::PlayerLoginStartEvent => {
+            register_typed_event::<
+                pumpkin_core::plugin::api::events::player::player_login_start::PlayerLoginStartEvent,
+            >(ctx, handler, priority, blocking);
+        }
         EventType::PlayerAdvancementDoneEvent => {
             register_typed_event::<
                 pumpkin_core::plugin::api::events::player::player_advancement_done::PlayerAdvancementDoneEvent,
