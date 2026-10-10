@@ -65,8 +65,12 @@ pub trait AgeableMob: Mob {
             } else {
                 Entity::type_dimensions(entity.entity_type)
             });
+            self.age_boundary_reached();
         }
     }
+
+    /// Runs when the mob turns into a baby or grows up.
+    fn age_boundary_reached(&self) {}
 
     fn is_age_locked(&self) -> bool {
         self.get_ageable_data().age_locked.load(Relaxed)

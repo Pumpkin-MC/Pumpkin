@@ -1361,6 +1361,13 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_entity().entity_type.experience_reward
     }
 
+    /// Ageable babies drop no experience.
+    fn should_drop_experience(&self) -> bool {
+        !self
+            .as_ageable()
+            .is_some_and(crate::entity::ageable::AgeableMob::is_baby)
+    }
+
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
@@ -1644,12 +1651,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
-        if self
-            .get_entity()
-            .age
-            .load(std::sync::atomic::Ordering::Relaxed)
-            < 0
-        {
+        if !self.should_drop_experience() {
             return 0;
         }
         // TODO: apply enchantment processing like in vanilla

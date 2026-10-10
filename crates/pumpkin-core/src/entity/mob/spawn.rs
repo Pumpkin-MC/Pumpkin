@@ -77,8 +77,8 @@ pub fn finalize_spawn(
 }
 
 impl MobEntity {
-    /// Baby state kept only as a negative age and the shared baby flag (hoglins, zoglins and
-    /// zombified piglins, which are not `AgeableMob`s here).
+    /// Baby state kept only as a negative age and the shared baby flag (zombified piglins,
+    /// which never grow up).
     pub fn set_baby_by_age(&self) {
         let entity = &self.living_entity.entity;
         entity

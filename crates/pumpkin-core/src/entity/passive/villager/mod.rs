@@ -34,6 +34,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase,
+    ageable::{AgeableData, AgeableMob},
     ai::{
         goal::{
             avoid_entity::AvoidEntityGoal, look_around::RandomLookAroundGoal,
@@ -356,6 +357,7 @@ pub struct VillagerEntity {
     pub job_site_pending: AtomicBool,
     pub home_pos: std::sync::Mutex<Option<BlockPos>>,
     pub self_weak: std::sync::Mutex<Option<Weak<Self>>>,
+    pub ageable_data: AgeableData,
 }
 
 impl VillagerEntity {
@@ -425,6 +427,7 @@ impl VillagerEntity {
             job_site_pending: AtomicBool::new(false),
             home_pos: std::sync::Mutex::new(None),
             self_weak: std::sync::Mutex::new(None),
+            ageable_data: AgeableData::default(),
         };
         let mob_arc = Arc::new(villager);
         *mob_arc
@@ -1871,7 +1874,17 @@ impl VillagerEntity {
     }
 }
 
+impl AgeableMob for VillagerEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl Mob for VillagerEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
     #[expect(clippy::too_many_lines)]
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         {

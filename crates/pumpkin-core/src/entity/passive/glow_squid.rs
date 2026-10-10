@@ -4,6 +4,7 @@ use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
     Entity,
+    ageable::{AgeableData, AgeableMob},
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
@@ -16,12 +17,16 @@ use crate::entity::{
 /// Wiki: <https://minecraft.wiki/w/Glow_Squid>
 pub struct GlowSquidEntity {
     pub mob_entity: MobEntity,
+    pub ageable_data: AgeableData,
 }
 
 impl GlowSquidEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let glow_squid = Self { mob_entity };
+        let glow_squid = Self {
+            mob_entity,
+            ageable_data: AgeableData::default(),
+        };
         let mob_arc = Arc::new(glow_squid);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -48,7 +53,17 @@ impl GlowSquidEntity {
     }
 }
 
+impl AgeableMob for GlowSquidEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl Mob for GlowSquidEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
