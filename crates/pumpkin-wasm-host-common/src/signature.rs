@@ -350,10 +350,36 @@ pub fn verify_pumpkin_wasm(wasm_bytes: &[u8], public_key_hex: &str) -> Verificat
     sign_payload.extend_from_slice(&clean_wasm);
     sign_payload.extend_from_slice(&meta_bytes);
 
-    let target_pub_key = sig_envelope.as_ref().map_or_else(
-        || public_key_hex.to_string(),
-        |env| env.public_key_hex.clone(),
-    );
+    // Always verify against the trusted key. The envelope carries a key of its
+    // own, but it travels inside the plugin, so trusting it would let any
+    // self-signed plugin pass as signed.
+    let target_pub_key = public_key_hex.to_string();
+
+    if target_pub_key.is_empty() {
+        return VerificationResult {
+            is_valid: false,
+            is_signed: true,
+            error: Some("No trusted public key available to verify against.".into()),
+            metadata: Some(meta),
+            signature_envelope: sig_envelope,
+            public_key_hex: target_pub_key,
+        };
+    }
+
+    if let Some(envelope) = sig_envelope.as_ref()
+        && !envelope
+            .public_key_hex
+            .eq_ignore_ascii_case(&target_pub_key)
+    {
+        return VerificationResult {
+            is_valid: false,
+            is_signed: true,
+            error: Some("Signature was not made with the trusted public key.".into()),
+            metadata: Some(meta),
+            signature_envelope: sig_envelope,
+            public_key_hex: target_pub_key,
+        };
+    }
 
     let Ok(pub_key_bytes) = hex::decode(&target_pub_key) else {
         return VerificationResult {
@@ -461,5 +487,54 @@ mod tests {
             let mut guard = MARKET_PUBLIC_KEY_CACHE.lock().unwrap();
             *guard = None;
         };
+    }
+
+    fn test_metadata() -> PumpkinMetadata {
+        PumpkinMetadata {
+            marketplace_url: "https://example.invalid".into(),
+            plugin_id: 1,
+            plugin_name: "test".into(),
+            version: "1.0.0".into(),
+            dev_id: 1,
+            dev_name: "dev".into(),
+            is_paid: false,
+            user_id: 1,
+            license_key: None,
+            issued_at: "1970-01-01T00:00:00Z".into(),
+        }
+    }
+
+    // The signature envelope carries a public key, but it ships inside the
+    // plugin. Verifying against it would let anyone sign their own plugin and
+    // have it accepted where only marketplace plugins are allowed.
+    #[test]
+    fn plugin_signed_with_another_key_is_rejected() {
+        let trusted = KeyManager::new(&hex::encode([1u8; 32]));
+        let attacker = KeyManager::new(&hex::encode([2u8; 32]));
+
+        let empty_module = b"\0asm\x01\0\0\0";
+        let plugin = inject_pumpkin_sections(empty_module, &test_metadata(), &attacker)
+            .expect("injecting sections should succeed");
+
+        let result = verify_pumpkin_wasm(&plugin, &trusted.public_key_hex());
+
+        assert!(result.is_signed, "the plugin does carry a signature");
+        assert!(
+            !result.is_valid,
+            "a plugin signed with a key other than the trusted one must not verify"
+        );
+    }
+
+    #[test]
+    fn plugin_signed_with_the_trusted_key_is_accepted() {
+        let trusted = KeyManager::new(&hex::encode([1u8; 32]));
+
+        let empty_module = b"\0asm\x01\0\0\0";
+        let plugin = inject_pumpkin_sections(empty_module, &test_metadata(), &trusted)
+            .expect("injecting sections should succeed");
+
+        let result = verify_pumpkin_wasm(&plugin, &trusted.public_key_hex());
+
+        assert!(result.is_valid, "{:?}", result.error);
     }
 }
