@@ -91,6 +91,8 @@ impl BlockEntity for HopperBlockEntity {
         hopper
     }
 
+    /// Vanilla `HopperBlockEntity.pushItemsTick`: counts the transfer cooldown down and moves
+    /// items when it reaches zero.
     fn tick(&self, world: &Arc<World>) {
         self.ticked_game_time
             .store(world.get_world_age(), Ordering::Relaxed);
@@ -101,7 +103,10 @@ impl BlockEntity for HopperBlockEntity {
         let Some(properties) = hopper_properties(block.id, state.id) else {
             return;
         };
-        if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
+        // Vanilla's gate is `cooldownTime--` then `!isOnCooldown()` (`cooldownTime > 0`),
+        // so the move tick is the one where the counter reaches 0.
+        self.cooldown_time.fetch_sub(1, Ordering::Relaxed);
+        if self.cooldown_time.load(Ordering::Relaxed) <= 0 {
             self.cooldown_time.store(0, Ordering::Relaxed);
             if properties.enabled
                 && let Some(entity) = world.get_block_entity(&self.position)
