@@ -26,6 +26,9 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tracing.workspace = true
 console-subscriber = { workspace = true, optional = true }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_System_Console"] }
+
 [features]
 console-subscriber = ["dep:console-subscriber"]
 
