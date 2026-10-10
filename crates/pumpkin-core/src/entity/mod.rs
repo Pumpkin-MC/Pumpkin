@@ -4071,10 +4071,15 @@ impl Entity {
         if let Some(velocity) = nbt.get_list("Motion")
             && velocity.len() >= 3
         {
+            // Vanilla `Entity.load` zeroes each axis whose magnitude exceeds 10.
             let x = velocity[0].extract_double().unwrap_or(0.0);
             let y = velocity[1].extract_double().unwrap_or(0.0);
             let z = velocity[2].extract_double().unwrap_or(0.0);
-            self.velocity.store(Vector3::new(x, y, z));
+            self.velocity.store(Vector3::new(
+                if x.abs() > 10.0 { 0.0 } else { x },
+                if y.abs() > 10.0 { 0.0 } else { y },
+                if z.abs() > 10.0 { 0.0 } else { z },
+            ));
         }
         if let Some(rotation) = nbt.get_list("Rotation")
             && rotation.len() >= 2
