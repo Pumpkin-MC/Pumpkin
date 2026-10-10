@@ -241,7 +241,16 @@ impl ChunkData {
             })?,
         };
 
-        let mut max_y_section = min_y_section as i8;
+        // Section indices are bytes in this format, and the loops below already
+        // treat them as such. Reject a yPos outside that range instead of
+        // truncating it, because the untruncated value sizes the vectors below.
+        let Ok(min_y_section) = i8::try_from(min_y_section) else {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+                "yPos {min_y_section} is outside the range of a section index"
+            )));
+        };
+
+        let mut max_y_section = min_y_section;
         if let Some(sections_list) = root_tag.get_list("sections") {
             for section_tag in sections_list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(section_compound) = section_tag {
@@ -253,7 +262,8 @@ impl ChunkData {
             }
         }
 
-        let section_count = (max_y_section as i32 - min_y_section + 1).max(0) as usize;
+        let section_count =
+            (i32::from(max_y_section) - i32::from(min_y_section) + 1).max(0) as usize;
         let mut block_lights = vec![LightContainer::Empty(0); section_count];
         let mut sky_lights = vec![LightContainer::Empty(0); section_count];
         let mut block_palettes = vec![BlockPalette::default(); section_count];
@@ -263,7 +273,10 @@ impl ChunkData {
             for section_tag in sections_list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(section_compound) = section_tag {
                     let y = section_y(section_compound);
-                    let index = (y - min_y_section) as usize;
+                    let Ok(index) = usize::try_from(y.saturating_sub(i32::from(min_y_section)))
+                    else {
+                        continue;
+                    };
                     if index >= section_count {
                         continue;
                     }
@@ -271,7 +284,7 @@ impl ChunkData {
                     let block_light = section_compound
                         .get("BlockLight")
                         .and_then(|tag| tag.extract_byte_array())
-                        .map(|arr| {
+                        .map(|arr| -> Box<[u8]> {
                             // SAFETY: `arr` is an `i8` slice (`&[i8]`). `u8` and `i8` have identical memory layout, alignment (1 byte), and lifetime.
                             unsafe {
                                 Box::from(std::slice::from_raw_parts(
@@ -284,7 +297,7 @@ impl ChunkData {
                     let sky_light = section_compound
                         .get("SkyLight")
                         .and_then(|tag| tag.extract_byte_array())
-                        .map(|arr| {
+                        .map(|arr| -> Box<[u8]> {
                             // SAFETY: `arr` is an `i8` slice (`&[i8]`). `u8` and `i8` have identical memory layout, alignment (1 byte), and lifetime.
                             unsafe {
                                 Box::from(std::slice::from_raw_parts(
@@ -294,10 +307,15 @@ impl ChunkData {
                             }
                         });
 
-                    block_lights[index] =
-                        block_light.map_or(LightContainer::Empty(0), LightContainer::Full);
-                    sky_lights[index] =
-                        sky_light.map_or(LightContainer::Empty(0), LightContainer::Full);
+                    // `Full` skips the length check `LightContainer::new` makes,
+                    // and every reader indexes it up to `ARRAY_SIZE`, so a
+                    // short array from disk is dropped instead of stored.
+                    block_lights[index] = block_light
+                        .filter(|data| data.len() == LightContainer::ARRAY_SIZE)
+                        .map_or(LightContainer::Empty(0), LightContainer::Full);
+                    sky_lights[index] = sky_light
+                        .filter(|data| data.len() == LightContainer::ARRAY_SIZE)
+                        .map_or(LightContainer::Empty(0), LightContainer::Full);
 
                     if let Some(bs_compound) = section_compound.get_compound("block_states") {
                         let data = bs_compound
@@ -339,7 +357,7 @@ impl ChunkData {
         };
 
         // Assemble the ChunkSections
-        let min_y = section_coords::section_to_block(min_y_section);
+        let min_y = section_coords::section_to_block(i32::from(min_y_section));
         let (random_tick_sections, randomly_ticking_mask) =
             ChunkSections::build_random_tick_sections_cache(&block_palettes);
         let section = ChunkSections {
@@ -357,15 +375,20 @@ impl ChunkData {
                 motion_blocking: None,
                 motion_blocking_no_leaves: None,
             },
+            // A heightmap of the wrong length is dropped rather than stored:
+            // every reader indexes it by column and would run off the end.
             |h_compound| ChunkHeightmaps {
                 world_surface: h_compound
                     .get_long_array("WORLD_SURFACE")
+                    .filter(|a| a.len() == ChunkHeightmaps::LONGS)
                     .map(|a| a.to_vec().into_boxed_slice()),
                 motion_blocking: h_compound
                     .get_long_array("MOTION_BLOCKING")
+                    .filter(|a| a.len() == ChunkHeightmaps::LONGS)
                     .map(|a| a.to_vec().into_boxed_slice()),
                 motion_blocking_no_leaves: h_compound
                     .get_long_array("MOTION_BLOCKING_NO_LEAVES")
+                    .filter(|a| a.len() == ChunkHeightmaps::LONGS)
                     .map(|a| a.to_vec().into_boxed_slice()),
             },
         );

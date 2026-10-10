@@ -17,6 +17,26 @@ use pumpkin_world::world::BlockAccessor;
 pub struct FallingBlock;
 
 impl FallingBlock {
+    // FallingBlock.getDelayAfterPlace
+    const DELAY_AFTER_PLACE: u8 = 2;
+
+    /// `FallingBlock.onPlace`, for subclasses that override `getDelayAfterPlace` in vanilla (`DragonEggBlock`).
+    pub fn placed_with_delay(args: &PlacedArgs<'_>, delay: u8) {
+        args.world
+            .schedule_block_tick(args.block, *args.position, delay, TickPriority::Normal);
+    }
+
+    /// `FallingBlock.updateShape`, for subclasses that override `getDelayAfterPlace`.
+    #[must_use]
+    pub fn get_state_for_neighbor_update_with_delay(
+        args: &GetStateForNeighborUpdateArgs<'_>,
+        delay: u8,
+    ) -> BlockStateId {
+        args.world
+            .schedule_block_tick(args.block, *args.position, delay, TickPriority::Normal);
+        args.state_id
+    }
+
     #[must_use]
     pub fn can_fall_through(state: &BlockState, block: &Block) -> bool {
         // Vanilla also checks liquid(), but only water, lava and bubble columns set it and
@@ -95,8 +115,7 @@ impl BlockBehaviour for FallingBlock {
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {
-        args.world
-            .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal);
+        Self::placed_with_delay(&args, Self::DELAY_AFTER_PLACE);
     }
 
     fn get_state_for_neighbor_update(
@@ -111,9 +130,7 @@ impl BlockBehaviour for FallingBlock {
             return concrete.default_state.id;
         }
 
-        args.world
-            .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal);
-        args.state_id
+        Self::get_state_for_neighbor_update_with_delay(&args, Self::DELAY_AFTER_PLACE)
     }
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {

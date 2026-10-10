@@ -164,6 +164,7 @@ impl PendingConnection {
             uuid::Uuid::new_v4(),
         );
         self.send_packet_now(&packet).await;
+        self.login_success_sent = true;
         None
     }
 

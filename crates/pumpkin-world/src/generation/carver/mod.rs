@@ -90,6 +90,8 @@ impl CarvingContext<'_> {
             self.min_y,
             self.height,
             &self.random_config.base_random_deriver,
+            self.random_config.legacy_random_source,
+            self.random_config.seed,
             self.terrain_builder,
             self.surface_noise,
             self.secondary_noise,
@@ -228,16 +230,12 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
             let carver_z = chunk_z + dz;
             let carver_chunk_pos = Vector2::new(carver_x, carver_z);
 
-            let carver_biome = if dx == 0 && dz == 0 {
-                chunk.get_biome(0, 0, 0)
-            } else {
-                supplier.biome(
-                    biome_coords::from_block(section_coords::section_to_block(carver_x)),
-                    0,
-                    biome_coords::from_block(section_coords::section_to_block(carver_z)),
-                    &mut multi_noise_sampler,
-                )
-            };
+            let carver_biome = supplier.biome(
+                biome_coords::from_block(section_coords::section_to_block(carver_x)),
+                0,
+                biome_coords::from_block(section_coords::section_to_block(carver_z)),
+                &mut multi_noise_sampler,
+            );
 
             for (index, &config) in carver_biome.carvers.iter().enumerate() {
                 let seed = get_large_feature_seed(
