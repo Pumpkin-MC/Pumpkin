@@ -33,7 +33,7 @@ impl JavaClient {
         let entity = target.get_entity();
         let block_pos = entity.block_pos.load().0;
         // Vanilla drops a camera target that is outside the world border.
-        if !world
+        if !target.world
             .worldborder
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
