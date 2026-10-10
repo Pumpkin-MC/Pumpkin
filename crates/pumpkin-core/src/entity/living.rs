@@ -1223,6 +1223,41 @@ impl LivingEntity {
         self.entity.touching_water.load(Ordering::Relaxed)
     }
 
+    /// Mirrors vanilla's elytra-eligibility gate (`LivingEntity.tryToStartFallFlying`, minus the
+    /// actual state transition): flight requires a non-broken elytra in the chest slot, and is
+    /// blocked while underwater or under Levitation (which already provides its own upward
+    /// motion). The caller is still responsible for checking that the entity is airborne.
+    pub fn can_glide(&self) -> bool {
+        if self.is_in_water() || self.has_effect(&StatusEffect::LEVITATION) {
+            return false;
+        }
+        let equipment = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        equipment
+            .equipment
+            .get(&EquipmentSlot::CHEST)
+            .is_some_and(|stack| {
+                stack.item == &Item::ELYTRA
+                    && stack
+                        .get_max_damage()
+                        .is_none_or(|max| max - stack.get_damage() > 1)
+            })
+    }
+
+    /// Whether an elytra (of any durability) is in the chest slot. An already-active glide
+    /// continues until the elytra is removed, even at 1 durability; `can_glide` additionally
+    /// requires a non-broken elytra to *start* one.
+    pub fn has_elytra_equipped(&self) -> bool {
+        self.entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .get(&EquipmentSlot::CHEST)
+            .is_some_and(|stack| stack.item == &Item::ELYTRA)
+    }
+
     // Check if the entity is in powder snow
     pub fn is_in_powder_snow(&self) -> bool {
         self.entity.is_in_powder_snow.load(Ordering::Relaxed)
