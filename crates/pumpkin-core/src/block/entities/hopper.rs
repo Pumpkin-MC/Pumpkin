@@ -427,6 +427,8 @@ impl HopperBlockEntity {
         }
         false
     }
+    /// Moves one item from `from` into `to` if it fits, mirroring vanilla
+    /// `HopperBlockEntity.tryMoveInItem`.
     pub fn add_one_item(from: &dyn Inventory, to: &dyn Inventory, item: &ItemStack) -> bool {
         let mut success = false;
         let to_empty = to.is_empty();
@@ -445,21 +447,24 @@ impl HopperBlockEntity {
                     success = true;
                 }
                 if success {
+                    // Vanilla `tryMoveInItem`: `8 - skipTickCount`, where a receiving hopper
+                    // that has already ticked this game tick skips one so chains keep their phase.
                     if to_empty
                         && let Some(hopper) = to.as_any().downcast_ref::<Self>()
                         && hopper.cooldown_time.load(Ordering::Relaxed) <= 8
                     {
-                        if let Some(from_hopper) = from.as_any().downcast_ref::<Self>() {
-                            if from_hopper.cooldown_time.load(Ordering::Relaxed)
-                                >= hopper.cooldown_time.load(Ordering::Relaxed)
-                            {
-                                hopper.cooldown_time.store(7, Ordering::Relaxed);
-                            } else {
-                                hopper.cooldown_time.store(8, Ordering::Relaxed);
-                            }
+                        let skip_tick_count = if let Some(from_hopper) =
+                            from.as_any().downcast_ref::<Self>()
+                            && hopper.ticked_game_time.load(Ordering::Relaxed)
+                                >= from_hopper.ticked_game_time.load(Ordering::Relaxed)
+                        {
+                            1
                         } else {
-                            hopper.cooldown_time.store(8, Ordering::Relaxed);
-                        }
+                            0
+                        };
+                        hopper
+                            .cooldown_time
+                            .store(8 - skip_tick_count, Ordering::Relaxed);
                     }
                     to.mark_dirty();
                     return true;
@@ -679,5 +684,38 @@ mod tests {
 
         assert_eq!(leftover.item_count, 1);
         assert_eq!(hopper.get_stack(0).item_count, max);
+    }
+
+    /// Vanilla `tryMoveInItem` gives the receiving hopper `8 - skipTickCount`. One tick less when
+    /// it has already ticked this game tick, so hopper chains keep their phase.
+    #[test]
+    fn receiving_hopper_that_already_ticked_gets_the_shorter_cooldown() {
+        let from = HopperBlockEntity::new(BlockPos::new(0, 0, 0), FacingHopper::Down);
+        let to = HopperBlockEntity::new(BlockPos::new(0, -1, 0), FacingHopper::Down);
+        from.ticked_game_time.store(4, Ordering::Relaxed);
+        to.ticked_game_time.store(4, Ordering::Relaxed);
+
+        assert!(HopperBlockEntity::add_one_item(
+            &from,
+            &to,
+            &ItemStack::new(1, &Item::DIAMOND)
+        ));
+        assert_eq!(to.cooldown_time.load(Ordering::Relaxed), 7);
+    }
+
+    /// Without the skip tick the receiving hopper gets the full cooldown of 8.
+    #[test]
+    fn receiving_hopper_that_ticked_earlier_gets_the_full_cooldown() {
+        let from = HopperBlockEntity::new(BlockPos::new(0, 0, 0), FacingHopper::Down);
+        let to = HopperBlockEntity::new(BlockPos::new(0, -1, 0), FacingHopper::Down);
+        from.ticked_game_time.store(4, Ordering::Relaxed);
+        to.ticked_game_time.store(3, Ordering::Relaxed);
+
+        assert!(HopperBlockEntity::add_one_item(
+            &from,
+            &to,
+            &ItemStack::new(1, &Item::DIAMOND)
+        ));
+        assert_eq!(to.cooldown_time.load(Ordering::Relaxed), 8);
     }
 }
