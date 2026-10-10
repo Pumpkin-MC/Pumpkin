@@ -1,3 +1,4 @@
+use crate::block::blocks::chests::get_container;
 use crate::block::entities::BlockEntity;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::world::World;
@@ -225,31 +226,33 @@ impl HopperBlockEntity {
             return false;
         }
 
-        if let Some(entity) = world.get_block_entity(pos_up)
-            && let Some(container) = entity.clone().get_inventory()
-        {
-            // TODO check WorldlyContainer
-            for i in 0..container.size() {
-                let mut item = container.get_stack(i);
-                if !item.is_empty() && container.can_transfer_to(self, i, &item) {
-                    //TODO WorldlyContainer
-                    let _backup = item.clone();
-                    let one_item = item.split(1);
-                    if Self::add_one_item(container.as_ref(), self, &one_item) {
-                        container.set_stack(i, item);
-                        // If extracting from furnace output slot (index 2), drop XP as orbs
-                        let furnace_output_slot: usize = 2;
-                        if i == furnace_output_slot
-                            && let Some(experience_container) =
-                                entity.clone().to_experience_container()
-                        {
-                            let xp = experience_container.extract_experience();
-                            if xp > 0 {
-                                let pos = self.position.to_f64();
-                                ExperienceOrbEntity::spawn(world, pos, xp as u32);
+        if let Some(entity) = world.get_block_entity(pos_up) {
+            if let Some(container) = get_container(world, pos_up, &entity, true)
+                .or_else(|| entity.clone().get_inventory())
+            {
+                // TODO check WorldlyContainer
+                for i in 0..container.size() {
+                    let mut item = container.get_stack(i);
+                    if !item.is_empty() && container.can_transfer_to(self, i, &item) {
+                        //TODO WorldlyContainer
+                        let _backup = item.clone();
+                        let one_item = item.split(1);
+                        if Self::add_one_item(container.as_ref(), self, &one_item) {
+                            container.set_stack(i, item);
+                            // If extracting from furnace output slot (index 2), drop XP as orbs
+                            let furnace_output_slot: usize = 2;
+                            if i == furnace_output_slot
+                                && let Some(experience_container) =
+                                    entity.clone().to_experience_container()
+                            {
+                                let xp = experience_container.extract_experience();
+                                if xp > 0 {
+                                    let pos = self.position.to_f64();
+                                    ExperienceOrbEntity::spawn(world, pos, xp as u32);
+                                }
                             }
+                            return true;
                         }
-                        return true;
                     }
                 }
             }
@@ -370,9 +373,11 @@ impl HopperBlockEntity {
 
     fn eject_items(&self, world: &Arc<World>) -> bool {
         // TODO getEntityContainer
+        let facing = &self.position.offset(to_offset(&self.facing));
 
-        if let Some(entity) = world.get_block_entity(&self.position.offset(to_offset(&self.facing)))
-            && let Some(container) = entity.get_inventory()
+        if let Some(entity) = world.get_block_entity(facing)
+            && let Some(container) = get_container(world, facing, &entity, true)
+                .or_else(|| entity.clone().get_inventory())
         {
             // TODO check WorldlyContainer
             let mut is_full = true;
