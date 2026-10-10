@@ -1,7 +1,7 @@
 use crate::block::blocks::falling::FallingBlock;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, GetStateForNeighborUpdateArgs, NormalUseArgs, OnScheduledTickArgs,
+    AttackArgs, BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnScheduledTickArgs,
     PathComputationType, PlacedArgs,
 };
 use crate::world::World;
@@ -63,8 +63,7 @@ impl BlockBehaviour for DragonEggBlock {
         BlockActionResult::Success
     }
 
-    // Dragon egg is typically teleported when attacked
-    fn broken(&self, args: BrokenArgs<'_>) {
+    fn attack(&self, args: AttackArgs<'_>) {
         Self::teleport(args.world, args.position);
     }
 

@@ -147,6 +147,9 @@ pub trait BlockBehaviour: Send + Sync {
         stop_vertical_movement_after_fall(args.entity);
     }
 
+    /// Called when a player starts digging this block, except in creative.
+    fn attack(&self, _args: AttackArgs<'_>) {}
+
     fn broken(&self, _args: BrokenArgs<'_>) {}
 
     fn on_neighbor_update(&self, _args: OnNeighborUpdateArgs<'_>) {}
@@ -364,6 +367,14 @@ pub struct OnLandedUponArgs<'a> {
 
 pub struct UpdateEntityMovementAfterFallOnArgs<'a> {
     pub entity: &'a dyn EntityBase,
+}
+
+pub struct AttackArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub position: &'a BlockPos,
+    pub player: &'a Arc<Player>,
 }
 
 pub struct BrokenArgs<'a> {
