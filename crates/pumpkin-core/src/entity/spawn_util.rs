@@ -27,15 +27,46 @@ impl SpawnStrategy {
     }
 }
 
-fn is_face_full_up(state: &BlockState) -> bool {
-    state.is_full_cube()
-        || state.get_block_collision_shapes().any(|shape| {
-            shape.max.y >= 1.0
-                && shape.min.x <= 0.0
-                && shape.min.z <= 0.0
-                && shape.max.x >= 1.0
-                && shape.max.z >= 1.0
-        })
+pub(crate) fn is_face_full_up(state: &BlockState) -> bool {
+    let top_faces = || {
+        state
+            .get_block_collision_shapes()
+            .filter(|shape| shape.min.y < 1.0 && shape.max.y >= 1.0)
+    };
+    // Block.isFaceFull requires equality with the unit face, not just coverage.
+    if top_faces().any(|shape| {
+        shape.min.x < 0.0 || shape.min.z < 0.0 || shape.max.x > 1.0 || shape.max.z > 1.0
+    }) {
+        return false;
+    }
+    if top_faces().any(|shape| {
+        shape.min.x <= 0.0 && shape.min.z <= 0.0 && shape.max.x >= 1.0 && shape.max.z >= 1.0
+    }) {
+        return true;
+    }
+
+    // Block.isFaceFull tests the union, not each AABB separately. Walk strips
+    // between shape edges so split stair/piston faces can cover the whole top.
+    let mut x = 0.0;
+    while x < 1.0 {
+        let next_x = top_faces()
+            .flat_map(|shape| [shape.min.x, shape.max.x])
+            .filter(|edge| *edge > x)
+            .fold(1.0, f64::min);
+        let mut z = 0.0;
+        while z < 1.0 {
+            let next_z = top_faces()
+                .filter(|shape| shape.min.x <= x && shape.max.x >= next_x && shape.min.z <= z)
+                .map(|shape| shape.max.z)
+                .fold(z, f64::max);
+            if next_z <= z {
+                return false;
+            }
+            z = next_z;
+        }
+        x = next_x;
+    }
+    true
 }
 
 #[expect(clippy::too_many_arguments)]
