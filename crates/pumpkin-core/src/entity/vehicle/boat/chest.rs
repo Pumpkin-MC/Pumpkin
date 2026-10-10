@@ -9,7 +9,7 @@ use crate::entity::{
 };
 
 #[derive(Clone)]
-pub(super) struct ChestBoat {
+pub struct ChestBoat {
     inventory: Arc<BoatInventory>,
 }
 
