@@ -38294,7 +38294,7 @@ static TILL_ROOTED_DIRT_POOLS: &[LootPool] = &[LootPool {
 pub static TILL_ROOTED_DIRT: LootTable = LootTable {
     pools: TILL_ROOTED_DIRT_POOLS,
 };
-static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
+static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2957usize] = [
     ("archaeology/desert_pyramid", &ARCHAEOLOGY_DESERT_PYRAMID),
     ("archaeology/desert_well", &ARCHAEOLOGY_DESERT_WELL),
     ("archaeology/ocean_ruin_cold", &ARCHAEOLOGY_OCEAN_RUIN_COLD),
@@ -40719,6 +40719,11 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/acacia_slab", &BLOCKS_ACACIA_SLAB),
     ("minecraft:blocks/acacia_stairs", &BLOCKS_ACACIA_STAIRS),
     ("minecraft:blocks/acacia_trapdoor", &BLOCKS_ACACIA_TRAPDOOR),
+    (
+        "minecraft:blocks/acacia_wall_hanging_sign",
+        &BLOCKS_ACACIA_HANGING_SIGN,
+    ),
+    ("minecraft:blocks/acacia_wall_sign", &BLOCKS_ACACIA_SIGN),
     ("minecraft:blocks/acacia_wood", &BLOCKS_ACACIA_WOOD),
     ("minecraft:blocks/activator_rail", &BLOCKS_ACTIVATOR_RAIL),
     ("minecraft:blocks/allium", &BLOCKS_ALLIUM),
@@ -40777,6 +40782,11 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/bamboo_slab", &BLOCKS_BAMBOO_SLAB),
     ("minecraft:blocks/bamboo_stairs", &BLOCKS_BAMBOO_STAIRS),
     ("minecraft:blocks/bamboo_trapdoor", &BLOCKS_BAMBOO_TRAPDOOR),
+    (
+        "minecraft:blocks/bamboo_wall_hanging_sign",
+        &BLOCKS_BAMBOO_HANGING_SIGN,
+    ),
+    ("minecraft:blocks/bamboo_wall_sign", &BLOCKS_BAMBOO_SIGN),
     ("minecraft:blocks/barrel", &BLOCKS_BARREL),
     ("minecraft:blocks/basalt", &BLOCKS_BASALT),
     ("minecraft:blocks/beacon", &BLOCKS_BEACON),
@@ -40813,6 +40823,11 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/birch_slab", &BLOCKS_BIRCH_SLAB),
     ("minecraft:blocks/birch_stairs", &BLOCKS_BIRCH_STAIRS),
     ("minecraft:blocks/birch_trapdoor", &BLOCKS_BIRCH_TRAPDOOR),
+    (
+        "minecraft:blocks/birch_wall_hanging_sign",
+        &BLOCKS_BIRCH_HANGING_SIGN,
+    ),
+    ("minecraft:blocks/birch_wall_sign", &BLOCKS_BIRCH_SIGN),
     ("minecraft:blocks/birch_wood", &BLOCKS_BIRCH_WOOD),
     ("minecraft:blocks/black_banner", &BLOCKS_BLACK_BANNER),
     ("minecraft:blocks/black_bed", &BLOCKS_BLACK_BED),
@@ -40855,6 +40870,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/black_terracotta",
         &BLOCKS_BLACK_TERRACOTTA,
     ),
+    ("minecraft:blocks/black_wall_banner", &BLOCKS_BLACK_BANNER),
     ("minecraft:blocks/black_wool", &BLOCKS_BLACK_WOOL),
     ("minecraft:blocks/black_wool_slab", &BLOCKS_BLACK_WOOL_SLAB),
     (
@@ -40909,6 +40925,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_BLUE_STAINED_GLASS_PANE,
     ),
     ("minecraft:blocks/blue_terracotta", &BLOCKS_BLUE_TERRACOTTA),
+    ("minecraft:blocks/blue_wall_banner", &BLOCKS_BLUE_BANNER),
     ("minecraft:blocks/blue_wool", &BLOCKS_BLUE_WOOL),
     ("minecraft:blocks/blue_wool_slab", &BLOCKS_BLUE_WOOL_SLAB),
     (
@@ -40923,6 +40940,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_BRAIN_CORAL_BLOCK,
     ),
     ("minecraft:blocks/brain_coral_fan", &BLOCKS_BRAIN_CORAL_FAN),
+    (
+        "minecraft:blocks/brain_coral_wall_fan",
+        &BLOCKS_BRAIN_CORAL_FAN,
+    ),
     ("minecraft:blocks/brewing_stand", &BLOCKS_BREWING_STAND),
     ("minecraft:blocks/brick_slab", &BLOCKS_BRICK_SLAB),
     ("minecraft:blocks/brick_stairs", &BLOCKS_BRICK_STAIRS),
@@ -40974,6 +40995,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/brown_terracotta",
         &BLOCKS_BROWN_TERRACOTTA,
     ),
+    ("minecraft:blocks/brown_wall_banner", &BLOCKS_BROWN_BANNER),
     ("minecraft:blocks/brown_wool", &BLOCKS_BROWN_WOOL),
     ("minecraft:blocks/brown_wool_slab", &BLOCKS_BROWN_WOOL_SLAB),
     (
@@ -40987,6 +41009,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ),
     (
         "minecraft:blocks/bubble_coral_fan",
+        &BLOCKS_BUBBLE_CORAL_FAN,
+    ),
+    (
+        "minecraft:blocks/bubble_coral_wall_fan",
         &BLOCKS_BUBBLE_CORAL_FAN,
     ),
     (
@@ -41041,6 +41067,11 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/cherry_slab", &BLOCKS_CHERRY_SLAB),
     ("minecraft:blocks/cherry_stairs", &BLOCKS_CHERRY_STAIRS),
     ("minecraft:blocks/cherry_trapdoor", &BLOCKS_CHERRY_TRAPDOOR),
+    (
+        "minecraft:blocks/cherry_wall_hanging_sign",
+        &BLOCKS_CHERRY_HANGING_SIGN,
+    ),
+    ("minecraft:blocks/cherry_wall_sign", &BLOCKS_CHERRY_SIGN),
     ("minecraft:blocks/cherry_wood", &BLOCKS_CHERRY_WOOD),
     ("minecraft:blocks/chest", &BLOCKS_CHEST),
     ("minecraft:blocks/chipped_anvil", &BLOCKS_CHIPPED_ANVIL),
@@ -41167,6 +41198,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/copper_ore", &BLOCKS_COPPER_ORE),
     ("minecraft:blocks/copper_torch", &BLOCKS_COPPER_TORCH),
     ("minecraft:blocks/copper_trapdoor", &BLOCKS_COPPER_TRAPDOOR),
+    ("minecraft:blocks/copper_wall_torch", &BLOCKS_COPPER_TORCH),
     ("minecraft:blocks/cornflower", &BLOCKS_CORNFLOWER),
     (
         "minecraft:blocks/cracked_deepslate_bricks",
@@ -41192,6 +41224,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/crafting_table", &BLOCKS_CRAFTING_TABLE),
     ("minecraft:blocks/creaking_heart", &BLOCKS_CREAKING_HEART),
     ("minecraft:blocks/creeper_head", &BLOCKS_CREEPER_HEAD),
+    ("minecraft:blocks/creeper_wall_head", &BLOCKS_CREEPER_HEAD),
     ("minecraft:blocks/crimson_button", &BLOCKS_CRIMSON_BUTTON),
     ("minecraft:blocks/crimson_door", &BLOCKS_CRIMSON_DOOR),
     ("minecraft:blocks/crimson_fence", &BLOCKS_CRIMSON_FENCE),
@@ -41221,6 +41254,11 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/crimson_trapdoor",
         &BLOCKS_CRIMSON_TRAPDOOR,
     ),
+    (
+        "minecraft:blocks/crimson_wall_hanging_sign",
+        &BLOCKS_CRIMSON_HANGING_SIGN,
+    ),
+    ("minecraft:blocks/crimson_wall_sign", &BLOCKS_CRIMSON_SIGN),
     ("minecraft:blocks/crying_obsidian", &BLOCKS_CRYING_OBSIDIAN),
     ("minecraft:blocks/cut_copper", &BLOCKS_CUT_COPPER),
     ("minecraft:blocks/cut_copper_slab", &BLOCKS_CUT_COPPER_SLAB),
@@ -41279,6 +41317,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_CYAN_STAINED_GLASS_PANE,
     ),
     ("minecraft:blocks/cyan_terracotta", &BLOCKS_CYAN_TERRACOTTA),
+    ("minecraft:blocks/cyan_wall_banner", &BLOCKS_CYAN_BANNER),
     ("minecraft:blocks/cyan_wool", &BLOCKS_CYAN_WOOL),
     ("minecraft:blocks/cyan_wool_slab", &BLOCKS_CYAN_WOOL_SLAB),
     (
@@ -41317,6 +41356,11 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/dark_oak_trapdoor",
         &BLOCKS_DARK_OAK_TRAPDOOR,
     ),
+    (
+        "minecraft:blocks/dark_oak_wall_hanging_sign",
+        &BLOCKS_DARK_OAK_HANGING_SIGN,
+    ),
+    ("minecraft:blocks/dark_oak_wall_sign", &BLOCKS_DARK_OAK_SIGN),
     ("minecraft:blocks/dark_oak_wood", &BLOCKS_DARK_OAK_WOOD),
     ("minecraft:blocks/dark_prismarine", &BLOCKS_DARK_PRISMARINE),
     (
@@ -41344,6 +41388,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_DEAD_BRAIN_CORAL_FAN,
     ),
     (
+        "minecraft:blocks/dead_brain_coral_wall_fan",
+        &BLOCKS_DEAD_BRAIN_CORAL_FAN,
+    ),
+    (
         "minecraft:blocks/dead_bubble_coral",
         &BLOCKS_DEAD_BUBBLE_CORAL,
     ),
@@ -41353,6 +41401,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ),
     (
         "minecraft:blocks/dead_bubble_coral_fan",
+        &BLOCKS_DEAD_BUBBLE_CORAL_FAN,
+    ),
+    (
+        "minecraft:blocks/dead_bubble_coral_wall_fan",
         &BLOCKS_DEAD_BUBBLE_CORAL_FAN,
     ),
     ("minecraft:blocks/dead_bush", &BLOCKS_DEAD_BUSH),
@@ -41365,6 +41417,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/dead_fire_coral_fan",
         &BLOCKS_DEAD_FIRE_CORAL_FAN,
     ),
+    (
+        "minecraft:blocks/dead_fire_coral_wall_fan",
+        &BLOCKS_DEAD_FIRE_CORAL_FAN,
+    ),
     ("minecraft:blocks/dead_horn_coral", &BLOCKS_DEAD_HORN_CORAL),
     (
         "minecraft:blocks/dead_horn_coral_block",
@@ -41374,6 +41430,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/dead_horn_coral_fan",
         &BLOCKS_DEAD_HORN_CORAL_FAN,
     ),
+    (
+        "minecraft:blocks/dead_horn_coral_wall_fan",
+        &BLOCKS_DEAD_HORN_CORAL_FAN,
+    ),
     ("minecraft:blocks/dead_tube_coral", &BLOCKS_DEAD_TUBE_CORAL),
     (
         "minecraft:blocks/dead_tube_coral_block",
@@ -41381,6 +41441,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ),
     (
         "minecraft:blocks/dead_tube_coral_fan",
+        &BLOCKS_DEAD_TUBE_CORAL_FAN,
+    ),
+    (
+        "minecraft:blocks/dead_tube_coral_wall_fan",
         &BLOCKS_DEAD_TUBE_CORAL_FAN,
     ),
     ("minecraft:blocks/decorated_pot", &BLOCKS_DECORATED_POT),
@@ -41458,6 +41522,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/dispenser", &BLOCKS_DISPENSER),
     ("minecraft:blocks/dragon_egg", &BLOCKS_DRAGON_EGG),
     ("minecraft:blocks/dragon_head", &BLOCKS_DRAGON_HEAD),
+    ("minecraft:blocks/dragon_wall_head", &BLOCKS_DRAGON_HEAD),
     ("minecraft:blocks/dried_ghast", &BLOCKS_DRIED_GHAST),
     (
         "minecraft:blocks/dried_kelp_block",
@@ -41556,6 +41621,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_FIRE_CORAL_BLOCK,
     ),
     ("minecraft:blocks/fire_coral_fan", &BLOCKS_FIRE_CORAL_FAN),
+    (
+        "minecraft:blocks/fire_coral_wall_fan",
+        &BLOCKS_FIRE_CORAL_FAN,
+    ),
     ("minecraft:blocks/firefly_bush", &BLOCKS_FIREFLY_BUSH),
     ("minecraft:blocks/fletching_table", &BLOCKS_FLETCHING_TABLE),
     ("minecraft:blocks/flower_pot", &BLOCKS_FLOWER_POT),
@@ -41628,6 +41697,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_GRAY_STAINED_GLASS_PANE,
     ),
     ("minecraft:blocks/gray_terracotta", &BLOCKS_GRAY_TERRACOTTA),
+    ("minecraft:blocks/gray_wall_banner", &BLOCKS_GRAY_BANNER),
     ("minecraft:blocks/gray_wool", &BLOCKS_GRAY_WOOL),
     ("minecraft:blocks/gray_wool_slab", &BLOCKS_GRAY_WOOL_SLAB),
     (
@@ -41675,6 +41745,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/green_terracotta",
         &BLOCKS_GREEN_TERRACOTTA,
     ),
+    ("minecraft:blocks/green_wall_banner", &BLOCKS_GREEN_BANNER),
     ("minecraft:blocks/green_wool", &BLOCKS_GREEN_WOOL),
     ("minecraft:blocks/green_wool_slab", &BLOCKS_GREEN_WOOL_SLAB),
     (
@@ -41698,6 +41769,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_HORN_CORAL_BLOCK,
     ),
     ("minecraft:blocks/horn_coral_fan", &BLOCKS_HORN_CORAL_FAN),
+    (
+        "minecraft:blocks/horn_coral_wall_fan",
+        &BLOCKS_HORN_CORAL_FAN,
+    ),
     ("minecraft:blocks/ice", &BLOCKS_ICE),
     (
         "minecraft:blocks/infested_chiseled_stone_bricks",
@@ -41756,6 +41831,11 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/jungle_slab", &BLOCKS_JUNGLE_SLAB),
     ("minecraft:blocks/jungle_stairs", &BLOCKS_JUNGLE_STAIRS),
     ("minecraft:blocks/jungle_trapdoor", &BLOCKS_JUNGLE_TRAPDOOR),
+    (
+        "minecraft:blocks/jungle_wall_hanging_sign",
+        &BLOCKS_JUNGLE_HANGING_SIGN,
+    ),
+    ("minecraft:blocks/jungle_wall_sign", &BLOCKS_JUNGLE_SIGN),
     ("minecraft:blocks/jungle_wood", &BLOCKS_JUNGLE_WOOD),
     ("minecraft:blocks/kelp", &BLOCKS_KELP),
     ("minecraft:blocks/kelp_plant", &BLOCKS_KELP_PLANT),
@@ -41825,6 +41905,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/light_blue_terracotta",
         &BLOCKS_LIGHT_BLUE_TERRACOTTA,
     ),
+    (
+        "minecraft:blocks/light_blue_wall_banner",
+        &BLOCKS_LIGHT_BLUE_BANNER,
+    ),
     ("minecraft:blocks/light_blue_wool", &BLOCKS_LIGHT_BLUE_WOOL),
     (
         "minecraft:blocks/light_blue_wool_slab",
@@ -41887,6 +41971,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/light_gray_terracotta",
         &BLOCKS_LIGHT_GRAY_TERRACOTTA,
     ),
+    (
+        "minecraft:blocks/light_gray_wall_banner",
+        &BLOCKS_LIGHT_GRAY_BANNER,
+    ),
     ("minecraft:blocks/light_gray_wool", &BLOCKS_LIGHT_GRAY_WOOL),
     (
         "minecraft:blocks/light_gray_wool_slab",
@@ -41945,6 +42033,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_LIME_STAINED_GLASS_PANE,
     ),
     ("minecraft:blocks/lime_terracotta", &BLOCKS_LIME_TERRACOTTA),
+    ("minecraft:blocks/lime_wall_banner", &BLOCKS_LIME_BANNER),
     ("minecraft:blocks/lime_wool", &BLOCKS_LIME_WOOL),
     ("minecraft:blocks/lime_wool_slab", &BLOCKS_LIME_WOOL_SLAB),
     (
@@ -41997,6 +42086,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/magenta_terracotta",
         &BLOCKS_MAGENTA_TERRACOTTA,
     ),
+    (
+        "minecraft:blocks/magenta_wall_banner",
+        &BLOCKS_MAGENTA_BANNER,
+    ),
     ("minecraft:blocks/magenta_wool", &BLOCKS_MAGENTA_WOOL),
     (
         "minecraft:blocks/magenta_wool_slab",
@@ -42038,6 +42131,11 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/mangrove_trapdoor",
         &BLOCKS_MANGROVE_TRAPDOOR,
     ),
+    (
+        "minecraft:blocks/mangrove_wall_hanging_sign",
+        &BLOCKS_MANGROVE_HANGING_SIGN,
+    ),
+    ("minecraft:blocks/mangrove_wall_sign", &BLOCKS_MANGROVE_SIGN),
     ("minecraft:blocks/mangrove_wood", &BLOCKS_MANGROVE_WOOD),
     (
         "minecraft:blocks/medium_amethyst_bud",
@@ -42146,6 +42244,11 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/oak_slab", &BLOCKS_OAK_SLAB),
     ("minecraft:blocks/oak_stairs", &BLOCKS_OAK_STAIRS),
     ("minecraft:blocks/oak_trapdoor", &BLOCKS_OAK_TRAPDOOR),
+    (
+        "minecraft:blocks/oak_wall_hanging_sign",
+        &BLOCKS_OAK_HANGING_SIGN,
+    ),
+    ("minecraft:blocks/oak_wall_sign", &BLOCKS_OAK_SIGN),
     ("minecraft:blocks/oak_wood", &BLOCKS_OAK_WOOD),
     ("minecraft:blocks/observer", &BLOCKS_OBSERVER),
     ("minecraft:blocks/obsidian", &BLOCKS_OBSIDIAN),
@@ -42197,6 +42300,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_ORANGE_TERRACOTTA,
     ),
     ("minecraft:blocks/orange_tulip", &BLOCKS_ORANGE_TULIP),
+    ("minecraft:blocks/orange_wall_banner", &BLOCKS_ORANGE_BANNER),
     ("minecraft:blocks/orange_wool", &BLOCKS_ORANGE_WOOL),
     (
         "minecraft:blocks/orange_wool_slab",
@@ -42305,6 +42409,11 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/pale_oak_trapdoor",
         &BLOCKS_PALE_OAK_TRAPDOOR,
     ),
+    (
+        "minecraft:blocks/pale_oak_wall_hanging_sign",
+        &BLOCKS_PALE_OAK_HANGING_SIGN,
+    ),
+    ("minecraft:blocks/pale_oak_wall_sign", &BLOCKS_PALE_OAK_SIGN),
     ("minecraft:blocks/pale_oak_wood", &BLOCKS_PALE_OAK_WOOD),
     (
         "minecraft:blocks/pearlescent_froglight",
@@ -42316,6 +42425,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_PETRIFIED_OAK_SLAB,
     ),
     ("minecraft:blocks/piglin_head", &BLOCKS_PIGLIN_HEAD),
+    ("minecraft:blocks/piglin_wall_head", &BLOCKS_PIGLIN_HEAD),
     ("minecraft:blocks/pink_banner", &BLOCKS_PINK_BANNER),
     ("minecraft:blocks/pink_bed", &BLOCKS_PINK_BED),
     ("minecraft:blocks/pink_candle", &BLOCKS_PINK_CANDLE),
@@ -42356,6 +42466,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ),
     ("minecraft:blocks/pink_terracotta", &BLOCKS_PINK_TERRACOTTA),
     ("minecraft:blocks/pink_tulip", &BLOCKS_PINK_TULIP),
+    ("minecraft:blocks/pink_wall_banner", &BLOCKS_PINK_BANNER),
     ("minecraft:blocks/pink_wool", &BLOCKS_PINK_WOOL),
     ("minecraft:blocks/pink_wool_slab", &BLOCKS_PINK_WOOL_SLAB),
     (
@@ -42366,6 +42477,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/pitcher_crop", &BLOCKS_PITCHER_CROP),
     ("minecraft:blocks/pitcher_plant", &BLOCKS_PITCHER_PLANT),
     ("minecraft:blocks/player_head", &BLOCKS_PLAYER_HEAD),
+    ("minecraft:blocks/player_wall_head", &BLOCKS_PLAYER_HEAD),
     ("minecraft:blocks/podzol", &BLOCKS_PODZOL),
     (
         "minecraft:blocks/pointed_dripstone",
@@ -42529,6 +42641,11 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/poplar_slab", &BLOCKS_POPLAR_SLAB),
     ("minecraft:blocks/poplar_stairs", &BLOCKS_POPLAR_STAIRS),
     ("minecraft:blocks/poplar_trapdoor", &BLOCKS_POPLAR_TRAPDOOR),
+    (
+        "minecraft:blocks/poplar_wall_hanging_sign",
+        &BLOCKS_POPLAR_HANGING_SIGN,
+    ),
+    ("minecraft:blocks/poplar_wall_sign", &BLOCKS_POPLAR_SIGN),
     ("minecraft:blocks/poplar_wood", &BLOCKS_POPLAR_WOOD),
     ("minecraft:blocks/poppy", &BLOCKS_POPPY),
     ("minecraft:blocks/potatoes", &BLOCKS_POTATOES),
@@ -42742,6 +42859,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/purple_terracotta",
         &BLOCKS_PURPLE_TERRACOTTA,
     ),
+    ("minecraft:blocks/purple_wall_banner", &BLOCKS_PURPLE_BANNER),
     ("minecraft:blocks/purple_wool", &BLOCKS_PURPLE_WOOL),
     (
         "minecraft:blocks/purple_wool_slab",
@@ -42840,6 +42958,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ),
     ("minecraft:blocks/red_terracotta", &BLOCKS_RED_TERRACOTTA),
     ("minecraft:blocks/red_tulip", &BLOCKS_RED_TULIP),
+    ("minecraft:blocks/red_wall_banner", &BLOCKS_RED_BANNER),
     ("minecraft:blocks/red_wool", &BLOCKS_RED_WOOL),
     ("minecraft:blocks/red_wool_slab", &BLOCKS_RED_WOOL_SLAB),
     ("minecraft:blocks/red_wool_stairs", &BLOCKS_RED_WOOL_STAIRS),
@@ -42847,6 +42966,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/redstone_lamp", &BLOCKS_REDSTONE_LAMP),
     ("minecraft:blocks/redstone_ore", &BLOCKS_REDSTONE_ORE),
     ("minecraft:blocks/redstone_torch", &BLOCKS_REDSTONE_TORCH),
+    (
+        "minecraft:blocks/redstone_wall_torch",
+        &BLOCKS_REDSTONE_TORCH,
+    ),
     ("minecraft:blocks/redstone_wire", &BLOCKS_REDSTONE_WIRE),
     (
         "minecraft:blocks/reinforced_deepslate",
@@ -42894,6 +43017,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/shroomlight", &BLOCKS_SHROOMLIGHT),
     ("minecraft:blocks/shulker_box", &BLOCKS_SHULKER_BOX),
     ("minecraft:blocks/skeleton_skull", &BLOCKS_SKELETON_SKULL),
+    (
+        "minecraft:blocks/skeleton_wall_skull",
+        &BLOCKS_SKELETON_SKULL,
+    ),
     ("minecraft:blocks/slime_block", &BLOCKS_SLIME_BLOCK),
     (
         "minecraft:blocks/small_amethyst_bud",
@@ -42950,6 +43077,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/soul_sand", &BLOCKS_SOUL_SAND),
     ("minecraft:blocks/soul_soil", &BLOCKS_SOUL_SOIL),
     ("minecraft:blocks/soul_torch", &BLOCKS_SOUL_TORCH),
+    ("minecraft:blocks/soul_wall_torch", &BLOCKS_SOUL_TORCH),
     ("minecraft:blocks/spawner", &BLOCKS_SPAWNER),
     ("minecraft:blocks/sponge", &BLOCKS_SPONGE),
     ("minecraft:blocks/spore_blossom", &BLOCKS_SPORE_BLOSSOM),
@@ -42977,6 +43105,11 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/spruce_slab", &BLOCKS_SPRUCE_SLAB),
     ("minecraft:blocks/spruce_stairs", &BLOCKS_SPRUCE_STAIRS),
     ("minecraft:blocks/spruce_trapdoor", &BLOCKS_SPRUCE_TRAPDOOR),
+    (
+        "minecraft:blocks/spruce_wall_hanging_sign",
+        &BLOCKS_SPRUCE_HANGING_SIGN,
+    ),
+    ("minecraft:blocks/spruce_wall_sign", &BLOCKS_SPRUCE_SIGN),
     ("minecraft:blocks/spruce_wood", &BLOCKS_SPRUCE_WOOD),
     ("minecraft:blocks/sticky_piston", &BLOCKS_STICKY_PISTON),
     ("minecraft:blocks/stone", &BLOCKS_STONE),
@@ -43154,6 +43287,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_TUBE_CORAL_BLOCK,
     ),
     ("minecraft:blocks/tube_coral_fan", &BLOCKS_TUBE_CORAL_FAN),
+    (
+        "minecraft:blocks/tube_coral_wall_fan",
+        &BLOCKS_TUBE_CORAL_FAN,
+    ),
     ("minecraft:blocks/tuff", &BLOCKS_TUFF),
     ("minecraft:blocks/tuff_brick_slab", &BLOCKS_TUFF_BRICK_SLAB),
     (
@@ -43177,6 +43314,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_VERDANT_FROGLIGHT,
     ),
     ("minecraft:blocks/vine", &BLOCKS_VINE),
+    ("minecraft:blocks/wall_torch", &BLOCKS_TORCH),
     ("minecraft:blocks/warped_button", &BLOCKS_WARPED_BUTTON),
     ("minecraft:blocks/warped_door", &BLOCKS_WARPED_DOOR),
     ("minecraft:blocks/warped_fence", &BLOCKS_WARPED_FENCE),
@@ -43203,6 +43341,11 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/warped_stairs", &BLOCKS_WARPED_STAIRS),
     ("minecraft:blocks/warped_stem", &BLOCKS_WARPED_STEM),
     ("minecraft:blocks/warped_trapdoor", &BLOCKS_WARPED_TRAPDOOR),
+    (
+        "minecraft:blocks/warped_wall_hanging_sign",
+        &BLOCKS_WARPED_HANGING_SIGN,
+    ),
+    ("minecraft:blocks/warped_wall_sign", &BLOCKS_WARPED_SIGN),
     (
         "minecraft:blocks/warped_wart_block",
         &BLOCKS_WARPED_WART_BLOCK,
@@ -43557,6 +43700,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_WHITE_TERRACOTTA,
     ),
     ("minecraft:blocks/white_tulip", &BLOCKS_WHITE_TULIP),
+    ("minecraft:blocks/white_wall_banner", &BLOCKS_WHITE_BANNER),
     ("minecraft:blocks/white_wool", &BLOCKS_WHITE_WOOL),
     ("minecraft:blocks/white_wool_slab", &BLOCKS_WHITE_WOOL_SLAB),
     (
@@ -43567,6 +43711,10 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
     ("minecraft:blocks/wither_rose", &BLOCKS_WITHER_ROSE),
     (
         "minecraft:blocks/wither_skeleton_skull",
+        &BLOCKS_WITHER_SKELETON_SKULL,
+    ),
+    (
+        "minecraft:blocks/wither_skeleton_wall_skull",
         &BLOCKS_WITHER_SKELETON_SKULL,
     ),
     ("minecraft:blocks/yellow_banner", &BLOCKS_YELLOW_BANNER),
@@ -43614,6 +43762,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         "minecraft:blocks/yellow_terracotta",
         &BLOCKS_YELLOW_TERRACOTTA,
     ),
+    ("minecraft:blocks/yellow_wall_banner", &BLOCKS_YELLOW_BANNER),
     ("minecraft:blocks/yellow_wool", &BLOCKS_YELLOW_WOOL),
     (
         "minecraft:blocks/yellow_wool_slab",
@@ -43624,6 +43773,7 @@ static LOOT_TABLES_BY_KEY: [(&str, &LootTable); 2894usize] = [
         &BLOCKS_YELLOW_WOOL_STAIRS,
     ),
     ("minecraft:blocks/zombie_head", &BLOCKS_ZOMBIE_HEAD),
+    ("minecraft:blocks/zombie_wall_head", &BLOCKS_ZOMBIE_HEAD),
     ("minecraft:brush/armadillo", &BRUSH_ARMADILLO),
     ("minecraft:carve/pumpkin", &CARVE_PUMPKIN),
     (
