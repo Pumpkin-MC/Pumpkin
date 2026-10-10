@@ -591,13 +591,28 @@ fn get_chest_properties_if_can_connect(
 }
 
 fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
-    // TODO: Block opening when a cat is sitting on top.
-    has_block_on_top(world, block_pos)
+    has_block_on_top(world, block_pos) | has_cat_on_top(world, block_pos)
 }
 fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
     let above_pos = block_pos.up();
     let above_state = world.get_block_state(&above_pos);
     above_state.is_solid_block()
+}
+fn has_cat_on_top(world: &World, block_pos: &BlockPos) -> bool {
+    let pos_up_f = block_pos.to_f64().add_raw(-0.5, 1.5, -0.5);
+    let search_box = pumpkin_util::math::boundingbox::BoundingBox::new(
+        pos_up_f,
+        pos_up_f.add_raw(1.0, 0.5, 1.0),
+    );
+    for entity_base in world.get_entities_at_box(&search_box) {
+        let entity = entity_base.get_entity();
+        if entity.entity_type.resource_name == "cat"
+            && let Some(mob) = entity_base.get_mob()
+        {
+            return mob.is_sitting();
+        }
+    }
+    false
 }
 
 trait ChestTypeExt {
