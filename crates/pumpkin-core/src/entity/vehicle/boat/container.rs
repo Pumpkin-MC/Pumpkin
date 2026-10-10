@@ -34,18 +34,20 @@ impl BoatInventory {
     }
 
     pub(super) fn write_nbt(&self, nbt: &mut NbtCompound) {
-        if let Ok(items) = self.items.try_read() {
-            let mut list: Vec<pumpkin_nbt::tag::NbtTag> = Vec::new();
-            for (slot, stack) in items.iter().enumerate() {
-                if !stack.is_empty() {
-                    let mut compound = NbtCompound::new();
-                    compound.put_byte("Slot", slot as i8);
-                    stack.write_item_stack(&mut compound);
-                    list.push(pumpkin_nbt::tag::NbtTag::Compound(compound));
-                }
+        let items = self
+            .items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut list: Vec<pumpkin_nbt::tag::NbtTag> = Vec::new();
+        for (slot, stack) in items.iter().enumerate() {
+            if !stack.is_empty() {
+                let mut compound = NbtCompound::new();
+                compound.put_byte("Slot", slot as i8);
+                stack.write_item_stack(&mut compound);
+                list.push(pumpkin_nbt::tag::NbtTag::Compound(compound));
             }
-            nbt.put("Items", pumpkin_nbt::tag::NbtTag::List(list));
         }
+        nbt.put("Items", pumpkin_nbt::tag::NbtTag::List(list));
     }
 }
 

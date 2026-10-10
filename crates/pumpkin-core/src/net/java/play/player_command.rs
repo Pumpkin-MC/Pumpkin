@@ -1,3 +1,5 @@
+use crate::entity::vehicle::boat::BoatEntity;
+
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
@@ -44,7 +46,21 @@ impl JavaClient {
             }
             Action::LeaveBed => player.wake_up(),
 
-            Action::StartHorseJump | Action::StopHorseJump | Action::OpenVehicleInventory => {
+            Action::OpenVehicleInventory => {
+                let vehicle = player
+                    .living_entity
+                    .entity
+                    .vehicle
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if let Some(vehicle) = vehicle
+                    && let Some(boat) = vehicle.cast_any().downcast_ref::<BoatEntity>()
+                {
+                    boat.open_inventory(player);
+                }
+            }
+            Action::StartHorseJump | Action::StopHorseJump => {
                 debug!("todo");
             }
             Action::StartFlyingElytra => {

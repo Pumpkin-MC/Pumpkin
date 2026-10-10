@@ -33,7 +33,7 @@ pub struct BoatEntity {
     right_paddle_moving: AtomicBool,
 }
 
-enum BoatKind {
+pub enum BoatKind {
     Normal,
     Chest(ChestBoat),
 }
@@ -81,6 +81,14 @@ impl BoatEntity {
 
     fn send_wobble_metadata(&self) {
         self.vehicle.send_wobble_metadata();
+    }
+
+    pub fn open_inventory(&self, player: &Arc<Player>) -> bool {
+        if let BoatKind::Chest(boat) = &self.kind {
+            let custom_name = self.vehicle.entity.custom_name.load().as_ref().clone();
+            return boat.interact(custom_name, self.get_chest_boat_translation(), player);
+        }
+        return true;
     }
 
     fn get_chest_boat_translation(&self) -> TextComponent {
@@ -203,12 +211,8 @@ impl EntityBase for BoatEntity {
 
     fn interact(&self, player: &Arc<Player>, _item_stack: &mut ItemStack) -> bool {
         if player.get_entity().is_sneaking() {
-            if let BoatKind::Chest(boat) = &self.kind {
-                let custom_name = self.vehicle.entity.custom_name.load().as_ref().clone();
-                boat.interact(custom_name, self.get_chest_boat_translation(), player);
-                return true;
-            }
-            return false;
+            // Try opening inventory (for chest boats)
+            return self.open_inventory(player);
         }
 
         if self.ticks_underwater.load() >= 60.0 {
