@@ -441,7 +441,7 @@ impl EntityBase for ShulkerBulletEntity {
 
         // Check for entity collisions
         let bullet_bb = entity.bounding_box.load().expand(0.1, 0.1, 0.1);
-        let nearby_entities = world.get_entities_at_box(&bullet_bb);
+        let nearby_entities = world.get_entities_and_players_at_box(&bullet_bb);
         let nearby_players = world.get_players_at_box(&bullet_bb);
         let nearby: Vec<Arc<dyn crate::entity::EntityBase>> = nearby_entities
             .into_iter()

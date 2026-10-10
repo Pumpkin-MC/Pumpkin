@@ -50,7 +50,7 @@ impl EntityBase for EvokerFangsEntity {
         if warmup < 0 {
             if warmup == -8 {
                 let bb = entity.bounding_box.load().expand(0.2, 0.0, 0.2);
-                let candidates = world.get_entities_at_box(&bb);
+                let candidates = world.get_entities_and_players_at_box(&bb);
 
                 let owner = self.owner_id.and_then(|id| world.get_entity_by_id(id));
 
