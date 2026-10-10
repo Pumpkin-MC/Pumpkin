@@ -101,7 +101,9 @@ impl BreedGoal {
 
         let parent_pos = entity.pos.load();
         let baby = from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4());
-        baby.get_mob().map(crate::entity::mob::Mob::spawn_as_baby);
+        if let Some(mob) = baby.get_mob() {
+            mob.spawn_as_baby();
+        }
         let world_full = entity.world.load_full();
         world_full.spawn_entity(baby);
 
