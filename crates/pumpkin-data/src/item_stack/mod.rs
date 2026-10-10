@@ -832,7 +832,7 @@ impl ItemStack {
         // Try to get item by registry key
         let item = Item::from_registry_key(registry_key)?;
 
-        let count = compound.get_int("count")? as u8;
+        let count = u8::try_from(compound.get_int("count")?).ok()?;
 
         // Create the item stack
         let mut item_stack = Self::new(count, item);
@@ -1071,6 +1071,20 @@ mod tests {
             Some(NbtTag::String("pos1".into()))
         );
         assert!(decoded.get_data_component::<UnbreakableImpl>().is_some());
+    }
+
+    #[test]
+    fn item_stack_nbt_counts_outside_a_byte_are_rejected() {
+        for count in [-1, 256] {
+            let mut compound = NbtCompound::new();
+            compound.put_string("id", "minecraft:wooden_axe".to_string());
+            compound.put_int("count", count);
+
+            assert!(
+                ItemStack::read_item_stack(&compound).is_none(),
+                "count {count} should not decode"
+            );
+        }
     }
 
     #[test]

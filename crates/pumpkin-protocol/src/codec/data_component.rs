@@ -1727,11 +1727,14 @@ impl DataComponentCodec<Self> for EnchantmentGlintOverrideImpl {
 }
 
 impl DataComponentCodec<Self> for IntangibleProjectileImpl {
-    fn serialize(&self, _seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        Ok(())
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        // Vanilla writes an empty compound. Omitting it shifts every later field
+        // and the client fails the whole container packet.
+        seq.write_nbt(NbtTag::Compound(pumpkin_nbt::compound::NbtCompound::new()))
     }
 
-    fn deserialize(_seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_3)?;
         Ok(Self)
     }
 }
@@ -2212,24 +2215,39 @@ impl DataComponentCodec<Self> for MapPostProcessingImpl {
     }
 }
 
+const MAX_CHARGED_PROJECTILES: i32 = 1024;
+
 impl DataComponentCodec<Self> for ChargedProjectilesImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt::from(self.projectiles.len() as i32))?;
-        for _ in &self.projectiles {
-            seq.write_var_int(&VarInt(0))?;
-            seq.write_var_int(&VarInt(0))?;
-            seq.write_var_int(&VarInt(0))?;
-            seq.write_var_int(&VarInt(0))?;
+        // A VarInt count followed by that many `ItemStackTemplate`s (item id before count).
+        let count = i32::try_from(self.projectiles.len())
+            .map_err(|_| WritingError::Message("Too many charged projectiles".into()))?;
+        if count > MAX_CHARGED_PROJECTILES {
+            return Err(WritingError::Message("Too many charged projectiles".into()));
+        }
+        seq.write_var_int(&VarInt(count))?;
+        for projectile in &self.projectiles {
+            let stack = pumpkin_data::item_stack::ItemStack::read_item_stack(projectile)
+                .filter(|stack| !stack.is_empty())
+                .ok_or_else(|| WritingError::Message("Invalid charged projectile".into()))?;
+            crate::codec::item_stack_seralizer::ItemStackTemplateSerializer::from(stack)
+                .write(seq)?;
         }
         Ok(())
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
-        let mut projectiles = Vec::with_capacity(len);
+        let len = seq.get_var_int()?.0;
+        if !(0..=MAX_CHARGED_PROJECTILES).contains(&len) {
+            return Err(ReadingError::Message("Too many charged projectiles".into()));
+        }
+        let mut projectiles = Vec::with_capacity(len as usize);
         for _ in 0..len {
-            let _ = deserialize_item_stack_template(seq)?;
-            projectiles.push(pumpkin_nbt::compound::NbtCompound::new());
+            let stack = crate::codec::item_stack_seralizer::ItemStackTemplateSerializer::read(seq)?
+                .to_stack();
+            let mut compound = pumpkin_nbt::compound::NbtCompound::new();
+            stack.write_item_stack(&mut compound);
+            projectiles.push(compound);
         }
         Ok(Self { projectiles })
     }
@@ -2869,6 +2887,99 @@ mod tests {
     fn partial_profile_is_read_as_name_then_id() {
         let decoded = ProfileImpl::deserialize(&mut textured_profile_bytes().as_slice()).unwrap();
         assert_eq!(decoded, textured_profile());
+    }
+
+    #[test]
+    fn charged_crossbow_projectile_is_written_as_a_template() {
+        use pumpkin_data::item::Item;
+        use pumpkin_data::item_stack::ItemStack;
+
+        let mut arrow = ItemStack::new(1, &Item::ARROW);
+        arrow.set_data_component(IntangibleProjectileImpl);
+        let mut projectile = pumpkin_nbt::compound::NbtCompound::new();
+        arrow.write_item_stack(&mut projectile);
+
+        let charged = ChargedProjectilesImpl {
+            projectiles: vec![projectile],
+        };
+        let mut encoded = Vec::new();
+        charged.serialize(&mut encoded).unwrap();
+
+        let mut expected = vec![1]; // one projectile
+        VarInt(i32::from(Item::ARROW.id))
+            .encode(&mut expected)
+            .unwrap(); // item id comes first
+        expected.extend_from_slice(&[
+            1, // count
+            1, // components added
+            0, // components removed
+            DataComponent::IntangibleProjectile.to_id(),
+            10, // empty compound
+            0,
+        ]);
+        assert_eq!(encoded, expected);
+
+        let mut cursor = encoded.as_slice();
+        let decoded = ChargedProjectilesImpl::deserialize(&mut cursor).unwrap();
+        assert!(cursor.is_empty());
+        let stack = ItemStack::read_item_stack(&decoded.projectiles[0]).unwrap();
+        assert_eq!(stack.item.id, Item::ARROW.id);
+        assert!(
+            stack
+                .get_data_component::<IntangibleProjectileImpl>()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn charged_projectiles_over_the_limit_are_not_written() {
+        let charged = ChargedProjectilesImpl {
+            projectiles: vec![
+                pumpkin_nbt::compound::NbtCompound::new();
+                (MAX_CHARGED_PROJECTILES as usize) + 1
+            ],
+        };
+        let mut encoded = Vec::new();
+        assert!(charged.serialize(&mut encoded).is_err());
+        assert!(encoded.is_empty());
+    }
+
+    #[test]
+    fn empty_charged_projectile_template_is_rejected() {
+        use pumpkin_data::item::Item;
+
+        // One projectile, then an arrow template with count 0 and no components.
+        let mut encoded = vec![1];
+        VarInt(i32::from(Item::ARROW.id))
+            .encode(&mut encoded)
+            .unwrap();
+        encoded.extend_from_slice(&[0, 0, 0]);
+        let mut cursor = encoded.as_slice();
+        assert!(ChargedProjectilesImpl::deserialize(&mut cursor).is_err());
+    }
+
+    #[test]
+    fn empty_charged_projectile_stack_is_not_written() {
+        use pumpkin_data::item::Item;
+        use pumpkin_data::item_stack::ItemStack;
+
+        let mut projectile = pumpkin_nbt::compound::NbtCompound::new();
+        ItemStack::new(0, &Item::ARROW).write_item_stack(&mut projectile);
+
+        let charged = ChargedProjectilesImpl {
+            projectiles: vec![projectile],
+        };
+        let mut encoded = Vec::new();
+        assert!(charged.serialize(&mut encoded).is_err());
+    }
+
+    #[test]
+    fn invalid_charged_projectile_is_rejected() {
+        let charged = ChargedProjectilesImpl {
+            projectiles: vec![pumpkin_nbt::compound::NbtCompound::new()],
+        };
+        let mut encoded = Vec::new();
+        assert!(charged.serialize(&mut encoded).is_err());
     }
 
     #[test]
