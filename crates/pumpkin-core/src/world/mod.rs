@@ -36,6 +36,7 @@ pub mod time;
 pub mod villager_poi;
 
 use crate::block::RandomTickArgs;
+use crate::entity::ai::pathfinder::node::PathType;
 use crate::world::chunker::is_within_chebyshev_distance;
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use crate::{
@@ -292,6 +293,19 @@ pub struct World {
     /// Block entities indexed by chunk, so ticking only visits the currently
     /// active chunks instead of scanning every loaded block entity each tick.
     pub block_entities: DashMap<Vector2<i32>, FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
+    /// Shared pathfinding block classification cache, consulted by every mob's
+    /// pathfinder before re-reading block states. Entries depend only on the
+    /// block state at their position, so a block change invalidates exactly the
+    /// cached entry for that position (see `on_block_state_set`).
+    path_type_cache: DashMap<Vector3<i32>, (PathType, BlockStateId)>,
+    /// Shared floor-height cache (`pos` → height of the collision top below it).
+    /// A floor height at `pos` is computed from the block at `pos - 1`, so a
+    /// block change at `pos` invalidates the entry for `pos + 1`.
+    floor_level_cache: DashMap<BlockPos, (f64, BlockStateId)>,
+    /// Wall time spent on A* searches during this world's tick. `World::tick`
+    /// resets it; navigations check it before searching so a large crowd all
+    /// retargeting in the same tick can't exceed the search time budget.
+    pathfinding_time_spent: std::sync::atomic::AtomicU64,
     pending_block_entity_migrations: crossbeam::queue::SegQueue<Vector2<i32>>,
     /// Persistent custom data for the world (matching Bukkit's `PersistentDataHolder`)
     pub custom_data: std::sync::Mutex<NbtCompound>,
@@ -316,7 +330,86 @@ impl PartialEq for World {
 
 impl Eq for World {}
 
+/// Wall time pathfinding may use per world tick. Bounds only search startups;
+/// a burst of concurrent searches can overshoot by their own durations.
+const PATHFINDING_TIME_BUDGET_PER_TICK: u64 = 2_000_000;
+
 impl World {
+    /// Reads the shared path-type cache. Entries carry the block state id the
+    /// classification consumed and are validated against the live state on
+    /// every read, so a block write that lands while a concurrent search
+    /// classifies the position can never keep serving its stale value.
+    /// Falls back to `compute`, which also returns the state id it used.
+    /// Positions in chunks that are not loaded are never stored.
+    pub fn path_type_get_or_compute(
+        &self,
+        pos: Vector3<i32>,
+        compute: impl FnOnce() -> (PathType, BlockStateId),
+    ) -> PathType {
+        let cached = self.path_type_cache.get(&pos).map(|e| *e.value());
+        if let Some((path_type, stored_id)) = cached
+            && self.get_block_state_id(&BlockPos::new(pos.x, pos.y, pos.z)) == stored_id
+        {
+            return path_type;
+        }
+        let (path_type, used_id) = compute();
+        if self
+            .level
+            .is_chunk_loaded(&Vector2::new(pos.x >> 4, pos.z >> 4))
+        {
+            Self::maintain_shared_path_cache(&self.path_type_cache);
+            self.path_type_cache.insert(pos, (path_type, used_id));
+        }
+        path_type
+    }
+
+    /// `true` while this tick's pathfinding searches have not yet used up the
+    /// wall-time budget. Starting a search barely over the budget never aborts
+    /// it, so a burst can overshoot by the few in-flight searches' time.
+    pub fn can_start_path_search(&self) -> bool {
+        self.pathfinding_time_spent.load(Ordering::Relaxed) < PATHFINDING_TIME_BUDGET_PER_TICK
+    }
+
+    /// Accounts one finished A* search's wall time against this tick's budget.
+    pub fn add_path_search_time(&self, nanos: u64) {
+        self.pathfinding_time_spent
+            .fetch_add(nanos, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Reads the shared floor-level cache, same contract and validation as
+    /// [`World::path_type_get_or_compute`]. The paired state id is the one of
+    /// `pos - 1`, which the floor height is computed from.
+    pub fn floor_level_get_or_compute(
+        &self,
+        pos: BlockPos,
+        compute: impl FnOnce() -> (f64, BlockStateId),
+    ) -> f64 {
+        let cached = self.floor_level_cache.get(&pos).map(|e| *e.value());
+        if let Some((height, stored_id)) = cached
+            && self.get_block_state_id(&pos.down()) == stored_id
+        {
+            return height;
+        }
+        let (height, used_id) = compute();
+        if self
+            .level
+            .is_chunk_loaded(&Vector2::new(pos.0.x >> 4, pos.0.z >> 4))
+        {
+            Self::maintain_shared_path_cache(&self.floor_level_cache);
+            self.floor_level_cache.insert(pos, (height, used_id));
+        }
+        height
+    }
+
+    /// Shared pathfinding caches only ever cover chunks that were loaded and
+    /// queried, so they grow with explored terrain. Cap them to stay bounded;
+    /// losing entries just means a few block reads happen again.
+    fn maintain_shared_path_cache<T>(cache: &DashMap<impl std::hash::Hash + Eq, T>) {
+        const SHARED_PATH_CACHE_SOFT_CAP: usize = 1 << 19;
+        if cache.len() >= SHARED_PATH_CACHE_SOFT_CAP {
+            cache.clear();
+        }
+    }
     const TAB_LIST_ADD_FLAGS: u8 = PlayerInfoFlags::ADD_PLAYER.bits()
         | PlayerInfoFlags::UPDATE_LISTED.bits()
         | PlayerInfoFlags::UPDATE_GAME_MODE.bits()
@@ -428,6 +521,9 @@ impl World {
             forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
             server,
             block_entities: DashMap::new(),
+            path_type_cache: DashMap::new(),
+            floor_level_cache: DashMap::new(),
+            pathfinding_time_spent: std::sync::atomic::AtomicU64::new(0),
             pending_block_entity_migrations: crossbeam::queue::SegQueue::new(),
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
@@ -1525,6 +1621,9 @@ impl World {
 
         let start = std::time::Instant::now();
 
+        self.pathfinding_time_spent
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+
         self.flush_block_updates();
         self.flush_synced_block_events();
         self.update_active_chunks();
@@ -1696,6 +1795,7 @@ impl World {
     }
 
     pub fn register_block_change(&self, position: BlockPos, block_state_id: BlockStateId) {
+        self.invalidate_path_caches(&position);
         self.unsent_block_changes
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -1706,6 +1806,9 @@ impl World {
     ///
     /// Call [`flush_block_updates`](Self::flush_block_updates) afterward to send the packets.
     pub fn queue_block_updates(&self, changes: &[(BlockPos, BlockStateId)]) {
+        for (pos, _) in changes {
+            self.invalidate_path_caches(pos);
+        }
         let mut guard = self
             .unsent_block_changes
             .lock()
@@ -1713,6 +1816,16 @@ impl World {
         for (pos, state_id) in changes {
             guard.insert(*pos, *state_id);
         }
+    }
+
+    /// Drops shared pathfinding cache entries affected by a block change: the
+    /// path type at the position itself, and the floor height above it, which
+    /// is computed from the block below (`pos - 1`). Covers every write path
+    /// that records a change: `on_block_state_set`, direct chunk writes from
+    /// `/fill` and `/place`, and single `register_block_change` calls.
+    fn invalidate_path_caches(&self, position: &BlockPos) {
+        self.path_type_cache.remove(&position.0);
+        self.floor_level_cache.remove(&position.up());
     }
 
     #[expect(clippy::too_many_lines)]
@@ -5109,6 +5222,8 @@ impl World {
         if !flags.contains(BlockFlags::FORCE_STATE) && replaced_block_state_id == block_state_id {
             return block_state_id;
         }
+
+        self.invalidate_path_caches(position);
 
         let old_block = Block::from_state_id(replaced_block_state_id);
         let new_block = Block::from_state_id(block_state_id);
