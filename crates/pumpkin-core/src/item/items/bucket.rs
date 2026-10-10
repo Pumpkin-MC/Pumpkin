@@ -232,7 +232,7 @@ fn try_place_powder_snow(world: &Arc<World>, pos: BlockPos, direction: BlockDire
     world.set_block_state(
         &target_pos,
         Block::POWDER_SNOW.default_state.id,
-        BlockFlags::NOTIFY_NEIGHBORS,
+        BlockFlags::NOTIFY_ALL,
     );
     true
 }
