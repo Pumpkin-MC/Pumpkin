@@ -151,8 +151,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -446,8 +455,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -500,8 +518,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::Beehive(BeehiveTreeDecorator {
                 probability: 0.002f32,
@@ -556,8 +583,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::Beehive(BeehiveTreeDecorator {
@@ -982,8 +1018,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::Beehive(BeehiveTreeDecorator {
                 probability: 0.02f32,
@@ -1038,8 +1083,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::Beehive(BeehiveTreeDecorator {
                 probability: 0.05f32,
@@ -1094,8 +1148,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::PlaceOnGround(PlaceOnGroundTreeDecorator {
@@ -1628,14 +1691,60 @@ fn build_configured_features()
                             ],
                         },
                     )),
-                    provider: BlockStateProvider::Simple(SimpleStateProvider {
-                        state: pumpkin_data::Block::AIR.default_state,
+                    provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                        entries: vec![
+                            Weighted {
+                                data: pumpkin_data::Block::CAVE_VINES_PLANT.default_state,
+                                weight: 4i32,
+                            },
+                            Weighted {
+                                data: {
+                                    let mut props = std::collections::HashMap::new();
+                                    props.insert("berries".to_string(), "true".to_string());
+                                    BlockStateCodec {
+                                        name: &pumpkin_data::Block::CAVE_VINES_PLANT,
+                                        properties: Some(props),
+                                    }
+                                    .get_state()
+                                },
+                                weight: 1i32,
+                            },
+                        ],
                     }),
                 },
                 Layer {
                     height: IntProvider::Constant(1i32),
-                    provider: BlockStateProvider::Simple(SimpleStateProvider {
-                        state: pumpkin_data::Block::AIR.default_state,
+                    provider: BlockStateProvider::RandomizedInt(RandomizedIntBlockStateProvider {
+                        source: Box::new(BlockStateProvider::Weighted(
+                            WeightedBlockStateProvider {
+                                entries: vec![
+                                    Weighted {
+                                        data: pumpkin_data::Block::CAVE_VINES.default_state,
+                                        weight: 4i32,
+                                    },
+                                    Weighted {
+                                        data: {
+                                            let mut props = std::collections::HashMap::new();
+                                            props.insert("age".to_string(), "0".to_string());
+                                            props.insert("berries".to_string(), "true".to_string());
+                                            BlockStateCodec {
+                                                name: &pumpkin_data::Block::CAVE_VINES,
+                                                properties: Some(props),
+                                            }
+                                            .get_state()
+                                        },
+                                        weight: 1i32,
+                                    },
+                                ],
+                            },
+                        )),
+                        property: "age".to_string(),
+                        values: IntProvider::Object(NormalIntProvider::Uniform(
+                            UniformIntProvider {
+                                min_inclusive: 23i32,
+                                max_inclusive: 25i32,
+                            },
+                        )),
                     }),
                 },
             ],
@@ -1676,14 +1785,60 @@ fn build_configured_features()
                             ],
                         },
                     )),
-                    provider: BlockStateProvider::Simple(SimpleStateProvider {
-                        state: pumpkin_data::Block::AIR.default_state,
+                    provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                        entries: vec![
+                            Weighted {
+                                data: pumpkin_data::Block::CAVE_VINES_PLANT.default_state,
+                                weight: 4i32,
+                            },
+                            Weighted {
+                                data: {
+                                    let mut props = std::collections::HashMap::new();
+                                    props.insert("berries".to_string(), "true".to_string());
+                                    BlockStateCodec {
+                                        name: &pumpkin_data::Block::CAVE_VINES_PLANT,
+                                        properties: Some(props),
+                                    }
+                                    .get_state()
+                                },
+                                weight: 1i32,
+                            },
+                        ],
                     }),
                 },
                 Layer {
                     height: IntProvider::Constant(1i32),
-                    provider: BlockStateProvider::Simple(SimpleStateProvider {
-                        state: pumpkin_data::Block::AIR.default_state,
+                    provider: BlockStateProvider::RandomizedInt(RandomizedIntBlockStateProvider {
+                        source: Box::new(BlockStateProvider::Weighted(
+                            WeightedBlockStateProvider {
+                                entries: vec![
+                                    Weighted {
+                                        data: pumpkin_data::Block::CAVE_VINES.default_state,
+                                        weight: 4i32,
+                                    },
+                                    Weighted {
+                                        data: {
+                                            let mut props = std::collections::HashMap::new();
+                                            props.insert("age".to_string(), "0".to_string());
+                                            props.insert("berries".to_string(), "true".to_string());
+                                            BlockStateCodec {
+                                                name: &pumpkin_data::Block::CAVE_VINES,
+                                                properties: Some(props),
+                                            }
+                                            .get_state()
+                                        },
+                                        weight: 1i32,
+                                    },
+                                ],
+                            },
+                        )),
+                        property: "age".to_string(),
+                        values: IntProvider::Object(NormalIntProvider::Uniform(
+                            UniformIntProvider {
+                                min_inclusive: 23i32,
+                                max_inclusive: 25i32,
+                            },
+                        )),
                     }),
                 },
             ],
@@ -1783,8 +1938,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -1878,8 +2042,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::Beehive(BeehiveTreeDecorator {
                 probability: 0.05f32,
@@ -2269,8 +2442,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -2325,8 +2507,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::PlaceOnGround(PlaceOnGroundTreeDecorator {
@@ -3595,8 +3786,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -3649,8 +3849,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::Beehive(BeehiveTreeDecorator {
                 probability: 1f32,
@@ -3705,8 +3914,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::Beehive(BeehiveTreeDecorator {
@@ -4131,8 +4349,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::Beehive(BeehiveTreeDecorator {
                 probability: 0.02f32,
@@ -4187,8 +4414,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::Beehive(BeehiveTreeDecorator {
                 probability: 0.05f32,
@@ -4243,8 +4479,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::PlaceOnGround(PlaceOnGroundTreeDecorator {
@@ -4858,8 +5103,28 @@ fn build_configured_features()
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::FlowerFlowerForest,
         ConfiguredFeature::SimpleBlock(SimpleBlockFeature {
-            to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            to_place: BlockStateProvider::NoiseProvider(NoiseBlockStateProvider {
+                base: NoiseBlockStateProviderBase {
+                    seed: 2345i64,
+                    noise: DoublePerlinNoiseParametersCodec {
+                        first_octave: 0i32,
+                        amplitudes: vec![1f64],
+                    },
+                    scale: 0.020833334f32,
+                },
+                states: vec![
+                    pumpkin_data::Block::DANDELION.default_state,
+                    pumpkin_data::Block::POPPY.default_state,
+                    pumpkin_data::Block::ALLIUM.default_state,
+                    pumpkin_data::Block::AZURE_BLUET.default_state,
+                    pumpkin_data::Block::RED_TULIP.default_state,
+                    pumpkin_data::Block::ORANGE_TULIP.default_state,
+                    pumpkin_data::Block::WHITE_TULIP.default_state,
+                    pumpkin_data::Block::PINK_TULIP.default_state,
+                    pumpkin_data::Block::OXEYE_DAISY.default_state,
+                    pumpkin_data::Block::CORNFLOWER.default_state,
+                    pumpkin_data::Block::LILY_OF_THE_VALLEY.default_state,
+                ],
             }),
             schedule_tick: None,
         }),
@@ -4867,8 +5132,33 @@ fn build_configured_features()
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::FlowerMeadow,
         ConfiguredFeature::SimpleBlock(SimpleBlockFeature {
-            to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            to_place: BlockStateProvider::DualNoise(DualNoiseBlockStateProvider {
+                base: NoiseBlockStateProvider {
+                    base: NoiseBlockStateProviderBase {
+                        seed: 2345i64,
+                        noise: DoublePerlinNoiseParametersCodec {
+                            first_octave: -3i32,
+                            amplitudes: vec![1f64],
+                        },
+                        scale: 1f32,
+                    },
+                    states: vec![
+                        pumpkin_data::Block::TALL_GRASS.default_state,
+                        pumpkin_data::Block::ALLIUM.default_state,
+                        pumpkin_data::Block::POPPY.default_state,
+                        pumpkin_data::Block::AZURE_BLUET.default_state,
+                        pumpkin_data::Block::DANDELION.default_state,
+                        pumpkin_data::Block::CORNFLOWER.default_state,
+                        pumpkin_data::Block::OXEYE_DAISY.default_state,
+                        pumpkin_data::Block::SHORT_GRASS.default_state,
+                    ],
+                },
+                variety: [1u32, 3u32],
+                slow_noise: DoublePerlinNoiseParametersCodec {
+                    first_octave: -10i32,
+                    amplitudes: vec![1f64],
+                },
+                slow_scale: 1f64,
             }),
             schedule_tick: None,
         }),
@@ -4885,8 +5175,30 @@ fn build_configured_features()
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::FlowerPlain,
         ConfiguredFeature::SimpleBlock(SimpleBlockFeature {
-            to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            to_place: BlockStateProvider::NoiseThreshold(NoiseThresholdBlockStateProvider {
+                base: NoiseBlockStateProviderBase {
+                    seed: 2345i64,
+                    noise: DoublePerlinNoiseParametersCodec {
+                        first_octave: 0i32,
+                        amplitudes: vec![1f64],
+                    },
+                    scale: 0.005f32,
+                },
+                threshold: -0.8f32,
+                high_chance: 0.33333334f32,
+                default_state: pumpkin_data::Block::DANDELION.default_state,
+                low_states: vec![
+                    pumpkin_data::Block::ORANGE_TULIP.default_state,
+                    pumpkin_data::Block::RED_TULIP.default_state,
+                    pumpkin_data::Block::PINK_TULIP.default_state,
+                    pumpkin_data::Block::WHITE_TULIP.default_state,
+                ],
+                high_states: vec![
+                    pumpkin_data::Block::POPPY.default_state,
+                    pumpkin_data::Block::AZURE_BLUET.default_state,
+                    pumpkin_data::Block::OXEYE_DAISY.default_state,
+                    pumpkin_data::Block::CORNFLOWER.default_state,
+                ],
             }),
             schedule_tick: None,
         }),
@@ -5333,8 +5645,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: false,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -5387,8 +5708,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::Cocoa(CocoaTreeDecorator {
@@ -5449,8 +5779,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -5815,8 +6154,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::LeaveVine(LeavesVineTreeDecorator {
@@ -5826,9 +6174,31 @@ fn build_configured_features()
                     probability: 0.14f32,
                     exclusion_radius_xz: 1i32,
                     exclusion_radius_y: 0i32,
-                    block_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                        state: pumpkin_data::Block::AIR.default_state,
-                    }),
+                    block_provider: BlockStateProvider::RandomizedInt(
+                        RandomizedIntBlockStateProvider {
+                            source: Box::new(BlockStateProvider::Simple(SimpleStateProvider {
+                                state: {
+                                    let mut props = std::collections::HashMap::new();
+                                    props.insert("age".to_string(), "0".to_string());
+                                    props.insert("hanging".to_string(), "true".to_string());
+                                    props.insert("stage".to_string(), "0".to_string());
+                                    props.insert("waterlogged".to_string(), "false".to_string());
+                                    BlockStateCodec {
+                                        name: &pumpkin_data::Block::MANGROVE_PROPAGULE,
+                                        properties: Some(props),
+                                    }
+                                    .get_state()
+                                },
+                            })),
+                            property: "age".to_string(),
+                            values: IntProvider::Object(NormalIntProvider::Uniform(
+                                UniformIntProvider {
+                                    min_inclusive: 0i32,
+                                    max_inclusive: 4i32,
+                                },
+                            )),
+                        },
+                    ),
                     required_empty_blocks: 2i32,
                     directions: vec![BlockDirection::Down],
                 }),
@@ -5962,8 +6332,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: false,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::TrunkVine(TrunkVineTreeDecorator),
@@ -6028,12 +6407,39 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: false,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::AlterGround(AlterGroundTreeDecorator {
-                provider: BlockStateProvider::Simple(SimpleStateProvider {
-                    state: pumpkin_data::Block::AIR.default_state,
+                provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                    fallback: None,
+                    rules: vec![BlockStateRule {
+                        if_true: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                            offset: OffsetBlocksBlockPredicate { offset: None },
+                            tag:
+                                pumpkin_data::tag::Block::MINECRAFT_BENEATH_TREE_PODZOL_REPLACEABLE,
+                        }),
+                        then: BlockStateProvider::Simple(SimpleStateProvider {
+                            state: {
+                                let mut props = std::collections::HashMap::new();
+                                props.insert("snowy".to_string(), "false".to_string());
+                                BlockStateCodec {
+                                    name: &pumpkin_data::Block::PODZOL,
+                                    properties: Some(props),
+                                }
+                                .get_state()
+                            },
+                        }),
+                    }],
                 }),
             })],
             root_placer: None,
@@ -6093,12 +6499,39 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: false,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::AlterGround(AlterGroundTreeDecorator {
-                provider: BlockStateProvider::Simple(SimpleStateProvider {
-                    state: pumpkin_data::Block::AIR.default_state,
+                provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                    fallback: None,
+                    rules: vec![BlockStateRule {
+                        if_true: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                            offset: OffsetBlocksBlockPredicate { offset: None },
+                            tag:
+                                pumpkin_data::tag::Block::MINECRAFT_BENEATH_TREE_PODZOL_REPLACEABLE,
+                        }),
+                        then: BlockStateProvider::Simple(SimpleStateProvider {
+                            state: {
+                                let mut props = std::collections::HashMap::new();
+                                props.insert("snowy".to_string(), "false".to_string());
+                                BlockStateCodec {
+                                    name: &pumpkin_data::Block::PODZOL,
+                                    properties: Some(props),
+                                }
+                                .get_state()
+                            },
+                        }),
+                    }],
                 }),
             })],
             root_placer: None,
@@ -6313,8 +6746,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -6367,8 +6809,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::Beehive(BeehiveTreeDecorator {
@@ -6793,8 +7244,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::Beehive(BeehiveTreeDecorator {
                 probability: 0.02f32,
@@ -6849,8 +7309,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::Beehive(BeehiveTreeDecorator {
                 probability: 0.05f32,
@@ -6905,8 +7374,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::PlaceOnGround(PlaceOnGroundTreeDecorator {
@@ -7363,8 +7841,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -7452,8 +7939,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::PlaceOnGround(PlaceOnGroundTreeDecorator {
@@ -7897,14 +8393,350 @@ fn build_configured_features()
             }],
         }),
     );
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreCoal , ConfiguredFeature :: Ore (OreFeature { size : 17i32 , discard_chance_on_air_exposure : 0f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: COAL_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_COAL_ORE . default_state }] , })) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreCoalBuried , ConfiguredFeature :: Ore (OreFeature { size : 17i32 , discard_chance_on_air_exposure : 0.5f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: COAL_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_COAL_ORE . default_state }] , })) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreCopperLarge , ConfiguredFeature :: Ore (OreFeature { size : 20i32 , discard_chance_on_air_exposure : 0f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: COPPER_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_COPPER_ORE . default_state }] , })) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreCopperSmall , ConfiguredFeature :: Ore (OreFeature { size : 10i32 , discard_chance_on_air_exposure : 0f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: COPPER_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_COPPER_ORE . default_state }] , })) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreDiamondBuried , ConfiguredFeature :: Ore (OreFeature { size : 8i32 , discard_chance_on_air_exposure : 1f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DIAMOND_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_DIAMOND_ORE . default_state }] , })) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreDiamondLarge , ConfiguredFeature :: Ore (OreFeature { size : 12i32 , discard_chance_on_air_exposure : 0.7f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DIAMOND_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_DIAMOND_ORE . default_state }] , })) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreDiamondMedium , ConfiguredFeature :: Ore (OreFeature { size : 8i32 , discard_chance_on_air_exposure : 0.5f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DIAMOND_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_DIAMOND_ORE . default_state }] , })) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreDiamondSmall , ConfiguredFeature :: Ore (OreFeature { size : 4i32 , discard_chance_on_air_exposure : 0.5f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DIAMOND_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_DIAMOND_ORE . default_state }] , })) ;
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreCoal,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 17i32,
+            discard_chance_on_air_exposure: 0f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::COAL_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_COAL_ORE.default_state,
+                },
+            ],
+        }),
+    );
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreCoalBuried,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 17i32,
+            discard_chance_on_air_exposure: 0.5f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::COAL_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_COAL_ORE.default_state,
+                },
+            ],
+        }),
+    );
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreCopperLarge,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 20i32,
+            discard_chance_on_air_exposure: 0f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::COPPER_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_COPPER_ORE.default_state,
+                },
+            ],
+        }),
+    );
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreCopperSmall,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 10i32,
+            discard_chance_on_air_exposure: 0f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::COPPER_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_COPPER_ORE.default_state,
+                },
+            ],
+        }),
+    );
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreDiamondBuried,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 8i32,
+            discard_chance_on_air_exposure: 1f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DIAMOND_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_DIAMOND_ORE.default_state,
+                },
+            ],
+        }),
+    );
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreDiamondLarge,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 12i32,
+            discard_chance_on_air_exposure: 0.7f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DIAMOND_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_DIAMOND_ORE.default_state,
+                },
+            ],
+        }),
+    );
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreDiamondMedium,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 8i32,
+            discard_chance_on_air_exposure: 0.5f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DIAMOND_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_DIAMOND_ORE.default_state,
+                },
+            ],
+        }),
+    );
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreDiamondSmall,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 4i32,
+            discard_chance_on_air_exposure: 0.5f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DIAMOND_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_DIAMOND_ORE.default_state,
+                },
+            ],
+        }),
+    );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::OreDiorite,
         ConfiguredFeature::Ore(OreFeature {
@@ -7931,9 +8763,135 @@ fn build_configured_features()
             }],
         }),
     );
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreEmerald , ConfiguredFeature :: Ore (OreFeature { size : 3i32 , discard_chance_on_air_exposure : 0f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: EMERALD_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_EMERALD_ORE . default_state }] , })) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreGold , ConfiguredFeature :: Ore (OreFeature { size : 9i32 , discard_chance_on_air_exposure : 0f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: GOLD_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_GOLD_ORE . default_state }] , })) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreGoldBuried , ConfiguredFeature :: Ore (OreFeature { size : 9i32 , discard_chance_on_air_exposure : 0.5f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: GOLD_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_GOLD_ORE . default_state }] , })) ;
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreEmerald,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 3i32,
+            discard_chance_on_air_exposure: 0f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::EMERALD_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_EMERALD_ORE.default_state,
+                },
+            ],
+        }),
+    );
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreGold,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 9i32,
+            discard_chance_on_air_exposure: 0f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::GOLD_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_GOLD_ORE.default_state,
+                },
+            ],
+        }),
+    );
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreGoldBuried,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 9i32,
+            discard_chance_on_air_exposure: 0.5f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::GOLD_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_GOLD_ORE.default_state,
+                },
+            ],
+        }),
+    );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::OreGranite,
         ConfiguredFeature::Ore(OreFeature {
@@ -7973,11 +8931,221 @@ fn build_configured_features()
             }],
         }),
     );
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreInfested , ConfiguredFeature :: Ore (OreFeature { size : 9i32 , discard_chance_on_air_exposure : 0f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: INFESTED_STONE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: INFESTED_DEEPSLATE . default_state }] , })) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreIron , ConfiguredFeature :: Ore (OreFeature { size : 9i32 , discard_chance_on_air_exposure : 0f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: IRON_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_IRON_ORE . default_state }] , })) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreIronSmall , ConfiguredFeature :: Ore (OreFeature { size : 4i32 , discard_chance_on_air_exposure : 0f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: IRON_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_IRON_ORE . default_state }] , })) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreLapis , ConfiguredFeature :: Ore (OreFeature { size : 7i32 , discard_chance_on_air_exposure : 0f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: LAPIS_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_LAPIS_ORE . default_state }] , })) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreLapisBuried , ConfiguredFeature :: Ore (OreFeature { size : 7i32 , discard_chance_on_air_exposure : 1f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: LAPIS_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_LAPIS_ORE . default_state }] , })) ;
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreInfested,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 9i32,
+            discard_chance_on_air_exposure: 0f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::INFESTED_STONE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::INFESTED_DEEPSLATE.default_state,
+                },
+            ],
+        }),
+    );
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreIron,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 9i32,
+            discard_chance_on_air_exposure: 0f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::IRON_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_IRON_ORE.default_state,
+                },
+            ],
+        }),
+    );
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreIronSmall,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 4i32,
+            discard_chance_on_air_exposure: 0f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::IRON_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_IRON_ORE.default_state,
+                },
+            ],
+        }),
+    );
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreLapis,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 7i32,
+            discard_chance_on_air_exposure: 0f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::LAPIS_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_LAPIS_ORE.default_state,
+                },
+            ],
+        }),
+    );
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreLapisBuried,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 7i32,
+            discard_chance_on_air_exposure: 1f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::LAPIS_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_LAPIS_ORE.default_state,
+                },
+            ],
+        }),
+    );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::OreMagma,
         ConfiguredFeature::Ore(OreFeature {
@@ -8017,7 +9185,49 @@ fn build_configured_features()
             }],
         }),
     );
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: OreRedstone , ConfiguredFeature :: Ore (OreFeature { size : 8i32 , discard_chance_on_air_exposure : 0f32 , targets : vec ! [OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : 0i32 , max_inclusive : 2031i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_STONE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: REDSTONE_ORE . default_state } , OreTarget { target : RuleTest :: AnyOf (vec ! [RuleTest :: AllOf (vec ! [RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }) , RuleTest :: HeightMatch { min_inclusive : - 2032i32 , max_inclusive : 8i32 }]) , RuleTest :: AllOf (vec ! [RuleTest :: Not (Box :: new (RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }))) , RuleTest :: TagMatch (TagMatchRuleTest { tag : pumpkin_data :: tag :: Block :: MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })])]) , state : pumpkin_data :: Block :: DEEPSLATE_REDSTONE_ORE . default_state }] , })) ;
+    map.insert(
+        pumpkin_data::configured_feature::ConfiguredFeature::OreRedstone,
+        ConfiguredFeature::Ore(OreFeature {
+            size: 8i32,
+            discard_chance_on_air_exposure: 0f32,
+            targets: vec![
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : 0i32, max_inclusive : 2031i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_STONE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::REDSTONE_ORE.default_state,
+                },
+                OreTarget {
+                    target: RuleTest::AnyOf(vec![
+                        RuleTest::AllOf(vec![RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES }),
+                RuleTest::HeightMatch { min_inclusive : - 2032i32, max_inclusive : 8i32
+                }]),
+                        RuleTest::AllOf(
+                            vec![RuleTest::Not(Box::new(RuleTest::TagMatch(TagMatchRuleTest
+                { tag :
+                pumpkin_data::tag::Block::MINECRAFT_HEIGHT_SPECIFIC_ORE_REPLACEABLES
+                }))), RuleTest::TagMatch(TagMatchRuleTest { tag :
+                pumpkin_data::tag::Block::MINECRAFT_DEEPSLATE_ORE_REPLACEABLES })],
+                        ),
+                    ]),
+                    state: pumpkin_data::Block::DEEPSLATE_REDSTONE_ORE.default_state,
+                },
+            ],
+        }),
+    );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::OreSoulSand,
         ConfiguredFeature::Ore(OreFeature {
@@ -8202,8 +9412,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::PaleMoss(PaleMossTreeDecorator {
                 leaves_probability: 0.15f32,
@@ -8262,8 +9481,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -8318,8 +9546,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::PaleMoss(PaleMossTreeDecorator {
@@ -8499,8 +9736,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -8699,8 +9945,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -8788,8 +10043,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::PlaceOnGround(PlaceOnGroundTreeDecorator {
@@ -9785,8 +11049,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -10025,8 +11298,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::Beehive(BeehiveTreeDecorator {
                 probability: 1f32,
@@ -10081,8 +11363,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::Beehive(BeehiveTreeDecorator {
                 probability: 0.002f32,
@@ -10137,8 +11428,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: false,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![TreeDecorator::LeaveVine(LeavesVineTreeDecorator {
                 probability: 0.25f32,
@@ -10247,8 +11547,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::LeaveVine(LeavesVineTreeDecorator {
@@ -10258,9 +11567,31 @@ fn build_configured_features()
                     probability: 0.14f32,
                     exclusion_radius_xz: 1i32,
                     exclusion_radius_y: 0i32,
-                    block_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                        state: pumpkin_data::Block::AIR.default_state,
-                    }),
+                    block_provider: BlockStateProvider::RandomizedInt(
+                        RandomizedIntBlockStateProvider {
+                            source: Box::new(BlockStateProvider::Simple(SimpleStateProvider {
+                                state: {
+                                    let mut props = std::collections::HashMap::new();
+                                    props.insert("age".to_string(), "0".to_string());
+                                    props.insert("hanging".to_string(), "true".to_string());
+                                    props.insert("stage".to_string(), "0".to_string());
+                                    props.insert("waterlogged".to_string(), "false".to_string());
+                                    BlockStateCodec {
+                                        name: &pumpkin_data::Block::MANGROVE_PROPAGULE,
+                                        properties: Some(props),
+                                    }
+                                    .get_state()
+                                },
+                            })),
+                            property: "age".to_string(),
+                            values: IntProvider::Object(NormalIntProvider::Uniform(
+                                UniformIntProvider {
+                                    min_inclusive: 0i32,
+                                    max_inclusive: 4i32,
+                                },
+                            )),
+                        },
+                    ),
                     required_empty_blocks: 2i32,
                     directions: vec![BlockDirection::Down],
                 }),
@@ -11627,8 +12958,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![],
             root_placer: None,
@@ -11716,8 +13056,17 @@ fn build_configured_features()
                 }),
             },
             ignore_vines: true,
-            below_trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: pumpkin_data::Block::AIR.default_state,
+            below_trunk_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: None,
+                rules: vec![
+                        BlockStateRule { if_true : BlockPredicate::Not(NotBlockPredicate
+                        { predicate :
+                        Box::new(BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate
+                        { offset : OffsetBlocksBlockPredicate { offset : None }, tag :
+                        pumpkin_data::tag::Block::MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK,
+                        })), }), then : BlockStateProvider::Simple(SimpleStateProvider {
+                        state : pumpkin_data::Block::DIRT.default_state }) }
+                    ],
             }),
             decorators: vec![
                 TreeDecorator::PlaceOnGround(PlaceOnGroundTreeDecorator {
