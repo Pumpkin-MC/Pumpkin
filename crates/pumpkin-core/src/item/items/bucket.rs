@@ -489,11 +489,6 @@ impl ItemBehaviour for MilkBucketItem {
             .set_active_hand(pumpkin_util::Hand::Right, stack, 32);
     }
 
-    fn on_stopped_using(&self, _stack: &ItemStack, player: &Player) {
-        player.living_entity.reset_effects_and_attributes();
-        give_player_bucket_item(player, &Item::BUCKET);
-    }
-
     fn get_use_duration(&self) -> i32 {
         32
     }
