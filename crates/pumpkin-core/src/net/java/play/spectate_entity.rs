@@ -20,7 +20,6 @@ impl JavaClient {
             return;
         }
 
-        let world = player.world();
         let target: Arc<dyn EntityBase> =
             if let Some(target) = world.get_entity_by_uuid(packet.target) {
                 target
