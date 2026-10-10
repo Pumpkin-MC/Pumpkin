@@ -293,7 +293,7 @@ impl Player {
         entity
             .horizontal_collision
             .store(requested.horizontal_collision, Ordering::Relaxed);
-        if requested.on_ground && entity.is_fall_flying() {
+        if requested.on_ground && entity.is_fall_flying() && self.glide_stop_allowed() {
             entity.set_fall_flying(false);
         }
 

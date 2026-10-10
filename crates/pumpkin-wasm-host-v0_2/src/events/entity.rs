@@ -1859,6 +1859,7 @@ impl ToFromWasmEvent for EntityKnockbackByEntityEvent {
             hit_by_id: self.hit_by_id,
             force: self.force,
             x: self.x,
+            y: self.y,
             z: self.z,
             cancelled: self.cancelled,
         })
@@ -1870,6 +1871,7 @@ impl ToFromWasmEvent for EntityKnockbackByEntityEvent {
             self.cancelled = data.cancelled;
             self.force = data.force;
             self.x = data.x;
+            self.y = data.y;
             self.z = data.z;
         }
     }
@@ -1881,6 +1883,7 @@ impl ToFromWasmEvent for EntityKnockbackByEntityEvent {
                 hit_by_id: data.hit_by_id,
                 force: data.force,
                 x: data.x,
+                y: data.y,
                 z: data.z,
                 cancelled: data.cancelled,
             },

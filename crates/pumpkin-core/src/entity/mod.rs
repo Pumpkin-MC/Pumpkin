@@ -1370,14 +1370,24 @@ impl Entity {
         self.set_synced_data(tracked_data::entity::DATA_NO_GRAVITY, no_gravity);
     }
 
-    /// Vanilla `hurtMarked` path: immediate, to watchers and self.
+    /// Vanilla `hurtMarked` path: immediate, to watchers and self. A player's goes through
+    /// `PlayerVelocityEvent`.
     pub fn send_velocity(&self) {
-        self.send_velocity_to_watchers();
         if self.entity_type == &EntityType::PLAYER
             && let Some(player) = self.world.load().get_player_by_id(self.entity_id)
         {
-            player.send_own_velocity(self.velocity.load());
+            let Some(velocity) = player.fire_velocity_event(self.velocity.load()) else {
+                // Cancelled -> back to the motion the client has, watchers get that instead
+                self.velocity.store(self.known_movement());
+                self.velocity_dirty.store(true, Ordering::SeqCst);
+                return;
+            };
+            self.velocity.store(velocity);
+            self.send_velocity_to_watchers();
+            player.send_own_velocity(velocity);
+            return;
         }
+        self.send_velocity_to_watchers();
     }
 
     /// watchers only: Own client predicts its pushes.
@@ -1617,12 +1627,18 @@ impl Entity {
     /// `LivingEntity.knockback` scale `strength` with
     /// `combat::knockback_after_resistance` first; callers modelling vanilla's raw
     /// `Entity.push` (such as the ender dragon) pass `strength` unscaled.
-    pub fn apply_knockback(&self, strength: f64, mut x: f64, mut z: f64) {
+    pub fn apply_knockback(&self, strength: f64, mut x: f64, mut z: f64, attacker: Option<&Self>) {
         if strength <= 0.0 {
+            // No vanilla knockback, but plugins can still add one
+            if let Some(knockback) =
+                self.fire_knockback_events(strength, Vector3::default(), attacker)
+                && knockback != Vector3::default()
+            {
+                self.velocity_dirty.store(true, Ordering::SeqCst);
+                self.velocity.store(self.velocity.load() + knockback);
+            }
             return;
         }
-
-        self.velocity_dirty.store(true, Ordering::SeqCst);
 
         // This has some vanilla magic
 
@@ -1635,8 +1651,7 @@ impl Entity {
         let var8 = Vector3::new(x, 0.0, z).normalize() * strength;
 
         let velocity = self.velocity.load();
-
-        self.velocity.store(Vector3::new(
+        let target = Vector3::new(
             velocity.x / 2.0 - var8.x,
             if self.on_ground.load(Relaxed) {
                 (velocity.y / 2.0 + strength).min(0.4)
@@ -1644,7 +1659,51 @@ impl Entity {
                 velocity.y
             },
             velocity.z / 2.0 - var8.z,
-        ));
+        );
+        let Some(knockback) = self.fire_knockback_events(strength, target - velocity, attacker)
+        else {
+            return;
+        };
+        self.velocity_dirty.store(true, Ordering::SeqCst);
+        self.velocity.store(velocity + knockback);
+    }
+
+    /// Fires `EntityKnockbackEvent`, then `EntityKnockbackByEntityEvent` with an attacker
+    /// -> `None` if cancelled, else the velocity change
+    pub fn fire_knockback_events(
+        &self,
+        strength: f64,
+        knockback: Vector3<f64>,
+        attacker: Option<&Self>,
+    ) -> Option<Vector3<f64>> {
+        let Some(server) = self.world.load().server.upgrade() else {
+            return Some(knockback);
+        };
+        let mut event =
+            crate::plugin::api::events::entity::entity_knockback::EntityKnockbackEvent {
+                entity_id: self.entity_id,
+                hit_by_id: attacker.map(|attacker| attacker.entity_id),
+                knockback,
+                cancelled: false,
+            };
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        let mut knockback = event.knockback;
+        let mut cancelled = event.cancelled;
+        if let Some(attacker) = attacker {
+            let mut event = crate::plugin::api::events::entity::entity_knockback_by_entity::EntityKnockbackByEntityEvent::new(
+                self.entity_id,
+                attacker.entity_id,
+                strength,
+                knockback.x,
+                knockback.y,
+                knockback.z,
+            );
+            event.cancelled = cancelled;
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            knockback = Vector3::new(event.x, event.y, event.z);
+            cancelled = event.cancelled;
+        }
+        (!cancelled).then_some(knockback)
     }
 
     // Part of LivingEntity.tickMovement() in yarn

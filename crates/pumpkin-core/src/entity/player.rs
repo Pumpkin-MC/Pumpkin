@@ -2543,23 +2543,30 @@ impl Player {
         self.try_send_client_packet(&packet);
     }
 
-    pub fn set_velocity(&self, mut velocity: Vector3<f64>) {
-        if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
-            && let Some(server) = self.world().server.upgrade()
-        {
-            let mut event =
-                crate::plugin::api::events::player::player_velocity::PlayerVelocityEvent {
-                    player: player_arc,
-                    velocity,
-                    cancelled: false,
-                };
-            server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return;
-            }
-            velocity = event.velocity;
+    pub fn set_velocity(&self, velocity: Vector3<f64>) {
+        if let Some(velocity) = self.fire_velocity_event(velocity) {
+            let entity = &self.living_entity.entity;
+            entity.velocity.store(velocity);
+            entity.send_velocity_to_watchers();
+            self.send_own_velocity(velocity);
         }
-        self.living_entity.entity.set_velocity(velocity);
+    }
+
+    /// Fires `PlayerVelocityEvent` -> `None` if cancelled, else the velocity to send
+    pub fn fire_velocity_event(&self, velocity: Vector3<f64>) -> Option<Vector3<f64>> {
+        let (Some(player), Some(server)) = (
+            self.world().get_player_by_uuid(self.gameprofile.id),
+            self.world().server.upgrade(),
+        ) else {
+            return Some(velocity);
+        };
+        let mut event = crate::plugin::api::events::player::player_velocity::PlayerVelocityEvent {
+            player,
+            velocity,
+            cancelled: false,
+        };
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        (!event.cancelled).then_some(event.velocity)
     }
 
     /// Server motion to the own client. For Bedrock -> tagged with the last processed input tick.
@@ -2604,9 +2611,16 @@ impl Player {
     pub fn send_velocity_changes(&self) {
         let entity = self.get_entity();
         if entity.sync_velocity.swap(false, Ordering::SeqCst) {
-            entity.velocity_dirty.store(false, Ordering::SeqCst);
             // The server velocity already holds the pushes
             entity.push_impulse.store(Vector3::default());
+            let Some(velocity) = self.fire_velocity_event(entity.velocity.load()) else {
+                // Cancelled -> back to the motion the client has, watchers get that instead
+                entity.velocity.store(entity.known_movement());
+                entity.velocity_dirty.store(true, Ordering::SeqCst);
+                return;
+            };
+            entity.velocity.store(velocity);
+            entity.velocity_dirty.store(false, Ordering::SeqCst);
             entity.send_velocity_to_watchers();
             self.send_own_velocity(entity.velocity.load());
             return;
@@ -2640,10 +2654,10 @@ impl Player {
         }
     }
 
-    /// Vanilla `LivingEntity.knockback`, sent to the player like a hit
+    /// Vanilla `LivingEntity.knockback`, sent to the player like a hit with `PlayerVelocityEvent`
     pub fn apply_knockback(&self, strength: f64, x: f64, z: f64) {
         let entity = &self.living_entity.entity;
-        entity.apply_knockback(strength, x, z);
+        entity.apply_knockback(strength, x, z, None);
         entity.mark_hurt();
     }
 
@@ -3192,6 +3206,20 @@ impl Player {
         true
     }
 
+    /// Fires `EntityToggleGlideEvent` for a stop -> `false` if a plugin keeps the glide
+    pub fn glide_stop_allowed(&self) -> bool {
+        let Some(server) = self.world().server.upgrade() else {
+            return true;
+        };
+        let mut event =
+            crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent::new(
+                self.entity_id(),
+                false,
+            );
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        !event.cancelled && !event.is_gliding
+    }
+
     /// Vanilla `updateFallFlying`: ends the glide once it isn't possible, wears the glider every second
     fn tick_fall_flying(&self) {
         let entity = &self.living_entity.entity;
@@ -3205,8 +3233,10 @@ impl Player {
             self.living_entity.fall_distance.store(1.0);
         }
         if !self.can_glide() {
-            entity.set_fall_flying(false);
-            self.fall_fly_ticks.store(0, Ordering::Relaxed);
+            if self.glide_stop_allowed() {
+                entity.set_fall_flying(false);
+                self.fall_fly_ticks.store(0, Ordering::Relaxed);
+            }
             return;
         }
         let ticks = self.fall_fly_ticks.fetch_add(1, Ordering::Relaxed) + 1;

@@ -3330,8 +3330,12 @@ impl LivingEntity {
                 (pos.x - target_pos.x, pos.z - target_pos.z)
             });
         let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
-        self.entity
-            .apply_knockback(knockback_after_resistance(0.4, resistance), dx, dz);
+        self.entity.apply_knockback(
+            knockback_after_resistance(0.4, resistance),
+            dx,
+            dz,
+            source.map(EntityBase::get_entity),
+        );
     }
 }
 

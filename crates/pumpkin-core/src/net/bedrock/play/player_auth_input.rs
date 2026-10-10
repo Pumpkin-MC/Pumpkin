@@ -80,7 +80,7 @@ impl BedrockClient {
         } else if flags.get(InputData::StopGliding as usize) && entity.is_fall_flying() {
             // Java cannot cancel elytra in mid-air, landing / `canGlide` already stops it.
             // A rejected stop resends GLIDING true, as `StopGliding` expects an answer either way.
-            let stop = on_ground || !player.can_glide();
+            let stop = (on_ground || !player.can_glide()) && player.glide_stop_allowed();
             entity.set_fall_flying(!stop);
         }
 
