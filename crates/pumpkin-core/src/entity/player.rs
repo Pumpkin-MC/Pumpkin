@@ -312,7 +312,10 @@ use crate::world::{BlockBreakingProgress, World};
 use bytes::Bytes;
 
 use super::breath::BreathManager;
-use super::combat::{self, AttackType, player_attack_sound};
+use super::combat::{
+    self, AttackType, can_smash_attack, mace_smash_damage_bonus, mace_smash_knockback,
+    player_attack_sound,
+};
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
@@ -1412,20 +1415,23 @@ impl Player {
         let pos = victim_entity.pos.load();
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32);
 
-        if matches!(attack_type, AttackType::Critical) {
-            damage *= 1.5;
-        }
-
-        let is_mace_smash = matches!(attack_type, AttackType::MaceSmash);
+        let is_mace_smash = item_stack.item.id == pumpkin_data::item::Item::MACE.id
+            && can_smash_attack(&self.living_entity);
+        // Vanilla adds the weapon's damage bonus before the critical hit multiplier.
         if is_mace_smash {
-            let fall_distance = self.living_entity.fall_distance.load();
+            let fall_distance = f64::from(self.living_entity.fall_distance.load());
             let mut smash_bonus_per_block = 0.0f64;
             if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
                 for (enchantment, level) in enchantments.enchantment.iter() {
                     enchantment.modify_fall_based_damage(*level, &mut smash_bonus_per_block);
                 }
             }
-            damage += (1.5 + smash_bonus_per_block) * f64::from(fall_distance);
+            damage += smash_bonus_per_block
+                .mul_add(fall_distance, mace_smash_damage_bonus(fall_distance));
+        }
+
+        if matches!(attack_type, AttackType::Critical) {
+            damage *= 1.5;
         }
 
         if !victim.damage_with_context(
@@ -1468,8 +1474,22 @@ impl Player {
             }
         }
 
-        if is_mace_smash {
+        if is_mace_smash && victim.get_living_entity().is_some() {
+            let attacker = &self.living_entity.entity;
+            let velocity = attacker.velocity.load();
+            self.set_velocity(Vector3::new(velocity.x, f64::from(0.01f32), velocity.z));
+
             let fall_distance = self.living_entity.fall_distance.load();
+            let sound = if !victim_entity.on_ground.load(Ordering::Relaxed) {
+                Sound::ItemMaceSmashAir
+            } else if fall_distance > 5.0 {
+                Sound::ItemMaceSmashGroundHeavy
+            } else {
+                Sound::ItemMaceSmashGround
+            };
+            world.play_sound(sound, SoundCategory::Players, &attacker.pos.load());
+            mace_smash_knockback(&world, self, victim.as_ref());
+
             self.living_entity.fall_distance.store(0.0);
             if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
                 for (enchantment, level) in enchantments.enchantment.iter() {
@@ -1483,15 +1503,6 @@ impl Player {
                     }
                 }
             }
-            world.play_sound(
-                if fall_distance > 5.0 {
-                    Sound::ItemMaceSmashGroundHeavy
-                } else {
-                    Sound::ItemMaceSmashGround
-                },
-                SoundCategory::Players,
-                &pos,
-            );
         }
 
         player_attack_sound(&pos, &world, attack_type);

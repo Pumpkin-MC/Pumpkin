@@ -1,7 +1,11 @@
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use crate::entity::EntityBase;
+use crate::entity::decoration::armor_stand::ArmorStandEntity;
+use crate::entity::living::LivingEntity;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{
     attributes::Attributes,
     particle::Particle,
@@ -23,7 +27,6 @@ pub enum AttackType {
     Sweeping,
     Strong,
     Weak,
-    MaceSmash,
 }
 
 impl AttackType {
@@ -34,11 +37,6 @@ impl AttackType {
         let on_ground = entity.on_ground.load(Ordering::Relaxed);
         let fall_distance = player.living_entity.fall_distance.load();
         let held_item = player.inventory().held_item();
-        let is_mace = held_item.item.id == pumpkin_data::item::Item::MACE.id;
-
-        if is_mace && !on_ground && fall_distance > 1.5 {
-            return Self::MaceSmash;
-        }
 
         let sword = held_item.is_sword();
         let is_bedrock = matches!(player.client.as_ref(), ClientPlatform::Bedrock(_));
@@ -58,6 +56,117 @@ impl AttackType {
 
         if is_strong { Self::Strong } else { Self::Weak }
     }
+}
+
+/// Checks smash eligibility, rejecting stale fall distance after a ground-only packet.
+pub fn can_smash_attack(attacker: &LivingEntity) -> bool {
+    attacker.fall_distance.load() > 1.5
+        && !attacker.entity.on_ground.load(Ordering::Relaxed)
+        && !attacker.entity.is_fall_flying()
+}
+
+/// Vanilla `MaceItem.getAttackDamageBonus`, before the enchantment part.
+pub fn mace_smash_damage_bonus(fall_distance: f64) -> f64 {
+    if fall_distance <= 3.0 {
+        4.0 * fall_distance
+    } else if fall_distance <= 8.0 {
+        2.0f64.mul_add(fall_distance - 3.0, 12.0)
+    } else {
+        22.0 + fall_distance - 8.0
+    }
+}
+
+/// Vanilla `MaceItem.knockback`: pushes everything near the victim away from it.
+pub fn mace_smash_knockback(world: &World, attacker: &dyn EntityBase, victim: &dyn EntityBase) {
+    let victim_entity = victim.get_entity();
+    world.sync_world_event(
+        WorldEvent::ParticlesSmashAttack,
+        victim_entity.get_on_pos(),
+        750,
+    );
+
+    let victim_pos = victim_entity.pos.load();
+    let heavy = attacker
+        .get_living_entity()
+        .is_some_and(|living| living.fall_distance.load() > 5.0);
+    let search_box = victim_entity.bounding_box.load().expand(3.5, 3.5, 3.5);
+    let nearby_entities = world.get_entities_at_box(&search_box).into_iter().chain(
+        world
+            .get_players_at_box(&search_box)
+            .into_iter()
+            .map(|player| player as Arc<dyn EntityBase>),
+    );
+
+    for nearby in nearby_entities {
+        let Some(nearby_living) = nearby.get_living_entity() else {
+            continue;
+        };
+        if !mace_smash_can_knockback(attacker, victim, nearby.as_ref()) {
+            continue;
+        }
+        let direction = nearby.get_entity().pos.load() - victim_pos;
+        let resistance = nearby_living.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
+        let power = (3.5 - direction.length())
+            * f64::from(0.7f32)
+            * if heavy { 2.0 } else { 1.0 }
+            * (1.0 - resistance);
+        if power > 0.0 {
+            let push = direction.normalize() * power;
+            let velocity = Vector3::new(push.x, f64::from(0.7f32), push.z);
+            let entity = nearby.get_entity();
+            if let Some(player) = nearby.get_player() {
+                player.set_velocity(entity.velocity.load() + velocity);
+            } else {
+                entity.add_velocity(velocity);
+            }
+        }
+    }
+}
+
+fn mace_smash_can_knockback(
+    attacker: &dyn EntityBase,
+    victim: &dyn EntityBase,
+    nearby: &dyn EntityBase,
+) -> bool {
+    let nearby_entity = nearby.get_entity();
+    let victim_entity = victim.get_entity();
+    if nearby.is_spectator()
+        || nearby_entity.entity_id == attacker.get_entity().entity_id
+        || nearby_entity.entity_id == victim_entity.entity_id
+        || attacker.is_allied_to(nearby)
+    {
+        return false;
+    }
+    // Vanilla checks the owner against the victim here, not the attacker.
+    if let Some(mob) = nearby.get_mob()
+        && mob.is_tamed()
+        && victim.get_living_entity().is_some()
+        && mob.get_owner_uuid() == Some(victim_entity.entity_uuid)
+    {
+        return false;
+    }
+    if nearby
+        .cast_any()
+        .downcast_ref::<ArmorStandEntity>()
+        .is_some_and(ArmorStandEntity::is_marker)
+    {
+        return false;
+    }
+    if victim_entity
+        .pos
+        .load()
+        .squared_distance_to_vec(&nearby_entity.pos.load())
+        > 3.5 * 3.5
+    {
+        return false;
+    }
+    !nearby.get_player().is_some_and(|player| {
+        player.is_creative()
+            && player
+                .abilities
+                .lock()
+                .is_ok_and(|abilities| abilities.flying)
+    })
 }
 
 /// Scales a knockback `strength` by a living entity's knockback resistance,
@@ -123,9 +232,6 @@ pub fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type: Attac
         }
         AttackType::Weak => {
             world.play_sound(Sound::EntityPlayerAttackWeak, SoundCategory::Players, pos);
-        }
-        AttackType::MaceSmash => {
-            world.play_sound(Sound::ItemMaceSmashAir, SoundCategory::Players, pos);
         }
     }
 }

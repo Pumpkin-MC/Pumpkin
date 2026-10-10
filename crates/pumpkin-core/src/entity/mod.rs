@@ -1963,6 +1963,11 @@ impl Entity {
     }
 
     #[must_use]
+    pub fn get_on_pos(&self) -> BlockPos {
+        self.get_pos_with_y_offset(1.0e-5).0
+    }
+
+    #[must_use]
     pub fn get_block_pos_below_that_affects_my_movement(&self) -> BlockPos {
         self.get_pos_with_y_offset(0.500_001).0
     }
