@@ -83,15 +83,6 @@ impl BlockBehaviour for DecoratedPotBlock {
     }
 
     fn broken(&self, args: BrokenArgs<'_>) {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(pot_entity) = block_entity
-                .as_any()
-                .downcast_ref::<DecoratedPotBlockEntity>()
-            && let Some(contained) = pot_entity.take_item()
-        {
-            args.world.drop_stack(args.position, contained);
-        }
-
         args.world.play_sound(
             Sound::BlockDecoratedPotShatter,
             SoundCategory::Blocks,

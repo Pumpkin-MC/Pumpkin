@@ -4,15 +4,12 @@ use std::sync::atomic::Ordering;
 use crate::block::entities::lectern::LecternBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
-    GetRedstonePowerArgs, GetScreenHandlerFactoryArgs, NormalUseArgs, OnPlaceArgs,
-    OnScheduledTickArgs, OnStateReplacedArgs, PathComputationType, PlacedArgs, UseWithItemArgs,
+    BlockBehaviour, EmitsRedstonePowerArgs, GetComparatorOutputArgs, GetRedstonePowerArgs,
+    GetScreenHandlerFactoryArgs, NormalUseArgs, OnPlaceArgs, OnScheduledTickArgs,
+    OnStateReplacedArgs, PathComputationType, PlacedArgs, UseWithItemArgs,
 };
-use crate::entity::Entity;
-use crate::entity::item::ItemEntity;
 use crate::world::World;
 use pumpkin_data::block_properties::LecternLikeProperties;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
@@ -25,7 +22,6 @@ use pumpkin_inventory::screen_handler::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
@@ -272,28 +268,6 @@ impl BlockBehaviour for LecternBlock {
             let props = LecternLikeProperties::from_state_id(args.old_state_id);
             if props.powered {
                 Self::update_neighbors_below(args.world, args.position);
-            }
-        }
-    }
-
-    fn broken(&self, args: BrokenArgs<'_>) {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(lectern_entity) = block_entity.as_any().downcast_ref::<LecternBlockEntity>()
-        {
-            let book = lectern_entity.remove_stack(0);
-            if !book.is_empty() {
-                // Drop the book item
-                let entity = Entity::new(
-                    args.world.clone(),
-                    Vector3::new(
-                        f64::from(args.position.0.x) + 0.5,
-                        f64::from(args.position.0.y) + 0.5,
-                        f64::from(args.position.0.z) + 0.5,
-                    ),
-                    &EntityType::ITEM,
-                );
-                let item_entity = ItemEntity::new(entity, book);
-                args.world.spawn_entity(Arc::new(item_entity));
             }
         }
     }
