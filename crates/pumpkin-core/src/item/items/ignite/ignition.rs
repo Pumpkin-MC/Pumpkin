@@ -10,6 +10,21 @@ use std::sync::Arc;
 pub struct Ignition;
 
 impl Ignition {
+    /// The block that [`Ignition::ignite_block`] will change: the clicked block when it can be
+    /// lit in place (campfires, candles, candle cakes), otherwise the created fire position.
+    pub fn ignite_position(
+        world: &Arc<World>,
+        location: BlockPos,
+        fire_pos: BlockPos,
+        block: &Block,
+    ) -> BlockPos {
+        if can_be_lit(block, world.get_block_state_id(&location)).is_some() {
+            location
+        } else {
+            fire_pos
+        }
+    }
+
     /// Lights `block` at `location` itself if it can be lit (campfires, candles, candle
     /// cakes), otherwise places a fire block at `fire_pos`.
     pub fn ignite_block<F>(
