@@ -28,6 +28,7 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
+use crate::item::items::bucket::create_filled_result;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
@@ -203,7 +204,7 @@ impl Mob for MooshroomEntity {
         }
 
         if item == &Item::BUCKET && !self.is_baby() {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            create_filled_result(item_stack, player, &Item::MILK_BUCKET, true);
             let entity = self.get_entity();
             let world = entity.world.load();
             world.play_sound(
