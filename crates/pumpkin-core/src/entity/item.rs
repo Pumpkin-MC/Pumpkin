@@ -531,7 +531,7 @@ impl ItemEntity {
         let moved =
             BlockPos::floored_v(entity.last_pos.load()) != BlockPos::floored_v(entity.pos.load());
         let rate = if moved { 2 } else { 40 };
-        if entity.age.load(Ordering::Relaxed) % rate == 0 {
+        if entity.tick_count.load(Ordering::Relaxed) % rate == 0 {
             self.merge_with_neighbours();
         }
 
@@ -671,11 +671,12 @@ impl EntityBase for ItemEntity {
         true
     }
 
+    fn receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn on_player_collision(&self, player: &Arc<Player>) {
-        if self.pickup_delay.load(Ordering::Relaxed) > 0
-            || player.living_entity.health.load() <= 0.0
-            || player.is_spectator()
-        {
+        if self.pickup_delay.load(Ordering::Relaxed) > 0 {
             return;
         }
 

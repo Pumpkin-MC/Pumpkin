@@ -93,7 +93,7 @@ impl Goal for PathfindToRaidGoal {
 
         let entity = mob.get_entity();
         let world = entity.world.load();
-        let current_age = entity.age.load(std::sync::atomic::Ordering::Relaxed);
+        let current_age = entity.tick_count.load(std::sync::atomic::Ordering::Relaxed);
 
         let raid_center = {
             let raids = world

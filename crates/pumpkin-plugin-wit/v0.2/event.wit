@@ -815,6 +815,7 @@ interface event {
         hit-by-id: s32,
         force: f64,
         x: f64,
+        y: f64,
         z: f64,
         cancelled: bool
     }

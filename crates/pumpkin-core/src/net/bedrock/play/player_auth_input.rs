@@ -1,224 +1,101 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use pumpkin_data::entity::EntityPose;
+use pumpkin_protocol::bedrock::server::player_auth_input::{InputMode, InteractionModel};
+use pumpkin_protocol::java::server::play::SPlayerInput;
+use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector3::Vector3;
+
+use crate::entity::player::ClientMove;
 
 impl BedrockClient {
-    #[expect(clippy::too_many_lines)]
     pub fn handle_player_auth_input(
         &self,
         player: &Arc<Player>,
         packet: SPlayerAuthInput,
         server: &Arc<Server>,
     ) {
-        if !player.has_client_loaded() {
-            return;
-        }
         if player.living_entity.dead.load(Ordering::Relaxed)
             || player.living_entity.health.load() <= 0.0
         {
             return;
         }
+        if self.await_teleport(player, &packet) {
+            // Stale poses before a respawn teleport must not count as client motion.
+            player.get_entity().movement.store(Vector3::default());
+            return;
+        }
+        if !player.has_client_loaded() {
+            return;
+        }
+
         let entity = player.get_entity();
-        let on_ground = packet.input_data.get(InputData::VerticalCollision as usize)
-            && packet.delta.y < 0.0
+        let flags = &packet.input_data;
+        // Like Geyser: the motion this tick started with was downward. Landing can already
+        // have cleared the end delta (gliding into the ground).
+        let on_ground = flags.get(InputData::VerticalCollision as usize)
+            && self.client_delta.load().y < 0.0
             && !entity.has_vehicle();
-        entity.on_ground.store(on_ground, Ordering::Relaxed);
+        let horizontal_collision = flags.get(InputData::HorizontalCollision as usize);
 
-        let new_pos = packet
-            .position
-            .add_raw(0.0, -entity.entity_type.eye_height, 0.0)
-            .to_f64();
-        let old_pos = player.position();
+        self.input_tick.store(packet.tick.0, Ordering::Relaxed);
+        // Client predicted end-of-tick velocity. Knockback is an absolute `SetActorMotion`.
+        // later entity pushes layer on this delta once that motion is no longer in flight.
+        self.client_delta.store(packet.delta.to_f64());
 
-        let new_pitch = packet.pitch;
-        let new_yaw = packet.yaw;
+        let sneaking = sneaking_from_auth(player, flags);
+        player.apply_client_input(server, java_input_from_auth(&packet, sneaking));
 
-        let old_pitch = entity.pitch.load();
-        let old_yaw = entity.yaw.load();
-
-        let pos_changed = new_pos != old_pos;
-        let rot_changed = new_pitch != old_pitch || new_yaw != old_yaw;
-
-        if pos_changed || rot_changed {
-            let world = player.world();
-
-            if pos_changed {
-                player.get_entity().set_pos(new_pos);
-            }
-            if rot_changed {
-                entity.pitch.store(new_pitch);
-                entity.yaw.store(new_yaw);
-            }
-
-            // TODO: use `pumpkin_util::math::pack_degrees`.
-            let je_yaw = (new_yaw * 256.0 / 360.0).rem_euclid(256.0);
-            let je_pitch = (new_pitch * 256.0 / 360.0).rem_euclid(256.0);
-
-            let delta = pumpkin_util::math::vector3::Vector3::new(
-                new_pos.x - old_pos.x,
-                new_pos.y - old_pos.y,
-                new_pos.z - old_pos.z,
-            );
-
-            let bedrock_move_packet = pumpkin_protocol::bedrock::client::CMovePlayer::new(
-                pumpkin_protocol::codec::var_ulong::VarULong(player.entity_id() as u64),
-                pumpkin_util::math::vector3::Vector3::new(
-                    new_pos.x as f32,
-                    new_pos.y as f32 + entity.entity_type.eye_height,
-                    new_pos.z as f32,
-                ),
-                new_pitch,
-                new_yaw,
-                new_yaw, // Head yaw
-                pumpkin_protocol::bedrock::client::CMovePlayer::MODE_NORMAL,
-                on_ground,
-                pumpkin_protocol::codec::var_ulong::VarULong(0),
-                0,
-                0,
-                pumpkin_protocol::codec::var_ulong::VarULong(0),
-            );
-
-            if pos_changed && delta.length_squared() >= 64.0 {
-                world.broadcast_packet_except(
-                    &[player.gameprofile.id],
-                    &pumpkin_protocol::java::client::play::CEntityPositionSync::new(
-                        player.entity_id().into(),
-                        new_pos,
-                        pumpkin_util::math::vector3::Vector3::new(0.0, 0.0, 0.0),
-                        je_yaw,
-                        je_pitch,
-                        on_ground,
-                    ),
-                );
-            } else if pos_changed && rot_changed {
-                world.broadcast_packet_except_editioned(
-                    &[player.gameprofile.id],
-                    &pumpkin_protocol::java::client::play::CUpdateEntityPosRot::new(
-                        player.entity_id().into(),
-                        pumpkin_util::math::vector3::Vector3::new(
-                            new_pos.x.mul_add(4096.0, -(old_pos.x * 4096.0)) as i16,
-                            new_pos.y.mul_add(4096.0, -(old_pos.y * 4096.0)) as i16,
-                            new_pos.z.mul_add(4096.0, -(old_pos.z * 4096.0)) as i16,
-                        ),
-                        je_yaw as u8,   // Use converted Java byte
-                        je_pitch as u8, // Use converted Java byte
-                        on_ground,
-                    ),
-                    &bedrock_move_packet,
-                );
-            } else if pos_changed {
-                world.broadcast_packet_except_editioned(
-                    &[player.gameprofile.id],
-                    &pumpkin_protocol::java::client::play::CUpdateEntityPos::new(
-                        player.entity_id().into(),
-                        pumpkin_util::math::vector3::Vector3::new(
-                            new_pos.x.mul_add(4096.0, -(old_pos.x * 4096.0)) as i16,
-                            new_pos.y.mul_add(4096.0, -(old_pos.y * 4096.0)) as i16,
-                            new_pos.z.mul_add(4096.0, -(old_pos.z * 4096.0)) as i16,
-                        ),
-                        on_ground,
-                    ),
-                    &bedrock_move_packet,
-                );
-            } else if rot_changed {
-                world.broadcast_packet_except_editioned(
-                    &[player.gameprofile.id],
-                    &pumpkin_protocol::java::client::play::CUpdateEntityRot::new(
-                        player.entity_id().into(),
-                        je_yaw as u8,   // Use converted Java byte
-                        je_pitch as u8, // Use converted Java byte
-                        on_ground,
-                    ),
-                    &bedrock_move_packet,
-                );
-            }
-
-            if rot_changed {
-                world.broadcast_packet_except(
-                    &[player.gameprofile.id],
-                    // Adjust to `CHeadRot` if that is what your crate currently calls it
-                    &pumpkin_protocol::java::client::play::CHeadRot::new(
-                        player.entity_id().into(),
-                        je_yaw as u8,
-                    ),
-                );
-            }
-
-            if pos_changed {
-                chunker::update_position(player);
-                player.check_location_enchantments(new_pos, on_ground);
-                player.progress_motion(delta);
-            }
+        let started_sprint = flags.get(InputData::StartSprinting as usize);
+        let stopped_sprint = flags.get(InputData::StopSprinting as usize);
+        if started_sprint && !stopped_sprint {
+            player.apply_sprint_input(server, true);
+        } else if stopped_sprint && !started_sprint {
+            player.apply_sprint_input(server, false);
         }
 
-        let input_data = packet.input_data;
-
-        if input_data.get(InputData::StartSprinting as usize) {
-            player.set_sprinting(true);
-        } else if input_data.get(InputData::StopSprinting as usize) {
-            player.set_sprinting(false);
+        if flags.get(InputData::StartSwimming as usize) {
+            entity.set_swimming(true);
+        } else if flags.get(InputData::StopSwimming as usize) {
+            entity.set_swimming(false);
         }
 
-        if input_data.get(InputData::StartSneaking as usize) {
-            entity.set_sneaking(true);
-        } else if input_data.get(InputData::StopSneaking as usize) {
-            entity.set_sneaking(false);
-        }
-
-        if input_data.get(InputData::StartCrawling as usize) {
+        if flags.get(InputData::StartCrawling as usize) {
             entity.set_pose(EntityPose::Swimming);
-        } else if input_data.get(InputData::StopCrawling as usize) {
+        } else if flags.get(InputData::StopCrawling as usize) {
             player.update_player_pose();
         }
 
-        if input_data.get(InputData::StartFlying as usize) {
-            let flying = {
-                player
-                    .abilities
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .flying
-            };
-            if !flying {
-                send_cancellable_blocking! {{
-                    server;
-                    PlayerToggleFlightEvent::new(player.clone(), true);
-                    'after: {
-                        player.living_entity.fall_distance.store(0.0);
-                        {
-                            player.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying = true;
-                        };
-                        player.send_abilities_update();
-                    }
-                    'cancelled: {
-                        player.send_abilities_update();
-                    }
-                }}
-            }
-        } else if input_data.get(InputData::StopFlying as usize) {
-            let flying = {
-                player
-                    .abilities
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .flying
-            };
-            if flying {
-                send_cancellable_blocking! {{
-                    server;
-                    PlayerToggleFlightEvent::new(player.clone(), false);
-                    'after: {
-                        {
-                            player.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying = false;
-                        };
-                        player.send_abilities_update();
-                    }
-                    'cancelled: {
-                        player.send_abilities_update();
-                    }
-                }}
-            }
+        if flags.get(InputData::StartFlying as usize) {
+            player.apply_flight_input(server, true);
+        } else if flags.get(InputData::StopFlying as usize) {
+            player.apply_flight_input(server, false);
         }
+
+        // Bedrock can stop in the same input it started, then it never glided.
+        if flags.get(InputData::StartGliding as usize)
+            && !flags.get(InputData::StopGliding as usize)
+        {
+            Self::start_gliding(player, server);
+        } else if flags.get(InputData::StopGliding as usize) && entity.is_fall_flying() {
+            // Java cannot cancel elytra in mid-air, landing / `canGlide` already stops it.
+            // A rejected stop resends GLIDING true, as `StopGliding` expects an answer either way.
+            let stop = (on_ground || !player.can_glide()) && player.glide_stop_allowed();
+            entity.set_fall_flying(!stop);
+        }
+
+        let new_pos = player.feet_from_bedrock_pos(packet.position.to_f64());
+        player.apply_client_move(
+            server,
+            ClientMove {
+                position: Some(new_pos),
+                yaw: Some(packet.yaw),
+                pitch: Some(packet.pitch),
+                head_yaw: Some(packet.head_yaw),
+                on_ground,
+                horizontal_collision,
+            },
+        );
 
         if let Some(block_actions) = packet.block_actions {
             for action in &block_actions {
@@ -226,4 +103,165 @@ impl BedrockClient {
             }
         }
     }
+}
+
+impl BedrockClient {
+    /// The Bedrock client glides straight out of creative flight, which vanilla `canGlide`
+    /// forbids, so flight ends first and comes back if the glide is refused.
+    fn start_gliding(player: &Arc<Player>, server: &Arc<Server>) {
+        if player.get_entity().is_fall_flying() {
+            return;
+        }
+        let was_flying = player.is_flying();
+        let set_flying = |flying: bool| {
+            player
+                .abilities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .flying = flying;
+        };
+        if was_flying {
+            set_flying(false);
+        }
+        if !player.try_to_start_fall_flying(server) {
+            if was_flying {
+                set_flying(true);
+            }
+            player.get_entity().stop_fall_flying();
+        }
+        if was_flying {
+            player.send_abilities_update();
+        }
+    }
+
+    /// Inputs are ignored until the client reaches a pending teleport, so stale
+    /// positions (e.g. the death spot before a respawn) never count as movement or a fall.
+    /// Returns true while still waiting.
+    fn await_teleport(&self, player: &Arc<Player>, packet: &SPlayerAuthInput) -> bool {
+        const TELEPORT_ERROR: f32 = 0.1;
+        const RESEND_INPUTS: u32 = 20;
+
+        let mut awaiting = player
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if awaiting.is_none() {
+            return false;
+        }
+        // The f32 position actually sent, a f64 target can sit between two f32 values.
+        let target = self.teleport_sent_pos.load();
+        let position = packet.position;
+        if (position.x - target.x).abs() < TELEPORT_ERROR
+            && (position.y - target.y).abs() < TELEPORT_ERROR
+            && (position.z - target.z).abs() < TELEPORT_ERROR
+        {
+            *awaiting = None;
+            drop(awaiting);
+            // Bedrock sends no `PlayerLoaded` after a respawn, reaching the spawn stands in
+            player.set_client_loaded(true);
+        } else if self
+            .teleport_unconfirmed_inputs
+            .fetch_add(1, Ordering::Relaxed)
+            + 1
+            >= RESEND_INPUTS
+        {
+            drop(awaiting);
+            player.send_bedrock_teleport(self);
+        }
+        true
+    }
+}
+
+fn sneaking_from_auth(
+    player: &Player,
+    flags: &pumpkin_protocol::codec::bitset::Bitset<66>,
+) -> bool {
+    if player.is_flying() {
+        return flags.get(InputData::Descend as usize) || flags.get(InputData::SneakDown as usize);
+    }
+    // Stop wins when both edges arrive on the same tick.
+    if flags.get(InputData::StopSneaking as usize) {
+        false
+    } else if flags.get(InputData::StartSneaking as usize) {
+        true
+    } else {
+        player.get_entity().is_sneaking()
+    }
+}
+
+fn java_input_from_auth(packet: &SPlayerAuthInput, sneaking: bool) -> i8 {
+    let flags = &packet.input_data;
+    let mouse = packet.input_mode.0 == InputMode::Mouse as u32;
+    let classic_touch = packet.input_mode.0 == InputMode::Touch as u32
+        && packet.interaction_model.0 == InteractionModel::Classic as i32;
+    let (up, down, left, right) = if mouse || classic_touch {
+        digital_move(flags, classic_touch)
+    } else {
+        analog_move(packet.analog_move)
+    };
+
+    let mut input = 0i8;
+    if up {
+        input |= SPlayerInput::FORWARD;
+    }
+    if down {
+        input |= SPlayerInput::BACKWARD;
+    }
+    if left {
+        input |= SPlayerInput::LEFT;
+    }
+    if right {
+        input |= SPlayerInput::RIGHT;
+    }
+    if flags.get(InputData::JumpCurrentRaw as usize)
+        || flags.get(InputData::JumpDown as usize)
+        || flags.get(InputData::AutoJumpingInWater as usize)
+    {
+        input |= SPlayerInput::JUMP;
+    }
+    if sneaking {
+        input |= SPlayerInput::SNEAK;
+    }
+    if flags.get(InputData::SprintDown as usize) {
+        input |= SPlayerInput::SPRINT;
+    }
+    input
+}
+
+fn digital_move(
+    flags: &pumpkin_protocol::codec::bitset::Bitset<66>,
+    classic_touch: bool,
+) -> (bool, bool, bool, bool) {
+    let mut up = flags.get(InputData::Up as usize);
+    let mut down = flags.get(InputData::Down as usize);
+    let mut left = flags.get(InputData::Left as usize);
+    let mut right = flags.get(InputData::Right as usize);
+    if classic_touch {
+        if flags.get(InputData::UpLeft as usize) {
+            up = true;
+            left = true;
+        }
+        if flags.get(InputData::UpRight as usize) {
+            up = true;
+            right = true;
+        }
+        if flags.get(InputData::DownLeft as usize) {
+            down = true;
+            left = true;
+        }
+        if flags.get(InputData::DownRight as usize) {
+            down = true;
+            right = true;
+        }
+    }
+    (up, down, left, right)
+}
+
+fn analog_move(analog: Vector2<f32>) -> (bool, bool, bool, bool) {
+    (
+        analog.y > 0.0,
+        analog.y < 0.0,
+        analog.x > 0.0,
+        analog.x < 0.0,
+    )
 }

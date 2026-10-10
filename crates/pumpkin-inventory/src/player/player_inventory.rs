@@ -618,4 +618,14 @@ impl PlayerInventory {
     pub fn get_selected_slot(&self) -> u8 {
         self.selected_slot.load(Ordering::Relaxed)
     }
+
+    /// Inventory slot of an equipment slot -> the main hand is the selected hotbar slot
+    pub fn equipment_slot_index(&self, slot: &EquipmentSlot) -> Option<usize> {
+        if matches!(slot, EquipmentSlot::MainHand(_)) {
+            return Some(self.get_selected_slot() as usize);
+        }
+        self.equipment_slots
+            .iter()
+            .find_map(|(index, equipment)| (equipment == slot).then_some(*index))
+    }
 }

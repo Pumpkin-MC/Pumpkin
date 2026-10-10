@@ -22,6 +22,8 @@ pub struct EntityType {
     pub attackable: Option<bool>,
     /// Whether this entity is classified as a mob (affects spawning mechanics).
     pub mob: Option<bool>,
+    /// Whether this entity's class extends vanilla `Animal`.
+    pub animal: Option<bool>,
     /// Maximum number of this entity type allowed per chunk, if capped.
     pub limit_per_chunk: Option<i32>,
     /// Whether this entity can be summoned by the `/summon` command.
@@ -46,8 +48,31 @@ pub struct EntityType {
     pub eye_height: f32,
     /// Scale factor for spawn dimensions (e.g. slimes/magma cubes).
     pub spawn_dimensions_scale: f32,
+    /// Vanilla `EntityAttachment.PASSENGER` points, one seat per passenger index.
+    pub passenger_attachments: Vec<[f64; 3]>,
+    /// Vanilla `EntityAttachment.VEHICLE` point, where this entity is held on a seat.
+    pub vehicle_attachment: [f64; 3],
+    /// Size and attachments as a baby, for mobs that can be babies.
+    pub baby: Option<BabyEntityType>,
     /// Spawn location restrictions for natural spawning.
     pub spawn_restriction: SpawnRestriction,
+}
+
+/// Vanilla `getDefaultDimensions` of a mob while it is a baby.
+#[derive(Deserialize)]
+pub struct BabyEntityType {
+    pub dimension: [f32; 2],
+    pub eye_height: f32,
+    pub passenger_attachments: Vec<[f64; 3]>,
+    pub vehicle_attachment: [f64; 3],
+}
+
+/// Emits `&[Vector3::new(..), ..]` for attachment points.
+fn attachment_points(points: &[[f64; 3]]) -> TokenStream {
+    let points = points
+        .iter()
+        .map(|[x, y, z]| quote! { Vector3::new(#x, #y, #z) });
+    quote! { &[#(#points),*] }
 }
 
 /// Spawn restrictions controlling where an entity is allowed to naturally spawn.
@@ -181,6 +206,7 @@ impl ToTokens for NamedEntityType<'_> {
             "missing field 'mob', entity name {name}"
         );
         let mob = entity.mob.unwrap_or(false);
+        let animal = entity.animal.unwrap_or(false);
         let limit_per_chunk = entity.limit_per_chunk.unwrap_or(0);
         let can_spawn_far_from_player = entity.can_spawn_far_from_player;
 
@@ -191,6 +217,23 @@ impl ToTokens for NamedEntityType<'_> {
         let client_tracking_range = entity.client_tracking_range;
         let update_interval = entity.update_interval;
         let track_deltas = entity.track_deltas;
+        let passenger_attachments = attachment_points(&entity.passenger_attachments);
+        let [vehicle_x, vehicle_y, vehicle_z] = entity.vehicle_attachment;
+        let baby = entity.baby.as_ref().map_or_else(
+            || quote! { None },
+            |baby| {
+                let [width, height] = baby.dimension;
+                let eye_height = baby.eye_height;
+                let passenger_attachments = attachment_points(&baby.passenger_attachments);
+                let [x, y, z] = baby.vehicle_attachment;
+                quote! { Some(BabyEntityType {
+                    dimension: [#width, #height],
+                    eye_height: #eye_height,
+                    passenger_attachments: #passenger_attachments,
+                    vehicle_attachment: Vector3::new(#x, #y, #z),
+                }) }
+            },
+        );
 
         tokens.extend(quote! {
             EntityType {
@@ -201,6 +244,7 @@ impl ToTokens for NamedEntityType<'_> {
                 death_sound: #death_sound,
                 attackable: #attackable,
                 mob: #mob,
+                animal: #animal,
                 saveable: #saveable,
                 limit_per_chunk: #limit_per_chunk,
                 summonable: #summonable,
@@ -213,6 +257,9 @@ impl ToTokens for NamedEntityType<'_> {
                 dimension: [#dimension0, #dimension1], // Correctly construct the array
                 eye_height: #eye_height,
                 spawn_dimensions_scale: #spawn_dimensions_scale,
+                passenger_attachments: #passenger_attachments,
+                vehicle_attachment: Vector3::new(#vehicle_x, #vehicle_y, #vehicle_z),
+                baby: #baby,
                 spawn_restriction: #spawn_restriction,
                 resource_name: #name,
             }
@@ -275,6 +322,7 @@ pub fn build() -> TokenStream {
             pub death_sound: Option<Sound>,
             pub attackable: Option<bool>,
             pub mob: bool,
+            pub animal: bool,
             pub saveable: bool,
             pub limit_per_chunk: i32,
             pub summonable: bool,
@@ -287,8 +335,20 @@ pub fn build() -> TokenStream {
             pub dimension: [f32; 2],
             pub eye_height: f32,
             pub spawn_dimensions_scale: f32,
+            pub passenger_attachments: &'static [Vector3<f64>],
+            pub vehicle_attachment: Vector3<f64>,
+            pub baby: Option<BabyEntityType>,
             pub spawn_restriction: SpawnRestriction,
             pub resource_name: &'static str,
+        }
+
+        /// Vanilla `getDefaultDimensions` of a mob while it is a baby.
+        #[derive(Debug, Clone)]
+        pub struct BabyEntityType {
+            pub dimension: [f32; 2],
+            pub eye_height: f32,
+            pub passenger_attachments: &'static [Vector3<f64>],
+            pub vehicle_attachment: Vector3<f64>,
         }
 
         impl Hash for EntityType {

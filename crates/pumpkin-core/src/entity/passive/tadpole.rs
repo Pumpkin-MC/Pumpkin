@@ -69,6 +69,8 @@ impl TadpoleEntity {
     }
 }
 
+// TODO: vanilla tadpoles are no `AgeableMob`; their age counts up from 0 and they turn into a
+// frog at 24000. Feeding should go through that age, not `age.fetch_add`.
 impl AgeableMob for TadpoleEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
@@ -90,10 +92,6 @@ impl Mob for TadpoleEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {

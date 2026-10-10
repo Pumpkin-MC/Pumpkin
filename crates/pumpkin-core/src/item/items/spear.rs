@@ -176,6 +176,7 @@ impl SpearItem {
         } else {
             0.0
         };
+        let old_movement = target_entity.velocity.load();
         let was_hurt = effects.damage
             && target.damage_with_context(
                 target.as_ref(),
@@ -187,14 +188,18 @@ impl SpearItem {
             );
 
         let config = &server.advanced_config.pvp;
-        if effects.knockback && config.knockback && target.get_living_entity().is_some() {
+        if effects.knockback && target.get_living_entity().is_some() {
             let attacker = player.get_entity();
-            combat::handle_knockback(attacker, target.as_ref(), 0.8);
+            if config.knockback {
+                combat::handle_knockback(attacker, target.as_ref(), 0.8);
+            }
+            // Vanilla syncs after the first knockback, so a hit player's own client
+            // doesn't get the enchantment knockback.
+            combat::sync_hit_player_velocity(target.as_ref(), old_movement);
             let knockback_level = Self::knockback_level(stack);
-            if knockback_level > 0 {
+            if config.knockback && knockback_level > 0 {
                 combat::handle_knockback(attacker, target.as_ref(), f64::from(knockback_level));
             }
-            target_entity.send_velocity();
         }
 
         let mut dismounted = false;
@@ -216,7 +221,7 @@ impl SpearItem {
             .last_attacking_id
             .store(target_entity.entity_id, Ordering::Relaxed);
         player.living_entity.last_attack_time.store(
-            player.get_entity().age.load(Ordering::Relaxed),
+            player.get_entity().tick_count.load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
         if was_hurt {
@@ -254,7 +259,7 @@ impl SpearItem {
         let base_damage = player
             .living_entity
             .get_attribute_base(&Attributes::ATTACK_DAMAGE) as f32;
-        let now = player.get_entity().age.load(Ordering::Relaxed);
+        let now = player.get_entity().tick_count.load(Ordering::Relaxed);
         let mut affected = false;
 
         for target in Self::targets_in_range(player, &server, stack) {

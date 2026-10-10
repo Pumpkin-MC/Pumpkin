@@ -1,5 +1,8 @@
 pub mod advancement;
+pub mod client_move;
 pub mod statistics;
+
+pub use client_move::{ClientMove, ClientMoveOutcome};
 
 use core::f32;
 use std::collections::{HashMap, VecDeque};
@@ -27,7 +30,7 @@ use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::client::update_abilities::{Ability, CUpdateAbilities};
 use pumpkin_protocol::bedrock::client::{
-    CommandPermissionLevel, PlayerPermissionLevel, SerializedAbilitiesData,
+    CSetActorMotion, CommandPermissionLevel, PlayerPermissionLevel, SerializedAbilitiesData,
 };
 use pumpkin_protocol::bedrock::client::{
     SerializedAbilitiesDataSerializedLayer,
@@ -233,11 +236,16 @@ impl BedrockPlayer<'_> {
         self.client_data().map(|d| d.graphics_mode)
     }
 }
+use crate::net::bedrock::play::{
+    bedrock_inventory_slot, bedrock_player_inventory_slot, send_bedrock_inventory_slot,
+};
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
-use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
+use pumpkin_data::data_component_impl::{
+    EquipmentSlot, EquippableImpl, GliderImpl, ToolImpl, WeaponImpl,
+};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::item_stack::ItemStack;
@@ -370,14 +378,6 @@ pub const DATA_VERSION: i32 = 4903; // 26.2
 /// non-creative players holding a tool that can harvest the block, so callers
 /// must apply the same gating.
 pub const MINE_BLOCK_EXHAUSTION: f32 = 0.005; // Vanilla: 0.005F
-
-const fn bedrock_inventory_slot(player_screen_slot: i16) -> Option<u32> {
-    match player_screen_slot {
-        9..=35 => Some(player_screen_slot as u32),
-        36..=44 => Some((player_screen_slot - 36) as u32),
-        _ => None,
-    }
-}
 
 /// Represents a Minecraft player entity.
 ///
@@ -528,6 +528,8 @@ pub struct Player {
     pub hidden_players: Mutex<std::collections::HashSet<uuid::Uuid>>,
     pub advancements: Arc<Mutex<PlayerAdvancement>>,
     pub enchantment_seed: AtomicI32,
+    /// Ticks spent gliding, vanilla `fallFlyTicks`
+    pub fall_fly_ticks: AtomicI32,
     pub fishing_bobber: AtomicI32,
     pub bedrock_skin: arc_swap::ArcSwap<pumpkin_protocol::bedrock::client::Skin>,
     pub seen_credits: AtomicBool,
@@ -741,6 +743,7 @@ impl Player {
             current_block_breaking_speed: AtomicU32::new(0),
             synced_mining_efficiency_level: AtomicI32::new(-1),
             enchantment_seed: AtomicI32::new(rand::random()),
+            fall_fly_ticks: AtomicI32::new(0),
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
             raid_omen_position: AtomicCell::new(None),
@@ -1428,6 +1431,7 @@ impl Player {
             damage += (1.5 + smash_bonus_per_block) * f64::from(fall_distance);
         }
 
+        let old_movement = victim_entity.velocity.load();
         if !victim.damage_with_context(
             victim.as_ref(),
             damage as f32,
@@ -1515,17 +1519,21 @@ impl Player {
         self.living_entity.last_attack_time.store(
             self.living_entity
                 .entity
-                .age
+                .tick_count
                 .load(std::sync::atomic::Ordering::Relaxed),
             std::sync::atomic::Ordering::Relaxed,
         );
 
         if victim.get_living_entity().is_some() {
-            // Vanilla `Player.attack` adds `LivingEntity.getKnockback()` - the Knockback
-            // enchantment bonus, halved - plus 0.5 for a sprint attack, on top of the base
-            // knockback the victim's damage handling applies. A plain hit adds nothing.
-            // `handle_knockback` halves `strength`, so these are twice the vanilla amount.
-            let mut knockback_strength = f64::from(knockback_level);
+            // Vanilla `Player.attack` adds `LivingEntity.getKnockback()` - ATTACK_KNOCKBACK
+            // plus the Knockback enchantment, halved - plus 0.5 for a sprint attack, on top
+            // of the base knockback the victim's damage handling applies. A plain hit adds
+            // nothing. `handle_knockback` halves `strength`, so these are twice the vanilla
+            // amount.
+            let mut knockback_strength = f64::from(knockback_level)
+                + self
+                    .living_entity
+                    .get_attribute_value(&Attributes::ATTACK_KNOCKBACK);
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
                 AttackType::Sweeping => {
@@ -1571,6 +1579,8 @@ impl Player {
                 combat::handle_knockback(attacker_entity, victim.as_ref(), knockback_strength);
             }
         }
+
+        combat::sync_hit_player_velocity(victim.as_ref(), old_movement);
 
         // NOTE: TOCTOU race condition in single-player context.
         // The weapon cost is computed (cost = 1 or 2) with item_stack locked, then damage_held_item
@@ -1638,26 +1648,8 @@ impl Player {
                 }
             }
             ClientPlatform::Bedrock(bedrock) => {
-                use pumpkin_protocol::bedrock::{
-                    client::inventory_slot::CInventorySlot,
-                    network_item::{ContainerName, FullContainerName, NetworkItemStackDescriptor},
-                };
-                use pumpkin_protocol::codec::var_uint::VarUInt;
-
-                let item_stack = &*packet.item.0;
-                let item_desc = NetworkItemStackDescriptor::from(item_stack);
-                let bedrock_packet = CInventorySlot {
-                    container_id: VarUInt(0),
-                    slot: VarUInt(packet.slot.0 as u32),
-                    full_container_name: Some(FullContainerName {
-                        container_name: ContainerName::Inventory,
-                        dynamic_id: None,
-                    }),
-                    storage_item: None,
-                    item: item_desc,
-                };
-                if let Ok(data) = bedrock.serialize_packet(&bedrock_packet) {
-                    bedrock.try_enqueue_packet(data);
+                if let Some(target) = bedrock_player_inventory_slot(packet.slot.0 as usize) {
+                    send_bedrock_inventory_slot(bedrock, target, &packet.item.0);
                 }
             }
         }
@@ -1689,17 +1681,8 @@ impl Player {
             return false;
         }
 
-        // Direct PlayerInventory slot indices (matches build_equipment_slots).
-        let slot_index: usize = match slot {
-            EquipmentSlot::MainHand(_) => self.inventory.get_selected_slot() as usize,
-            EquipmentSlot::OffHand(_) => PlayerInventory::OFF_HAND_SLOT, // 40
-            EquipmentSlot::Feet(_) => 36,
-            EquipmentSlot::Legs(_) => 37,
-            EquipmentSlot::Chest(_) => 38,
-            EquipmentSlot::Head(_) => 39,
-            // Players do not have Body or Saddle equipment slots;
-            // these are only used by non-player entities (e.g. horses).
-            EquipmentSlot::Body(_) | EquipmentSlot::Saddle(_) => return false,
+        let Some(slot_index) = self.inventory.equipment_slot_index(slot) else {
+            return false;
         };
 
         let mut stack = self.inventory.get_slot(slot_index);
@@ -2560,35 +2543,122 @@ impl Player {
         self.try_send_client_packet(&packet);
     }
 
-    pub fn set_velocity(&self, mut velocity: Vector3<f64>) {
-        if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
-            && let Some(server) = self.world().server.upgrade()
-        {
-            let mut event =
-                crate::plugin::api::events::player::player_velocity::PlayerVelocityEvent {
-                    player: player_arc,
-                    velocity,
-                    cancelled: false,
-                };
-            server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return;
-            }
-            velocity = event.velocity;
+    pub fn set_velocity(&self, velocity: Vector3<f64>) {
+        if let Some(velocity) = self.fire_velocity_event(velocity) {
+            let entity = &self.living_entity.entity;
+            entity.velocity.store(velocity);
+            entity.send_velocity_to_watchers();
+            self.send_own_velocity(velocity);
         }
-        self.living_entity.entity.set_velocity(velocity);
-        self.try_send_client_packet(&CEntityVelocity::new(self.entity_id().into(), velocity));
     }
 
-    pub fn apply_knockback(&self, strength: f64, x: f64, z: f64) {
-        let current_vel = self.living_entity.entity.velocity.load();
-        let norm = x.hypot(z);
-        if norm > 0.0 {
-            let vx = current_vel.x / 2.0 - (x / norm) * strength;
-            let vz = current_vel.z / 2.0 - (z / norm) * strength;
-            let vy = (current_vel.y / 2.0 + strength).min(0.4);
-            self.set_velocity(Vector3::new(vx, vy, vz));
+    /// Fires `PlayerVelocityEvent` -> `None` if cancelled, else the velocity to send
+    pub fn fire_velocity_event(&self, velocity: Vector3<f64>) -> Option<Vector3<f64>> {
+        let (Some(player), Some(server)) = (
+            self.world().get_player_by_uuid(self.gameprofile.id),
+            self.world().server.upgrade(),
+        ) else {
+            return Some(velocity);
+        };
+        let mut event = crate::plugin::api::events::player::player_velocity::PlayerVelocityEvent {
+            player,
+            velocity,
+            cancelled: false,
+        };
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        (!event.cancelled).then_some(event.velocity)
+    }
+
+    /// Server motion to the own client. For Bedrock -> tagged with the last processed input tick.
+    pub fn send_own_velocity(&self, velocity: Vector3<f64>) {
+        if let Some(client) = self.client.bedrock() {
+            client.own_motion_age.store(self.world().get_world_age());
+            client
+                .own_motion_tick
+                .store(client.input_tick.load(Ordering::Relaxed), Ordering::Relaxed);
         }
+        self.send_own_motion(velocity);
+    }
+
+    fn send_own_motion(&self, velocity: Vector3<f64>) {
+        let tick = self
+            .client
+            .bedrock()
+            .map_or(0, |client| client.input_tick.load(Ordering::Relaxed));
+        self.try_enqueue_packet_editioned(
+            &CEntityVelocity::new(self.entity_id().into(), velocity),
+            &CSetActorMotion {
+                target_runtime_id: VarULong(self.entity_id() as u64),
+                motion: velocity.to_f32_lossy(),
+                tick: VarULong(tick),
+            },
+        );
+    }
+
+    /// Ticks until a Bedrock `SetActorMotion` should show up in `PlayerAuthInput.delta`.
+    /// `ping_ms == 0` is unsampled and keeps the 10-tick cap.
+    fn bedrock_motion_in_flight_ticks(ping_ms: u32) -> i64 {
+        const MIN: i64 = 2;
+        const MAX: i64 = 10;
+        if ping_ms == 0 {
+            return MAX;
+        }
+        (i64::from(ping_ms.div_ceil(50)) + 1).clamp(MIN, MAX)
+    }
+
+    /// Velocity part of vanilla `ServerEntity.sendChanges`. Runs after the entity pass,
+    /// so this tick's knockback goes out before the next packets and friction.
+    pub fn send_velocity_changes(&self) {
+        let entity = self.get_entity();
+        if entity.sync_velocity.swap(false, Ordering::SeqCst) {
+            // The server velocity already holds the pushes
+            entity.push_impulse.store(Vector3::default());
+            let Some(velocity) = self.fire_velocity_event(entity.velocity.load()) else {
+                // Cancelled -> back to the motion the client has, watchers get that instead
+                entity.velocity.store(entity.known_movement());
+                entity.velocity_dirty.store(true, Ordering::SeqCst);
+                return;
+            };
+            entity.velocity.store(velocity);
+            entity.velocity_dirty.store(false, Ordering::SeqCst);
+            entity.send_velocity_to_watchers();
+            self.send_own_velocity(entity.velocity.load());
+            return;
+        }
+        if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+            // Vanilla `needsSync`: watchers only, Java clients predict their own pushes
+            entity.send_velocity_to_watchers();
+        }
+        let Some(client) = self.client.bedrock() else {
+            entity.push_impulse.store(Vector3::default());
+            return;
+        };
+        // `SetActorMotion` replaces velocity; there is no add-impulse packet. Bedrock also
+        // does not predict entity pushes, so the server layers them onto the last client
+        // delta. While a previous own-player motion is in flight those deltas are stale
+        // and a new set would overwrite it (e.g. knockback), so the impulse stays pending
+        // and fades in `travel` like Java friction would.
+        let since_motion = self
+            .world()
+            .get_world_age()
+            .saturating_sub(client.own_motion_age.load());
+        let input_caught_up = client.input_tick.load(Ordering::Relaxed)
+            > client.own_motion_tick.load(Ordering::Relaxed);
+        if since_motion >= Self::bedrock_motion_in_flight_ticks(self.ping.load(Ordering::Relaxed))
+            && input_caught_up
+        {
+            let push = entity.push_impulse.swap(Vector3::default());
+            if push != Vector3::default() {
+                self.send_own_velocity(client.client_delta.load() + push);
+            }
+        }
+    }
+
+    /// Vanilla `LivingEntity.knockback`, sent to the player like a hit with `PlayerVelocityEvent`
+    pub fn apply_knockback(&self, strength: f64, x: f64, z: f64) {
+        let entity = &self.living_entity.entity;
+        entity.apply_knockback(strength, x, z, None);
+        entity.mark_hurt();
     }
 
     pub fn set_movement_locked(&self, locked: bool) {
@@ -2713,6 +2783,15 @@ impl Player {
     #[expect(clippy::too_many_lines)]
     pub fn tick<'a>(&'a self, server: &'a Server) {
         self.process_inbound_packets();
+        // Players are ticked here, not in the entity pass, so they never reach `tick_count` there
+        self.living_entity
+            .entity
+            .tick_count
+            .fetch_add(1, Ordering::Relaxed);
+
+        if let ClientPlatform::Bedrock(client) = self.client.as_ref() {
+            client.tick_network_latency(self);
+        }
 
         if self.is_spectator() {
             self.living_entity
@@ -2978,6 +3057,7 @@ impl Player {
 
         self.hunger_manager.tick(self);
 
+        self.tick_fall_flying();
         // Vanilla updates pose in PlayerEntity#tick after super.tick().
         self.update_player_pose();
         self.check_inventory_advancements();
@@ -3081,6 +3161,143 @@ impl Player {
         } else {
             self.add_exhaustion(0.05);
         }
+    }
+
+    /// Equipment slots with a glider that can still take damage, vanilla `canGlideUsing`
+    fn glider_slots(&self) -> Vec<EquipmentSlot> {
+        std::iter::once(EquipmentSlot::MAIN_HAND)
+            .chain(self.inventory.equipment_slots.values().cloned())
+            .filter(|slot| {
+                self.inventory
+                    .equipment_slot_index(slot)
+                    .is_some_and(|index| {
+                        let stack = self.inventory.get_slot(index);
+                        stack.get_data_component::<GliderImpl>().is_some()
+                            && stack
+                                .get_data_component::<EquippableImpl>()
+                                .is_some_and(|equippable| equippable.slot == slot)
+                            && !stack.next_damage_will_break()
+                    })
+            })
+            .collect()
+    }
+
+    /// Vanilla `Player.canGlide`
+    pub fn can_glide(&self) -> bool {
+        let entity = &self.living_entity.entity;
+        !self.is_flying()
+            && !entity.on_ground.load(Ordering::Relaxed)
+            && !entity.has_vehicle()
+            && !self.living_entity.has_effect(&StatusEffect::LEVITATION)
+            && !self.glider_slots().is_empty()
+    }
+
+    /// Vanilla `tryToStartFallFlying`, for the glide request of both editions
+    pub fn try_to_start_fall_flying(&self, server: &Arc<Server>) -> bool {
+        let entity = &self.living_entity.entity;
+        if entity.is_fall_flying() || !self.can_glide() || entity.is_in_liquid() {
+            return false;
+        }
+        let mut event =
+            crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent::new(
+                entity.entity_id,
+                true,
+            );
+        server.plugin_manager.fire_blocking(server, &mut event);
+        if event.cancelled || !event.is_gliding {
+            return false;
+        }
+        entity.set_fall_flying(true);
+        true
+    }
+
+    /// Fires `EntityToggleGlideEvent` for a stop -> `false` if a plugin keeps the glide
+    pub fn glide_stop_allowed(&self) -> bool {
+        let Some(server) = self.world().server.upgrade() else {
+            return true;
+        };
+        let mut event =
+            crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent::new(
+                self.entity_id(),
+                false,
+            );
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        !event.cancelled && !event.is_gliding
+    }
+
+    /// Vanilla `updateFallFlying`: ends the glide once it isn't possible, wears the glider every second
+    fn tick_fall_flying(&self) {
+        let entity = &self.living_entity.entity;
+        if !entity.is_fall_flying() {
+            self.fall_fly_ticks.store(0, Ordering::Relaxed);
+            return;
+        }
+        // Vanilla `checkFallDistanceAccumulation`: only a steep dive builds it up. In the tick,
+        // so a landing move has already taken its damage.
+        if entity.movement.load().y > -0.5 && self.living_entity.fall_distance.load() > 1.0 {
+            self.living_entity.fall_distance.store(1.0);
+        }
+        if !self.can_glide() {
+            if self.glide_stop_allowed() {
+                entity.set_fall_flying(false);
+                self.fall_fly_ticks.store(0, Ordering::Relaxed);
+            }
+            return;
+        }
+        let ticks = self.fall_fly_ticks.fetch_add(1, Ordering::Relaxed) + 1;
+        if ticks % 10 == 0 {
+            if ticks % 20 == 0 {
+                let slots = self.glider_slots();
+                let slot = &slots[rand::random_range(0..slots.len())];
+                self.damage_item_in_slot(slot, 1);
+            }
+            self.world().emit_game_event(
+                pumpkin_data::game_event::GameEvent::ElytraGlide.name(),
+                entity.pos.load(),
+            );
+        }
+    }
+
+    /// Vanilla `handleFallFlyingCollisions`: the speed lost into a wall is taken as damage
+    fn handle_fall_flying_collision(&self, last_speed: f64, new_speed: f64) {
+        let damage = (last_speed - new_speed).mul_add(10.0, -3.0) as f32;
+        if damage > 0.0 {
+            self.living_entity
+                .entity
+                .play_sound(self.living_entity.fall_sound(damage as i32));
+            self.living_entity
+                .damage(self, damage, DamageType::FLY_INTO_WALL);
+        }
+    }
+
+    /// Vanilla `doCheckFallDamage` from the move handlers of both editions, plus the
+    /// glide wall check vanilla runs in its server travel.
+    pub fn do_check_fall_damage(
+        &self,
+        movement: Vector3<f64>,
+        on_ground: bool,
+        horizontal_collision: bool,
+    ) {
+        // Vanilla `handlePlayerKnownMovement`
+        let last_move = self.living_entity.entity.movement.swap(movement);
+        if self.is_flying()
+            || self.living_entity.health.load() <= 0.0
+            || self.living_entity.dead.load(Ordering::Relaxed)
+        {
+            return;
+        }
+        if horizontal_collision && self.living_entity.entity.is_fall_flying() {
+            self.handle_fall_flying_collision(
+                last_move.horizontal_length(),
+                movement.horizontal_length(),
+            );
+        }
+        self.living_entity.fall(
+            self,
+            movement.y,
+            on_ground,
+            self.gamemode.load() == GameMode::Creative,
+        );
     }
 
     pub fn progress_motion(&self, delta_pos: Vector3<f64>) {
@@ -4174,13 +4391,14 @@ impl Player {
         self.living_entity.entity.set_pos(position);
         let entity = &self.living_entity.entity;
         entity.set_rotation(yaw, pitch);
+        // Moves are ignored until the client confirms, for both editions
+        *self
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some((teleport_id.into(), position));
         match self.client.as_ref() {
             ClientPlatform::Java(client) => {
-                *self
-                    .awaiting_teleport
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                    Some((teleport_id.into(), position));
                 let packet = CPlayerPosition::new(
                     teleport_id.into(),
                     position,
@@ -4195,28 +4413,42 @@ impl Player {
                 }
             }
             ClientPlatform::Bedrock(client) => {
-                let packet = CBedrockMovePlayer::new(
-                    VarULong(self.entity_id() as u64),
-                    Vector3::new(
-                        position.x as f32,
-                        position.y as f32 + entity.entity_type.eye_height,
-                        position.z as f32,
-                    ),
-                    pitch,
-                    yaw,
-                    yaw,
-                    CBedrockMovePlayer::MODE_TELEPORT,
-                    false,
-                    VarULong(0),
-                    0,
-                    0,
-                    VarULong(self.tick_counter.load(Ordering::Relaxed).max(0) as u64),
-                );
-                if let Ok(data) = client.serialize_packet(&packet) {
-                    client.try_enqueue_packet(data);
-                }
+                self.send_bedrock_teleport(client);
             }
         }
+    }
+
+    /// `MovePlayer` at the current position and rotation, for the own client and watchers
+    pub fn bedrock_move_packet(&self, mode: u8, on_ground: bool, tick: u64) -> CBedrockMovePlayer {
+        let entity = &self.living_entity.entity;
+        CBedrockMovePlayer::new(
+            VarULong(entity.entity_id as u64),
+            self.bedrock_pos().to_f32_lossy(),
+            entity.pitch.load(),
+            entity.yaw.load(),
+            entity.head_yaw.load(),
+            mode,
+            on_ground,
+            VarULong(0),
+            0,
+            0,
+            VarULong(tick),
+        )
+    }
+
+    /// Teleports the Bedrock client to the current position. It has no teleport id and
+    /// confirms by reaching the position.
+    pub fn send_bedrock_teleport(&self, client: &crate::net::bedrock::BedrockClient) {
+        client
+            .teleport_unconfirmed_inputs
+            .store(0, Ordering::Relaxed);
+        let packet = self.bedrock_move_packet(
+            CBedrockMovePlayer::MODE_TELEPORT,
+            false,
+            client.input_tick.load(Ordering::Relaxed),
+        );
+        client.teleport_sent_pos.store(packet.position);
+        client.try_enqueue_client_packet(&packet);
     }
 
     pub fn block_interaction_range(&self) -> f64 {
@@ -4370,18 +4602,51 @@ impl Player {
         source: Option<&dyn crate::entity::EntityBase>,
         cause: Option<&dyn crate::entity::EntityBase>,
     ) -> bool {
+        // Vanilla `ServerPlayer.isInvulnerableTo`: nothing hurts a player still loading in
+        if !self.has_client_loaded() {
+            return false;
+        }
         if self
             .abilities
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .invulnerable
-            && damage_type != pumpkin_data::damage::DamageType::GENERIC_KILL
-            && damage_type != pumpkin_data::damage::DamageType::OUT_OF_WORLD
+            && !damage_type
+                .has_tag(&pumpkin_data::tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY)
         {
+            return false;
+        }
+        // Vanilla `Player.hurtServer`: mob damage follows the difficulty
+        let amount = if Self::scales_with_difficulty(&damage_type, cause) {
+            match self.world().level_info.load().difficulty {
+                Difficulty::Peaceful => 0.0,
+                Difficulty::Easy => (amount / 2.0 + 1.0).min(amount),
+                Difficulty::Normal => amount,
+                Difficulty::Hard => amount * 3.0 / 2.0,
+            }
+        } else {
+            amount
+        };
+        if amount == 0.0 {
             return false;
         }
         self.living_entity
             .damage_with_context(caller, amount, damage_type, position, source, cause)
+    }
+
+    /// Vanilla `DamageSource.scalesWithDifficulty`
+    fn scales_with_difficulty(
+        damage_type: &pumpkin_data::damage::DamageType,
+        cause: Option<&dyn crate::entity::EntityBase>,
+    ) -> bool {
+        use pumpkin_data::damage::DamageScaling;
+        match damage_type.scaling {
+            DamageScaling::Never => false,
+            DamageScaling::WhenCausedByLivingNonPlayer => cause.is_some_and(|cause| {
+                cause.get_living_entity().is_some() && cause.get_player().is_none()
+            }),
+            DamageScaling::Always => true,
+        }
     }
 
     pub fn damage_generic(&self, amount: f32) -> bool {
@@ -4450,19 +4715,11 @@ impl Player {
 
     fn send_bedrock_respawn_state(&self, state: RespawnState) {
         if let ClientPlatform::Bedrock(client) = self.client.as_ref() {
-            let entity = self.get_entity();
-            let position = entity.pos.load();
-            if let Ok(data) = client.serialize_packet(&SBedrockRespawn {
-                position: Vector3::new(
-                    position.x as f32,
-                    position.y as f32 + entity.entity_type.eye_height,
-                    position.z as f32,
-                ),
+            client.try_enqueue_client_packet(&SBedrockRespawn {
+                position: self.bedrock_pos().to_f32_lossy(),
                 state,
                 player_runtime_id: VarULong(self.entity_id() as u64),
-            }) {
-                client.try_enqueue_packet(data);
-            }
+            });
         }
     }
 
@@ -6887,6 +7144,11 @@ impl EntityBase for Player {
     }
 
     /// Bedrock renders remote players only from `AddPlayer`, never `AddActor`.
+    /// Endstone `getBaseOffset`: a player's Bedrock position is at its eyes
+    fn bedrock_y_offset(&self) -> f64 {
+        f64::from(self.living_entity.entity.entity_type.eye_height)
+    }
+
     fn send_bedrock_spawn_packet(&self, client: &crate::net::bedrock::BedrockClient) {
         let (player_list, add_player) = self.bedrock_spawn_packets();
         let equipment = pumpkin_protocol::bedrock::client::CMobEquipment {
@@ -6924,8 +7186,17 @@ impl EntityBase for Player {
         }
     }
 
+    fn on_climbable(&self) -> bool {
+        // Vanilla `Player.onClimbable`.
+        !self.is_flying() && self.living_entity.on_climbable()
+    }
+
     fn is_pushable(&self) -> bool {
-        self.gamemode.load() != GameMode::Spectator && self.gamemode.load() != GameMode::Creative
+        // Creative players get pushed too.
+        !self.is_spectator()
+            && self.living_entity.health.load() > 0.0
+            && !self.living_entity.dead.load(Ordering::Relaxed)
+            && !self.on_climbable()
     }
 
     fn get_name(&self) -> TextComponent {
@@ -7736,6 +8007,15 @@ impl InventoryPlayer for Player {
                     if let Ok(data) = bedrock.serialize_packet(&bedrock_packet) {
                         bedrock.try_enqueue_packet(data);
                     }
+                    // Armor and off-hand are their own containers on Bedrock
+                    for slot in (5..=8).chain([45]) {
+                        if let (Some(target), Some(stack)) = (
+                            bedrock_inventory_slot(slot),
+                            packet.slot_data.get(slot as usize),
+                        ) {
+                            send_bedrock_inventory_slot(bedrock, target, &stack.0);
+                        }
+                    }
                 } else if matches!(
                     window_type,
                     Some(
@@ -7797,21 +8077,8 @@ impl InventoryPlayer for Player {
 
                 let window_id = packet.window_id;
                 if window_id == 0 {
-                    if let Some(slot_idx) = bedrock_inventory_slot(packet.slot) {
-                        let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
-                        let bedrock_packet = CInventorySlot {
-                            container_id: VarUInt(0),
-                            slot: VarUInt(slot_idx),
-                            full_container_name: Some(FullContainerName {
-                                container_name: ContainerName::Inventory,
-                                dynamic_id: None,
-                            }),
-                            storage_item: None,
-                            item: item_desc,
-                        };
-                        if let Ok(data) = bedrock.serialize_packet(&bedrock_packet) {
-                            bedrock.try_enqueue_packet(data);
-                        }
+                    if let Some(target) = bedrock_inventory_slot(packet.slot) {
+                        send_bedrock_inventory_slot(bedrock, target, &packet.slot_data.0);
                     }
                 } else {
                     let slot_idx = packet.slot as usize;
@@ -8074,18 +8341,20 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
-    use super::{bedrock_inventory_slot, read_root_vehicle, write_root_vehicle};
+    use super::{Player, read_root_vehicle, write_root_vehicle};
     use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
     use uuid::Uuid;
 
     #[test]
-    fn player_screen_slots_map_to_bedrock_inventory() {
-        assert_eq!(bedrock_inventory_slot(9), Some(9));
-        assert_eq!(bedrock_inventory_slot(35), Some(35));
-        assert_eq!(bedrock_inventory_slot(36), Some(0));
-        assert_eq!(bedrock_inventory_slot(44), Some(8));
-        assert_eq!(bedrock_inventory_slot(8), None);
-        assert_eq!(bedrock_inventory_slot(45), None);
+    fn bedrock_motion_wait_uses_ping_and_caps() {
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(0), 10);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(1), 2);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(20), 2);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(50), 2);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(100), 3);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(250), 6);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(500), 10);
+        assert_eq!(Player::bedrock_motion_in_flight_ticks(2000), 10);
     }
 
     #[test]

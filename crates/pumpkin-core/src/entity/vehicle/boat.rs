@@ -4,10 +4,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crossbeam::atomic::AtomicCell;
 
 use crate::entity::player::Player;
-use crate::entity::{Entity, EntityBase, living::LivingEntity};
+use crate::entity::{Entity, EntityBase, attachment, living::LivingEntity};
 use crate::server::Server;
 
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::java::client::play::Metadata;
 
@@ -57,6 +58,45 @@ impl EntityBase for BoatEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    /// Vanilla `AbstractBoat.getPassengerAttachmentPoint`: driver in front, second seat behind.
+    fn passenger_attachment_point(&self, passenger: &Entity) -> Vector3<f64> {
+        let entity = &self.vehicle.entity;
+        let entity_type = entity.entity_type;
+        let height = entity.entity_dimension.load().height;
+        let ride_height = if entity_type == &EntityType::BAMBOO_RAFT
+            || entity_type == &EntityType::BAMBOO_CHEST_RAFT
+        {
+            height * 0.888_888_9
+        } else {
+            height / 3.0
+        };
+        let mut offset: f32 = if entity_type.resource_name.contains("chest") {
+            0.15
+        } else {
+            0.0
+        };
+        if entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len()
+            > 1
+        {
+            offset = if attachment::passenger_index(entity, passenger) == 0 {
+                0.2
+            } else {
+                -0.6
+            };
+            if passenger.entity_type.animal {
+                offset += 0.2;
+            }
+        }
+        attachment::rotate_by_yaw(
+            Vector3::new(0.0, f64::from(ride_height), f64::from(offset)),
+            entity.yaw.load(),
+        )
     }
 
     fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {

@@ -71,6 +71,7 @@ use uuid::Uuid;
 pub mod ageable;
 pub mod ai;
 pub mod area_effect_cloud;
+pub mod attachment;
 pub mod attributes;
 pub mod boss;
 pub mod breath;
@@ -129,6 +130,39 @@ impl dyn EntityBase + '_ {
             || self.considers_entity_as_ally(other)
             || other.considers_entity_as_ally(self)
     }
+
+    /// Vanilla `getPassengerRidingPosition`: where this vehicle seats the passenger.
+    #[must_use]
+    pub fn passenger_riding_position(&self, passenger: &Entity) -> Vector3<f64> {
+        self.get_entity()
+            .pos
+            .load()
+            .add(&self.passenger_attachment_point(passenger))
+    }
+
+    /// Vanilla `rideTick` / `positionRider`: the passenger sits on its seat without motion.
+    pub fn position_rider(&self, passenger: &dyn EntityBase) {
+        let seat = self.passenger_riding_position(passenger.get_entity());
+        let offset = passenger.vehicle_attachment_point(self.get_entity());
+        let entity = passenger.get_entity();
+        entity.velocity.store(Vector3::default());
+        entity.set_pos(seat.sub(&offset));
+    }
+
+    /// Seats every passenger, then their own passengers.
+    // TODO: A player seated here keeps its chunk view, only `SMoveVehicle` updates it.
+    pub fn position_passengers(&self) {
+        let passengers = self
+            .get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        for passenger in &passengers {
+            self.position_rider(passenger.as_ref());
+            passenger.as_ref().position_passengers();
+        }
+    }
 }
 
 pub trait EntityBase: Send + Sync + std::any::Any {
@@ -183,6 +217,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
         None
+    }
+
+    /// Vanilla `getPassengerAttachmentPoint`: the seat, relative to this vehicle's position.
+    fn passenger_attachment_point(&self, passenger: &Entity) -> Vector3<f64> {
+        attachment::default_passenger_attachment(self.get_entity(), passenger)
+    }
+
+    /// Vanilla `getVehicleAttachmentPoint`: the seat, relative to this rider's position.
+    fn vehicle_attachment_point(&self, _vehicle: &Entity) -> Vector3<f64> {
+        attachment::default_vehicle_attachment(self.get_entity())
     }
 
     fn get_owner_id(&self) -> Option<i32> {
@@ -247,6 +291,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .pos
             .load()
             .add_raw(0.0, self.bedrock_y_offset(), 0.0)
+    }
+
+    /// Feet position of a Bedrock network position
+    fn feet_from_bedrock_pos(&self, bedrock_pos: Vector3<f64>) -> Vector3<f64> {
+        bedrock_pos.add_raw(0.0, -self.bedrock_y_offset(), 0.0)
     }
 
     fn get_mob(&self) -> Option<&dyn mob::Mob> {
@@ -513,6 +562,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     /// Called when a player collides with an entity
     fn on_player_collision(&self, _player: &Arc<Player>) {}
 
+    /// When false, world tick skips the player-touch scan for this entity.
+    fn receives_player_touch(&self) -> bool {
+        false
+    }
+
     fn is_passenger(&self) -> bool {
         self.get_entity().has_vehicle()
     }
@@ -526,6 +580,22 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .has_passenger(other.get_entity().entity_id)
     }
 
+    /// Vanilla `Entity.getRootVehicle`: walk up the ride chain.
+    fn root_vehicle_id(&self) -> i32 {
+        let mut current_id = self.get_entity().entity_id;
+        let mut vehicle = self.get_entity().get_vehicle();
+        while let Some(ridden) = vehicle {
+            current_id = ridden.get_entity().entity_id;
+            vehicle = ridden.get_entity().get_vehicle();
+        }
+        current_id
+    }
+
+    /// Vanilla `Entity.isPassengerOfSameVehicle`.
+    fn is_passenger_of_same_vehicle(&self, other: &dyn EntityBase) -> bool {
+        self.root_vehicle_id() == other.root_vehicle_id()
+    }
+
     fn move_entity(&self, caller: &dyn EntityBase, motion: Vector3<f64>) {
         self.get_entity().move_entity(caller, motion);
     }
@@ -534,7 +604,20 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    /// Vanilla `LivingEntity.onClimbable`.
+    fn on_climbable(&self) -> bool {
+        self.get_living_entity()
+            .is_some_and(living::LivingEntity::on_climbable)
+    }
+
     fn push(&self, entity: &dyn EntityBase) {
+        // Vanilla `LivingEntity.push`: sleeping entities neither push nor get pushed here.
+        if self.get_living_entity().is_some()
+            && self.get_entity().pose.load() == EntityPose::Sleeping
+        {
+            return;
+        }
+
         let self_entity = self.get_entity();
         let other_entity = entity.get_entity();
 
@@ -544,9 +627,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             return;
         }
 
-        if self_entity.has_passenger(other_entity.entity_id)
-            || other_entity.has_passenger(self_entity.entity_id)
-        {
+        if self.is_passenger_of_same_vehicle(entity) {
             return;
         }
 
@@ -567,19 +648,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             dz *= 0.05;
 
             if !self_entity.has_passengers() && self.is_pushable() {
-                let mut vel = self_entity.velocity.load();
-                vel.x -= dx;
-                vel.z -= dz;
-                self_entity.velocity.store(vel);
-                self_entity.velocity_dirty.store(true, Ordering::SeqCst);
+                self_entity.push_by(Vector3::new(-dx, 0.0, -dz));
             }
 
             if !other_entity.has_passengers() && entity.is_pushable() {
-                let mut vel = other_entity.velocity.load();
-                vel.x += dx;
-                vel.z += dz;
-                other_entity.velocity.store(vel);
-                other_entity.velocity_dirty.store(true, Ordering::SeqCst);
+                other_entity.push_by(Vector3::new(dx, 0.0, dz));
             }
         }
     }
@@ -898,6 +971,10 @@ pub struct Entity {
     pub bounding_box: AtomicCell<BoundingBox>,
     ///The size (width and height) of the bounding box
     pub entity_dimension: AtomicCell<EntityDimensions>,
+    /// Size before the pose: the type size, or a baby or slime size. Vanilla `getDefaultDimensions`.
+    pub default_dimension: AtomicCell<EntityDimensions>,
+    /// Vanilla `LivingEntity.getScale` (`Attributes.SCALE`). 1.0 for non-living.
+    pub scale: AtomicCell<f32>,
     /// Whether this entity is invulnerable to all damage
     pub invulnerable: AtomicBool,
     /// List of damage types this entity is immune to
@@ -922,8 +999,10 @@ pub struct Entity {
     pub leashed_to: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     /// Cooldown before entity can mount again after dismounting
     pub riding_cooldown: AtomicI32,
-    /// The age of the entity in ticks. Negative values indicate a baby.
+    /// Vanilla `AgeableMob.age`: negative while a baby, counting up to 0.
     pub age: AtomicI32,
+    /// Vanilla `tickCount`: ticks since the entity was created.
+    pub tick_count: AtomicI32,
 
     pub current_biome: ArcSwap<&'static Biome>,
     pub last_biome_update_pos: AtomicCell<BlockPos>,
@@ -950,11 +1029,18 @@ pub struct Entity {
     pub bedrock_flags_two: std::sync::atomic::AtomicI64,
     /// If true, the entity bypasses physics, collisions, and block effects (e.g. spectator, markers, display entities)
     pub no_physics: AtomicBool,
+    /// Vanilla `firstTick`: true until the first base tick has run.
+    pub first_tick: AtomicBool,
     pub synched_data: synched_entity_data::SynchedEntityData,
     /// Multiplies movement for one tick before being reset
     pub movement_multiplier: AtomicCell<Vector3<f64>>,
     /// Vanilla `needsSync`: tracker resyncs position and velocity of entities
     pub velocity_dirty: AtomicBool,
+    /// velocity goes to the own client
+    pub sync_velocity: AtomicBool,
+    /// Unsent entity pushes on a player. Bedrock clients don't predict them, so they stay
+    /// pending until `SetActorMotion` can layer them on the last client delta.
+    pub push_impulse: AtomicCell<Vector3<f64>>,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
     /// The last sent yaw value (encoded as u8) for change detection
@@ -1055,6 +1141,8 @@ impl Entity {
                 &bounding_box_size,
             )),
             entity_dimension: AtomicCell::new(bounding_box_size),
+            default_dimension: AtomicCell::new(bounding_box_size),
+            scale: AtomicCell::new(1.0),
             invulnerable: AtomicBool::new(false),
             damage_immunities: std::sync::Mutex::new(Vec::new()),
             data: AtomicI32::new(0),
@@ -1074,6 +1162,7 @@ impl Entity {
 
             riding_cooldown: AtomicI32::new(0),
             age: AtomicI32::new(0),
+            tick_count: AtomicI32::new(0),
             current_biome: ArcSwap::new(Arc::new(current_biome)),
             last_biome_update_pos: AtomicCell::new(BlockPos::new(floor_x, floor_y, floor_z)),
             portal_cooldown: AtomicU32::new(0),
@@ -1084,9 +1173,12 @@ impl Entity {
             has_no_gravity: AtomicBool::new(false),
             scoreboard_tags: std::sync::Mutex::new(HashSet::new()),
             no_physics: AtomicBool::new(false),
+            first_tick: AtomicBool::new(true),
             synched_data: synched_entity_data::SynchedEntityData::new(),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
+            sync_velocity: AtomicBool::new(false),
+            push_impulse: AtomicCell::new(Vector3::default()),
             removed: AtomicBool::new(false),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -1128,13 +1220,14 @@ impl Entity {
         }
 
         let mut metadata = SyncedActorDataList::new();
+        let dimension = self.entity_dimension.load();
         metadata.set(
             entity_data_key::WIDTH,
-            MetadataValue::Float(self.entity_type.dimension[0]),
+            MetadataValue::Float(dimension.width),
         );
         metadata.set(
             entity_data_key::HEIGHT,
-            MetadataValue::Float(self.entity_type.dimension[1]),
+            MetadataValue::Float(dimension.height),
         );
         metadata.set(entity_data_key::SCALE, MetadataValue::Float(1.0));
         metadata.set(
@@ -1178,10 +1271,17 @@ impl Entity {
         }
     }
 
-    /// Sets the entity's age in ticks.
-    /// Negative values indicate that the entity is a baby.
-    pub fn set_age(&self, age: i32) {
-        self.age.store(age, Relaxed);
+    /// Vanilla `getDefaultDimensions` of the type as a baby, the adult size if it has none.
+    #[must_use]
+    pub const fn baby_dimensions(entity_type: &EntityType) -> EntityDimensions {
+        match &entity_type.baby {
+            Some(baby) => EntityDimensions {
+                width: baby.dimension[0],
+                height: baby.dimension[1],
+                eye_height: baby.eye_height,
+            },
+            None => Self::type_dimensions(entity_type),
+        }
     }
 
     /// Adds a scoreboard tag to this entity.
@@ -1270,21 +1370,44 @@ impl Entity {
         self.set_synced_data(tracked_data::entity::DATA_NO_GRAVITY, no_gravity);
     }
 
-    /// Vanilla `hurtMarked` path: immediate, to watchers and self.
+    /// Vanilla `hurtMarked` path: immediate, to watchers and self. A player's goes through
+    /// `PlayerVelocityEvent`.
     pub fn send_velocity(&self) {
+        if self.entity_type == &EntityType::PLAYER
+            && let Some(player) = self.world.load().get_player_by_id(self.entity_id)
+        {
+            let Some(velocity) = player.fire_velocity_event(self.velocity.load()) else {
+                // Cancelled -> back to the motion the client has, watchers get that instead
+                self.velocity.store(self.known_movement());
+                self.velocity_dirty.store(true, Ordering::SeqCst);
+                return;
+            };
+            self.velocity.store(velocity);
+            self.send_velocity_to_watchers();
+            player.send_own_velocity(velocity);
+            return;
+        }
+        self.send_velocity_to_watchers();
+    }
+
+    /// watchers only: Own client predicts its pushes.
+    pub fn send_velocity_to_watchers(&self) {
         let velocity = self.velocity.load();
         self.last_sent_velocity.store(velocity);
-        self.world
-            .load()
-            .send_to_tracking_players_and_self_editioned(
-                self,
-                &CEntityVelocity::new(self.entity_id.into(), velocity),
-                &CSetActorMotion {
-                    target_runtime_id: VarULong(self.entity_id as u64),
-                    motion: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
-                    tick: VarULong(0),
-                },
-            );
+        self.world.load().send_to_tracking_players_editioned(
+            self,
+            &CEntityVelocity::new(self.entity_id.into(), velocity),
+            &CSetActorMotion {
+                target_runtime_id: VarULong(self.entity_id as u64),
+                motion: velocity.to_f32_lossy(),
+                tick: VarULong(0),
+            },
+        );
+    }
+
+    /// next fuse velocity send includes self
+    pub fn mark_hurt(&self) {
+        self.sync_velocity.store(true, Ordering::SeqCst);
     }
 
     #[must_use]
@@ -1300,8 +1423,9 @@ impl Entity {
         }
     }
 
+    /// Vanilla `getEyeHeight`: of the current size, which follows the pose
     pub fn get_eye_height(&self) -> f64 {
-        f64::from(Self::get_entity_dimensions(self.pose.load()).eye_height)
+        f64::from(self.entity_dimension.load().eye_height)
     }
 
     /// Updates the entity's position, block position, and chunk position.
@@ -1503,12 +1627,18 @@ impl Entity {
     /// `LivingEntity.knockback` scale `strength` with
     /// `combat::knockback_after_resistance` first; callers modelling vanilla's raw
     /// `Entity.push` (such as the ender dragon) pass `strength` unscaled.
-    pub fn apply_knockback(&self, strength: f64, mut x: f64, mut z: f64) {
+    pub fn apply_knockback(&self, strength: f64, mut x: f64, mut z: f64, attacker: Option<&Self>) {
         if strength <= 0.0 {
+            // No vanilla knockback, but plugins can still add one
+            if let Some(knockback) =
+                self.fire_knockback_events(strength, Vector3::default(), attacker)
+                && knockback != Vector3::default()
+            {
+                self.velocity_dirty.store(true, Ordering::SeqCst);
+                self.velocity.store(self.velocity.load() + knockback);
+            }
             return;
         }
-
-        self.velocity_dirty.store(true, Ordering::SeqCst);
 
         // This has some vanilla magic
 
@@ -1521,8 +1651,7 @@ impl Entity {
         let var8 = Vector3::new(x, 0.0, z).normalize() * strength;
 
         let velocity = self.velocity.load();
-
-        self.velocity.store(Vector3::new(
+        let target = Vector3::new(
             velocity.x / 2.0 - var8.x,
             if self.on_ground.load(Relaxed) {
                 (velocity.y / 2.0 + strength).min(0.4)
@@ -1530,7 +1659,51 @@ impl Entity {
                 velocity.y
             },
             velocity.z / 2.0 - var8.z,
-        ));
+        );
+        let Some(knockback) = self.fire_knockback_events(strength, target - velocity, attacker)
+        else {
+            return;
+        };
+        self.velocity_dirty.store(true, Ordering::SeqCst);
+        self.velocity.store(velocity + knockback);
+    }
+
+    /// Fires `EntityKnockbackEvent`, then `EntityKnockbackByEntityEvent` with an attacker
+    /// -> `None` if cancelled, else the velocity change
+    pub fn fire_knockback_events(
+        &self,
+        strength: f64,
+        knockback: Vector3<f64>,
+        attacker: Option<&Self>,
+    ) -> Option<Vector3<f64>> {
+        let Some(server) = self.world.load().server.upgrade() else {
+            return Some(knockback);
+        };
+        let mut event =
+            crate::plugin::api::events::entity::entity_knockback::EntityKnockbackEvent {
+                entity_id: self.entity_id,
+                hit_by_id: attacker.map(|attacker| attacker.entity_id),
+                knockback,
+                cancelled: false,
+            };
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        let mut knockback = event.knockback;
+        let mut cancelled = event.cancelled;
+        if let Some(attacker) = attacker {
+            let mut event = crate::plugin::api::events::entity::entity_knockback_by_entity::EntityKnockbackByEntityEvent::new(
+                self.entity_id,
+                attacker.entity_id,
+                strength,
+                knockback.x,
+                knockback.y,
+                knockback.z,
+            );
+            event.cancelled = cancelled;
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            knockback = Vector3::new(event.x, event.y, event.z);
+            cancelled = event.cancelled;
+        }
+        (!cancelled).then_some(knockback)
     }
 
     // Part of LivingEntity.tickMovement() in yarn
@@ -1705,9 +1878,31 @@ impl Entity {
     pub fn update_last_pos(&self) -> Vector3<f64> {
         let pos = self.pos.load();
         let old = self.last_pos.load();
-        self.movement.store(pos - old);
+        // A player's movement is its last client move, set by the move handlers
+        if self.entity_type != &EntityType::PLAYER {
+            self.movement.store(pos - old);
+        }
         self.last_pos.store(pos);
         old
+    }
+
+    /// Vanilla `Entity.push(Vec3)`. A player's pushes are also kept apart for Bedrock,
+    /// whose client doesn't predict them.
+    pub fn push_by(&self, impulse: Vector3<f64>) {
+        self.velocity.store(self.velocity.load() + impulse);
+        self.velocity_dirty.store(true, Ordering::SeqCst);
+        if self.entity_type == &EntityType::PLAYER {
+            self.push_impulse.store(self.push_impulse.load() + impulse);
+        }
+    }
+
+    /// Vanilla `getKnownMovement`: a player's own client motion, otherwise the velocity.
+    pub fn known_movement(&self) -> Vector3<f64> {
+        if self.entity_type == &EntityType::PLAYER {
+            self.movement.load()
+        } else {
+            self.velocity.load()
+        }
     }
 
     // updateWaterState() in yarn
@@ -2391,7 +2586,7 @@ impl Entity {
         // Vanilla parity: full-freeze damage is tick-phase based.
         if can_freeze
             && new_frozen_ticks >= Self::MAX_FROZEN_TICKS
-            && self.age.load(Ordering::Relaxed) % Self::FREEZE_DAMAGE_INTERVAL == 0
+            && self.tick_count.load(Ordering::Relaxed) % Self::FREEZE_DAMAGE_INTERVAL == 0
         {
             let world = self.world.load_full();
             if world.level_info.load().game_rules.freeze_damage
@@ -2487,31 +2682,6 @@ impl Entity {
         self.entity_dimension.load().height
     }
 
-    /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
-    ///
-    /// This function calculates the entity's new velocity based on the specified knockback strength and direction.
-    pub fn knockback(&self, strength: f64, x: f64, z: f64) {
-        // This has some vanilla magic
-        let mut x = x;
-        let mut z = z;
-        while x.mul_add(x, z * z) < 1.0E-5 {
-            x = (rand::random::<f64>() - rand::random::<f64>()) * 0.01;
-            z = (rand::random::<f64>() - rand::random::<f64>()) * 0.01;
-        }
-
-        let var8 = Vector3::new(x, 0.0, z).normalize() * strength;
-        let velocity = self.velocity.load();
-        self.velocity.store(Vector3::new(
-            velocity.x / 2.0 - var8.x,
-            if self.on_ground.load(Relaxed) {
-                (velocity.y / 2.0 + strength).min(0.4)
-            } else {
-                velocity.y
-            },
-            velocity.z / 2.0 - var8.z,
-        ));
-    }
-
     pub fn set_sneaking(&self, sneaking: bool) {
         //assert!(self.sneaking.load(Relaxed) != sneaking);
         self.sneaking.store(sneaking, Relaxed);
@@ -2534,6 +2704,12 @@ impl Entity {
     #[must_use]
     pub fn is_in_water(&self) -> bool {
         self.touching_water.load(Ordering::Relaxed)
+    }
+
+    /// Vanilla `isInLiquid`
+    #[must_use]
+    pub fn is_in_liquid(&self) -> bool {
+        self.is_in_water() || self.touching_lava.load(Ordering::Relaxed)
     }
 
     #[must_use]
@@ -2720,14 +2896,19 @@ impl Entity {
     pub fn is_sprinting(&self) -> bool {
         self.sprinting.load(Ordering::Relaxed)
     }
-    pub fn check_fall_flying(&self) -> bool {
-        !self.on_ground.load(Relaxed)
-    }
-
     pub fn set_fall_flying(&self, fall_flying: bool) {
-        assert_ne!(self.fall_flying.load(Relaxed), fall_flying);
         self.fall_flying.store(fall_flying, Relaxed);
         self.set_flag(Flag::FallFlying, fall_flying);
+    }
+
+    /// Vanilla `stopFallFlying`: always resends the flag, so a client that predicted gliding is corrected
+    pub fn stop_fall_flying(&self) {
+        let mask = 1i8 << Flag::FallFlying as u8;
+        self.set_synced_data(
+            tracked_data::entity::DATA_SHARED_FLAGS_ID,
+            self.flags.load(Relaxed) | mask,
+        );
+        self.set_fall_flying(false);
     }
     pub fn is_fall_flying(&self) -> bool {
         self.fall_flying.load(Ordering::Relaxed)
@@ -3033,15 +3214,66 @@ impl Entity {
             }
         }
 
-        let dimension = Self::get_entity_dimensions(pose);
-        let position = self.pos.load();
-        let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
         self.pose.store(pose);
-        self.bounding_box.store(aabb);
-        self.entity_dimension.store(dimension);
         let pose = pose as i32;
         let mut bedrock_meta = SyncedActorDataList::new();
         bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
+        self.set_synced_data(tracked_data::entity::DATA_POSE, VarInt(pose));
+        self.send_bedrock_actor_data(&bedrock_meta);
+        self.refresh_dimensions();
+    }
+
+    /// Vanilla `getDefaultDimensions` changed, e.g. a baby growing up.
+    pub fn set_default_dimensions(&self, dimensions: EntityDimensions) {
+        self.default_dimension.store(dimensions);
+        self.refresh_dimensions();
+    }
+
+    /// Vanilla `LivingEntity.getDimensions`: the player pose table, sleeping, or the default.
+    fn dimensions_for_pose(&self, pose: EntityPose) -> EntityDimensions {
+        if pose == EntityPose::Sleeping {
+            return Self::get_entity_dimensions(pose);
+        }
+        let base = if self.entity_type == &EntityType::PLAYER {
+            Self::get_entity_dimensions(pose)
+        } else {
+            self.default_dimension.load()
+        };
+        base.scale(self.scale.load())
+    }
+
+    /// Vanilla `LivingEntity.getHitbox`: the bounding box, with the bottom clipped
+    /// to the vehicle seat when riding.
+    #[must_use]
+    pub fn get_hitbox(&self) -> BoundingBox {
+        let aabb = self.bounding_box.load();
+        let Some(vehicle) = self.get_vehicle() else {
+            return aabb;
+        };
+        aabb.with_min_y(vehicle.passenger_riding_position(self).y.max(aabb.min.y))
+    }
+
+    /// Vanilla `refreshDimensions`: size and bounding box for the current pose.
+    fn refresh_dimensions(&self) {
+        let dimension = self.dimensions_for_pose(self.pose.load());
+        let old = self.entity_dimension.swap(dimension);
+        if old == dimension {
+            return;
+        }
+        let position = self.pos.load();
+        self.bounding_box.store(BoundingBox::new_from_pos(
+            position.x, position.y, position.z, &dimension,
+        ));
+        if !self.first_tick.load(Ordering::Relaxed)
+            && !self.no_physics.load(Ordering::Relaxed)
+            && dimension.width <= 4.0
+            && dimension.height <= 4.0
+            && (dimension.width > old.width || dimension.height > old.height)
+            && self.entity_type != &EntityType::PLAYER
+        {
+            self.fudge_position_after_size_change(old, dimension);
+        }
+        let mut bedrock_meta = SyncedActorDataList::new();
         bedrock_meta.set(
             entity_data_key::WIDTH,
             MetadataValue::Float(dimension.width),
@@ -3050,8 +3282,46 @@ impl Entity {
             entity_data_key::HEIGHT,
             MetadataValue::Float(dimension.height),
         );
-        self.set_synced_data(tracked_data::entity::DATA_POSE, VarInt(pose));
         self.send_bedrock_actor_data(&bedrock_meta);
+    }
+
+    /// Vanilla `fudgePositionAfterSizeChange`: a grown entity moves to the closest free spot.
+    fn fudge_position_after_size_change(&self, old: EntityDimensions, new: EntityDimensions) {
+        let world = self.world.load();
+        let old_height = f64::from(old.height);
+        let (new_width, new_height) = (f64::from(new.width), f64::from(new.height));
+        let old_center = self.pos.load().add_raw(0.0, old_height / 2.0, 0.0);
+        let width_delta = f64::from((new.width - old.width).max(0.0)) + 1.0E-6;
+        let height_delta = f64::from((new.height - old.height).max(0.0)) + 1.0E-6;
+        let centers = |height: f64| {
+            let half = Vector3::new(width_delta / 2.0, height / 2.0, width_delta / 2.0);
+            BoundingBox::new(old_center.sub(&half), old_center.add(&half))
+        };
+        if let Some(free) = world.find_free_position(
+            self,
+            centers(height_delta),
+            old_center,
+            new_width,
+            new_height,
+            new_width,
+        ) {
+            self.set_pos(free.add_raw(0.0, -new_height / 2.0, 0.0));
+            return;
+        }
+        // Grown both ways: free space for the new width at the old height
+        if new.width > old.width
+            && new.height > old.height
+            && let Some(free) = world.find_free_position(
+                self,
+                centers(1.0E-6),
+                old_center,
+                new_width,
+                old_height,
+                new_width,
+            )
+        {
+            self.set_pos(free.add_raw(0.0, -old_height / 2.0 + 1.0E-6, 0.0));
+        }
     }
 
     /// Vanilla `Entity.fireImmune`: the entity type.
@@ -3202,11 +3472,7 @@ impl Entity {
 
     pub fn get_eye_pos(&self) -> Vector3<f64> {
         let pos = self.pos.load();
-        Vector3::new(
-            pos.x,
-            pos.y + f64::from(self.entity_dimension.load().eye_height),
-            pos.z,
-        )
+        Vector3::new(pos.x, pos.y + self.get_eye_height(), pos.z)
     }
 
     /// No solid block between the two eye positions.
@@ -3865,6 +4131,9 @@ impl Entity {
                             PositionFlag::XRot,
                         ],
                     ));
+                    if let Some(client) = player.client.bedrock() {
+                        player.send_bedrock_teleport(client);
+                    }
                 }
 
                 // Vanilla: setSneaking(false) after dismount via sneak input
@@ -3892,7 +4161,11 @@ impl Entity {
 
     pub fn reset_state(&self) {
         self.pose.store(EntityPose::Standing);
-        self.fall_flying.store(false, Relaxed);
+        self.refresh_dimensions();
+        // Through the flag too, or both editions keep showing the glide after respawn
+        if self.is_fall_flying() {
+            self.set_fall_flying(false);
+        }
         self.extinguish();
         self.set_on_fire(false);
     }
@@ -4197,6 +4470,7 @@ impl EntityBase for Entity {
             self.riding_cooldown
                 .store(riding_cooldown - 1, Ordering::Relaxed);
         }
+        self.first_tick.store(false, Ordering::Relaxed);
     }
 
     fn get_entity(&self) -> &Entity {
