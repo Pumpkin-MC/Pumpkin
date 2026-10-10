@@ -12,7 +12,7 @@ use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::generation::generator::biome_finder::find_closest_biome_3d;
 use pumpkin_world::generation::generator::structure_finder::{
-    find_nearest_structure, find_nearest_structure_start,
+    StructureSearch, find_nearest_structure, find_nearest_structure_start,
 };
 use rustc_hash::FxHashSet;
 
@@ -23,7 +23,7 @@ use crate::command::argument_types::resource_or_tag::{
     STRUCTURE_REGISTRY,
 };
 use crate::command::context::command_context::CommandContext;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
@@ -58,6 +58,11 @@ static STRUCTURE_NOT_FOUND_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::n
     translation::bedrock::COMMANDS_LOCATE_STRUCTURE_FAIL_NOSTRUCTUREFOUND,
 );
 
+// The stronghold rings are computed in the background and a command can't wait for them.
+static STRUCTURE_PENDING_ERROR_TYPE: LiteralCommandErrorType = LiteralCommandErrorType::new(
+    "Stronghold positions are still being calculated, try again shortly",
+);
+
 static BIOME_NOT_FOUND_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_LOCATE_BIOME_NOT_FOUND,
     translation::bedrock::COMMANDS_LOCATE_BIOME_FAIL,
@@ -79,7 +84,7 @@ fn coordinates_text(pos: &BlockPos, absolute_y: bool) -> TextComponent {
         "~".to_string()
     };
 
-    TextComponent::translate_cross(
+    let coordinates = TextComponent::translate_cross(
         translation::java::CHAT_COORDINATES,
         translation::java::CHAT_COORDINATES,
         [
@@ -87,6 +92,12 @@ fn coordinates_text(pos: &BlockPos, absolute_y: bool) -> TextComponent {
             TextComponent::text(y.clone()),
             TextComponent::text(z.to_string()),
         ],
+    );
+
+    TextComponent::translate_cross(
+        translation::java::CHAT_SQUARE_BRACKETS,
+        translation::java::CHAT_SQUARE_BRACKETS,
+        [coordinates],
     )
     .color_named(NamedColor::Green)
     .click_event(ClickEvent::SuggestCommand {
@@ -227,9 +238,8 @@ impl CommandExecutor for LocateStructureExecutor {
                 // Strongholds come out of the pre-computed ring cache, which
                 // already holds positions they really occupy. A concentric-ring
                 // set holds exactly one structure, so the hit is unambiguous.
-                StructurePlacementType::ConcentricRings(_) => world_gen
-                    .global_structure_cache()
-                    .and_then(|global_cache| {
+                StructurePlacementType::ConcentricRings(_) => {
+                    let search = world_gen.global_structure_cache().map(|global_cache| {
                         find_nearest_structure(
                             origin,
                             &[&set.placement],
@@ -237,8 +247,15 @@ impl CommandExecutor for LocateStructureExecutor {
                             seed as i64,
                             global_cache,
                         )
-                    })
-                    .map(|pos| (pos, keys[0])),
+                    });
+                    match search {
+                        Some(StructureSearch::Found(pos)) => Some((pos, keys[0])),
+                        Some(StructureSearch::Pending) => {
+                            return Err(STRUCTURE_PENDING_ERROR_TYPE.create_without_context());
+                        }
+                        Some(StructureSearch::NotFound) | None => None,
+                    }
+                }
                 // Everything else is spread over a grid whose candidate chunks
                 // are only *possible* sites: the biome at a candidate can still
                 // reject every structure in the set. Resolving the start makes
