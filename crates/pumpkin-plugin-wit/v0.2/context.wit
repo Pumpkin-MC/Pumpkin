@@ -36,7 +36,9 @@ interface context {
         /// * `handler-id`: Unique ID for the event handler.
         /// * `event-type`: The type of event to listen for.
         /// * `event-priority`: When this handler should be called relative to others.
-        /// * `blocking`: Whether the event should wait for this handler to finish.
+        /// * `blocking`: If true, the returned event updates the event being
+        ///   dispatched. Otherwise the result is ignored. Either kind of
+        ///   handler may suspend without blocking a host thread.
         register-event: func(handler-id: u32, event-type: event-type, event-priority: event-priority, blocking: bool);
 
         /// Registers a new command.
@@ -58,4 +60,3 @@ interface context {
         get-marketplace-metadata: func() -> option<marketplace-metadata>;
     }
 }
-

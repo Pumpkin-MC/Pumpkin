@@ -48,7 +48,6 @@ impl gametest::Host for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn spawn_simulated_player(
         &mut self,
         _location: DimensionLocation,
@@ -344,7 +343,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn attack(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -354,7 +352,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn attack_entity(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -365,7 +362,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn break_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -377,7 +373,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn chat(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -388,7 +383,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn disconnect(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -398,7 +392,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn drop_selected_item(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -414,7 +407,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn give_item(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -432,7 +424,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn interact(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -442,7 +433,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn interact_with_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -454,7 +444,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn interact_with_entity(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -528,7 +517,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn move_to_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -540,7 +528,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn move_to_location(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -552,7 +539,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn navigate_to_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -564,7 +550,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn navigate_to_entity(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -576,7 +561,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn navigate_to_location(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -588,7 +572,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn navigate_to_locations(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -600,7 +583,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn respawn(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -630,7 +612,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn set_item(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -731,7 +712,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn use_item(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -742,7 +722,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn use_item_in_slot(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -753,7 +732,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn use_item_in_slot_on_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -767,7 +745,6 @@ impl gametest::HostSimulatedPlayer for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn use_item_on_block(
         &mut self,
         _res: Resource<SimulatedPlayer>,
@@ -999,7 +976,6 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn destroy_block(
         &mut self,
         _res: Resource<Test>,
@@ -1079,7 +1055,6 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn kill_all_entities(&mut self, _res: Resource<Test>) -> wasmtime::Result<Result<(), String>> {
         Ok(Err(
             "gametest.test.kill-all-entities not implemented".to_string()
@@ -1097,7 +1072,6 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn press_button(
         &mut self,
         _res: Resource<Test>,
@@ -1114,7 +1088,6 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.print not implemented".to_string()))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn pull_lever(
         &mut self,
         _res: Resource<Test>,
@@ -1123,7 +1096,6 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.pull-lever not implemented".to_string()))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn pulse_redstone(
         &mut self,
         _res: Resource<Test>,
@@ -1155,7 +1127,6 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn remove_simulated_player(
         &mut self,
         _res: Resource<Test>,
@@ -1218,7 +1189,6 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn set_block_permutation(
         &mut self,
         _res: Resource<Test>,
@@ -1230,7 +1200,6 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn set_block_type(
         &mut self,
         _res: Resource<Test>,
@@ -1242,7 +1211,6 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn set_fluid_container(
         &mut self,
         _res: Resource<Test>,
@@ -1254,7 +1222,6 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn set_tnt_fuse(
         &mut self,
         _res: Resource<Test>,
@@ -1264,7 +1231,6 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.set-tnt-fuse not implemented".to_string()))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn spawn(
         &mut self,
         _res: Resource<Test>,
@@ -1274,7 +1240,6 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.spawn not implemented".to_string()))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn spawn_at_location(
         &mut self,
         _res: Resource<Test>,
@@ -1286,7 +1251,6 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn spawn_item(
         &mut self,
         _res: Resource<Test>,
@@ -1296,7 +1260,6 @@ impl gametest::HostTest for PluginHostState {
         Ok(Err("gametest.test.spawn-item not implemented".to_string()))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn spawn_simulated_player(
         &mut self,
         _res: Resource<Test>,
@@ -1309,7 +1272,6 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn spawn_without_behaviors(
         &mut self,
         _res: Resource<Test>,
@@ -1321,7 +1283,6 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn spawn_without_behaviors_at_location(
         &mut self,
         _res: Resource<Test>,
@@ -1333,7 +1294,6 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn spread_from_face_toward_direction(
         &mut self,
         _res: Resource<Test>,
@@ -1433,7 +1393,6 @@ impl gametest::HostTest for PluginHostState {
         ))
     }
 
-    // TODO: make this async (list it in bindings.rs) once implemented
     fn trigger_internal_block_event(
         &mut self,
         _res: Resource<Test>,

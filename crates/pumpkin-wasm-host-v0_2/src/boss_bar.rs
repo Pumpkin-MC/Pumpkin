@@ -1,14 +1,18 @@
+use super::AccessorExt;
+use crate::RequireServer;
 use crate::pumpkin::plugin::boss_bar::{
     self, BossBar, BossBarColor as WitColor, BossBarDivision as WitDivision,
     BossBarMetadata as WitMetadata,
 };
-use pumpkin_core::server::Server;
-use pumpkin_core::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags};
+use pumpkin_core::{
+    server::Server,
+    world::bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags},
+};
 use pumpkin_wasm_host_common::state::PluginHostState;
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 use uuid::Uuid;
-use wasmtime::component::Resource;
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 pub struct PluginBossBar {
     pub bossbar: Bossbar,
@@ -93,9 +97,27 @@ fn from_wit_metadata(metadata: WitMetadata) -> BossbarFlags {
     f
 }
 
+async fn remove_all_players(pbb: &Arc<Mutex<PluginBossBar>>) {
+    let mut pbb = pbb.lock().await;
+    let players = std::mem::take(&mut pbb.players);
+    if let Some(server) = pbb.server.upgrade() {
+        for uuid in players {
+            if let Some(player) = server.get_player_by_uuid(uuid) {
+                player.remove_bossbar(pbb.bossbar.uuid);
+            }
+        }
+    }
+}
+
 impl boss_bar::Host for PluginHostState {}
 
 impl boss_bar::HostBossBar for PluginHostState {
+    async fn drop(&mut self, res: Resource<BossBar>) -> wasmtime::Result<()> {
+        let pbb_handle = self.get(&res)?.clone();
+        remove_all_players(&pbb_handle).await;
+        self.drop(res)
+    }
+
     fn new(
         &mut self,
         title: Resource<crate::pumpkin::plugin::text::TextComponent>,
@@ -108,33 +130,32 @@ impl boss_bar::HostBossBar for PluginHostState {
         bossbar.color = from_wit_color(color);
         bossbar.division = from_wit_division(division);
 
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("server not available"))?
-            .clone();
+        let server = self.require_server()?.clone();
         let plugin_bossbar = Arc::new(Mutex::new(PluginBossBar::new(
             bossbar,
             Arc::downgrade(&server),
         )));
         self.add(plugin_bossbar)
     }
+}
 
+impl boss_bar::HostBossBarWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn get_title(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         res: Resource<BossBar>,
     ) -> wasmtime::Result<Resource<crate::pumpkin::plugin::text::TextComponent>> {
-        let title = self.get(&res)?.lock().await.bossbar.title.clone();
-        self.add(title)
+        let title = accessor.get_res(&res)?.lock().await.bossbar.title.clone();
+        accessor.add_res(title)
     }
 
     async fn set_title(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         res: Resource<BossBar>,
         title: Resource<crate::pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let title = self.take(title)?;
-        let mut pbb = self.get(&res)?.lock().await;
+        let title = accessor.take_res(title)?;
+        let pbb_handle = accessor.get_res(&res)?;
+        let mut pbb = pbb_handle.lock().await;
         pbb.bossbar.title = title.clone();
         if let Some(server) = pbb.server.upgrade() {
             for uuid in &pbb.players {
@@ -146,13 +167,22 @@ impl boss_bar::HostBossBar for PluginHostState {
         Ok(())
     }
 
-    async fn get_health(&mut self, res: Resource<BossBar>) -> wasmtime::Result<f32> {
-        let pbb = self.get(&res)?.lock().await;
+    async fn get_health(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<BossBar>,
+    ) -> wasmtime::Result<f32> {
+        let pbb_handle = accessor.get_res(&res)?;
+        let pbb = pbb_handle.lock().await;
         Ok(pbb.bossbar.health)
     }
 
-    async fn set_health(&mut self, res: Resource<BossBar>, health: f32) -> wasmtime::Result<()> {
-        let mut pbb = self.get(&res)?.lock().await;
+    async fn set_health(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<BossBar>,
+        health: f32,
+    ) -> wasmtime::Result<()> {
+        let pbb_handle = accessor.get_res(&res)?;
+        let mut pbb = pbb_handle.lock().await;
         pbb.bossbar.health = health;
         if let Some(server) = pbb.server.upgrade() {
             for uuid in &pbb.players {
@@ -164,13 +194,22 @@ impl boss_bar::HostBossBar for PluginHostState {
         Ok(())
     }
 
-    async fn get_color(&mut self, res: Resource<BossBar>) -> wasmtime::Result<WitColor> {
-        let pbb = self.get(&res)?.lock().await;
+    async fn get_color(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<BossBar>,
+    ) -> wasmtime::Result<WitColor> {
+        let pbb_handle = accessor.get_res(&res)?;
+        let pbb = pbb_handle.lock().await;
         Ok(to_wit_color(pbb.bossbar.color))
     }
 
-    async fn set_color(&mut self, res: Resource<BossBar>, color: WitColor) -> wasmtime::Result<()> {
-        let mut pbb = self.get(&res)?.lock().await;
+    async fn set_color(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<BossBar>,
+        color: WitColor,
+    ) -> wasmtime::Result<()> {
+        let pbb_handle = accessor.get_res(&res)?;
+        let mut pbb = pbb_handle.lock().await;
         pbb.bossbar.color = from_wit_color(color);
         if let Some(server) = pbb.server.upgrade() {
             for uuid in &pbb.players {
@@ -186,17 +225,22 @@ impl boss_bar::HostBossBar for PluginHostState {
         Ok(())
     }
 
-    async fn get_division(&mut self, res: Resource<BossBar>) -> wasmtime::Result<WitDivision> {
-        let pbb = self.get(&res)?.lock().await;
+    async fn get_division(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<BossBar>,
+    ) -> wasmtime::Result<WitDivision> {
+        let pbb_handle = accessor.get_res(&res)?;
+        let pbb = pbb_handle.lock().await;
         Ok(to_wit_division(pbb.bossbar.division))
     }
 
     async fn set_division(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         res: Resource<BossBar>,
         division: WitDivision,
     ) -> wasmtime::Result<()> {
-        let mut pbb = self.get(&res)?.lock().await;
+        let pbb_handle = accessor.get_res(&res)?;
+        let mut pbb = pbb_handle.lock().await;
         pbb.bossbar.division = from_wit_division(division);
         if let Some(server) = pbb.server.upgrade() {
             for uuid in &pbb.players {
@@ -212,17 +256,22 @@ impl boss_bar::HostBossBar for PluginHostState {
         Ok(())
     }
 
-    async fn get_metadata(&mut self, res: Resource<BossBar>) -> wasmtime::Result<WitMetadata> {
-        let pbb = self.get(&res)?.lock().await;
+    async fn get_metadata(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<BossBar>,
+    ) -> wasmtime::Result<WitMetadata> {
+        let pbb_handle = accessor.get_res(&res)?;
+        let pbb = pbb_handle.lock().await;
         Ok(to_wit_metadata(pbb.bossbar.flags))
     }
 
     async fn set_metadata(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         res: Resource<BossBar>,
         metadata: WitMetadata,
     ) -> wasmtime::Result<()> {
-        let mut pbb = self.get(&res)?.lock().await;
+        let pbb_handle = accessor.get_res(&res)?;
+        let mut pbb = pbb_handle.lock().await;
         pbb.bossbar.flags = from_wit_metadata(metadata);
         if let Some(server) = pbb.server.upgrade() {
             for uuid in &pbb.players {
@@ -235,35 +284,34 @@ impl boss_bar::HostBossBar for PluginHostState {
     }
 
     async fn get_players(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         res: Resource<BossBar>,
     ) -> wasmtime::Result<Vec<Resource<crate::pumpkin::plugin::player::Player>>> {
         let players = {
-            let pbb = self.get(&res)?.lock().await;
+            let pbb_handle = accessor.get_res(&res)?;
+            let pbb = pbb_handle.lock().await;
             pbb.players.clone()
         };
 
-        let server = self
-            .server
-            .clone()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = accessor.server()?;
 
         let mut wit_players = Vec::new();
         for uuid in players {
             if let Some(player) = server.get_player_by_uuid(uuid) {
-                wit_players.push(self.add(player)?);
+                wit_players.push(accessor.add_res(player)?);
             }
         }
         Ok(wit_players)
     }
 
     async fn add_player(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         res: Resource<BossBar>,
         player: Resource<crate::pumpkin::plugin::player::Player>,
     ) -> wasmtime::Result<()> {
-        let player = self.take(player)?;
-        let mut pbb = self.get(&res)?.lock().await;
+        let player = accessor.take_res(player)?;
+        let pbb_handle = accessor.get_res(&res)?;
+        let mut pbb = pbb_handle.lock().await;
         let uuid = player.gameprofile.id;
 
         if !pbb.players.contains(&uuid) {
@@ -274,12 +322,13 @@ impl boss_bar::HostBossBar for PluginHostState {
     }
 
     async fn remove_player(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         res: Resource<BossBar>,
         player: Resource<crate::pumpkin::plugin::player::Player>,
     ) -> wasmtime::Result<()> {
-        let player = self.take(player)?;
-        let mut pbb = self.get(&res)?.lock().await;
+        let player = accessor.take_res(player)?;
+        let pbb_handle = accessor.get_res(&res)?;
+        let mut pbb = pbb_handle.lock().await;
         let uuid = player.gameprofile.id;
 
         if let Some(idx) = pbb.players.iter().position(|&x| x == uuid) {
@@ -289,21 +338,12 @@ impl boss_bar::HostBossBar for PluginHostState {
         Ok(())
     }
 
-    async fn remove_all(&mut self, res: Resource<BossBar>) -> wasmtime::Result<()> {
-        let pbb = self.get(&res)?.lock().await;
-        if let Some(server) = pbb.server.upgrade() {
-            for uuid in &pbb.players {
-                if let Some(player) = server.get_player_by_uuid(*uuid) {
-                    player.remove_bossbar(pbb.bossbar.uuid);
-                }
-            }
-        }
+    async fn remove_all(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<BossBar>,
+    ) -> wasmtime::Result<()> {
+        let pbb_handle = accessor.get_res(&res)?;
+        remove_all_players(&pbb_handle).await;
         Ok(())
-    }
-
-    async fn drop(&mut self, res: Resource<BossBar>) -> wasmtime::Result<()> {
-        let rep = res.rep();
-        self.remove_all(Resource::new_borrow(rep)).await?;
-        self.drop(res)
     }
 }

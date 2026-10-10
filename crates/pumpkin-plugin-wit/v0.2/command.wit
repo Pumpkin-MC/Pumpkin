@@ -130,7 +130,8 @@ interface command {
         as-player: func() -> option<player>;
         permission-level: func() -> permission-level;
         has-permission-level: func(level: permission-level) -> bool;
-        has-permission: func(server: borrow<server>, node: string) -> bool;
+        /// Checks whether the sender has a permission on the server.
+        has-permission: async func(node: string) -> bool;
         position: func() -> option<position>;
         %world: func() -> option<%world>;
         get-locale: func() -> locale;
@@ -236,7 +237,9 @@ interface command {
     }
 
     resource command {
-        /// First name is primary, rest are aliases
+        /// Creates a command from its names and description.
+        ///
+        /// The first name is primary; the remaining names are aliases.
         constructor(names: list<string>, description: string);
         then: func(node: command-node);
         execute-with-handler-id: func(handler-id: u32);

@@ -1,8 +1,9 @@
+use super::AccessorExt;
 use crate::pumpkin::plugin::recipe::{
     CookingRecipe as WitCookingRecipe, CookingType as WitCookingType, Host as RecipeHost,
-    HostRecipeManager, Ingredient as WitIngredient, RecipeCategory as WitRecipeCategory,
-    RecipeManager as WitRecipeManager, ShapedRecipe as WitShapedRecipe,
-    ShapelessRecipe as WitShapelessRecipe,
+    HostRecipeManager, HostRecipeManagerWithStore, Ingredient as WitIngredient,
+    RecipeCategory as WitRecipeCategory, RecipeManager as WitRecipeManager,
+    ShapedRecipe as WitShapedRecipe, ShapelessRecipe as WitShapelessRecipe,
 };
 use pumpkin_data::recipes::RecipeCategoryTypes;
 use pumpkin_protocol::codec::recipe::{
@@ -10,18 +11,24 @@ use pumpkin_protocol::codec::recipe::{
     OwnedRecipeIngredient, OwnedRecipeResult,
 };
 use pumpkin_wasm_host_common::state::PluginHostState;
-use wasmtime::component::Resource;
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 impl RecipeHost for PluginHostState {}
 
 impl HostRecipeManager for PluginHostState {
+    fn drop(&mut self, rep: Resource<WitRecipeManager>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+}
+
+impl HostRecipeManagerWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn register_shaped(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitRecipeManager>,
         id: String,
         recipe: WitShapedRecipe,
     ) -> wasmtime::Result<()> {
-        let result_stack = self.take(recipe.output)?;
+        let result_stack = accessor.take_res(recipe.output)?;
         let result_stack = result_stack.lock().await;
 
         let category = recipe
@@ -45,10 +52,7 @@ impl HostRecipeManager for PluginHostState {
             },
         };
 
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = accessor.server()?;
         server
             .recipe_manager
             .add_recipe(DynamicRecipe::Crafting(owned_recipe));
@@ -56,12 +60,12 @@ impl HostRecipeManager for PluginHostState {
     }
 
     async fn register_shapeless(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitRecipeManager>,
         id: String,
         recipe: WitShapelessRecipe,
     ) -> wasmtime::Result<()> {
-        let result_stack = self.take(recipe.output)?;
+        let result_stack = accessor.take_res(recipe.output)?;
         let result_stack = result_stack.lock().await;
 
         let category = recipe
@@ -83,10 +87,7 @@ impl HostRecipeManager for PluginHostState {
             },
         };
 
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = accessor.server()?;
         server
             .recipe_manager
             .add_recipe(DynamicRecipe::Crafting(owned_recipe));
@@ -94,13 +95,13 @@ impl HostRecipeManager for PluginHostState {
     }
 
     async fn register_cooking(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitRecipeManager>,
         id: String,
         station_type: WitCookingType,
         recipe: WitCookingRecipe,
     ) -> wasmtime::Result<()> {
-        let result_stack = self.take(recipe.output)?;
+        let result_stack = accessor.take_res(recipe.output)?;
         let result_stack = result_stack.lock().await;
 
         let category = recipe
@@ -135,15 +136,8 @@ impl HostRecipeManager for PluginHostState {
             }
         };
 
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = accessor.server()?;
         server.recipe_manager.add_recipe(dynamic_recipe);
-        Ok(())
-    }
-
-    fn drop(&mut self, _rep: Resource<WitRecipeManager>) -> wasmtime::Result<()> {
         Ok(())
     }
 }
@@ -164,5 +158,32 @@ fn to_owned_ingredient(ing: WitIngredient) -> OwnedRecipeIngredient {
         WitIngredient::Item(id) => OwnedRecipeIngredient::Simple(id),
         WitIngredient::Tag(tag) => OwnedRecipeIngredient::Tagged(tag),
         WitIngredient::OneOf(items) => OwnedRecipeIngredient::OneOf(items),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_core::server::RecipeManager;
+    use std::sync::Arc;
+
+    #[test]
+    fn guest_drop_releases_recipe_manager_resource() {
+        let mut state = PluginHostState::new();
+        let manager = Arc::new(RecipeManager::new());
+        let weak_manager = Arc::downgrade(&manager);
+        let resource = state
+            .add::<WitRecipeManager>(manager)
+            .expect("insert recipe manager resource");
+        let rep = resource.rep();
+
+        HostRecipeManager::drop(&mut state, resource).expect("drop recipe manager resource");
+
+        assert!(weak_manager.upgrade().is_none());
+        assert!(
+            state
+                .get(&Resource::<WitRecipeManager>::new_borrow(rep))
+                .is_err()
+        );
     }
 }

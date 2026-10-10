@@ -1,8 +1,5 @@
-use std::sync::Arc;
-use wasmtime::component::{Access, HasSelf, Resource};
-
-use pumpkin_util::math::vector3::Vector3;
-
+use super::{AccessorExt, run_blocking};
+use crate::LockIgnorePoison;
 use crate::{
     events::to_wasm_position,
     pumpkin::plugin::{
@@ -13,7 +10,7 @@ use crate::{
         uuid::Uuid,
         world::{
             BlockPos as WitBlockPos, BoundingBox as WitBoundingBox, Entity, HostEntity,
-            LivingEntity as WitLivingEntity, Mob as WitMob,
+            HostEntityWithStore, LivingEntity as WitLivingEntity, Mob as WitMob,
             RayTraceBlockResult as WitRayTraceBlockResult,
             RayTraceEntityResult as WitRayTraceEntityResult, RaycastResult as WitRaycastResult,
             World,
@@ -23,20 +20,13 @@ use crate::{
     world::to_wasm_block_direction,
 };
 use pumpkin_data::entity::EntityPose as InternalEntityPose;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_wasm_host_common::state::PluginHostState;
+use std::sync::Arc;
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 impl Host for PluginHostState {}
 impl entity_types::Host for PluginHostState {}
-
-fn active_plugin(
-    state: &PluginHostState,
-) -> wasmtime::Result<Arc<pumpkin_wasm_host_common::plugin::WasmPlugin>> {
-    state
-        .plugin
-        .as_ref()
-        .and_then(std::sync::Weak::upgrade)
-        .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))
-}
 
 const fn map_entity_pose(pose: InternalEntityPose) -> EntityPose {
     match pose {
@@ -62,6 +52,10 @@ const fn map_entity_pose(pose: InternalEntityPose) -> EntityPose {
 }
 
 impl HostEntity for PluginHostState {
+    fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn get_id(&mut self, entity: Resource<Entity>) -> wasmtime::Result<u32> {
         let entity = self.get(&entity)?;
         Ok(entity.get_entity().entity_id as u32)
@@ -409,11 +403,7 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<Entity>>> {
         let entity = self.get(&entity)?.clone();
-        let vehicle = entity
-            .get_entity()
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let vehicle = entity.get_entity().vehicle.lock_ignore_poison();
         if let Some(v) = vehicle.as_ref() {
             Ok(Some(self.add(Arc::clone(v)).map_err(|_| {
                 wasmtime::Error::msg("failed to add entity resource")
@@ -428,11 +418,7 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Vec<Resource<Entity>>> {
         let entity = self.get(&entity)?.clone();
-        let passengers = entity
-            .get_entity()
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let passengers = entity.get_entity().passengers.lock_ignore_poison();
         let mut result = Vec::new();
         for p in passengers.iter() {
             result.push(
@@ -655,15 +641,6 @@ impl HostEntity for PluginHostState {
         Ok(None)
     }
 
-    fn get_target_entity(
-        &mut self,
-        entity: Resource<Entity>,
-        max_distance: f64,
-    ) -> wasmtime::Result<Option<Resource<Entity>>> {
-        let res = self.ray_trace_entity(entity, max_distance)?;
-        Ok(res.map(|r| r.entity))
-    }
-
     fn set_custom_data(
         &mut self,
         this: Resource<Entity>,
@@ -744,154 +721,124 @@ impl HostEntity for PluginHostState {
         Ok(entity.get_mob().is_some())
     }
 
-    fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
-        self.drop(rep)
+    fn get_target_entity(
+        &mut self,
+        entity: Resource<Entity>,
+        max_distance: f64,
+    ) -> wasmtime::Result<Option<Resource<Entity>>> {
+        let res = self.ray_trace_entity(entity, max_distance)?;
+        Ok(res.map(|r| r.entity))
     }
 }
 
-impl crate::pumpkin::plugin::world::HostEntityWithStore<PluginHostState>
-    for HasSelf<PluginHostState>
-{
+impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn teleport(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         entity: Resource<Entity>,
         pos: Position,
         world: Resource<World>,
     ) -> wasmtime::Result<()> {
-        let (entity, world, plugin) = {
+        let (entity, world) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
             let world = state.take(world)?;
             let entity = state.get(&entity)?.clone();
-            (entity, world, active_plugin(state)?)
-        };
+            Ok((entity, world))
+        })?;
         let pos = Vector3::new(pos.0, pos.1, pos.2);
-        plugin
-            .store
-            .pump_blocking(&mut host, move || entity.teleport(pos, None, None, world))
-            .await
+        run_blocking(accessor, move || entity.teleport(pos, None, None, world)).await
     }
 
     async fn set_swimming(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         entity: Resource<Entity>,
         swimming: bool,
     ) -> wasmtime::Result<()> {
-        let (entity, plugin) = {
-            let state = host.get();
-            (state.get(&entity)?.clone(), active_plugin(state)?)
-        };
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                entity.get_entity().set_swimming(swimming);
-            })
-            .await
+        let entity = accessor.get_res(&entity)?;
+        run_blocking(accessor, move || {
+            entity.get_entity().set_swimming(swimming);
+        })
+        .await
     }
 
     async fn set_vehicle(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         entity: Resource<Entity>,
         vehicle: Option<Resource<Entity>>,
     ) -> wasmtime::Result<()> {
-        let (entity, vehicle, plugin) = {
+        let (entity, vehicle) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
             let entity = state.get(&entity)?.clone();
             let vehicle = vehicle.map(|vehicle| state.take(vehicle)).transpose()?;
-            (entity, vehicle, active_plugin(state)?)
-        };
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                let current_vehicle = entity
+            Ok((entity, vehicle))
+        })?;
+        run_blocking(accessor, move || {
+            let current_vehicle = entity.get_entity().vehicle.lock_ignore_poison().clone();
+            if let Some(current_vehicle) = current_vehicle {
+                current_vehicle
                     .get_entity()
-                    .vehicle
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .clone();
-                if let Some(current_vehicle) = current_vehicle {
-                    current_vehicle
-                        .get_entity()
-                        .remove_passenger(entity.get_entity().entity_id);
-                }
-                if let Some(vehicle) = vehicle {
-                    vehicle
-                        .get_entity()
-                        .add_passenger(Arc::clone(&vehicle), entity);
-                }
-            })
-            .await
+                    .remove_passenger(entity.get_entity().entity_id);
+            }
+            if let Some(vehicle) = vehicle {
+                vehicle
+                    .get_entity()
+                    .add_passenger(Arc::clone(&vehicle), entity);
+            }
+        })
+        .await
     }
 
     async fn add_passenger(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         entity: Resource<Entity>,
         passenger: Resource<Entity>,
     ) -> wasmtime::Result<()> {
-        let (entity, passenger, plugin) = {
+        let (entity, passenger) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
-            (
-                state.get(&entity)?.clone(),
-                state.take(passenger)?,
-                active_plugin(state)?,
-            )
-        };
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                entity
-                    .get_entity()
-                    .add_passenger(Arc::clone(&entity), passenger);
-            })
-            .await
+            Ok((state.get(&entity)?.clone(), state.take(passenger)?))
+        })?;
+        run_blocking(accessor, move || {
+            entity
+                .get_entity()
+                .add_passenger(Arc::clone(&entity), passenger);
+        })
+        .await
     }
 
     async fn remove_passenger(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         entity: Resource<Entity>,
         passenger: Resource<Entity>,
     ) -> wasmtime::Result<()> {
-        let (entity, passenger_id, plugin) = {
+        let (entity, passenger_id) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
             let entity = state.get(&entity)?.clone();
             let passenger = state.take(passenger)?;
-            (
-                entity,
-                passenger.get_entity().entity_id,
-                active_plugin(state)?,
-            )
-        };
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                entity.get_entity().remove_passenger(passenger_id);
-            })
-            .await
+            Ok((entity, passenger.get_entity().entity_id))
+        })?;
+        run_blocking(accessor, move || {
+            entity.get_entity().remove_passenger(passenger_id);
+        })
+        .await
     }
 
     async fn eject_passengers(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<()> {
-        let (entity, plugin) = {
-            let state = host.get();
-            (state.get(&entity)?.clone(), active_plugin(state)?)
-        };
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                let passenger_ids: Vec<i32> = entity
-                    .get_entity()
-                    .passengers
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .iter()
-                    .map(|passenger| passenger.get_entity().entity_id)
-                    .collect();
-                for passenger_id in passenger_ids {
-                    entity.get_entity().remove_passenger(passenger_id);
-                }
-            })
-            .await
+        let entity = accessor.get_res(&entity)?;
+        run_blocking(accessor, move || {
+            let passenger_ids: Vec<i32> = entity
+                .get_entity()
+                .passengers
+                .lock_ignore_poison()
+                .iter()
+                .map(|passenger| passenger.get_entity().entity_id)
+                .collect();
+            for passenger_id in passenger_ids {
+                entity.get_entity().remove_passenger(passenger_id);
+            }
+        })
+        .await
     }
 }
 

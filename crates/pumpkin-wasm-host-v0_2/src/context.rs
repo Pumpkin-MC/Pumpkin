@@ -1,6 +1,3 @@
-use std::{collections::HashMap, sync::Arc};
-use wasmtime::component::Resource;
-
 use crate::{
     events::{ToFromWasmEvent, WasmPluginEventHandler},
     pumpkin::{
@@ -16,6 +13,8 @@ use crate::{
 };
 use pumpkin_core::plugin::Context;
 use pumpkin_wasm_host_common::state::PluginHostState;
+use std::{collections::HashMap, sync::Arc};
+use wasmtime::component::Resource;
 
 fn register_typed_event<E: pumpkin_core::plugin::Payload + ToFromWasmEvent + Clone + 'static>(
     ctx: &Context,
@@ -34,25 +33,32 @@ fn register_player_event(
     blocking: bool,
     event_type: EventType,
 ) {
-    use pumpkin_core::plugin::player::{
-        bedrock_form_response::BedrockFormResponseEvent,
-        changed_main_hand::PlayerChangedMainHandEvent, egg_throw::PlayerEggThrowEvent,
-        exp_change::PlayerExpChangeEvent, fish::PlayerFishEvent,
-        inventory_close::InventoryCloseEvent, inventory_interact::InventoryClickEvent,
-        item_held::PlayerItemHeldEvent, player_change_world::PlayerChangeWorldEvent,
-        player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent,
-        player_custom_payload::PlayerCustomPayloadEvent,
-        player_gamemode_change::PlayerGamemodeChangeEvent,
-        player_interact_entity_event::PlayerInteractEntityEvent,
-        player_interact_event::PlayerInteractEvent,
-        player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
-        player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
-        player_login::PlayerLoginEvent, player_move::PlayerMoveEvent,
-        player_permission_check::PlayerPermissionCheckEvent, player_respawn::PlayerRespawnEvent,
-        player_teleport::PlayerTeleportEvent, player_toggle_flight_event::PlayerToggleFlightEvent,
-        player_toggle_sneak_event::PlayerToggleSneakEvent,
-        player_toggle_sprint_event::PlayerToggleSprintEvent,
-    };
+    use pumpkin_core::plugin::player::bedrock_form_response::BedrockFormResponseEvent;
+    use pumpkin_core::plugin::player::changed_main_hand::PlayerChangedMainHandEvent;
+    use pumpkin_core::plugin::player::egg_throw::PlayerEggThrowEvent;
+    use pumpkin_core::plugin::player::exp_change::PlayerExpChangeEvent;
+    use pumpkin_core::plugin::player::fish::PlayerFishEvent;
+    use pumpkin_core::plugin::player::inventory_close::InventoryCloseEvent;
+    use pumpkin_core::plugin::player::inventory_interact::InventoryClickEvent;
+    use pumpkin_core::plugin::player::item_held::PlayerItemHeldEvent;
+    use pumpkin_core::plugin::player::player_change_world::PlayerChangeWorldEvent;
+    use pumpkin_core::plugin::player::player_chat::PlayerChatEvent;
+    use pumpkin_core::plugin::player::player_command_send::PlayerCommandSendEvent;
+    use pumpkin_core::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
+    use pumpkin_core::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
+    use pumpkin_core::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
+    use pumpkin_core::plugin::player::player_interact_event::PlayerInteractEvent;
+    use pumpkin_core::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
+    use pumpkin_core::plugin::player::player_join::PlayerJoinEvent;
+    use pumpkin_core::plugin::player::player_leave::PlayerLeaveEvent;
+    use pumpkin_core::plugin::player::player_login::PlayerLoginEvent;
+    use pumpkin_core::plugin::player::player_move::PlayerMoveEvent;
+    use pumpkin_core::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
+    use pumpkin_core::plugin::player::player_respawn::PlayerRespawnEvent;
+    use pumpkin_core::plugin::player::player_teleport::PlayerTeleportEvent;
+    use pumpkin_core::plugin::player::player_toggle_flight_event::PlayerToggleFlightEvent;
+    use pumpkin_core::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
+    use pumpkin_core::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 
     match event_type {
         EventType::PlayerJoinEvent => {
@@ -418,84 +424,83 @@ fn register_entity_event(
     blocking: bool,
     event_type: EventType,
 ) {
-    use pumpkin_core::plugin::entity::{
-        area_effect_cloud_apply::AreaEffectCloudApplyEvent,
-        arrow_body_count_change::ArrowBodyCountChangeEvent,
-        bat_toggle_sleep::BatToggleSleepEvent,
-        creature_spawn::CreatureSpawnEvent,
-        creeper_power::CreeperPowerEvent,
-        ender_dragon_change_phase::EnderDragonChangePhaseEvent,
-        entity_air_change::EntityAirChangeEvent,
-        entity_break_door::EntityBreakDoorEvent,
-        entity_breed::EntityBreedEvent,
-        entity_change_block::EntityChangeBlockEvent,
-        entity_combust::EntityCombustEvent,
-        entity_combust_by_block::EntityCombustByBlockEvent,
-        entity_combust_by_entity::EntityCombustByEntityEvent,
-        entity_damage::EntityDamageEvent,
-        entity_damage_by_block::EntityDamageByBlockEvent,
-        entity_damage_by_entity::EntityDamageByEntityEvent,
-        entity_death::{EntityDeathEvent, PlayerDeathEvent},
-        entity_dismount::EntityDismountEvent,
-        entity_drop_item::EntityDropItemEvent,
-        entity_dye::EntityDyeEvent,
-        entity_enter_block::EntityEnterBlockEvent,
-        entity_enter_love_mode::EntityEnterLoveModeEvent,
-        entity_exhaustion::EntityExhaustionEvent,
-        entity_explode::EntityExplodeEvent,
-        entity_interact::EntityInteractEvent,
-        entity_knockback::EntityKnockbackEvent,
-        entity_knockback_by_entity::EntityKnockbackByEntityEvent,
-        entity_mount::EntityMountEvent,
-        entity_pickup_item::EntityPickupItemEvent,
-        entity_place::EntityPlaceEvent,
-        entity_portal::EntityPortalEvent,
-        entity_portal_enter::EntityPortalEnterEvent,
-        entity_portal_exit::EntityPortalExitEvent,
-        entity_pose_change::EntityPoseChangeEvent,
-        entity_potion_effect::EntityPotionEffectEvent,
-        entity_regain_health::EntityRegainHealthEvent,
-        entity_remove::EntityRemoveEvent,
-        entity_resurrect::EntityResurrectEvent,
-        entity_shoot_bow::EntityShootBowEvent,
-        entity_spawn::EntitySpawnEvent,
-        entity_spell_cast::EntitySpellCastEvent,
-        entity_tame::EntityTameEvent,
-        entity_target::EntityTargetEvent,
-        entity_target_block::EntityTargetBlockEvent,
-        entity_target_living_entity::EntityTargetLivingEntityEvent,
-        entity_teleport::EntityTeleportEvent,
-        entity_toggle_glide::EntityToggleGlideEvent,
-        entity_toggle_swim::EntityToggleSwimEvent,
-        entity_transform::EntityTransformEvent,
-        entity_unleash::EntityUnleashEvent,
-        exp_bottle::ExpBottleEvent,
-        explosion_prime::ExplosionPrimeEvent,
-        firework_explode::FireworkExplodeEvent,
-        food_level_change::FoodLevelChangeEvent,
-        horse_jump::HorseJumpEvent,
-        item_despawn::ItemDespawnEvent,
-        item_merge::ItemMergeEvent,
-        item_spawn::ItemSpawnEvent,
-        lingering_potion_splash::LingeringPotionSplashEvent,
-        pig_zap::PigZapEvent,
-        pig_zombie_anger::PigZombieAngerEvent,
-        piglin_barter::PiglinBarterEvent,
-        potion_splash::PotionSplashEvent,
-        projectile_hit::ProjectileHitEvent,
-        projectile_launch::ProjectileLaunchEvent,
-        sheep_dye_wool::SheepDyeWoolEvent,
-        sheep_regrow_wool::SheepRegrowWoolEvent,
-        slime_split::SlimeSplitEvent,
-        spawner_spawn::SpawnerSpawnEvent,
-        strider_temperature_change::StriderTemperatureChangeEvent,
-        trial_spawner_spawn::TrialSpawnerSpawnEvent,
-        villager_acquire_trade::VillagerAcquireTradeEvent,
-        villager_career_change::VillagerCareerChangeEvent,
-        villager_replenish_trade::VillagerReplenishTradeEvent,
-        villager_reputation_change::VillagerReputationChangeEvent,
-        warden_anger_change::WardenAngerChangeEvent,
-    };
+    use pumpkin_core::plugin::entity::area_effect_cloud_apply::AreaEffectCloudApplyEvent;
+    use pumpkin_core::plugin::entity::arrow_body_count_change::ArrowBodyCountChangeEvent;
+    use pumpkin_core::plugin::entity::bat_toggle_sleep::BatToggleSleepEvent;
+    use pumpkin_core::plugin::entity::creature_spawn::CreatureSpawnEvent;
+    use pumpkin_core::plugin::entity::creeper_power::CreeperPowerEvent;
+    use pumpkin_core::plugin::entity::ender_dragon_change_phase::EnderDragonChangePhaseEvent;
+    use pumpkin_core::plugin::entity::entity_air_change::EntityAirChangeEvent;
+    use pumpkin_core::plugin::entity::entity_break_door::EntityBreakDoorEvent;
+    use pumpkin_core::plugin::entity::entity_breed::EntityBreedEvent;
+    use pumpkin_core::plugin::entity::entity_change_block::EntityChangeBlockEvent;
+    use pumpkin_core::plugin::entity::entity_combust::EntityCombustEvent;
+    use pumpkin_core::plugin::entity::entity_combust_by_block::EntityCombustByBlockEvent;
+    use pumpkin_core::plugin::entity::entity_combust_by_entity::EntityCombustByEntityEvent;
+    use pumpkin_core::plugin::entity::entity_damage::EntityDamageEvent;
+    use pumpkin_core::plugin::entity::entity_damage_by_block::EntityDamageByBlockEvent;
+    use pumpkin_core::plugin::entity::entity_damage_by_entity::EntityDamageByEntityEvent;
+    use pumpkin_core::plugin::entity::entity_death::EntityDeathEvent;
+    use pumpkin_core::plugin::entity::entity_death::PlayerDeathEvent;
+    use pumpkin_core::plugin::entity::entity_dismount::EntityDismountEvent;
+    use pumpkin_core::plugin::entity::entity_drop_item::EntityDropItemEvent;
+    use pumpkin_core::plugin::entity::entity_dye::EntityDyeEvent;
+    use pumpkin_core::plugin::entity::entity_enter_block::EntityEnterBlockEvent;
+    use pumpkin_core::plugin::entity::entity_enter_love_mode::EntityEnterLoveModeEvent;
+    use pumpkin_core::plugin::entity::entity_exhaustion::EntityExhaustionEvent;
+    use pumpkin_core::plugin::entity::entity_explode::EntityExplodeEvent;
+    use pumpkin_core::plugin::entity::entity_interact::EntityInteractEvent;
+    use pumpkin_core::plugin::entity::entity_knockback::EntityKnockbackEvent;
+    use pumpkin_core::plugin::entity::entity_knockback_by_entity::EntityKnockbackByEntityEvent;
+    use pumpkin_core::plugin::entity::entity_mount::EntityMountEvent;
+    use pumpkin_core::plugin::entity::entity_pickup_item::EntityPickupItemEvent;
+    use pumpkin_core::plugin::entity::entity_place::EntityPlaceEvent;
+    use pumpkin_core::plugin::entity::entity_portal::EntityPortalEvent;
+    use pumpkin_core::plugin::entity::entity_portal_enter::EntityPortalEnterEvent;
+    use pumpkin_core::plugin::entity::entity_portal_exit::EntityPortalExitEvent;
+    use pumpkin_core::plugin::entity::entity_pose_change::EntityPoseChangeEvent;
+    use pumpkin_core::plugin::entity::entity_potion_effect::EntityPotionEffectEvent;
+    use pumpkin_core::plugin::entity::entity_regain_health::EntityRegainHealthEvent;
+    use pumpkin_core::plugin::entity::entity_remove::EntityRemoveEvent;
+    use pumpkin_core::plugin::entity::entity_resurrect::EntityResurrectEvent;
+    use pumpkin_core::plugin::entity::entity_shoot_bow::EntityShootBowEvent;
+    use pumpkin_core::plugin::entity::entity_spawn::EntitySpawnEvent;
+    use pumpkin_core::plugin::entity::entity_spell_cast::EntitySpellCastEvent;
+    use pumpkin_core::plugin::entity::entity_tame::EntityTameEvent;
+    use pumpkin_core::plugin::entity::entity_target::EntityTargetEvent;
+    use pumpkin_core::plugin::entity::entity_target_block::EntityTargetBlockEvent;
+    use pumpkin_core::plugin::entity::entity_target_living_entity::EntityTargetLivingEntityEvent;
+    use pumpkin_core::plugin::entity::entity_teleport::EntityTeleportEvent;
+    use pumpkin_core::plugin::entity::entity_toggle_glide::EntityToggleGlideEvent;
+    use pumpkin_core::plugin::entity::entity_toggle_swim::EntityToggleSwimEvent;
+    use pumpkin_core::plugin::entity::entity_transform::EntityTransformEvent;
+    use pumpkin_core::plugin::entity::entity_unleash::EntityUnleashEvent;
+    use pumpkin_core::plugin::entity::exp_bottle::ExpBottleEvent;
+    use pumpkin_core::plugin::entity::explosion_prime::ExplosionPrimeEvent;
+    use pumpkin_core::plugin::entity::firework_explode::FireworkExplodeEvent;
+    use pumpkin_core::plugin::entity::food_level_change::FoodLevelChangeEvent;
+    use pumpkin_core::plugin::entity::horse_jump::HorseJumpEvent;
+    use pumpkin_core::plugin::entity::item_despawn::ItemDespawnEvent;
+    use pumpkin_core::plugin::entity::item_merge::ItemMergeEvent;
+    use pumpkin_core::plugin::entity::item_spawn::ItemSpawnEvent;
+    use pumpkin_core::plugin::entity::lingering_potion_splash::LingeringPotionSplashEvent;
+    use pumpkin_core::plugin::entity::pig_zap::PigZapEvent;
+    use pumpkin_core::plugin::entity::pig_zombie_anger::PigZombieAngerEvent;
+    use pumpkin_core::plugin::entity::piglin_barter::PiglinBarterEvent;
+    use pumpkin_core::plugin::entity::potion_splash::PotionSplashEvent;
+    use pumpkin_core::plugin::entity::projectile_hit::ProjectileHitEvent;
+    use pumpkin_core::plugin::entity::projectile_launch::ProjectileLaunchEvent;
+    use pumpkin_core::plugin::entity::sheep_dye_wool::SheepDyeWoolEvent;
+    use pumpkin_core::plugin::entity::sheep_regrow_wool::SheepRegrowWoolEvent;
+    use pumpkin_core::plugin::entity::slime_split::SlimeSplitEvent;
+    use pumpkin_core::plugin::entity::spawner_spawn::SpawnerSpawnEvent;
+    use pumpkin_core::plugin::entity::strider_temperature_change::StriderTemperatureChangeEvent;
+    use pumpkin_core::plugin::entity::trial_spawner_spawn::TrialSpawnerSpawnEvent;
+    use pumpkin_core::plugin::entity::villager_acquire_trade::VillagerAcquireTradeEvent;
+    use pumpkin_core::plugin::entity::villager_career_change::VillagerCareerChangeEvent;
+    use pumpkin_core::plugin::entity::villager_replenish_trade::VillagerReplenishTradeEvent;
+    use pumpkin_core::plugin::entity::villager_reputation_change::VillagerReputationChangeEvent;
+    use pumpkin_core::plugin::entity::warden_anger_change::WardenAngerChangeEvent;
 
     match event_type {
         EventType::EntityDamageEvent => {
@@ -742,19 +747,27 @@ fn register_inventory_event(
     blocking: bool,
     event_type: EventType,
 ) {
-    use pumpkin_core::plugin::inventory::{
-        brew::BrewEvent, brewing_stand_fuel::BrewingStandFuelEvent, craft_item::CraftItemEvent,
-        furnace_burn::FurnaceBurnEvent, furnace_extract::FurnaceExtractEvent,
-        furnace_smelt::FurnaceSmeltEvent, furnace_start_smelt::FurnaceStartSmeltEvent,
-        hopper_inventory_search::HopperInventorySearchEvent,
-        inventory_creative::InventoryCreativeEvent, inventory_drag::InventoryDragEvent,
-        inventory_interact::InventoryInteractEvent, inventory_move_item::InventoryMoveItemEvent,
-        inventory_open::InventoryOpenEvent, inventory_pickup_item::InventoryPickupItemEvent,
-        prepare_anvil::PrepareAnvilEvent, prepare_grindstone::PrepareGrindstoneEvent,
-        prepare_inventory_result::PrepareInventoryResultEvent,
-        prepare_item_craft::PrepareItemCraftEvent, prepare_smithing::PrepareSmithingEvent,
-        smith_item::SmithItemEvent, trade_select::TradeSelectEvent,
-    };
+    use pumpkin_core::plugin::inventory::brew::BrewEvent;
+    use pumpkin_core::plugin::inventory::brewing_stand_fuel::BrewingStandFuelEvent;
+    use pumpkin_core::plugin::inventory::craft_item::CraftItemEvent;
+    use pumpkin_core::plugin::inventory::furnace_burn::FurnaceBurnEvent;
+    use pumpkin_core::plugin::inventory::furnace_extract::FurnaceExtractEvent;
+    use pumpkin_core::plugin::inventory::furnace_smelt::FurnaceSmeltEvent;
+    use pumpkin_core::plugin::inventory::furnace_start_smelt::FurnaceStartSmeltEvent;
+    use pumpkin_core::plugin::inventory::hopper_inventory_search::HopperInventorySearchEvent;
+    use pumpkin_core::plugin::inventory::inventory_creative::InventoryCreativeEvent;
+    use pumpkin_core::plugin::inventory::inventory_drag::InventoryDragEvent;
+    use pumpkin_core::plugin::inventory::inventory_interact::InventoryInteractEvent;
+    use pumpkin_core::plugin::inventory::inventory_move_item::InventoryMoveItemEvent;
+    use pumpkin_core::plugin::inventory::inventory_open::InventoryOpenEvent;
+    use pumpkin_core::plugin::inventory::inventory_pickup_item::InventoryPickupItemEvent;
+    use pumpkin_core::plugin::inventory::prepare_anvil::PrepareAnvilEvent;
+    use pumpkin_core::plugin::inventory::prepare_grindstone::PrepareGrindstoneEvent;
+    use pumpkin_core::plugin::inventory::prepare_inventory_result::PrepareInventoryResultEvent;
+    use pumpkin_core::plugin::inventory::prepare_item_craft::PrepareItemCraftEvent;
+    use pumpkin_core::plugin::inventory::prepare_smithing::PrepareSmithingEvent;
+    use pumpkin_core::plugin::inventory::smith_item::SmithItemEvent;
+    use pumpkin_core::plugin::inventory::trade_select::TradeSelectEvent;
 
     match event_type {
         EventType::InventoryOpenEvent => {
@@ -837,14 +850,16 @@ fn register_vehicle_event(
     blocking: bool,
     event_type: EventType,
 ) {
-    use pumpkin_core::plugin::vehicle::{
-        vehicle_block_collision::VehicleBlockCollisionEvent,
-        vehicle_collision::VehicleCollisionEvent, vehicle_create::VehicleCreateEvent,
-        vehicle_damage::VehicleDamageEvent, vehicle_destroy::VehicleDestroyEvent,
-        vehicle_enter::VehicleEnterEvent, vehicle_entity_collision::VehicleEntityCollisionEvent,
-        vehicle_exit::VehicleExitEvent, vehicle_move::VehicleMoveEvent,
-        vehicle_update::VehicleUpdateEvent,
-    };
+    use pumpkin_core::plugin::vehicle::vehicle_block_collision::VehicleBlockCollisionEvent;
+    use pumpkin_core::plugin::vehicle::vehicle_collision::VehicleCollisionEvent;
+    use pumpkin_core::plugin::vehicle::vehicle_create::VehicleCreateEvent;
+    use pumpkin_core::plugin::vehicle::vehicle_damage::VehicleDamageEvent;
+    use pumpkin_core::plugin::vehicle::vehicle_destroy::VehicleDestroyEvent;
+    use pumpkin_core::plugin::vehicle::vehicle_enter::VehicleEnterEvent;
+    use pumpkin_core::plugin::vehicle::vehicle_entity_collision::VehicleEntityCollisionEvent;
+    use pumpkin_core::plugin::vehicle::vehicle_exit::VehicleExitEvent;
+    use pumpkin_core::plugin::vehicle::vehicle_move::VehicleMoveEvent;
+    use pumpkin_core::plugin::vehicle::vehicle_update::VehicleUpdateEvent;
 
     match event_type {
         EventType::VehicleBlockCollisionEvent => {
@@ -894,9 +909,8 @@ fn register_enchantment_event(
     blocking: bool,
     event_type: EventType,
 ) {
-    use pumpkin_core::plugin::enchantment::{
-        enchant_item::EnchantItemEvent, prepare_item_enchant::PrepareItemEnchantEvent,
-    };
+    use pumpkin_core::plugin::enchantment::enchant_item::EnchantItemEvent;
+    use pumpkin_core::plugin::enchantment::prepare_item_enchant::PrepareItemEnchantEvent;
 
     match event_type {
         EventType::PrepareItemEnchantEvent => {
@@ -921,10 +935,10 @@ fn register_world_event(
     blocking: bool,
     event_type: EventType,
 ) {
-    use pumpkin_core::plugin::world::{
-        chunk_load::ChunkLoad, chunk_save::ChunkSave, chunk_send::ChunkSend,
-        spawn_change::SpawnChangeEvent,
-    };
+    use pumpkin_core::plugin::world::chunk_load::ChunkLoad;
+    use pumpkin_core::plugin::world::chunk_save::ChunkSave;
+    use pumpkin_core::plugin::world::chunk_send::ChunkSend;
+    use pumpkin_core::plugin::world::spawn_change::SpawnChangeEvent;
 
     match event_type {
         EventType::SpawnChangeEvent => {
@@ -1044,11 +1058,12 @@ fn register_block_event(
     blocking: bool,
     event_type: EventType,
 ) {
-    use pumpkin_core::plugin::block::{
-        block_break::BlockBreakEvent, block_burn::BlockBurnEvent,
-        block_can_build::BlockCanBuildEvent, block_grow::BlockGrowEvent,
-        block_place::BlockPlaceEvent, block_redstone::BlockRedstoneEvent,
-    };
+    use pumpkin_core::plugin::block::block_break::BlockBreakEvent;
+    use pumpkin_core::plugin::block::block_burn::BlockBurnEvent;
+    use pumpkin_core::plugin::block::block_can_build::BlockCanBuildEvent;
+    use pumpkin_core::plugin::block::block_grow::BlockGrowEvent;
+    use pumpkin_core::plugin::block::block_place::BlockPlaceEvent;
+    use pumpkin_core::plugin::block::block_redstone::BlockRedstoneEvent;
 
     match event_type {
         EventType::BlockRedstoneEvent => {
@@ -1278,10 +1293,10 @@ fn register_raid_event(
     blocking: bool,
     event_type: EventType,
 ) {
-    use pumpkin_core::plugin::raid::{
-        raid_finish::RaidFinishEvent, raid_spawn_wave::RaidSpawnWaveEvent,
-        raid_stop::RaidStopEvent, raid_trigger::RaidTriggerEvent,
-    };
+    use pumpkin_core::plugin::raid::raid_finish::RaidFinishEvent;
+    use pumpkin_core::plugin::raid::raid_spawn_wave::RaidSpawnWaveEvent;
+    use pumpkin_core::plugin::raid::raid_stop::RaidStopEvent;
+    use pumpkin_core::plugin::raid::raid_trigger::RaidTriggerEvent;
 
     match event_type {
         EventType::RaidFinishEvent => {
@@ -1309,9 +1324,9 @@ fn register_dialog_event(
     blocking: bool,
     event_type: EventType,
 ) {
-    use pumpkin_core::plugin::api::events::dialog::{
-        DialogClearEvent, DialogClickActionEvent, DialogShowEvent,
-    };
+    use pumpkin_core::plugin::api::events::dialog::DialogClearEvent;
+    use pumpkin_core::plugin::api::events::dialog::DialogClickActionEvent;
+    use pumpkin_core::plugin::api::events::dialog::DialogShowEvent;
 
     match event_type {
         EventType::DialogClickActionEvent => {
@@ -1336,15 +1351,14 @@ fn register_server_event(
     blocking: bool,
     event_type: EventType,
 ) {
-    use pumpkin_core::plugin::server::{
-        list_ping::ServerListPingEvent,
-        packet::{PacketReceivedEvent, PacketSentEvent},
-        server_broadcast::ServerBroadcastEvent,
-        server_command::ServerCommandEvent,
-        server_load::ServerLoadEvent,
-        server_tick_end::ServerTickEndEvent,
-        server_tick_start::ServerTickStartEvent,
-    };
+    use pumpkin_core::plugin::server::list_ping::ServerListPingEvent;
+    use pumpkin_core::plugin::server::packet::PacketReceivedEvent;
+    use pumpkin_core::plugin::server::packet::PacketSentEvent;
+    use pumpkin_core::plugin::server::server_broadcast::ServerBroadcastEvent;
+    use pumpkin_core::plugin::server::server_command::ServerCommandEvent;
+    use pumpkin_core::plugin::server::server_load::ServerLoadEvent;
+    use pumpkin_core::plugin::server::server_tick_end::ServerTickEndEvent;
+    use pumpkin_core::plugin::server::server_tick_start::ServerTickStartEvent;
 
     match event_type {
         EventType::PacketReceivedEvent => {
@@ -1389,10 +1403,9 @@ fn register_hanging_event(
     blocking: bool,
     event_type: EventType,
 ) {
-    use pumpkin_core::plugin::hanging::{
-        hanging_break::HangingBreakEvent, hanging_break_by_entity::HangingBreakByEntityEvent,
-        hanging_place::HangingPlaceEvent,
-    };
+    use pumpkin_core::plugin::hanging::hanging_break::HangingBreakEvent;
+    use pumpkin_core::plugin::hanging::hanging_break_by_entity::HangingBreakByEntityEvent;
+    use pumpkin_core::plugin::hanging::hanging_place::HangingPlaceEvent;
 
     match event_type {
         EventType::HangingBreakEvent => {
@@ -1413,6 +1426,10 @@ fn register_hanging_event(
 impl pumpkin::plugin::context::Host for PluginHostState {}
 
 impl pumpkin::plugin::context::HostContext for PluginHostState {
+    fn drop(&mut self, rep: Resource<WitContext>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     #[allow(clippy::too_many_lines)]
     fn register_event(
         &mut self,
@@ -1747,9 +1764,5 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
                 license_key: metadata.license_key,
                 issued_at: metadata.issued_at,
             }))
-    }
-
-    fn drop(&mut self, rep: Resource<WitContext>) -> wasmtime::Result<()> {
-        self.drop(rep)
     }
 }

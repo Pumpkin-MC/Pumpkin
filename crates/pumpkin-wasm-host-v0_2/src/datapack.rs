@@ -1,23 +1,26 @@
+use super::run_blocking;
 use crate::pumpkin::plugin::datapack::{
     DatapackInfo as WitDatapackInfo, DatapackManager as WitDatapackManager,
     EnablePosition as WitEnablePosition, Host as DatapackHost, HostDatapackManager,
     HostDatapackManagerWithStore,
 };
+use crate::{AccessorExt, RequireServer};
 use pumpkin_core::data::datapack::DatapackManager;
 use pumpkin_wasm_host_common::state::PluginHostState;
-use wasmtime::component::{Access, HasSelf, Resource};
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 impl DatapackHost for PluginHostState {}
 
 impl HostDatapackManager for PluginHostState {
+    fn drop(&mut self, rep: Resource<WitDatapackManager>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn list_all_packs(
         &mut self,
         _res: Resource<WitDatapackManager>,
     ) -> wasmtime::Result<Vec<WitDatapackInfo>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let packs = DatapackManager::list_all_packs(server);
         Ok(packs.into_iter().map(to_wit_datapack_info).collect())
     }
@@ -26,10 +29,7 @@ impl HostDatapackManager for PluginHostState {
         &mut self,
         _res: Resource<WitDatapackManager>,
     ) -> wasmtime::Result<Vec<WitDatapackInfo>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let packs = DatapackManager::list_enabled_packs(server);
         Ok(packs.into_iter().map(to_wit_datapack_info).collect())
     }
@@ -38,10 +38,7 @@ impl HostDatapackManager for PluginHostState {
         &mut self,
         _res: Resource<WitDatapackManager>,
     ) -> wasmtime::Result<Vec<WitDatapackInfo>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let packs = DatapackManager::list_available_packs(server);
         Ok(packs.into_iter().map(to_wit_datapack_info).collect())
     }
@@ -51,10 +48,7 @@ impl HostDatapackManager for PluginHostState {
         _res: Resource<WitDatapackManager>,
         name: String,
     ) -> wasmtime::Result<Option<WitDatapackInfo>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         let pack = DatapackManager::get_pack_info(server, &name);
         Ok(pack.map(to_wit_datapack_info))
     }
@@ -64,125 +58,60 @@ impl HostDatapackManager for PluginHostState {
         _res: Resource<WitDatapackManager>,
         name: String,
     ) -> wasmtime::Result<bool> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.require_server()?;
         Ok(DatapackManager::is_pack_enabled(server, &name))
-    }
-
-    fn drop(&mut self, rep: Resource<WitDatapackManager>) -> wasmtime::Result<()> {
-        self.drop(rep)
     }
 }
 
 impl HostDatapackManagerWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn enable_pack(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitDatapackManager>,
         name: String,
         position: WitEnablePosition,
     ) -> wasmtime::Result<Result<(), String>> {
-        let (server, plugin) = {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
-            (server, plugin)
-        };
+        let server = accessor.server()?;
         let position = to_data_enable_position(position);
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                DatapackManager::enable_pack(&server, &name, position)
-            })
-            .await
+        run_blocking(accessor, move || {
+            DatapackManager::enable_pack(&server, &name, position)
+        })
+        .await
     }
 
     async fn disable_pack(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitDatapackManager>,
         name: String,
     ) -> wasmtime::Result<Result<(), String>> {
-        let (server, plugin) = {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
-            (server, plugin)
-        };
+        let server = accessor.server()?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                DatapackManager::disable_pack(&server, &name)
-            })
-            .await
+        run_blocking(accessor, move || {
+            DatapackManager::disable_pack(&server, &name)
+        })
+        .await
     }
 
     async fn reload(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitDatapackManager>,
     ) -> wasmtime::Result<Result<(), String>> {
-        let (server, plugin) = {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
-            (server, plugin)
-        };
+        let server = accessor.server()?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || DatapackManager::reload(&server))
-            .await
+        run_blocking(accessor, move || DatapackManager::reload(&server)).await
     }
 
     async fn execute_function(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitDatapackManager>,
         name: String,
     ) -> wasmtime::Result<Result<u32, String>> {
-        let (server, plugin) = {
-            let state = host.get();
-            let server = state
-                .server
-                .clone()
-                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
-            (server, plugin)
-        };
+        let server = accessor.server()?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                DatapackManager::execute_function_from_console(&server, &name)
-                    .map(|count| count as u32)
-            })
-            .await
+        run_blocking(accessor, move || {
+            DatapackManager::execute_function_from_console(&server, &name).map(|count| count as u32)
+        })
+        .await
     }
 }
 

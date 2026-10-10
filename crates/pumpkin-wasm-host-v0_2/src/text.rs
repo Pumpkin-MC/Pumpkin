@@ -1,24 +1,27 @@
-use std::borrow::Cow;
-use std::str::FromStr;
-use wasmtime::component::Resource;
-
 use crate::pumpkin::{
     self,
     plugin::text::{ArgbColor, NamedColor, RgbColor, TextComponent},
 };
-use pumpkin_wasm_host_common::state::PluginHostState;
-
-use pumpkin_util::text::{
-    TextComponent as InternalTextComponent,
-    click::ClickEvent,
-    color::{self, Color},
-    hover::HoverEvent,
+use pumpkin_util::{
+    text::{
+        TextComponent as InternalTextComponent,
+        click::ClickEvent,
+        color::{self, Color},
+        hover::HoverEvent,
+    },
+    translation::Locale,
 };
-use pumpkin_util::translation::Locale;
+use pumpkin_wasm_host_common::state::PluginHostState;
+use std::{borrow::Cow, str::FromStr};
+use wasmtime::component::Resource;
 
 impl pumpkin::plugin::text::Host for PluginHostState {}
 
 impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
+    fn drop(&mut self, rep: Resource<TextComponent>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     fn text(&mut self, plain: String) -> wasmtime::Result<Resource<TextComponent>> {
         let tc = InternalTextComponent::text(plain);
         self.add(tc)
@@ -355,10 +358,6 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
             name: name_val,
         });
         Ok(())
-    }
-
-    fn drop(&mut self, rep: Resource<TextComponent>) -> wasmtime::Result<()> {
-        self.drop(rep)
     }
 }
 

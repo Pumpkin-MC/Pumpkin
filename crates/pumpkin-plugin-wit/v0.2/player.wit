@@ -833,7 +833,8 @@ interface player {
         log-to-console: bool,
     }
 
-    /// A handle to a player on the server.
+    /// Opaque handle to a player on the server.
+    /// Operations may run in the player's owning domain.
     resource player {
         /// Returns the player as an entity.
         as-entity: func () -> entity;
@@ -855,7 +856,7 @@ interface player {
         /// Returns the player's current game mode.
         get-gamemode: func () -> game-mode;
         /// Changes the player's game mode. Returns true if successful.
-        set-gamemode: func (mode: game-mode) -> bool;
+        set-gamemode: async func (mode: game-mode) -> bool;
         /// Returns the player's locale (e.g., \"en_us\").
         get-locale: func () -> string;
         /// Returns the player's current ping in milliseconds.
@@ -866,7 +867,7 @@ interface player {
         /// Returns the player's permission level (0-4).
         get-permission-level: func () -> permission-level;
         /// Sets the player's permission level.
-        set-permission-level: func (level: permission-level);
+        set-permission-level: async func (level: permission-level);
         /// Grants or denies a specific permission node for the player.
         set-permission: func(node: string, value: bool);
         /// Removes an explicitly set permission node from the player.
@@ -874,7 +875,7 @@ interface player {
         /// Returns `Some(true)` if granted, `Some(false)` if denied, or `None` if not set.
         has-permission-set: func (node: string) -> option<bool>;
         /// Checks if the player has a specific permission node.
-        has-permission: func (node: string) -> bool;
+        has-permission: async func (node: string) -> bool;
         /// Returns the player's display name, which may include formatting.
         get-display-name: func () -> text-component;
         /// Sets the player's display name.
@@ -889,9 +890,9 @@ interface player {
         /// Sends a system message to the player's chat.
         send-system-message: func (text: text-component, overlay: bool);
         /// Deletes a signed chat message from the player's chat window using its 256-byte signature.
-        delete-message-by-signature: func (signature: list<u8>);
+        delete-message-by-signature: async func (signature: list<u8>);
         /// Deletes a signed chat message from the player's chat window using its signature cache ID.
-        delete-message-by-id: func (signature-id: s32);
+        delete-message-by-id: async func (signature-id: s32);
         /// Sets the header and footer of the player's Tab list.
         set-tab-list-header-footer: func (header: text-component, footer: text-component);
 
@@ -985,27 +986,27 @@ interface player {
         // Teleport & kick
 
         /// Teleports the player to a position in a world.
-        teleport: func (position: position, yaw: option<f32>, pitch: option<f32>, %world: %world);
+        teleport: async func (position: position, yaw: option<f32>, pitch: option<f32>, %world: %world);
         /// Teleports the player to another world at a specific position.
-        teleport-world: func (world-ref: %world, position: position, yaw: option<f32>, pitch: option<f32>);
+        teleport-world: async func (world-ref: %world, position: position, yaw: option<f32>, pitch: option<f32>);
         /// Forces the player to respawn.
-        respawn: func ();
+        respawn: async func ();
 
         /// Opens a GUI for the player.
-        open-gui: func (gui-ref: gui);
+        open-gui: async func (gui-ref: gui);
 
         /// Bans the player with the specified options.
-        ban: func (options: ban-player-options);
+        ban: async func (options: ban-player-options);
         /// Bans the player's IP address with the specified options.
-        ban-ip: func (options: ban-ip-options);
+        ban-ip: async func (options: ban-ip-options);
 
         /// Transfers the player to another server.
-        transfer: func (host: string, port: u16);
+        transfer: async func (host: string, port: u16);
 
         // Status Effects
 
         /// Gives a status effect to the player.
-        add-effect: func(effect: status-effect-instance);
+        add-effect: async func(effect: status-effect-instance);
         /// Removes a status effect from the player.
         remove-effect: func(effect: status-effect-type);
         /// Clears all active status effects from the player.
@@ -1020,11 +1021,11 @@ interface player {
         // Health & Damage
 
         /// Heals the player by a specified amount.
-        heal: func(amount: f32);
+        heal: async func(amount: f32);
         /// Deals damage to the player by a specified amount with a damage type.
-        damage: func(amount: f32, damage-type: damage-type);
+        damage: async func(amount: f32, damage-type: damage-type);
         /// Kills the player instantly.
-        kill: func();
+        kill: async func();
 
         // Statistics
 
@@ -1083,20 +1084,20 @@ interface player {
         get-inventory-item: func (slot: u8) -> option<item-stack>;
 
         /// Sets the item in the specified hand.
-        set-item-in-hand: func (hand: hand, stack: option<item-stack>);
+        set-item-in-hand: async func (hand: hand, stack: option<item-stack>);
         /// Sets the item in the specified inventory slot.
-        set-inventory-item: func (slot: u8, stack: option<item-stack>);
+        set-inventory-item: async func (slot: u8, stack: option<item-stack>);
 
         // Ender Chest Inventory
 
         /// Returns the item in the specified ender chest slot (0-26).
         get-ender-chest-item: func (slot: u8) -> option<item-stack>;
         /// Sets the item in the specified ender chest slot (0-26).
-        set-ender-chest-item: func (slot: u8, stack: option<item-stack>);
+        set-ender-chest-item: async func (slot: u8, stack: option<item-stack>);
         /// Clears all items from the player's ender chest.
-        clear-ender-chest: func ();
+        clear-ender-chest: async func ();
         /// Opens the player's ender chest inventory screen for them.
-        open-ender-chest: func ();
+        open-ender-chest: async func ();
 
         // Status
 
@@ -1111,7 +1112,7 @@ interface player {
         /// Returns the player's food level (0-20).
         get-food-level: func () -> u8;
         /// Sets the player's food level.
-        set-food-level: func (food-level: u8);
+        set-food-level: async func (food-level: u8);
         /// Returns the player's food saturation level.
         get-saturation: func () -> f32;
         /// Sets the player's food saturation level.
@@ -1132,15 +1133,15 @@ interface player {
         /// Returns the total experience points the player has.
         get-experience-points:   func() -> s32;
         /// Sets the player's total experience level.
-        set-experience-level:    func(level: s32);
+        set-experience-level:    async func(level: s32);
         /// Sets the player's progress toward the next level.
-        set-experience-progress: func(progress: f32);
+        set-experience-progress: async func(progress: f32);
         /// Sets the player's total experience points.
-        set-experience-points:   func(points: s32);
+        set-experience-points:   async func(points: s32);
         /// Adds experience levels to the player.
-        add-experience-levels:   func(levels: s32);
+        add-experience-levels:   async func(levels: s32);
         /// Adds experience points to the player.
-        add-experience-points:   func(points: s32);
+        add-experience-points:   async func(points: s32);
 
         /// Returns whether the player is currently flying.
         is-flying:    func() -> bool;
@@ -1238,7 +1239,7 @@ interface player {
 
         /// Awards a specific criterion of an advancement to the player.
         /// Returns true if the criterion was successfully awarded (was not already completed).
-        award-advancement-criterion: func(advancement-id: string, criterion: string) -> bool;
+        award-advancement-criterion: async func(advancement-id: string, criterion: string) -> bool;
 
         /// Revokes a specific criterion of an advancement from the player.
         /// Returns true if the criterion was successfully revoked (was previously completed).
@@ -1246,7 +1247,7 @@ interface player {
 
         /// Awards all criteria of the specified advancement to the player.
         /// Returns true if any criterion was newly awarded.
-        award-advancement: func(advancement-id: string) -> bool;
+        award-advancement: async func(advancement-id: string) -> bool;
 
         /// Revokes all criteria of the specified advancement from the player.
         /// Returns true if any criterion was newly revoked.
@@ -1348,16 +1349,16 @@ interface player {
         get-settings: func() -> java-player-settings;
 
         /// Sends a Java-specific clientbound packet to the player.
-        send-packet: func(packet: java-packet);
+        send-packet: async func(packet: java-packet);
 
         /// Sends a custom payload packet (plugin message) to the player.
-        send-custom-payload: func(channel: string, data: list<u8>);
+        send-custom-payload: async func(channel: string, data: list<u8>);
 
         /// Shows a dialog to the player.
-        show-dialog: func(dialog: dialog);
+        show-dialog: async func(dialog: dialog);
 
         /// Clears any currently shown dialog for the player.
-        clear-dialog: func();
+        clear-dialog: async func();
 
         /// Returns the Java scoreboard handle for this player.
         get-scoreboard: func() -> scoreboard;
@@ -1366,16 +1367,16 @@ interface player {
         reset-scoreboard: func();
 
         /// Sends a resource pack to the Java player.
-        send-resource-pack: func(pack: java-resource-pack);
+        send-resource-pack: async func(pack: java-resource-pack);
 
         /// Removes a specific resource pack by UUID for the Java player.
-        remove-resource-pack: func(id: uuid);
+        remove-resource-pack: async func(id: uuid);
 
         /// Clears all custom resource packs for the Java player.
-        clear-resource-packs: func();
+        clear-resource-packs: async func();
 
         /// Kicks the Java player with the specified options.
-        kick: func(options: java-kick-options);
+        kick: async func(options: java-kick-options);
 
         /// Sends a clientbound GameEvent packet to the Java player.
         send-game-event: func(event: client-game-event, value: f32);
@@ -1407,13 +1408,13 @@ interface player {
         /// Sets whether a specific Bedrock-only status flag is enabled for the player.
         ///
         /// This can be used to manually trigger client-side visual states.
-        set-status-flag: func(flag: bedrock-status-flag, value: bool);
+        set-status-flag: async func(flag: bedrock-status-flag, value: bool);
 
         /// Sends a Bedrock-specific clientbound packet to the player.
-        send-packet: func(packet: bedrock-packet);
+        send-packet: async func(packet: bedrock-packet);
 
         /// Opens a Bedrock custom form for the player.
-        open-form: func(form: form) -> u32;
+        open-form: async func(form: form) -> u32;
 
         /// Returns the Bedrock scoreboard handle for this player.
         get-scoreboard: func() -> bedrock-scoreboard;
@@ -1422,10 +1423,10 @@ interface player {
         reset-scoreboard: func();
 
         /// Sends resource packs information to the Bedrock player.
-        send-resource-packs-info: func(info: bedrock-resource-packs-info);
+        send-resource-packs-info: async func(info: bedrock-resource-packs-info);
 
         /// Kicks the Bedrock player with the specified options.
-        kick: func(options: bedrock-kick-options);
+        kick: async func(options: bedrock-kick-options);
     }
 
     /// Returns a list of all players in a specific world.
