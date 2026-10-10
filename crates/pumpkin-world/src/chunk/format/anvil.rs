@@ -258,12 +258,20 @@ impl AnvilChunkData {
             ));
         };
 
-        if length > bytes.len() {
+        // The compression byte has not been read yet, so the payload can use at
+        // most one less than what remains.
+        let Some(available) = bytes.len().checked_sub(1) else {
+            return Err(ChunkReadingError::ParsingError(
+                ChunkParsingError::ErrorDeserializingChunk(
+                    "Chunk record is missing its compression byte".to_string(),
+                ),
+            ));
+        };
+
+        if length > available {
             return Err(ChunkReadingError::ParsingError(
                 ChunkParsingError::ErrorDeserializingChunk(format!(
-                    "Chunk length is greater than available bytes ({} vs {})",
-                    length,
-                    bytes.len()
+                    "Chunk length is greater than available bytes ({length} vs {available})"
                 )),
             ));
         }
@@ -1392,6 +1400,19 @@ mod tests {
         // is 1 and the byte count is that minus one. Zero came from a file, so
         // it has to be rejected rather than subtracted from.
         let file = AnvilChunkFile::<ChunkData>::read(region_with_first_location((2 << 8) | 1, 0));
+
+        assert!(file.is_err());
+    }
+
+    #[test]
+    fn a_chunk_declaring_one_byte_too_many_is_an_error_not_a_panic() {
+        // The length is checked while the compression byte is still unread, so
+        // a chunk claiming exactly the bytes that remain used to pass the check
+        // and then slice one byte past the end.
+        let file = AnvilChunkFile::<ChunkData>::read(region_with_first_location(
+            (2 << 8) | 1,
+            SECTOR_BYTES as u32 - 3,
+        ));
 
         assert!(file.is_err());
     }
