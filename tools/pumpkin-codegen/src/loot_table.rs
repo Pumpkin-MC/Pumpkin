@@ -351,6 +351,19 @@ struct ChestLootTableJson {
     pools: Vec<PoolStruct>,
 }
 
+/// Block name -> loot table key overrides, emitted by the Extractor.
+///
+/// Vanilla registers all `wallVariant()` blocks (wall torches, wall signs,
+/// hanging signs, banners, coral fans, skulls, ...) with their base block's
+/// loot table at runtime. That inheritance is not present in the datapack,
+/// so `collect_json_files` cannot see it. The Extractor emits the exceptions
+/// as `assets/block_loot_tables.json`, and `build()` turns them into extra
+/// lookup entries.
+#[derive(Deserialize, Clone, Debug)]
+struct AliasFile {
+    overrides: std::collections::HashMap<String, String>,
+}
+
 fn path_to_key(relative: &str) -> String {
     format!("minecraft:{relative}")
 }
@@ -795,6 +808,29 @@ pub fn build() -> TokenStream {
         lookup_rows.push((key, table_ident.clone()));
         lookup_rows.push((relative_path.clone(), table_ident));
     }
+
+    // Apply Extractor-emitted loot table aliases for `wallVariant()` blocks.
+    let alias_path = Path::new("../../assets/block_loot_tables.json");
+
+    if let Ok(content) = fs::read_to_string(alias_path) {
+        let aliases: AliasFile = serde_json::from_str(&content)
+            .unwrap_or_else(|e| panic!("failed to parse {}: {e}", alias_path.display()));
+
+        let key_to_ident: std::collections::HashMap<String, Ident> = lookup_rows
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+
+        for (block_name, target_key) in &aliases.overrides {
+            let alias_key = format!("minecraft:blocks/{block_name}");
+            let target_ident = key_to_ident.get(target_key).unwrap_or_else(|| {
+                panic!("loot table alias for `{block_name}` points to unknown table `{target_key}`")
+            });
+
+            lookup_rows.push((alias_key, target_ident.clone()));
+        }
+    }
+
     lookup_rows.sort_by(|a, b| a.0.cmp(&b.0));
     let lookup_len = lookup_rows.len();
     let lookup_rows = lookup_rows
