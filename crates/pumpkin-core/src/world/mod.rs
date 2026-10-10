@@ -3784,13 +3784,13 @@ impl World {
         if let Some(calc) = damage_calculator {
             explosion = explosion.with_damage_calculator(calc);
         }
-        self.run_explosion(&explosion, position, power);
+        self.run_explosion(&explosion);
     }
 
     pub fn explode_tnt_minecart(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
         let block_interaction = self.get_block_interaction(ExplosionInteraction::Tnt);
         let explosion = Explosion::new(power, position, block_interaction).preserving_rails();
-        self.run_explosion(&explosion, position, power);
+        self.run_explosion(&explosion);
     }
 
     #[must_use]
@@ -3824,7 +3824,9 @@ impl World {
         }
     }
 
-    fn run_explosion(self: &Arc<Self>, explosion: &Explosion, position: Vector3<f64>, power: f32) {
+    pub(crate) fn run_explosion(self: &Arc<Self>, explosion: &Explosion) {
+        let position = explosion.pos;
+        let power = explosion.power;
         let mut event = crate::plugin::api::events::entity::entity_explode::EntityExplodeEvent::new(
             0, position, power,
         );
@@ -3835,22 +3837,25 @@ impl World {
             return;
         }
 
-        let block_count = explosion.explode(self);
+        let result = explosion.explode(self);
         let particle = if power < 2.0 {
-            Particle::Explosion
+            explosion.small_particle
         } else {
-            Particle::ExplosionEmitter
+            explosion.large_particle
         };
-        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
+        let sound = IdOr::<SoundEvent>::Id(explosion.sound as u16);
         for player in self.players.load().iter() {
             if player.position().squared_distance_to_vec(&position) > 4096.0 {
+                if let Some(knockback) = result.player_knockback.get(&player.entity_id()) {
+                    player.get_entity().add_velocity(*knockback);
+                }
                 continue;
             }
             player.try_send_client_packet(&CExplosion::new(
                 position,
                 power,
-                block_count as i32,
-                None,
+                result.block_count as i32,
+                result.player_knockback.get(&player.entity_id()).copied(),
                 VarInt(particle as i32),
                 sound.clone(),
             ));
@@ -6690,6 +6695,25 @@ impl World {
         end_pos: Vector3<f64>,
         hit_check: impl Fn(&BlockPos, &Arc<Self>) -> bool,
     ) -> Option<(BlockPos, BlockDirection)> {
+        let adjust = -1.0e-7f64;
+        let to = end_pos.lerp(&start_pos, adjust);
+        let from = start_pos.lerp(&end_pos, adjust);
+        Self::traverse_blocks(start_pos, end_pos, |block, fallback_direction| {
+            if !hit_check(block, self) {
+                return None;
+            }
+            let (collision, direction) = self.ray_outline_check(block, from, to);
+            collision
+                .then(|| direction.or(fallback_direction).map(|dir| (*block, dir)))
+                .flatten()
+        })
+    }
+
+    pub(crate) fn traverse_blocks<T>(
+        start_pos: Vector3<f64>,
+        end_pos: Vector3<f64>,
+        hit_check: impl Fn(&BlockPos, Option<BlockDirection>) -> Option<T>,
+    ) -> Option<T> {
         if start_pos == end_pos {
             return None;
         }
@@ -6700,13 +6724,8 @@ impl World {
 
         let mut block = BlockPos::floored(from.x, from.y, from.z);
 
-        if hit_check(&block, self) {
-            let (collision, direction) = self.ray_outline_check(&block, from, to);
-            if let Some(dir) = direction
-                && collision
-            {
-                return Some((block, dir));
-            }
+        if let Some(hit) = hit_check(&block, None) {
+            return Some(hit);
         }
 
         let difference = to.sub(&from);
@@ -6783,14 +6802,8 @@ impl World {
                 }
             };
 
-            if hit_check(&block, self) {
-                let (collision, direction) = self.ray_outline_check(&block, from, to);
-                if collision {
-                    if let Some(dir) = direction {
-                        return Some((block, dir));
-                    }
-                    return Some((block, block_direction));
-                }
+            if let Some(hit) = hit_check(&block, Some(block_direction)) {
+                return Some(hit);
             }
         }
 
