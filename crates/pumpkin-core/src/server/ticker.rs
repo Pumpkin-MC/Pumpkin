@@ -1,7 +1,6 @@
 use super::server_test_manager::drain_game_test_queue;
 
 use crate::{
-    STOP_INTERRUPT,
     plugin::server::{
         server_tick_end::ServerTickEndEvent, server_tick_start::ServerTickStartEvent,
     },
@@ -55,7 +54,7 @@ impl Ticker {
         let mut game_test_runner = GameTestRunner::new();
 
         let park_thread = std::thread::current();
-        let stop = STOP_INTERRUPT.clone();
+        let stop = server.stop_token.clone();
         server.runtime.spawn(async move {
             stop.cancelled().await;
             park_thread.unpark();
@@ -130,13 +129,13 @@ impl Ticker {
 
             server.update_tick_times(tick_duration_nanos);
 
-            if STOP_INTERRUPT.is_cancelled() {
+            if server.stop_token.is_cancelled() {
                 break 'ticker;
             }
 
-            wait_until_next_tick(base, schedule.next_tick_nanos);
+            wait_until_next_tick(server, base, schedule.next_tick_nanos);
 
-            if STOP_INTERRUPT.is_cancelled() {
+            if server.stop_token.is_cancelled() {
                 break 'ticker;
             }
         }
@@ -196,9 +195,9 @@ const fn apply_overload_skip(
 ///
 /// Vanilla drains its server-thread queue here (`pollTask`). there is no such queue:
 /// that work runs on the runtime and keeps going while this thread parks.
-fn wait_until_next_tick(base: Instant, next_tick_nanos: i64) {
+fn wait_until_next_tick(server: &Server, base: Instant, next_tick_nanos: i64) {
     loop {
-        if STOP_INTERRUPT.is_cancelled() {
+        if server.stop_token.is_cancelled() {
             return;
         }
 

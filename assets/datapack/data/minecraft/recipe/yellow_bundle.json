@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:crafting_transmute",
+  "category": "equipment",
+  "group": "bundle_dye",
+  "input": "#minecraft:bundles",
+  "material": "minecraft:yellow_dye",
+  "result": {
+    "id": "minecraft:yellow_bundle"
+  }
+}

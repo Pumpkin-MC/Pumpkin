@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:randomized_int",
+  "property": "age",
+  "source": {
+    "type": "minecraft:weighted",
+    "entries": [
+      {
+        "data": "minecraft:cave_vines",
+        "weight": 4
+      },
+      {
+        "data": {
+          "id": "minecraft:cave_vines",
+          "properties": {
+            "age": "0",
+            "berries": "true"
+          }
+        },
+        "weight": 1
+      }
+    ]
+  },
+  "values": {
+    "type": "minecraft:uniform",
+    "max_inclusive": 25,
+    "min_inclusive": 23
+  }
+}

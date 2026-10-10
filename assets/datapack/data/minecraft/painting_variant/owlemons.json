@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:owlemons",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.owlemons.author"
+  },
+  "height": 3,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.owlemons.title"
+  },
+  "width": 3
+}

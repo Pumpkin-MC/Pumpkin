@@ -1,0 +1,28 @@
+{
+  "values": [
+    {
+      "id": "#c:seeds/beetroot",
+      "required": false
+    },
+    {
+      "id": "#c:seeds/melon",
+      "required": false
+    },
+    {
+      "id": "#c:seeds/pumpkin",
+      "required": false
+    },
+    {
+      "id": "#c:seeds/torchflower",
+      "required": false
+    },
+    {
+      "id": "#c:seeds/pitcher_plant",
+      "required": false
+    },
+    {
+      "id": "#c:seeds/wheat",
+      "required": false
+    }
+  ]
+}

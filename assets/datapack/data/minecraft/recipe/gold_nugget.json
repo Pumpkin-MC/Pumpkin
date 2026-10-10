@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    "minecraft:gold_ingot"
+  ],
+  "result": {
+    "count": 9,
+    "id": "minecraft:gold_nugget"
+  }
+}

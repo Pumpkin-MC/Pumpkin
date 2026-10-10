@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "redstone",
+  "group": "waxed_copper_door",
+  "ingredients": [
+    "minecraft:exposed_copper_door",
+    "minecraft:honeycomb"
+  ],
+  "result": {
+    "id": "minecraft:waxed_exposed_copper_door"
+  }
+}

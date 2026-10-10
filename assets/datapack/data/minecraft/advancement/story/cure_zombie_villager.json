@@ -1,0 +1,26 @@
+{
+  "parent": "minecraft:story/enter_the_nether",
+  "criteria": {
+    "cured_zombie": {
+      "trigger": "minecraft:cured_zombie_villager"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.story.cure_zombie_villager.description"
+    },
+    "frame": "goal",
+    "icon": {
+      "id": "minecraft:golden_apple"
+    },
+    "title": {
+      "translate": "advancements.story.cure_zombie_villager.title"
+    }
+  },
+  "requirements": [
+    [
+      "cured_zombie"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

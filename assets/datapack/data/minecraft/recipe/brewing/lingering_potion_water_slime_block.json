@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:brewing",
+  "input": {
+    "item": "minecraft:lingering_potion",
+    "potion_contents": {
+      "potions": "minecraft:water"
+    }
+  },
+  "output": {
+    "components": {
+      "minecraft:potion_contents": {
+        "potion": "minecraft:mundane"
+      }
+    },
+    "id": "minecraft:lingering_potion"
+  },
+  "reagent": {
+    "item": "minecraft:slime_block"
+  }
+}

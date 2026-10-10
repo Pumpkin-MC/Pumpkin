@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "key": {
+    "#": "minecraft:cobblestone",
+    "Q": "minecraft:quartz",
+    "R": "minecraft:redstone"
+  },
+  "pattern": [
+    "###",
+    "RRQ",
+    "###"
+  ],
+  "result": {
+    "id": "minecraft:observer"
+  }
+}

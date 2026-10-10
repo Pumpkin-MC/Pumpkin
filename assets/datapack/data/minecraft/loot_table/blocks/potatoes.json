@@ -1,0 +1,63 @@
+{
+  "type": "minecraft:block",
+  "modifier": {
+    "type": "minecraft:explosion_decay"
+  },
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:potato"
+        }
+      ],
+      "rolls": 1
+    },
+    {
+      "condition": {
+        "type": "minecraft:match_block",
+        "blocks": "minecraft:potatoes",
+        "state": {
+          "age": "7"
+        }
+      },
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:apply_bonus",
+            "enchantment": "minecraft:fortune",
+            "formula": "minecraft:binomial_with_bonus_count",
+            "parameters": {
+              "extra": 3,
+              "probability": 0.5714286
+            }
+          },
+          "name": "minecraft:potato"
+        }
+      ],
+      "rolls": 1
+    },
+    {
+      "condition": {
+        "type": "minecraft:match_block",
+        "blocks": "minecraft:potatoes",
+        "state": {
+          "age": "7"
+        }
+      },
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "condition": {
+            "type": "minecraft:random_chance",
+            "chance": 0.02
+          },
+          "name": "minecraft:poisonous_potato"
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:blocks/potatoes"
+}

@@ -1,0 +1,50 @@
+{
+  "elements": [
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/starting_pieces/starting_stairs_0",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/starting_pieces/starting_stairs_1",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/starting_pieces/starting_stairs_2",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/starting_pieces/starting_stairs_3",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/starting_pieces/starting_stairs_4",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    }
+  ],
+  "fallback": "minecraft:empty"
+}

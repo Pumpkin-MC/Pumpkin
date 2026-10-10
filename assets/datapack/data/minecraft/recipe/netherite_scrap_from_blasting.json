@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:blasting",
+  "cookingtime": 200,
+  "experience": 2.0,
+  "ingredient": "minecraft:ancient_debris",
+  "result": {
+    "id": "minecraft:netherite_scrap"
+  }
+}

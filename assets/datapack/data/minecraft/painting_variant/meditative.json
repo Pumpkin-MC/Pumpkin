@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:meditative",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.meditative.author"
+  },
+  "height": 1,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.meditative.title"
+  },
+  "width": 1
+}

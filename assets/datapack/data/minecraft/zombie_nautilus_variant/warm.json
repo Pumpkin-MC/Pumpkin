@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:entity/nautilus/zombie_nautilus_coral",
+  "model": "warm",
+  "spawn_conditions": [
+    {
+      "condition": {
+        "type": "minecraft:biome",
+        "biomes": "#minecraft:spawns_coral_variant_zombie_nautilus"
+      },
+      "priority": 1
+    }
+  ]
+}

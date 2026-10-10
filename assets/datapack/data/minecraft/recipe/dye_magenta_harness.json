@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "group": "harness_dye",
+  "ingredients": [
+    "minecraft:magenta_dye",
+    [
+      "minecraft:white_harness",
+      "minecraft:orange_harness",
+      "minecraft:light_blue_harness",
+      "minecraft:yellow_harness",
+      "minecraft:lime_harness",
+      "minecraft:pink_harness",
+      "minecraft:gray_harness",
+      "minecraft:light_gray_harness",
+      "minecraft:cyan_harness",
+      "minecraft:purple_harness",
+      "minecraft:blue_harness",
+      "minecraft:brown_harness",
+      "minecraft:green_harness",
+      "minecraft:red_harness",
+      "minecraft:black_harness"
+    ]
+  ],
+  "result": {
+    "id": "minecraft:magenta_harness"
+  }
+}

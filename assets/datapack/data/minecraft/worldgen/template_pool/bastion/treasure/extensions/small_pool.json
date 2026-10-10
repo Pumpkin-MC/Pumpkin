@@ -1,0 +1,68 @@
+{
+  "elements": [
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/treasure/extensions/empty",
+        "processors": "minecraft:treasure_rooms",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/treasure/extensions/fire_room",
+        "processors": "minecraft:treasure_rooms",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/treasure/extensions/empty",
+        "processors": "minecraft:treasure_rooms",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/treasure/extensions/small_bridge_0",
+        "processors": "minecraft:treasure_rooms",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/treasure/extensions/small_bridge_1",
+        "processors": "minecraft:treasure_rooms",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/treasure/extensions/small_bridge_2",
+        "processors": "minecraft:treasure_rooms",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/treasure/extensions/small_bridge_3",
+        "processors": "minecraft:treasure_rooms",
+        "projection": "rigid"
+      },
+      "weight": 1
+    }
+  ],
+  "fallback": "minecraft:empty"
+}

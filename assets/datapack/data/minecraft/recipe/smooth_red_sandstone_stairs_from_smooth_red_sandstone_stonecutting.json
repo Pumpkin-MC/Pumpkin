@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": "minecraft:smooth_red_sandstone",
+  "result": {
+    "id": "minecraft:smooth_red_sandstone_stairs"
+  }
+}

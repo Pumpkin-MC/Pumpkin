@@ -1,0 +1,36 @@
+{
+  "parent": "minecraft:adventure/ol_betsy",
+  "criteria": {
+    "arbalistic": {
+      "conditions": {
+        "fired_from_weapon": {
+          "items": "minecraft:crossbow"
+        },
+        "unique_entity_types": 5
+      },
+      "trigger": "minecraft:killed_by_arrow"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.arbalistic.description"
+    },
+    "frame": "challenge",
+    "hidden": true,
+    "icon": {
+      "id": "minecraft:crossbow"
+    },
+    "title": {
+      "translate": "advancements.adventure.arbalistic.title"
+    }
+  },
+  "requirements": [
+    [
+      "arbalistic"
+    ]
+  ],
+  "rewards": {
+    "experience": 85
+  },
+  "sends_telemetry_event": true
+}

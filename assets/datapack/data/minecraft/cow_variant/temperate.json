@@ -1,0 +1,9 @@
+{
+  "asset_id": "minecraft:entity/cow/cow_temperate",
+  "baby_asset_id": "minecraft:entity/cow/cow_temperate_baby",
+  "spawn_conditions": [
+    {
+      "priority": 0
+    }
+  ]
+}

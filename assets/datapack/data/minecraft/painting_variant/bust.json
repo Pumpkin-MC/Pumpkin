@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:bust",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.bust.author"
+  },
+  "height": 2,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.bust.title"
+  },
+  "width": 2
+}

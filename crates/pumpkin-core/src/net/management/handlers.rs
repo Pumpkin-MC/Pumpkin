@@ -809,12 +809,7 @@ async fn execute_method(
         }
         "minecraft:server/stop" => {
             check_no_params(params)?;
-            server.management_hub.broadcast_server_stopping();
-            let s = server.clone();
-            tokio::spawn(async move {
-                s.shutdown().await;
-                std::process::exit(0);
-            });
+            server.stop();
             Ok(json!(true))
         }
         "minecraft:server/system_message" => {

@@ -1,0 +1,13 @@
+{
+  "values": [
+    "minecraft:breeze",
+    "minecraft:skeleton",
+    "minecraft:bogged",
+    "minecraft:stray",
+    "minecraft:zombie",
+    "minecraft:husk",
+    "minecraft:spider",
+    "minecraft:cave_spider",
+    "minecraft:slime"
+  ]
+}

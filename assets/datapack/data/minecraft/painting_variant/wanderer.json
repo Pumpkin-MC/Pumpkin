@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:wanderer",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.wanderer.author"
+  },
+  "height": 2,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.wanderer.title"
+  },
+  "width": 1
+}

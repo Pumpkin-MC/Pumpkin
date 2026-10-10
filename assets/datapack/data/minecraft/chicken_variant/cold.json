@@ -1,0 +1,14 @@
+{
+  "asset_id": "minecraft:entity/chicken/chicken_cold",
+  "baby_asset_id": "minecraft:entity/chicken/chicken_cold_baby",
+  "model": "cold",
+  "spawn_conditions": [
+    {
+      "condition": {
+        "type": "minecraft:biome",
+        "biomes": "#minecraft:spawns_cold_variant_farm_animals"
+      },
+      "priority": 1
+    }
+  ]
+}

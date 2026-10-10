@@ -226,6 +226,56 @@ pub fn stop_or_exit_server() {
     stop_server();
 }
 
+/// Runs one Java connection from handshake to disconnect: login, configuration, play, and the
+/// player save when they leave.
+pub async fn serve_java_connection(server: Arc<Server>, mut pending: PendingConnection) {
+    // Stop waiting on a pending login once this server stops
+    let login_result = select! {
+        result = pending.handle_login_sequence(&server) => result,
+        () = server.stop_token.cancelled() => PacketHandlerResult::Stop,
+    };
+
+    match login_result {
+        PacketHandlerResult::Stop => {
+            pending.close();
+        }
+        PacketHandlerResult::ReadyToPlay(profile, config) => {
+            let mut java_client =
+                JavaClient::from_pending(pending, profile.clone(), config.clone());
+            java_client.start_outgoing_packet_task();
+
+            if let Some((player, world)) = server.add_player(
+                Arc::new(ClientPlatform::Java(java_client)),
+                profile,
+                Some(config),
+            ) {
+                if let ClientPlatform::Java(client) = player.client.as_ref() {
+                    client.set_player(player.clone());
+                }
+                world
+                    .spawn_java_player(&server.basic_config, &player, &server)
+                    .await;
+
+                if let ClientPlatform::Java(client) = player.client.as_ref() {
+                    client.progress_player_packets(&player, &server).await;
+
+                    // Close when done
+                    client.close();
+                    client.await_tasks().await;
+                }
+                player.remove().await;
+                server.remove_player(&player);
+                if let Err(e) = server.player_data_storage.handle_player_leave(&player) {
+                    error!("Failed to save player data on disconnect: {e}");
+                }
+                if let Err(e) = server.advancement_manager.save_player(&player).await {
+                    error!("Failed to save player advancement on disconnect: {e}");
+                }
+            }
+        }
+    }
+}
+
 fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
     opt: Option<D>,
     func: F,
@@ -237,11 +287,33 @@ fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
     )
 }
 
+/// [`PumpkinServer::new`] fails. embedding host gets it back instead of existing process
+#[derive(thiserror::Error, Debug)]
+pub enum ServerSetupError {
+    #[error("Failed to initialize world storage: {0}")]
+    WorldInfo(#[from] WorldInfoError),
+    #[error("Failed to bind the Java listener on {address}: {source}")]
+    JavaBind {
+        address: SocketAddr,
+        source: std::io::Error,
+    },
+    #[error("Failed to bind the Bedrock UDP socket on {address}: {source}")]
+    BedrockBind {
+        address: SocketAddr,
+        source: std::io::Error,
+    },
+    #[error("Failed to spawn the Server-Ticker thread: {0}")]
+    TickerSpawn(std::io::Error),
+}
+
 pub struct PumpkinServer {
     pub server: Arc<Server>,
     pub tcp_listener: Option<TcpListener>,
     pub bedrock_status: Option<StatusResponder>,
     pub nethernet_listener: Option<NetherNetListener>,
+    /// Whether this instance owns the process: on shutdown, a standalone server also stops the
+    /// process, while an embedded server only ends its own world.
+    pub standalone: bool,
 }
 
 impl PumpkinServer {
@@ -254,7 +326,7 @@ impl PumpkinServer {
         telemetry_config: TelemetryConfig,
         vanilla_data: VanillaData,
         plugin_loaders: Vec<Arc<dyn PluginLoader>>,
-    ) -> Result<Self, WorldInfoError> {
+    ) -> Result<Self, ServerSetupError> {
         let server = Server::new(
             basic_config,
             advanced_config,
@@ -264,8 +336,30 @@ impl PumpkinServer {
         )
         .await?;
 
+        let result = Self::setup(server.clone()).await;
+        if result.is_err() {
+            // End what `Server::new` and `setup` already spawned, so the host keeps a clean process
+            server.stop();
+        }
+        result
+    }
+
+    /// Binds the listeners, then starts the services and the ticker. Binding comes first, so a
+    /// bind error leaves nothing running.
+    async fn setup(server: Arc<Server>) -> Result<Self, ServerSetupError> {
         #[cfg(target_family = "unix")]
         adjust_file_descriptor_limit();
+
+        let tcp_listener = if server.advanced_config.networking.java.enabled {
+            Some(Self::bind_java(server.advanced_config.networking.java.address).await?)
+        } else {
+            None
+        };
+
+        let (bedrock_status, ice_socket) = match Self::bind_bedrock_status(&server).await? {
+            Some((status, ice)) => (Some(status), Some(ice)),
+            None => (None, None),
+        };
 
         let management = server.advanced_config.networking.management.clone();
 
@@ -276,32 +370,7 @@ impl PumpkinServer {
             });
         }
 
-        let tcp_listener = if server.advanced_config.networking.java.enabled {
-            let address = server.advanced_config.networking.java.address;
-            // Setup the TCP server socket.
-            let listener = match TcpListener::bind(address).await {
-                Ok(l) => l,
-                Err(e) => match e.kind() {
-                    ErrorKind::AddrInUse => {
-                        error!("Error: Address {address} is already in use.");
-                        error!("Make sure another instance of the server isn't already running");
-                        std::process::exit(1);
-                    }
-                    ErrorKind::PermissionDenied => {
-                        error!("Error: Permission denied when binding to {address}.");
-                        error!("You might need sudo/admin privileges to use ports below 1024");
-                        std::process::exit(1);
-                    }
-                    ErrorKind::AddrNotAvailable => {
-                        error!("Error: The address {address} is not available on this machine");
-                        std::process::exit(1);
-                    }
-                    _ => {
-                        error!("Failed to start TcpListener on {address}: {e}");
-                        std::process::exit(1);
-                    }
-                },
-            };
+        if let Some(listener) = &tcp_listener {
             // In the event the user puts 0 for their port, this will allow us to know what port it is running on
             let addr = listener.local_addr().unwrap_or_else(|_| {
                 std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
@@ -322,32 +391,21 @@ impl PumpkinServer {
                     &server.advanced_config.networking.lan_broadcast,
                     &server.advanced_config.networking.java.motd,
                 );
-                server.spawn_task(lan_broadcast.start(addr));
+                server.spawn_task(lan_broadcast.start(server.clone(), addr));
             }
-
-            Some(listener)
-        } else {
-            None
-        };
+        }
 
         // Ticker
         {
             let ticker_server = server.clone();
-            if let Err(err) = std::thread::Builder::new()
+            std::thread::Builder::new()
                 .name("Server-Ticker".into())
                 .spawn(move || {
                     Ticker::run(&ticker_server);
                 })
-            {
-                error!("Failed to spawn Server-Ticker thread: {err}");
-                std::process::exit(1);
-            }
+                .map_err(ServerSetupError::TickerSpawn)?;
         };
 
-        let (bedrock_status, ice_socket) = match Self::bind_bedrock_status(&server).await {
-            Some((status, ice)) => (Some(status), Some(ice)),
-            None => (None, None),
-        };
         let nethernet_listener = Self::bind_nethernet(&server, ice_socket).await;
 
         Ok(Self {
@@ -355,6 +413,27 @@ impl PumpkinServer {
             tcp_listener,
             bedrock_status,
             nethernet_listener,
+            standalone: true,
+        })
+    }
+
+    async fn bind_java(address: SocketAddr) -> Result<TcpListener, ServerSetupError> {
+        TcpListener::bind(address).await.map_err(|e| {
+            match e.kind() {
+                ErrorKind::AddrInUse => {
+                    error!("Error: Address {address} is already in use.");
+                    error!("Make sure another instance of the server isn't already running");
+                }
+                ErrorKind::PermissionDenied => {
+                    error!("Error: Permission denied when binding to {address}.");
+                    error!("You might need sudo/admin privileges to use ports below 1024");
+                }
+                ErrorKind::AddrNotAvailable => {
+                    error!("Error: The address {address} is not available on this machine");
+                }
+                _ => {}
+            }
+            ServerSetupError::JavaBind { address, source: e }
         })
     }
 
@@ -389,10 +468,12 @@ impl PumpkinServer {
     }
 
     /// Binds the UDP port used by Bedrock status and `NetherNet`'s ICE agent.
-    async fn bind_bedrock_status(server: &Arc<Server>) -> Option<(StatusResponder, IceSocket)> {
+    async fn bind_bedrock_status(
+        server: &Arc<Server>,
+    ) -> Result<Option<(StatusResponder, IceSocket)>, ServerSetupError> {
         let config = &server.advanced_config.networking.bedrock;
         if !config.enabled || !config.nethernet.enabled {
-            return None;
+            return Ok(None);
         }
         match StatusResponder::bind(config.nethernet.address).await {
             Ok((status, ice)) => {
@@ -401,18 +482,17 @@ impl PumpkinServer {
                         "Bedrock server-list status is listening on {ipv4} (IPv4) and {ipv6} (IPv6)"
                     );
                 }
-                Some((status, ice))
+                Ok(Some((status, ice)))
             }
             Err(err) => {
-                error!(
-                    "Failed to bind the Bedrock UDP socket on {}: {err}",
-                    config.nethernet.address
-                );
                 error!(
                     "Bedrock status and NetherNet ICE use this UDP port; make sure nothing else \
                      is using it and start the server again"
                 );
-                std::process::exit(1);
+                Err(ServerSetupError::BedrockBind {
+                    address: config.nethernet.address,
+                    source: err,
+                })
             }
         }
     }
@@ -452,7 +532,9 @@ impl PumpkinServer {
     }
 
     pub async fn start(&self) {
-        if self.server.advanced_config.commands.use_console
+        // Console input belongs to the process, so an embedded server leaves it to the host
+        if self.standalone
+            && self.server.advanced_config.commands.use_console
             && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
         {
             if let Some(rl) = wrapper.take_readline() {
@@ -488,7 +570,10 @@ impl PumpkinServer {
             }
         }
 
-        SERVER_IS_STOPPING.store(true, Ordering::Release);
+        // Process-wide flag, so only a standalone server marks the process as stopping
+        if self.standalone {
+            SERVER_IS_STOPPING.store(true, Ordering::Release);
+        }
 
         if let Some(crash_report) = CRASH_REPORT.get() {
             crash_report.print_to_console();
@@ -505,6 +590,26 @@ impl PumpkinServer {
         }
 
         info!("Stopped accepting incoming connections");
+        if self.standalone {
+            // `stop.rs` only cancels this server's own `stop_token`. escalate here so the
+            // process-wide console ends too. An embedded server only ends its own world.
+            stop_server();
+        }
+
+        self.shutdown(&tasks).await;
+
+        // An embedding host may never set the logger, so don't wait for it
+        if let Some(Some((wrapper, _, _))) = LOGGER_IMPL.get()
+            && let Some(rl) = wrapper.take_readline()
+        {
+            let _ = rl;
+        }
+    }
+
+    /// Saves every player, kicks them, waits for their connection `tasks` to end, then unloads
+    /// plugins and saves the worlds.
+    pub async fn shutdown(&self, tasks: &TaskTracker) {
+        self.server.close_admission();
 
         if let Err(e) = self
             .server
@@ -540,12 +645,6 @@ impl PumpkinServer {
         self.server.shutdown().await;
 
         info!("Completed save!");
-
-        if let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
-            && let Some(rl) = wrapper.take_readline()
-        {
-            let _ = rl;
-        }
     }
 
     #[allow(clippy::too_many_lines)]
@@ -579,57 +678,14 @@ impl PumpkinServer {
                             let packet_limiter = PacketRateLimiter::from_config(
                                 &server_clone.advanced_config.networking.java.packet_limiter,
                             );
-                            let mut pending = PendingConnection::new(
+                            let pending = PendingConnection::new(
                                 connection,
                                 client_addr,
                                 client_id,
                                 packet_limiter,
                                 Arc::downgrade(&server_clone),
                             );
-                            let login_result = pending.handle_login_sequence(&server_clone).await;
-
-                            match login_result {
-                                PacketHandlerResult::Stop => {
-                                     pending.close();
-                                },
-                                PacketHandlerResult::ReadyToPlay(profile, config) => {
-                                     let mut java_client = JavaClient::from_pending(pending, profile.clone(), config.clone());
-                                     java_client.start_outgoing_packet_task();
-
-                                     if let Some((player, world)) = server_clone
-                                         .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
-                                 {
-
-                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                         client.set_player(player.clone());
-                                     }
-                                     world
-                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
-                                         .await;
-
-                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                         client.progress_player_packets(&player, &server_clone).await;
-
-                                         // Close when done
-                                         client.close();
-                                         client.await_tasks().await;
-                                     }
-                                     player.remove().await;
-                                     server_clone.remove_player(&player);
-                                    if let Err(e) = server_clone
-                                        .player_data_storage
-                                        .handle_player_leave(&player)
-                                    {
-                                        error!("Failed to save player data on disconnect: {e}");
-                                    }
-                                    if let Err(e) = server_clone.advancement_manager
-                                        .save_player(&player)
-                                        .await {
-                                            error!("Failed to save player advancement on disconnect: {e}");
-                                        }
-                                    }
-                                },
-                            }
+                            serve_java_connection(server_clone, pending).await;
                         });
                     }
                     Err(e) => {
@@ -693,8 +749,8 @@ impl PumpkinServer {
                 }
             },
 
-            // Branch for the global stop signal
-            () = STOP_INTERRUPT.cancelled() => {
+            // Branch for this server's stop signal, which the global one also reaches
+            () = self.server.stop_token.cancelled() => {
                 return false;
             }
         }

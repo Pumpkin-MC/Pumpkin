@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "group": "wool",
+  "ingredients": [
+    "minecraft:brown_dye",
+    [
+      "minecraft:white_wool",
+      "minecraft:orange_wool",
+      "minecraft:magenta_wool",
+      "minecraft:light_blue_wool",
+      "minecraft:yellow_wool",
+      "minecraft:lime_wool",
+      "minecraft:pink_wool",
+      "minecraft:gray_wool",
+      "minecraft:light_gray_wool",
+      "minecraft:cyan_wool",
+      "minecraft:purple_wool",
+      "minecraft:blue_wool",
+      "minecraft:green_wool",
+      "minecraft:red_wool",
+      "minecraft:black_wool"
+    ]
+  ],
+  "result": {
+    "id": "minecraft:brown_wool"
+  }
+}

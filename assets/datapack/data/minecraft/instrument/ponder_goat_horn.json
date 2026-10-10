@@ -1,0 +1,8 @@
+{
+  "description": {
+    "translate": "instrument.minecraft.ponder_goat_horn"
+  },
+  "range": 256.0,
+  "sound_event": "minecraft:item.goat_horn.sound.0",
+  "use_duration": 7.0
+}

@@ -1,0 +1,27 @@
+{
+  "criteria": {
+    "consumed_item": {
+      "trigger": "minecraft:consume_item"
+    }
+  },
+  "display": {
+    "announce_to_chat": false,
+    "background": "minecraft:gui/advancements/backgrounds/husbandry",
+    "description": {
+      "translate": "advancements.husbandry.root.description"
+    },
+    "icon": {
+      "id": "minecraft:hay_block"
+    },
+    "show_toast": false,
+    "title": {
+      "translate": "advancements.husbandry.root.title"
+    }
+  },
+  "requirements": [
+    [
+      "consumed_item"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

@@ -1,6 +1,5 @@
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
@@ -485,15 +484,12 @@ pub fn start_telemetry_with_config(server: Arc<Server>, config: &TelemetryConfig
 
     server.spawn_task(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
-        while !crate::SHOULD_STOP.load(Ordering::Relaxed) {
+        loop {
             tokio::select! {
                 _ = interval.tick() => {}
-                () = crate::STOP_INTERRUPT.cancelled() => {
+                () = server_task.stop_token.cancelled() => {
                     break;
                 }
-            }
-            if crate::SHOULD_STOP.load(Ordering::Relaxed) {
-                break;
             }
 
             let payload = build_heartbeat_payload(&server_task, &config);

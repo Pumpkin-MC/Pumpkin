@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "group": "harness",
+  "key": {
+    "#": "minecraft:orange_wool",
+    "G": "minecraft:glass",
+    "L": "minecraft:leather"
+  },
+  "pattern": [
+    "LLL",
+    "G#G"
+  ],
+  "result": {
+    "id": "minecraft:orange_harness"
+  }
+}

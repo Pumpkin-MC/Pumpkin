@@ -1,0 +1,10 @@
+{
+  "gives": {
+    "id": "minecraft:tropical_fish_bucket"
+  },
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 3,
+    "id": "minecraft:emerald"
+  }
+}

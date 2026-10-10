@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_pink_wool_slab": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:pink_wool_slab"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipes": "minecraft:pink_cushion"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_pink_wool_slab"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:pink_cushion"
+    ]
+  }
+}

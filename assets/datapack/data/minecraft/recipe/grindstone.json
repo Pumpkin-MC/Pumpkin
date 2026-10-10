@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "#": "#minecraft:planks",
+    "-": "minecraft:stone_slab",
+    "I": "minecraft:stick"
+  },
+  "pattern": [
+    "I-I",
+    "# #"
+  ],
+  "result": {
+    "id": "minecraft:grindstone"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "values": [
+    "#minecraft:animals_spawnable_on",
+    "minecraft:stone",
+    "minecraft:snow",
+    "minecraft:snow_block",
+    "minecraft:packed_ice",
+    "minecraft:gravel"
+  ]
+}

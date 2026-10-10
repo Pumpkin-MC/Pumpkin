@@ -1,0 +1,33 @@
+{
+  "parent": "minecraft:end/kill_dragon",
+  "criteria": {
+    "dragon_egg": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:dragon_egg"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.end.dragon_egg.description"
+    },
+    "frame": "goal",
+    "icon": {
+      "id": "minecraft:dragon_egg"
+    },
+    "title": {
+      "translate": "advancements.end.dragon_egg.title"
+    }
+  },
+  "requirements": [
+    [
+      "dragon_egg"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

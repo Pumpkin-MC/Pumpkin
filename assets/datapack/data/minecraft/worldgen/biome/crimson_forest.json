@@ -1,0 +1,123 @@
+{
+  "attributes": {
+    "minecraft:audio/ambient_sounds": {
+      "additions": {
+        "sound": "minecraft:ambient.crimson_forest.additions",
+        "tick_chance": 0.0111
+      },
+      "loop": "minecraft:ambient.crimson_forest.loop",
+      "mood": {
+        "block_search_extent": 8,
+        "offset": 2.0,
+        "sound": "minecraft:ambient.crimson_forest.mood",
+        "tick_delay": 6000
+      }
+    },
+    "minecraft:audio/background_music": {
+      "default": {
+        "max_delay": 24000,
+        "min_delay": 12000,
+        "sound": "minecraft:music.nether.crimson_forest"
+      }
+    },
+    "minecraft:gameplay/natural_mob_spawns": {
+      "argument": {
+        "spawn_costs": {},
+        "spawns_by_category": {
+          "creature": [
+            {
+              "type": "minecraft:strider",
+              "count": {
+                "type": "minecraft:uniform",
+                "max_inclusive": 2,
+                "min_inclusive": 1
+              },
+              "weight": 60
+            }
+          ],
+          "monster": [
+            {
+              "type": "minecraft:zombified_piglin",
+              "count": {
+                "type": "minecraft:uniform",
+                "max_inclusive": 4,
+                "min_inclusive": 2
+              },
+              "weight": 1
+            },
+            {
+              "type": "minecraft:hoglin",
+              "count": {
+                "type": "minecraft:uniform",
+                "max_inclusive": 4,
+                "min_inclusive": 3
+              },
+              "weight": 9
+            },
+            {
+              "type": "minecraft:piglin",
+              "count": {
+                "type": "minecraft:uniform",
+                "max_inclusive": 4,
+                "min_inclusive": 3
+              },
+              "weight": 5
+            }
+          ]
+        }
+      },
+      "modifier": "overlay"
+    },
+    "minecraft:visual/ambient_particles": {
+      "argument": [
+        {
+          "particle": {
+            "type": "minecraft:crimson_spore"
+          },
+          "probability": 0.025
+        }
+      ],
+      "modifier": "append"
+    },
+    "minecraft:visual/fog_color": "#330303"
+  },
+  "carvers": "minecraft:nether_cave",
+  "downfall": 0.0,
+  "effects": {
+    "water_color": "#3f76e4"
+  },
+  "features": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+      "minecraft:spring_open",
+      "minecraft:patch_fire",
+      "minecraft:glowstone_extra",
+      "minecraft:glowstone",
+      "minecraft:ore_magma",
+      "minecraft:spring_closed",
+      "minecraft:ore_gravel_nether",
+      "minecraft:ore_blackstone",
+      "minecraft:ore_gold_nether",
+      "minecraft:ore_quartz_nether",
+      "minecraft:ore_ancient_debris_large",
+      "minecraft:ore_debris_small"
+    ],
+    [],
+    [
+      "minecraft:spring_lava",
+      "minecraft:brown_mushroom_normal",
+      "minecraft:red_mushroom_normal",
+      "minecraft:weeping_vines",
+      "minecraft:crimson_fungi",
+      "minecraft:crimson_forest_vegetation"
+    ]
+  ],
+  "has_precipitation": false,
+  "temperature": 2.0
+}

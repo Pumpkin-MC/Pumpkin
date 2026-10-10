@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:cache",
+  "input": {
+    "type": "minecraft:noise",
+    "noise": "minecraft:ridge",
+    "shift_x": "minecraft:shift_x",
+    "shift_z": "minecraft:shift_z",
+    "xz_scale": 0.25,
+    "y_scale": 0.0
+  }
+}
