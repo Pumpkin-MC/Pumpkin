@@ -7,13 +7,15 @@ use crate::entity::EntityBase;
 use crate::{
     block::{
         BlockBehaviour, BlockMetadata, CanPlaceAtArgs, NormalUseArgs, OnNeighborUpdateArgs,
-        OnPlaceArgs, OnScheduledTickArgs, PlacedArgs, registry::BlockActionResult,
+        OnPlaceArgs, OnScheduledTickArgs, PlacedArgs, PlayerPlacedArgs,
+        registry::BlockActionResult,
     },
     server::Server,
     world::World,
 };
 
 use pumpkin_data::block_properties::{CommandBlockLikeProperties, Facing};
+use pumpkin_data::data_component_impl::BlockEntityDataImpl;
 use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, FacingExt, Rotation};
 
 use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
@@ -333,20 +335,49 @@ impl BlockBehaviour for CommandBlock {
         false
     }
 
-    fn placed(&self, args: PlacedArgs<'_>) {
-        {
-            let send_command_feedback = {
-                let game_rules = &args.world.level_info.load().game_rules;
-                game_rules.send_command_feedback
-            };
-
-            let entity = CommandBlockEntity::new(
-                *args.position,
-                send_command_feedback,
-                args.block.id == Block::CHAIN_COMMAND_BLOCK.id,
+    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
+        let PlayerPlacedArgs {
+            world,
+            position: pos,
+            stack,
+            block,
+            ..
+        } = args;
+        let Some(entity) = world.get_block_entity(pos) else {
+            return;
+        };
+        let Some(command_entity) = entity.as_any().downcast_ref::<CommandBlockEntity>() else {
+            return;
+        };
+        if stack.get_data_component::<BlockEntityDataImpl>().is_none() {
+            command_entity.track_output.store(
+                world.level_info.load().game_rules.send_command_feedback,
+                Ordering::Relaxed,
             );
-            args.world.add_block_entity(Arc::new(entity));
         }
+        if command_entity.auto.load(Ordering::Relaxed)
+            && !command_entity.powered.load(Ordering::Relaxed)
+            && block.id != Block::CHAIN_COMMAND_BLOCK.id
+        {
+            Self::mark_condition_met(world, command_entity, pos);
+            world.schedule_block_tick(block, *pos, 1, TickPriority::Normal);
+        }
+        Self::update(
+            world,
+            block,
+            command_entity,
+            pos,
+            block_receives_redstone_power(world, pos),
+        );
+    }
+
+    fn placed(&self, args: PlacedArgs<'_>) {
+        let entity = CommandBlockEntity::new(
+            *args.position,
+            true,
+            args.block.id == Block::CHAIN_COMMAND_BLOCK.id,
+        );
+        args.world.add_block_entity(Arc::new(entity));
     }
 
     fn get_comparator_output(&self, args: crate::block::GetComparatorOutputArgs<'_>) -> Option<u8> {

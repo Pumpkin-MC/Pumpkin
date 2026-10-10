@@ -627,6 +627,9 @@ impl BlockRegistry {
         location: BlockPos,
         face: BlockDirection,
     ) -> Result<Option<(BlockPos, BlockStateId)>, BlockPlacingError> {
+        let Ok(hand) = pumpkin_util::Hand::from_packet_id(use_item_on.hand.0) else {
+            return Ok(None);
+        };
         let entity = &player.get_entity();
 
         match player.gamemode.load() {
@@ -806,21 +809,26 @@ impl BlockRegistry {
             BlockState::to_be_network_id(new_state) as i32,
         );
 
-        if let Ok(hand) = pumpkin_util::Hand::from_packet_id(use_item_on.hand.0)
-            && placed_block.default_state.block_entity_type != u16::MAX
-            && let Some(block_entity) = world.get_block_entity(&final_block_pos)
+        let stack = player.inventory().get_stack_in_hand(hand);
+        if placed_block.default_state.block_entity_type != u16::MAX
+            && let Some(mut block_entity) = world.get_block_entity(&final_block_pos)
         {
-            block_entity.apply_item_components(&player.inventory().get_stack_in_hand(hand));
+            if let Some(restored) = block_entity.load_item_data(player, &stack, new_state) {
+                world.add_block_entity(restored.clone());
+                block_entity = restored;
+            }
+            block_entity.apply_item_components(&stack);
         }
 
-        self.player_placed(
-            &world,
-            placed_block,
-            new_state,
-            &final_block_pos,
-            face,
+        self.player_placed(PlayerPlacedArgs {
+            world: &world,
+            block: placed_block,
+            state_id: new_state,
+            position: &final_block_pos,
+            direction: face,
             player,
-        );
+            stack: &stack,
+        });
 
         player.trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::PlacedBlock {
@@ -1130,25 +1138,9 @@ impl BlockRegistry {
         block.default_state.id
     }
 
-    pub fn player_placed(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        state_id: BlockStateId,
-        position: &BlockPos,
-        direction: BlockDirection,
-        player: &Player,
-    ) {
-        let pumpkin_block = self.get_pumpkin_block(block.id);
-        if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block.player_placed(PlayerPlacedArgs {
-                world,
-                block,
-                state_id,
-                position,
-                direction,
-                player,
-            });
+    pub fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
+        if let Some(pumpkin_block) = self.get_pumpkin_block(args.block.id) {
+            pumpkin_block.player_placed(args);
         }
     }
 
