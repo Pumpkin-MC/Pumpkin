@@ -34,8 +34,8 @@ use crate::entity::{Entity, EntityBase};
 use crate::item::ItemMetadata;
 use crate::item::items::boat::BoatItem;
 use crate::item::items::bucket::{
-    FilledBucketItem, play_bucket_evaporation, should_evaporate_in_nether, try_pickup_fluid_at,
-    try_place_filled_bucket,
+    FilledBucketItem, check_extra_content, play_bucket_evaporation, play_empty_sound,
+    should_evaporate_in_nether, try_pickup_fluid_at, try_place_filled_bucket,
 };
 use crate::item::items::honeycomb::try_wax_block;
 use crate::item::items::ignite::ignition::Ignition;
@@ -832,21 +832,31 @@ impl DispenserBlock {
 
     fn dispense_filled_bucket(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
         let front = Self::target_position(ctx);
+        let (front_block, front_state) = ctx.world.get_block_and_state(&front);
+        // Vanilla `BlockState.canBeReplaced(Fluid)` is `replaceable || !solid`.
+        let can_place_fluid_inside = front_state.is_air()
+            || front_state.replaceable()
+            || !front_state.is_solid()
+            || front_block.is_waterloggable();
 
-        // TODO: Spawn the stored entity for axolotl/fish/tadpole buckets, like the player path.
-        let emptied = if should_evaporate_in_nether(item.item, ctx.world) {
+        let emptied = if can_place_fluid_inside && should_evaporate_in_nether(item.item, ctx.world)
+        {
             play_bucket_evaporation(ctx.world, &front.to_f64());
             true
+        } else if try_place_filled_bucket(
+            ctx.world,
+            item.item,
+            *ctx.position,
+            ctx.facing.to_block_direction(),
+        ) {
+            play_empty_sound(ctx.world, item.item, front);
+            true
         } else {
-            try_place_filled_bucket(
-                ctx.world,
-                item.item,
-                *ctx.position,
-                ctx.facing.to_block_direction(),
-            )
+            false
         };
 
         if emptied {
+            check_extra_content(ctx.world, item.item, front);
             *item = ItemStack::new(1, &Item::BUCKET);
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
         } else {
