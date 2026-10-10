@@ -1,5 +1,8 @@
 use crate::block::entities::BlockEntity;
 use crate::entity::experience_orb::ExperienceOrbEntity;
+use crate::plugin::api::events::inventory::hopper_inventory_search::HopperInventorySearchEvent;
+use crate::plugin::api::events::inventory::inventory_move_item::InventoryMoveItemEvent;
+use crate::plugin::api::events::inventory::inventory_pickup_item::InventoryPickupItemEvent;
 use crate::world::World;
 use pumpkin_data::block_properties::{FacingHopper, HopperLikeProperties};
 use pumpkin_data::item_stack::ItemStack;
@@ -9,6 +12,7 @@ use pumpkin_data::{BlockId, BlockStateId};
 use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::any::Any;
@@ -17,6 +21,9 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64};
+
+/// Vanilla `Hopper.SUCK_AABB`: from the hopper's bowl up to the top of the block above.
+const SUCK_AABB: BoundingBox = BoundingBox::new_array([0.0, 11.0 / 16.0, 0.0], [1.0, 2.0, 1.0]);
 
 pub struct HopperBlockEntity {
     pub position: BlockPos,
@@ -101,7 +108,8 @@ impl BlockEntity for HopperBlockEntity {
         let Some(properties) = hopper_properties(block.id, state.id) else {
             return;
         };
-        if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
+        // Vanilla `pushItemsTick`: decrement first, move once the cooldown is down to 0.
+        if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) - 1 <= 0 {
             self.cooldown_time.store(0, Ordering::Relaxed);
             if properties.enabled
                 && let Some(entity) = world.get_block_entity(&self.position)
@@ -212,16 +220,7 @@ impl HopperBlockEntity {
     fn suck_in_items(&self, world: &Arc<World>) -> bool {
         // TODO getEntityContainer
         let pos_up = &self.position.up();
-        let mut search_event = crate::plugin::api::events::inventory::hopper_inventory_search::HopperInventorySearchEvent::new(
-            self.position,
-            *pos_up,
-        );
-        if let Some(server) = world.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut search_event);
-        }
-        if search_event.cancelled {
+        if world.cancelled_by_plugin(|| HopperInventorySearchEvent::new(self.position, *pos_up)) {
             return false;
         }
 
@@ -232,6 +231,21 @@ impl HopperBlockEntity {
             for i in 0..container.size() {
                 let mut item = container.get_stack(i);
                 if !item.is_empty() && container.can_transfer_to(self, i, &item) {
+                    // Hoppers tick in parallel: writing back the stale `item` would erase what
+                    // another hopper put into this slot meanwhile -> take and put back instead.
+                    if let Some(source) = container.as_any().downcast_ref::<Self>() {
+                        let Some(extraction) = source.take_one(i) else {
+                            continue;
+                        };
+                        if Self::add_one_item(source, self, &extraction.one_item) {
+                            return true;
+                        }
+                        if let Some(leftover) = source.put_back(i, extraction) {
+                            let pos = source.position.to_centered_f64();
+                            world.scatter_stack(pos.x, pos.y, pos.z, leftover);
+                        }
+                        continue;
+                    }
                     //TODO WorldlyContainer
                     let _backup = item.clone();
                     let one_item = item.split(1);
@@ -256,62 +270,32 @@ impl HopperBlockEntity {
             return false;
         }
         let (block, state) = world.get_block_and_state(pos_up);
-        if !(state.is_solid() && block.has_tag(&tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS)) {
-            let pos_up_f = pos_up.to_f64();
-            let search_box = pumpkin_util::math::boundingbox::BoundingBox::new(
-                pos_up_f,
-                pos_up_f.add_raw(1.0, 1.0, 1.0),
-            );
-            let entities = world.get_entities_at_box(&search_box);
+        if !state.is_full_cube() || block.has_tag(&tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS) {
+            let entities = world.get_entities_at_box(&SUCK_AABB.at_pos(self.position));
             for entity_base in entities {
-                if let Some(item_entity) = entity_base.get_item_entity() {
-                    let (is_empty, registry_key) = {
-                        let stack = item_entity
-                            .get_item_stack()
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        (stack.is_empty(), stack.item.registry_key.to_string())
-                    };
-                    if !is_empty {
-                        let mut pickup_event =
-                            crate::plugin::api::events::inventory::inventory_pickup_item::InventoryPickupItemEvent::new(
-                                self.position,
-                                item_entity.get_entity().entity_id,
-                                registry_key,
-                            );
-                        if let Some(server) = world.server.upgrade() {
-                            server
-                                .plugin_manager
-                                .fire_blocking(&server, &mut pickup_event);
-                        }
-                        if pickup_event.cancelled {
-                            continue;
-                        }
-                        let (backup, one_item, is_empty) = {
-                            let mut stack = item_entity
-                                .get_item_stack()
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner);
-                            if stack.is_empty() {
-                                continue;
-                            }
-                            let backup = stack.clone();
-                            let one_item = stack.split(1);
-                            let is_empty = stack.is_empty();
-                            (backup, one_item, is_empty)
-                        };
-                        if Self::add_one_item(self, self, &one_item) {
-                            if is_empty {
-                                item_entity.get_entity().remove();
-                            }
-                            return true;
-                        }
-                        let mut stack = item_entity
-                            .get_item_stack()
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        *stack = backup;
-                    }
+                let Some(item_entity) = entity_base.get_item_entity() else {
+                    continue;
+                };
+                let (is_empty, item_id) = {
+                    let stack = item_entity
+                        .get_item_stack()
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    (stack.is_empty(), stack.item.registry_key)
+                };
+                if is_empty
+                    || world.cancelled_by_plugin(|| {
+                        InventoryPickupItemEvent::new(
+                            self.position,
+                            item_entity.get_entity().entity_id,
+                            item_id.to_string(),
+                        )
+                    })
+                {
+                    continue;
+                }
+                if item_entity.insert_into(|stack| Self::add_stack(None, self, stack)) {
+                    return true;
                 }
             }
         }
@@ -392,18 +376,14 @@ impl HopperBlockEntity {
                 if item.is_empty() {
                     continue;
                 }
-                let mut move_event = crate::plugin::api::events::inventory::inventory_move_item::InventoryMoveItemEvent::new(
-                    self.position,
-                    target_pos,
-                    item.item.registry_key.to_string(),
-                    1,
-                );
-                if let Some(server) = world.server.upgrade() {
-                    server
-                        .plugin_manager
-                        .fire_blocking(&server, &mut move_event);
-                }
-                if move_event.cancelled {
+                if world.cancelled_by_plugin(|| {
+                    InventoryMoveItemEvent::new(
+                        self.position,
+                        target_pos,
+                        item.item.registry_key.to_string(),
+                        1,
+                    )
+                }) {
                     continue;
                 }
                 // Vanilla `HopperBlockEntity.ejectItems`: actually remove the item from the
@@ -428,45 +408,93 @@ impl HopperBlockEntity {
         false
     }
     pub fn add_one_item(from: &dyn Inventory, to: &dyn Inventory, item: &ItemStack) -> bool {
-        let mut success = false;
-        let to_empty = to.is_empty();
-        for j in 0..to.size() {
-            if to.is_valid_slot_for(j, item) {
-                let mut dst = to.get_stack(j);
-                if dst.is_empty() {
-                    dst = item.clone();
-                    to.set_stack(j, dst);
-                    success = true;
-                } else if dst.item_count < dst.get_max_stack_size()
-                    && dst.are_items_and_components_equal(item)
-                {
-                    dst.item_count += 1;
-                    to.set_stack(j, dst);
-                    success = true;
-                }
-                if success {
-                    if to_empty
-                        && let Some(hopper) = to.as_any().downcast_ref::<Self>()
-                        && hopper.cooldown_time.load(Ordering::Relaxed) <= 8
-                    {
-                        if let Some(from_hopper) = from.as_any().downcast_ref::<Self>() {
-                            if from_hopper.cooldown_time.load(Ordering::Relaxed)
-                                >= hopper.cooldown_time.load(Ordering::Relaxed)
-                            {
-                                hopper.cooldown_time.store(7, Ordering::Relaxed);
-                            } else {
-                                hopper.cooldown_time.store(8, Ordering::Relaxed);
-                            }
-                        } else {
-                            hopper.cooldown_time.store(8, Ordering::Relaxed);
-                        }
-                    }
-                    to.mark_dirty();
-                    return true;
-                }
+        Self::add_stack(Some(from), to, item.copy_with_count(1)).is_empty()
+    }
+
+    /// Vanilla `HopperBlockEntity.addItem(from, container, stack, null)`: spreads stack inside
+    /// all the slots of `to` and returns what did not fit.
+    pub fn add_stack(
+        from: Option<&dyn Inventory>,
+        to: &dyn Inventory,
+        mut stack: ItemStack,
+    ) -> ItemStack {
+        for slot in 0..to.size() {
+            if stack.is_empty() {
+                break;
             }
+            Self::try_move_in_item(from, to, &mut stack, slot);
         }
-        false
+        stack
+    }
+
+    /// Vanilla `HopperBlockEntity.tryMoveInItem`.
+    fn try_move_in_item(
+        from: Option<&dyn Inventory>,
+        to: &dyn Inventory,
+        stack: &mut ItemStack,
+        slot: usize,
+    ) {
+        if !to.is_valid_slot_for(slot, stack) {
+            return;
+        }
+        let to_empty = to.is_empty();
+        let success = if let Some(hopper) = to.as_any().downcast_ref::<Self>() {
+            // One lock for read and write: a parallel insert into the same slot would otherwise
+            // overwrite this one with its stale copy, or the reverse.
+            let mut items = hopper
+                .items
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            Self::merge_into_slot(&mut items[slot], stack)
+        } else {
+            let mut dst = to.get_stack(slot);
+            let success = Self::merge_into_slot(&mut dst, stack);
+            if success {
+                to.set_stack(slot, dst);
+            }
+            success
+        };
+        if !success {
+            return;
+        }
+
+        if to_empty
+            && let Some(hopper) = to.as_any().downcast_ref::<Self>()
+            && hopper.cooldown_time.load(Ordering::Relaxed) <= 8
+        {
+            // A hopper that hasn't ticked yet this game tick still counts its 8 down to 7.
+            // One that already ticked misses that count -> it starts at 7 instead, so both move
+            // again on the same game tick, no matter which hopper ticked first.
+            let cooldown = match from.and_then(|from| from.as_any().downcast_ref::<Self>()) {
+                Some(from_hopper)
+                    if hopper.ticked_game_time.load(Ordering::Relaxed)
+                        >= from_hopper.ticked_game_time.load(Ordering::Relaxed) =>
+                {
+                    7
+                }
+                _ => 8,
+            };
+            hopper.cooldown_time.store(cooldown, Ordering::Relaxed);
+        }
+        to.mark_dirty();
+    }
+
+    /// The slot half of vanilla `tryMoveInItem`: fills an empty `dst` with `stack`, or tops
+    /// `dst` up from it. Returns whether anything moved.
+    fn merge_into_slot(dst: &mut ItemStack, stack: &mut ItemStack) -> bool {
+        if dst.is_empty() {
+            *dst = std::mem::replace(stack, ItemStack::EMPTY.clone());
+            return true;
+        }
+        if !dst.are_items_and_components_equal(stack) {
+            return false;
+        }
+        let moved = stack
+            .item_count
+            .min(stack.get_max_stack_size().saturating_sub(dst.item_count));
+        stack.decrement(moved);
+        dst.increment(moved);
+        moved > 0
     }
 }
 
@@ -679,5 +707,35 @@ mod tests {
 
         assert_eq!(leftover.item_count, 1);
         assert_eq!(hopper.get_stack(0).item_count, max);
+    }
+
+    /// A dropped stack goes in whole, like vanilla `addItem(Container, ItemEntity)`, not one item
+    /// per transfer.
+    #[test]
+    fn add_stack_moves_a_whole_stack_into_one_slot() {
+        let hopper = hopper_holding(ItemStack::EMPTY.clone());
+
+        let leftover =
+            HopperBlockEntity::add_stack(None, &hopper, ItemStack::new(64, &Item::DIAMOND));
+
+        assert!(leftover.is_empty());
+        assert_eq!(hopper.get_stack(0).item_count, 64);
+        assert!(hopper.get_stack(1).is_empty());
+    }
+
+    /// Tops up the partial stack, and what's left comes back when every other slot is taken.
+    #[test]
+    fn add_stack_returns_what_does_not_fit() {
+        let hopper = hopper_holding(ItemStack::new(60, &Item::DIAMOND));
+        for slot in 1..HopperBlockEntity::INVENTORY_SIZE {
+            hopper.set_stack(slot, ItemStack::new(64, &Item::DIRT));
+        }
+
+        let leftover =
+            HopperBlockEntity::add_stack(None, &hopper, ItemStack::new(10, &Item::DIAMOND));
+
+        assert_eq!(hopper.get_stack(0).item_count, 64);
+        assert_eq!(leftover.get_item().id, Item::DIAMOND.id);
+        assert_eq!(leftover.item_count, 6);
     }
 }

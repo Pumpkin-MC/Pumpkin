@@ -93,6 +93,7 @@ impl ItemEntity {
     pub const DEFAULT_PICKUP_DELAY: u8 = 10;
 
     pub fn new(entity: Entity, item_stack: ItemStack) -> Self {
+        // TODO: vanilla rolls velocity and yaw from the entity `random`; not seed-reproducible.
         entity.velocity.store(Vector3::new(
             rand::random::<f64>().mul_add(0.2, -0.1),
             0.2,
@@ -120,6 +121,7 @@ impl ItemEntity {
         pickup_delay: u8,
     ) -> Self {
         entity.velocity.store(velocity);
+        // TODO: vanilla rolls yaw from the entity `random`; same odds, not seed-reproducible.
         entity.yaw.store(rand::random::<f32>() * 360.0);
         Self::update_fire_immune(&entity, &item_stack);
 
@@ -166,6 +168,33 @@ impl ItemEntity {
         &self.entity
     }
 
+    /// Vanilla `HopperBlockEntity.addItem(Container, ItemEntity)`: `insert` gets a copy of the
+    /// stack and returns the rest. Locked throughout -> a parallel tick never sees the stack
+    /// emptied by an insert that is still running. True once the whole stack moved.
+    pub fn insert_into(&self, insert: impl FnOnce(ItemStack) -> ItemStack) -> bool {
+        let mut stack = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if stack.is_empty() || self.entity.removed.load(Ordering::SeqCst) {
+            return false;
+        }
+        let rest = insert(stack.clone()).item_count;
+        let changed = rest != stack.item_count;
+        stack.set_count(rest);
+        drop(stack);
+
+        if rest == 0 {
+            self.entity.remove();
+            true
+        } else {
+            if changed {
+                self.on_count_changed();
+            }
+            false
+        }
+    }
+
     /// Vanilla `ItemStack.canBeHurtBy`: the `damage_resistant` tag blocks matching damage.
     fn can_be_hurt_by(stack: &ItemStack, damage_type: DamageType) -> bool {
         stack
@@ -189,6 +218,14 @@ impl ItemEntity {
             && stack.are_items_and_components_equal(other)
     }
 
+    /// Vanilla `ItemEntity.merge`: moves up to `min(max stack, max_count)` from `from` into `to`.
+    pub fn merge(to: &mut ItemStack, from: &mut ItemStack, max_count: u8) {
+        let max_size = to.get_max_stack_size().min(max_count);
+        let moved = from.item_count.min(max_size.saturating_sub(to.item_count));
+        to.increment(moved);
+        from.decrement(moved);
+    }
+
     /// Vanilla `ItemEntity.isMergable`.
     fn is_mergeable(&self) -> bool {
         if self.entity.removed.load(Ordering::SeqCst)
@@ -198,10 +235,12 @@ impl ItemEntity {
         {
             return false;
         }
-        let Ok(item_stack) = self.item_stack.try_lock() else {
-            return false;
-        };
-
+        // Blocking is safe: no other stack lock is held here, and a skipped check would delay
+        // the merge by up to 40 ticks.
+        let item_stack = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         item_stack.item_count < item_stack.get_max_stack_size()
     }
 
@@ -276,16 +315,13 @@ impl ItemEntity {
             return;
         }
 
-        let mut event = crate::plugin::api::events::entity::item_merge::ItemMergeEvent {
-            entity_id: target.entity.entity_id,
-            target_id: source.entity.entity_id,
-            cancelled: false,
-        };
-        let server = self.entity.world.load().server.upgrade();
-        if let Some(server) = server {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
-        if event.cancelled
+        let cancelled = self.entity.world.load().cancelled_by_plugin(|| {
+            crate::plugin::api::events::entity::item_merge::ItemMergeEvent::new(
+                target.entity.entity_id,
+                source.entity.entity_id,
+            )
+        });
+        if cancelled
             || self.entity.removed.load(Ordering::SeqCst)
             || other.entity.removed.load(Ordering::SeqCst)
         {
@@ -326,13 +362,7 @@ impl ItemEntity {
             (other_stack, self_stack)
         };
 
-        // Vanilla `ItemEntity.merge(to, from, 64)`.
-        let max_size = stack1.get_max_stack_size().min(MERGE_MAX_COUNT);
-        let moved = stack2
-            .item_count
-            .min(max_size.saturating_sub(stack1.item_count));
-        stack1.increment(moved);
-        stack2.decrement(moved);
+        Self::merge(&mut stack1, &mut stack2, MERGE_MAX_COUNT);
         let source_empty = stack2.is_empty();
         drop(stack1);
         drop(stack2);
@@ -362,6 +392,12 @@ impl ItemEntity {
                 .item_stack
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // in a parallel batch -> the player already has the contents.
+            if stack.is_empty() {
+                return;
+            }
+            // Claims the item -> a pickup waiting on the lock sees an empty stack.
+            stack.set_count(0);
             let mut contents = Vec::new();
             if let Some(container) = stack.get_data_component::<ContainerImpl>()
                 && !container.items.is_empty()
@@ -507,25 +543,6 @@ impl ItemEntity {
         }
 
         let entity = &self.entity;
-        let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
-
-        if age >= LIFETIME {
-            let entity_id = entity.entity_id;
-            let world = entity.world.load_full();
-            let mut despawn_event =
-                crate::plugin::api::events::entity::item_despawn::ItemDespawnEvent::new(entity_id);
-            if let Some(server) = world.server.upgrade() {
-                server
-                    .plugin_manager
-                    .fire_blocking(&server, &mut despawn_event);
-            }
-            if !despawn_event.cancelled
-                && let Some(e) = world.get_entity_by_id(entity_id)
-            {
-                e.get_entity().remove();
-            }
-            return false;
-        }
 
         // merge rate on `tickCount`: 2 while the item changes block cell, else 40.
         let moved =
@@ -533,6 +550,23 @@ impl ItemEntity {
         let rate = if moved { 2 } else { 40 };
         if entity.age.load(Ordering::Relaxed) % rate == 0 {
             self.merge_with_neighbours();
+            if entity.removed.load(Ordering::SeqCst) {
+                return false;
+            }
+        }
+
+        // Aged after merging, so the last tick before despawn can still merge.
+        let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
+        if age >= LIFETIME {
+            let entity_id = entity.entity_id;
+            let world = entity.world.load_full();
+            if !world.cancelled_by_plugin(|| {
+                crate::plugin::api::events::entity::item_despawn::ItemDespawnEvent::new(entity_id)
+            }) && let Some(e) = world.get_entity_by_id(entity_id)
+            {
+                e.get_entity().remove();
+            }
+            return false;
         }
 
         true
@@ -591,6 +625,18 @@ impl EntityBase for ItemEntity {
         }
     }
 
+    fn teleport(
+        &self,
+        position: Vector3<f64>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        world: Arc<World>,
+    ) {
+        self.entity.teleport(position, yaw, pitch, &world);
+        // Vanilla `ItemEntity.teleport`: merge at the destination right away.
+        self.merge_with_neighbours();
+    }
+
     fn init_data_tracker(&self) {
         self.entity.set_synced_data(
             pumpkin_data::tracked_data::item::ITEM,
@@ -635,17 +681,17 @@ impl EntityBase for ItemEntity {
             return false;
         }
 
-        let mut event = crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
-            entity.entity_id,
-            damage_type,
-            amount,
-        );
-        if let Some(server) = world.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
-        if event.cancelled {
-            return false;
-        }
+        let damage = match world.plugin_event(|| {
+            crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
+                entity.entity_id,
+                damage_type,
+                amount,
+            )
+        }) {
+            Some(event) if event.cancelled => return false,
+            Some(event) => event.damage,
+            None => amount,
+        };
 
         // Vanilla `markHurt`: resend the motion.
         entity.velocity_dirty.store(true, Ordering::SeqCst);
@@ -653,7 +699,7 @@ impl EntityBase for ItemEntity {
         // Vanilla keeps item health as an int: `(int)(health - damage)`.
         let destroyed = loop {
             let current = self.health.load(Relaxed);
-            let new = (current - event.damage).trunc();
+            let new = (current - damage).trunc();
             if self
                 .health
                 .compare_exchange(current, new, AcqRel, Relaxed)
@@ -679,26 +725,26 @@ impl EntityBase for ItemEntity {
             return;
         }
 
-        let (item_id, count_before) = {
-            let stack = self
+        // Inserted in place under the lock, so a parallel merge or destruction can't act on a
+        // stale copy. An empty stack was already destroyed or merged away.
+        let (item_id, count_before, inserted, count_after, is_empty) = {
+            let mut stack = self
                 .item_stack
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            (stack.item.id, stack.item_count)
+            if stack.is_empty() {
+                return;
+            }
+            let (item_id, count_before) = (stack.item.id, stack.item_count);
+            let inserted = player.inventory.insert_stack_anywhere(&mut stack);
+            (
+                item_id,
+                count_before,
+                inserted,
+                stack.item_count,
+                stack.is_empty(),
+            )
         };
-
-        let mut local_stack = self
-            .item_stack
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        let inserted = player.inventory.insert_stack_anywhere(&mut local_stack);
-        let count_after = local_stack.item_count;
-        let is_empty = local_stack.is_empty();
-        *self
-            .item_stack
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = local_stack;
 
         if inserted || player.is_creative() {
             player.inventory_changed.store(true, Ordering::Relaxed);
