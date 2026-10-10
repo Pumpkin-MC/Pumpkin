@@ -13,10 +13,9 @@ use crate::block::{
     BlockBehaviour, GetComparatorOutputArgs, GetScreenHandlerFactoryArgs, NormalUseArgs,
     OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
-use crate::entity::ageable::AgeableMob;
 use crate::entity::decoration::armor_stand::ArmorStandEntity;
 use crate::entity::item::ItemEntity;
-use crate::entity::passive::sheep::SheepEntity;
+use crate::entity::mob::Mob;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
 use crate::entity::projectile::egg::EggEntity;
@@ -41,6 +40,7 @@ use crate::item::items::honeycomb::try_wax_block;
 use crate::item::items::ignite::ignition::Ignition;
 use crate::item::items::minecart::MinecartItem;
 use crate::item::items::spawn_egg::prepare_egg_mob;
+use crate::plugin::api::events::block::block_shear_entity::BlockShearEntityEvent;
 use crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason;
 use crate::world::World;
 
@@ -156,27 +156,6 @@ fn is_allowed_entity(
         None => true,
         Some(IDSet::Tag(tag)) => entity_type.is_tagged_with(tag).unwrap_or(false),
         Some(IDSet::IDs(types)) => types.contains(&entity_type),
-    }
-}
-
-const fn wool_of_color(color: u8) -> &'static Item {
-    match color {
-        1 => &Item::ORANGE_WOOL,
-        2 => &Item::MAGENTA_WOOL,
-        3 => &Item::LIGHT_BLUE_WOOL,
-        4 => &Item::YELLOW_WOOL,
-        5 => &Item::LIME_WOOL,
-        6 => &Item::PINK_WOOL,
-        7 => &Item::GRAY_WOOL,
-        8 => &Item::LIGHT_GRAY_WOOL,
-        9 => &Item::CYAN_WOOL,
-        10 => &Item::PURPLE_WOOL,
-        11 => &Item::BLUE_WOOL,
-        12 => &Item::BROWN_WOOL,
-        13 => &Item::GREEN_WOOL,
-        14 => &Item::RED_WOOL,
-        15 => &Item::BLACK_WOOL,
-        _ => &Item::WHITE_WOOL,
     }
 }
 
@@ -386,7 +365,7 @@ impl DispenserBlock {
             // Spawn eggs
             Self::dispense_spawn_egg(ctx, item);
         } else if item.item.id == Item::SHEARS.id {
-            // Shears harvest full beehives and shear sheep
+            // Shears harvest full beehives and shear mobs (mooshroom, sheep, snow golem basically)
             Self::dispense_shears(ctx, item);
         } else if item.item.id == Item::GLASS_BOTTLE.id {
             // Glass bottles fill from water and full beehives
@@ -946,7 +925,7 @@ impl DispenserBlock {
     }
 
     fn dispense_shears(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
-        if Self::shear_beehive(ctx) || Self::shear_entity_in_front(ctx) {
+        if Self::shear_beehive(ctx) || Self::shear_entity_in_front(ctx, item) {
             // `damage_item` already consumes the tool from the stack when it breaks.
             let _ = item.damage_item(1);
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
@@ -985,29 +964,44 @@ impl DispenserBlock {
         true
     }
 
-    fn shear_entity_in_front(ctx: &DispenseContext<'_>) -> bool {
-        let target_box = BoundingBox::from_block(&Self::target_position(ctx));
+    fn shear_entity_in_front(ctx: &DispenseContext<'_>, tool: &ItemStack) -> bool {
+        let target = Self::target_position(ctx);
+        let target_box = BoundingBox::from_block(&target);
 
         for entity in ctx.world.get_entities_at_box(&target_box) {
-            let Some(sheep) = entity.cast_any().downcast_ref::<SheepEntity>() else {
+            // Vanilla `LivingEntity.isAlive` also needs health left, so mobs in their death animation are skipped.
+            if !entity.get_entity().is_alive()
+                || entity
+                    .get_living_entity()
+                    .is_some_and(|living| living.health.load() <= 0.0)
+            {
+                continue;
+            }
+            let Some(shearable) = entity.get_mob().and_then(Mob::as_shearable) else {
                 continue;
             };
-            if sheep.is_sheared() || sheep.is_baby() || !entity.get_entity().is_alive() {
+            if !shearable.ready_for_shearing() {
                 continue;
             }
 
-            let position = entity.get_entity().pos.load();
-            sheep.set_sheared(true);
+            if let Some(server) = ctx.world.server.upgrade() {
+                let mut event = BlockShearEntityEvent::new(
+                    *ctx.position,
+                    ctx.world.clone(),
+                    entity.clone(),
+                    tool.clone(),
+                );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    continue;
+                }
+            }
+
+            if !shearable.shear(SoundCategory::Blocks, tool) {
+                continue;
+            }
             ctx.world
-                .play_sound(Sound::EntitySheepShear, SoundCategory::Blocks, &position);
-
-            let count = rng().random_range(1..=3);
-            Self::drop_at(
-                ctx.world,
-                position,
-                ItemStack::new(count, wool_of_color(sheep.get_color())),
-            );
-
+                .emit_game_event(GameEvent::Shear.name(), target.to_centered_f64());
             return true;
         }
 
