@@ -307,6 +307,7 @@ use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::plugin::server::packet::PacketSentEvent;
+use crate::plugin::world::chunk_send::ChunkSend;
 use crate::server::Server;
 use crate::world::{BlockBreakingProgress, World};
 use bytes::Bytes;
@@ -2824,6 +2825,13 @@ impl Player {
             },
             |batch| match self.client.as_ref() {
                 ClientPlatform::Java(_) => {
+                    let mut batch = batch;
+                    let cancelled = match world.server.upgrade() {
+                        Some(server) if server.plugin_manager.has_handlers::<ChunkSend>() => {
+                            ChunkSend::retain_blocking(&server, &world, &mut batch.chunks)
+                        }
+                        _ => Vec::new(),
+                    };
                     let mut per_player_cache = rustc_hash::FxHashMap::default();
                     let encoded =
                         crate::net::ChunkSender::encode_batch(&batch, &mut per_player_cache);
@@ -2831,6 +2839,7 @@ impl Player {
                     let (sent, total_sent_chunks) = self.chunk_sender.try_lock().map_or_else(
                         |_| (Vec::new(), 0),
                         |mut sender| {
+                            sender.cancel_pending(&batch, current_epoch, &cancelled);
                             let sent =
                                 sender.commit_batch(&batch, &encoded, &self.client, current_epoch);
                             (sent, sender.sent_chunks_count())
@@ -2858,14 +2867,20 @@ impl Player {
                                 .into_iter()
                                 .map(|c| ((c.position, c.delivery_token), c.chunk))
                                 .unzip();
-                            client.send_chunks(&chunks).await;
+                            let sent = client.send_chunks(&chunks).await;
+                            // A cancelled `ChunkSend` never reached the client -> no longer held.
+                            let (deliveries, dropped): (Vec<_>, Vec<_>) = deliveries
+                                .into_iter()
+                                .partition(|(pos, _)| sent.contains(pos));
                             if let Some(player) = world.get_player_by_uuid(uuid) {
                                 // dispatcher sets a reset or a re-enqueue since then holds a newer token.
-                                let delivered = player
+                                let mut sender = player
                                     .chunk_sender
                                     .lock()
-                                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                    .mark_delivered(&deliveries);
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                                sender.cancel_delivery(&dropped);
+                                let delivered = sender.mark_delivered(&deliveries);
+                                drop(sender);
                                 player.pair_entities_in_chunks(&world, &delivered);
                             }
                         });

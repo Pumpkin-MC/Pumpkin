@@ -36,6 +36,7 @@ use pumpkin_protocol::{
     },
     ser::{NetworkReadExt, NetworkWriteExt, WritingError},
 };
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::{
@@ -327,26 +328,19 @@ impl JavaClient {
         }
     }
 
-    pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
+    /// Returns the positions actually queued -> cancelled or unencodable chunks are left out.
+    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> Vec<Vector2<i32>> {
         let player = self.player.load_full();
         let Some(player) = player.as_ref() else {
-            return;
+            return Vec::new();
         };
         let Some(server) = player.world().server.upgrade() else {
-            return;
+            return Vec::new();
         };
 
-        let mut valid_chunks = Vec::with_capacity(chunks.len());
-        for chunk in chunks {
-            let mut event = ChunkSend::new(player.world(), chunk.clone());
-            server.plugin_manager.fire(&server, &mut event).await;
-            if !event.cancelled {
-                valid_chunks.push(chunk.clone());
-            }
-        }
-
+        let valid_chunks = ChunkSend::filter(&server, &player.world(), chunks).await;
         if valid_chunks.is_empty() {
-            return;
+            return Vec::new();
         }
 
         let (tx, rx) = oneshot::channel();
@@ -365,28 +359,32 @@ impl JavaClient {
                     error!("Failed to write chunk data: {err:?}");
                     continue;
                 }
-                serialized.push(Bytes::from(buf));
+                serialized.push((Vector2::new(chunk.x, chunk.z), Bytes::from(buf)));
             }
             let _ = tx.send(serialized);
         });
 
         let Ok(serialized) = rx.await else {
-            return;
+            return Vec::new();
         };
-        let sent_count = serialized.len();
-        if sent_count == 0 {
-            return;
+        if serialized.is_empty() {
+            return Vec::new();
         }
 
         self.send_packet(&CChunkBatchStart).await;
 
         // One FIFO per connection: batch start/data/end stay in enqueue order.
-        for chunk_data in serialized {
-            self.send_packet_now_data(chunk_data).await;
+        let mut sent = Vec::with_capacity(serialized.len());
+        for (pos, chunk_data) in serialized {
+            if self.send_packet_now_data(chunk_data).await {
+                sent.push(pos);
+            }
         }
 
-        self.send_packet(&CChunkBatchEnd::new(sent_count as u16))
+        // Count only queued chunks -> a `PacketSentEvent` cancel drops one without closing.
+        self.send_packet(&CChunkBatchEnd::new(sent.len() as u16))
             .await;
+        sent
     }
 
     pub async fn enqueue_packet(&self, packet_data: Bytes) {
@@ -465,11 +463,12 @@ impl JavaClient {
         self.try_enqueue_packet_data(packet_data);
     }
 
-    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+    /// `false` when the packet was dropped instead (cancelled, closed, buffer full).
+    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) -> bool {
         let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data) else {
-            return;
+            return false;
         };
-        self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len);
+        self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len)
     }
 
     /// `false` once the writer is gone. Then the connection is closed.
@@ -592,30 +591,33 @@ impl JavaClient {
 
     /// Enqueue on the per-connection FIFO and wait until the writer has
     /// `write_frame`d into the `BufWriter`. Never waits for a TCP flush.
-    pub async fn send_packet_now_data(&self, packet: Bytes) {
+    /// `false` when the packet was dropped instead (cancelled, closed, buffer full).
+    pub async fn send_packet_now_data(&self, packet: Bytes) -> bool {
         self.send_and_wait(packet, OutgoingPacket::high_priority)
-            .await;
+            .await
     }
 
     /// Enqueue and wait for the writer's completion, `Framed` or `Flushed` per `make`.
+    /// `false` when the packet was dropped instead of queued.
     async fn send_and_wait(
         &self,
         packet: Bytes,
         make: fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket,
-    ) {
+    ) -> bool {
         let Some((packet, packet_len)) = self.reserve_pending_bytes(packet) else {
-            return;
+            return false;
         };
 
         let (completion_tx, completion_rx) = oneshot::channel();
         if !self.queue_outgoing(make(packet, completion_tx), packet_len) {
-            return;
+            return false;
         }
 
         if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
             // The outgoing packet task dropped before confirming the write.
             self.close();
         }
+        true
     }
 
     pub fn write_packet_for_version<P: ClientPacket>(
