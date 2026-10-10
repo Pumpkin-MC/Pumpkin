@@ -608,8 +608,9 @@ fn has_cat_on_top(world: &World, block_pos: &BlockPos) -> bool {
         let entity = entity_base.get_entity();
         if entity.entity_type.resource_name == "cat"
             && let Some(mob) = entity_base.get_mob()
+            && mob.is_sitting()
         {
-            return mob.is_sitting();
+            return true;
         }
     }
     false
