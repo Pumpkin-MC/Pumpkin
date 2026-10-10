@@ -1055,11 +1055,6 @@ impl ArrowEntity {
     fn should_skip_collision(&self, self_ent: &Entity, other: &Arc<dyn EntityBase>) -> bool {
         let other_ent = other.get_entity();
 
-        // Don't collide with self
-        if other_ent.entity_id == self_ent.entity_id {
-            return true;
-        }
-
         // Skip owner for initial frames (5 ticks)
         if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
             return true;
@@ -1081,6 +1076,7 @@ impl ArrowEntity {
         }
 
         // Skip other arrows, item entities, falling block entities, and area effect clouds
+	// Avoids colliding with self because it is an arrow and thus won't collide with arrows
         if (other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::SPECTRAL_ARROW)
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::ITEM

@@ -133,8 +133,14 @@ impl TridentEntity {
     fn should_skip_collision(&self, self_ent: &Entity, other: &Arc<dyn EntityBase>) -> bool {
         let other_ent = other.get_entity();
 
-        // Don't collide with self
-        if other_ent.entity_id == self_ent.entity_id {
+        // Skip other projectiles and item entities
+	// Will not collide with self because will not collide with any tridents
+	// Check for trident first to take advantage of short-circuit evaluation
+        if other_ent.entity_type == &pumpkin_data::entity::EntityType::TRIDENT
+            || other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
+            || other_ent.entity_type == &pumpkin_data::entity::EntityType::ITEM
+            || other_ent.entity_type == &pumpkin_data::entity::EntityType::FALLING_BLOCK
+        {
             return true;
         }
 
@@ -143,14 +149,6 @@ impl TridentEntity {
             return true;
         }
 
-        // Skip other projectiles and item entities
-        if other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
-            || other_ent.entity_type == &pumpkin_data::entity::EntityType::TRIDENT
-            || other_ent.entity_type == &pumpkin_data::entity::EntityType::ITEM
-            || other_ent.entity_type == &pumpkin_data::entity::EntityType::FALLING_BLOCK
-        {
-            return true;
-        }
 
         false
     }
