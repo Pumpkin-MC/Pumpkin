@@ -8,7 +8,9 @@ pub mod structure_loader;
 pub mod test_loader;
 pub mod trade_loader;
 
+use std::cell::Cell;
 use std::collections::HashMap;
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -91,6 +93,87 @@ fn share_function_bodies(
         .into_iter()
         .map(|(name, lines)| (name, lines.into()))
         .collect()
+}
+
+/// Maximum nested functions per command chain. Far below vanilla's `maxCommandChainLength`
+/// (65536): each level costs stack frames and a Rust stack overflow aborts the process.
+pub const MAX_FUNCTION_CHAIN_DEPTH: usize = 256;
+
+/// Maximum dispatched commands per chain (vanilla `maxCommandChainLength` default).
+/// Depth alone cannot bound a fanning chain, which grows exponentially without nesting deep.
+pub const MAX_FUNCTION_CHAIN_COMMANDS: usize = 65536;
+
+thread_local! {
+    /// How many functions the current thread is currently executing, nested.
+    static FUNCTION_CHAIN_DEPTH: Cell<usize> = const { Cell::new(0) };
+    /// How many command lines the current chain has dispatched so far.
+    static FUNCTION_CHAIN_COMMANDS: Cell<usize> = const { Cell::new(0) };
+}
+
+/// Why a function could not be executed.
+#[derive(Debug, PartialEq, Eq)]
+pub enum FunctionRunError {
+    /// The function or function tag does not exist, or could not be read.
+    Unknown(String),
+    /// The command chain already nested [`MAX_FUNCTION_CHAIN_DEPTH`] functions.
+    ChainLimitExceeded,
+}
+
+impl fmt::Display for FunctionRunError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unknown(reason) => f.write_str(reason),
+            Self::ChainLimitExceeded => write!(
+                f,
+                "Maximum number of nested function calls reached ({MAX_FUNCTION_CHAIN_DEPTH})"
+            ),
+        }
+    }
+}
+
+/// Counts nested function entries on this thread; the guard releases its level on drop.
+struct FunctionChainGuard;
+
+impl FunctionChainGuard {
+    fn enter() -> Result<Self, FunctionRunError> {
+        FUNCTION_CHAIN_DEPTH.with(|depth| {
+            if depth.get() >= MAX_FUNCTION_CHAIN_DEPTH {
+                return Err(FunctionRunError::ChainLimitExceeded);
+            }
+            depth.set(depth.get() + 1);
+            Ok(Self)
+        })
+    }
+
+    /// Records one dispatched line against the chain budget; false means stop the chain.
+    fn count_command() -> bool {
+        FUNCTION_CHAIN_COMMANDS.with(|commands| {
+            let count = commands.get() + 1;
+            commands.set(count);
+            count <= MAX_FUNCTION_CHAIN_COMMANDS
+        })
+    }
+}
+
+impl Drop for FunctionChainGuard {
+    fn drop(&mut self) {
+        // Only ever dropped after a successful `enter`, so the depth cannot underflow.
+        let outermost = FUNCTION_CHAIN_DEPTH.with(|depth| {
+            let outer = depth.get() - 1;
+            depth.set(outer);
+            outer
+        });
+        if outermost == 0 {
+            // Outermost chain ended; reset the budget for the next chain.
+            FUNCTION_CHAIN_COMMANDS.with(|commands| commands.set(0));
+        }
+    }
+}
+
+/// True while inside a nested function call; nested calls must not report their own result.
+#[must_use]
+pub fn is_nested_function_call() -> bool {
+    FUNCTION_CHAIN_DEPTH.with(Cell::get) > 0
 }
 
 impl Default for DatapackManager {
@@ -731,18 +814,24 @@ impl DatapackManager {
         names
     }
 
+    /// Runs every line of a function or function tag; also the single place chains are bounded.
     pub fn execute_function(
         &self,
         server: &Arc<Server>,
         source: &CommandSource,
         name: &str,
-    ) -> Result<usize, String> {
+    ) -> Result<usize, FunctionRunError> {
+        let Ok(_guard) = FunctionChainGuard::enter() else {
+            return Err(FunctionRunError::ChainLimitExceeded);
+        };
+
         self.visit_function_lines(name, |line| {
             server
                 .command_dispatcher
                 .load()
                 .handle_command(source, line);
         })
+        .map_err(FunctionRunError::Unknown)
     }
 
     fn visit_function_lines(
@@ -782,8 +871,11 @@ impl DatapackManager {
         };
 
         let mut total_executed = 0;
-        for lines in functions {
+        'functions: for lines in functions {
             for line in lines.iter() {
+                if !FunctionChainGuard::count_command() {
+                    break 'functions;
+                }
                 visit(line);
                 total_executed += 1;
             }
@@ -1132,6 +1224,7 @@ impl DatapackManager {
         server
             .datapack_manager
             .execute_function(server, &source, name)
+            .map_err(|error| error.to_string())
     }
 }
 
@@ -1672,7 +1765,74 @@ fn load_recipes_from_dir(
 }
 #[cfg(test)]
 mod tests {
-    use super::DatapackManager;
+    use super::{
+        DatapackManager, FunctionChainGuard, FunctionRunError, MAX_FUNCTION_CHAIN_COMMANDS,
+        MAX_FUNCTION_CHAIN_DEPTH,
+    };
+
+    #[test]
+    fn function_chain_depth_is_bounded_instead_of_recursing_forever() {
+        // Unbounded entry is refused instead of overflowing the stack.
+        let mut guards = Vec::new();
+        let error = loop {
+            match FunctionChainGuard::enter() {
+                Ok(guard) => guards.push(guard),
+                Err(error) => break error,
+            }
+        };
+
+        assert_eq!(error, FunctionRunError::ChainLimitExceeded);
+        assert_eq!(guards.len(), MAX_FUNCTION_CHAIN_DEPTH);
+    }
+
+    #[test]
+    fn function_chain_depth_is_released_after_a_bounded_chain() {
+        // Bounded recursion still completes and releases the depth.
+        fn recurse(remaining: usize) -> Result<(), FunctionRunError> {
+            if remaining == 0 {
+                return Ok(());
+            }
+            let _guard = FunctionChainGuard::enter()?;
+            recurse(remaining - 1)
+        }
+
+        recurse(100).expect("bounded recursion must succeed");
+        // The depth has to be released again, or later chains would inherit it.
+        assert!(FunctionChainGuard::enter().is_ok());
+    }
+
+    #[test]
+    fn function_chain_commands_are_budgeted_per_chain() {
+        // An exhausted budget stops the chain; the next chain starts fresh.
+        let manager = DatapackManager::new();
+        manager
+            .functions
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                "test:wide".to_string(),
+                vec!["say hi".to_string(); MAX_FUNCTION_CHAIN_COMMANDS + 10].into(),
+            );
+
+        {
+            let _guard = FunctionChainGuard::enter().expect("chain must start");
+            let mut visited = 0;
+            let executed = manager
+                .visit_function_lines("test:wide", |_| visited += 1)
+                .expect("wide function must resolve");
+            assert_eq!(visited, MAX_FUNCTION_CHAIN_COMMANDS);
+            assert_eq!(executed, MAX_FUNCTION_CHAIN_COMMANDS);
+        };
+        // Guard dropped above, so the budget was reset.
+        {
+            let _guard = FunctionChainGuard::enter().expect("next chain must start");
+            let mut visited = 0;
+            manager
+                .visit_function_lines("test:wide", |_| visited += 1)
+                .expect("wide function must resolve");
+            assert_eq!(visited, MAX_FUNCTION_CHAIN_COMMANDS);
+        };
+    }
 
     #[test]
     fn function_dispatch_releases_the_functions_lock() {
