@@ -838,6 +838,22 @@ impl DispenserBlock {
             play_bucket_evaporation(ctx.world, &front.to_f64());
             true
         } else {
+            let front_state = ctx.world.get_block_state(&front);
+            if front_state.replaceable() {
+                if !front_state.is_air()
+                    && ctx
+                        .world
+                        .break_block(&front, None, BlockFlags::NOTIFY_ALL)
+                        .is_none()
+                {
+                    return;
+                }
+                ctx.world.set_block_state(
+                    &front,
+                    Block::AIR.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                );
+            }
             try_place_filled_bucket(
                 ctx.world,
                 item.item,
