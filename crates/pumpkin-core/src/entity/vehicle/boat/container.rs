@@ -27,10 +27,12 @@ impl BoatInventory {
     }
 
     pub(super) fn read_nbt(&self, nbt: &NbtCompound) {
-        if let Ok(mut items) = self.items.try_write() {
-            items.fill_with(|| ItemStack::EMPTY.clone());
-            self.read_data(nbt, &mut items);
-        }
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        items.fill_with(|| ItemStack::EMPTY.clone());
+        self.read_data(nbt, &mut items);
     }
 
     pub(super) fn write_nbt(&self, nbt: &mut NbtCompound) {
