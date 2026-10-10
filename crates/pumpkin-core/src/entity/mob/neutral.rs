@@ -300,7 +300,7 @@ pub fn tell_neutral_mobs_player_died(player: &dyn EntityBase, world: &World) {
         DEATH_NOTICE_RANGE_XZ,
     );
     for other in world.get_entities_at_box(&search_box) {
-        if !EntityPredicate::ExceptSpectator.test(other.get_entity()) {
+        if !EntityPredicate::ExceptSpectator.test(other.as_ref()) {
             continue;
         }
         if let Some(neutral) = other.get_mob().and_then(Mob::as_neutral) {

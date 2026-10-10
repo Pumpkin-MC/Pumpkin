@@ -13,6 +13,10 @@ const SCARE_RANGE_SQ: f64 = 36.0;
 const SCARE_MOVE_SQ: f64 = 0.010_000_000_000_000_002;
 const SCARE_ROTATION: f32 = 5.0;
 
+/// Vanilla subclass hooks, ported as closures: `CatTemptGoal#canUse` (tame state) and
+/// `OcelotTemptGoal#canScare` (trust state).
+type TemptGate = dyn Fn(&dyn Mob) -> bool + Send + Sync;
+
 pub struct TemptGoal {
     goal_control: Controls,
     speed: f64,
@@ -25,6 +29,11 @@ pub struct TemptGoal {
     watched_pitch: f32,
     cooldown: i32,
     running: bool,
+    /// Extra condition asked on every start/continue attempt (`CatTemptGoal#canUse`).
+    can_use_gate: Option<Box<TemptGate>>,
+    /// Extra condition combined with `can_scare` on every continue check
+    /// (`OcelotTemptGoal#canScare`).
+    scare_condition: Option<Box<TemptGate>>,
 }
 
 impl TemptGoal {
@@ -33,6 +42,7 @@ impl TemptGoal {
         Self::with_stop_distance(speed, tempt_items, can_scare, DEFAULT_STOP_DISTANCE)
     }
 
+    /// Like [`Self::new`], with a custom distance at which following stops once reached.
     #[must_use]
     pub fn with_stop_distance(
         speed: f64,
@@ -52,7 +62,51 @@ impl TemptGoal {
             watched_pitch: 0.0,
             cooldown: 0,
             running: false,
+            can_use_gate: None,
+            scare_condition: None,
         }
+    }
+
+    /// Like [`Self::new`], but the goal refuses to start while `gate` returns false.
+    ///
+    /// Mirrors vanilla `CatTemptGoal#canUse`'s `&& !cat.isTame()`: a tamed cat ignores the
+    /// tempt item instead of following it. Consulted on every start and continue attempt,
+    /// like the vanilla override (which `canContinueToUse` reaches through virtual dispatch).
+    #[must_use]
+    pub fn with_can_use_gate<F>(mut self, gate: F) -> Self
+    where
+        F: Fn(&dyn Mob) -> bool + Send + Sync + 'static,
+    {
+        self.can_use_gate = Some(Box::new(gate));
+        self
+    }
+
+    /// Like [`Self::new`], but the startle check additionally requires `condition`.
+    ///
+    /// Mirrors vanilla `OcelotTemptGoal#canScare`'s `&& !ocelot.isTrusting()`: a trusting
+    /// ocelot keeps following the fish instead of being startled by player movement.
+    #[must_use]
+    pub fn with_scare_condition<F>(mut self, condition: F) -> Self
+    where
+        F: Fn(&dyn Mob) -> bool + Send + Sync + 'static,
+    {
+        self.scare_condition = Some(Box::new(condition));
+        self
+    }
+
+    /// Whether the can-use gate (if any) allows a start right now; no gate always allows.
+    fn can_use_gate_allows(&self, mob: &dyn Mob) -> bool {
+        self.can_use_gate.as_ref().is_none_or(|gate| gate(mob))
+    }
+
+    /// Whether the startle check applies right now: `can_scare` combined with the optional
+    /// subclass condition.
+    fn can_scare_now(&self, mob: &dyn Mob) -> bool {
+        self.can_scare
+            && self
+                .scare_condition
+                .as_ref()
+                .is_none_or(|condition| condition(mob))
     }
 
     #[must_use]
@@ -93,17 +147,21 @@ impl TemptGoal {
 }
 
 impl Goal for TemptGoal {
+    /// Finds the nearest player holding a tempt item; the startle cooldown and the optional
+    /// can-use gate can both veto.
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         if self.cooldown > 0 {
             self.cooldown -= 1;
             return false;
         }
         self.target_player = self.find_tempting_player(mob);
-        self.target_player.is_some()
+        self.target_player.is_some() && self.can_use_gate_allows(mob)
     }
 
+    /// Continues while [`Self::can_start`] agrees; while `can_scare_now` holds, a moving or
+    /// turning player within six blocks ends the temptation.
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        if self.can_scare {
+        if self.can_scare_now(mob) {
             let Some(player) = self.target_player.clone() else {
                 return false;
             };

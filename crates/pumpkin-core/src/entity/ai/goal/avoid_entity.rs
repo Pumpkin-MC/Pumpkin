@@ -11,6 +11,9 @@ const FAST_DISTANCE_SQ: f64 = 49.0;
 const HORIZONTAL_RANGE: i32 = 16;
 const VERTICAL_RANGE: i32 = 7;
 
+/// Extra condition deciding whether the mob avoids anything at all right now.
+type AvoidGate = dyn Fn(&dyn Mob) -> bool + Send + Sync;
+
 pub struct AvoidEntityGoal {
     goal_control: Controls,
     flee_type: &'static EntityType,
@@ -19,15 +22,55 @@ pub struct AvoidEntityGoal {
     fast_speed: f64,
     target: Option<Arc<dyn EntityBase>>,
     flee_pos: Option<Vector3<f64>>,
+    gate: Option<Box<AvoidGate>>,
 }
 
 impl AvoidEntityGoal {
+    /// Creates the goal with no gate: the mob always flees when `flee_type` is found.
+    ///
+    /// Use [`Self::with_gate`] when the flee decision depends on mob state (tame, trust).
     #[must_use]
     pub fn new(
         flee_type: &'static EntityType,
         flee_distance: f64,
         slow_speed: f64,
         fast_speed: f64,
+    ) -> Self {
+        Self::build(flee_type, flee_distance, slow_speed, fast_speed, None)
+    }
+
+    /// Like [`Self::new`], but the goal is skipped entirely while `gate` returns false.
+    ///
+    /// Vanilla subclasses such as `Cat$CatAvoidEntityGoal` and `Ocelot$OcelotAvoidEntityGoal`
+    /// override `canUse`/`canContinueToUse` with the mob's tame or trust state; that check has to
+    /// run on every start attempt, not only when the goal is registered.
+    #[must_use]
+    pub fn with_gate<F>(
+        flee_type: &'static EntityType,
+        flee_distance: f64,
+        slow_speed: f64,
+        fast_speed: f64,
+        gate: F,
+    ) -> Self
+    where
+        F: Fn(&dyn Mob) -> bool + Send + Sync + 'static,
+    {
+        Self::build(
+            flee_type,
+            flee_distance,
+            slow_speed,
+            fast_speed,
+            Some(Box::new(gate)),
+        )
+    }
+
+    /// Shared constructor behind [`Self::new`] and [`Self::with_gate`].
+    fn build(
+        flee_type: &'static EntityType,
+        flee_distance: f64,
+        slow_speed: f64,
+        fast_speed: f64,
+        gate: Option<Box<AvoidGate>>,
     ) -> Self {
         Self {
             goal_control: Controls::MOVE,
@@ -37,7 +80,13 @@ impl AvoidEntityGoal {
             fast_speed,
             target: None,
             flee_pos: None,
+            gate,
         }
+    }
+
+    /// Whether the gate (if any) lets the goal run right now; no gate always allows.
+    fn gate_allows(&self, mob: &dyn Mob) -> bool {
+        self.gate.as_ref().is_none_or(|gate| gate(mob))
     }
 
     fn find_threat(&self, mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
@@ -48,12 +97,12 @@ impl AvoidEntityGoal {
         if self.flee_type == &EntityType::PLAYER {
             world
                 .get_nearest_player(pos, self.flee_distance, |player| {
-                    EntityPredicate::ExceptCreativeOrSpectator.test(player.get_entity())
+                    EntityPredicate::ExceptCreativeOrSpectator.test(player.as_ref())
                 })
                 .map(|p| p as Arc<dyn EntityBase>)
         } else {
             world.get_nearest_entity(pos, self.flee_distance, Some(&[self.flee_type]), |entity| {
-                EntityPredicate::ExceptCreativeOrSpectator.test(entity.get_entity())
+                EntityPredicate::ExceptCreativeOrSpectator.test(entity.as_ref())
             })
         }
     }
@@ -61,6 +110,10 @@ impl AvoidEntityGoal {
 
 impl Goal for AvoidEntityGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if !self.gate_allows(mob) {
+            return false;
+        }
+
         let Some(target) = self.find_threat(mob) else {
             return false;
         };
@@ -86,7 +139,7 @@ impl Goal for AvoidEntityGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        !mob.is_navigator_idle()
+        self.gate_allows(mob) && !mob.is_navigator_idle()
     }
 
     fn start(&mut self, mob: &dyn Mob) {

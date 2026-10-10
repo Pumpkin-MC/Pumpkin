@@ -1140,7 +1140,7 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Drops a target the mob is not allowed to attack, such as a creative player.
     fn as_valid_target(&self, target: Option<Arc<dyn EntityBase>>) -> Option<Arc<dyn EntityBase>> {
         let target = target?;
-        if !EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity()) {
+        if !EntityPredicate::ExceptCreativeOrSpectator.test(target.as_ref()) {
             return None;
         }
         self.can_attack(target.as_ref()).then_some(target)
@@ -1380,19 +1380,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         }
 
         if mob_entity.love_ticks.load(Relaxed) > 0 {
-            let ticks = mob_entity.love_ticks.fetch_sub(1, Relaxed);
-            if ticks % 10 == 0 {
-                let entity = &mob_entity.living_entity.entity;
-                let pos = entity.pos.load();
-                let world = entity.world.load();
-                world.spawn_particle(
-                    pos + Vector3::new(0.0, f64::from(entity.height()) + 0.5, 0.0),
-                    Vector3::new(0.5, 0.5, 0.5),
-                    1.0,
-                    1,
-                    pumpkin_data::particle::Particle::Heart,
-                );
-            }
+            // Vanilla `Animal.aiStep` only adds in-love hearts on the client, and `inLove` is
+            // never synced, so the hearts players see are the entity-event bursts sent from
+            // `set_in_love` and breeding. A per-tick server-side stream is not vanilla.
+            mob_entity.love_ticks.fetch_sub(1, Relaxed);
         }
 
         mob_entity.check_despawn(self);

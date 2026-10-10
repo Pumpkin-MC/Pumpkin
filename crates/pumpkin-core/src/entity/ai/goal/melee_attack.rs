@@ -136,9 +136,7 @@ impl Goal for MeleeAttackGoal {
             .get_mob_entity()
             .get_target()
             .as_deref()
-            .is_some_and(|entity| {
-                !EntityPredicate::ExceptCreativeOrSpectator.test(entity.get_entity())
-            });
+            .is_some_and(|entity| !EntityPredicate::ExceptCreativeOrSpectator.test(entity));
         if should_clear {
             mob.set_mob_target(None);
         }

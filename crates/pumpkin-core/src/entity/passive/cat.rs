@@ -1,11 +1,11 @@
 use std::sync::{
-    Arc, Weak,
+    Arc, Mutex, Weak,
     atomic::{AtomicBool, AtomicU8, Ordering},
 };
 
 use pumpkin_data::cat_sound_variant::CatSoundVariant;
 use pumpkin_data::cat_variant::CatVariant;
-use pumpkin_data::entity::{EntityStatus, EntityType};
+use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
@@ -19,21 +19,54 @@ use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, breed::BreedGoal,
-        escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        active_target::{ActiveTargetGoal, DEFAULT_RANDOM_INTERVAL},
+        avoid_entity::AvoidEntityGoal,
+        breed::BreedGoal,
+        escape_danger::EscapeDangerGoal,
+        follow_owner::FollowOwnerGoal,
+        leap_at_target::LeapAtTargetGoal,
+        look_at_entity::LookAtEntityGoal,
+        ocelot_attack::OcelotAttackGoal,
+        sit_when_ordered_to::SitWhenOrderedToGoal,
+        swim::SwimGoal,
+        tempt::TemptGoal,
+        water_avoiding_random_stroll::WaterAvoidingRandomStrollGoal,
     },
+    living::LivingEntity,
     mob::{Mob, MobEntity},
     passive::{
         animal::Animal,
         tamable::{TamableAnimal, TamableData},
+        turtle::baby_on_land_selector,
     },
     player::Player,
 };
+use crate::world::World;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
+
+/// Vanilla `Cat.WALK_SPEED_MOD`: breed, stroll and the avoid goal's walk speed; the avoid
+/// goal's sprint speed is `Cat.SPRINT_SPEED_MOD`.
+const WALK_SPEED_MOD: f64 = 0.8;
+const SPRINT_SPEED_MOD: f64 = 1.33;
+const AVOID_DISTANCE: f64 = 16.0;
+/// Vanilla `Cat.TEMPT_SPEED_MOD`; `customServerAiStep` keys the crouch off it.
+const TEMPT_SPEED_MOD: f64 = 0.6;
+
+/// `Cat#registerGoals`'s `NonTameRandomTargetGoal` gate: the cat only hunts while untamed.
+/// The turtle row adds vanilla's baby-on-land selector, shared from the turtle module.
+fn cat_prey_predicate(
+    cat: &Weak<CatEntity>,
+    baby_only: bool,
+) -> impl Fn(&LivingEntity, &World) -> bool + Send + Sync + 'static {
+    let cat = cat.clone();
+    move |target, world| {
+        if cat.upgrade().is_none_or(|cat| cat.is_tame()) {
+            return false;
+        }
+        !baby_only || baby_on_land_selector(target, world)
+    }
+}
 
 fn get_dye_color_from_item(item: &Item) -> Option<u8> {
     let key = item.registry_key;
@@ -82,6 +115,9 @@ pub struct CatEntity {
     pub tamable_data: TamableData,
     pub is_lying: AtomicBool,
     pub relax_state_one: AtomicBool,
+    /// Set right after construction; the avoid goal and the prey goals need a `Weak` to read the
+    /// tame state back out of the mob they are attached to.
+    self_weak: Mutex<Option<Weak<Self>>>,
 }
 
 impl CatEntity {
@@ -95,12 +131,20 @@ impl CatEntity {
             tamable_data: TamableData::default(),
             is_lying: AtomicBool::new(false),
             relax_state_one: AtomicBool::new(false),
+            self_weak: Mutex::new(None),
         };
         let mob_arc = Arc::new(cat);
+        *mob_arc
+            .self_weak
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(&mob_arc));
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
         };
+        // Captured by the tempt goal, which re-reads the tame state from the cat on every start
+        // attempt (`CatTemptGoal#canUse`).
+        let tempt_weak = mob_arc.weak_ref();
 
         {
             let mut goal_selector = mob_arc
@@ -113,29 +157,48 @@ impl CatEntity {
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             // Goal 1: TamableAnimalPanicGoal (EscapeDangerGoal)
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
-            // Goal 4: CatTemptGoal
-            goal_selector.add_goal(4, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS, true)));
-            // Goal 4: CatAvoidEntityGoal (when untamed)
+            // Goal 2: SitWhenOrderedToGoal
+            goal_selector.add_goal(2, Box::new(SitWhenOrderedToGoal::new()));
+            // Goal 4: CatTemptGoal. Vanilla gates the goal on `!cat.isTame()`
+            // (`CatTemptGoal#canUse`), so a tamed cat ignores the fish entirely.
             goal_selector.add_goal(
                 4,
-                Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 16.0, 0.8, 1.33)),
+                Box::new(
+                    TemptGoal::new(TEMPT_SPEED_MOD, TEMPT_ITEMS, true).with_can_use_gate(
+                        move |_mob| tempt_weak.upgrade().is_some_and(|cat| !cat.is_tame()),
+                    ),
+                ),
             );
-            // Goal 5: BreedGoal
-            goal_selector.add_goal(5, BreedGoal::new(0.8));
             // Goal 6: FollowOwnerGoal
             goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 5.0));
-            // Goal 9: FollowParentGoal
-            goal_selector.add_goal(9, Box::new(FollowParentGoal::new(0.8)));
-            // Goal 11: WanderAroundGoal
-            goal_selector.add_goal(11, Box::new(WanderAroundGoal::new(0.8)));
-            // Goal 12: LookAtPlayerGoal
+            // Goal 8: LeapAtTargetGoal
+            goal_selector.add_goal(8, Box::new(LeapAtTargetGoal::new(0.3)));
+            // Goal 9: OcelotAttackGoal, shared with the ocelot
+            goal_selector.add_goal(9, Box::new(OcelotAttackGoal::new()));
+            // Goal 10: BreedGoal
+            goal_selector.add_goal(10, BreedGoal::new(WALK_SPEED_MOD));
+            // Goal 11: WaterAvoidingRandomStrollGoal
+            goal_selector.add_goal(
+                11,
+                Box::new(WaterAvoidingRandomStrollGoal::with_probability(
+                    WALK_SPEED_MOD,
+                    1.000_000_1E-5,
+                )),
+            );
+            // Goal 12: LookAtPlayerGoal. Vanilla stops at this one — no RandomLookAroundGoal, so
+            // a cat that is not looking at a player simply keeps its head where it is.
             goal_selector.add_goal(
                 12,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
             );
-            // Goal 12: RandomLookAroundGoal
-            goal_selector.add_goal(12, Box::new(RandomLookAroundGoal::default()));
+
+            // Goal 4: CatAvoidEntityGoal is added last, by `reassess_tame_goals` below, so it
+            // registers after the tempt goal: both sit at priority 4 and the first registered
+            // goal wins the MOVE control, which matches the vanilla insertion order.
         };
+
+        // Goal 4: CatAvoidEntityGoal (only while untamed)
+        mob_arc.reassess_tame_goals();
 
         {
             let mut target_selector = mob_arc
@@ -143,19 +206,69 @@ impl CatEntity {
                 .target_selector
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let weak = mob_arc.weak_ref();
 
             // Target Goal 1: NonTameRandomTargetGoal for Rabbit and Turtle
             target_selector.add_goal(
                 1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false),
+                Box::new(ActiveTargetGoal::new(
+                    &mob_arc.mob_entity,
+                    &EntityType::RABBIT,
+                    DEFAULT_RANDOM_INTERVAL,
+                    false,
+                    false,
+                    Some(cat_prey_predicate(&weak, false)),
+                )),
             );
             target_selector.add_goal(
                 1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false),
+                Box::new(ActiveTargetGoal::new(
+                    &mob_arc.mob_entity,
+                    &EntityType::TURTLE,
+                    DEFAULT_RANDOM_INTERVAL,
+                    false,
+                    false,
+                    Some(cat_prey_predicate(&weak, true)),
+                )),
             );
         };
 
         mob_arc
+    }
+
+    fn weak_ref(&self) -> Weak<Self> {
+        self.self_weak
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+            .unwrap_or_default()
+    }
+
+    /// Vanilla `Cat#reassessTameGoals`: the avoid-players goal exists only while the cat is
+    /// untamed, so every tame-state change has to add it back or drop it. The goal additionally
+    /// re-checks the tame state on every start, which is vanilla's second guard in
+    /// `Cat$CatAvoidEntityGoal#canUse`.
+    pub fn reassess_tame_goals(&self) {
+        let weak = self.weak_ref();
+        let mob: &dyn Mob = self;
+        let mut goal_selector = self
+            .mob_entity
+            .goals_selector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        goal_selector.remove_goal::<AvoidEntityGoal>(mob);
+        if !self.is_tame() {
+            goal_selector.add_goal(
+                4,
+                Box::new(AvoidEntityGoal::with_gate(
+                    &EntityType::PLAYER,
+                    AVOID_DISTANCE,
+                    WALK_SPEED_MOD,
+                    SPRINT_SPEED_MOD,
+                    move |_mob| weak.upgrade().is_some_and(|cat| !cat.is_tame()),
+                )),
+            );
+        }
     }
 
     pub fn get_tame_flags(&self) -> u8 {
@@ -212,6 +325,7 @@ impl CatEntity {
             self.get_tame_flags(),
         );
         entity.set_synced_data(pumpkin_data::tracked_data::cat::OWNER_UUID, owner);
+        self.reassess_tame_goals();
     }
 
     pub fn set_variant(&self, variant: u8) {
@@ -302,6 +416,37 @@ impl Mob for CatEntity {
         Some(self)
     }
 
+    /// Vanilla `Cat.customServerAiStep`: the pose and sprint state follow the speed the
+    /// navigation was last told to move at. The sprint flag is what the client keys the
+    /// feet dust off, and the sprint attribute modifier is what makes the flee actually
+    /// faster than the walk.
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        let (idle, speed) = {
+            let navigator = self
+                .mob_entity
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            (navigator.is_idle(), navigator.get_speed())
+        };
+
+        let entity = self.get_entity();
+        // Vanilla compares the move-control modifier directly; ours is one of the fixed
+        // goal speeds, so exact equality is intended. The crouch is cosmetic for a cat:
+        // vanilla `LivingEntity.getDimensions` only swaps boxes for `Sleeping`, so the pose
+        // must not resize the hitbox to the player-sized pose table.
+        if !idle && speed == SPRINT_SPEED_MOD {
+            entity.set_pose_keep_dimensions(EntityPose::Standing);
+            self.mob_entity.living_entity.set_sprinting(true);
+        } else if !idle && speed == TEMPT_SPEED_MOD {
+            entity.set_pose_keep_dimensions(EntityPose::Crouching);
+            self.mob_entity.living_entity.set_sprinting(false);
+        } else {
+            entity.set_pose_keep_dimensions(EntityPose::Standing);
+            self.mob_entity.living_entity.set_sprinting(false);
+        }
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         let variant_id = self.variant.load(Ordering::Relaxed);
         let variant_str = CatVariant::all()
@@ -337,6 +482,10 @@ impl Mob for CatEntity {
         } else if let Some(collar_int) = nbt.get_int("CollarColor") {
             self.collar_color.store(collar_int as u8, Ordering::Relaxed);
         }
+        // `TamableAnimal::read_tamable_nbt` has already applied `Owner`/`IsTame`, so a cat
+        // loaded from disk needs its goals re-checked here — vanilla does the same through
+        // `setTame`, which `readAdditionalSaveData` reaches via `TamableAnimal`.
+        self.reassess_tame_goals();
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
