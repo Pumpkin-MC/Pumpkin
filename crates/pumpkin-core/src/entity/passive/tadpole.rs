@@ -92,10 +92,6 @@ impl Mob for TadpoleEntity {
         &self.mob_entity
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
-    }
-
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         if Self::is_food(item_stack) {
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);

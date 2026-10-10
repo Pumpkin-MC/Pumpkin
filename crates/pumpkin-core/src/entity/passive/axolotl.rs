@@ -260,8 +260,6 @@ impl Mob for AxolotlEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
-
         let play_dead_ticks = self.play_dead_ticks.load(Ordering::Relaxed);
         if play_dead_ticks > 0 {
             let remaining = play_dead_ticks - 1;

@@ -159,8 +159,6 @@ impl Mob for HappyGhastEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
-
         let leash_time = self.leash_holder_time.load(Ordering::Relaxed);
         if leash_time > 0 {
             self.leash_holder_time.fetch_sub(1, Ordering::Relaxed);

@@ -13,6 +13,7 @@ use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase,
+    ageable::{AgeableData, AgeableMob},
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, breed::BreedGoal,
         escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
@@ -32,6 +33,7 @@ const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
 pub struct OcelotEntity {
     pub mob_entity: MobEntity,
     pub is_trusting: AtomicBool,
+    pub ageable_data: AgeableData,
 }
 
 impl OcelotEntity {
@@ -40,6 +42,7 @@ impl OcelotEntity {
         let ocelot = Self {
             mob_entity,
             is_trusting: AtomicBool::new(false),
+            ageable_data: AgeableData::default(),
         };
         let mob_arc = Arc::new(ocelot);
         let mob_weak: Weak<dyn Mob> = {
@@ -121,7 +124,17 @@ impl Animal for OcelotEntity {
     }
 }
 
+impl AgeableMob for OcelotEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl Mob for OcelotEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }

@@ -142,10 +142,6 @@ impl Mob for StriderEntity {
         self.saddled.store(saddled, Ordering::Relaxed);
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
-    }
-
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
