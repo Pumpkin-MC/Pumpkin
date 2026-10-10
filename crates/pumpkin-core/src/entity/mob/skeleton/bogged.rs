@@ -43,14 +43,16 @@ impl Mob for BoggedSkeletonEntity {
     }
 
     fn get_arrow_projectile(&self) -> Option<ItemStack> {
-        // Create poison arrow item stack
-        let mut poison_arrow = ItemStack::new(1, &Item::TIPPED_ARROW);
+        // Vanilla Bogged.getArrow calls arrow.addEffect(new MobEffectInstance(POISON, 100))
+        // directly on the AbstractArrow, bypassing any PotionDurationScale.
+        // Using a plain ARROW (no PotionDurationScale component, so scale=1.0) means the
+        // 100-tick duration is preserved unchanged when applied through PotionContents.
+        let mut arrow = ItemStack::new(1, &Item::ARROW);
 
-        // Add poison effect: 5 seconds (100 ticks) duration - matches vanilla Bogged
         let poison_effect = StatusEffectInstance {
             effect_id: Cow::Borrowed("minecraft:poison"),
             amplifier: 0,
-            duration: 100, // 5 seconds * 20 ticks (not 4 seconds as wiki incorrectly states)
+            duration: 100, // 5 seconds at 20 ticks/s, matching vanilla MobEffectInstance(POISON, 100)
             ambient: false,
             show_particles: true,
             show_icon: true,
@@ -63,8 +65,8 @@ impl Mob for BoggedSkeletonEntity {
             custom_name: None,
         };
 
-        poison_arrow.set_data_component(potion_contents);
-        Some(poison_arrow)
+        arrow.set_data_component(potion_contents);
+        Some(arrow)
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
