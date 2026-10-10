@@ -1138,7 +1138,7 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Drops a target the mob is not allowed to attack, such as a creative player.
     fn as_valid_target(&self, target: Option<Arc<dyn EntityBase>>) -> Option<Arc<dyn EntityBase>> {
         let target = target?;
-        if !EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity()) {
+        if !EntityPredicate::ExceptCreativeOrSpectator.test(target.as_ref()) {
             return None;
         }
         self.can_attack(target.as_ref()).then_some(target)

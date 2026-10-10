@@ -97,12 +97,12 @@ impl AvoidEntityGoal {
         if self.flee_type == &EntityType::PLAYER {
             world
                 .get_nearest_player(pos, self.flee_distance, |player| {
-                    EntityPredicate::ExceptCreativeOrSpectator.test(player.get_entity())
+                    EntityPredicate::ExceptCreativeOrSpectator.test(player.as_ref())
                 })
                 .map(|p| p as Arc<dyn EntityBase>)
         } else {
             world.get_nearest_entity(pos, self.flee_distance, Some(&[self.flee_type]), |entity| {
-                EntityPredicate::ExceptCreativeOrSpectator.test(entity.get_entity())
+                EntityPredicate::ExceptCreativeOrSpectator.test(entity.as_ref())
             })
         }
     }
