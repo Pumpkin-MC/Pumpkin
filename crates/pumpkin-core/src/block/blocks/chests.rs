@@ -6,7 +6,7 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{ChestLikeProperties, ChestType, HorizontalFacing};
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::loot_table::get_loot_table;
-use pumpkin_data::{Block, BlockDirection, translation};
+use pumpkin_data::{Block, BlockDirection, entity::EntityType, translation};
 use pumpkin_inventory::Inventory;
 use pumpkin_inventory::double::DoubleInventory;
 use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
@@ -606,7 +606,7 @@ fn has_cat_on_top(world: &World, block_pos: &BlockPos) -> bool {
     );
     for entity_base in world.get_entities_at_box(&search_box) {
         let entity = entity_base.get_entity();
-        if entity.entity_type.resource_name == "cat"
+        if *entity.entity_type == EntityType::CAT
             && let Some(mob) = entity_base.get_mob()
             && mob.is_sitting()
         {
