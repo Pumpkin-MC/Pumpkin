@@ -305,6 +305,9 @@ impl ItemBehaviour for SpawnEggItem {
             mob.get_entity()
                 .set_rotation(rand::random::<f32>() * 360.0, 0.0);
             apply_entity_variant(item, mob.as_ref(), Some(player));
+            if let Some(mob_trait) = mob.get_mob() {
+                mob_trait.on_offspring_spawned_from_egg(player);
+            }
             if world.spawn_creature(
                 mob,
                 CreatureSpawnReason::SpawnerEgg,

@@ -1104,6 +1104,10 @@ pub trait Mob: EntityBase + Send + Sync {
         group_data
     }
 
+    /// Vanilla `Mob.onOffspringSpawnedFromEgg`: hook called on an offspring mob when spawned
+    /// by right-clicking an adult mob with a spawn egg.
+    fn on_offspring_spawned_from_egg(&self, _player: &crate::entity::player::Player) {}
+
     fn populate_default_equipment_slots(
         &self,
         _world: &Arc<World>,

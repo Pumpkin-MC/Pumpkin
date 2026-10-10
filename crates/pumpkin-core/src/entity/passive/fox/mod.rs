@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::data_component_impl::{EquipmentSlot, FoodImpl};
-use pumpkin_data::entity::{EntityType, MobCategory};
+use pumpkin_data::entity::{EntityPose, EntityType, MobCategory};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -22,13 +22,10 @@ use crate::entity::ai::goal::active_target::ActiveTargetGoal;
 use crate::entity::ai::goal::avoid_entity::AvoidEntityGoal;
 use crate::entity::ai::goal::breed::BreedGoal;
 use crate::entity::ai::goal::climb_powder_snow::ClimbOnTopOfPowderSnowGoal;
-use crate::entity::ai::goal::escape_danger::EscapeDangerGoal;
-use crate::entity::ai::goal::flee_sun::FleeSunGoal;
 use crate::entity::ai::goal::follow_parent::FollowParentGoal;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::ai::goal::leap_at_target::LeapAtTargetGoal;
 use crate::entity::ai::goal::look_at_entity::LookAtEntityGoal;
-use crate::entity::ai::goal::melee_attack::MeleeAttackGoal;
 use crate::entity::ai::goal::stroll_through_village::StrollThroughVillageGoal;
 use crate::entity::ai::goal::swim::SwimGoal;
 use crate::entity::ai::goal::water_avoiding_random_stroll::WaterAvoidingRandomStrollGoal;
@@ -250,14 +247,7 @@ impl FoxEntity {
         goal_selector.add_goal(0, Box::new(SwimGoal::default()));
         goal_selector.add_goal(0, Box::new(ClimbOnTopOfPowderSnowGoal::new()));
         goal_selector.add_goal(1, Box::new(FaceplantGoal::new(fox_weak.clone())));
-        goal_selector.add_goal(
-            2,
-            Box::new(EscapeDangerGoal::new(2.2).gated_by(|mob| {
-                mob.cast_any()
-                    .downcast_ref::<Self>()
-                    .is_none_or(|fox| !fox.is_defending())
-            })),
-        );
+        goal_selector.add_goal(2, Box::new(FoxPanicGoal::new(fox_weak.clone(), 2.2)));
         goal_selector.add_goal(3, BreedGoal::new(1.0));
         Self::add_avoid_goals(&mut goal_selector);
         goal_selector.add_goal(5, Box::new(StalkPreyGoal::new(fox_weak.clone())));
@@ -265,14 +255,7 @@ impl FoxEntity {
         goal_selector.add_goal(6, Box::new(FoxSeekShelterGoal::new(fox_weak.clone(), 1.25)));
         goal_selector.add_goal(
             7,
-            Box::new(MeleeAttackGoal::new(1.2, true).gated_by(|mob| {
-                mob.cast_any().downcast_ref::<Self>().is_none_or(|fox| {
-                    !fox.is_sitting()
-                        && !fox.is_sleeping()
-                        && !fox.is_crouching()
-                        && !fox.is_faceplanted()
-                })
-            })),
+            Box::new(FoxMeleeAttackGoal::new(fox_weak.clone(), 1.2, true)),
         );
         goal_selector.add_goal(7, Box::new(SleepGoal::new(fox_weak.clone())));
         goal_selector.add_goal(8, Box::new(FollowParentGoal::new(1.25)));
@@ -347,6 +330,7 @@ impl FoxEntity {
                 |target: &LivingEntity, _world: &World| {
                     target.entity.entity_type == &EntityType::COD
                         || target.entity.entity_type == &EntityType::SALMON
+                        || target.entity.entity_type == &EntityType::TROPICAL_FISH
                 },
             ),
         );
@@ -657,9 +641,9 @@ impl FoxEntity {
     }
 
     fn tick_eating(&self, world: &World) {
+        let ticks = self.ticks_since_eaten.fetch_add(1, Ordering::Relaxed) + 1;
         let mouth_item = self.get_mouth_item();
         if self.can_eat(&mouth_item) {
-            let ticks = self.ticks_since_eaten.fetch_add(1, Ordering::Relaxed) + 1;
             if ticks > 600 {
                 self.eat_food_in_mouth(world, &mouth_item);
                 self.ticks_since_eaten.store(0, Ordering::Relaxed);
@@ -675,8 +659,6 @@ impl FoxEntity {
                     None,
                 );
             }
-        } else {
-            self.ticks_since_eaten.store(0, Ordering::Relaxed);
         }
     }
 
@@ -951,6 +933,38 @@ impl Mob for FoxEntity {
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         self.animal_interact(player, item_stack, Sound::EntityFoxAmbient)
     }
+
+    fn finalize_spawn(
+        &self,
+        world: &Arc<World>,
+        group_data: Option<crate::entity::mob::spawn::SpawnGroupData>,
+    ) -> Option<crate::entity::mob::spawn::SpawnGroupData> {
+        self.get_mob_entity().finalize_spawn_base();
+        let (variant, size) =
+            if let Some(crate::entity::mob::spawn::SpawnGroupData::FoxGroupData {
+                variant,
+                group_size,
+            }) = group_data
+            {
+                (variant, group_size + 1)
+            } else {
+                let pos = self.get_entity().block_pos.load();
+                let biome = world.get_biome(&pos);
+                (FoxVariant::select_for_biome(biome.registry_id), 1)
+            };
+        self.set_variant(variant);
+        if size >= 3 {
+            self.get_mob_entity().set_baby_by_age();
+        }
+        Some(crate::entity::mob::spawn::SpawnGroupData::FoxGroupData {
+            variant,
+            group_size: size,
+        })
+    }
+
+    fn on_offspring_spawned_from_egg(&self, player: &Player) {
+        self.add_trusted(player.gameprofile.id);
+    }
 }
 
 pub fn is_path_clear(fox_pos: Vector3<f64>, target_pos: Vector3<f64>, world: &World) -> bool {
@@ -1049,10 +1063,10 @@ pub fn is_alertable(fox: &FoxEntity, world: &World) -> bool {
 
         // Other living entities (cows, pigs, sheep, etc.):
         // Java Fox.java:1618: return Fox.this.trusts(target) ? false : !target.isSleeping() && !target.isDiscrete();
-        if let Some(living) = candidate.get_living_entity() {
+        if candidate.get_living_entity().is_some() {
             if fox.trusts(&c_entity.entity_uuid)
                 || c_entity.sneaking.load(Ordering::Relaxed)
-                || living.is_sleeping()
+                || c_entity.pose.load() == EntityPose::Sleeping
             {
                 continue;
             }

@@ -277,7 +277,7 @@ impl BoundingBox {
 
         // Allow a tiny negative epsilon for resting/sliding entities on block boundaries
         // due to floating-point rounding. Clamping to 0.0 prevents entities from missing collision and falling through blocks.
-        if collision_time >= -1.0e-5 && collision_time < 0.0 {
+        if (-1.0e-5..0.0).contains(&collision_time) {
             collision_time = 0.0;
         }
 
