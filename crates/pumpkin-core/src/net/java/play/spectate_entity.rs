@@ -64,7 +64,6 @@ impl JavaClient {
         let target_id = entity.entity_id;
 
         player.set_camera_entity_id(target_id);
-        player.try_send_client_packet(&CSetCamera::new(target_id.into()));
 
         player.request_teleport(target_pos, target_yaw, target_pitch);
     }
