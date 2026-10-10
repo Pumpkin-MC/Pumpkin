@@ -803,6 +803,12 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_mob_entity().living_entity.can_attack(target)
     }
 
+    /// Returns the arrow projectile to shoot. Override for custom arrows (e.g., poison arrows).
+    /// Returns `None` to use default arrow.
+    fn get_arrow_projectile(&self) -> Option<ItemStack> {
+        None
+    }
+
     /// Takes the navigation lock, so callers must not already hold it.
     fn is_navigator_idle(&self) -> bool {
         self.get_mob_entity()
