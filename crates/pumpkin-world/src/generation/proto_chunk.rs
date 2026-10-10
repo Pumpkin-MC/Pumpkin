@@ -37,6 +37,7 @@ use crate::chunk::format::LightContainer;
 use crate::chunk::palette::BlockPalette;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
 use crate::chunk_system::{StagedChunkEnum, generation_cache::SurfaceBiomeNeighborhood};
+use crate::generation::generator::flat::{FlatFeature, FlatGenerator};
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::noise::aquifer_sampler::{FluidLevel, FluidLevelSamplerImpl};
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
@@ -1164,6 +1165,60 @@ impl ProtoChunk {
                         &mut random,
                         origin_pos,
                     );
+                }
+            }
+        }
+
+        cache.get_center_chunk_mut().stage = StagedChunkEnum::Features;
+    }
+
+    /// Vanilla `ChunkGenerator.applyBiomeDecoration` for a flat world: its only biome's
+    /// decorations come from [`FlatGenerator::feature_steps`], and it has no structures.
+    pub fn generate_flat_features<T: GenerationCache>(
+        cache: &mut T,
+        block_registry: &dyn WorldPortalExt,
+        flat: &FlatGenerator,
+    ) {
+        let (center_x, center_z, min_y, generation_min_y, generation_height) = {
+            let chunk = cache.get_center_chunk();
+            (
+                chunk.x,
+                chunk.z,
+                chunk.bottom_y() as i32,
+                chunk.generation_bottom_y(),
+                chunk.generation_height(),
+            )
+        };
+        let start_block_x = chunk_pos::start_block_x(center_x);
+        let start_block_z = chunk_pos::start_block_z(center_z);
+        let origin_pos = BlockPos::new(start_block_x, min_y, start_block_z);
+        let population_seed =
+            WorldgenRandom::get_population_seed(flat.seed, start_block_x, start_block_z);
+
+        for (step, features) in flat.feature_steps().iter().enumerate() {
+            for (index, feature) in features.iter().enumerate() {
+                match feature {
+                    FlatFeature::Placed(feature_enum) => {
+                        let Some(feature) = PLACED_FEATURES.get(feature_enum) else {
+                            continue;
+                        };
+                        let decorator_seed =
+                            get_decorator_seed(population_seed, index as u64, step as u64);
+                        let mut random =
+                            RandomGenerator::Worldgen(WorldgenRandom::from_seed(decorator_seed));
+                        feature.generate(
+                            cache,
+                            block_registry,
+                            generation_min_y,
+                            generation_height,
+                            *feature_enum,
+                            &mut random,
+                            origin_pos,
+                        );
+                    }
+                    FlatFeature::FillLayer(layer) => {
+                        layer.fill(cache, generation_min_y, origin_pos);
+                    }
                 }
             }
         }

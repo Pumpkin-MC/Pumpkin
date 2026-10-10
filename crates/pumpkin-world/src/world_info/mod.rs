@@ -160,8 +160,15 @@ fn default_world_version_series() -> String {
 pub struct WorldGenSettings {
     // the numerical seed of the world
     pub seed: i64,
+    /// Vanilla `generate-structures`; `false` turns every structure off.
+    #[serde(default = "default_true")]
+    pub generate_structures: bool,
     #[serde(default)]
     pub dimensions: Dimensions,
+}
+
+const fn default_true() -> bool {
+    true
 }
 
 impl Default for WorldGenSettings {
@@ -307,6 +314,8 @@ const fn default_layer_height() -> i32 {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct FlatPresetSettings {
+    /// Optional in vanilla, which falls back to plains.
+    #[serde(default = "default_flat_biome")]
     pub biome: String,
     #[serde(default, deserialize_with = "deserialize_bool_from_byte")]
     pub features: bool,
@@ -316,6 +325,10 @@ pub struct FlatPresetSettings {
     pub layers: Vec<FlatPresetLayer>,
     #[serde(default)]
     pub structure_overrides: Option<StructureOverrides>,
+}
+
+fn default_flat_biome() -> String {
+    "minecraft:plains".to_string()
 }
 
 /// Vanilla has no boolean type in NBT, so it writes booleans as bytes (0 or 1),
@@ -477,8 +490,18 @@ impl WorldGenSettings {
             Self {
                 dimensions,
                 seed: seed.0 as i64,
+                generate_structures: true,
             }
         })
+    }
+
+    /// Vanilla `PrimaryLevelData.isFlatWorld`: whether the overworld is a flat world. Clients
+    /// put the horizon at the bottom of such a world instead of at sea level.
+    #[must_use]
+    pub fn is_flat_world(&self) -> bool {
+        self.dimensions
+            .get("minecraft:overworld")
+            .is_some_and(|overworld| overworld.generator.generator_type == "minecraft:flat")
     }
 
     #[must_use]
@@ -486,6 +509,7 @@ impl WorldGenSettings {
         Self {
             dimensions: preset.dimensions.clone(),
             seed: seed.0 as i64,
+            generate_structures: true,
         }
     }
 
@@ -559,30 +583,93 @@ impl LevelData {
         }
     }
 
+    /// A new world as vanilla's `level-type`, `generator-settings` and `generate-structures`
+    /// server properties describe it (`DedicatedServerProperties.WorldDimensionData`).
     #[must_use]
-    pub fn default_with_preset(seed: Seed, preset_name: &str) -> Self {
-        let mut data = Self::default(seed);
-        if let Some(wgs) = WorldGenSettings::from_preset_name(preset_name, seed) {
-            data.world_gen_settings = wgs;
-        }
-        data
-    }
-
-    #[must_use]
-    pub fn from_world_generator(
+    pub fn for_new_world(
         seed: Seed,
-        generator: &crate::generation::generator::VanillaGenerator,
+        level_type: &str,
+        generator_settings: &str,
+        generate_structures: bool,
     ) -> Self {
+        let level_type = level_type.to_lowercase();
+        let preset_name = match level_type.as_str() {
+            "default" => "minecraft:normal",
+            "largebiomes" => "minecraft:large_biomes",
+            name => name,
+        };
+        let mut settings = match WorldGenSettings::from_preset_name(preset_name, seed) {
+            Some(settings) if !is_debug_preset(preset_name) => settings,
+            Some(_) => {
+                warn!("Level type {level_type} is not supported, defaulting to minecraft:normal");
+                WorldGenSettings::new(seed)
+            }
+            None => {
+                warn!("Failed to parse level-type {level_type}, defaulting to minecraft:normal");
+                WorldGenSettings::new(seed)
+            }
+        };
+        if let Some(overworld) = settings.dimensions.get_mut("minecraft:overworld")
+            && overworld.generator.generator_type == "minecraft:flat"
+            && let Some(flat) = parse_flat_settings(generator_settings)
+        {
+            overworld.generator.settings = Some(GeneratorSettings::Compound(flat));
+        }
+        settings.generate_structures = generate_structures;
+
         let mut data = Self::default(seed);
-        let spawn_pos = generator.find_spawn_position();
-        data.spawn_x = spawn_pos.0.x;
-        data.spawn_z = spawn_pos.0.z;
+        data.world_gen_settings = settings;
+        let generator = crate::generation::world_generator_for(
+            Some(&data.world_gen_settings),
+            pumpkin_data::dimension::Dimension::OVERWORLD,
+            seed,
+        );
+        match &*generator {
+            // Vanilla `MinecraftServer.setInitialSpawn`: a flat world spawns in the middle of
+            // chunk (0, 0), at `FlatLevelSource.getSpawnHeight`.
+            crate::generation::generator::WorldGenerator::Flat(flat) => {
+                let dimension = &flat.dimension;
+                let layers: i32 = flat.layers.iter().map(|layer| layer.height.max(0)).sum();
+                data.spawn_x = 8;
+                data.spawn_y = dimension.min_y + layers.min(dimension.height);
+                data.spawn_z = 8;
+            }
+            generator => {
+                let spawn_pos = generator.find_spawn_position();
+                data.spawn_x = spawn_pos.0.x;
+                data.spawn_z = spawn_pos.0.z;
+            }
+        }
         data
     }
 
     pub const fn set_pos(&mut self, x: i32, z: i32) {
         self.spawn_x = x;
         self.spawn_z = z;
+    }
+}
+
+fn is_debug_preset(preset_name: &str) -> bool {
+    preset_name
+        .strip_prefix("minecraft:")
+        .unwrap_or(preset_name)
+        == "debug_all_block_states"
+}
+
+/// Vanilla parses `generator-settings` as flat settings and keeps the preset's when that fails.
+fn parse_flat_settings(generator_settings: &str) -> Option<serde_json::Value> {
+    // Vanilla's default for the property.
+    if generator_settings.trim().is_empty() || generator_settings.trim() == "{}" {
+        return None;
+    }
+    let parsed = serde_json::from_str::<serde_json::Value>(generator_settings)
+        .and_then(|json| serde_json::from_value::<FlatPresetSettings>(json.clone()).map(|_| json));
+    match parsed {
+        Ok(json) => Some(json),
+        Err(error) => {
+            warn!("Failed to parse generator-settings, keeping the preset's: {error}");
+            None
+        }
     }
 }
 
@@ -609,6 +696,92 @@ pub enum WorldInfoError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn overworld_generator(data: &LevelData) -> &Generator {
+        &data.world_gen_settings.dimensions["minecraft:overworld"].generator
+    }
+
+    #[test]
+    fn new_worlds_resolve_level_types_like_vanilla() {
+        for (level_type, noise_settings) in [
+            ("minecraft:normal", "minecraft:overworld"),
+            ("Default", "minecraft:overworld"),
+            ("largebiomes", "minecraft:large_biomes"),
+            ("amplified", "minecraft:amplified"),
+            ("minecraft:debug_all_block_states", "minecraft:overworld"),
+            ("nonsense", "minecraft:overworld"),
+        ] {
+            let data = LevelData::for_new_world(Seed(1), level_type, "{}", true);
+            let generator = overworld_generator(&data);
+
+            assert_eq!(generator.generator_type, "minecraft:noise", "{level_type}");
+            assert_eq!(
+                generator.settings,
+                Some(GeneratorSettings::Reference(noise_settings.to_string())),
+                "{level_type}"
+            );
+        }
+        let flat = LevelData::for_new_world(Seed(1), "flat", "{}", true);
+        assert_eq!(overworld_generator(&flat).generator_type, "minecraft:flat");
+    }
+
+    #[test]
+    fn a_new_flat_world_uses_generator_settings_and_spawns_in_chunk_zero() {
+        let the_void = r#"{"layers": [{"block": "minecraft:air", "height": 1}], "biome": "minecraft:the_void", "features": true}"#;
+        let data = LevelData::for_new_world(Seed(1), "minecraft:flat", the_void, true);
+
+        let settings = overworld_generator(&data)
+            .settings
+            .as_ref()
+            .and_then(GeneratorSettings::as_flat_settings)
+            .unwrap();
+        assert_eq!(settings.biome, "minecraft:the_void");
+        assert!(settings.features);
+        let min_y = pumpkin_data::dimension::Dimension::OVERWORLD.min_y;
+        assert_eq!(
+            (data.spawn_x, data.spawn_y, data.spawn_z),
+            (8, min_y + 1, 8)
+        );
+    }
+
+    #[test]
+    fn generator_settings_without_a_biome_use_plains() {
+        let layers = r#"{"layers": [{"block": "minecraft:bedrock", "height": 1}]}"#;
+        let data = LevelData::for_new_world(Seed(1), "flat", layers, true);
+        let settings = overworld_generator(&data)
+            .settings
+            .as_ref()
+            .and_then(GeneratorSettings::as_flat_settings)
+            .unwrap();
+
+        assert_eq!(settings.biome, "minecraft:plains");
+        assert_eq!(settings.layers.len(), 1);
+        assert_eq!(settings.layers[0].block, "minecraft:bedrock");
+    }
+
+    #[test]
+    fn invalid_generator_settings_keep_the_flat_preset() {
+        let data = LevelData::for_new_world(Seed(1), "flat", "not json", true);
+        let settings = overworld_generator(&data)
+            .settings
+            .as_ref()
+            .and_then(GeneratorSettings::as_flat_settings)
+            .unwrap();
+
+        assert_eq!(settings.biome, "minecraft:plains");
+    }
+
+    #[test]
+    fn generate_structures_is_saved_with_the_world() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let data = LevelData::for_new_world(Seed(1), "minecraft:normal", "{}", false);
+
+        data_files::write_world_gen_settings(temp_dir.path(), &data.world_gen_settings, 4903)
+            .unwrap();
+
+        let read = data_files::read_world_gen_settings(temp_dir.path()).unwrap();
+        assert!(!read.generate_structures);
+    }
 
     #[test]
     fn world_presets_parse() {

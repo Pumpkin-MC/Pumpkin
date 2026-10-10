@@ -3209,7 +3209,7 @@ impl World {
                         .load()
                         .map_or(-1, |gamemode| gamemode as i8),
                     false,
-                    false,
+                    self.level_info.load().world_gen_settings.is_flat_world(),
                     None,
                     VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                     self.sea_level.into(),
@@ -4103,7 +4103,11 @@ impl World {
                     player.gamemode.load() as u8,
                     player.gamemode.load() as i8,
                     false,
-                    false,
+                    target_world
+                        .level_info
+                        .load()
+                        .world_gen_settings
+                        .is_flat_world(),
                     Some((death_dimension, death_location)),
                     VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                     target_world.sea_level.into(),
