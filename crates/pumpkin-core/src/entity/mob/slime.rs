@@ -335,6 +335,10 @@ impl Mob for SlimeEntity {
         self.speed_modifier.store(0.0);
     }
 
+    fn mob_receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn mob_player_collision(&self, player: &Arc<crate::entity::player::Player>) {
         if !self.is_tiny() {
             // dealDamage

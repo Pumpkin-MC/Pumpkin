@@ -1,3 +1,4 @@
+use crate::entity::velocity;
 use pumpkin_data::item::Item;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::potion::Effect;
@@ -91,6 +92,8 @@ pub struct LivingEntity {
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
     pub dead: AtomicBool,
+    /// Plugin switch. False: neither pushed nor pushing.
+    pub collides: AtomicBool,
     /// The distance the entity has been falling.
     pub fall_distance: AtomicCell<f32>,
     pub active_effects: std::sync::Mutex<FxHashMap<&'static StatusEffect, Effect>>,
@@ -194,33 +197,6 @@ pub fn can_be_seen_as_enemy(target: &dyn EntityBase) -> bool {
     )
 }
 
-fn is_allowed_by_team_rules(
-    own_team: Option<&crate::world::scoreboard::Team>,
-    their_team: Option<&crate::world::scoreboard::Team>,
-) -> bool {
-    use crate::world::scoreboard::CollisionRule;
-
-    let own_rule = own_team.map_or(CollisionRule::Always, |team| team.collision_rule);
-    let their_rule = their_team.map_or(CollisionRule::Always, |team| team.collision_rule);
-
-    if own_rule == CollisionRule::Never || their_rule == CollisionRule::Never {
-        return false;
-    }
-
-    let same_team = own_team
-        .zip(their_team)
-        .is_some_and(|(own, their)| own.name == their.name);
-
-    if (own_rule == CollisionRule::PushOwnTeam || their_rule == CollisionRule::PushOwnTeam)
-        && same_team
-    {
-        return false;
-    }
-
-    (own_rule != CollisionRule::PushOtherTeams && their_rule != CollisionRule::PushOtherTeams)
-        || same_team
-}
-
 impl LivingEntity {
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
@@ -287,6 +263,7 @@ impl LivingEntity {
             fall_distance: AtomicCell::new(0.0),
             death_time: AtomicU8::new(0),
             dead: AtomicBool::new(false),
+            collides: AtomicBool::new(true),
             item_use_time: AtomicI32::new(0),
             item_in_use: std::sync::Mutex::new(None),
             active_hand: std::sync::Mutex::new(None),
@@ -1436,21 +1413,7 @@ impl LivingEntity {
 
     fn push_entities(&self, dyn_self: &dyn EntityBase) {
         let world = self.entity.world.load();
-        let entity_bb = self.entity.bounding_box.load();
-        let own_team = dyn_self.get_team();
-
-        let pushable: Vec<Arc<dyn EntityBase>> = world
-            .get_all_at_box(&entity_bb)
-            .into_iter()
-            .filter(|entity| {
-                let entity_ref = entity.get_entity();
-                entity_ref.entity_id != self.entity.entity_id
-                    && !entity.is_spectator()
-                    && entity.is_pushable()
-                    && is_allowed_by_team_rules(own_team.as_ref(), entity.get_team().as_ref())
-            })
-            .collect();
-
+        let pushable = velocity::pushable_entities(dyn_self, &self.entity.bounding_box.load());
         if pushable.is_empty() {
             return;
         }
@@ -3197,8 +3160,13 @@ impl LivingEntity {
                 let dx = source_pos.x - target_pos.x;
                 let dz = source_pos.z - target_pos.z;
                 let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
-                self.entity
-                    .apply_knockback(knockback_after_resistance(0.4, resistance), dx, dz);
+                self.entity.apply_knockback(
+                    knockback_after_resistance(0.4, resistance),
+                    dx,
+                    dz,
+                    Some(source.get_entity()),
+                );
+                self.entity.mark_hurt();
             }
         }
 
@@ -3358,6 +3326,10 @@ impl EntityBase for LivingEntity {
         let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
         let in_death_animation = self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
         let is_player = self.entity.entity_type == &EntityType::PLAYER;
+        // Vanilla `ServerEntity.sendChanges` runs before the player's `aiStep`.
+        if is_player {
+            self.entity.flush_velocity(caller.get_player());
+        }
         if (is_alive || in_death_animation) && !is_player {
             self.tick_movement(caller);
             // Vanilla-like order: freeze logic runs after movement/collisions.
@@ -3378,9 +3350,8 @@ impl EntityBase for LivingEntity {
             self.entity.tick_frozen(caller);
         }
 
-        // Coalesce velocity sends to once per tick.
-        if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-            self.entity.send_velocity();
+        if !is_player {
+            self.entity.flush_velocity(None);
         }
 
         // Fetch supporting blocks for players or other entities
@@ -3615,7 +3586,7 @@ impl EntityBase for LivingEntity {
     }
 
     fn is_pushable(&self) -> bool {
-        self.health.load() > 0.0 && !self.dead.load(Relaxed)
+        self.health.load() > 0.0 && !self.dead.load(Relaxed) && self.collides.load(Relaxed)
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

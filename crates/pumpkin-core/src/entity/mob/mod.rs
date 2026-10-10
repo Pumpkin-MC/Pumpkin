@@ -1281,6 +1281,10 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_player_collision(&self, _player: &Arc<Player>) {}
 
+    fn mob_receives_player_touch(&self) -> bool {
+        false
+    }
+
     fn get_owner_uuid(&self) -> Option<Uuid> {
         self.as_tamable()
             .and_then(crate::entity::passive::tamable::TamableAnimal::get_owner)
@@ -1470,6 +1474,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn on_player_collision(&self, player: &Arc<Player>) {
         self.mob_player_collision(player);
+    }
+
+    fn receives_player_touch(&self) -> bool {
+        self.mob_receives_player_touch()
     }
 
     fn get_entity(&self) -> &Entity {

@@ -41,7 +41,7 @@ impl LlamaSpitEntity {
         let x = owner_pos.x - offset * body_yaw_rad.sin();
         let y = owner_pos.y + shooter.get_eye_height() - 0.1;
         let z = owner_pos.z + offset * body_yaw_rad.cos();
-        entity.pos.store(Vector3::new(x, y, z));
+        entity.set_pos(Vector3::new(x, y, z));
 
         let thrown = ThrownItemEntity {
             entity,

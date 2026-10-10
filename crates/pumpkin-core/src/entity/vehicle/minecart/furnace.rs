@@ -63,6 +63,7 @@ impl FurnaceMinecart {
         let push_length_squared = push.x.mul_add(push.x, push.z * push.z);
         let velocity_length_squared = velocity.x.mul_add(velocity.x, velocity.z * velocity.z);
 
+        let in_water = entity.touching_water.load(Ordering::Relaxed);
         let mut next = if push_length_squared > 1.0e-7 {
             if push_length_squared > 1.0e-4 && velocity_length_squared > 0.001 {
                 let velocity_direction = Vector3::new(velocity.x, 0.0, velocity.z).normalize();
@@ -75,23 +76,15 @@ impl FurnaceMinecart {
                 push = velocity_direction.multiply(push_scale, 0.0, push_scale);
                 self.push.store(push);
             }
-            velocity.multiply(0.8, 0.0, 0.8).add(&push)
+            let next = velocity.multiply(0.8, 0.0, 0.8).add(&push);
+            if in_water { next * 0.1 } else { next }
         } else {
             velocity.multiply(0.98, 0.0, 0.98)
         };
-
-        let in_water = entity.touching_water.load(Ordering::Relaxed);
+        // Vanilla `AbstractMinecart.applyNaturalSlowdown`. The speed cap is on the step.
+        next = next.multiply(0.96, 0.0, 0.96);
         if in_water {
-            next = next.multiply(0.1, 0.0, 0.1);
-        }
-        let slowdown = 0.96 * if in_water { 0.95 } else { 1.0 };
-        next = next.multiply(slowdown, 0.0, slowdown);
-
-        let max_speed = if in_water { 0.3 } else { 0.2 };
-        let speed = next.x.hypot(next.z);
-        if speed > max_speed {
-            next.x = next.x / speed * max_speed;
-            next.z = next.z / speed * max_speed;
+            next = next * f64::from(0.95f32);
         }
         next
     }
