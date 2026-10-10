@@ -1649,8 +1649,8 @@ impl VillagerEntity {
         self.decay_gossips(game_time);
         self.work_at_job_site(game_time, day_time, day);
 
-        let age = self.get_entity().tick_count.load(Ordering::Relaxed);
-        if age % 20 != 0 {
+        let tick_count = self.get_entity().tick_count.load(Ordering::Relaxed);
+        if tick_count % 20 != 0 {
             return;
         }
         self.update_job_site(&world);
@@ -1811,9 +1811,10 @@ impl VillagerEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .profession_enum();
-        if profession != VillagerProfession::Nitwit && age >= 0 {
+        let is_adult = self.get_entity().age.load(Ordering::Relaxed) >= 0;
+        if profession != VillagerProfession::Nitwit && is_adult {
             // Checked every 20 ticks, golem spawn check every ~100 ticks
-            if age % 100 == 0 && self.get_home().is_some() {
+            if tick_count % 100 == 0 && self.get_home().is_some() {
                 // Check if panicked or talked recently to spawn an Iron Golem
                 let has_bed = self.get_home().is_some();
                 let has_worked =
