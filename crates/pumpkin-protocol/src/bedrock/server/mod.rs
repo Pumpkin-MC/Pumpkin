@@ -1,3 +1,5 @@
+//! Serverbound Bedrock protocol packets received from clients.
+
 pub mod actor_event;
 pub mod animate;
 pub mod block_pick_request;
