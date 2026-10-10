@@ -122,6 +122,28 @@ mod tests {
         }
     }
 
+    /// Returns from `spawn_blocking` only after the task has had time to run,
+    /// so callbacks from the task reach the Store before its caller pumps.
+    struct DelayedReturnSpawner {
+        runtime: tokio::runtime::Handle,
+    }
+
+    impl RuntimeSpawner for DelayedReturnSpawner {
+        fn spawn(&self, task: SpawnFuture) -> Result<(), SpawnError> {
+            drop(self.runtime.spawn(task));
+            Ok(())
+        }
+
+        fn spawn_blocking(
+            &self,
+            task: Box<dyn FnOnce() + Send + 'static>,
+        ) -> Result<(), SpawnError> {
+            drop(self.runtime.spawn_blocking(task));
+            std::thread::sleep(Duration::from_millis(100));
+            Ok(())
+        }
+    }
+
     #[derive(Clone)]
     struct ConcurrentStore(Arc<LegacyStore<TestHostState>>);
 
@@ -791,7 +813,9 @@ mod tests {
 
     /// Mirrors synchronous game methods that call `fire_blocking` from a
     /// blocking worker while the host import keeps the active store pumpable.
-    async fn blocking_host_operation_propagates_the_reentry_chain() {
+    async fn blocking_host_operation_propagates_the_reentry_chain(
+        spawner: Arc<dyn RuntimeSpawner>,
+    ) {
         let mut config = Config::new();
         config.wasm_component_model(true);
         config.wasm_component_model_async(true);
@@ -851,7 +875,11 @@ mod tests {
             .expect("run export");
         assert!(run_slot.set(run).is_ok());
 
-        let driver = ConcurrentStore::new(store).await;
+        let driver = ConcurrentStore(Arc::new(
+            LegacyStore::start(store, LegacySyncReentry::new(), spawner)
+                .await
+                .expect("start test Store driver"),
+        ));
         assert!(driver_slot.set(driver.clone()).is_ok());
 
         timeout(
@@ -1320,7 +1348,15 @@ mod tests {
         assert_synchronous_reentry_depth_is_bounded_and_recovers();
         timeout(Duration::from_secs(10), async {
             sync_lifted_same_instance_reentry_completes().await;
-            blocking_host_operation_propagates_the_reentry_chain().await;
+            let runtime = tokio::runtime::Handle::current();
+            blocking_host_operation_propagates_the_reentry_chain(Arc::new(TestSpawner {
+                runtime: runtime.clone(),
+            }))
+            .await;
+            blocking_host_operation_propagates_the_reentry_chain(Arc::new(DelayedReturnSpawner {
+                runtime,
+            }))
+            .await;
             unrelated_guest_call_waits_for_the_active_chain().await;
             opposing_plugin_roots_scenario().await;
         })
