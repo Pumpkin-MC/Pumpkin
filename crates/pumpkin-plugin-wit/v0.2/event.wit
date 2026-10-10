@@ -1285,6 +1285,7 @@ interface event {
     record block-from-to-event-data {
         from-pos: block-pos,
         to-pos: block-pos,
+        block: string,
         cancelled: bool
     }
 
