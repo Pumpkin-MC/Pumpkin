@@ -270,7 +270,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-codecs"
-version = "0.1.0+26.2-26.45"
+version = "0.2.0+26.3-26.51"
 dependencies = [
  "serde_json",
  "tracing",
@@ -278,7 +278,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-nbt"
-version = "0.1.0+26.2-26.45"
+version = "0.2.0+26.3-26.51"
 dependencies = [
  "bytes",
  "cesu8",
