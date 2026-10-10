@@ -32,6 +32,10 @@ pub struct Block {
     pub velocity_multiplier: f32,
     /// How much this block affects an entity's jump height (e.g., Honey Blocks).
     pub jump_velocity_multiplier: f32,
+    /// How much vertical velocity an entity keeps when bouncing off this block (e.g., Slime Blocks, Beds).
+    pub bounce_restitution: f32,
+    /// How much of the fall distance is ignored when landing on this block (e.g., Beds).
+    pub fall_distance_reduction: f32,
     /// The ID of the item form of this block, used for inventory and drops.
     pub item_id: u16,
     /// The initial state of the block when placed without extra data.
@@ -139,6 +143,16 @@ impl Block {
     #[must_use]
     pub const fn get_jump_velocity_multiplier(&self) -> f32 {
         self.jump_velocity_multiplier
+    }
+
+    #[must_use]
+    pub const fn get_bounce_restitution(&self) -> f32 {
+        self.bounce_restitution
+    }
+
+    #[must_use]
+    pub const fn get_fall_distance_reduction(&self) -> f32 {
+        self.fall_distance_reduction
     }
 
     pub(crate) fn shape_offset_delta(&self, pos: &BlockPos) -> Vector3<f64> {
