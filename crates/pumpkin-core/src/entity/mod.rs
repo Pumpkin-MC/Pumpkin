@@ -1473,6 +1473,11 @@ impl Entity {
 
         let mut horizontal_collision = false;
 
+        // Shift bounding box by resolved Y movement before resolving horizontal axes,
+        // and subsequently by each resolved horizontal axis, matching Vanilla Entity.java:1346.
+        let mut current_bb =
+            bounding_box.shift(Vector3::new(0.0, adjusted_movement.get_axis(Axis::Y), 0.0));
+
         for axis in Axis::horizontal() {
             if movement.get_axis(axis) == 0.0 {
                 continue;
@@ -1481,7 +1486,7 @@ impl Entity {
             let mut max_time = 1.0;
 
             for inert_box in &collisions {
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
+                if let Some(collision_time) = current_bb.calculate_collision_time(
                     inert_box,
                     adjusted_movement,
                     axis,
@@ -1496,6 +1501,10 @@ impl Entity {
                 adjusted_movement.set_axis(axis, changed_component);
                 horizontal_collision = true;
             }
+
+            let mut shift_vec = Vector3::default();
+            shift_vec.set_axis(axis, adjusted_movement.get_axis(axis));
+            current_bb = current_bb.shift(shift_vec);
         }
 
         self.horizontal_collision

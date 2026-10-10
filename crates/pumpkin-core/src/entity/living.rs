@@ -3433,6 +3433,15 @@ impl EntityBase for LivingEntity {
             self.entity.send_velocity();
         }
 
+        // Vanilla LivingEntity.java:495-497: clear last hurt by mob after 100 ticks (5 seconds)
+        if self.last_attacker_id.load(Relaxed) != 0 {
+            let age = self.entity.age.load(Relaxed);
+            let attacked_time = self.last_attacked_time.load(Relaxed);
+            if age - attacked_time > 100 {
+                self.last_attacker_id.store(0, Relaxed);
+            }
+        }
+
         // Fetch supporting blocks for players or other entities
         let supporting_pos = caller.get_player().map_or_else(
             || self.entity.get_supporting_block_pos(),

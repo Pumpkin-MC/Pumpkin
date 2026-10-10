@@ -225,17 +225,6 @@ impl Goal for FoxPounceGoal {
             return false;
         }
 
-        // Target movement alignment check
-        let target_vel = target.get_entity().velocity.load();
-        if target_vel.x.hypot(target_vel.z) > 0.05 {
-            let movement_yaw = (target_vel.z.atan2(target_vel.x).to_degrees() as f32) - 90.0;
-            let facing_yaw = target.get_entity().yaw.load();
-            let yaw_diff = ((movement_yaw - facing_yaw + 180.0).rem_euclid(360.0) - 180.0).abs();
-            if yaw_diff > 45.0 {
-                return false;
-            }
-        }
-
         let world = fox.get_entity().world.load();
         let fox_pos = fox.get_entity().pos.load();
         let target_pos = target.get_entity().pos.load();
@@ -309,6 +298,7 @@ impl Goal for FoxPounceGoal {
             fox.crouch_amount.store(0.0);
             fox.set_interested(false);
             fox.set_pouncing(false);
+            fox.get_entity().pitch.store(0.0);
             fox.mob_entity
                 .living_entity
                 .jumping
@@ -387,10 +377,7 @@ impl Goal for FoxPounceGoal {
             if on_ground {
                 entity.pitch.store(0.0);
             }
-        } else if entity.pitch.load() > 0.0
-            && entity.on_ground.load(Ordering::Relaxed)
-            && vel.y != 0.0
-        {
+        } else if entity.pitch.load() > 0.0 && entity.on_ground.load(Ordering::Relaxed) {
             let world = entity.world.load();
             let block = world
                 .get_block_state(&entity.block_pos.load())
@@ -400,6 +387,8 @@ impl Goal for FoxPounceGoal {
                 entity.pitch.store(60.0);
                 fox.set_faceplanted(true);
                 mob.get_mob_entity().set_target(None);
+            } else {
+                entity.pitch.store(0.0);
             }
         }
     }
@@ -979,6 +968,8 @@ impl Goal for FoxEatBerriesGoal {
 pub struct DefendTrustedTargetGoal {
     fox: Weak<FoxEntity>,
     target_attacker: Option<Arc<dyn EntityBase>>,
+    last_timestamp: i32,
+    pending_timestamp: i32,
 }
 
 impl DefendTrustedTargetGoal {
@@ -987,6 +978,8 @@ impl DefendTrustedTargetGoal {
         Self {
             fox,
             target_attacker: None,
+            last_timestamp: 0,
+            pending_timestamp: 0,
         }
     }
 }
@@ -1014,12 +1007,18 @@ impl Goal for DefendTrustedTargetGoal {
                     .living_entity
                     .last_attacker_id
                     .load(Ordering::Relaxed);
+                let attack_time = player
+                    .living_entity
+                    .last_attacked_time
+                    .load(Ordering::Relaxed);
                 if attacker_id != 0
+                    && attack_time != self.last_timestamp
                     && let Some(attacker_ent) = world.get_entity_by_id(attacker_id)
                 {
                     let att = attacker_ent.get_entity();
                     if attacker_ent.is_alive() && !fox.trusts(&att.entity_uuid) {
                         self.target_attacker = Some(attacker_ent);
+                        self.pending_timestamp = attack_time;
                         return true;
                     }
                 }
@@ -1034,12 +1033,15 @@ impl Goal for DefendTrustedTargetGoal {
                         }
                         if let Some(living) = candidate.get_living_entity() {
                             let attacker_id = living.last_attacker_id.load(Ordering::Relaxed);
+                            let attack_time = living.last_attacked_time.load(Ordering::Relaxed);
                             if attacker_id != 0
+                                && attack_time != self.last_timestamp
                                 && let Some(attacker_ent) = world.get_entity_by_id(attacker_id)
                             {
                                 let att = attacker_ent.get_entity();
                                 if attacker_ent.is_alive() && !fox.trusts(&att.entity_uuid) {
                                     self.target_attacker = Some(attacker_ent);
+                                    self.pending_timestamp = attack_time;
                                     return true;
                                 }
                             }
@@ -1057,6 +1059,7 @@ impl Goal for DefendTrustedTargetGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
+        self.last_timestamp = self.pending_timestamp;
         if let Some(target) = &self.target_attacker {
             mob.get_mob_entity().set_target(Some(target.clone()));
             if let Some(fox) = self.fox.upgrade() {
@@ -1081,5 +1084,112 @@ impl Goal for DefendTrustedTargetGoal {
 
     fn controls(&self) -> Controls {
         Controls::TARGET
+    }
+}
+
+pub struct FoxSeekShelterGoal {
+    fox: Weak<FoxEntity>,
+    speed_modifier: f64,
+    wanted_x: f64,
+    wanted_y: f64,
+    wanted_z: f64,
+    interval: i32,
+}
+
+impl FoxSeekShelterGoal {
+    #[must_use]
+    pub const fn new(fox: Weak<FoxEntity>, speed_modifier: f64) -> Self {
+        Self {
+            fox,
+            speed_modifier,
+            wanted_x: 0.0,
+            wanted_y: 0.0,
+            wanted_z: 0.0,
+            interval: 100,
+        }
+    }
+
+    fn find_hide_pos(mob: &dyn Mob) -> Option<Vector3<f64>> {
+        let mob_pos = mob.get_entity().block_pos.load();
+        let world = mob.get_entity().world.load();
+        let mut rng = mob.get_random();
+
+        for _ in 0..10 {
+            let offset_x = rng.random_range(-10..=10);
+            let offset_y = rng.random_range(-3..=3);
+            let offset_z = rng.random_range(-10..=10);
+            let check_pos = BlockPos::new(
+                mob_pos.0.x + offset_x,
+                mob_pos.0.y + offset_y,
+                mob_pos.0.z + offset_z,
+            );
+
+            if !world.can_see_sky(&check_pos) {
+                let block_at = world.get_block_state(&check_pos);
+                let block_below = world.get_block_state(&check_pos.down());
+                if !block_at.is_solid() && block_below.is_solid() {
+                    return Some(Vector3::new(
+                        f64::from(check_pos.0.x) + 0.5,
+                        f64::from(check_pos.0.y),
+                        f64::from(check_pos.0.z) + 0.5,
+                    ));
+                }
+            }
+        }
+        None
+    }
+}
+
+impl Goal for FoxSeekShelterGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(fox) = self.fox.upgrade() else {
+            return false;
+        };
+        if fox.is_sleeping() || mob.get_mob_entity().get_target().is_some() {
+            return false;
+        }
+        let entity = fox.get_entity();
+        let world = entity.world.load();
+        if world.is_thundering() {
+            if let Some(pos) = Self::find_hide_pos(mob) {
+                self.wanted_x = pos.x;
+                self.wanted_y = pos.y;
+                self.wanted_z = pos.z;
+                return true;
+            }
+            return false;
+        }
+        if self.interval > 0 {
+            self.interval -= 1;
+            return false;
+        }
+        self.interval = 100;
+        let pos = entity.block_pos.load();
+        if world.is_bright_outside() && world.can_see_sky(&pos) {
+            if let Some(hide_pos) = Self::find_hide_pos(mob) {
+                self.wanted_x = hide_pos.x;
+                self.wanted_y = hide_pos.y;
+                self.wanted_z = hide_pos.z;
+                return true;
+            }
+        }
+        false
+    }
+
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        !mob.is_navigator_idle()
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        if let Some(fox) = self.fox.upgrade() {
+            fox.clear_states();
+        }
+        let current_pos = mob.get_mob_entity().living_entity.entity.pos.load();
+        let target_pos = Vector3::new(self.wanted_x, self.wanted_y, self.wanted_z);
+        mob.navigate_to(current_pos, target_pos, self.speed_modifier);
+    }
+
+    fn controls(&self) -> Controls {
+        Controls::MOVE
     }
 }

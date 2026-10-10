@@ -82,11 +82,15 @@ impl FoxVariant {
 
     #[must_use]
     pub fn select_for_biome(biome_name: &str) -> Self {
-        if biome_name.contains("snow")
-            || biome_name.contains("frozen")
-            || biome_name.contains("ice")
-            || biome_name.contains("grove")
-            || biome_name.contains("jagged_peaks")
+        let clean_name = biome_name.strip_prefix("minecraft:").unwrap_or(biome_name);
+        if pumpkin_data::tag::WorldgenBiome::MINECRAFT_SPAWNS_SNOW_FOXES
+            .0
+            .contains(&clean_name)
+            || clean_name.contains("snow")
+            || clean_name.contains("frozen")
+            || clean_name.contains("ice")
+            || clean_name.contains("grove")
+            || clean_name.contains("jagged_peaks")
         {
             Self::Snow
         } else {
@@ -246,12 +250,19 @@ impl FoxEntity {
         goal_selector.add_goal(0, Box::new(SwimGoal::default()));
         goal_selector.add_goal(0, Box::new(ClimbOnTopOfPowderSnowGoal::new()));
         goal_selector.add_goal(1, Box::new(FaceplantGoal::new(fox_weak.clone())));
-        goal_selector.add_goal(2, EscapeDangerGoal::new(2.2));
+        goal_selector.add_goal(
+            2,
+            Box::new(EscapeDangerGoal::new(2.2).gated_by(|mob| {
+                mob.cast_any()
+                    .downcast_ref::<Self>()
+                    .is_none_or(|fox| !fox.is_defending())
+            })),
+        );
         goal_selector.add_goal(3, BreedGoal::new(1.0));
         Self::add_avoid_goals(&mut goal_selector);
         goal_selector.add_goal(5, Box::new(StalkPreyGoal::new(fox_weak.clone())));
         goal_selector.add_goal(6, Box::new(FoxPounceGoal::new(fox_weak.clone())));
-        goal_selector.add_goal(6, Box::new(FleeSunGoal::new(1.25)));
+        goal_selector.add_goal(6, Box::new(FoxSeekShelterGoal::new(fox_weak.clone(), 1.25)));
         goal_selector.add_goal(
             7,
             Box::new(MeleeAttackGoal::new(1.2, true).gated_by(|mob| {
@@ -753,7 +764,7 @@ impl FoxEntity {
             self.set_sitting(false);
         }
 
-        if self.is_sleeping() || self.is_crouching() {
+        if self.is_sleeping() || self.is_crouching() || self.is_sitting() {
             let living = &self.mob_entity.living_entity;
             living.jumping.store(false, Ordering::SeqCst);
             living.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
@@ -773,11 +784,6 @@ impl FoxEntity {
         }
 
         self.tick_crouch_and_interest();
-
-        if self.is_sleeping() {
-            let vel = entity.velocity.load();
-            entity.set_velocity(Vector3::new(0.0, vel.y.min(0.0), 0.0));
-        }
 
         if self.is_faceplanted() && rand::random::<f32>() < 0.2 {
             let pos = entity.block_pos.load();
@@ -1035,6 +1041,18 @@ pub fn is_alertable(fox: &FoxEntity, world: &World) -> bool {
             if fox.trusts(&player.gameprofile.id)
                 || player.living_entity.entity.sneaking.load(Ordering::Relaxed)
                 || player.is_sleeping()
+            {
+                continue;
+            }
+            return true;
+        }
+
+        // Other living entities (cows, pigs, sheep, etc.):
+        // Java Fox.java:1618: return Fox.this.trusts(target) ? false : !target.isSleeping() && !target.isDiscrete();
+        if let Some(living) = candidate.get_living_entity() {
+            if fox.trusts(&c_entity.entity_uuid)
+                || c_entity.sneaking.load(Ordering::Relaxed)
+                || living.is_sleeping()
             {
                 continue;
             }

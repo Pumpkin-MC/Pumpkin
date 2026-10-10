@@ -273,7 +273,13 @@ impl BoundingBox {
         let move_positive = movement_on_axis.is_sign_positive();
         let self_plane_const = self.get_side(move_positive).get_axis(axis);
         let other_plane_const = other.get_side(!move_positive).get_axis(axis);
-        let collision_time = (other_plane_const - self_plane_const) / movement_on_axis;
+        let mut collision_time = (other_plane_const - self_plane_const) / movement_on_axis;
+
+        // Allow a tiny negative epsilon for resting/sliding entities on block boundaries
+        // due to floating-point rounding. Clamping to 0.0 prevents entities from missing collision and falling through blocks.
+        if collision_time >= -1.0e-5 && collision_time < 0.0 {
+            collision_time = 0.0;
+        }
 
         if collision_time < 0.0 || collision_time >= max_time {
             return None;
