@@ -143,7 +143,7 @@ impl HostRecipeManager for PluginHostState {
         Ok(())
     }
 
-    async fn drop(&mut self, _rep: Resource<WitRecipeManager>) -> wasmtime::Result<()> {
+    fn drop(&mut self, _rep: Resource<WitRecipeManager>) -> wasmtime::Result<()> {
         Ok(())
     }
 }

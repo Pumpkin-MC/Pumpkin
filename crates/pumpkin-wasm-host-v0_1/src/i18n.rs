@@ -4,12 +4,12 @@ use pumpkin_wasm_host_common::state::PluginHostState;
 use std::str::FromStr;
 
 impl Host for PluginHostState {
-    async fn translate(&mut self, key: String, locale: WitLocale) -> wasmtime::Result<String> {
+    fn translate(&mut self, key: String, locale: WitLocale) -> wasmtime::Result<String> {
         let util_locale = wit_to_util_locale(locale);
         Ok(get_translation(&key, util_locale))
     }
 
-    async fn load_translations(
+    fn load_translations(
         &mut self,
         namespace: String,
         json: String,
