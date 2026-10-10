@@ -197,6 +197,9 @@ pub struct ChunkHeightmaps {
 }
 
 impl ChunkHeightmaps {
+    /// Longs a heightmap occupies: 256 columns of 9 bits, 7 columns per long.
+    pub const LONGS: usize = 37;
+
     pub fn set(&mut self, heightmap: ChunkHeightmapType, x: i32, z: i32, height: i32, min_y: i32) {
         let data = match heightmap {
             ChunkHeightmapType::WorldSurface => &mut self.world_surface,
@@ -204,7 +207,7 @@ impl ChunkHeightmaps {
             ChunkHeightmapType::MotionBlockingNoLeaves => &mut self.motion_blocking_no_leaves,
         };
 
-        let data = data.get_or_insert_with(|| vec![0; 37].into_boxed_slice());
+        let data = data.get_or_insert_with(|| vec![0; Self::LONGS].into_boxed_slice());
 
         let local_x = (x & 15) as usize;
         let local_z = (z & 15) as usize;
