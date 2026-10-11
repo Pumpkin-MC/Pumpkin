@@ -5,6 +5,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const LATENCY_INTERVAL: Duration = Duration::from_secs(1);
 const MAX_PENDING: usize = 4;
+const LATENCY_TIMEOUT: Duration = Duration::from_secs(5);
 
 impl BedrockClient {
     /// Probe once the client has finished loading, then once a second.
@@ -23,6 +24,12 @@ impl BedrockClient {
             .pending_latencies
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        while pending
+            .front()
+            .is_some_and(|sent| sent.elapsed() >= LATENCY_TIMEOUT)
+        {
+            pending.pop_front();
+        }
         if pending.len() >= MAX_PENDING {
             return;
         }
