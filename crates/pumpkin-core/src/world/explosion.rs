@@ -5,6 +5,8 @@ use pumpkin_data::{
     damage::DamageType,
     entity::EntityType,
     fluid::Fluid,
+    particle::Particle,
+    sound::Sound,
     tag::{Tag, Taggable},
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
@@ -14,6 +16,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     block::{ExplodeArgs, drop_loot},
     entity::{Entity, EntityBase},
+    net::ClientPlatform,
     world::loot::LootContextParameters,
 };
 
@@ -185,11 +188,19 @@ impl ExplosionDamageCalculator for SimpleExplosionDamageCalculator {
 }
 
 pub struct Explosion {
-    power: f32,
-    pos: Vector3<f64>,
+    pub(super) power: f32,
+    pub(super) pos: Vector3<f64>,
     block_interaction: BlockInteraction,
     damage_calculator: Option<Arc<dyn ExplosionDamageCalculator>>,
     preserve_rails: bool,
+    pub(super) small_particle: Particle,
+    pub(super) large_particle: Particle,
+    pub(super) sound: Sound,
+}
+
+pub struct ExplosionResult {
+    pub block_count: u32,
+    pub player_knockback: FxHashMap<i32, Vector3<f64>>,
 }
 
 impl Explosion {
@@ -201,6 +212,9 @@ impl Explosion {
             block_interaction,
             damage_calculator: None,
             preserve_rails: false,
+            small_particle: Particle::Explosion,
+            large_particle: Particle::ExplosionEmitter,
+            sound: Sound::EntityGenericExplode,
         }
     }
 
@@ -216,6 +230,19 @@ impl Explosion {
     #[must_use]
     pub const fn preserving_rails(mut self) -> Self {
         self.preserve_rails = true;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_particles_and_sound(
+        mut self,
+        small_particle: Particle,
+        large_particle: Particle,
+        sound: Sound,
+    ) -> Self {
+        self.small_particle = small_particle;
+        self.large_particle = large_particle;
+        self.sound = sound;
         self
     }
 
@@ -352,10 +379,11 @@ impl Explosion {
         map
     }
 
-    fn damage_entities(&self, world: &Arc<World>) {
+    fn damage_entities(&self, world: &Arc<World>) -> FxHashMap<i32, Vector3<f64>> {
+        let mut player_knockback = FxHashMap::default();
         // Explosion is too small
         if self.power < 1.0e-5 {
-            return;
+            return player_knockback;
         }
 
         let radius = self.power as f64 * 2.0;
@@ -432,8 +460,18 @@ impl Explosion {
             {
                 continue;
             }
-            entity.add_velocity(knockback);
+            if entity_base
+                .get_player()
+                .is_some_and(|player| matches!(player.client.as_ref(), ClientPlatform::Java(_)))
+            {
+                // Java applies this impulse to its own current motion in handleExplosion.
+                // Sending server velocity would replay previous client-authoritative launches.
+                player_knockback.insert(entity.entity_id, knockback);
+            } else {
+                entity.add_velocity(knockback);
+            }
         }
+        player_knockback
     }
 
     fn calculate_exposure(
@@ -469,12 +507,16 @@ impl Explosion {
 
                     let vec3d = Vector3::new(n + offset_x, o, p + offset_z);
 
-                    if world
-                        .raycast(vec3d, *explosion_pos, |pos, world_ref| {
-                            let state = world_ref.get_block_state(pos);
-                            !state.is_air() && !state.collision_shapes.is_empty()
-                        })
-                        .is_none()
+                    if World::traverse_blocks(vec3d, *explosion_pos, |pos, _| {
+                        Self::clips_collision_shape(
+                            world.get_block_state(pos),
+                            pos,
+                            vec3d,
+                            *explosion_pos,
+                        )
+                        .then_some(())
+                    })
+                    .is_none()
                     {
                         visible_points += 1;
                     }
@@ -494,10 +536,64 @@ impl Explosion {
         visible_points as f32 / total_points as f32
     }
 
-    /// Returns the removed block count
-    pub fn explode(&self, world: &Arc<World>) -> u32 {
-        self.damage_entities(world);
+    // Vanilla VoxelShape.clip / AABB.clip, using the original ray endpoints.
+    fn clips_collision_shape(
+        state: &BlockState,
+        pos: &BlockPos,
+        from: Vector3<f64>,
+        to: Vector3<f64>,
+    ) -> bool {
+        const EPSILON: f64 = 1.0e-7;
+        let direction = to - from;
+        if direction.length_squared() < EPSILON {
+            return false;
+        }
+        let from = from - pos.0.to_f64();
+        let test_point = from + direction * 0.001;
+        state.get_block_collision_shapes_at(pos).any(|shape| {
+            if test_point.x >= shape.min.x
+                && test_point.x < shape.max.x
+                && test_point.y >= shape.min.y
+                && test_point.y < shape.max.y
+                && test_point.z >= shape.min.z
+                && test_point.z < shape.max.z
+            {
+                return true;
+            }
 
+            let origin = [from.x, from.y, from.z];
+            let delta = [direction.x, direction.y, direction.z];
+            let min = [shape.min.x, shape.min.y, shape.min.z];
+            let max = [shape.max.x, shape.max.y, shape.max.z];
+            (0..3).any(|axis| {
+                let plane = if delta[axis] > EPSILON {
+                    min[axis]
+                } else if delta[axis] < -EPSILON {
+                    max[axis]
+                } else {
+                    return false;
+                };
+                let t = (plane - origin[axis]) / delta[axis];
+                t > 0.0
+                    && t < 1.0
+                    && (0..3).filter(|&other| other != axis).all(|other| {
+                        let coordinate = origin[other] + t * delta[other];
+                        coordinate > min[other] - EPSILON && coordinate < max[other] + EPSILON
+                    })
+            })
+        })
+    }
+
+    pub fn explode(&self, world: &Arc<World>) -> ExplosionResult {
+        let player_knockback = self.damage_entities(world);
+        let block_count = self.interact_with_blocks(world);
+        ExplosionResult {
+            block_count,
+            player_knockback,
+        }
+    }
+
+    fn interact_with_blocks(&self, world: &Arc<World>) -> u32 {
         match self.block_interaction {
             BlockInteraction::Keep => 0,
             BlockInteraction::TriggerBlock => {
@@ -578,8 +674,66 @@ impl Explosion {
 
 #[cfg(test)]
 mod tests {
-    use super::Explosion;
+    use super::{Explosion, World};
     use pumpkin_data::Block;
+    use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+
+    #[test]
+    fn exposure_ray_leaving_ground_is_not_obstructed() {
+        let pos = BlockPos::new(8, 150, 8);
+        let from = Vector3::new(8.5, 151.0, 8.5);
+        assert!(!Explosion::clips_collision_shape(
+            Block::STONE.default_state,
+            &pos,
+            from,
+            Vector3::new(8.5, 151.25, 8.5),
+        ));
+        assert!(Explosion::clips_collision_shape(
+            Block::STONE.default_state,
+            &pos,
+            from,
+            Vector3::new(8.5, 150.75, 8.5),
+        ));
+    }
+
+    #[test]
+    fn collision_shape_extends_above_fence_outline() {
+        let pos = BlockPos::new(0, 0, 0);
+        let from = Vector3::new(0.0, 1.25, 0.5);
+        let to = Vector3::new(1.0, 1.25, 0.5);
+        assert!(Explosion::clips_collision_shape(
+            Block::OAK_FENCE.default_state,
+            &pos,
+            from,
+            to,
+        ));
+        assert!(!Explosion::clips_collision_shape(
+            Block::SHORT_GRASS.default_state,
+            &pos,
+            Vector3::new(0.0, 0.5, 0.5),
+            Vector3::new(1.0, 0.5, 0.5),
+        ));
+    }
+
+    #[test]
+    fn exposure_ray_only_checks_traversed_blocks_like_vanilla() {
+        let fence_pos = BlockPos::new(0, 0, 0);
+        // Official 26.3 BlockGetter.clip: the upper ray misses despite the
+        // fence's 1.5-block collision height; only the lower ray visits it.
+        for (height, expected_hit) in [(1.25, false), (0.75, true)] {
+            let from = Vector3::new(-0.5, height, 0.5);
+            let to = Vector3::new(1.5, height, 0.5);
+            let hit = World::traverse_blocks(from, to, |pos, _| {
+                let state = if *pos == fence_pos {
+                    Block::OAK_FENCE.default_state
+                } else {
+                    Block::AIR.default_state
+                };
+                Explosion::clips_collision_shape(state, pos, from, to).then_some(())
+            });
+            assert_eq!(hit.is_some(), expected_hit, "ray at Y={height}");
+        }
+    }
 
     #[test]
     fn tnt_minecart_rail_protection_covers_every_rail_type() {

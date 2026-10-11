@@ -1,4 +1,6 @@
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::particle::Particle;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::LazyLock;
@@ -18,10 +20,11 @@ use crate::{
         projectile_deflection::ProjectileDeflectionType,
     },
     server::Server,
-    world::SimpleExplosionDamageCalculator,
+    world::{BlockInteraction, Explosion, SimpleExplosionDamageCalculator},
 };
 
 const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
+const JUMP_SCALE: f64 = 0.25;
 pub const WIND_CHARGE_GRAVITY: f64 = 0.0;
 
 enum WindChargeKind {
@@ -37,7 +40,7 @@ pub struct WindChargeEntity {
 pub static WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR: LazyLock<Arc<SimpleExplosionDamageCalculator>> =
     LazyLock::new(|| {
         Arc::new(SimpleExplosionDamageCalculator::new(
-            true,
+            false,
             false,
             Some(1.22),
             Some(&tag::Block::MINECRAFT_BLOCKS_WIND_CHARGE_EXPLOSIONS),
@@ -48,7 +51,7 @@ pub static BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR: LazyLock<
     Arc<SimpleExplosionDamageCalculator>,
 > = LazyLock::new(|| {
     Arc::new(SimpleExplosionDamageCalculator::new(
-        true,
+        false,
         false,
         None,
         Some(&tag::Block::MINECRAFT_BLOCKS_WIND_CHARGE_EXPLOSIONS),
@@ -86,16 +89,26 @@ impl WindChargeEntity {
     }
 
     pub fn create_explosion(&self, position: Vector3<f64>) {
-        let (power, calculator) = match self.kind {
-            WindChargeKind::Normal { .. } => (1.2, WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone()),
-            WindChargeKind::Breeze => (3.0, BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone()),
+        let (power, calculator, sound) = match self.kind {
+            WindChargeKind::Normal { .. } => (
+                1.2,
+                WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone(),
+                Sound::EntityWindChargeWindBurst,
+            ),
+            WindChargeKind::Breeze => (
+                3.0,
+                BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone(),
+                Sound::EntityBreezeWindBurst,
+            ),
         };
-        self.get_entity().world.load().explode_with_calculator(
-            position,
-            power,
-            crate::world::ExplosionInteraction::Trigger,
-            Some(calculator),
-        );
+        let explosion = Explosion::new(power, position, BlockInteraction::TriggerBlock)
+            .with_damage_calculator(calculator)
+            .with_particles_and_sound(
+                Particle::GustEmitterSmall,
+                Particle::GustEmitterLarge,
+                sound,
+            );
+        self.get_entity().world.load().run_explosion(&explosion);
     }
 
     pub fn deflect(
@@ -158,6 +171,11 @@ impl EntityBase for WindChargeEntity {
                 owner.as_deref(),
             );
         }
-        self.create_explosion(hit_pos);
+        let explosion_pos = if let ProjectileHit::Block { face, .. } = hit {
+            hit_pos + face.to_offset().to_f64() * JUMP_SCALE
+        } else {
+            hit_pos
+        };
+        self.create_explosion(explosion_pos);
     }
 }

@@ -118,7 +118,10 @@ impl ItemRegistry {
             pumpkin_item.use_on_block(stack, player, location, face, cursor_pos, block, server)
         });
 
-        if let Some(cooldown) = cooldown {
+        // Block items are placed by the caller after Pass, so retain their cooldown.
+        if (result.consumes_action() || Block::from_item_id(stack.item.id).is_some())
+            && let Some(cooldown) = cooldown
+        {
             player.start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32);
         }
 
