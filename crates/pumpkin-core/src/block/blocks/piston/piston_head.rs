@@ -51,18 +51,16 @@ impl BlockBehaviour for PistonHeadBlock {
                 //Then somebody probably broke the redstone block, try to check if piston should still be extended.
                 try_move(args.world, piston_block, &piston_pos);
             }
-        } else {
-            if args
-                .world
-                .break_block(args.position, None, BlockFlags::SKIP_DROPS)
-                .is_some()
-            {
-                args.world.set_block_state(
-                    args.position,
-                    Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
-                );
-            }
+        } else if args
+            .world
+            .break_block(args.position, None, BlockFlags::SKIP_DROPS)
+            .is_some()
+        {
+            args.world.set_block_state(
+                args.position,
+                Block::AIR.default_state.id,
+                BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
+            );
         }
     }
 
