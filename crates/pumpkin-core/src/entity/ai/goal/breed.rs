@@ -68,6 +68,18 @@ impl BreedGoal {
         let mob_entity = mob.get_mob_entity();
         let entity = mob.get_entity();
         let world = entity.world.load();
+        let world_full = entity.world.load_full();
+        let parent_pos = entity.pos.load();
+
+        let baby = from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4());
+        let experience = mob.get_random().random_range(1..8);
+        let Some(experience) = mob.approve_breeding(
+            mate.get_entity().entity_id,
+            baby.get_entity().entity_id,
+            experience,
+        ) else {
+            return;
+        };
 
         let player_opt = mob_entity
             .breeder
@@ -99,15 +111,16 @@ impl BreedGoal {
         mate.reset_love();
         mate.set_breeding_cooldown(6000);
 
-        let parent_pos = entity.pos.load();
-        let baby = from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4());
         baby.get_entity().set_age(-24000);
-        let world_full = entity.world.load_full();
         world_full.spawn_entity(baby);
 
         world_full.send_entity_status(entity, EntityStatus::InLoveHearts, None);
         // TODO: gate on the `animalBreedingDropsXp` game rule once it exists.
-        ExperienceOrbEntity::spawn(&world_full, parent_pos, mob.get_random().random_range(1..8));
+        if let Ok(experience) = u32::try_from(experience)
+            && experience > 0
+        {
+            ExperienceOrbEntity::spawn(&world_full, parent_pos, experience);
+        }
     }
 }
 

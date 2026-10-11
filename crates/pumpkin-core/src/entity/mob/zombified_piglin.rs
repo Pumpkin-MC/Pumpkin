@@ -21,6 +21,8 @@ use crate::entity::{
         neutral::{NeutralData, NeutralMob},
     },
 };
+use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::api::events::entity::pig_zombie_anger::PigZombieAngerEvent;
 use crate::world::World;
 
 /// Vanilla `ALERT_INTERVAL`: 4 to 6 seconds.
@@ -98,7 +100,7 @@ impl ZombifiedPiglinEntity {
                 {
                     continue;
                 }
-                other_mob.set_mob_target(Some(target.clone()));
+                other_mob.set_mob_target(Some(target.clone()), TargetReason::PigZombieTarget);
             }
         }
 
@@ -107,7 +109,22 @@ impl ZombifiedPiglinEntity {
     }
 }
 
-crate::impl_neutral_mob!(ZombifiedPiglinEntity, neutral_data);
+impl NeutralMob for ZombifiedPiglinEntity {
+    fn get_neutral_data(&self) -> &NeutralData {
+        &self.neutral_data
+    }
+
+    fn approve_grudge(&self, target: &dyn EntityBase, ticks: i32) -> Option<i32> {
+        let entity = &self.mob_entity.living_entity.entity;
+        let Some(server) = entity.world.load().server.upgrade() else {
+            return Some(ticks);
+        };
+        let mut event =
+            PigZombieAngerEvent::new(entity.entity_id, Some(target.get_entity().entity_id), ticks);
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        (!event.cancelled).then_some(event.new_anger)
+    }
+}
 
 impl Mob for ZombifiedPiglinEntity {
     fn get_mob_entity(&self) -> &MobEntity {

@@ -45,6 +45,7 @@ use crate::entity::{
     },
     player::Player,
 };
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 
 const WOLF_PREY: TargetMatch =
     TargetMatch::AnyOf(&[&EntityType::SHEEP, &EntityType::RABBIT, &EntityType::FOX]);
@@ -156,7 +157,7 @@ impl WolfEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .stop();
-        self.set_mob_target(None);
+        self.set_mob_target(None, TargetReason::ForgotTarget);
     }
 
     pub fn get_tame_flags(&self) -> u8 {
@@ -198,7 +199,7 @@ impl NeutralMob for WolfEntity {
 
 impl Mob for WolfEntity {
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {
-        self.set_ordered_to_sit(false);
+        self.order_to_sit(false);
     }
 
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
@@ -369,8 +370,9 @@ impl Mob for WolfEntity {
 
                 let parent_interaction = self.animal_interact(player, item_stack, ambient);
                 if !parent_interaction {
-                    self.set_ordered_to_sit(!self.is_ordered_to_sit());
-                    self.stop_and_forget_target();
+                    if self.order_to_sit(!self.is_ordered_to_sit()) {
+                        self.stop_and_forget_target();
+                    }
                     return true;
                 }
                 return parent_interaction;
@@ -378,7 +380,7 @@ impl Mob for WolfEntity {
         } else if item == &Item::BONE && !self.mob_entity.is_attacking() {
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             let mut rng = rand::rng();
-            if rng.random_range(0..3) == 0 {
+            if rng.random_range(0..3) == 0 && self.approve_taming(player) {
                 TamableAnimal::tame(self, player.gameprofile.id);
                 self.stop_and_forget_target();
                 self.set_ordered_to_sit(true);

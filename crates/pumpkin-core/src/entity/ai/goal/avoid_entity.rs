@@ -7,6 +7,7 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::ai::util::default_random_pos;
 use crate::entity::predicate::EntityPredicate;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob};
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 use pumpkin_util::math::vector3::Vector3;
 
 const FAST_DISTANCE_SQ: f64 = 49.0;
@@ -152,7 +153,7 @@ impl Goal for AvoidEntityGoal {
 
     fn start(&mut self, mob: &dyn Mob) {
         if self.drop_target {
-            mob.set_mob_target(None);
+            mob.set_mob_target(None, TargetReason::Fleeing);
         }
         if let Some(flee_pos) = self.flee_pos {
             let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
@@ -167,7 +168,7 @@ impl Goal for AvoidEntityGoal {
 
     fn tick(&mut self, mob: &dyn Mob) {
         if self.drop_target {
-            mob.set_mob_target(None);
+            mob.set_mob_target(None, TargetReason::Fleeing);
         }
         if let Some(target) = &self.target {
             let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();

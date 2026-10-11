@@ -9,6 +9,7 @@ use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::mob::neutral::{NeutralMob, find_by_uuid};
 use crate::entity::{EntityBase, mob::MobEntity};
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 use rand::RngExt;
@@ -286,7 +287,18 @@ impl Goal for ActiveTargetGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        mob.set_mob_target(self.target.clone());
+        let reason = if self.condition == TargetCondition::Untamed {
+            TargetReason::RandomTarget
+        } else if self
+            .target
+            .as_ref()
+            .is_some_and(|t| t.get_player().is_some())
+        {
+            TargetReason::ClosestPlayer
+        } else {
+            TargetReason::ClosestEntity
+        };
+        mob.set_mob_target(self.target.clone(), reason);
         self.track_target_goal.start(mob);
     }
 

@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
 use crate::entity::passive::animal::Animal;
+use crate::plugin::api::events::entity::entity_toggle_sit::EntityToggleSitEvent;
 
 /// Gate for goals vanilla runs only on wild animals.
 pub fn is_untamed(mob: &dyn Mob) -> bool {
@@ -90,6 +91,23 @@ pub trait TamableAnimal: Animal {
         self.get_tamable_data()
             .ordered_to_sit
             .store(ordered_to_sit, Relaxed);
+    }
+
+    /// Owner's sit or stand order, through `EntityToggleSitEvent`. `false`: a plugin cancelled.
+    fn order_to_sit(&self, sitting: bool) -> bool {
+        if self.is_ordered_to_sit() == sitting {
+            return true;
+        }
+        let entity = &self.get_mob_entity().living_entity.entity;
+        if let Some(server) = entity.world.load().server.upgrade() {
+            let mut event = EntityToggleSitEvent::new(entity.entity_id, sitting);
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+        }
+        self.set_ordered_to_sit(sitting);
+        true
     }
 
     fn get_owner(&self) -> Option<Uuid> {

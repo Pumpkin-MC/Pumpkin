@@ -320,7 +320,7 @@ impl Mob for NautilusEntity {
 
         if !self.is_tame() && self.is_food(item_stack) {
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            if rand::random::<u32>().is_multiple_of(3) {
+            if rand::random::<u32>().is_multiple_of(3) && self.approve_taming(player) {
                 self.set_tame(true, Some(player.gameprofile.id));
                 let world = entity.world.load();
                 world.send_entity_status(entity, EntityStatus::TamingSucceeded, None);

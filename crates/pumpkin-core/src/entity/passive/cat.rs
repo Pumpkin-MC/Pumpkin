@@ -395,7 +395,7 @@ impl Mob for CatEntity {
 
                 let parent_interaction = self.mob_entity.mob_interact(player, item_stack);
                 if !parent_interaction {
-                    self.set_ordered_to_sit(!self.is_ordered_to_sit());
+                    self.order_to_sit(!self.is_ordered_to_sit());
                     return true;
                 }
                 return parent_interaction;
@@ -405,7 +405,7 @@ impl Mob for CatEntity {
             self.play_eating_sound();
 
             let mut rng = rand::rng();
-            if rng.random_range(0..3) == 0 {
+            if rng.random_range(0..3) == 0 && self.approve_taming(player) {
                 self.set_tame(true, Some(player.gameprofile.id));
                 self.set_ordered_to_sit(true);
                 self.get_entity().world.load().send_entity_status(

@@ -3,6 +3,7 @@ use super::{Controls, Goal, to_goal_ticks};
 use crate::entity::EntityBase;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 use pumpkin_data::attributes::Attributes;
 use rand::RngExt;
 use std::sync::Arc;
@@ -160,7 +161,7 @@ impl Goal for TrackTargetGoal {
             }
         }
 
-        mob.set_mob_target(Some(target_base.clone()));
+        mob.set_mob_target(Some(target_base.clone()), TargetReason::Unknown);
         true
     }
 
@@ -171,7 +172,7 @@ impl Goal for TrackTargetGoal {
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
-        mob.set_mob_target(None);
+        mob.set_mob_target(None, TargetReason::ForgotTarget);
         self.target_mob = None;
     }
 

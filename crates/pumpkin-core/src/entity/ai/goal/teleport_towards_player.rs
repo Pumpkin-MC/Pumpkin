@@ -8,6 +8,7 @@ use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::{EndermanEntity, PLAYER_EYE_HEIGHT};
 use crate::entity::mob::neutral::NeutralMob;
 use crate::entity::player::Player;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 
@@ -120,7 +121,7 @@ impl Goal for TeleportTowardsPlayerGoal {
             }
             let needs_reset = mob_entity.get_target().is_none();
             if needs_reset {
-                mob.set_mob_target(Some(target.clone()));
+                mob.set_mob_target(Some(target.clone()), TargetReason::ClosestPlayer);
             }
             true
         } else {

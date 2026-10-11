@@ -4,6 +4,7 @@ use crate::entity::ai::goal::revenge::MobFilter;
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
@@ -140,7 +141,7 @@ impl Goal for MeleeAttackGoal {
                 !EntityPredicate::ExceptCreativeOrSpectator.test(entity.get_entity())
             });
         if should_clear {
-            mob.set_mob_target(None);
+            mob.set_mob_target(None, TargetReason::ForgotTarget);
         }
 
         mob.get_mob_entity().set_attacking(false);
