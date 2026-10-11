@@ -4,13 +4,14 @@ pub(crate) mod recipe;
 pub mod status;
 use crossbeam::atomic::AtomicCell;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     io::{Cursor, Error, Write},
     net::SocketAddr,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
     },
+    time::Instant,
 };
 
 use tracing::{debug, error, warn};
@@ -25,16 +26,19 @@ use pumpkin_protocol::{
             client_cache_miss_response::{CClientCacheMissResponse, MissingBlobData},
             disconnect::CDisconnect,
         },
+        network_stack_latency::NetworkStackLatency,
         packet_decoder::BedrockBatchDecoder,
         packet_encoder::BedrockBatchEncoder,
         server::{
             actor_event::SActorEvent, animate::SAnimate, block_pick_request::SBlockPickRequest,
             client_cache_blob_status::SClientCacheBlobStatus,
-            client_cache_status::SClientCacheStatus, command_request::SCommandRequest,
-            container_close::SContainerClose, emote::SEmote, emote_list::SEmoteList,
-            interact::SInteract, inventory_transaction::SInventoryTransaction,
-            item_stack_request::SItemStackRequest, loading_screen::SLoadingScreen, login::SLogin,
-            mob_equipment::SMobEquipment, modal_form_response::SModalFormResponse,
+            client_cache_status::SClientCacheStatus,
+            client_movement_prediction_sync::SClientMovementPredictionSync,
+            command_request::SCommandRequest, container_close::SContainerClose, emote::SEmote,
+            emote_list::SEmoteList, interact::SInteract,
+            inventory_transaction::SInventoryTransaction, item_stack_request::SItemStackRequest,
+            loading_screen::SLoadingScreen, login::SLogin, mob_equipment::SMobEquipment,
+            modal_form_response::SModalFormResponse,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
@@ -122,6 +126,21 @@ pub struct BedrockClient {
     /// The next form ID to use for custom forms.
     pub next_form_id: AtomicU32,
     pub inventory_opened: AtomicBool,
+    /// Last processed `PlayerAuthInput` tick. Motion for the own player must carry it.
+    pub input_tick: AtomicU64,
+    /// Client predicted velocity from the last `PlayerAuthInput`. Pushes build on it.
+    pub client_delta: AtomicCell<pumpkin_util::math::vector3::Vector3<f64>>,
+    /// World age of the last server motion sent to the own player.
+    pub own_motion_age: AtomicCell<i64>,
+    /// `PlayerAuthInput` tick tagged on that last own-player `SetActorMotion`.
+    pub own_motion_tick: AtomicU64,
+    /// Send times of unanswered `NetworkStackLatency` probes, oldest first.
+    pending_latencies: std::sync::Mutex<VecDeque<Instant>>,
+    last_latency_send: AtomicCell<Instant>,
+    /// Inputs since the last teleport without reaching it. Resent past a threshold.
+    pub teleport_unconfirmed_inputs: AtomicU32,
+    /// Network position of the last own teleport `MovePlayer`, which the client must reach.
+    pub teleport_sent_pos: AtomicCell<pumpkin_util::math::vector3::Vector3<f32>>,
     /// Separate from normal vitals caching so the first rejected use always gets corrected.
     last_food_rejection_tick: AtomicCell<Option<i32>>,
     pub client_cache_supported: AtomicBool,
@@ -162,6 +181,14 @@ impl BedrockClient {
             pending_bytes: Arc::new(AtomicUsize::new(0)),
             next_form_id: AtomicU32::new(0),
             inventory_opened: AtomicBool::new(false),
+            input_tick: AtomicU64::new(0),
+            client_delta: AtomicCell::new(pumpkin_util::math::vector3::Vector3::default()),
+            own_motion_age: AtomicCell::new(i64::MIN),
+            own_motion_tick: AtomicU64::new(0),
+            pending_latencies: std::sync::Mutex::new(VecDeque::new()),
+            last_latency_send: AtomicCell::new(Instant::now()),
+            teleport_unconfirmed_inputs: AtomicU32::new(0),
+            teleport_sent_pos: AtomicCell::new(pumpkin_util::math::vector3::Vector3::default()),
             last_food_rejection_tick: AtomicCell::new(None),
             client_cache_supported: AtomicBool::new(false),
             blob_cache: std::sync::Mutex::new(HashMap::new()),
@@ -811,15 +838,17 @@ impl BedrockClient {
                 let form_resp = SModalFormResponse::read(reader)?;
                 self.handle_modal_form_response(player, server, form_resp);
             }
-            SLoadingScreen::PACKET_ID => {
-                // Ignore for now
-            }
+            // Ignore for now; movement is client authoritative, so there is no prediction to sync
+            SLoadingScreen::PACKET_ID | SClientMovementPredictionSync::PACKET_ID => {}
             SBlockPickRequest::PACKET_ID => {
                 let packet = SBlockPickRequest::read(reader)?;
                 self.handle_block_pick_request(player, &packet);
             }
             SRequestAbility::PACKET_ID => {
                 self.handle_request_ability(player, &SRequestAbility::read(reader)?);
+            }
+            NetworkStackLatency::PACKET_ID => {
+                self.handle_network_stack_latency(player, NetworkStackLatency::read(reader)?);
             }
             SMobEquipment::PACKET_ID => {
                 let packet = SMobEquipment::read(reader)?;

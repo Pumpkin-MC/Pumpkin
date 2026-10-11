@@ -204,7 +204,7 @@ impl Goal for MeleeAttackGoal {
         self.cooldown = (self.cooldown - 1).max(0);
 
         if self.cooldown <= 0
-            && mob.get_mob_entity().is_in_attack_range(target.as_ref())
+            && mob.is_in_attack_range(target.as_ref())
             && mob.has_line_of_sight(target.get_entity())
         {
             self.cooldown = self.get_max_cooldown();

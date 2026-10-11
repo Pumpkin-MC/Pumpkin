@@ -83,7 +83,7 @@ impl ThrownItemEntity {
     pub fn new(entity: Entity, owner: &Entity, gravity: f64) -> Self {
         let mut owner_pos = owner.pos.load();
         owner_pos.y += owner.get_eye_height() - 0.1;
-        entity.pos.store(owner_pos);
+        entity.set_pos(owner_pos);
         Self {
             entity,
             owner_id: Some(owner.entity_id),
@@ -262,7 +262,9 @@ impl ThrownItemEntity {
         }
 
         // Skip owner for initial frames
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+        if Some(other_ent.entity_id) == self.owner_id
+            && self_ent.tick_count.load(Ordering::Relaxed) < 5
+        {
             return true;
         }
 

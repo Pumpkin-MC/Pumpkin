@@ -126,6 +126,7 @@ impl Animal for CamelEntity {
     }
 }
 
+// TODO: Vanilla seats a second rider behind and moves the seats with the body animation.
 impl Mob for CamelEntity {
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
@@ -149,10 +150,6 @@ impl Mob for CamelEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
     }
 
     fn mob_init_data_tracker(&self) {

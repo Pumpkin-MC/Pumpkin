@@ -154,6 +154,7 @@ impl ZombieEntityBase {
     }
 }
 
+// TODO: vanilla `Zombie.getBaseExperienceReward` gives babies 2.5x experience.
 impl Mob for ZombieEntityBase {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity

@@ -7,6 +7,7 @@
 pub mod client;
 pub mod enum_as_str;
 pub mod network_item;
+pub mod network_stack_latency;
 pub mod packet_decoder;
 pub mod packet_encoder;
 pub mod server;

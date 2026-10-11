@@ -1,10 +1,19 @@
-use pumpkin_data::tracked_data;
+use pumpkin_data::{particle::Particle, tracked_data};
+use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
+use crate::entity::Entity;
 use crate::entity::mob::Mob;
 
 pub const BABY_START_AGE: i32 = -24000;
 pub const FORCED_AGE_PARTICLE_TICKS: i32 = 40;
+
+/// Seconds a feeding takes off a baby's remaining growth time.
+#[must_use]
+pub fn speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32 {
+    ((ticks_until_adult / 20) as f32 * 0.1) as i32
+}
 
 pub struct AgeableData {
     pub forced_age: AtomicI32,
@@ -51,8 +60,17 @@ pub trait AgeableMob: Mob {
         if (old_age < 0 && new_age >= 0) || (old_age >= 0 && new_age < 0) {
             let is_baby = new_age < 0;
             entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, is_baby);
+            entity.set_default_dimensions(if is_baby {
+                Entity::baby_dimensions(entity.entity_type)
+            } else {
+                Entity::type_dimensions(entity.entity_type)
+            });
+            self.age_boundary_reached();
         }
     }
+
+    /// Runs when the mob turns into a baby or grows up.
+    fn age_boundary_reached(&self) {}
 
     fn is_age_locked(&self) -> bool {
         self.get_ageable_data().age_locked.load(Relaxed)
@@ -81,21 +99,14 @@ pub trait AgeableMob: Mob {
         if forced {
             data.forced_age.fetch_add(delta, Relaxed);
             if data.forced_age_timer.load(Relaxed) == 0 {
-                data.forced_age_timer.store(40, Relaxed);
+                data.forced_age_timer
+                    .store(FORCED_AGE_PARTICLE_TICKS, Relaxed);
             }
         }
 
         if self.get_age() == 0 {
             self.set_age(data.forced_age.load(Relaxed));
         }
-    }
-
-    #[must_use]
-    fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32
-    where
-        Self: Sized,
-    {
-        (ticks_until_adult as f32 / 20.0 * 0.1) as i32
     }
 
     fn write_ageable_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
@@ -124,6 +135,34 @@ pub trait AgeableMob: Mob {
     }
 
     fn ageable_ai_step(&self) {
+        let data = self.get_ageable_data();
+        let forced_timer = data.forced_age_timer.load(Relaxed);
+        if forced_timer > 0 {
+            if forced_timer % 4 == 0 {
+                let entity = &self.get_mob_entity().living_entity.entity;
+                let mut rng = rand::rng();
+                let width = f64::from(entity.width());
+                let pos = entity.pos.load()
+                    + Vector3::new(
+                        (rng.random::<f64>() * 2.0 - 1.0) * width,
+                        rng.random::<f64>() * f64::from(entity.height()) + 0.5,
+                        (rng.random::<f64>() * 2.0 - 1.0) * width,
+                    );
+                entity.world.load().spawn_particle(
+                    pos,
+                    Vector3::new(0.0, 0.0, 0.0),
+                    0.0,
+                    1,
+                    Particle::HappyVillager,
+                );
+            }
+            data.forced_age_timer.store(forced_timer - 1, Relaxed);
+        }
+
+        let living = &self.get_mob_entity().living_entity;
+        if living.dead.load(Relaxed) || living.health.load() <= 0.0 {
+            return;
+        }
         if self.can_age_up() {
             let age = self.get_age() + 1;
             self.set_age(age);

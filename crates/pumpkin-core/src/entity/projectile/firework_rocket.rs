@@ -124,7 +124,8 @@ impl EntityBase for FireworkRocketEntity {
                     }
                     if !boost_cancelled {
                         let rotation = shooter.rotation().to_f64();
-                        let shooter_vel = shooter.velocity.load();
+                        // Boost from the client motion, the server doesn't simulate player flight
+                        let shooter_vel = shooter.known_movement();
 
                         let new_shooter_vel =
                             shooter_vel + (rotation * 0.1 + (rotation * 1.5 - shooter_vel) * 0.5);

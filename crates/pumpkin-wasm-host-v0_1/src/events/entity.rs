@@ -1881,6 +1881,8 @@ impl ToFromWasmEvent for EntityKnockbackByEntityEvent {
                 hit_by_id: data.hit_by_id,
                 force: data.force,
                 x: data.x,
+                // v0.1 has no vertical part
+                y: 0.0,
                 z: data.z,
                 cancelled: data.cancelled,
             },

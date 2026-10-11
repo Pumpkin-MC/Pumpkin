@@ -52,6 +52,7 @@ impl ArrowPickup {
 
 pub struct ArrowEntity {
     pub entity: Entity,
+    // TODO: Save the owner as an `Owner` UUID like vanilla, a reloaded arrow loses it.
     pub owner_id: Option<i32>,
     pub item_stack: RwLock<ItemStack>,
     pub base_damage: AtomicU64,
@@ -119,7 +120,7 @@ impl ArrowEntity {
     ) -> Self {
         let mut owner_pos = shooter.pos.load();
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
-        entity.pos.store(owner_pos);
+        entity.set_pos(owner_pos);
         let mut launch_event =
             crate::plugin::api::events::entity::projectile_launch::ProjectileLaunchEvent::new(
                 entity.entity_id,
@@ -918,14 +919,16 @@ impl EntityBase for ArrowEntity {
                 let pierce = self.pierce_level.load(Ordering::Relaxed);
 
                 let owner_entity = owner_id.and_then(|id| world.get_entity_by_id(id));
+                // Vanilla `arrow(this, owner)`: an ownerless arrow causes its own damage
+                let cause = owner_entity.as_deref().unwrap_or(self as &dyn EntityBase);
 
                 let damage_succeeded = target.damage_with_context(
                     target.as_ref(),
                     damage as f32,
                     DamageType::ARROW,
                     Some(hit_pos),
-                    owner_entity.as_deref(),
-                    None,
+                    Some(self),
+                    Some(cause),
                 );
 
                 if let Some(living) = target.get_living_entity() {
@@ -997,13 +1000,13 @@ impl EntityBase for ArrowEntity {
         None
     }
 
+    fn receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn on_player_collision(&self, player: &Arc<Player>) {
         // Only allow picking up grounded arrows
         if !self.in_ground.load(Ordering::Relaxed) {
-            return;
-        }
-
-        if player.living_entity.health.load() <= 0.0 {
             return;
         }
 
@@ -1061,7 +1064,9 @@ impl ArrowEntity {
         }
 
         // Skip owner for initial frames (5 ticks)
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+        if Some(other_ent.entity_id) == self.owner_id
+            && self_ent.tick_count.load(Ordering::Relaxed) < 5
+        {
             return true;
         }
 

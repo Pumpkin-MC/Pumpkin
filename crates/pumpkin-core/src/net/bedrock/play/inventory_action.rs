@@ -41,11 +41,12 @@ impl BedrockClient {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             for legacy_slot in &packet.legacy_set_item_slots {
-                let mapped_window_id = match legacy_slot.container_id {
-                    28 | 29 => 0,    // HotBar or Inventory
-                    6 | 120 => 120,  // Armor
-                    34 | 119 => 119, // Offhand
-                    other => other as i32,
+                // Legacy slots may name the container instead of its id
+                let mapped_window_id = match i32::from(legacy_slot.container_id) {
+                    28 | 29 => WINDOW_ID_INVENTORY, // HotBar or Inventory
+                    6 | WINDOW_ID_ARMOUR => WINDOW_ID_ARMOUR,
+                    34 | WINDOW_ID_OFF_HAND => WINDOW_ID_OFF_HAND,
+                    other => other,
                 };
                 for &slot_id in &legacy_slot.slots {
                     if let Some(screen_slot) =

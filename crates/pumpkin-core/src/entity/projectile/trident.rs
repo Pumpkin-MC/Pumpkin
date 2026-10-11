@@ -61,7 +61,7 @@ impl TridentEntity {
     ) -> Self {
         let mut owner_pos = shooter.pos.load();
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
-        entity.pos.store(owner_pos);
+        entity.set_pos(owner_pos);
         entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
 
         Self {
@@ -139,7 +139,9 @@ impl TridentEntity {
         }
 
         // Skip owner for initial frames (5 ticks)
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+        if Some(other_ent.entity_id) == self.owner_id
+            && self_ent.tick_count.load(Ordering::Relaxed) < 5
+        {
             return true;
         }
 
@@ -384,13 +386,13 @@ impl EntityBase for TridentEntity {
         }
     }
 
+    fn receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn on_player_collision(&self, player: &Arc<Player>) {
         // Can only pick up when on the ground
         if !self.in_ground.load(Ordering::Relaxed) {
-            return;
-        }
-
-        if player.living_entity.health.load() <= 0.0 {
             return;
         }
 

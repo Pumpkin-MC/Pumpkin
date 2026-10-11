@@ -913,10 +913,18 @@ impl JavaClient {
                 );
             }
             id if id == SPlayerRotation::to_id(version) => {
-                self.handle_rotation(player, &SPlayerRotation::read(&mut payload, &version)?);
+                self.handle_rotation(
+                    player,
+                    server,
+                    &SPlayerRotation::read(&mut payload, &version)?,
+                );
             }
             id if id == SSetPlayerGround::to_id(version) => {
-                self.handle_player_ground(player, &SSetPlayerGround::read(&mut payload, &version)?);
+                self.handle_player_ground(
+                    player,
+                    server,
+                    &SSetPlayerGround::read(&mut payload, &version)?,
+                );
             }
             id if id == SPickItemFromBlock::to_id(version) => {
                 self.handle_pick_item_from_block(

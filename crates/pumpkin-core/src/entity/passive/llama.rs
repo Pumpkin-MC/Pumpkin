@@ -264,6 +264,10 @@ impl Animal for LlamaEntity {
 }
 
 impl Mob for LlamaEntity {
+    fn on_climbable(&self) -> bool {
+        false
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -308,10 +312,6 @@ impl Mob for LlamaEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
     }
 
     fn mob_init_data_tracker(&self) {

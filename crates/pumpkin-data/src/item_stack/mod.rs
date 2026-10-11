@@ -341,6 +341,14 @@ impl ItemStack {
         self.get_max_damage().unwrap_or(0) > 0
     }
 
+    /// Vanilla `nextDamageWillBreak`
+    #[must_use]
+    pub fn next_damage_will_break(&self) -> bool {
+        self.is_damageable()
+            && !self.is_unbreakable()
+            && self.get_damage() >= self.get_max_damage().unwrap_or(0) - 1
+    }
+
     pub fn repair_item(&mut self, amount: i32) -> i32 {
         if amount <= 0 {
             return 0;

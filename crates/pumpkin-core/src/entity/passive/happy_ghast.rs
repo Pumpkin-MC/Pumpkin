@@ -129,6 +129,10 @@ impl Animal for HappyGhastEntity {
 }
 
 impl Mob for HappyGhastEntity {
+    fn on_climbable(&self) -> bool {
+        false
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -155,8 +159,6 @@ impl Mob for HappyGhastEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
-
         let leash_time = self.leash_holder_time.load(Ordering::Relaxed);
         if leash_time > 0 {
             self.leash_holder_time.fetch_sub(1, Ordering::Relaxed);
@@ -166,7 +168,7 @@ impl Mob for HappyGhastEntity {
         let still_timeout = self.server_still_timeout.load(Ordering::Relaxed);
         if still_timeout > 0 {
             let entity = self.get_entity();
-            if entity.age.load(Ordering::Relaxed) > 60 {
+            if entity.tick_count.load(Ordering::Relaxed) > 60 {
                 self.server_still_timeout.fetch_sub(1, Ordering::Relaxed);
             }
             self.sync_stay_still_flag();

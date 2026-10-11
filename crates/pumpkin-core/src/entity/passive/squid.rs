@@ -4,6 +4,7 @@ use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
     Entity,
+    ageable::{AgeableData, AgeableMob},
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
@@ -13,12 +14,16 @@ use crate::entity::{
 
 pub struct SquidEntity {
     pub mob_entity: MobEntity,
+    pub ageable_data: AgeableData,
 }
 
 impl SquidEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let squid = Self { mob_entity };
+        let squid = Self {
+            mob_entity,
+            ageable_data: AgeableData::default(),
+        };
         let mob_arc = Arc::new(squid);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -47,7 +52,17 @@ impl SquidEntity {
     }
 }
 
+impl AgeableMob for SquidEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl Mob for SquidEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

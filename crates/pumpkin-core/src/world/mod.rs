@@ -148,7 +148,7 @@ use pumpkin_util::{
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
 };
 use pumpkin_util::{
-    math::{get_section_cord, position::chunk_section_from_pos, vector2::Vector2},
+    math::{position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
@@ -173,6 +173,7 @@ pub mod end_podium;
 pub mod entity_tracker;
 pub mod environment;
 pub mod natural_spawner;
+mod player_touch;
 pub mod scoreboard;
 pub mod weather;
 
@@ -180,6 +181,7 @@ pub use environment::EnvironmentAttributes;
 pub use pumpkin_data::environment_attribute::{Activity, MoonPhase};
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
+use crate::world::player_touch::{PlayerTouch, touch_players};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::{self, MotionBlocking};
@@ -1557,19 +1559,6 @@ impl World {
 
         let players = self.players.load();
         let player_count = players.len();
-        let players_cache: Vec<_> = players
-            .par_iter()
-            .map(|player| {
-                let entity = player.get_entity();
-                let pos = entity.pos.load();
-                let bb = entity.bounding_box.load().expand(1.0, 0.5, 1.0);
-                let chunk_pos = Vector2::new(
-                    get_section_cord(pos.x.floor() as i32),
-                    get_section_cord(pos.z.floor() as i32),
-                );
-                (player, pos, bb, chunk_pos)
-            })
-            .collect();
 
         let t_players = std::time::Instant::now();
         let player_handle = handle.clone();
@@ -1578,6 +1567,8 @@ impl World {
             player.tick(server);
         });
         let player_elapsed = t_players.elapsed();
+        // After movement so pickup uses this-tick player boxes
+        let player_touches: Vec<_> = players.par_iter().filter_map(PlayerTouch::new).collect();
 
         let entities_to_tick = self.entities.load();
         let entity_count = entities_to_tick.len();
@@ -1592,11 +1583,7 @@ impl World {
         let tickable: Vec<_> = entities_to_tick
             .par_iter()
             .filter_map(|entity| {
-                let entity_pos = entity.get_entity().pos.load();
-                let entity_chunk = Vector2::new(
-                    get_section_cord(entity_pos.x.floor() as i32),
-                    get_section_cord(entity_pos.z.floor() as i32),
-                );
+                let entity_chunk = entity.get_entity().chunk_pos.load();
                 if !active_chunks.contains(&entity_chunk) {
                     return None;
                 }
@@ -1614,29 +1601,27 @@ impl World {
                 let _guard = entity_handle.enter();
 
                 for (entity, entity_chunk) in batch {
-                    entity.get_entity().age.fetch_add(1, Relaxed);
+                    entity.get_entity().tick_count.fetch_add(1, Relaxed);
                     entity.tick(entity.as_ref(), server_ref);
-
-                    let entity_inner = entity.get_entity();
-                    let entity_pos = entity_inner.pos.load();
-                    let entity_bb = entity_inner.bounding_box.load();
-
-                    for (player, player_pos, player_bb, player_chunk) in &players_cache {
-                        if (player_chunk.x - entity_chunk.x).abs() <= 1
-                            && (player_chunk.y - entity_chunk.y).abs() <= 1
-                            && (player_pos.x - entity_pos.x).abs() < 5.0
-                            && (player_pos.y - entity_pos.y).abs() < 5.0
-                            && (player_pos.z - entity_pos.z).abs() < 5.0
-                            && player_bb.intersects(&entity_bb)
-                        {
-                            entity.on_player_collision(player);
-                            break;
-                        }
-                    }
+                    touch_players(entity, *entity_chunk, &player_touches);
                 }
             });
+        // Vanilla `rideTick`: riders follow their vehicle's seat once it has moved
+        tickable.par_iter().for_each(|(entity, _)| {
+            if !entity.is_passenger() && entity.get_entity().has_passengers() {
+                entity.as_ref().position_passengers();
+            }
+        });
+        // Sequential so two players can't take the same orb
+        for touch in &player_touches {
+            touch.touch_random_orb();
+        }
         let entity_elapsed = t_entities.elapsed();
 
+        // Like vanilla `sendChanges`: before the next tick's packets
+        for player in players.iter() {
+            player.send_velocity_changes();
+        }
         self.entity_tracker.update_all(self);
 
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
@@ -2373,6 +2358,75 @@ impl World {
         }
 
         (collisions, positions)
+    }
+
+    /// Vanilla `findFreePosition`: the point in `allowed_centers` closest to `preferred`
+    /// where a box of the given size touches no block inside the world border.
+    pub fn find_free_position(
+        &self,
+        entity: &dyn EntityBase,
+        allowed_centers: BoundingBox,
+        preferred: Vector3<f64>,
+        size_x: f64,
+        size_y: f64,
+        size_z: f64,
+    ) -> Option<Vector3<f64>> {
+        let search = allowed_centers.expand(size_x, size_y, size_z);
+        let (shapes, _) = self.get_block_collisions(search, entity);
+        // Block shapes grown by half the size: centers inside them collide
+        let blocked: Vec<BoundingBox> = {
+            let border = self
+                .worldborder
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            shapes
+                .into_iter()
+                .filter(|shape| {
+                    border.contains(shape.min.x, shape.min.z)
+                        && border.contains(shape.max.x - 1.0E-5, shape.max.z - 1.0E-5)
+                })
+                .map(|shape| shape.expand(size_x / 2.0, size_y / 2.0, size_z / 2.0))
+                .collect()
+        };
+        // Split the allowed box at every blocked edge, so each cell is fully free or blocked
+        let edges = |axis: fn(&Vector3<f64>) -> f64| {
+            let (low, high) = (axis(&allowed_centers.min), axis(&allowed_centers.max));
+            let mut edges = vec![low, high];
+            edges.extend(
+                blocked
+                    .iter()
+                    .flat_map(|b| [axis(&b.min), axis(&b.max)])
+                    .filter(|&edge| edge > low && edge < high),
+            );
+            edges.sort_by(f64::total_cmp);
+            edges.dedup();
+            edges
+        };
+        let (xs, ys, zs) = (edges(|v| v.x), edges(|v| v.y), edges(|v| v.z));
+        let mut closest: Option<(f64, Vector3<f64>)> = None;
+        for x in xs.windows(2) {
+            for y in ys.windows(2) {
+                for z in zs.windows(2) {
+                    let cell = BoundingBox::new(
+                        Vector3::new(x[0], y[0], z[0]),
+                        Vector3::new(x[1], y[1], z[1]),
+                    );
+                    if blocked.iter().any(|b| b.intersects(&cell)) {
+                        continue;
+                    }
+                    let point = Vector3::new(
+                        preferred.x.clamp(x[0], x[1]),
+                        preferred.y.clamp(y[0], y[1]),
+                        preferred.z.clamp(z[0], z[1]),
+                    );
+                    let distance = point.squared_distance_to_vec(&preferred);
+                    if closest.is_none_or(|(best, _)| distance < best) {
+                        closest = Some((distance, point));
+                    }
+                }
+            }
+        }
+        closest.map(|(_, point)| point)
     }
 
     pub fn is_space_empty(&self, bounding_box: BoundingBox) -> bool {
@@ -4143,6 +4197,8 @@ impl World {
             )
             .await;
 
+        // Vanilla `restartClientLoadTimerAfterRespawn`: invulnerable and still until loaded
+        player.set_client_loaded(false);
         player.living_entity.reset_state();
 
         player.send_permission_lvl_update();
