@@ -185,11 +185,13 @@ impl Goal for MeleeAttackGoal {
                 .navigator
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let was_idle = navigator.is_idle();
             navigator.set_progress(NavigatorGoal {
                 current_progress: mob_pos,
                 destination: current_target_pos,
                 speed: self.speed,
             });
+            let prev_target = self.last_target_position;
             self.last_target_position = Some(current_target_pos);
             self.update_countdown_ticks = 4 + mob.get_random().random_range(0..7);
             if dist_sq > 1024.0 {
@@ -197,7 +199,9 @@ impl Goal for MeleeAttackGoal {
             } else if dist_sq > 256.0 {
                 self.update_countdown_ticks += 5;
             }
-            // TODO: add 15 more ticks when the path request fails.
+            if was_idle && prev_target.is_some() {
+                self.update_countdown_ticks += 15;
+            }
             self.update_countdown_ticks = self.get_tick_count(self.update_countdown_ticks);
         }
 

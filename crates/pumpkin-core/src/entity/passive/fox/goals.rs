@@ -23,6 +23,67 @@ use crate::world::World;
 
 use super::{FoxEntity, is_alertable, is_path_clear};
 
+pub struct FoxFloatGoal {
+    fox: Weak<FoxEntity>,
+    swim_goal: crate::entity::ai::goal::swim::SwimGoal,
+}
+
+impl FoxFloatGoal {
+    #[must_use]
+    pub fn new(fox: Weak<FoxEntity>) -> Self {
+        Self {
+            fox,
+            swim_goal: crate::entity::ai::goal::swim::SwimGoal::default(),
+        }
+    }
+
+    fn is_in_fluid(mob: &dyn Mob) -> bool {
+        let living = &mob.get_mob_entity().living_entity;
+        let entity = &living.entity;
+        let in_water =
+            entity.touching_water.load(Ordering::SeqCst) && entity.water_height.load() > 0.25;
+        in_water || entity.touching_lava.load(Ordering::SeqCst)
+    }
+}
+
+impl Goal for FoxFloatGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        mob.get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set_can_float(true);
+        Self::is_in_fluid(mob)
+    }
+
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        Self::is_in_fluid(mob)
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        if let Some(fox) = self.fox.upgrade() {
+            fox.clear_states();
+        }
+        self.swim_goal.start(mob);
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.swim_goal.stop(mob);
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        self.swim_goal.tick(mob);
+    }
+
+    fn should_run_every_tick(&self) -> bool {
+        true
+    }
+
+    fn controls(&self) -> Controls {
+        self.swim_goal.controls()
+    }
+}
+
 pub struct FoxPanicGoal {
     fox: Weak<FoxEntity>,
     inner: Box<EscapeDangerGoal>,
@@ -131,7 +192,16 @@ impl Goal for StalkPreyGoal {
         let Some(fox) = self.fox.upgrade() else {
             return false;
         };
-        if fox.is_sleeping() || fox.is_crouching() || fox.is_interested() || fox.is_pouncing() {
+        if fox.is_sleeping()
+            || fox.is_crouching()
+            || fox.is_interested()
+            || fox.is_pouncing()
+            || mob
+                .get_mob_entity()
+                .living_entity
+                .jumping
+                .load(Ordering::Relaxed)
+        {
             return false;
         }
         let Some(target) = mob.get_mob_entity().get_target() else {

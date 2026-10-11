@@ -27,7 +27,6 @@ use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::ai::goal::leap_at_target::LeapAtTargetGoal;
 use crate::entity::ai::goal::look_at_entity::LookAtEntityGoal;
 use crate::entity::ai::goal::stroll_through_village::StrollThroughVillageGoal;
-use crate::entity::ai::goal::swim::SwimGoal;
 use crate::entity::ai::goal::water_avoiding_random_stroll::WaterAvoidingRandomStrollGoal;
 use crate::entity::ai::pathfinder::node::PathType;
 use crate::entity::custom_sound::CustomSound;
@@ -244,7 +243,7 @@ impl FoxEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+        goal_selector.add_goal(0, Box::new(FoxFloatGoal::new(fox_weak.clone())));
         goal_selector.add_goal(0, Box::new(ClimbOnTopOfPowderSnowGoal::new()));
         goal_selector.add_goal(1, Box::new(FaceplantGoal::new(fox_weak.clone())));
         goal_selector.add_goal(2, Box::new(FoxPanicGoal::new(fox_weak.clone(), 2.2)));
@@ -746,7 +745,7 @@ impl FoxEntity {
             self.set_sitting(false);
         }
 
-        if self.is_sleeping() || self.is_crouching() || self.is_sitting() {
+        if self.is_sleeping() || self.is_sitting() {
             let living = &self.mob_entity.living_entity;
             living.jumping.store(false, Ordering::SeqCst);
             living.movement_input.store(Vector3::new(0.0, 0.0, 0.0));

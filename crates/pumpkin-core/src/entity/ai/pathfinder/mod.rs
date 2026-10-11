@@ -530,7 +530,11 @@ impl PathNavigation {
         self.stop();
         entity.set_speed(0.0);
         entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-        entity.jumping.store(false, Ordering::Relaxed);
+        if !entity.entity.touching_water.load(Ordering::Relaxed)
+            && !entity.entity.touching_lava.load(Ordering::Relaxed)
+        {
+            entity.jumping.store(false, Ordering::Relaxed);
+        }
     }
 
     pub fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
@@ -1035,7 +1039,7 @@ impl PathNavigation {
         }
 
         if self.path.is_none() {
-            self.finish_navigation(entity);
+            self.stop();
             return;
         }
 
@@ -1099,7 +1103,13 @@ impl PathNavigation {
 
                 let current_pos = entity.entity.pos.load();
                 let dx = target_pos.x - current_pos.x;
-                let dy = target_pos.y - current_pos.y;
+                let check_y =
+                    if entity.entity.touching_water.load(Ordering::Relaxed) && self.can_float {
+                        mob_pos.y
+                    } else {
+                        current_pos.y
+                    };
+                let dy = target_pos.y - check_y;
                 let dz = target_pos.z - current_pos.z;
 
                 let horizontal_dist_sq = dx * dx + dz * dz;
