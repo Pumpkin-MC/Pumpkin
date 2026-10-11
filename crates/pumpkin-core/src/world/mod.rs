@@ -4387,8 +4387,7 @@ impl World {
             .collect()
     }
 
-    /// Gets all entities (including players) whose bounding box intersects `aabb`.
-    /// Use this for projectile collision so that players are not skipped.
+    /// Gets all entities and players whose bounding box intersects `aabb`.
     pub fn get_entities_and_players_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
         let mut result: Vec<Arc<dyn EntityBase>> = self
             .entities

@@ -54,16 +54,13 @@ impl Mob for BoggedSkeletonEntity {
     }
 
     fn get_arrow_projectile(&self) -> Option<ItemStack> {
-        // Vanilla Bogged.getArrow calls arrow.addEffect(new MobEffectInstance(POISON, 100))
-        // directly on the AbstractArrow, bypassing any PotionDurationScale.
-        // Using a plain ARROW (no PotionDurationScale component, so scale=1.0) means the
-        // 100-tick duration is preserved unchanged when applied through PotionContents.
+        // Plain arrow avoids PotionDurationScale reducing the 100-tick poison duration.
         let mut arrow = ItemStack::new(1, &Item::ARROW);
 
         let poison_effect = StatusEffectInstance {
             effect_id: Cow::Borrowed("minecraft:poison"),
             amplifier: 0,
-            duration: 100, // 5 seconds at 20 ticks/s, matching vanilla MobEffectInstance(POISON, 100)
+            duration: 100,
             ambient: false,
             show_particles: true,
             show_icon: true,
@@ -97,16 +94,13 @@ impl Mob for BoggedSkeletonEntity {
     ) -> bool {
         let item = item_stack.get_item();
 
-        // Handle shearing
         if item == &Item::SHEARS && !self.is_sheared() {
             let entity = self.get_entity();
             let world = entity.world.load();
             let pos = entity.pos.load();
 
-            // Play shearing sound
             world.play_sound(Sound::EntityBoggedShear, SoundCategory::Players, &pos);
 
-            // Drop 2 mushrooms (randomly brown or red)
             for _ in 0..2 {
                 let mushroom = if rand::random::<bool>() {
                     &Item::BROWN_MUSHROOM
@@ -122,10 +116,7 @@ impl Mob for BoggedSkeletonEntity {
                 world.spawn_entity(item_entity);
             }
 
-            // Mark as sheared
             self.set_sheared(true);
-
-            // Damage shears
             player.damage_held_item(1);
 
             true

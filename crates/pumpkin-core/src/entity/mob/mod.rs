@@ -1438,8 +1438,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
         mob_entity.check_despawn(self);
 
-        // Vanilla Mob.baseTick ambient sound:
-        // if (this.isAlive() && this.random.nextInt(1000) < this.ambientSoundTime++)
+        // Vanilla Mob.baseTick ambient sound
         let ambient_time = mob_entity.ambient_sound_time.fetch_add(1, Relaxed);
         if ambient_time >= 0
             && mob_entity.living_entity.entity.is_alive()

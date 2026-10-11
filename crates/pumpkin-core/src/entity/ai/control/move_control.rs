@@ -45,14 +45,7 @@ impl MoveControlTrait for MoveControl {
         let living_entity = &mob_entity.living_entity;
         let entity = &living_entity.entity;
         if self.operation == Operation::Strafe {
-            // Vanilla MoveControl sets setSpeed(speedModifier * MOVEMENT_SPEED = 0.0625)
-            // and setXxa(strafe_right)/setZza(strafe_forwards) = ±0.5.
-            // travel() adds (xxa, 0, zza) * setSpeed to velocity, giving ±0.03125.
-            //
-            // Pumpkin's movement_input_to_velocity applies ground speed (0.25) and
-            // rotates by yaw into world coordinates. So movement_input must be local
-            // (unrotated) and scaled by speed_modifier (0.25) so that
-            // ±0.5 * 0.25 * 0.25 = ±0.03125 matches vanilla delta velocity.
+            // Scaled by speed_modifier so movement_input_to_velocity matches vanilla delta velocity.
             living_entity.movement_input.store(Vector3::new(
                 f64::from(self.strafe_right) * self.speed_modifier,
                 0.0,
