@@ -1,7 +1,7 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use pumpkin_data::attributes::Attributes;
-use pumpkin_protocol::java::{client::play::CSetCamera, server::play::SSpectateEntity};
+use pumpkin_protocol::java::server::play::SSpectateEntity;
 use pumpkin_util::GameMode;
 
 impl JavaClient {
@@ -20,6 +20,7 @@ impl JavaClient {
             return;
         }
 
+        let world = player.world();
         let target: Arc<dyn EntityBase> =
             if let Some(target) = world.get_entity_by_uuid(packet.target) {
                 target
@@ -32,7 +33,9 @@ impl JavaClient {
         let entity = target.get_entity();
         let block_pos = entity.block_pos.load().0;
         // Vanilla drops a camera target that is outside the world border.
-        if !target.world
+        if !entity
+            .world
+            .load()
             .worldborder
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
