@@ -134,8 +134,8 @@ impl TridentEntity {
         let other_ent = other.get_entity();
 
         // Skip other projectiles and item entities
-	// Will not collide with self because will not collide with any tridents
-	// Check for trident first to take advantage of short-circuit evaluation
+        // Will not collide with self because will not collide with any tridents
+        // Check for trident first to take advantage of short-circuit evaluation
         if other_ent.entity_type == &pumpkin_data::entity::EntityType::TRIDENT
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::ITEM
@@ -148,7 +148,6 @@ impl TridentEntity {
         if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
             return true;
         }
-
 
         false
     }
