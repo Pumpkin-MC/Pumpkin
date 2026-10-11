@@ -231,7 +231,12 @@ impl GlobalStructureCache {
     ) -> &[(i32, i32)] {
         self.stronghold_chunks.get_or_init(|| {
             multi_noise.map_or_else(
-                || Self::calculate_strongholds_without_biomes(seed, placement),
+                || {
+                    let random_config = crate::GlobalRandomConfig::new(seed as u64, false);
+                    let base = pumpkin_data::noise_router::BaseNoiseRouters::from_dimension(&pumpkin_data::dimension::Dimension::OVERWORLD);
+                    let base_router = crate::generation::noise::router::proto_noise_router::ProtoNoiseRouters::generate(base, &random_config);
+                    Self::calculate_strongholds(seed, placement, &base_router.multi_noise)
+                },
                 |multi_noise| Self::calculate_strongholds(seed, placement, multi_noise),
             )
         })

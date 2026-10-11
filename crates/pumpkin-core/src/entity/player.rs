@@ -3977,8 +3977,17 @@ impl Player {
             pitch_rad.cos() * yaw_rad.sin(),
         );
         let end_pos = eye_pos + dir * max_distance;
-        let res = world.raycast(eye_pos, end_pos, |pos, w| !w.get_block_state(pos).is_air());
-        res.map(|(pos, _)| pos)
+        let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
+            eye_pos,
+            end_pos,
+            pumpkin_world::clip::ClipBlock::Outline,
+            pumpkin_world::clip::ClipFluid::None,
+        ));
+        if hit.is_miss {
+            None
+        } else {
+            Some(hit.block_pos)
+        }
     }
 
     pub async fn unload_watched_chunks(&self, world: &World) {
