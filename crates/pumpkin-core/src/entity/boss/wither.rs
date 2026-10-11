@@ -515,6 +515,7 @@ impl WitherEntity {
                             self.set_alternative_target(i, 0);
                         }
                     } else {
+                        // TODO: vanilla tests head targets like the main target: no armor stands, range and sight checks.
                         let search_box = entity.bounding_box.load().expand(20.0, 8.0, 20.0);
                         let entities = world.get_entities_at_box(&search_box);
                         let candidates: Vec<_> = entities

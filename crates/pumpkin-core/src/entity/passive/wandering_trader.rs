@@ -184,6 +184,7 @@ impl WanderingTraderEntity {
             goal_selector.add_goal(1, Box::new(TradeWithPlayerGoal::new()));
 
             // Priority 1: AvoidEntityGoals
+            // TODO: one goal per distance; vanilla's zombie entry is the whole ZOMBIE_LIKE family.
             goal_selector.add_goal(
                 1,
                 Box::new(AvoidEntityGoal::new(&EntityType::ZOMBIE, 8.0, 0.5, 0.5)),

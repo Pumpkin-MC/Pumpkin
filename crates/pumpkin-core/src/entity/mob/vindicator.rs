@@ -72,6 +72,7 @@ impl VindicatorEntity {
                 1,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
             );
+            // TODO: VILLAGER_LIKE.
             target_selector.add_goal(
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),

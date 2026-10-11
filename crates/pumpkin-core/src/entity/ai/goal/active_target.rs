@@ -41,6 +41,7 @@ impl TargetCondition {
             Self::AngryAt => mob.as_neutral().is_some_and(|neutral| {
                 neutral.get_persistent_anger_target().is_some() || neutral.is_angry()
             }),
+            // TODO: `Mob::is_baby()` once baby state is unified.
             Self::Adult => !mob.as_ageable().is_some_and(AgeableMob::is_baby),
             Self::Untamed => !mob.is_tamed(),
             Self::Always => true,

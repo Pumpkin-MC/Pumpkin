@@ -17,6 +17,7 @@ impl ParchedSkeletonEntity {
     }
 }
 
+// TODO: arrows inflict Weakness for 600 ticks, immune to Weakness.
 impl Mob for ParchedSkeletonEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity

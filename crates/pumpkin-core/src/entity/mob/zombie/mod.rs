@@ -88,6 +88,7 @@ impl ZombieEntityBase {
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
             );
+            // TODO: VILLAGER_LIKE, no sight check.
             target_selector.add_goal(
                 3,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
@@ -96,6 +97,7 @@ impl ZombieEntityBase {
                 3,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
             );
+            // TODO: `.only_mobs(is_baby_on_land)`, like vanilla.
             target_selector.add_goal(
                 5,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, true),

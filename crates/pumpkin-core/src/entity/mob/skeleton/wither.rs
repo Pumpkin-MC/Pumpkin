@@ -17,6 +17,7 @@ impl WitherSkeletonEntity {
     }
 }
 
+// TODO: target PIGLIN_LIKE at 3.
 impl Mob for WitherSkeletonEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity

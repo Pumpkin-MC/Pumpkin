@@ -92,6 +92,7 @@ impl LlamaEntity {
         let mob_entity = MobEntity::new(entity);
         let mut rng = rand::rng();
         let variant = LlamaVariant::random_variant();
+        // TODO: vanilla rolls 1..=3, and 1..=5 with 4% chance.
         let strength = rng.random_range(1..=5);
 
         let llama = Self {

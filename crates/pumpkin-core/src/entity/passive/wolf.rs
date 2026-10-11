@@ -92,6 +92,7 @@ impl WolfEntity {
             // 1: EscapeDangerGoal (TamableAnimalPanicGoal)
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             // 3: Avoid Llama
+            // TODO: LLAMA_LIKE, only while untamed and if the llama's strength >= rand(5).
             goal_selector.add_goal(
                 3,
                 Box::new(AvoidEntityGoal::new(&EntityType::LLAMA, 24.0, 1.5, 1.5)),

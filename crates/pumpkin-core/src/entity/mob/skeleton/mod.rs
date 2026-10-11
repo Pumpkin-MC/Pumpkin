@@ -51,6 +51,7 @@ impl SkeletonEntityBase {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // TODO: attack interval per type and difficulty (vanilla 40, 20 on hard; bogged and parched 70, 50 on hard).
             goal_selector.add_goal(2, Box::new(BowAttackGoal::new(1.0, 20, 15.0)));
             goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.2, false)));
             goal_selector.add_goal(
@@ -69,6 +70,7 @@ impl SkeletonEntityBase {
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
             );
+            // TODO: iron golem and baby turtle on land at 3.
         };
 
         mob_arc

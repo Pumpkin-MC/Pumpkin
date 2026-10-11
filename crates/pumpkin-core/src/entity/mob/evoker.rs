@@ -108,6 +108,7 @@ impl EvokerEntity {
                 1,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
             );
+            // TODO: VILLAGER_LIKE, no sight check, 300 unseen memory ticks.
             target_selector.add_goal(
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),

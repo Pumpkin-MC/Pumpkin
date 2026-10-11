@@ -78,6 +78,7 @@ impl HorseEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
+            // TODO: RunAroundLikeCrazyGoal at 1, the only way to tame by riding.
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
@@ -162,6 +163,7 @@ impl Animal for HorseEntity {
     }
 }
 
+// TODO: random health, speed and jump at spawn and averaged for foals (`AbstractHorse`); needs attribute NBT.
 impl Mob for HorseEntity {
     fn is_tamed(&self) -> bool {
         self.is_tame()

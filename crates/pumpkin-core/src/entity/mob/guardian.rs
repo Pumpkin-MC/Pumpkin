@@ -48,6 +48,7 @@ impl GuardianEntity {
                 .target_selector
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // TODO: vanilla has one goal at 1: player, SQUID_LIKE or axolotl, farther than 3 blocks.
             target_selector.add_goal(
                 1,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),

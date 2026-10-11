@@ -419,7 +419,7 @@ impl Mob for EndermanEntity {
         self.set_target(self.as_valid_target(target));
     }
 
-    // TODO: sunlight avoidance, carried block drop on death, angerable system, ambient sound override
+    // TODO: sunlight avoidance, carried block drop on death, ambient sound override
     fn mob_tick(&self, caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {

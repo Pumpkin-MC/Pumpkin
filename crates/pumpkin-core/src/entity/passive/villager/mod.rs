@@ -446,6 +446,7 @@ impl VillagerEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(0, Box::new(OpenDoorGoal::new(true)));
             // Villagers avoid threats
+            // TODO: one AnyOf goal per distance instead of one goal per type.
             goal_selector.add_goal(
                 1,
                 Box::new(AvoidEntityGoal::new(&EntityType::ZOMBIE, 8.0, 0.5, 0.5)),
