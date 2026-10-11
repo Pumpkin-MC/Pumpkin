@@ -6,8 +6,8 @@ use pumpkin_data::structures::{
 use pumpkin_util::{
     math::floor_div,
     random::{
-        RandomGenerator, RandomImpl, get_large_feature_seed, get_region_seed,
-        legacy_rand::LegacyRand,
+        RandomGenerator, RandomImpl, get_large_feature_seed, get_large_feature_with_salt,
+        get_region_seed, legacy_rand::LegacyRand,
     },
 };
 use rayon::prelude::*;
@@ -307,7 +307,7 @@ fn should_generate_frequency(
 ) -> bool {
     match method {
         FrequencyReductionMethod::Default => {
-            let region_seed = get_region_seed(seed as u64, salt as i32, chunk_x, chunk_z as u32);
+            let region_seed = get_large_feature_with_salt(seed, salt as i32, chunk_x, chunk_z);
             let mut random = LegacyRand::from_seed(region_seed);
             random.next_f32() < frequency
         }
@@ -319,7 +319,7 @@ fn should_generate_frequency(
             random.next_bounded_i32((1.0 / frequency) as i32) == 0
         }
         FrequencyReductionMethod::LegacyType2 => {
-            let region_seed = get_region_seed(seed as u64, chunk_x, chunk_z, 10387320);
+            let region_seed = get_large_feature_with_salt(seed, chunk_x, chunk_z, 10387320);
             let mut random = LegacyRand::from_seed(region_seed);
             random.next_f32() < frequency
         }

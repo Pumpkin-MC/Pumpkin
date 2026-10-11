@@ -33,6 +33,8 @@ pub struct MaterialRuleContext<'a> {
     pub min_y: i8,
     pub height: u16,
     pub random_deriver: &'a XoroshiroSplitter,
+    pub legacy_random_source: bool,
+    pub world_seed: u64,
     fluid_height: i32,
     pub block_pos_x: i32,
     pub block_pos_y: i32,
@@ -65,10 +67,13 @@ pub struct MaterialRuleContext<'a> {
 }
 
 impl<'a> MaterialRuleContext<'a> {
+    #[expect(clippy::too_many_arguments)]
     pub const fn new(
         min_y: i8,
         height: u16,
         random_deriver: &'a XoroshiroSplitter,
+        legacy_random_source: bool,
+        world_seed: u64,
         terrain_builder: &'a SurfaceTerrainBuilder,
         surface_noise: &'a DoublePerlinNoiseSampler,
         secondary_noise: &'a DoublePerlinNoiseSampler,
@@ -85,6 +90,8 @@ impl<'a> MaterialRuleContext<'a> {
             last_unique_horizontal_pos_value: HORIZONTAL_POS - 1,
             last_est_heiht_unique_horizontal_pos_value: HORIZONTAL_POS - 1,
             random_deriver,
+            legacy_random_source,
+            world_seed,
             terrain_builder,
             fluid_height: 0,
             block_pos_x: 0,
@@ -104,16 +111,24 @@ impl<'a> MaterialRuleContext<'a> {
     }
 
     fn sample_run_depth(&self) -> i32 {
-        let noise =
-            self.surface_noise
-                .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64);
-        (noise * 2.75
-            + 3.0
-            + (self
-                .random_deriver
+        let noise = f64::from(self.surface_noise.sample(
+            self.block_pos_x as f64,
+            0.0,
+            self.block_pos_z as f64,
+        ));
+        let rand_val = if self.legacy_random_source {
+            use pumpkin_util::random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand};
+            let mut root = LegacyRand::from_seed(self.world_seed);
+            let factory_seed = root.next_i64() as u64;
+            let pos_seed = hash_block_pos(self.block_pos_x, 0, self.block_pos_z) as u64;
+            let mut rand = LegacyRand::from_seed(pos_seed ^ factory_seed);
+            rand.next_f64()
+        } else {
+            self.random_deriver
                 .split_pos(self.block_pos_x, 0, self.block_pos_z)
                 .next_f64()
-                * 0.25) as f32) as i32
+        };
+        (noise * 2.75 + 3.0 + rand_val * 0.25) as i32
     }
 
     pub fn init_horizontal(&mut self, x: i32, z: i32) {
@@ -320,8 +335,10 @@ pub fn test_noise_threshold(
         .iter()
         .position(|(id, _)| *id == condition.noise.id);
     let index = cached.unwrap_or_else(|| {
-        let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+        let sampler = DoublePerlinNoiseBuilder::get_noise_sampler(
             context.random_deriver,
+            context.legacy_random_source,
+            context.world_seed,
             &condition.noise,
         );
         context
@@ -353,13 +370,8 @@ pub fn test_stone_depth(
     let depth_range = if condition.secondary_depth_range == 0 {
         0
     } else {
-        pumpkin_util::math::map(
-            context.get_secondary_depth(),
-            -1.0,
-            1.0,
-            0.0,
-            condition.secondary_depth_range as f32,
-        ) as i32
+        let sec = f64::from(context.get_secondary_depth());
+        (f64::midpoint(sec, 1.0) * f64::from(condition.secondary_depth_range)) as i32
     };
     stone_depth <= 1 + condition.offset + depth + depth_range
 }
@@ -400,11 +412,28 @@ pub fn test_vertical_gradient(
     if block_y >= false_at {
         return false;
     }
-    let splitter = context
-        .random_deriver
-        .from_lo_and_hi(condition.random_lo, condition.random_hi)
-        .next_splitter();
     let mapped = pumpkin_util::math::map(block_y as f32, true_at as f32, false_at as f32, 1.0, 0.0);
-    let mut random = splitter.split_pos(context.block_pos_x, block_y, context.block_pos_z);
-    random.next_f32() < mapped
+    if context.legacy_random_source {
+        use pumpkin_util::random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand};
+        let name_hash = match condition.random_lo {
+            13544455532117611141 => 2042456806i32, // minecraft:bedrock_floor
+            10285458612719284684 => 343340730i32,  // minecraft:bedrock_roof
+            10411719568726253007 => -112689504i32, // minecraft:deepslate
+            _ => 0i32,
+        };
+        let mut root = LegacyRand::from_seed(context.world_seed);
+        let root_seed = root.next_i64();
+        let mut derived = LegacyRand::from_seed((name_hash as i64 ^ root_seed) as u64);
+        let derived_seed = derived.next_i64() as u64;
+        let pos_seed = hash_block_pos(context.block_pos_x, block_y, context.block_pos_z) as u64;
+        let mut block_rand = LegacyRand::from_seed(pos_seed ^ derived_seed);
+        block_rand.next_f32() < mapped
+    } else {
+        let splitter = context
+            .random_deriver
+            .from_lo_and_hi(condition.random_lo, condition.random_hi)
+            .next_splitter();
+        let mut random = splitter.split_pos(context.block_pos_x, block_y, context.block_pos_z);
+        random.next_f32() < mapped
+    }
 }
