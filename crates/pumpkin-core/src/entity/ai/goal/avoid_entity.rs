@@ -3,6 +3,7 @@ use std::sync::Arc;
 use super::{Controls, Goal};
 use crate::entity::ai::goal::revenge::MobFilter;
 use crate::entity::ai::target_match::TargetMatch;
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::ai::util::default_random_pos;
 use crate::entity::predicate::EntityPredicate;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob};
@@ -11,6 +12,8 @@ use pumpkin_util::math::vector3::Vector3;
 const FAST_DISTANCE_SQ: f64 = 49.0;
 const HORIZONTAL_RANGE: i32 = 16;
 const VERTICAL_RANGE: i32 = 7;
+/// Vanilla only looks this far above and below for threats.
+const THREAT_SEARCH_HEIGHT: f64 = 3.0;
 
 /// A check on the threat that was found.
 pub type ThreatFilter = fn(&dyn EntityBase) -> bool;
@@ -19,6 +22,7 @@ pub struct AvoidEntityGoal {
     goal_control: Controls,
     flee_from: TargetMatch,
     flee_distance: f64,
+    threat_predicate: TargetPredicate,
     slow_speed: f64,
     fast_speed: f64,
     target: Option<Arc<dyn EntityBase>>,
@@ -41,6 +45,9 @@ impl AvoidEntityGoal {
             goal_control: Controls::MOVE,
             flee_from: flee_from.into(),
             flee_distance,
+            // Vanilla `forCombat`: line of sight, can attack, not allied, visibility-scaled range.
+            threat_predicate: TargetPredicate::create_attackable()
+                .set_base_max_distance(flee_distance),
             slow_speed,
             fast_speed,
             target: None,
@@ -85,10 +92,18 @@ impl AvoidEntityGoal {
         let entity = &mob.get_mob_entity().living_entity.entity;
         let pos = entity.pos.load();
         let world = entity.world.load();
+        let search_box = entity.bounding_box.load().expand(
+            self.flee_distance,
+            THREAT_SEARCH_HEIGHT,
+            self.flee_distance,
+        );
 
         self.flee_from
-            .find_nearest(&world, pos, self.flee_distance, |entity| {
-                EntityPredicate::ExceptCreativeOrSpectator.test(entity.get_entity())
+            .find_nearest(&world, pos, self.flee_distance, |candidate| {
+                let candidate_entity = candidate.get_entity();
+                candidate_entity.bounding_box.load().intersects(&search_box)
+                    && EntityPredicate::ExceptCreativeOrSpectator.test(candidate_entity)
+                    && self.threat_predicate.test(&world, Some(mob), candidate)
             })
     }
 }

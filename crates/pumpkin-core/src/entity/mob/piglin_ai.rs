@@ -259,7 +259,9 @@ impl PiglinAi {
         let modifier = if is_attack_target {
             1.0
         } else {
-            Self::visibility_percent(target)
+            target
+                .living_entity
+                .visibility_percent(Some(piglin.mob_entity.living_entity.entity.entity_type))
         };
         let visibility_distance =
             (Self::TARGETING_RANGE * modifier).max(Self::MIN_VISIBILITY_DISTANCE);
@@ -280,43 +282,6 @@ impl PiglinAi {
                 |block_pos, w| w.get_block_state(block_pos).is_solid(),
             )
             .is_none()
-    }
-
-    /// How visible `target` is to a piglin, from 1.0 down to 0.1.
-    fn visibility_percent(target: &Player) -> f64 {
-        let target_entity = target.get_entity();
-        let mut percent = 1.0;
-        if target_entity.is_sneaking() {
-            percent *= 0.8;
-        }
-        let head = {
-            let equipment = target
-                .living_entity
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if target_entity
-                .invisible
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
-                let worn = [
-                    EquipmentSlot::HEAD,
-                    EquipmentSlot::CHEST,
-                    EquipmentSlot::LEGS,
-                    EquipmentSlot::FEET,
-                ]
-                .iter()
-                .filter(|slot| !equipment.get(slot).is_empty())
-                .count();
-                let cover = (worn as f64 / 4.0).max(0.1);
-                percent *= 0.7 * cover;
-            }
-            equipment.get(&EquipmentSlot::HEAD)
-        };
-        if head.item.id == Item::PIGLIN_HEAD.id {
-            percent *= 0.5;
-        }
-        percent
     }
 
     pub fn throw_items(piglin: &PiglinEntity, items: Vec<ItemStack>) {

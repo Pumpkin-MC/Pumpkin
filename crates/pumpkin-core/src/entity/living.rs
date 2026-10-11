@@ -70,6 +70,25 @@ use pumpkin_util::text::TextComponent;
 use rand::RngExt;
 use std::sync::RwLock;
 
+const ARMOR_SLOTS: [EquipmentSlot; 4] = [
+    EquipmentSlot::HEAD,
+    EquipmentSlot::CHEST,
+    EquipmentSlot::LEGS,
+    EquipmentSlot::FEET,
+];
+
+/// Heads with vanilla's default `mob_visibility` (0.5 against these types).
+// TODO: read the `mob_visibility` component once items carry it.
+const LOWERED_MOB_VISIBILITY: &[(&Item, &[&EntityType])] = &[
+    (&Item::SKELETON_SKULL, &[&EntityType::SKELETON]),
+    (&Item::ZOMBIE_HEAD, &[&EntityType::ZOMBIE]),
+    (&Item::CREEPER_HEAD, &[&EntityType::CREEPER]),
+    (
+        &Item::PIGLIN_HEAD,
+        &[&EntityType::PIGLIN, &EntityType::PIGLIN_BRUTE],
+    ),
+];
+
 /// Represents a living entity within the game world.
 ///
 /// This struct encapsulates the core properties and behaviors of living entities, including players, mobs, and other creatures.
@@ -2558,6 +2577,35 @@ impl LivingEntity {
 
     pub fn can_take_damage(&self) -> bool {
         !self.entity.invulnerable.load(Ordering::Relaxed) && self.is_part_of_game()
+    }
+
+    /// Vanilla `getVisibilityPercent`: scales how far `targeting` notices this entity.
+    pub fn visibility_percent(&self, targeting: Option<&EntityType>) -> f64 {
+        let mut percent = 1.0;
+        if self.entity.is_sneaking() {
+            percent *= 0.8;
+        }
+        let equipment = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.entity.invisible.load(Ordering::Relaxed) {
+            let worn = ARMOR_SLOTS
+                .iter()
+                .filter(|slot| !equipment.get(slot).is_empty())
+                .count();
+            percent *= 0.7 * (worn as f64 / ARMOR_SLOTS.len() as f64).max(0.1);
+        }
+        if let Some(targeting) = targeting {
+            let head = equipment.get(&EquipmentSlot::HEAD);
+            if LOWERED_MOB_VISIBILITY
+                .iter()
+                .any(|(item, types)| head.item == *item && types.contains(&targeting))
+            {
+                percent *= 0.5;
+            }
+        }
+        percent.clamp(0.0, 10.0)
     }
 
     pub fn is_part_of_game(&self) -> bool {
