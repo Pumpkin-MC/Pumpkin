@@ -6291,13 +6291,29 @@ impl World {
 
     pub fn remove_block_entity(&self, block_pos: &BlockPos) {
         let chunk_pos = block_pos.chunk_position();
+        // The NBT copy also serves lazy loading; leaving it revives removed entities.
+        let removed_pending = self
+            .level
+            .read_chunk_sync(&chunk_pos, |chunk| {
+                let removed = chunk
+                    .pending_block_entities
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(block_pos)
+                    .is_some();
+                if removed {
+                    chunk.mark_dirty(true);
+                }
+                removed
+            })
+            .unwrap_or(false);
         let removed =
             self.block_entities
                 .get_mut(&chunk_pos)
                 .is_some_and(|mut chunk_block_entities| {
                     chunk_block_entities.remove(block_pos).is_some()
                 });
-        if removed {
+        if removed || removed_pending {
             self.custom_block_entity_data.remove(block_pos);
             // Drop the chunk's map once its last block entity is gone.
             self.block_entities
