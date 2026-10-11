@@ -26,7 +26,7 @@ impl BlockBehaviour for PistonHeadBlock {
                 // TODO: use player
                 if args
                     .world
-                    .break_block(&pos, None, BlockFlags::SKIP_DROPS)
+                    .break_block(&pos, None, BlockFlags::empty())
                     .is_some()
                 {
                     args.world.set_block_state(
