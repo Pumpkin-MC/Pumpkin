@@ -42,7 +42,7 @@ mod chunk_view_lut;
 mod configured_feature;
 mod context_provider;
 mod damage_type;
-mod data_component;
+pub mod data_component;
 mod decorated_pot_pattern;
 mod dimension;
 mod dye_color;
