@@ -121,6 +121,10 @@ impl Animal for SkeletonHorseEntity {
 }
 
 impl Mob for SkeletonHorseEntity {
+    fn is_tamed(&self) -> bool {
+        self.is_tame()
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

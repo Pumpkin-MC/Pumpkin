@@ -27,14 +27,16 @@ use crate::{
     entity::{
         Entity, EntityBase,
         ai::goal::{
-            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-            revenge::RevengeGoal,
+            active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
+            look_at_entity::LookAtEntityGoal, revenge::RevengeGoal,
         },
+        ai::target_match::TargetMatch,
+        living::LivingEntity,
         mob::{Mob, MobEntity},
         projectile::wither_skull::WitherSkullEntity,
     },
     world::{
-        ExplosionInteraction,
+        ExplosionInteraction, World,
         bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags},
     },
 };
@@ -94,6 +96,19 @@ impl WitherEntity {
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(
+                2,
+                Box::new(ActiveTargetGoal::new(
+                    &mob_arc.mob_entity,
+                    TargetMatch::AllExcept(&tag::EntityType::MINECRAFT_WITHER_FRIENDS),
+                    0,
+                    false,
+                    false,
+                    Some(|target: &LivingEntity, _world: &World| {
+                        target.entity.entity_type != &EntityType::ARMOR_STAND
+                    }),
+                )),
+            );
         };
 
         mob_arc

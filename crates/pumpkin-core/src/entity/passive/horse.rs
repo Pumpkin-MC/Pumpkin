@@ -163,6 +163,10 @@ impl Animal for HorseEntity {
 }
 
 impl Mob for HorseEntity {
+    fn is_tamed(&self) -> bool {
+        self.is_tame()
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

@@ -28,6 +28,8 @@ pub enum TargetCondition {
     NoDaylight,
     /// Nothing at all while the mob is a baby. (Polar bears hunting foxes)
     Adult,
+    /// Only starts while the mob is untamed. (Wolves hunting prey)
+    Untamed,
 }
 
 impl TargetCondition {
@@ -40,6 +42,7 @@ impl TargetCondition {
                 neutral.get_persistent_anger_target().is_some() || neutral.is_angry()
             }),
             Self::Adult => !mob.as_ageable().is_some_and(AgeableMob::is_baby),
+            Self::Untamed => !mob.is_tamed(),
             Self::Always => true,
         }
     }
@@ -51,7 +54,7 @@ impl TargetCondition {
             Self::AngryAt => mob
                 .as_neutral()
                 .and_then(NeutralMob::get_persistent_anger_target),
-            Self::Always | Self::NoDaylight | Self::Adult => None,
+            Self::Always | Self::NoDaylight | Self::Adult | Self::Untamed => None,
         }
     }
 
@@ -62,7 +65,7 @@ impl TargetCondition {
             Self::AngryAt => mob
                 .as_neutral()
                 .is_some_and(|neutral| neutral.is_angry_at(target, world)),
-            Self::Always | Self::NoDaylight | Self::Adult => true,
+            Self::Always | Self::NoDaylight | Self::Adult | Self::Untamed => true,
         }
     }
 }
@@ -75,6 +78,7 @@ pub struct ActiveTargetGoal {
     target_predicate: TargetPredicate,
     condition: TargetCondition,
     gate: Option<MobFilter>,
+    target_filter: Option<MobFilter>,
 }
 
 impl ActiveTargetGoal {
@@ -107,6 +111,7 @@ impl ActiveTargetGoal {
             target_predicate,
             condition: TargetCondition::Always,
             gate: None,
+            target_filter: None,
         }
     }
 
@@ -122,6 +127,18 @@ impl ActiveTargetGoal {
     pub fn gated_by(mut self: Box<Self>, gate: MobFilter) -> Box<Self> {
         self.gate = Some(gate);
         self
+    }
+
+    /// Only mob targets passing `filter`, checked on start and while continuing. e.g. baby turtles on land.
+    #[must_use]
+    pub fn only_mobs(mut self: Box<Self>, filter: MobFilter) -> Box<Self> {
+        self.target_filter = Some(filter);
+        self
+    }
+
+    fn passes_filter(&self, target: &dyn EntityBase) -> bool {
+        self.target_filter
+            .is_none_or(|filter| target.get_mob().is_some_and(filter))
     }
 
     #[must_use]
@@ -144,6 +161,7 @@ impl ActiveTargetGoal {
             target_predicate,
             condition: TargetCondition::Always,
             gate: None,
+            target_filter: None,
         })
     }
 
@@ -172,6 +190,7 @@ impl ActiveTargetGoal {
             target_predicate,
             condition: TargetCondition::Always,
             gate: None,
+            target_filter: None,
         })
     }
 
@@ -208,6 +227,7 @@ impl ActiveTargetGoal {
             Some(uuid) => find_by_uuid(&world, uuid).filter(|candidate| {
                 let entity = candidate.get_entity();
                 target_type.matches(entity.entity_type)
+                    && self.passes_filter(candidate.as_ref())
                     && entity.pos.load().squared_distance_to_vec(&search_pos)
                         <= follow_range * follow_range
                     && predicate.test(&world, Some(mob), candidate.as_ref())
@@ -215,12 +235,14 @@ impl ActiveTargetGoal {
             }),
             None if target_type.is_player() => world
                 .get_nearest_player(search_pos, follow_range, |player| {
-                    predicate.test(&world, Some(mob), player.as_ref())
+                    self.passes_filter(player.as_ref())
+                        && predicate.test(&world, Some(mob), player.as_ref())
                         && condition.allows_target(mob, player.as_ref(), &world)
                 })
                 .map(|p: Arc<Player>| p as Arc<dyn EntityBase>),
             None => world.get_nearest_entity(search_pos, follow_range, None, |entity| {
                 target_type.matches(entity.get_entity().entity_type)
+                    && self.passes_filter(entity.as_ref())
                     && predicate.test(&world, Some(mob), entity.as_ref())
                     && condition.allows_target(mob, entity.as_ref(), &world)
             }),
@@ -250,6 +272,14 @@ impl Goal for ActiveTargetGoal {
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         if self.gate.is_some_and(|gate| !gate(mob)) {
             self.target = None;
+            return false;
+        }
+        if self.target_filter.is_some()
+            && mob
+                .get_mob_entity()
+                .get_target()
+                .is_some_and(|target| !self.passes_filter(target.as_ref()))
+        {
             return false;
         }
         // Like vanilla TargetGoal.canContinueToUse, the condition only gates the search.

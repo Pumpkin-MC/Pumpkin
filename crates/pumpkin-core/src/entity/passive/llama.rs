@@ -264,6 +264,10 @@ impl Animal for LlamaEntity {
 }
 
 impl Mob for LlamaEntity {
+    fn is_tamed(&self) -> bool {
+        self.is_tame()
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

@@ -204,6 +204,10 @@ impl CustomSound for NautilusEntity {
 }
 
 impl Mob for NautilusEntity {
+    fn is_tamed(&self) -> bool {
+        self.is_tame()
+    }
+
     fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
         Some(self)
     }

@@ -19,16 +19,23 @@ use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, breed::BreedGoal,
-        escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+        active_target::{ActiveTargetGoal, TargetCondition},
+        avoid_entity::AvoidEntityGoal,
+        breed::BreedGoal,
+        escape_danger::EscapeDangerGoal,
+        follow_owner::FollowOwnerGoal,
+        follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal,
+        swim::SwimGoal,
+        tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     passive::{
         animal::Animal,
         tamable::{TamableAnimal, TamableData},
+        turtle::is_baby_on_land,
     },
     player::Player,
 };
@@ -144,14 +151,17 @@ impl CatEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            // Target Goal 1: NonTameRandomTargetGoal for Rabbit and Turtle
+            // NonTameRandomTargetGoal for Rabbit and Turtle
             target_selector.add_goal(
                 1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false)
+                    .when(TargetCondition::Untamed),
             );
             target_selector.add_goal(
                 1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false)
+                    .when(TargetCondition::Untamed)
+                    .only_mobs(is_baby_on_land),
             );
         };
 

@@ -19,13 +19,23 @@ use crate::entity::{
     ageable::AgeableMob,
     ai::behavior::neutral::apply_targets,
     ai::goal::{
-        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, beg::BegGoal,
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
-        owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
-        revenge::RevengeGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        active_target::{ActiveTargetGoal, TargetCondition},
+        avoid_entity::AvoidEntityGoal,
+        beg::BegGoal,
+        breed::BreedGoal,
+        escape_danger::EscapeDangerGoal,
+        follow_owner::FollowOwnerGoal,
+        follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal,
+        owner_hurt_by_target::OwnerHurtByTargetGoal,
+        owner_hurt_target::OwnerHurtTargetGoal,
+        revenge::RevengeGoal,
+        swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
+    ai::target_match::TargetMatch,
     mob::{
         Mob, MobEntity,
         neutral::{NeutralData, NeutralMob},
@@ -33,9 +43,13 @@ use crate::entity::{
     passive::{
         animal::Animal,
         tamable::{TamableAnimal, TamableData},
+        turtle::is_baby_on_land,
     },
     player::Player,
 };
+
+const WOLF_PREY: TargetMatch =
+    TargetMatch::AnyOf(&[&EntityType::SHEEP, &EntityType::RABBIT, &EntityType::FOX]);
 
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
@@ -120,20 +134,24 @@ impl WolfEntity {
             // 5: NonTameRandomTarget (Sheep, Rabbit, Fox)
             target_selector.add_goal(
                 5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SHEEP, false),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, WOLF_PREY, false)
+                    .when(TargetCondition::Untamed),
             );
+            // 6: NonTameRandomTarget
             target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false),
+                6,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false)
+                    .when(TargetCondition::Untamed)
+                    .only_mobs(is_baby_on_land),
             );
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, false),
-            );
-            // 7: NearestAttackableTarget (Skeleton)
+            // 7: NearestAttackableTarget (AbstractSkeleton)
             target_selector.add_goal(
                 7,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SKELETON, false),
+                ActiveTargetGoal::with_default(
+                    &mob_arc.mob_entity,
+                    TargetMatch::SKELETON_LIKE,
+                    false,
+                ),
             );
         };
 
@@ -232,15 +250,7 @@ impl Mob for WolfEntity {
             return true;
         }
 
-        // TODO: vanilla also spares tamed `AbstractHorse`s
-        if let Some(target_mob) = target.get_mob()
-            && let Some(tamable) = target_mob.as_tamable()
-            && tamable.is_tame()
-        {
-            return false;
-        }
-
-        true
+        !target.get_mob().is_some_and(Mob::is_tamed)
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {

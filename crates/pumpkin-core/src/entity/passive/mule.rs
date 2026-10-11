@@ -152,6 +152,10 @@ impl Animal for MuleEntity {
 }
 
 impl Mob for MuleEntity {
+    fn is_tamed(&self) -> bool {
+        self.is_tame()
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
