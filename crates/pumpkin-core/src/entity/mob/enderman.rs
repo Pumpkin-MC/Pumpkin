@@ -380,11 +380,13 @@ impl EndermanEntity {
         let player_eye_pos = Vector3::new(player_pos.x, player_eye_y, player_pos.z);
         let world = entity.world.load();
         world
-            .raycast(enderman_eye_pos, player_eye_pos, |block_pos, w| {
-                let state = w.get_block_state(block_pos);
-                state.is_solid()
-            })
-            .is_none()
+            .clip(&pumpkin_world::clip::ClipContext::new(
+                enderman_eye_pos,
+                player_eye_pos,
+                pumpkin_world::clip::ClipBlock::Visual,
+                pumpkin_world::clip::ClipFluid::None,
+            ))
+            .is_miss
     }
 }
 
