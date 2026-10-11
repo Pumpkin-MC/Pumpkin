@@ -103,6 +103,11 @@ impl BlockBehaviour for PistonBlock {
         } else if &Block::MOVING_PISTON == block_to_check {
             args.world.break_block(&pos, None, BlockFlags::SKIP_DROPS);
         }
+        args.world.set_block_state(
+            &pos,
+            Block::AIR.default_state.id,
+            BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
+        );
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {

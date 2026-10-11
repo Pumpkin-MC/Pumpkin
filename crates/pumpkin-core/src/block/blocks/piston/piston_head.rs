@@ -25,6 +25,11 @@ impl BlockBehaviour for PistonHeadBlock {
             if props.extended {
                 // TODO: use player
                 args.world.break_block(&pos, None, BlockFlags::SKIP_DROPS);
+                args.world.set_block_state(
+                    &pos,
+                    Block::AIR.default_state.id,
+                    BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
+                );
             }
         }
     }
