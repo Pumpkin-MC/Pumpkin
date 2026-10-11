@@ -27,7 +27,7 @@ impl OwnerHurtByTargetGoal {
 
 impl Goal for OwnerHurtByTargetGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        if !mob.is_tamed() || mob.is_sitting() {
+        if !mob.is_tamed() || mob.ordered_to_sit() {
             return false;
         }
 

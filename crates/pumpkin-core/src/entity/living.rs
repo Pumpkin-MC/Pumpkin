@@ -337,6 +337,16 @@ impl LivingEntity {
         }
     }
 
+    /// Vanilla `getLastHurtByMob() != null`: hit by any living attacker in the last 100 ticks.
+    pub fn was_recently_hurt_by_living(&self) -> bool {
+        let current_tick = self.entity.world.load().level_info.load().day_time;
+        let recent = |id: &AtomicI32, time: &AtomicI64| {
+            id.load(Relaxed) != 0 && (current_tick - time.load(Relaxed)).abs() <= 100
+        };
+        recent(&self.last_hurt_by_player_id, &self.last_hurt_by_player_time)
+            || recent(&self.last_hurt_by_mob_id, &self.last_hurt_by_mob_time)
+    }
+
     /// Returns the entity that should receive kill credit for this entity's death.
     /// Following vanilla Java logic (`LivingEntity.getKillCredit`):
     /// 1. Prioritize `last_hurt_by_player` if hurt within the last 100 ticks (5 seconds).

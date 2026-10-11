@@ -14,28 +14,22 @@ use rand::RngExt;
 use crate::entity::{
     Entity, EntityBase,
     ai::behavior::{
+        feline,
         fleeing::{self, Flee},
         hunting::{self, Hunt},
     },
-    ai::goal::{
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
-    },
+    ai::goal::swim::SwimGoal,
     ai::target_match::TargetMatch,
     mob::{Mob, MobEntity},
-    passive::{animal::Animal, turtle::is_baby_on_land},
+    passive::animal::Animal,
     player::Player,
 };
 
-const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
-
-const OCELOT_FLEES: &[Flee] =
-    &[Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 16.0, 0.8, 1.33).as_long_as(is_wary)];
+const OCELOT_FLEES: &[Flee] = &[feline::flee_players(4, is_wary)];
 
 const OCELOT_HUNTS: &[Hunt] = &[
     Hunt::new(1, TargetMatch::Type(&EntityType::CHICKEN), false),
-    Hunt::new(1, TargetMatch::Type(&EntityType::TURTLE), false).only_mobs(is_baby_on_land),
+    feline::hunt_baby_turtles(1),
 ];
 
 fn is_wary(mob: &dyn Mob) -> bool {
@@ -74,25 +68,12 @@ impl OcelotEntity {
 
             // Goal 1: FloatGoal (SwimGoal)
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            // Goal 1: PanicGoal (EscapeDangerGoal)
-            goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             // Goal 3: OcelotTemptGoal
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS, true)));
+            goal_selector.add_goal(3, feline::tempt_goal());
             // Goal 4: OcelotAvoidEntityGoal (when not trusting)
             fleeing::apply(&mut goal_selector, OCELOT_FLEES);
-            // Goal 9: BreedGoal
-            goal_selector.add_goal(9, BreedGoal::new(0.8));
-            // Goal 9: FollowParentGoal
-            goal_selector.add_goal(9, Box::new(FollowParentGoal::new(0.8)));
-            // Goal 10: WaterAvoidingRandomStrollGoal (WanderAroundGoal)
-            goal_selector.add_goal(10, Box::new(WanderAroundGoal::new(0.8)));
-            // Goal 11: LookAtPlayerGoal
-            goal_selector.add_goal(
-                11,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
-            );
-            // Goal 11: RandomLookAroundGoal
-            goal_selector.add_goal(11, Box::new(RandomLookAroundGoal::default()));
+            // Goal 7-11: LeapAtTarget, OcelotAttack, Breed, Stroll, LookAtPlayer
+            feline::apply_tail(&mut goal_selector, mob_weak, 7);
         };
 
         {

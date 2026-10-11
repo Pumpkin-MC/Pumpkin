@@ -19,26 +19,22 @@ use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::behavior::{
+        feline,
         fleeing::{self, Flee},
         hunting::{self, Hunt},
     },
     ai::goal::{
-        active_target::TargetCondition, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_owner::FollowOwnerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
+        active_target::TargetCondition, escape_danger::EscapeDangerGoal,
+        follow_owner::FollowOwnerGoal, sit_when_ordered_to::SitWhenOrderedToGoal, swim::SwimGoal,
     },
     ai::target_match::TargetMatch,
     mob::{Mob, MobEntity},
     passive::{
         animal::Animal,
         tamable::{TamableAnimal, TamableData, is_untamed},
-        turtle::is_baby_on_land,
     },
     player::Player,
 };
-
-const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
 
 fn get_dye_color_from_item(item: &Item) -> Option<u8> {
     let key = item.registry_key;
@@ -79,15 +75,11 @@ fn get_dye_color_from_item(item: &Item) -> Option<u8> {
     }
 }
 
-const CAT_FLEES: &[Flee] = &[
-    Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 16.0, 0.8, 1.33).as_long_as(is_untamed),
-];
+const CAT_FLEES: &[Flee] = &[feline::flee_players(4, is_untamed)];
 
 const CAT_HUNTS: &[Hunt] = &[
     Hunt::new(1, TargetMatch::Type(&EntityType::RABBIT), false).when(TargetCondition::Untamed),
-    Hunt::new(1, TargetMatch::Type(&EntityType::TURTLE), false)
-        .when(TargetCondition::Untamed)
-        .only_mobs(is_baby_on_land),
+    feline::hunt_baby_turtles(1).when(TargetCondition::Untamed),
 ];
 
 pub struct CatEntity {
@@ -129,25 +121,17 @@ impl CatEntity {
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             // Goal 1: TamableAnimalPanicGoal (EscapeDangerGoal)
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
+            // Goal 2: SitWhenOrderedToGoal
+            goal_selector.add_goal(2, Box::new(SitWhenOrderedToGoal::new()));
+            // TODO: CatRelaxOnOwnerGoal at 3, CatLieOnBlockGoal at 5, CatSitOnBlockGoal at 7.
             // Goal 4: CatTemptGoal
-            goal_selector.add_goal(4, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS, true)));
+            goal_selector.add_goal(4, feline::tempt_goal());
             // Goal 4: CatAvoidEntityGoal (when untamed)
             fleeing::apply(&mut goal_selector, CAT_FLEES);
-            // Goal 5: BreedGoal
-            goal_selector.add_goal(5, BreedGoal::new(0.8));
             // Goal 6: FollowOwnerGoal
             goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 5.0));
-            // Goal 9: FollowParentGoal
-            goal_selector.add_goal(9, Box::new(FollowParentGoal::new(0.8)));
-            // Goal 11: WanderAroundGoal
-            goal_selector.add_goal(11, Box::new(WanderAroundGoal::new(0.8)));
-            // Goal 12: LookAtPlayerGoal
-            goal_selector.add_goal(
-                12,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
-            );
-            // Goal 12: RandomLookAroundGoal
-            goal_selector.add_goal(12, Box::new(RandomLookAroundGoal::default()));
+            // Goal 8-12: LeapAtTarget, OcelotAttack, Breed, Stroll, LookAtPlayer
+            feline::apply_tail(&mut goal_selector, mob_weak, 8);
         };
 
         {
@@ -175,10 +159,6 @@ impl CatEntity {
         flags
     }
 
-    pub fn is_sitting(&self) -> bool {
-        self.is_in_sitting_pose()
-    }
-
     pub fn is_lying(&self) -> bool {
         self.is_lying.load(Ordering::Relaxed)
     }
@@ -197,15 +177,6 @@ impl CatEntity {
         entity.set_synced_data(
             pumpkin_data::tracked_data::cat::CAT_COLLAR_COLOR,
             VarInt(color as i32),
-        );
-    }
-
-    pub fn set_sitting(&self, sitting: bool) {
-        self.set_in_sitting_pose(sitting);
-        let entity = self.get_entity();
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::cat::TAMEABLE_FLAGS,
-            self.get_tame_flags(),
         );
     }
 
@@ -424,7 +395,7 @@ impl Mob for CatEntity {
 
                 let parent_interaction = self.mob_entity.mob_interact(player, item_stack);
                 if !parent_interaction {
-                    self.set_sitting(!self.is_sitting());
+                    self.set_ordered_to_sit(!self.is_ordered_to_sit());
                     return true;
                 }
                 return parent_interaction;
@@ -436,7 +407,7 @@ impl Mob for CatEntity {
             let mut rng = rand::rng();
             if rng.random_range(0..3) == 0 {
                 self.set_tame(true, Some(player.gameprofile.id));
-                self.set_sitting(true);
+                self.set_ordered_to_sit(true);
                 self.get_entity().world.load().send_entity_status(
                     self.get_entity(),
                     EntityStatus::TamingSucceeded,

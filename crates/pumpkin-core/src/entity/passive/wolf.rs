@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -25,10 +26,11 @@ use crate::entity::{
     ai::goal::{
         active_target::TargetCondition, beg::BegGoal, breed::BreedGoal,
         escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
-        owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
-        revenge::RevengeGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        follow_parent::FollowParentGoal, leap_at_target::LeapAtTargetGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, owner_hurt_by_target::OwnerHurtByTargetGoal,
+        owner_hurt_target::OwnerHurtTargetGoal, revenge::RevengeGoal,
+        sit_when_ordered_to::SitWhenOrderedToGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     ai::target_match::TargetMatch,
     mob::{
@@ -100,8 +102,12 @@ impl WolfEntity {
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             // 1: EscapeDangerGoal (TamableAnimalPanicGoal)
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
+            // 2: SitWhenOrderedToGoal
+            goal_selector.add_goal(2, Box::new(SitWhenOrderedToGoal::new()));
             // 3: WolfAvoidEntityGoal (Llama)
             fleeing::apply(&mut goal_selector, WOLF_FLEES);
+            // 4: LeapAtTargetGoal
+            goal_selector.add_goal(4, Box::new(LeapAtTargetGoal::new(0.4)));
             // 5: MeleeAttackGoal
             goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.0, true)));
             // 6: FollowOwnerGoal
@@ -144,6 +150,15 @@ impl WolfEntity {
         mob_arc
     }
 
+    fn stop_and_forget_target(&self) {
+        self.mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .stop();
+        self.set_mob_target(None);
+    }
+
     pub fn get_tame_flags(&self) -> u8 {
         let mut flags = 0u8;
         if self.is_in_sitting_pose() {
@@ -182,6 +197,10 @@ impl NeutralMob for WolfEntity {
 }
 
 impl Mob for WolfEntity {
+    fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {
+        self.set_ordered_to_sit(false);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -351,6 +370,7 @@ impl Mob for WolfEntity {
                 let parent_interaction = self.animal_interact(player, item_stack, ambient);
                 if !parent_interaction {
                     self.set_ordered_to_sit(!self.is_ordered_to_sit());
+                    self.stop_and_forget_target();
                     return true;
                 }
                 return parent_interaction;
@@ -360,6 +380,7 @@ impl Mob for WolfEntity {
             let mut rng = rand::rng();
             if rng.random_range(0..3) == 0 {
                 TamableAnimal::tame(self, player.gameprofile.id);
+                self.stop_and_forget_target();
                 self.set_ordered_to_sit(true);
                 self.spawn_taming_particles(true);
             } else {
