@@ -39,14 +39,15 @@ pub trait FlowingFluid: Send + Sync {
     fn get_max_flow_distance(&self, world: &World) -> i32;
     fn can_convert_to_source(&self, world: &Arc<World>) -> bool;
 
-    /// Returns true if `state_id` represents the given fluid — either as a direct fluid state
-    /// or as a waterlogged block (when the fluid is water-type).
+    /// Returns true if `state_id` represents the given fluid.
+    /// Includes waterlogged blocks and bubble columns for water-type fluids.
     fn has_fluid_at(&self, fluid: &Fluid, state_id: BlockStateId) -> bool {
         self.get_effective_props(fluid, state_id).is_some()
     }
 
-    /// Returns correct fluid properties for a state, treating waterlogged blocks as water sources
-    /// (level 8, non-falling). Returns `None` if the state doesn't contain this fluid.
+    /// Returns correct fluid properties for a state.
+    /// Treats bubble columns and waterlogged blocks as water sources (level 8, non-falling).
+    /// Returns `None` if the state doesn't contain this fluid.
     fn get_effective_props(
         &self,
         fluid: &Fluid,
@@ -57,7 +58,7 @@ pub trait FlowingFluid: Send + Sync {
         }
         if fluid.id == Fluid::FLOWING_WATER.id || fluid.id == Fluid::WATER.id {
             let block = Block::from_state_id(state_id);
-            if block.is_waterlogged(state_id) {
+            if block == &Block::BUBBLE_COLUMN || block.is_waterlogged(state_id) {
                 return Some(self.get_source(fluid, false));
             }
         }
