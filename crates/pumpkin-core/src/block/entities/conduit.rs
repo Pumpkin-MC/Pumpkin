@@ -42,19 +42,28 @@ impl ConduitBlockEntity {
         }
     }
 
-    fn update_shape(&self, world: &Arc<World>) -> Vec<BlockPos> {
+    fn ensure_shape_position_loaded(world: &Arc<World>, pos: BlockPos) -> bool {
+        if !world.is_in_build_limit(pos) || world.is_loaded(&pos) {
+            return true;
+        }
+        let world = Arc::clone(world);
+        tokio::runtime::Handle::current().spawn(async move {
+            world.get_block_state_id_async(&pos).await;
+        });
+        false
+    }
+
+    fn update_shape(&self, world: &Arc<World>) -> Option<Vec<BlockPos>> {
         let mut effect_blocks = Vec::new();
         for x in -1..=1 {
             for y in -1..=1 {
                 for z in -1..=1 {
                     let pos = self.position.offset(Vector3::new(x, y, z));
-                    // Block entities tick on Rayon; load chunks in vanilla's read order.
-                    if world.is_in_build_limit(pos) && !world.is_loaded(&pos) {
-                        tokio::runtime::Handle::current()
-                            .block_on(world.get_block_state_id_async(&pos));
+                    if !Self::ensure_shape_position_loaded(world, pos) {
+                        return None;
                     }
                     if !world.get_fluid(&pos).has_tag(&tag::Fluid::MINECRAFT_WATER) {
-                        return effect_blocks;
+                        return Some(effect_blocks);
                     }
                 }
             }
@@ -69,9 +78,8 @@ impl ConduitBlockEntity {
                             || (z == 0 && (ax == 2 || ay == 2)))
                     {
                         let pos = self.position.offset(Vector3::new(x, y, z));
-                        if world.is_in_build_limit(pos) && !world.is_loaded(&pos) {
-                            tokio::runtime::Handle::current()
-                                .block_on(world.get_block_state_id_async(&pos));
+                        if !Self::ensure_shape_position_loaded(world, pos) {
+                            return None;
                         }
                         if world
                             .get_block(&pos)
@@ -83,7 +91,7 @@ impl ConduitBlockEntity {
                 }
             }
         }
-        effect_blocks
+        Some(effect_blocks)
     }
 
     fn apply_effects(&self, world: &Arc<World>, effect_blocks: &[BlockPos]) {
@@ -151,15 +159,7 @@ impl ConduitBlockEntity {
         let Some(uuid) = self.destroy_target.load() else {
             return self.select_new_target(world);
         };
-        let target = world.server.upgrade().and_then(|server| {
-            server.worlds.load().iter().find_map(|world| {
-                world.get_entity_by_uuid(uuid).or_else(|| {
-                    world
-                        .get_player_by_uuid(uuid)
-                        .map(|player| player as Arc<dyn EntityBase>)
-                })
-            })
-        })?;
+        let target = world.get_entity_by_uuid(uuid)?;
         let living = target.get_living_entity()?;
         (!target.get_entity().is_removed()
             && !living.dead.load(Ordering::Relaxed)
@@ -223,8 +223,9 @@ impl BlockEntity for ConduitBlockEntity {
 
     fn tick(&self, world: &Arc<World>) {
         let game_time = world.get_world_age();
-        if game_time % (Self::BLOCK_REFRESH_RATE * 20) == 0 {
-            let effect_blocks = self.update_shape(world);
+        if game_time % (Self::BLOCK_REFRESH_RATE * 20) == 0
+            && let Some(effect_blocks) = self.update_shape(world)
+        {
             let active = effect_blocks.len() >= Self::MIN_ACTIVE_SIZE;
             if self.active.swap(active, Ordering::Relaxed) != active {
                 world.play_sound(
