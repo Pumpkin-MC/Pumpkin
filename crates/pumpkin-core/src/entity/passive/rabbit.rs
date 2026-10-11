@@ -15,13 +15,14 @@ use rand::RngExt;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
+    ai::behavior::fleeing::{self, Flee},
     ai::goal::{
-        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, breed::BreedGoal,
-        escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
+        tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
+    ai::target_match::TargetMatch,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
@@ -75,6 +76,19 @@ impl RabbitVariant {
     }
 }
 
+// TODO: vanilla's third entry is `Monster.class` at 4.0, not the fox.
+const RABBIT_FLEES: &[Flee] = &[
+    Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 8.0, 2.2, 2.2).when(is_not_evil),
+    Flee::new(4, TargetMatch::Type(&EntityType::WOLF), 10.0, 2.2, 2.2).when(is_not_evil),
+    Flee::new(4, TargetMatch::Type(&EntityType::FOX), 10.0, 2.2, 2.2).when(is_not_evil),
+];
+
+fn is_not_evil(mob: &dyn Mob) -> bool {
+    mob.cast_any()
+        .downcast_ref::<RabbitEntity>()
+        .is_some_and(|rabbit| rabbit.get_variant() != RabbitVariant::Evil)
+}
+
 pub struct RabbitEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
@@ -109,18 +123,7 @@ impl RabbitEntity {
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.2));
             goal_selector.add_goal(2, BreedGoal::new(0.8));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS, false)));
-            goal_selector.add_goal(
-                4,
-                Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 8.0, 2.2, 2.2)),
-            );
-            goal_selector.add_goal(
-                4,
-                Box::new(AvoidEntityGoal::new(&EntityType::WOLF, 10.0, 2.2, 2.2)),
-            );
-            goal_selector.add_goal(
-                4,
-                Box::new(AvoidEntityGoal::new(&EntityType::FOX, 10.0, 2.2, 2.2)),
-            );
+            fleeing::apply(&mut goal_selector, RABBIT_FLEES);
             goal_selector.add_goal(5, Box::new(FollowParentGoal::new(0.8)));
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(0.6)));
             goal_selector.add_goal(

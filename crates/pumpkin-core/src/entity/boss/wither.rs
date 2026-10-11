@@ -26,22 +26,30 @@ use pumpkin_world::world::BlockFlags;
 use crate::{
     entity::{
         Entity, EntityBase,
+        ai::behavior::hunting::{self, Hunt},
         ai::goal::{
-            active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-            look_at_entity::LookAtEntityGoal, revenge::RevengeGoal,
+            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+            revenge::RevengeGoal,
         },
         ai::target_match::TargetMatch,
-        living::LivingEntity,
         mob::{Mob, MobEntity},
         projectile::wither_skull::WitherSkullEntity,
     },
     world::{
-        ExplosionInteraction, World,
+        ExplosionInteraction,
         bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags},
     },
 };
 
 const INVULNERABLE_TICKS: i32 = 220;
+
+const WITHER_HUNTS: &[Hunt] = &[Hunt::new(
+    2,
+    TargetMatch::AllExcept(&tag::EntityType::MINECRAFT_WITHER_FRIENDS),
+    false,
+)
+.every(0)
+.matching(|target, _world| target.entity.entity_type != &EntityType::ARMOR_STAND)];
 
 pub struct WitherEntity {
     pub mob_entity: MobEntity,
@@ -96,19 +104,7 @@ impl WitherEntity {
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                Box::new(ActiveTargetGoal::new(
-                    &mob_arc.mob_entity,
-                    TargetMatch::AllExcept(&tag::EntityType::MINECRAFT_WITHER_FRIENDS),
-                    0,
-                    false,
-                    false,
-                    Some(|target: &LivingEntity, _world: &World| {
-                        target.entity.entity_type != &EntityType::ARMOR_STAND
-                    }),
-                )),
-            );
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, WITHER_HUNTS);
         };
 
         mob_arc

@@ -8,12 +8,14 @@ use pumpkin_util::Difficulty;
 
 use crate::entity::{
     Entity,
+    ai::behavior::fleeing::{self, Flee},
     ai::goal::{
-        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, bow_attack::BowAttackGoal,
+        active_target::ActiveTargetGoal, bow_attack::BowAttackGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
+    ai::target_match::TargetMatch,
     mob::{Mob, MobEntity, equipment::RegionalDifficulty},
 };
 use crate::world::World;
@@ -24,6 +26,14 @@ pub mod parched;
 pub mod skeleton;
 pub mod stray;
 pub mod wither;
+
+const SKELETON_FLEES: &[Flee] = &[Flee::new(
+    3,
+    TargetMatch::Type(&EntityType::WOLF),
+    6.0,
+    1.0,
+    1.2,
+)];
 
 pub struct SkeletonEntityBase {
     pub mob_entity: MobEntity,
@@ -54,10 +64,7 @@ impl SkeletonEntityBase {
             // TODO: attack interval per type and difficulty (vanilla 40, 20 on hard; bogged and parched 70, 50 on hard).
             goal_selector.add_goal(2, Box::new(BowAttackGoal::new(1.0, 20, 15.0)));
             goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.2, false)));
-            goal_selector.add_goal(
-                3,
-                Box::new(AvoidEntityGoal::new(&EntityType::WOLF, 6.0, 1.0, 1.2)),
-            );
+            fleeing::apply(&mut goal_selector, SKELETON_FLEES);
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 8,

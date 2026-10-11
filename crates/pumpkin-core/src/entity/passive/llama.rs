@@ -24,7 +24,10 @@ use crate::entity::{
         swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity, RangedAttackMob},
-    passive::animal::{Animal, get_carpet_color_from_item},
+    passive::{
+        animal::{Animal, get_carpet_color_from_item},
+        trader_llama::TraderLlamaEntity,
+    },
     player::Player,
     projectile::llama_spit::LlamaSpitEntity,
 };
@@ -73,6 +76,19 @@ impl LlamaVariant {
             _ => Self::Creamy,
         }
     }
+}
+
+/// Vanilla `Wolf.avoidLlama`: the stronger the llama, the likelier a wolf flees.
+pub fn scares_wolves(threat: &dyn EntityBase) -> bool {
+    let any = threat.cast_any();
+    let strength = any
+        .downcast_ref::<LlamaEntity>()
+        .map(LlamaEntity::get_strength)
+        .or_else(|| {
+            any.downcast_ref::<TraderLlamaEntity>()
+                .map(TraderLlamaEntity::get_strength)
+        });
+    strength.is_some_and(|strength| strength >= rand::rng().random_range(0..5))
 }
 
 pub struct LlamaEntity {

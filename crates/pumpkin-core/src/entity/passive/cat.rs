@@ -18,23 +18,21 @@ use uuid::Uuid;
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
-    ai::goal::{
-        active_target::{ActiveTargetGoal, TargetCondition},
-        avoid_entity::AvoidEntityGoal,
-        breed::BreedGoal,
-        escape_danger::EscapeDangerGoal,
-        follow_owner::FollowOwnerGoal,
-        follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal,
-        swim::SwimGoal,
-        tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+    ai::behavior::{
+        fleeing::{self, Flee},
+        hunting::{self, Hunt},
     },
+    ai::goal::{
+        active_target::TargetCondition, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+        follow_owner::FollowOwnerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        tempt::TemptGoal, wander_around::WanderAroundGoal,
+    },
+    ai::target_match::TargetMatch,
     mob::{Mob, MobEntity},
     passive::{
         animal::Animal,
-        tamable::{TamableAnimal, TamableData},
+        tamable::{TamableAnimal, TamableData, is_untamed},
         turtle::is_baby_on_land,
     },
     player::Player,
@@ -81,6 +79,16 @@ fn get_dye_color_from_item(item: &Item) -> Option<u8> {
     }
 }
 
+const CAT_FLEES: &[Flee] =
+    &[Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 16.0, 0.8, 1.33).when(is_untamed)];
+
+const CAT_HUNTS: &[Hunt] = &[
+    Hunt::new(1, TargetMatch::Type(&EntityType::RABBIT), false).when(TargetCondition::Untamed),
+    Hunt::new(1, TargetMatch::Type(&EntityType::TURTLE), false)
+        .when(TargetCondition::Untamed)
+        .only_mobs(is_baby_on_land),
+];
+
 pub struct CatEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
@@ -123,10 +131,7 @@ impl CatEntity {
             // Goal 4: CatTemptGoal
             goal_selector.add_goal(4, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS, true)));
             // Goal 4: CatAvoidEntityGoal (when untamed)
-            goal_selector.add_goal(
-                4,
-                Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 16.0, 0.8, 1.33)),
-            );
+            fleeing::apply(&mut goal_selector, CAT_FLEES);
             // Goal 5: BreedGoal
             goal_selector.add_goal(5, BreedGoal::new(0.8));
             // Goal 6: FollowOwnerGoal
@@ -152,17 +157,7 @@ impl CatEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             // NonTameRandomTargetGoal for Rabbit and Turtle
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false)
-                    .when(TargetCondition::Untamed),
-            );
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false)
-                    .when(TargetCondition::Untamed)
-                    .only_mobs(is_baby_on_land),
-            );
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, CAT_HUNTS);
         };
 
         mob_arc

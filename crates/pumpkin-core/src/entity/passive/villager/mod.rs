@@ -31,15 +31,16 @@ use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase,
     ai::{
         goal::{
-            avoid_entity::AvoidEntityGoal, look_around::RandomLookAroundGoal,
-            look_at_entity::LookAtEntityGoal, open_door::OpenDoorGoal, swim::SwimGoal,
-            trade_with_player::TradeWithPlayerGoal, wander_around::WanderAroundGoal,
-            work_at_job_site::WorkAtJobSiteGoal,
+            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+            open_door::OpenDoorGoal, swim::SwimGoal, trade_with_player::TradeWithPlayerGoal,
+            wander_around::WanderAroundGoal, work_at_job_site::WorkAtJobSiteGoal,
         },
         pathfinder::Navigator,
     },
@@ -330,6 +331,40 @@ fn explorer_map_target(
     })
 }
 
+/// Vanilla `VillagerHostilesSensor` distances.
+// TODO: the brain flees the nearest hostile, goals let the first listed one win.
+const VILLAGER_FLEES: &[Flee] = &[
+    Flee::new(1, TargetMatch::Type(&EntityType::DROWNED), 8.0, 0.5, 0.5),
+    Flee::new(1, TargetMatch::Type(&EntityType::EVOKER), 12.0, 0.5, 0.5),
+    Flee::new(1, TargetMatch::Type(&EntityType::HUSK), 8.0, 0.5, 0.5),
+    Flee::new(
+        1,
+        TargetMatch::Type(&EntityType::ILLUSIONER),
+        12.0,
+        0.5,
+        0.5,
+    ),
+    Flee::new(1, TargetMatch::Type(&EntityType::PILLAGER), 15.0, 0.5, 0.5),
+    Flee::new(1, TargetMatch::Type(&EntityType::RAVAGER), 12.0, 0.5, 0.5),
+    Flee::new(1, TargetMatch::Type(&EntityType::VEX), 8.0, 0.5, 0.5),
+    Flee::new(
+        1,
+        TargetMatch::Type(&EntityType::VINDICATOR),
+        10.0,
+        0.5,
+        0.5,
+    ),
+    Flee::new(1, TargetMatch::Type(&EntityType::ZOGLIN), 10.0, 0.5, 0.5),
+    Flee::new(1, TargetMatch::Type(&EntityType::ZOMBIE), 8.0, 0.5, 0.5),
+    Flee::new(
+        1,
+        TargetMatch::Type(&EntityType::ZOMBIE_VILLAGER),
+        8.0,
+        0.5,
+        0.5,
+    ),
+];
+
 pub struct VillagerEntity {
     pub mob_entity: MobEntity,
     pub villager_data: std::sync::Mutex<VillagerData>,
@@ -446,53 +481,7 @@ impl VillagerEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(0, Box::new(OpenDoorGoal::new(true)));
             // Villagers avoid threats
-            // TODO: one AnyOf goal per distance instead of one goal per type.
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::ZOMBIE, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(
-                    &EntityType::ZOMBIE_VILLAGER,
-                    8.0,
-                    0.5,
-                    0.5,
-                )),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::HUSK, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::DROWNED, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::PILLAGER, 12.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(
-                    &EntityType::VINDICATOR,
-                    12.0,
-                    0.5,
-                    0.5,
-                )),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::EVOKER, 12.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::RAVAGER, 12.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::VEX, 12.0, 0.5, 0.5)),
-            );
+            fleeing::apply(&mut goal_selector, VILLAGER_FLEES);
 
             goal_selector.add_goal(2, Box::new(TradeWithPlayerGoal::new()));
             // Basic movement and looking (Vanilla uses 0.5 speed)

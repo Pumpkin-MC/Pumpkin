@@ -13,18 +13,29 @@ use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase,
+    ai::behavior::fleeing::{self, Flee},
     ai::goal::{
-        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, breed::BreedGoal,
-        escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
+    ai::target_match::TargetMatch,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
 };
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
+
+const OCELOT_FLEES: &[Flee] =
+    &[Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 16.0, 0.8, 1.33).when(is_wary)];
+
+fn is_wary(mob: &dyn Mob) -> bool {
+    mob.cast_any()
+        .downcast_ref::<OcelotEntity>()
+        .is_some_and(|ocelot| !ocelot.is_trusting())
+}
 
 /// Represents an Ocelot, a shy passive mob found in jungles.
 ///
@@ -61,10 +72,7 @@ impl OcelotEntity {
             // Goal 3: OcelotTemptGoal
             goal_selector.add_goal(3, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS, true)));
             // Goal 4: OcelotAvoidEntityGoal (when not trusting)
-            goal_selector.add_goal(
-                4,
-                Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 16.0, 0.8, 1.33)),
-            );
+            fleeing::apply(&mut goal_selector, OCELOT_FLEES);
             // Goal 9: BreedGoal
             goal_selector.add_goal(9, BreedGoal::new(0.8));
             // Goal 9: FollowParentGoal

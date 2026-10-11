@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use super::{Controls, Goal};
+use crate::entity::ai::goal::revenge::MobFilter;
 use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::ai::util::default_random_pos;
 use crate::entity::predicate::EntityPredicate;
@@ -11,6 +12,9 @@ const FAST_DISTANCE_SQ: f64 = 49.0;
 const HORIZONTAL_RANGE: i32 = 16;
 const VERTICAL_RANGE: i32 = 7;
 
+/// A check on the threat that was found.
+pub type ThreatFilter = fn(&dyn EntityBase) -> bool;
+
 pub struct AvoidEntityGoal {
     goal_control: Controls,
     flee_from: TargetMatch,
@@ -19,6 +23,9 @@ pub struct AvoidEntityGoal {
     fast_speed: f64,
     target: Option<Arc<dyn EntityBase>>,
     flee_pos: Option<Vector3<f64>>,
+    when: Option<MobFilter>,
+    confirm: Option<ThreatFilter>,
+    drop_target: bool,
 }
 
 impl AvoidEntityGoal {
@@ -37,7 +44,31 @@ impl AvoidEntityGoal {
             fast_speed,
             target: None,
             flee_pos: None,
+            when: None,
+            confirm: None,
+            drop_target: false,
         }
+    }
+
+    /// Only flees while the mob passes `filter`
+    #[must_use]
+    pub const fn when(mut self, filter: MobFilter) -> Self {
+        self.when = Some(filter);
+        self
+    }
+
+    /// The nearest threat must also pass `filter`, else no flee
+    #[must_use]
+    pub const fn confirmed_by(mut self, filter: ThreatFilter) -> Self {
+        self.confirm = Some(filter);
+        self
+    }
+
+    /// Clears the mob's target when fleeing starts.
+    #[must_use]
+    pub const fn dropping_target(mut self) -> Self {
+        self.drop_target = true;
+        self
     }
 
     fn find_threat(&self, mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
@@ -63,9 +94,18 @@ impl AvoidEntityGoal {
 
 impl Goal for AvoidEntityGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if self.when.is_some_and(|when| !when(mob)) {
+            return false;
+        }
         let Some(target) = self.find_threat(mob) else {
             return false;
         };
+        if self
+            .confirm
+            .is_some_and(|confirm| !confirm(target.as_ref()))
+        {
+            return false;
+        }
 
         let threat_pos = target.get_entity().pos.load();
         let Some(flee_pos) =
@@ -92,6 +132,9 @@ impl Goal for AvoidEntityGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
+        if self.drop_target {
+            mob.set_mob_target(None);
+        }
         if let Some(flee_pos) = self.flee_pos {
             let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
             let mut navigator = mob

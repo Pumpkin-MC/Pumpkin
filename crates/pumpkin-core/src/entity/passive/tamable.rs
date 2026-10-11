@@ -5,7 +5,13 @@ use pumpkin_nbt::compound::NbtCompound;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
+use crate::entity::mob::Mob;
 use crate::entity::passive::animal::Animal;
+
+/// Gate for goals vanilla runs only on wild animals.
+pub fn is_untamed(mob: &dyn Mob) -> bool {
+    !mob.is_tamed()
+}
 
 pub const SITTING_FLAG: u8 = 1;
 pub const TAME_FLAG: u8 = 4;

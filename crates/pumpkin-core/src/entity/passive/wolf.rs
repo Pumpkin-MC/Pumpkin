@@ -17,23 +17,18 @@ use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ageable::AgeableMob,
-    ai::behavior::neutral::apply_targets,
+    ai::behavior::{
+        fleeing::{self, Flee},
+        hunting::{self, Hunt},
+        neutral::apply_targets,
+    },
     ai::goal::{
-        active_target::{ActiveTargetGoal, TargetCondition},
-        avoid_entity::AvoidEntityGoal,
-        beg::BegGoal,
-        breed::BreedGoal,
-        escape_danger::EscapeDangerGoal,
-        follow_owner::FollowOwnerGoal,
-        follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal,
-        owner_hurt_by_target::OwnerHurtByTargetGoal,
-        owner_hurt_target::OwnerHurtTargetGoal,
-        revenge::RevengeGoal,
-        swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        active_target::TargetCondition, beg::BegGoal, breed::BreedGoal,
+        escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
+        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+        owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
+        revenge::RevengeGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     ai::target_match::TargetMatch,
     mob::{
@@ -42,7 +37,8 @@ use crate::entity::{
     },
     passive::{
         animal::Animal,
-        tamable::{TamableAnimal, TamableData},
+        llama::scares_wolves,
+        tamable::{TamableAnimal, TamableData, is_untamed},
         turtle::is_baby_on_land,
     },
     player::Player,
@@ -50,6 +46,19 @@ use crate::entity::{
 
 const WOLF_PREY: TargetMatch =
     TargetMatch::AnyOf(&[&EntityType::SHEEP, &EntityType::RABBIT, &EntityType::FOX]);
+
+const WOLF_FLEES: &[Flee] = &[Flee::new(3, TargetMatch::LLAMA_LIKE, 24.0, 1.5, 1.5)
+    .when(is_untamed)
+    .confirmed_by(scares_wolves)
+    .dropping_target()];
+
+const WOLF_HUNTS: &[Hunt] = &[
+    Hunt::new(5, WOLF_PREY, false).when(TargetCondition::Untamed),
+    Hunt::new(6, TargetMatch::Type(&EntityType::TURTLE), false)
+        .when(TargetCondition::Untamed)
+        .only_mobs(is_baby_on_land),
+    Hunt::new(7, TargetMatch::SKELETON_LIKE, false),
+];
 
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
@@ -91,12 +100,8 @@ impl WolfEntity {
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             // 1: EscapeDangerGoal (TamableAnimalPanicGoal)
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
-            // 3: Avoid Llama
-            // TODO: LLAMA_LIKE, only while untamed and if the llama's strength >= rand(5).
-            goal_selector.add_goal(
-                3,
-                Box::new(AvoidEntityGoal::new(&EntityType::LLAMA, 24.0, 1.5, 1.5)),
-            );
+            // 3: WolfAvoidEntityGoal (Llama)
+            fleeing::apply(&mut goal_selector, WOLF_FLEES);
             // 5: MeleeAttackGoal
             goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.0, true)));
             // 6: FollowOwnerGoal
@@ -132,28 +137,8 @@ impl WolfEntity {
             target_selector.add_goal(3, Box::new(RevengeGoal::new(true).alerting_others()));
             // 4: NearestAttackableTarget (Player, angry only), 8: ResetUniversalAnger
             apply_targets(&mut target_selector, &mob_arc.mob_entity, 4, 8, true);
-            // 5: NonTameRandomTarget (Sheep, Rabbit, Fox)
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, WOLF_PREY, false)
-                    .when(TargetCondition::Untamed),
-            );
-            // 6: NonTameRandomTarget
-            target_selector.add_goal(
-                6,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false)
-                    .when(TargetCondition::Untamed)
-                    .only_mobs(is_baby_on_land),
-            );
-            // 7: NearestAttackableTarget (AbstractSkeleton)
-            target_selector.add_goal(
-                7,
-                ActiveTargetGoal::with_default(
-                    &mob_arc.mob_entity,
-                    TargetMatch::SKELETON_LIKE,
-                    false,
-                ),
-            );
+            // 5, 6: NonTameRandomTarget (prey, baby turtle), 7: NearestAttackableTarget (AbstractSkeleton)
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, WOLF_HUNTS);
         };
 
         mob_arc
