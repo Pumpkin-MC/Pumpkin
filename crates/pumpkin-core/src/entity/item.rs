@@ -467,7 +467,7 @@ impl ItemEntity {
         !entity.on_ground.load(Ordering::SeqCst)
             || move_velo.horizontal_length_squared() > 1.0e-5
             || entity
-                .age
+                .tick_count
                 .load(Ordering::Relaxed)
                 .wrapping_add(entity.entity_id)
                 % 4
