@@ -31,9 +31,6 @@ impl BlockBehaviour for PistonHeadBlock {
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         let head_state_id = args.world.get_block_state_id(args.position);
         let head_props = PistonHeadProperties::from_state_id(head_state_id);
-        if head_props.facing != Facing::Up {
-            return;
-        }
         let piston_pos = args.position.offset(
             head_props
                 .facing
@@ -43,6 +40,9 @@ impl BlockBehaviour for PistonHeadBlock {
         );
         let piston_block = args.world.get_block(&piston_pos);
         if &Block::PISTON == piston_block || &Block::STICKY_PISTON == piston_block {
+            if head_props.facing != Facing::Up {
+                return;
+            }
             let up_pos = args
                 .position
                 .offset(head_props.facing.to_block_direction().to_offset());
@@ -51,6 +51,14 @@ impl BlockBehaviour for PistonHeadBlock {
                 //Then somebody probably broke the redstone block, try to check if piston should still be extended.
                 try_move(args.world, piston_block, &piston_pos);
             }
+        } else {
+            args.world
+                .break_block(args.position, None, BlockFlags::SKIP_DROPS);
+            args.world.set_block_state(
+                args.position,
+                Block::AIR.default_state.id,
+                BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
+            );
         }
     }
 
