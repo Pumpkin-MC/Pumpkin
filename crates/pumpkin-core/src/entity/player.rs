@@ -286,6 +286,7 @@ use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
+use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::{Difficulty, GameMode, Hand};
 use pumpkin_world::biome;
@@ -5843,8 +5844,13 @@ impl Player {
             self.open_container_pos.store(block_pos);
             Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
         } else {
-            //TODO: Send message if spectator
-
+            if self.is_spectator() {
+                self.send_system_message_raw(
+                    &TextComponent::translate(translation::java::CONTAINER_SPECTATORCANTOPEN, [])
+                        .color_named(NamedColor::Red),
+                    true,
+                );
+            }
             None
         }
     }
