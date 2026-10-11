@@ -89,7 +89,7 @@ impl BlockBehaviour for PistonBlock {
             .position
             .offset(props.facing.to_block_direction().to_offset());
         let (block_to_check, block_to_check_state_id) = args.world.get_block_and_state_id(&pos);
-        if &Block::PISTON_HEAD == block_to_check {
+        let broken = if &Block::PISTON_HEAD == block_to_check {
             let head_props = PistonHeadProperties::from_state_id(block_to_check_state_id);
 
             if (head_props.facing.to_block_direction() != props.facing.to_block_direction())
@@ -99,15 +99,23 @@ impl BlockBehaviour for PistonBlock {
                 return;
             }
 
-            args.world.break_block(&pos, None, BlockFlags::SKIP_DROPS);
+            args.world
+                .break_block(&pos, None, BlockFlags::SKIP_DROPS)
+                .is_some()
         } else if &Block::MOVING_PISTON == block_to_check {
-            args.world.break_block(&pos, None, BlockFlags::SKIP_DROPS);
+            args.world
+                .break_block(&pos, None, BlockFlags::SKIP_DROPS)
+                .is_some()
+        } else {
+            false
+        };
+        if broken {
+            args.world.set_block_state(
+                &pos,
+                Block::AIR.default_state.id,
+                BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
+            );
         }
-        args.world.set_block_state(
-            &pos,
-            Block::AIR.default_state.id,
-            BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
-        );
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {
