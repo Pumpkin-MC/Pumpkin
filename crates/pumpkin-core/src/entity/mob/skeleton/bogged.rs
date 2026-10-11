@@ -53,6 +53,15 @@ impl Mob for BoggedSkeletonEntity {
         Some(Sound::EntityBoggedAmbient)
     }
 
+    fn get_min_attack_interval(&self) -> Option<i32> {
+        let world = self.get_entity().world.load();
+        if world.get_difficulty() == pumpkin_util::Difficulty::Hard {
+            Some(50)
+        } else {
+            Some(70)
+        }
+    }
+
     fn get_arrow_projectile(&self) -> Option<ItemStack> {
         // Plain arrow avoids PotionDurationScale reducing the 100-tick poison duration.
         let mut arrow = ItemStack::new(1, &Item::ARROW);
@@ -97,6 +106,21 @@ impl Mob for BoggedSkeletonEntity {
         if item == &Item::SHEARS && !self.is_sheared() {
             let entity = self.get_entity();
             let world = entity.world.load();
+            if let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+                && let Some(server) = world.server.upgrade()
+            {
+                let mut event =
+                    crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
+                        player: player_arc,
+                        entity_id: entity.entity_id,
+                        hand: 0,
+                        cancelled: false,
+                    };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return false;
+                }
+            }
             let pos = entity.pos.load();
 
             world.play_sound(Sound::EntityBoggedShear, SoundCategory::Players, &pos);

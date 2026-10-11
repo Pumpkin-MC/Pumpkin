@@ -54,6 +54,10 @@ impl SkeletonEntityBase {
             goal_selector.add_goal(2, Box::new(RestrictSunGoal::new()));
             goal_selector.add_goal(3, Box::new(FleeSunGoal::new(1.0)));
             goal_selector.add_goal(
+                3,
+                Box::new(AvoidEntityGoal::new(&EntityType::WOLF, 6.0, 1.0, 1.2)),
+            );
+            goal_selector.add_goal(
                 4,
                 Box::new(
                     MeleeAttackGoal::new(1.2, false)
@@ -61,10 +65,6 @@ impl SkeletonEntityBase {
                 ),
             );
             goal_selector.add_goal(4, Box::new(BowAttackGoal::new(1.0, 20, 15.0)));
-            goal_selector.add_goal(
-                5,
-                Box::new(AvoidEntityGoal::new(&EntityType::WOLF, 6.0, 1.0, 1.2)),
-            );
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 8,

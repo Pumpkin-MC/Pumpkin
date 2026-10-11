@@ -18,7 +18,7 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
@@ -812,6 +812,12 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    /// Minimum attack interval for ranged bow attacks in ticks, matching vanilla `AbstractSkeleton.getAttackInterval`.
+    /// Returns `None` to use the goal's configured interval.
+    fn get_min_attack_interval(&self) -> Option<i32> {
+        None
+    }
+
     /// Takes the navigation lock, so callers must not already hold it.
     fn is_navigator_idle(&self) -> bool {
         self.get_mob_entity()
@@ -1006,20 +1012,16 @@ pub trait Mob: EntityBase + Send + Sync {
     fn play_ambient_sound(&self) {
         if let Some(sound) = self.get_ambient_sound() {
             let mob_entity = self.get_mob_entity();
-            let entity = &mob_entity.living_entity.entity;
-            let category =
-                if entity.entity_type.category == &pumpkin_data::entity::MobCategory::MONSTER {
-                    SoundCategory::Hostile
-                } else {
-                    SoundCategory::Neutral
-                };
+            let living_entity = &mob_entity.living_entity;
+            let entity = &living_entity.entity;
+            let category = living_entity.sound_category(false);
             let world = entity.world.load();
             world.play_sound_fine(
                 sound,
                 category,
                 &entity.pos.load(),
                 1.0,
-                mob_entity.living_entity.get_pitch(),
+                living_entity.get_pitch(),
             );
         }
     }

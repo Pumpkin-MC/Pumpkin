@@ -269,7 +269,9 @@ impl Goal for BowAttackGoal {
                 if self.draw_ticks >= Self::DRAW_TIME {
                     self.stop_drawing(mob);
                     Self::shoot(mob, &target);
-                    self.attack_time = self.attack_interval;
+                    self.attack_time = mob
+                        .get_min_attack_interval()
+                        .unwrap_or(self.attack_interval);
                 }
             }
         } else {

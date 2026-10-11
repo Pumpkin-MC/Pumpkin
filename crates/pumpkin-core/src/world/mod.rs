@@ -879,6 +879,11 @@ impl World {
         self.level_info.store(Arc::new(new_info));
     }
 
+    #[must_use]
+    pub fn get_difficulty(&self) -> Difficulty {
+        self.level_info.load().difficulty
+    }
+
     pub fn get_game_rule(&self, rule: &GameRule) -> GameRuleValue<i64, bool> {
         let level_info = self.level_info.load();
         match level_info.game_rules.get(rule) {
