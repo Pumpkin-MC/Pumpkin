@@ -13,23 +13,30 @@ use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase,
-    ai::behavior::fleeing::{self, Flee},
+    ai::behavior::{
+        fleeing::{self, Flee},
+        hunting::{self, Hunt},
+    },
     ai::goal::{
-        active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     ai::target_match::TargetMatch,
     mob::{Mob, MobEntity},
-    passive::animal::Animal,
+    passive::{animal::Animal, turtle::is_baby_on_land},
     player::Player,
 };
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
 
 const OCELOT_FLEES: &[Flee] =
-    &[Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 16.0, 0.8, 1.33).when(is_wary)];
+    &[Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 16.0, 0.8, 1.33).as_long_as(is_wary)];
+
+const OCELOT_HUNTS: &[Hunt] = &[
+    Hunt::new(1, TargetMatch::Type(&EntityType::CHICKEN), false),
+    Hunt::new(1, TargetMatch::Type(&EntityType::TURTLE), false).only_mobs(is_baby_on_land),
+];
 
 fn is_wary(mob: &dyn Mob) -> bool {
     mob.cast_any()
@@ -95,15 +102,8 @@ impl OcelotEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            // Target Goal 1: NearestAttackableTargetGoal for Chicken and Turtle
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::CHICKEN, false),
-            );
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false),
-            );
+            // Target Goal 1: NearestAttackableTargetGoal for Chicken and Turtle (baby on land)
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, OCELOT_HUNTS);
         };
 
         mob_arc

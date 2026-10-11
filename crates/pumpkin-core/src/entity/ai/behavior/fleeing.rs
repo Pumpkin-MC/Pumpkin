@@ -13,6 +13,7 @@ pub struct Flee {
     walk_speed: f64,
     sprint_speed: f64,
     when: Option<MobFilter>,
+    keep_when: bool,
     confirm: Option<ThreatFilter>,
     drop_target: bool,
 }
@@ -33,6 +34,7 @@ impl Flee {
             walk_speed,
             sprint_speed,
             when: None,
+            keep_when: false,
             confirm: None,
             drop_target: false,
         }
@@ -42,6 +44,14 @@ impl Flee {
     #[must_use]
     pub const fn when(mut self, filter: MobFilter) -> Self {
         self.when = Some(filter);
+        self
+    }
+
+    /// See [`AvoidEntityGoal::as_long_as`].
+    #[must_use]
+    pub const fn as_long_as(mut self, filter: MobFilter) -> Self {
+        self.when = Some(filter);
+        self.keep_when = true;
         self
     }
 
@@ -63,7 +73,11 @@ impl Flee {
         let mut goal =
             AvoidEntityGoal::new(self.from, self.distance, self.walk_speed, self.sprint_speed);
         if let Some(when) = self.when {
-            goal = goal.when(when);
+            goal = if self.keep_when {
+                goal.as_long_as(when)
+            } else {
+                goal.when(when)
+            };
         }
         if let Some(confirm) = self.confirm {
             goal = goal.confirmed_by(confirm);

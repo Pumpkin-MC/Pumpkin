@@ -8,7 +8,7 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::mob::neutral::{NeutralMob, find_by_uuid};
-use crate::entity::{EntityBase, mob::MobEntity, player::Player};
+use crate::entity::{EntityBase, mob::MobEntity};
 use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 use rand::RngExt;
@@ -130,7 +130,8 @@ impl ActiveTargetGoal {
         self
     }
 
-    /// Only mob targets passing `filter`, checked on start and while continuing. e.g. baby turtles on land.
+    /// Only mob targets passing `filter`. Re-checked while continuing only with
+    /// [`TargetCondition::Untamed`], like vanilla `NonTameRandomTargetGoal`.
     #[must_use]
     pub fn only_mobs(mut self: Box<Self>, filter: MobFilter) -> Box<Self> {
         self.target_filter = Some(filter);
@@ -223,31 +224,27 @@ impl ActiveTargetGoal {
         let predicate = &self.target_predicate;
         let condition = self.condition;
         let target_type = self.target_type;
-        let found = match condition.grudge_target(mob) {
-            // Same range rule as the area search: follow range from the eye.
-            Some(uuid) => find_by_uuid(&world, uuid).filter(|candidate| {
-                let entity = candidate.get_entity();
-                target_type.matches(entity.entity_type)
-                    && self.passes_filter(candidate.as_ref())
-                    && entity.pos.load().squared_distance_to_vec(&search_pos)
-                        <= follow_range * follow_range
-                    && predicate.test(&world, Some(mob), candidate.as_ref())
-                    && condition.allows_target(mob, candidate.as_ref(), &world)
-            }),
-            None if target_type.is_player() => world
-                .get_nearest_player(search_pos, follow_range, |player| {
-                    self.passes_filter(player.as_ref())
-                        && predicate.test(&world, Some(mob), player.as_ref())
-                        && condition.allows_target(mob, player.as_ref(), &world)
+        let found = condition.grudge_target(mob).map_or_else(
+            || {
+                target_type.find_nearest(&world, search_pos, follow_range, |candidate| {
+                    self.passes_filter(candidate)
+                        && predicate.test(&world, Some(mob), candidate)
+                        && condition.allows_target(mob, candidate, &world)
                 })
-                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>),
-            None => world.get_nearest_entity(search_pos, follow_range, None, |entity| {
-                target_type.matches(entity.get_entity().entity_type)
-                    && self.passes_filter(entity.as_ref())
-                    && predicate.test(&world, Some(mob), entity.as_ref())
-                    && condition.allows_target(mob, entity.as_ref(), &world)
-            }),
-        };
+            },
+            // Same range rule as the area search: follow range from the eye.
+            |uuid| {
+                find_by_uuid(&world, uuid).filter(|candidate| {
+                    let entity = candidate.get_entity();
+                    target_type.matches(entity.entity_type)
+                        && self.passes_filter(candidate.as_ref())
+                        && entity.pos.load().squared_distance_to_vec(&search_pos)
+                            <= follow_range * follow_range
+                        && predicate.test(&world, Some(mob), candidate.as_ref())
+                        && condition.allows_target(mob, candidate.as_ref(), &world)
+                })
+            },
+        );
 
         self.target = found;
     }
@@ -275,7 +272,8 @@ impl Goal for ActiveTargetGoal {
             self.target = None;
             return false;
         }
-        if self.target_filter.is_some()
+        if self.condition == TargetCondition::Untamed
+            && self.target_filter.is_some()
             && mob
                 .get_mob_entity()
                 .get_target()

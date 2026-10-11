@@ -1,5 +1,11 @@
+use std::sync::Arc;
+
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::tag::{self, Tag, Taggable};
+use pumpkin_util::math::vector3::Vector3;
+
+use crate::entity::EntityBase;
+use crate::world::World;
 
 /// Which entity types a target or threat search accepts.
 #[derive(Clone, Copy, Debug)]
@@ -29,6 +35,41 @@ impl TargetMatch {
     #[must_use]
     pub fn is_player(self) -> bool {
         matches!(self, Self::Type(t) if t == &EntityType::PLAYER)
+    }
+
+    /// Nearest matching entity within `radius` that passes `accept`.
+    /// Players live in their own list, so it is searched whenever they can match.
+    pub fn find_nearest(
+        self,
+        world: &World,
+        pos: Vector3<f64>,
+        radius: f64,
+        accept: impl Fn(&dyn EntityBase) -> bool,
+    ) -> Option<Arc<dyn EntityBase>> {
+        let player = self
+            .matches(&EntityType::PLAYER)
+            .then(|| world.get_nearest_player(pos, radius, |player| accept(player.as_ref())))
+            .flatten()
+            .map(|player| player as Arc<dyn EntityBase>);
+        if self.is_player() {
+            return player;
+        }
+        let entity = world.get_nearest_entity(pos, radius, None, |entity| {
+            self.matches(entity.get_entity().entity_type) && accept(entity.as_ref())
+        });
+        match (player, entity) {
+            (Some(player), Some(entity)) => {
+                let dist = |e: &Arc<dyn EntityBase>| {
+                    e.get_entity().pos.load().squared_distance_to_vec(&pos)
+                };
+                Some(if dist(&player) <= dist(&entity) {
+                    player
+                } else {
+                    entity
+                })
+            }
+            (player, entity) => player.or(entity),
+        }
     }
 }
 

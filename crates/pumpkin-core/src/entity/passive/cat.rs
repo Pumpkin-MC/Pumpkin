@@ -79,8 +79,9 @@ fn get_dye_color_from_item(item: &Item) -> Option<u8> {
     }
 }
 
-const CAT_FLEES: &[Flee] =
-    &[Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 16.0, 0.8, 1.33).when(is_untamed)];
+const CAT_FLEES: &[Flee] = &[
+    Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 16.0, 0.8, 1.33).as_long_as(is_untamed),
+];
 
 const CAT_HUNTS: &[Hunt] = &[
     Hunt::new(1, TargetMatch::Type(&EntityType::RABBIT), false).when(TargetCondition::Untamed),

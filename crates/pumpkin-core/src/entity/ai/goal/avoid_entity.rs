@@ -24,6 +24,7 @@ pub struct AvoidEntityGoal {
     target: Option<Arc<dyn EntityBase>>,
     flee_pos: Option<Vector3<f64>>,
     when: Option<MobFilter>,
+    keep_when: bool,
     confirm: Option<ThreatFilter>,
     drop_target: bool,
 }
@@ -45,6 +46,7 @@ impl AvoidEntityGoal {
             target: None,
             flee_pos: None,
             when: None,
+            keep_when: false,
             confirm: None,
             drop_target: false,
         }
@@ -57,6 +59,14 @@ impl AvoidEntityGoal {
         self
     }
 
+    /// Like [`Self::when`], also checked while fleeing. e.g. a cat tamed mid-flight stops.
+    #[must_use]
+    pub const fn as_long_as(mut self, filter: MobFilter) -> Self {
+        self.when = Some(filter);
+        self.keep_when = true;
+        self
+    }
+
     /// The nearest threat must also pass `filter`, else no flee
     #[must_use]
     pub const fn confirmed_by(mut self, filter: ThreatFilter) -> Self {
@@ -64,7 +74,7 @@ impl AvoidEntityGoal {
         self
     }
 
-    /// Clears the mob's target when fleeing starts.
+    /// Clears the mob's target while fleeing.
     #[must_use]
     pub const fn dropping_target(mut self) -> Self {
         self.drop_target = true;
@@ -76,19 +86,10 @@ impl AvoidEntityGoal {
         let pos = entity.pos.load();
         let world = entity.world.load();
 
-        if self.flee_from.is_player() {
-            world
-                .get_nearest_player(pos, self.flee_distance, |player| {
-                    EntityPredicate::ExceptCreativeOrSpectator.test(player.get_entity())
-                })
-                .map(|p| p as Arc<dyn EntityBase>)
-        } else {
-            world.get_nearest_entity(pos, self.flee_distance, None, |entity| {
-                let entity = entity.get_entity();
-                self.flee_from.matches(entity.entity_type)
-                    && EntityPredicate::ExceptCreativeOrSpectator.test(entity)
+        self.flee_from
+            .find_nearest(&world, pos, self.flee_distance, |entity| {
+                EntityPredicate::ExceptCreativeOrSpectator.test(entity.get_entity())
             })
-        }
     }
 }
 
@@ -128,6 +129,9 @@ impl Goal for AvoidEntityGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        if self.keep_when && self.when.is_some_and(|when| !when(mob)) {
+            return false;
+        }
         !mob.is_navigator_idle()
     }
 
@@ -147,6 +151,9 @@ impl Goal for AvoidEntityGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
+        if self.drop_target {
+            mob.set_mob_target(None);
+        }
         if let Some(target) = &self.target {
             let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
             let threat_pos = target.get_entity().pos.load();
