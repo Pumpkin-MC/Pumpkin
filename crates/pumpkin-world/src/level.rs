@@ -656,6 +656,9 @@ impl Level {
             self.loaded_chunk_changes
                 .push(LoadedChunkChange::Loaded(pos));
         }
+        if chunk.has_scheduled_ticks() {
+            self.chunks_with_scheduled_ticks.insert(pos);
+        }
         f(&chunk)
     }
 
