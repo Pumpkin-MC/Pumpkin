@@ -806,14 +806,12 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_mob_entity().living_entity.can_attack(target)
     }
 
-    /// Returns the arrow projectile to shoot. Override for custom arrows (e.g., poison arrows).
-    /// Returns `None` to use default arrow.
+    /// Arrow projectile to shoot when using a bow.
     fn get_arrow_projectile(&self) -> Option<ItemStack> {
         None
     }
 
-    /// Minimum attack interval for ranged bow attacks in ticks, matching vanilla `AbstractSkeleton.getAttackInterval`.
-    /// Returns `None` to use the goal's configured interval.
+    /// Minimum attack interval for ranged bow attacks in ticks.
     fn get_min_attack_interval(&self) -> Option<i32> {
         None
     }
@@ -998,17 +996,17 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
-    /// Sound played periodically while alive, matching vanilla `Mob.getAmbientSound`.
+    /// Sound played periodically while alive.
     fn get_ambient_sound(&self) -> Option<Sound> {
         None
     }
 
-    /// Interval in ticks between ambient sound attempts (vanilla default: 80 ticks = 4 s).
+    /// Interval in ticks between ambient sound attempts.
     fn get_ambient_sound_interval(&self) -> i32 {
         80
     }
 
-    /// Plays the ambient sound, matching vanilla `Mob.playAmbientSound`.
+    /// Plays the ambient sound.
     fn play_ambient_sound(&self) {
         if let Some(sound) = self.get_ambient_sound() {
             let mob_entity = self.get_mob_entity();

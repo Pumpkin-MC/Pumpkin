@@ -85,7 +85,6 @@ impl BowAttackGoal {
 
         let arrow_entity = Entity::new(world.clone(), entity.pos.load(), &EntityType::ARROW);
 
-        // Use custom arrow if mob provides one, otherwise use default
         let projectile = mob
             .get_arrow_projectile()
             .unwrap_or_else(|| ItemStack::new(1, &Item::ARROW));
