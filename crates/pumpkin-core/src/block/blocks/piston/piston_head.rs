@@ -52,13 +52,17 @@ impl BlockBehaviour for PistonHeadBlock {
                 try_move(args.world, piston_block, &piston_pos);
             }
         } else {
-            args.world
-                .break_block(args.position, None, BlockFlags::SKIP_DROPS);
-            args.world.set_block_state(
-                args.position,
-                Block::AIR.default_state.id,
-                BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
-            );
+            if args
+                .world
+                .break_block(args.position, None, BlockFlags::SKIP_DROPS)
+                .is_some()
+            {
+                args.world.set_block_state(
+                    args.position,
+                    Block::AIR.default_state.id,
+                    BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
+                );
+            }
         }
     }
 

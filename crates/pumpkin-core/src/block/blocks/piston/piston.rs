@@ -120,9 +120,13 @@ impl BlockBehaviour for PistonBlock {
             .position
             .offset(props.facing.to_block_direction().to_offset());
         let head_block = args.world.get_block(&head_pos);
-        if props.extended && head_block != &Block::PISTON_HEAD {
-            args.world
-                .break_block(args.position, None, BlockFlags::SKIP_DROPS);
+        if props.extended
+            && head_block != &Block::PISTON_HEAD
+            && args
+                .world
+                .break_block(args.position, None, BlockFlags::SKIP_DROPS)
+                .is_some()
+        {
             args.world.set_block_state(
                 args.position,
                 Block::AIR.default_state.id,
