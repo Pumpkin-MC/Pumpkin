@@ -5,6 +5,7 @@ use crate::block::{
     PathComputationType, PlacedArgs,
 };
 use crate::world::World;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -17,18 +18,31 @@ pub struct DragonEggBlock;
 impl DragonEggBlock {
     // DragonEggBlock.getDelayAfterPlace
     const DELAY_AFTER_PLACE: u8 = 5;
+    const TELEPORT_RADIUS_XZ: i32 = 16;
+    const TELEPORT_RADIUS_Y: i32 = 8;
 
     fn teleport(world: &Arc<World>, pos: &BlockPos) {
         for _ in 0..1000 {
-            let x = pos.0.x + rng().random_range(-16..16);
-            let y = pos.0.y + rng().random_range(-8..8);
-            let z = pos.0.z + rng().random_range(-16..16);
-            let test_pos = BlockPos::new(x, y, z);
+            let test_pos = pos.add(
+                rng().random_range(0..Self::TELEPORT_RADIUS_XZ)
+                    - rng().random_range(0..Self::TELEPORT_RADIUS_XZ),
+                rng().random_range(0..Self::TELEPORT_RADIUS_Y)
+                    - rng().random_range(0..Self::TELEPORT_RADIUS_Y),
+                rng().random_range(0..Self::TELEPORT_RADIUS_XZ)
+                    - rng().random_range(0..Self::TELEPORT_RADIUS_XZ),
+            );
 
             let state = world.get_block_state(&test_pos);
             let below_state = world.get_block_state(&test_pos.down());
 
             if state.is_air() && !below_state.is_air() {
+                let packed_diff = pos.pack_difference_in_position(
+                    &test_pos,
+                    Self::TELEPORT_RADIUS_XZ,
+                    Self::TELEPORT_RADIUS_Y,
+                    Self::TELEPORT_RADIUS_XZ,
+                );
+                world.sync_world_event(WorldEvent::ParticlesDragonEggTeleport, *pos, packed_diff);
                 let current_state = world.get_block_state(pos);
                 world.set_block_state(
                     &test_pos,
@@ -63,7 +77,8 @@ impl BlockBehaviour for DragonEggBlock {
         BlockActionResult::Success
     }
 
-    // Dragon egg is typically teleported when attacked
+    // TODO this should be attack but this does not exist yet in pumpkin
+    // it is hardcoded for left clicking note blocks at JavaClient.handle_player_action
     fn broken(&self, args: BrokenArgs<'_>) {
         Self::teleport(args.world, args.position);
     }
