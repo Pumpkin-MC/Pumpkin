@@ -1,4 +1,4 @@
-use pumpkin_data::block_properties::Facing;
+use pumpkin_data::block_properties::{Facing, MovingPistonLikeProperties};
 use pumpkin_data::{Block, BlockState, FacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
@@ -51,7 +51,14 @@ impl BlockBehaviour for PistonHeadBlock {
                 //Then somebody probably broke the redstone block, try to check if piston should still be extended.
                 try_move(args.world, piston_block, &piston_pos);
             }
-        } else if args
+        } else if &Block::MOVING_PISTON == piston_block
+            && MovingPistonLikeProperties::from_state_id(args.world.get_block_state_id(&piston_pos))
+                .facing
+                == head_props.facing
+        {
+            return;
+        }
+        if args
             .world
             .break_block(args.position, None, BlockFlags::SKIP_DROPS)
             .is_some()
