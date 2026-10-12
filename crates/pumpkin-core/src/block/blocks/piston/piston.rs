@@ -148,6 +148,7 @@ impl BlockBehaviour for PistonBlock {
                 Block::AIR.default_state.id,
                 BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
             );
+            return;
         }
 
         try_move(args.world, args.block, args.position);
