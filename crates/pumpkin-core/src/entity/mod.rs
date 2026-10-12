@@ -2723,9 +2723,15 @@ impl Entity {
     pub fn check_fall_flying(&self) -> bool {
         if let Some(living) = self.get_living_entity() {
             if let Some(_player) = living.get_player() {
-                let equipment = living.entity_equipment.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let equipment = living
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 if !equipment.equipment.iter().any(|(slot, stack)| {
-                    matches!(slot, pumpkin_data::data_component_impl::EquipmentSlot::Chest(_)) && stack.get_item() == &pumpkin_data::item::Item::ELYTRA
+                    matches!(
+                        slot,
+                        pumpkin_data::data_component_impl::EquipmentSlot::Chest(_)
+                    ) && stack.get_item() == &pumpkin_data::item::Item::ELYTRA
                 }) {
                     return false;
                 }
