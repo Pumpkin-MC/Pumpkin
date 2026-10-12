@@ -2745,9 +2745,7 @@ impl Entity {
         self.fall_flying.store(fall_flying, Relaxed);
         self.set_flag(Flag::FallFlying, fall_flying);
 
-        if fall_flying
-            && let Some(player) = self.get_player()
-        {
+        if fall_flying && let Some(player) = self.get_player() {
             player.set_flying(false);
         }
     }
