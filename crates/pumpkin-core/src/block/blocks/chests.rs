@@ -35,7 +35,10 @@ use crate::world::World;
 use crate::world::loot::fill_chest_inventory;
 use pumpkin_data::BlockState;
 
-struct ChestScreenFactory(Arc<dyn Inventory>);
+struct ChestScreenFactory {
+    inventory: Arc<dyn Inventory>,
+    loot_pending: bool,
+}
 
 impl ScreenHandlerFactory for ChestScreenFactory {
     fn create_screen_handler(
@@ -44,10 +47,14 @@ impl ScreenHandlerFactory for ChestScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
-        let concrete_handler = if self.0.size() > 27 {
-            create_generic_9x6(sync_id, player_inventory, self.0.clone(), player)
+        if self.loot_pending && player.is_spectator() {
+            return None;
+        }
+
+        let concrete_handler = if self.inventory.size() > 27 {
+            create_generic_9x6(sync_id, player_inventory, self.inventory.clone(), player)
         } else {
-            create_generic_9x3(sync_id, player_inventory, self.0.clone(), player)
+            create_generic_9x3(sync_id, player_inventory, self.inventory.clone(), player)
         };
 
         let concrete_arc = Arc::new(Mutex::new(concrete_handler));
@@ -56,7 +63,7 @@ impl ScreenHandlerFactory for ChestScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        if self.0.size() > 27 {
+        if self.inventory.size() > 27 {
             pumpkin_macros::translate_cross!(
                 translation::java::CONTAINER_CHESTDOUBLE,
                 translation::bedrock::CONTAINER_CHESTDOUBLE
@@ -197,6 +204,10 @@ fn get_chest_screen_handler_factory(
         unpack(entity);
     }
 
+    let first_loot_pending = first_chest
+        .as_ref()
+        .is_some_and(|entity| entity.has_loot_table());
+
     if is_chest_blocked(args.world, args.position) {
         return None;
     }
@@ -217,15 +228,26 @@ fn get_chest_screen_handler_factory(
     {
         unpack(&second);
     }
-    if let Some(entity) = first_chest {
-        if let Some(inventory) = get_container(args.world, args.position, &entity, false) {
-            return Some(Box::new(ChestScreenFactory(inventory)));
-        }
-        if let Some(inventory) = entity.clone().get_inventory() {
-            return Some(Box::new(ChestScreenFactory(inventory)));
-        }
-    }
-    None
+
+    let entity = first_chest?;
+    let inventory =
+        if let Some(container) = get_container(args.world, args.position, &entity, false) {
+            container
+        } else {
+            entity.clone().get_inventory()?
+        };
+
+    let loot_pending = first_loot_pending
+        || connected_towards.is_some_and(|direction| {
+            args.world
+                .get_block_entity(&args.position.offset(direction.to_offset()))
+                .is_some_and(|second| second.has_loot_table())
+        });
+
+    Some(Box::new(ChestScreenFactory {
+        inventory,
+        loot_pending,
+    }))
 }
 
 fn normal_use_chest_impl(args: &NormalUseArgs<'_>) -> BlockActionResult {

@@ -1,10 +1,11 @@
+use crate::data_component::DataComponentValue;
 use semver::Version;
 use std::collections::BTreeMap;
 use std::fs;
 use wit_encoder::{Enum, Interface, Package, PackageName, TypeDef, TypeDefKind};
 
 pub fn build() -> String {
-    let data_components: BTreeMap<String, u8> =
+    let data_components: BTreeMap<String, DataComponentValue> =
         serde_json::from_str(&fs::read_to_string("../../assets/data_component.json").unwrap())
             .expect("Failed to parse data_component.json");
 
@@ -17,7 +18,7 @@ pub fn build() -> String {
 
     let mut component_enum = Enum::empty();
     let mut data_component_vec = data_components.iter().collect::<Vec<_>>();
-    data_component_vec.sort_by_key(|(_, i)| **i);
+    data_component_vec.sort_by_key(|(_, val)| val.id());
 
     for (raw_name, _) in data_component_vec {
         let name = raw_name

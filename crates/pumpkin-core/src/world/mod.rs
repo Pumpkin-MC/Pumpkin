@@ -6489,131 +6489,37 @@ impl World {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
+    /// Traces a ray through the world, testing blocks and fluids according to `context`.
+    /// Vanilla: `BlockGetter.clip(ClipContext)`.
+    pub fn clip(
+        &self,
+        context: &pumpkin_world::clip::ClipContext,
+    ) -> pumpkin_world::clip::BlockHitResult {
+        pumpkin_world::clip::clip(self, context)
+    }
+
     pub fn ray_trace_block(
         &self,
         start_pos: Vector3<f64>,
         end_pos: Vector3<f64>,
         include_fluids: bool,
     ) -> Option<(BlockPos, BlockDirection, Vector3<f64>)> {
-        if start_pos == end_pos {
-            return None;
-        }
-
-        let adjust = -1.0e-7f64;
-        let to = end_pos.lerp(&start_pos, adjust);
-        let from = start_pos.lerp(&end_pos, adjust);
-
-        let mut block = BlockPos::floored(from.x, from.y, from.z);
-
-        let state = self.get_block_state(&block);
-        let valid_start = if include_fluids {
-            !state.is_air()
+        let fluid = if include_fluids {
+            pumpkin_world::clip::ClipFluid::Any
         } else {
-            !state.is_air() && !state.is_liquid()
+            pumpkin_world::clip::ClipFluid::None
         };
-        if valid_start
-            && let Some((dir, hit_pos)) = self.ray_outline_check_detailed(&block, from, to)
-        {
-            return Some((block, dir, hit_pos));
+        let hit = self.clip(&pumpkin_world::clip::ClipContext::new(
+            start_pos,
+            end_pos,
+            pumpkin_world::clip::ClipBlock::Outline,
+            fluid,
+        ));
+        if hit.is_miss {
+            None
+        } else {
+            Some((hit.block_pos, hit.direction, hit.location))
         }
-
-        let difference = to.sub(&from);
-        let step = difference.sign();
-
-        let delta = Vector3::new(
-            if step.x == 0 {
-                f64::MAX
-            } else {
-                (f64::from(step.x)) / difference.x
-            },
-            if step.y == 0 {
-                f64::MAX
-            } else {
-                (f64::from(step.y)) / difference.y
-            },
-            if step.z == 0 {
-                f64::MAX
-            } else {
-                (f64::from(step.z)) / difference.z
-            },
-        );
-
-        let mut next = Vector3::new(
-            delta.x
-                * (if step.x > 0 {
-                    1.0 - (from.x - from.x.floor())
-                } else {
-                    from.x - from.x.floor()
-                }),
-            delta.y
-                * (if step.y > 0 {
-                    1.0 - (from.y - from.y.floor())
-                } else {
-                    from.y - from.y.floor()
-                }),
-            delta.z
-                * (if step.z > 0 {
-                    1.0 - (from.z - from.z.floor())
-                } else {
-                    from.z - from.z.floor()
-                }),
-        );
-
-        while next.x <= 1.0 || next.y <= 1.0 || next.z <= 1.0 {
-            let block_direction = match (next.x, next.y, next.z) {
-                (x, y, z) if x < y && x < z => {
-                    block.0.x += step.x;
-                    next.x += delta.x;
-                    if step.x > 0 {
-                        BlockDirection::West
-                    } else {
-                        BlockDirection::East
-                    }
-                }
-                (_, y, z) if y < z => {
-                    block.0.y += step.y;
-                    next.y += delta.y;
-                    if step.y > 0 {
-                        BlockDirection::Down
-                    } else {
-                        BlockDirection::Up
-                    }
-                }
-                _ => {
-                    block.0.z += step.z;
-                    next.z += delta.z;
-                    if step.z > 0 {
-                        BlockDirection::North
-                    } else {
-                        BlockDirection::South
-                    }
-                }
-            };
-
-            let state = self.get_block_state(&block);
-            let hit = if include_fluids {
-                !state.is_air()
-            } else {
-                !state.is_air() && !state.is_liquid()
-            };
-
-            if hit {
-                if let Some((dir, hit_pos)) = self.ray_outline_check_detailed(&block, from, to) {
-                    return Some((block, dir, hit_pos));
-                }
-                let block_min = block.0.to_f64();
-                let block_max = block_min.add_raw(1.0, 1.0, 1.0);
-                if let Some((_, dir, hit_pos)) =
-                    Self::intersects_aabb_with_hit(from, to, block_min, block_max)
-                {
-                    return Some((block, dir, hit_pos));
-                }
-                return Some((block, block_direction, to));
-            }
-        }
-
-        None
     }
 
     pub fn ray_trace_entities(
