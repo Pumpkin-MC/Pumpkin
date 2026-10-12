@@ -517,6 +517,10 @@ impl TrapezoidIntProvider {
         if self.min_inclusive >= self.max_inclusive {
             return self.min_inclusive;
         }
+        if self.plateau == 0 && self.max_inclusive == -self.min_inclusive {
+            return random.next_bounded_i32(self.max_inclusive + 1)
+                - random.next_bounded_i32(self.max_inclusive + 1);
+        }
         let range = self.max_inclusive - self.min_inclusive;
         if self.plateau >= range {
             return self.min_inclusive + random.next_bounded_i32(range + 1);

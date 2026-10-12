@@ -3209,7 +3209,7 @@ impl Entity {
         )
     }
 
-    /// No solid block between the two eye positions.
+    /// No visual-blocking block between the two eye positions (matching vanilla `ClipContext.Block.VISUAL`).
     #[must_use]
     pub fn has_line_of_sight(&self, other: &Self) -> bool {
         let from = self.get_eye_pos();
@@ -3219,10 +3219,13 @@ impl Entity {
         }
         self.world
             .load_full()
-            .raycast(from, to, |block_pos, world| {
-                world.get_block_state(block_pos).is_solid()
-            })
-            .is_none()
+            .clip(&pumpkin_world::clip::ClipContext::new(
+                from,
+                to,
+                pumpkin_world::clip::ClipBlock::Visual,
+                pumpkin_world::clip::ClipFluid::None,
+            ))
+            .is_miss
     }
 
     pub fn get_eye_y(&self) -> f64 {

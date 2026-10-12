@@ -18,7 +18,6 @@ use pumpkin_data::data_component_impl::{
 };
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity::entity_from_egg;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockDirection};
@@ -161,17 +160,18 @@ impl ItemBehaviour for SpawnEggItem {
         if let Some(entity_type) = entity_from_egg(item.id) {
             let world = player.world();
             let (start_pos, end_pos) = self.get_start_and_end_pos(player);
-            let checker = |pos: &BlockPos, world_inner: &Arc<World>| {
-                let state_id = world_inner.get_block_state_id(pos);
-                if state_id == Block::AIR.default_state.id {
-                    return false;
-                }
-                Fluid::from_state_id(state_id).is_some()
-            };
+            let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
+                start_pos,
+                end_pos,
+                pumpkin_world::clip::ClipBlock::Outline,
+                pumpkin_world::clip::ClipFluid::SourceOnly,
+            ));
 
-            let Some((hit_pos, _)) = world.raycast(start_pos, end_pos, checker) else {
+            if hit.is_miss {
                 return;
-            };
+            }
+
+            let hit_pos = hit.block_pos;
 
             let pos = Vector3::new(
                 f64::from(hit_pos.0.x) + 0.5,
