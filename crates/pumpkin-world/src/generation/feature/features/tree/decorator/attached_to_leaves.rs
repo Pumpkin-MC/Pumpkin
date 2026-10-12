@@ -27,6 +27,7 @@ impl AttachedToLeavesTreeDecorator {
         block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         foliage_positions: &[BlockPos],
+        decorations: &mut Vec<BlockPos>,
     ) {
         if self.directions.is_empty() || foliage_positions.is_empty() {
             return;
@@ -62,6 +63,7 @@ impl AttachedToLeavesTreeDecorator {
                     self.block_provider
                         .get(random, placement_pos, chunk, block_registry),
                 );
+                decorations.push(placement_pos);
             }
         }
     }

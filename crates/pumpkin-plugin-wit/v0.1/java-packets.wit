@@ -488,7 +488,8 @@ interface java-packets {
     accept,
   }
   record s-spectate-entity {
-    target: uuid,
+    /// Vanilla `OPTIONAL_VAR_INT`: 0 for no target, otherwise the entity ID plus one.
+    target: s32,
   }
   record s-swing-arm {
     hand: s32,
