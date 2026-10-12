@@ -18,9 +18,34 @@ pub enum YOffset {
     AboveBottom(AboveBottom),
     /// Offset measured downward from the world's maximum Y.
     BelowTop(BelowTop),
+    /// Offset measured relative to the world's sea level.
+    RelativeToSeaLevel(RelativeToSeaLevel),
 }
 
 impl YOffset {
+    /// Resolves the effective world Y coordinate with sea level support.
+    ///
+    /// # Arguments
+    /// * `min_y` - The minimum Y level of the world.
+    /// * `height` - The total world height.
+    /// * `sea_level` - The sea level of the world.
+    ///
+    /// # Returns
+    /// The computed absolute Y coordinate as `i32`.
+    #[must_use]
+    pub const fn resolve_y(&self, min_y: i16, height: u16, sea_level: i32) -> i32 {
+        match self {
+            Self::AboveBottom(above_bottom) => min_y as i32 + above_bottom.above_bottom as i32,
+            Self::BelowTop(below_top) => {
+                height as i32 - 1 + min_y as i32 - below_top.below_top as i32
+            }
+            Self::Absolute(absolute) => absolute.absolute as i32,
+            Self::RelativeToSeaLevel(relative_to_sea_level) => {
+                sea_level + relative_to_sea_level.relative_to_sea_level as i32
+            }
+        }
+    }
+
     /// Resolves the effective world Y coordinate.
     ///
     /// # Arguments
@@ -34,15 +59,10 @@ impl YOffset {
     /// * `Absolute` - Returns the provided Y coordinate directly.
     /// * `AboveBottom` - Returns `min_y + offset`.
     /// * `BelowTop` - Returns `(min_y + height - 1) - offset`.
+    /// * `RelativeToSeaLevel` - Returns `63 + offset`.
     #[must_use]
     pub const fn get_y(&self, min_y: i16, height: u16) -> i32 {
-        match self {
-            Self::AboveBottom(above_bottom) => min_y as i32 + above_bottom.above_bottom as i32,
-            Self::BelowTop(below_top) => {
-                height as i32 - 1 + min_y as i32 - below_top.below_top as i32
-            }
-            Self::Absolute(absolute) => absolute.absolute as i32,
-        }
+        self.resolve_y(min_y, height, 63)
     }
 }
 
@@ -65,4 +85,11 @@ pub struct AboveBottom {
 pub struct BelowTop {
     /// Number of blocks below the maximum Y.
     pub below_top: i8,
+}
+
+/// Offset measured relative to the world's sea level.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+pub struct RelativeToSeaLevel {
+    /// Number of blocks relative to the sea level.
+    pub relative_to_sea_level: i16,
 }

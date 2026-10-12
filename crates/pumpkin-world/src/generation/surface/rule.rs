@@ -27,6 +27,7 @@ pub fn try_apply_material_rule(
         MaterialRule::Condition(condition) => {
             try_apply_condition(condition, chunk, context, surface_height_estimate_sampler)
         }
+        MaterialRule::OreVein(ore_vein) => context.try_apply_ore_vein(ore_vein),
     }
 }
 

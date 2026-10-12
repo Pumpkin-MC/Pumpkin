@@ -28,28 +28,37 @@ impl DarkOakTrunkPlacer {
         trunk_block: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         let below = start_pos.down();
-        TrunkPlacer::set_dirt(block_registry, chunk, random, &below, below_trunk_provider);
-        TrunkPlacer::set_dirt(
+        let mut trunk_poses = Vec::new();
+        if TrunkPlacer::set_dirt(block_registry, chunk, random, &below, below_trunk_provider) {
+            trunk_poses.push(below);
+        }
+        if TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &below.east(),
             below_trunk_provider,
-        );
-        TrunkPlacer::set_dirt(
+        ) {
+            trunk_poses.push(below.east());
+        }
+        if TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &below.south(),
             below_trunk_provider,
-        );
-        TrunkPlacer::set_dirt(
+        ) {
+            trunk_poses.push(below.south());
+        }
+        if TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &below.south().east(),
             below_trunk_provider,
-        );
+        ) {
+            trunk_poses.push(below.south().east());
+        }
 
         let lean_direction = BlockDirection::random_horizontal(random);
         let lean_height = height as i32 - random.next_bounded_i32(4);
@@ -58,8 +67,6 @@ impl DarkOakTrunkPlacer {
         let mut tx = start_pos.0.x;
         let mut tz = start_pos.0.z;
         let ey = start_pos.0.y + height as i32 - 1;
-
-        let mut trunk_poses = Vec::new();
         for dy in 0..height as i32 {
             if dy >= lean_height && lean_steps > 0 {
                 let offset = lean_direction.to_offset();

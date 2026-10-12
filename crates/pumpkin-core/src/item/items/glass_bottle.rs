@@ -1,11 +1,9 @@
 use std::any::Any;
-use std::sync::Arc;
 
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
-use crate::world::World;
 use pumpkin_data::block_properties::WaterCauldronLikeProperties;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::PotionContentsImpl;
@@ -49,54 +47,58 @@ impl ItemBehaviour for GlassBottleItem {
     fn normal_use(&self, _item: &Item, player: &Player) {
         let world = player.world();
         let (start_pos, end_pos) = self.get_start_and_end_pos(player);
-        let checker = |pos: &BlockPos, world_inner: &Arc<World>| {
-            let state_id = world_inner.get_block_state_id(pos);
-            let block = Block::from_state_id(state_id);
-            if state_id == Block::AIR.default_state.id {
-                return false;
-            }
-            block.id == Block::WATER.id || block.is_waterlogged(state_id)
-        };
+        let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
+            start_pos,
+            end_pos,
+            pumpkin_world::clip::ClipBlock::Outline,
+            pumpkin_world::clip::ClipFluid::SourceOnly,
+        ));
 
-        if let Some((hit_pos, _)) = world.raycast(start_pos, end_pos, checker) {
-            world.play_sound(
-                Sound::ItemBottleFill,
-                SoundCategory::Players,
-                &hit_pos.to_f64(),
-            );
+        if !hit.is_miss {
+            let hit_pos = hit.block_pos;
+            let (block, state_id) = world.get_block_and_state_id(&hit_pos);
+            if block.id == Block::WATER.id || block.is_waterlogged(state_id) {
+                world.play_sound(
+                    Sound::ItemBottleFill,
+                    SoundCategory::Players,
+                    &hit_pos.to_f64(),
+                );
 
-            let water_bottle = water_bottle();
-            let mut held = player.inventory().held_item();
-            let mut is_main = true;
-            if held.is_empty() || held.item.id != Item::GLASS_BOTTLE.id {
-                held = player.inventory().off_hand_item();
-                is_main = false;
+                let water_bottle = water_bottle();
+                let mut held = player.inventory().held_item();
+                let mut is_main = true;
                 if held.is_empty() || held.item.id != Item::GLASS_BOTTLE.id {
-                    return;
+                    held = player.inventory().off_hand_item();
+                    is_main = false;
+                    if held.is_empty() || held.item.id != Item::GLASS_BOTTLE.id {
+                        return;
+                    }
                 }
-            }
 
-            if held.item_count == 1 && player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                if is_main {
-                    player.inventory().set_held_item(water_bottle);
+                if held.item_count == 1
+                    && player.gamemode.load() != pumpkin_util::GameMode::Creative
+                {
+                    if is_main {
+                        player.inventory().set_held_item(water_bottle);
+                    } else {
+                        player
+                            .inventory()
+                            .set_stack_in_hand(pumpkin_util::Hand::Left, water_bottle);
+                    }
                 } else {
-                    player
-                        .inventory()
-                        .set_stack_in_hand(pumpkin_util::Hand::Left, water_bottle);
-                }
-            } else {
-                held.decrement_unless_creative(player.gamemode.load(), 1);
-                if is_main {
-                    player.inventory().set_held_item(held);
-                } else {
-                    player
-                        .inventory()
-                        .set_stack_in_hand(pumpkin_util::Hand::Left, held);
-                }
-                let mut stack_to_give = water_bottle;
-                let was_added = player.inventory().insert_stack_anywhere(&mut stack_to_give);
-                if !was_added && !stack_to_give.is_empty() {
-                    world.drop_stack(&player.position().to_block_pos(), stack_to_give);
+                    held.decrement_unless_creative(player.gamemode.load(), 1);
+                    if is_main {
+                        player.inventory().set_held_item(held);
+                    } else {
+                        player
+                            .inventory()
+                            .set_stack_in_hand(pumpkin_util::Hand::Left, held);
+                    }
+                    let mut stack_to_give = water_bottle;
+                    let was_added = player.inventory().insert_stack_anywhere(&mut stack_to_give);
+                    if !was_added && !stack_to_give.is_empty() {
+                        world.drop_stack(&player.position().to_block_pos(), stack_to_give);
+                    }
                 }
             }
         }

@@ -375,16 +375,10 @@ fn get_large_feature_seed(seed: u64, chunk_x: i32, chunk_z: i32) -> u64 {
     result as u64
 }
 
-const fn new_carver_random(seed: u64, non_vanilla_random: bool) -> RandomGenerator {
-    if non_vanilla_random {
-        RandomGenerator::Xoroshiro(pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(
-            seed,
-        ))
-    } else {
-        RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
-            seed,
-        ))
-    }
+const fn new_carver_random(seed: u64, _non_vanilla_random: bool) -> RandomGenerator {
+    RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
+        seed,
+    ))
 }
 
 fn carve_top_material(
