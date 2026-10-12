@@ -248,7 +248,7 @@ pub(crate) fn try_place_filled_bucket(
         return try_place_powder_snow(world, pos, direction);
     }
 
-    if item.id == Item::WATER_BUCKET.id && block.is_waterlogged(state.id) {
+    if item.id == Item::WATER_BUCKET.id && block.is_waterloggable() {
         let state_id = block.set_waterlogged(state.id, true).unwrap_or(state.id);
         world.set_block_state(&pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal);
