@@ -11,7 +11,7 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            nether_fortress::{NetherFortressPiece, PieceWeight},
+            nether_fortress::NetherFortressPiece,
         },
     },
     world::WorldPortalExt,
@@ -65,18 +65,6 @@ impl StructurePieceBase for BridgeEndPiece {
         &mut self.piece.piece
     }
 
-    // BridgeEnd is a terminal piece – it never spawns children.
-    fn fill_openings_nether(
-        &self,
-        _start: &StructurePiece,
-        _random: &mut RandomGenerator,
-        _bridge_pieces: &mut Vec<PieceWeight>,
-        _corridor_pieces: &mut Vec<PieceWeight>,
-        _collector: &mut StructurePiecesCollector,
-        _pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
-
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
@@ -90,7 +78,8 @@ impl StructurePieceBase for BridgeEndPiece {
         let nb = Block::NETHER_BRICKS.default_state;
 
         // Use a seeded local random so geometry is deterministic.
-        let mut rng = pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(self.seed as u64);
+        let mut rng =
+            pumpkin_util::random::legacy_rand::LegacyRand::from_seed((self.seed as i64) as u64);
 
         for i in 0..=4i32 {
             for j in 3..=4i32 {

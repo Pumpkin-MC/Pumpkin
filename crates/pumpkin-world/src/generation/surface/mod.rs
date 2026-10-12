@@ -21,6 +21,8 @@ use crate::{
 use super::{
     noise::perlin::DoublePerlinNoiseSampler,
     noise::router::{
+        chunk_noise_router::ChunkNoiseRouter,
+        density_volume::{DensityBuffer, DensityVolume},
         proto_noise_router::DoublePerlinNoiseBuilder,
         surface_height_sampler::SurfaceHeightEstimateSampler,
     },
@@ -64,6 +66,60 @@ pub struct MaterialRuleContext<'a> {
     /// reused for the lifetime of the context. Surface rules reference very few
     /// distinct noises, so a linear scan beats hashing here.
     noise_threshold_samplers: Vec<(usize, DoublePerlinNoiseSampler)>,
+    pub vein_context: Option<&'a mut VeinContext<'a>>,
+}
+
+pub struct VeinContext<'a> {
+    pub volume: DensityVolume,
+    pub vein_toggle: DensityBuffer,
+    pub vein_ridged: DensityBuffer,
+    pub router: ChunkNoiseRouter<'a>,
+    pub ore_random_deriver: &'a XoroshiroSplitter,
+}
+
+impl VeinContext<'_> {
+    #[must_use]
+    pub fn get_density(&self, is_iron: bool, x: i32, y: i32, z: i32) -> f32 {
+        let Some(index) = self.volume.index_of_block(x, y, z) else {
+            return -1.0;
+        };
+        let ridged = self.vein_ridged[index];
+        if ridged < 0.0 {
+            return -1.0;
+        }
+        let toggle = self.vein_toggle[index];
+        if is_iron {
+            if !(-60..-8).contains(&y) {
+                return -1.0;
+            }
+            let closest_to_bound = (-8 - y).min(y - -60) as f32;
+            let edge_roundoff = (closest_to_bound.clamp(0.0, 20.0) * 0.01) - 0.2;
+            let input = -toggle - 0.4 + edge_roundoff;
+            if input >= 0.0 { 0.7 } else { -1.0 }
+        } else {
+            if !(0..50).contains(&y) {
+                return -1.0;
+            }
+            let closest_to_bound = (50 - y).min(y) as f32;
+            let edge_roundoff = (closest_to_bound.clamp(0.0, 20.0) * 0.01) - 0.2;
+            let input = toggle - 0.4 + edge_roundoff;
+            if input >= 0.0 { 0.7 } else { -1.0 }
+        }
+    }
+
+    #[must_use]
+    pub fn get_richness(&self, x: i32, y: i32, z: i32) -> f32 {
+        let Some(index) = self.volume.index_of_block(x, y, z) else {
+            return 0.0;
+        };
+        let toggle = self.vein_toggle[index];
+        toggle.abs().clamp(0.4, 0.6) - 0.3
+    }
+
+    pub fn get_filler_gap(&mut self, x: i32, y: i32, z: i32) -> f32 {
+        self.router
+            .vein_gap(&pumpkin_util::math::vector3::Vector3::new(x, y, z))
+    }
 }
 
 impl<'a> MaterialRuleContext<'a> {
@@ -107,6 +163,45 @@ impl<'a> MaterialRuleContext<'a> {
             sea_level,
             steep_material_condition: None,
             noise_threshold_samplers: Vec::new(),
+            vein_context: None,
+        }
+    }
+
+    pub fn try_apply_ore_vein(
+        &mut self,
+        rule: &pumpkin_data::material_rule::OreVeinMaterialRule,
+    ) -> Option<&'static pumpkin_data::BlockState> {
+        let block_y = self.block_pos_y;
+        if block_y < rule.min_y || block_y >= rule.max_y {
+            return None;
+        }
+
+        let vein_context = self.vein_context.as_deref_mut()?;
+        let density =
+            vein_context.get_density(rule.is_iron, self.block_pos_x, block_y, self.block_pos_z);
+        if density <= 0.0 {
+            return None;
+        }
+
+        let mut random =
+            vein_context
+                .ore_random_deriver
+                .split_pos(self.block_pos_x, block_y, self.block_pos_z);
+        if random.next_f32() > density {
+            return None;
+        }
+
+        let richness = vein_context.get_richness(self.block_pos_x, block_y, self.block_pos_z);
+        if random.next_f32() < richness
+            && vein_context.get_filler_gap(self.block_pos_x, block_y, self.block_pos_z) < 0.0
+        {
+            Some(if random.next_f32() < rule.raw_ore_chance {
+                rule.raw_ore_block
+            } else {
+                rule.ore_block
+            })
+        } else {
+            Some(rule.filler_block)
         }
     }
 
