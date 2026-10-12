@@ -2721,20 +2721,20 @@ impl Entity {
         self.sprinting.load(Ordering::Relaxed)
     }
     pub fn check_fall_flying(&self) -> bool {
-        if let Some(living) = self.get_living_entity() {
-            if let Some(_player) = living.get_player() {
-                let equipment = living
-                    .entity_equipment
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if !equipment.equipment.iter().any(|(slot, stack)| {
-                    matches!(
-                        slot,
-                        pumpkin_data::data_component_impl::EquipmentSlot::Chest(_)
-                    ) && stack.get_item() == &pumpkin_data::item::Item::ELYTRA
-                }) {
-                    return false;
-                }
+        if let Some(living) = self.get_living_entity()
+            && let Some(_player) = living.get_player()
+        {
+            let equipment = living
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !equipment.equipment.iter().any(|(slot, stack)| {
+                matches!(
+                    slot,
+                    pumpkin_data::data_component_impl::EquipmentSlot::Chest(_)
+                ) && stack.get_item() == &pumpkin_data::item::Item::ELYTRA
+            }) {
+                return false;
             }
         }
         !self.on_ground.load(Relaxed)
@@ -2745,10 +2745,10 @@ impl Entity {
         self.fall_flying.store(fall_flying, Relaxed);
         self.set_flag(Flag::FallFlying, fall_flying);
 
-        if fall_flying {
-            if let Some(player) = self.get_player() {
-                player.set_flying(false);
-            }
+        if fall_flying
+            && let Some(player) = self.get_player()
+        {
+            player.set_flying(false);
         }
     }
     pub fn is_fall_flying(&self) -> bool {
