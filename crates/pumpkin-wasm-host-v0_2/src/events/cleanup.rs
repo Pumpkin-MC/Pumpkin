@@ -131,7 +131,9 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
                 cleanup_player(state, res);
             }
         }
-        Event::BlockBurnEvent(_) => {}
+        Event::BlockBurnEvent(data) => {
+            cleanup_world(state, &data.target_world);
+        }
         Event::BlockCanBuildEvent(data) => {
             cleanup_player(state, &data.player);
         }

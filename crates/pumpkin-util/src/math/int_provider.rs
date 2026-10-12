@@ -365,11 +365,9 @@ impl VeryBiasedToBottomIntProvider {
             return self.min_inclusive;
         }
         let range = self.max_inclusive - self.min_inclusive + 1;
-        let mut bound = range;
-        for _ in 0..=self.inner {
-            bound = random.next_bounded_i32(bound) + 1;
-        }
-        self.min_inclusive + bound - 1
+        let b1 = random.next_bounded_i32(range) + 1;
+        let b2 = random.next_bounded_i32(b1) + 1;
+        self.min_inclusive + random.next_bounded_i32(b2)
     }
 
     #[must_use]
@@ -518,6 +516,10 @@ impl TrapezoidIntProvider {
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
         if self.min_inclusive >= self.max_inclusive {
             return self.min_inclusive;
+        }
+        if self.plateau == 0 && self.max_inclusive == -self.min_inclusive {
+            return random.next_bounded_i32(self.max_inclusive + 1)
+                - random.next_bounded_i32(self.max_inclusive + 1);
         }
         let range = self.max_inclusive - self.min_inclusive;
         if self.plateau >= range {
