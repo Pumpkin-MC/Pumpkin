@@ -94,7 +94,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("pumpkin_item_tags_{}", std::process::id()));
         let nested = dir.join("item").join("ingots");
         fs::create_dir_all(&nested).unwrap();
-        fs::write(nested.join("mymod.json"), r#"{"values": ["mymod:ingot"]}"#).unwrap();
+        fs::write(nested.join("ruby.json"), r#"{"values": ["mymod:ingot"]}"#).unwrap();
         fs::write(
             dir.join("item").join("swords.json"),
             r#"{"values": ["mymod:sword"]}"#,
