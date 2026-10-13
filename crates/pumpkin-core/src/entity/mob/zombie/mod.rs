@@ -38,6 +38,14 @@ impl ZombieEntityBase {
     }
 
     pub fn with_can_break_doors(entity: Entity, can_break_doors: bool) -> Arc<Self> {
+        let mob_arc = Self::without_behaviour_goals(entity, can_break_doors);
+        mob_arc.add_behaviour_goals();
+        mob_arc
+    }
+
+    /// Vanilla `Zombie.registerGoals` without `addBehaviourGoals`, for zombies that bring their
+    /// own behaviour goals.
+    pub fn without_behaviour_goals(entity: Entity, can_break_doors: bool) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let zombie = Self {
             mob_entity,
@@ -56,51 +64,61 @@ impl ZombieEntityBase {
                 .goals_selector
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             if can_break_doors {
                 goal_selector.add_goal(1, Box::new(BreakDoorGoal::default()));
             }
-            goal_selector.add_goal(2, ZombieAttackGoal::new(1.0, false));
             goal_selector.add_goal(4, DestroyEggGoal::new(1.0, 3));
-            goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 8,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
-
-            target_selector.add_goal(
-                1,
-                Box::new(
-                    RevengeGoal::new(true).alerting_others_except(|entity_type| {
-                        entity_type == &EntityType::ZOMBIFIED_PIGLIN
-                    }),
-                ),
-            );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
-            );
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, true),
-            );
         };
 
         mob_arc
+    }
+
+    /// Vanilla `Zombie.addBehaviourGoals`.
+    fn add_behaviour_goals(&self) {
+        let mut goal_selector = self
+            .mob_entity
+            .goals_selector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut target_selector = self
+            .mob_entity
+            .target_selector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        goal_selector.add_goal(2, ZombieAttackGoal::new(1.0, false));
+        goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
+
+        target_selector.add_goal(
+            1,
+            Box::new(
+                RevengeGoal::new(true).alerting_others_except(|entity_type| {
+                    entity_type == &EntityType::ZOMBIFIED_PIGLIN
+                }),
+            ),
+        );
+        target_selector.add_goal(
+            2,
+            ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::PLAYER, true),
+        );
+        target_selector.add_goal(
+            3,
+            ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::VILLAGER, true),
+        );
+        target_selector.add_goal(
+            3,
+            ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::IRON_GOLEM, true),
+        );
+        target_selector.add_goal(
+            5,
+            ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::TURTLE, true),
+        );
     }
 
     #[must_use]
