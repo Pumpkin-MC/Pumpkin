@@ -3,7 +3,6 @@ use crate::entity::ai::goal::break_door::BreakDoorGoal;
 use crate::entity::ai::goal::destroy_egg::DestroyEggGoal;
 use crate::entity::ai::goal::look_around::RandomLookAroundGoal;
 use crate::entity::ai::goal::revenge::RevengeGoal;
-use crate::entity::ai::goal::swim::SwimGoal;
 use crate::entity::ai::goal::wander_around::WanderAroundGoal;
 use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
 use crate::entity::mob::equipment::RegionalDifficulty;
@@ -63,7 +62,6 @@ impl ZombieEntityBase {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             if can_break_doors {
                 goal_selector.add_goal(1, Box::new(BreakDoorGoal::default()));
             }
