@@ -100,7 +100,8 @@ rustc_version_runtime.workspace = true
 
 flate2.workspace = true
 
-axum.workspace = true
+axum = { workspace = true, features = ["ws"] }
+subtle.workspace = true
 webrtc.workspace = true
 async-trait.workspace = true
 

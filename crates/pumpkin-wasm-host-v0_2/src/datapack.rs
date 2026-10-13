@@ -10,7 +10,7 @@ use wasmtime::component::{Access, HasSelf, Resource};
 impl DatapackHost for PluginHostState {}
 
 impl HostDatapackManager for PluginHostState {
-    async fn list_all_packs(
+    fn list_all_packs(
         &mut self,
         _res: Resource<WitDatapackManager>,
     ) -> wasmtime::Result<Vec<WitDatapackInfo>> {
@@ -22,7 +22,7 @@ impl HostDatapackManager for PluginHostState {
         Ok(packs.into_iter().map(to_wit_datapack_info).collect())
     }
 
-    async fn list_enabled_packs(
+    fn list_enabled_packs(
         &mut self,
         _res: Resource<WitDatapackManager>,
     ) -> wasmtime::Result<Vec<WitDatapackInfo>> {
@@ -34,7 +34,7 @@ impl HostDatapackManager for PluginHostState {
         Ok(packs.into_iter().map(to_wit_datapack_info).collect())
     }
 
-    async fn list_available_packs(
+    fn list_available_packs(
         &mut self,
         _res: Resource<WitDatapackManager>,
     ) -> wasmtime::Result<Vec<WitDatapackInfo>> {
@@ -46,7 +46,7 @@ impl HostDatapackManager for PluginHostState {
         Ok(packs.into_iter().map(to_wit_datapack_info).collect())
     }
 
-    async fn get_pack(
+    fn get_pack(
         &mut self,
         _res: Resource<WitDatapackManager>,
         name: String,
@@ -59,7 +59,7 @@ impl HostDatapackManager for PluginHostState {
         Ok(pack.map(to_wit_datapack_info))
     }
 
-    async fn is_enabled(
+    fn is_enabled(
         &mut self,
         _res: Resource<WitDatapackManager>,
         name: String,
@@ -71,7 +71,7 @@ impl HostDatapackManager for PluginHostState {
         Ok(DatapackManager::is_pack_enabled(server, &name))
     }
 
-    async fn drop(&mut self, rep: Resource<WitDatapackManager>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<WitDatapackManager>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
 }
