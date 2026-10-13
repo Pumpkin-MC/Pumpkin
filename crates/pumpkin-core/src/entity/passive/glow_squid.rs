@@ -1,55 +1,40 @@
-use std::sync::{Arc, Weak};
-
-use pumpkin_data::entity::EntityType;
+use std::sync::Arc;
 
 use crate::entity::{
-    Entity,
-    ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
-    },
+    Entity, EntityBase,
     mob::{Mob, MobEntity},
+    passive::squid::SquidEntity,
 };
 
 /// Represents a Glow Squid, a passive aquatic mob that emits a glowing particle effect.
 ///
 /// Wiki: <https://minecraft.wiki/w/Glow_Squid>
 pub struct GlowSquidEntity {
-    pub mob_entity: MobEntity,
+    squid: SquidEntity,
 }
 
 impl GlowSquidEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
-        let glow_squid = Self { mob_entity };
-        let mob_arc = Arc::new(glow_squid);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
-
-        {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
-            goal_selector.add_goal(
-                2,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
-            );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
-        };
-
-        mob_arc
+        Arc::new(Self {
+            squid: SquidEntity::create(entity),
+        })
     }
 }
 
 impl Mob for GlowSquidEntity {
     fn get_mob_entity(&self) -> &MobEntity {
-        &self.mob_entity
+        &self.squid.mob_entity
+    }
+
+    fn mob_tick(&self, caller: &dyn EntityBase) {
+        self.squid.mob_tick(caller);
+    }
+
+    fn post_tick(&self) {
+        self.squid.post_tick();
+    }
+
+    fn mob_travel_in_water(&self, caller: &dyn EntityBase) -> bool {
+        self.squid.mob_travel_in_water(caller)
     }
 }
