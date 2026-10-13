@@ -967,6 +967,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn mob_travel_in_water(&self, _caller: &dyn EntityBase) -> bool {
+        false
+    }
+
     fn as_ageable(&self) -> Option<&dyn crate::entity::ageable::AgeableMob> {
         None
     }
@@ -1563,6 +1567,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_y_velocity_drag(&self) -> Option<f64> {
         self.get_mob_y_velocity_drag()
+    }
+
+    fn travel_in_water(&self) -> bool {
+        self.mob_travel_in_water(self)
     }
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
