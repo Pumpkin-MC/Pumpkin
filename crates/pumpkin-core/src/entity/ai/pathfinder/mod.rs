@@ -410,6 +410,11 @@ pub trait PathNavigationTrait: Send + Sync {
     fn get_target_pos(&self) -> Option<BlockPos>;
     fn can_path_to_targets_below_surface(&self) -> bool;
     fn set_can_path_to_targets_below_surface(&mut self, can_path: bool);
+
+    /// Whether a mob using this navigation can settle at `pos`; something solid to stand on.
+    fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
+        world.get_block_state(&pos.down()).is_solid()
+    }
 }
 
 pub struct PathNavigation {
@@ -890,6 +895,52 @@ impl PathNavigation {
             }
             self.last_timeout_check = world_age;
         }
+    }
+
+    /// Vanilla `followThePath`'s test for the next node: within reach of it on each axis, by the
+    /// mob's width, and a block of its floor, or able to cut the corner to the node after it.
+    /// `can_move_directly` is the navigation's `canMoveDirectly` towards the next node.
+    fn reached_next_node(
+        path: &Path,
+        current_pos: Vector3<f64>,
+        mob_pos: Vector3<f64>,
+        mob_width: f32,
+        can_move_directly: impl FnOnce(Vector3<f64>) -> bool,
+    ) -> bool {
+        let Some(pos) = path.get_next_node_pos() else {
+            return false;
+        };
+        let reach = f64::from(if mob_width > 0.75 {
+            mob_width * 0.5
+        } else {
+            0.75 - mob_width * 0.5
+        });
+        let close_enough = (f64::from(pos.0.x) + 0.5 - current_pos.x).abs() < reach
+            && (f64::from(pos.0.z) + 0.5 - current_pos.z).abs() < reach
+            && (f64::from(pos.0.y) - current_pos.y).abs() < NODE_REACH_Y;
+        if close_enough {
+            return true;
+        }
+        if !path.get_next_node().is_some_and(|n| {
+            n.path_type != PathType::DangerFire
+                && n.path_type != PathType::DamageFire
+                && n.path_type != PathType::WalkableDoor
+        }) {
+            return false;
+        }
+        // The start of vanilla's `shouldTargetNextNodeInDirection`: past the next node once it is
+        // within two blocks and the way to it is clear.
+        let node_center = Vector3::new(
+            f64::from(pos.0.x) + 0.5,
+            f64::from(pos.0.y),
+            f64::from(pos.0.z) + 0.5,
+        );
+        let moves_directly = path.get_next_node_index() + 1 < path.get_node_count()
+            && mob_pos.squared_distance_to_vec(&node_center) < 4.0
+            && path
+                .get_next_entity_pos(mob_width)
+                .is_some_and(can_move_directly);
+        moves_directly || Self::should_target_next_node_in_direction(mob_pos, path)
     }
 
     #[must_use]
@@ -2244,6 +2295,11 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
         self.inner.set_progress(goal);
     }
 
+    // Anything but air underneath will do, so a spot in open water counts.
+    fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
+        !world.get_block_state(&pos.down()).is_air()
+    }
+
     fn set_speed(&mut self, speed: f64) {
         self.inner.set_speed(speed);
     }
@@ -2329,23 +2385,29 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
             if self.is_done() {
                 self.inner.finish_navigation(entity);
             } else {
+                let in_liquid = entity.entity.touching_water.load(Ordering::Relaxed)
+                    || entity.entity.touching_lava.load(Ordering::Relaxed);
+                let mob_height = self.inner.mob_height;
                 if let Some(path) = &mut self.inner.path
-                    && let Some(pos) = path.get_next_node_pos()
+                    && PathNavigation::reached_next_node(
+                        path,
+                        entity.entity.pos.load(),
+                        mob_pos,
+                        self.inner.mob_width,
+                        // Vanilla `AmphibiousPathNavigation.canMoveDirectly`.
+                        |next| {
+                            in_liquid
+                                && PathNavigation::can_move_directly(
+                                    &entity.entity.world.load(),
+                                    mob_pos,
+                                    next,
+                                    mob_height,
+                                    false,
+                                )
+                        },
+                    )
                 {
-                    let target_pos = Vector3::new(
-                        f64::from(pos.0.x) + 0.5,
-                        f64::from(pos.0.y) + 0.5,
-                        f64::from(pos.0.z) + 0.5,
-                    );
-                    let current_pos = entity.entity.pos.load();
-                    let dx = target_pos.x - current_pos.x;
-                    let dy = target_pos.y - current_pos.y;
-                    let dz = target_pos.z - current_pos.z;
-                    let dist_sq = dx * dx + dy * dy + dz * dz;
-
-                    if dist_sq < 0.5 * 0.5 {
-                        path.advance();
-                    }
+                    path.advance();
                 }
 
                 if !self.is_done()
@@ -2365,10 +2427,15 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
 
                     let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
                     let desired_pitch = wrap_degrees(-(dy.atan2(sd) as f32).to_degrees());
+                    // Turn like vanilla's move control, at most 90 degrees a tick.
+                    let current_yaw = entity.entity.yaw.load();
+                    let yaw = current_yaw
+                        + wrap_degrees(desired_yaw - current_yaw)
+                            .clamp(-MAX_YAW_TURN_PER_TICK, MAX_YAW_TURN_PER_TICK);
 
-                    entity.entity.yaw.store(desired_yaw);
-                    entity.entity.head_yaw.store(desired_yaw);
-                    entity.entity.body_yaw.store(desired_yaw);
+                    entity.entity.yaw.store(yaw);
+                    entity.entity.head_yaw.store(yaw);
+                    entity.entity.body_yaw.store(yaw);
                     entity.entity.pitch.store(desired_pitch);
 
                     let speed = self.inner.speed_modifier
