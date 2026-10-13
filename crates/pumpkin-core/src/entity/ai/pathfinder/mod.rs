@@ -663,6 +663,11 @@ impl PathNavigation {
                 .get_neighbors(&current, &mut self.neighbors_buf);
 
             for mut neighbor in self.neighbors_buf.drain(..) {
+                // Vanilla's evaluators hand back the node the search marked closed and skip it;
+                // ours hand back a copy, so check here.
+                if closed_set.contains_key(&neighbor.pos.0) {
+                    continue;
+                }
                 let step_cost = current.distance(&neighbor);
                 neighbor.walked_dist = current.walked_dist + step_cost;
                 let tentative_g = current.g + step_cost + neighbor.cost_malus;
