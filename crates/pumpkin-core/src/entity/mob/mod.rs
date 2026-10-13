@@ -971,6 +971,11 @@ pub trait Mob: EntityBase + Send + Sync {
         false
     }
 
+    /// Vanilla `isPushedByFluid`: whether water currents carry the mob along.
+    fn mob_is_pushed_by_fluids(&self) -> bool {
+        true
+    }
+
     fn as_ageable(&self) -> Option<&dyn crate::entity::ageable::AgeableMob> {
         None
     }
@@ -1571,6 +1576,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn travel_in_water(&self) -> bool {
         self.mob_travel_in_water(self)
+    }
+
+    fn is_pushed_by_fluids(&self) -> bool {
+        self.mob_is_pushed_by_fluids()
     }
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {

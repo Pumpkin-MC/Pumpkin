@@ -36,4 +36,9 @@ impl Mob for SalmonEntity {
     fn mob_travel_in_water(&self, caller: &dyn EntityBase) -> bool {
         fish::travel_in_water(self, caller)
     }
+
+    // Vanilla `WaterAnimal`: currents don't carry fish.
+    fn mob_is_pushed_by_fluids(&self) -> bool {
+        false
+    }
 }
