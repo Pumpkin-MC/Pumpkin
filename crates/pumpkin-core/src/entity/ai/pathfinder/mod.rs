@@ -897,6 +897,34 @@ impl PathNavigation {
         }
     }
 
+    /// Vanilla `followThePath`'s test for the next node: within reach across, by the mob's width,
+    /// and a block of the node's floor, or able to cut the corner to the node after it.
+    fn reached_next_node(
+        path: &Path,
+        current_pos: Vector3<f64>,
+        mob_pos: Vector3<f64>,
+        mob_width: f32,
+    ) -> bool {
+        let Some(pos) = path.get_next_node_pos() else {
+            return false;
+        };
+        let dx = f64::from(pos.0.x) + 0.5 - current_pos.x;
+        let dy = f64::from(pos.0.y) - current_pos.y;
+        let dz = f64::from(pos.0.z) + 0.5 - current_pos.z;
+        let reach = if mob_width > 0.75 {
+            mob_width * 0.5
+        } else {
+            0.75 - mob_width * 0.5
+        };
+        let close_enough = dx.hypot(dz) < f64::from(reach) && dy.abs() < NODE_REACH_Y;
+        let corner_cut = path.get_next_node().is_some_and(|n| {
+            n.path_type != PathType::DangerFire
+                && n.path_type != PathType::DamageFire
+                && n.path_type != PathType::WalkableDoor
+        }) && Self::should_target_next_node_in_direction(mob_pos, path);
+        close_enough || corner_cut
+    }
+
     #[must_use]
     pub fn should_target_next_node_in_direction(mob_pos: Vector3<f64>, path: &Path) -> bool {
         if path.get_next_node_index() + 1 >= path.get_node_count() {
@@ -1813,22 +1841,14 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
             self.inner.finish_navigation(entity);
         } else {
             if let Some(path) = &mut self.inner.path
-                && let Some(pos) = path.get_next_node_pos()
+                && PathNavigation::reached_next_node(
+                    path,
+                    entity.entity.pos.load(),
+                    mob_pos,
+                    self.inner.mob_width,
+                )
             {
-                let target_pos = Vector3::new(
-                    f64::from(pos.0.x) + 0.5,
-                    f64::from(pos.0.y) + 0.5,
-                    f64::from(pos.0.z) + 0.5,
-                );
-                let current_pos = entity.entity.pos.load();
-                let dx = target_pos.x - current_pos.x;
-                let dy = target_pos.y - current_pos.y;
-                let dz = target_pos.z - current_pos.z;
-                let dist_sq = dx * dx + dy * dy + dz * dz;
-
-                if dist_sq < 0.5 * 0.5 {
-                    path.advance();
-                }
+                path.advance();
             }
 
             if !self.is_done()
