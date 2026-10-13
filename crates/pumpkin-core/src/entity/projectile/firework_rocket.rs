@@ -3,6 +3,7 @@ use crate::{
     server::Server,
     world::World,
 };
+use pumpkin_data::data_component_impl::FireworksImpl;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -27,6 +28,17 @@ pub struct FireworkRocketEntity {
     item_stack: RwLock<ItemStack>,
 }
 
+/// Vanilla adds ten ticks of lifetime per level of the stack's `Fireworks` flight-duration
+/// component, before the random terms. A stack without the component (shouldn't normally
+/// happen - every firework rocket item carries one) falls back to duration 1.
+fn life_time_for(item_stack: &ItemStack, random: &mut RandomGenerator) -> u32 {
+    let flight_duration = item_stack
+        .get_data_component::<FireworksImpl>()
+        .map_or(1, |fireworks| fireworks.flight_duration.max(1) as u32);
+
+    10 * flight_duration + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32
+}
+
 impl FireworkRocketEntity {
     pub fn new(entity: Entity) -> Self {
         Self::new_with_item(entity, ItemStack::new(1, &Item::FIREWORK_ROCKET))
@@ -43,6 +55,7 @@ impl FireworkRocketEntity {
             0.05,
             random.next_triangular(0.0, 0.002_297),
         ));
+        let life_time = life_time_for(&item_stack, &mut random);
         Self {
             entity: ThrownItemEntity {
                 entity,
@@ -52,8 +65,7 @@ impl FireworkRocketEntity {
                 gravity: GRAVITY,
             },
             life: 0.into(),
-            life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32)
-                .into(),
+            life_time: life_time.into(),
             item_stack: RwLock::new(item_stack),
         }
     }
@@ -73,12 +85,12 @@ impl FireworkRocketEntity {
             0.05,
             random.next_triangular(0.0, 0.002_297),
         ));
+        let life_time = life_time_for(&item_stack, &mut random);
 
         let rocket = Self {
             entity: thrown,
             life: 0.into(),
-            life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32)
-                .into(),
+            life_time: life_time.into(),
             item_stack: RwLock::new(item_stack),
         };
 
@@ -137,40 +149,49 @@ impl EntityBase for FireworkRocketEntity {
         let world = entity.world.load();
         let mut velocity = entity.velocity.load();
 
-        if let Some(shooter_id) = self.entity.owner_id {
-            if let Some(shooter) = world.get_entity_by_id(shooter_id) {
-                let shooter = shooter.get_entity();
+        // The rocket is only attached to its shooter (following them and boosting their
+        // flight) while that shooter is actually gliding. A rocket that was block-launched,
+        // dispensed, or hand-launched without gliding has either no owner at all or an owner
+        // that isn't fall-flying - either way it's a free-flying rocket, same physics as the
+        // ownerless case below.
+        let mut attached_boost = false;
+        if let Some(shooter_id) = self.entity.owner_id
+            && let Some(shooter) = world.get_entity_by_id(shooter_id)
+        {
+            let shooter = shooter.get_entity();
 
-                if shooter.is_fall_flying() {
-                    let mut boost_cancelled = false;
-                    if let Some(player) = world.get_player_by_id(shooter_id)
-                        && let Some(server) = world.server.upgrade()
-                    {
-                        let mut event = crate::plugin::api::events::player::player_elytra_boost::PlayerElytraBoostEvent {
-                            player,
-                            firework_id: entity.entity_id,
-                            cancelled: false,
-                        };
-                        server.plugin_manager.fire_blocking(&server, &mut event);
-                        if event.cancelled {
-                            boost_cancelled = true;
-                        }
-                    }
-                    if !boost_cancelled {
-                        let rotation = shooter.rotation().to_f64();
-                        let shooter_vel = shooter.velocity.load();
-
-                        let new_shooter_vel =
-                            shooter_vel + (rotation * 0.1 + (rotation * 1.5 - shooter_vel) * 0.5);
-
-                        shooter.set_velocity(new_shooter_vel);
-
-                        entity.set_pos(shooter.pos.load());
-                        entity.set_velocity(new_shooter_vel);
+            if shooter.is_fall_flying() {
+                attached_boost = true;
+                let mut boost_cancelled = false;
+                if let Some(player) = world.get_player_by_id(shooter_id)
+                    && let Some(server) = world.server.upgrade()
+                {
+                    let mut event = crate::plugin::api::events::player::player_elytra_boost::PlayerElytraBoostEvent {
+                        player,
+                        firework_id: entity.entity_id,
+                        cancelled: false,
+                    };
+                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    if event.cancelled {
+                        boost_cancelled = true;
                     }
                 }
+                if !boost_cancelled {
+                    let rotation = shooter.rotation().to_f64();
+                    let shooter_vel = shooter.velocity.load();
+
+                    let new_shooter_vel =
+                        shooter_vel + (rotation * 0.1 + (rotation * 1.5 - shooter_vel) * 0.5);
+
+                    shooter.set_velocity(new_shooter_vel);
+
+                    entity.set_pos(shooter.pos.load());
+                    entity.set_velocity(new_shooter_vel);
+                }
             }
-        } else {
+        }
+
+        if !attached_boost {
             velocity.x *= 1.15;
             velocity.z *= 1.15;
             velocity.y += 0.04;
@@ -198,5 +219,38 @@ impl EntityBase for FireworkRocketEntity {
     fn on_hit(&self, _hit: crate::entity::projectile::ProjectileHit) {
         let world = self.get_entity().world.load();
         self.explode_and_remove(&world);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::life_time_for;
+    use pumpkin_data::data_component_impl::FireworksImpl;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+    use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
+
+    fn random() -> RandomGenerator {
+        RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()))
+    }
+
+    /// Without a `Fireworks` component, lifetime falls back to duration 1: the same
+    /// 10 + [0,6) + [0,7) range the rocket used before flight duration was accounted for.
+    #[test]
+    fn life_time_without_fireworks_component_uses_duration_one() {
+        let stack = ItemStack::new(1, &Item::FIREWORK_ROCKET);
+        let life_time = life_time_for(&stack, &mut random());
+        assert!((10..=21).contains(&life_time));
+    }
+
+    /// Vanilla adds ten ticks per flight-duration level before the random terms, so a
+    /// duration-3 rocket's lifetime always exceeds a duration-1 rocket's maximum.
+    #[test]
+    fn life_time_scales_with_flight_duration() {
+        let mut stack = ItemStack::new(1, &Item::FIREWORK_ROCKET);
+        stack.set_data_component(FireworksImpl::new(3, Vec::new()));
+
+        let life_time = life_time_for(&stack, &mut random());
+        assert!((30..=41).contains(&life_time));
     }
 }

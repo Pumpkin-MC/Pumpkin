@@ -14,6 +14,10 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
+/// Vanilla offsets a block-launched rocket's spawn point by this many blocks along the
+/// clicked face, so it doesn't spawn embedded in the block.
+const FACE_SPAWN_OFFSET: f64 = 0.15;
+
 pub struct FireworkRocketItem;
 
 impl ItemMetadata for FireworkRocketItem {
@@ -44,9 +48,15 @@ impl ItemBehaviour for FireworkRocketItem {
         // spawn embedded in the block.
         let face_offset = face.to_offset();
         let hit_pos = Vector3::new(
-            f64::from(location.0.x) + f64::from(cursor_pos.x) + f64::from(face_offset.x) * 0.001,
-            f64::from(location.0.y) + f64::from(cursor_pos.y) + f64::from(face_offset.y) * 0.001,
-            f64::from(location.0.z) + f64::from(cursor_pos.z) + f64::from(face_offset.z) * 0.001,
+            f64::from(location.0.x)
+                + f64::from(cursor_pos.x)
+                + f64::from(face_offset.x) * FACE_SPAWN_OFFSET,
+            f64::from(location.0.y)
+                + f64::from(cursor_pos.y)
+                + f64::from(face_offset.y) * FACE_SPAWN_OFFSET,
+            f64::from(location.0.z)
+                + f64::from(cursor_pos.z)
+                + f64::from(face_offset.z) * FACE_SPAWN_OFFSET,
         );
         let entity = Entity::new(world.clone(), hit_pos, &EntityType::FIREWORK_ROCKET);
         let entity =
