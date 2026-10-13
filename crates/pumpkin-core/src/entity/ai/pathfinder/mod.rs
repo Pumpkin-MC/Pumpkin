@@ -583,6 +583,9 @@ impl PathNavigation {
         let context = PathfindingContext::new(mob_position, entity.entity.world.load_full());
         let mut mob_data = MobData::new(start_pos_f, self.mob_width, self.mob_height, 1.0);
         mob_data.on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
+        // The evaluators' `getStart` start a path in water from where the mob swims. The water
+        // flag is set by the base tick, which runs after the AI here, so check the eyes as well.
+        mob_data.is_in_water = entity.entity.is_in_water() || entity.entity.is_submerged_in_water();
         mob_data.can_swim = self.can_float;
 
         mob_data.set_pathfinding_malus(PathType::DangerFire, 16.0);
