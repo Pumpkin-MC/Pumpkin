@@ -2521,6 +2521,18 @@ impl Entity {
         self.touching_water.load(Ordering::Relaxed)
     }
 
+    pub fn is_in_water_or_rain(&self) -> bool {
+        let world = self.world.load();
+        let pos = self.block_pos.load();
+        self.is_in_water()
+            || world.is_raining_at(&pos)
+            || world.is_raining_at(&BlockPos::new(
+                pos.0.x,
+                self.bounding_box.load().max.y.floor() as i32,
+                pos.0.z,
+            ))
+    }
+
     #[must_use]
     pub fn is_submerged_in_water(&self) -> bool {
         let pos = self.pos.load();
