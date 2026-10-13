@@ -2,9 +2,14 @@ use std::f64::consts::FRAC_PI_2;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::Hand;
 use pumpkin_util::math::lerp;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -13,6 +18,7 @@ use rand::RngExt;
 use crate::entity::ai::control::move_control::MoveControl;
 use crate::entity::ai::control::{Control, MoveControlTrait};
 use crate::entity::ai::goal::move_to_target_pos::{MoveToTargetPos, MoveToTargetPosGoal};
+use crate::entity::ai::goal::ranged_attack::RangedAttackGoal;
 use crate::entity::ai::goal::revenge::RevengeGoal;
 use crate::entity::ai::goal::wander_around::WanderAroundGoal;
 use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
@@ -23,9 +29,11 @@ use crate::entity::ai::util::default_random_pos;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::passive::turtle::TurtleEntity;
+use crate::entity::projectile::arrow::ArrowPickup;
+use crate::entity::projectile::trident::TridentEntity;
 use crate::entity::{
     Entity, EntityBase,
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, RangedAttackMob},
 };
 use crate::world::World;
 
@@ -74,6 +82,13 @@ impl DrownedEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             goal_selector.add_goal(1, Box::new(DrownedGoToWaterGoal::new(1.0)));
+            let ranged: Arc<dyn RangedAttackMob> = self.clone();
+            goal_selector.add_goal(
+                2,
+                Box::new(DrownedTridentAttackGoal {
+                    ranged_attack: RangedAttackGoal::new(Arc::downgrade(&ranged), 1.0, 40, 10.0),
+                }),
+            );
             goal_selector.add_goal(2, Box::new(DrownedAttackGoal::new(1.0, false)));
             goal_selector.add_goal(5, DrownedGoToBeachGoal::new(Arc::downgrade(self), 1.0));
             goal_selector.add_goal(
@@ -179,6 +194,66 @@ impl DrownedEntity {
                     f64::from(target.0.z),
                 ) < 4.0
             })
+    }
+}
+
+/// The drowned's main hand, or nothing while the equipment is locked elsewhere.
+fn main_hand_item(mob: &dyn Mob) -> ItemStack {
+    mob.get_mob_entity()
+        .living_entity
+        .entity_equipment
+        .try_lock()
+        .map_or_else(
+            |_| ItemStack::EMPTY.clone(),
+            |equipment| equipment.get(&EquipmentSlot::MAIN_HAND),
+        )
+}
+
+impl RangedAttackMob for DrownedEntity {
+    /// Vanilla `Drowned.performRangedAttack`.
+    fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, _power: f32) {
+        let entity = &self.entity.mob_entity.living_entity.entity;
+        let world = entity.world.load_full();
+        let weapon = main_hand_item(self);
+        let trident_stack = if weapon.item.id == Item::TRIDENT.id {
+            weapon
+        } else {
+            ItemStack::new(1, &Item::TRIDENT)
+        };
+        let trident = TridentEntity::new_shot(
+            Entity::new(world.clone(), entity.pos.load(), &EntityType::TRIDENT),
+            entity,
+            trident_stack.clone(),
+            ArrowPickup::Disallowed,
+        );
+
+        let pos = entity.pos.load();
+        let target_entity = target.get_entity();
+        let target_pos = target_entity.pos.load();
+        let dx = target_pos.x - pos.x;
+        let dy = target_pos.y + f64::from(target_entity.entity_dimension.load().height) / 3.0
+            - trident.entity.pos.load().y;
+        let dz = target_pos.z - pos.z;
+        let distance = dx.hypot(dz);
+        let difficulty = world.level_info.load().difficulty as i32;
+        trident.set_velocity(
+            dx,
+            distance.mul_add(0.2, dy),
+            dz,
+            1.6,
+            f64::from(14 - difficulty * 4),
+        );
+        trident.apply_on_projectile_spawned(&trident_stack);
+        world.spawn_entity(Arc::new(trident));
+
+        let pitch = 1.0 / self.get_random().random::<f32>().mul_add(0.4, 0.8);
+        world.play_sound_fine(
+            Sound::EntityDrownedShoot,
+            SoundCategory::Hostile,
+            &pos,
+            1.0,
+            pitch,
+        );
     }
 }
 
@@ -435,6 +510,49 @@ impl Goal for DrownedAttackGoal {
 
     fn controls(&self) -> Controls {
         self.zombie_attack.controls()
+    }
+}
+
+/// Vanilla `Drowned.DrownedTridentAttackGoal`: the ranged attack, only while holding a trident.
+struct DrownedTridentAttackGoal {
+    ranged_attack: RangedAttackGoal,
+}
+
+impl Goal for DrownedTridentAttackGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        self.ranged_attack.can_start(mob) && main_hand_item(mob).item.id == Item::TRIDENT.id
+    }
+
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        self.ranged_attack.should_continue(mob)
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        self.ranged_attack.start(mob);
+        let mob_entity = mob.get_mob_entity();
+        mob_entity.set_attacking(true);
+        mob_entity
+            .living_entity
+            .set_active_hand(Hand::Right, main_hand_item(mob), i32::MAX);
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.ranged_attack.stop(mob);
+        let mob_entity = mob.get_mob_entity();
+        mob_entity.living_entity.clear_active_hand();
+        mob_entity.set_attacking(false);
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        self.ranged_attack.tick(mob);
+    }
+
+    fn should_run_every_tick(&self) -> bool {
+        self.ranged_attack.should_run_every_tick()
+    }
+
+    fn controls(&self) -> Controls {
+        self.ranged_attack.controls()
     }
 }
 
