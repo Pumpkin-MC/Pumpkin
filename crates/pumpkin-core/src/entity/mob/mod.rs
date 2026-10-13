@@ -1428,6 +1428,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         // Piglin timers, `tick_sensors`, admiring, dancing (conversion already checks NoAI)
         // Bee and ZombifiedPiglin `update_persistent_anger` (Enderman, Wolf, IronGolem and
         // PolarBear run it outside the AI step, so the shared call stays for them).
+        // Vanilla `aiStep` drops tiny motion before `serverAiStep`, so the controls' small pushes
+        // carry into `travel`.
+        mob_entity.living_entity.entity.check_zero_velo();
         if !mob_entity.is_no_ai() {
             mob_entity.server_ai_step(self, caller);
         }

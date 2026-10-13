@@ -1351,7 +1351,10 @@ impl LivingEntity {
 
         let should_swim_in_fluids = caller.get_player().is_none_or(|player| !player.is_flying());
 
-        self.entity.check_zero_velo();
+        // Mobs did this before their AI step.
+        if caller.get_mob().is_none() {
+            self.entity.check_zero_velo();
+        }
 
         let mut movement_input = self.movement_input.load();
 
