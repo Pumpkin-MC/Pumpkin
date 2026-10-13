@@ -270,6 +270,25 @@ def cargo_package_insert_index(command: list[str]) -> int:
     raise ValueError(f"unsupported Cargo command: {' '.join(command)}")
 
 
+def packages_with_library(packages: list[str]) -> list[str]:
+    """Keeps the packages that have a library target.
+
+    `cargo test --doc` fails outright on a package that only builds a binary, so a
+    binary-only package in the affected set would fail the whole run.
+    """
+    _, metadata_packages = cargo_metadata()
+    with_library = {
+        package["name"]
+        for package in metadata_packages
+        if any(
+            kind.endswith("lib") or kind == "proc-macro"
+            for target in package["targets"]
+            for kind in target["kind"]
+        )
+    }
+    return [package for package in packages if package in with_library]
+
+
 def run_for_packages(args: argparse.Namespace) -> None:
     packages_json = os.environ.get("CI_AFFECTED_PACKAGES")
     if packages_json is None:
@@ -283,6 +302,12 @@ def run_for_packages(args: argparse.Namespace) -> None:
         for package in packages
     ):
         raise ValueError("CI_AFFECTED_PACKAGES contains an invalid package name")
+
+    if "--doc" in args.command:
+        packages = packages_with_library(packages)
+        if not packages:
+            print("No affected package has a library target; skipping doc tests.")
+            return
 
     package_arguments = [
         argument for package in packages for argument in ("-p", package)
