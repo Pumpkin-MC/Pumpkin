@@ -617,6 +617,75 @@ impl BlockRegistry {
         })
     }
 
+    /// Mirrors vanilla `BlockPlaceContext`: where the placed block would go, or `None` when `canPlace()` is false.
+    pub fn placement_target(
+        &self,
+        world: &World,
+        player: &Player,
+        placed_block: &Block,
+        use_item_on: &SUseItemOn,
+        location: BlockPos,
+        face: BlockDirection,
+    ) -> Option<(BlockPos, BlockDirection, BlockIsReplacing)> {
+        let clicked_block_pos = BlockPos(location.0);
+        let (clicked_block, clicked_block_state) = world.get_block_and_state(&clicked_block_pos);
+
+        let replace_clicked_block = if clicked_block == placed_block {
+            self.can_update_at(
+                world,
+                clicked_block,
+                clicked_block_state.id,
+                &clicked_block_pos,
+                face,
+                use_item_on,
+                player,
+            )
+            .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
+        } else if can_replace_with_other_block(clicked_block, clicked_block_state) {
+            if clicked_block == &Block::WATER {
+                use pumpkin_data::block_properties::WaterLikeProperties;
+                let water_props = WaterLikeProperties::from_state_id(clicked_block_state.id);
+                Some(BlockIsReplacing::Water(water_props.level))
+            } else {
+                Some(BlockIsReplacing::Other)
+            }
+        } else {
+            None
+        };
+
+        if let Some(replacing) = replace_clicked_block {
+            return Some((clicked_block_pos, face.opposite(), replacing));
+        }
+
+        let block_pos = BlockPos(location.0 + face.to_offset());
+        let (previous_block, previous_block_state) = world.get_block_and_state(&block_pos);
+
+        let replace_previous_block = if previous_block == placed_block {
+            self.can_update_at(
+                world,
+                previous_block,
+                previous_block_state.id,
+                &block_pos,
+                face.opposite(),
+                use_item_on,
+                player,
+            )
+            .then_some(BlockIsReplacing::Itself(previous_block_state.id))
+        } else {
+            can_replace_with_other_block(previous_block, previous_block_state).then(|| {
+                if previous_block == &Block::WATER {
+                    use pumpkin_data::block_properties::WaterLikeProperties;
+                    let water_props = WaterLikeProperties::from_state_id(previous_block_state.id);
+                    BlockIsReplacing::Water(water_props.level)
+                } else {
+                    BlockIsReplacing::None
+                }
+            })
+        };
+
+        replace_previous_block.map(|replacing| (block_pos, face.opposite(), replacing))
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn place_block(
         &self,
@@ -658,69 +727,13 @@ impl BlockRegistry {
             return Err(BlockPlacingError::BlockOutOfWorld);
         }
 
-        let (clicked_block, clicked_block_state) = world.get_block_and_state(&clicked_block_pos);
+        let clicked_block = world.get_block(&clicked_block_pos);
 
-        let replace_clicked_block = if clicked_block == placed_block {
-            self.can_update_at(
-                &world,
-                clicked_block,
-                clicked_block_state.id,
-                &clicked_block_pos,
-                face,
-                use_item_on,
-                player,
-            )
-            .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
-        } else if can_replace_with_other_block(clicked_block, clicked_block_state) {
-            if clicked_block == &Block::WATER {
-                use pumpkin_data::block_properties::WaterLikeProperties;
-                let water_props = WaterLikeProperties::from_state_id(clicked_block_state.id);
-                Some(BlockIsReplacing::Water(water_props.level))
-            } else {
-                Some(BlockIsReplacing::Other)
-            }
-        } else {
-            None
+        let Some((final_block_pos, final_face, replacing)) =
+            self.placement_target(&world, player, placed_block, use_item_on, location, face)
+        else {
+            return Ok(None);
         };
-
-        let (final_block_pos, final_face, replacing) =
-            if let Some(replacing) = replace_clicked_block {
-                (clicked_block_pos, face.opposite(), replacing)
-            } else {
-                let block_pos = BlockPos(location.0 + face.to_offset());
-                let (previous_block, previous_block_state) = world.get_block_and_state(&block_pos);
-
-                let replace_previous_block = if previous_block == placed_block {
-                    self.can_update_at(
-                        &world,
-                        previous_block,
-                        previous_block_state.id,
-                        &block_pos,
-                        face.opposite(),
-                        use_item_on,
-                        player,
-                    )
-                    .then_some(BlockIsReplacing::Itself(previous_block_state.id))
-                } else {
-                    can_replace_with_other_block(previous_block, previous_block_state).then(|| {
-                        if previous_block == &Block::WATER {
-                            use pumpkin_data::block_properties::WaterLikeProperties;
-                            let water_props =
-                                WaterLikeProperties::from_state_id(previous_block_state.id);
-                            BlockIsReplacing::Water(water_props.level)
-                        } else {
-                            BlockIsReplacing::None
-                        }
-                    })
-                };
-
-                match replace_previous_block {
-                    Some(replacing) => (block_pos, face.opposite(), replacing),
-                    None => {
-                        return Ok(None);
-                    }
-                }
-            };
 
         if world.is_in_spawn_protection(player, &final_block_pos) {
             player.send_system_message(&pumpkin_util::text::TextComponent::translate_cross(
