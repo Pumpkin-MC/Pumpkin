@@ -7,11 +7,24 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockAccessor;
 
 use crate::block::{
-    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase,
+    BlockBehaviour, CanPlaceAtArgs, CanPlaceLiquidArgs, GetStateForNeighborUpdateArgs,
+    PlaceLiquidArgs, blocks::plant::PlantBlockBase,
 };
 #[pumpkin_block("minecraft:seagrass")]
 pub struct SeaGrassBlock;
 impl BlockBehaviour for SeaGrassBlock {
+    fn is_liquid_block_container(&self) -> bool {
+        true
+    }
+
+    fn can_place_liquid(&self, _args: CanPlaceLiquidArgs<'_>) -> bool {
+        false
+    }
+
+    fn place_liquid(&self, _args: PlaceLiquidArgs<'_>) -> bool {
+        false
+    }
+
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }

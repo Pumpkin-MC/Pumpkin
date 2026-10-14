@@ -840,10 +840,12 @@ impl DispenserBlock {
         } else {
             try_place_filled_bucket(
                 ctx.world,
+                None,
                 item.item,
                 *ctx.position,
                 ctx.facing.to_block_direction(),
             )
+            .is_some()
         };
 
         if emptied {

@@ -1,9 +1,11 @@
 use pumpkin_data::block_properties::SlabType;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
 
 use crate::block::{
-    BlockBehaviour, BlockIsReplacing, CanUpdateAtArgs, OnPlaceArgs, PathComputationType,
+    BlockBehaviour, BlockIsReplacing, CanPlaceLiquidArgs, CanUpdateAtArgs, OnPlaceArgs,
+    PathComputationType, PlaceLiquidArgs,
 };
 
 type SlabProperties = pumpkin_data::block_properties::WhiteWoolSlabLikeProperties;
@@ -12,6 +14,16 @@ type SlabProperties = pumpkin_data::block_properties::WhiteWoolSlabLikePropertie
 pub struct SlabBlock;
 
 impl BlockBehaviour for SlabBlock {
+    fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
+        SlabProperties::from_state_id(args.state_id).r#type != SlabType::Double
+            && crate::block::place_liquid(args)
+    }
+
+    fn can_place_liquid(&self, args: CanPlaceLiquidArgs<'_>) -> bool {
+        args.fluid == &Fluid::WATER
+            && SlabProperties::from_state_id(args.state_id).r#type != SlabType::Double
+    }
+
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         if let BlockIsReplacing::Itself(state_id) = args.replacing {
             let mut slab_props = SlabProperties::from_state_id(state_id);

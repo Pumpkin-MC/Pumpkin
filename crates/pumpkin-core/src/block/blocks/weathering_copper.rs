@@ -19,9 +19,10 @@ use crate::block::blocks::stairs::StairBlock;
 use crate::block::blocks::trapdoor::TrapDoorBlock;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockMetadata, BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs,
+    BlockBehaviour, BlockMetadata, BrokenArgs, CanPlaceAtArgs, CanPlaceLiquidArgs, CanUpdateAtArgs,
     GetComparatorOutputArgs, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
-    OnPlaceArgs, OnStateReplacedArgs, PathComputationType, PlacedArgs, RandomTickArgs,
+    OnPlaceArgs, OnStateReplacedArgs, PathComputationType, PlaceLiquidArgs, PlacedArgs,
+    RandomTickArgs,
 };
 use crate::world::World;
 
@@ -890,6 +891,14 @@ impl BlockMetadata for WeatheringCopperSlabBlock {
 }
 
 impl BlockBehaviour for WeatheringCopperSlabBlock {
+    fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
+        SlabBlock.place_liquid(args)
+    }
+
+    fn can_place_liquid(&self, args: CanPlaceLiquidArgs<'_>) -> bool {
+        SlabBlock.can_place_liquid(args)
+    }
+
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         SlabBlock.on_place(args)
     }

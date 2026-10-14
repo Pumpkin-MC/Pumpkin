@@ -205,10 +205,10 @@ use super::blocks::plant::crop::gourds::attached_stem::AttachedStemBlock;
 use super::blocks::plant::crop::gourds::stem::StemBlock;
 use super::fluid::FluidBehaviour;
 use super::{
-    AttackArgs, BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs, EmitsRedstonePowerArgs, ExplodeArgs,
-    GetRedstonePowerArgs, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
-    OnPlaceArgs, OnStateReplacedArgs, OnSyncedBlockEventArgs, PlacedArgs, PlayerPlacedArgs,
-    PrepareArgs, UseWithItemArgs,
+    AttackArgs, BrokenArgs, CanPlaceAtArgs, CanPlaceLiquidArgs, CanUpdateAtArgs,
+    EmitsRedstonePowerArgs, ExplodeArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs,
+    NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnStateReplacedArgs, OnSyncedBlockEventArgs,
+    PlaceLiquidArgs, PlacedArgs, PlayerPlacedArgs, PrepareArgs, UseWithItemArgs,
 };
 use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
 use crate::block::blocks::chain::ChainBlock;
@@ -1537,6 +1537,45 @@ impl BlockRegistry {
             |pumpkin_block| pumpkin_block.is_pathfindable(state, computation_type),
         )
     }
+
+    #[must_use]
+    pub fn is_liquid_block_container(&self, block: &Block) -> bool {
+        block.is_waterloggable()
+            || self
+                .get_pumpkin_block(block.id)
+                .is_some_and(|pumpkin_block| pumpkin_block.is_liquid_block_container())
+    }
+
+    #[must_use]
+    pub fn can_be_replaced_with_fluid(
+        &self,
+        block: &Block,
+        state: &BlockState,
+        fluid: &Fluid,
+    ) -> bool {
+        self.get_pumpkin_block(block.id).map_or_else(
+            || state.replaceable() || !state.is_solid(),
+            |pumpkin_block| pumpkin_block.can_be_replaced_with_fluid(state, fluid),
+        )
+    }
+
+    #[must_use]
+    pub fn can_place_liquid(&self, block: &Block, args: CanPlaceLiquidArgs<'_>) -> bool {
+        self.is_liquid_block_container(block)
+            && self
+                .get_pumpkin_block(block.id)
+                .map_or(args.fluid == &Fluid::WATER, |pumpkin_block| {
+                    pumpkin_block.can_place_liquid(args)
+                })
+    }
+
+    pub fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
+        if let Some(pumpkin_block) = self.get_pumpkin_block(args.block.id) {
+            pumpkin_block.place_liquid(args)
+        } else {
+            super::place_liquid(args)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1588,5 +1627,59 @@ mod replacement_tests {
                 expected
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod fluid_filling_tests {
+    use super::default_registry;
+    use crate::block::CanPlaceLiquidArgs;
+    use pumpkin_data::{
+        Block,
+        block_properties::{SlabProperties, SlabType},
+        fluid::Fluid,
+    };
+
+    #[test]
+    fn slab_filling_respects_type_through_registry() {
+        let registry = default_registry();
+        for block in [
+            &Block::STONE_SLAB,
+            &Block::CUT_COPPER_SLAB,
+            &Block::WAXED_CUT_COPPER_SLAB,
+        ] {
+            for (slab_type, expected) in [
+                (SlabType::Double, false),
+                (SlabType::Top, true),
+                (SlabType::Bottom, true),
+            ] {
+                let mut properties = SlabProperties::default(block);
+                properties.r#type = slab_type;
+                assert_eq!(
+                    registry.can_place_liquid(
+                        block,
+                        CanPlaceLiquidArgs {
+                            player: None,
+                            state_id: properties.to_state_id(block),
+                            fluid: &Fluid::WATER,
+                        }
+                    ),
+                    expected
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn dispensers_cannot_fill_barriers() {
+        let registry = default_registry();
+        assert!(!registry.can_place_liquid(
+            &Block::BARRIER,
+            CanPlaceLiquidArgs {
+                player: None,
+                state_id: Block::BARRIER.default_state.id,
+                fluid: &Fluid::WATER,
+            }
+        ));
     }
 }

@@ -1,7 +1,7 @@
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::{
-    BlockBehaviour, BlockMetadata, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    PlacedArgs,
+    BlockBehaviour, BlockMetadata, BrokenArgs, CanPlaceAtArgs, CanPlaceLiquidArgs,
+    GetStateForNeighborUpdateArgs, PlaceLiquidArgs, PlacedArgs,
 };
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::WaterLikeProperties;
@@ -18,6 +18,18 @@ impl BlockMetadata for KelpBlock {
 }
 
 impl BlockBehaviour for KelpBlock {
+    fn is_liquid_block_container(&self) -> bool {
+        true
+    }
+
+    fn can_place_liquid(&self, _args: CanPlaceLiquidArgs<'_>) -> bool {
+        false
+    }
+
+    fn place_liquid(&self, _args: PlaceLiquidArgs<'_>) -> bool {
+        false
+    }
+
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }

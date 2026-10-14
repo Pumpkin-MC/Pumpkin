@@ -29,7 +29,27 @@ use pumpkin_inventory::screen_handler::ScreenHandlerFactory;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
+
+// Shared default for SimpleWaterloggedBlock.placeLiquid.
+fn place_liquid(args: PlaceLiquidArgs<'_>) -> bool {
+    if args.fluid != &Fluid::WATER {
+        return false;
+    }
+    let Some(state_id) = args.block.set_waterlogged(args.state_id, true) else {
+        return false;
+    };
+    args.world
+        .set_block_state(args.position, state_id, BlockFlags::NOTIFY_ALL);
+    args.world.schedule_fluid_tick(
+        args.fluid,
+        *args.position,
+        args.fluid.flow_speed as u8,
+        TickPriority::Normal,
+    );
+    true
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PathComputationType {
@@ -130,6 +150,26 @@ pub trait BlockBehaviour: Send + Sync {
 
     fn can_update_at(&self, _args: CanUpdateAtArgs<'_>) -> bool {
         false
+    }
+
+    /// Marks liquid containers without a waterlogged property, such as kelp.
+    fn is_liquid_block_container(&self) -> bool {
+        false
+    }
+
+    /// Checks whether this container permits the fluid, without changing the world.
+    fn can_place_liquid(&self, args: CanPlaceLiquidArgs<'_>) -> bool {
+        args.fluid == &Fluid::WATER
+    }
+
+    /// Attempts to fill this container, applying its state changes and effects.
+    /// Bucket use may still succeed when this returns false.
+    fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
+        place_liquid(args)
+    }
+
+    fn can_be_replaced_with_fluid(&self, state: &BlockState, _fluid: &Fluid) -> bool {
+        state.replaceable() || !state.is_solid()
     }
 
     /// onBlockAdded in source code
@@ -329,6 +369,20 @@ pub struct CanPlaceAtArgs<'a> {
     pub direction: Option<BlockDirection>,
     pub player: Option<&'a Player>,
     pub use_item_on: Option<&'a SUseItemOn>,
+}
+
+pub struct CanPlaceLiquidArgs<'a> {
+    pub player: Option<&'a Player>,
+    pub state_id: BlockStateId,
+    pub fluid: &'a Fluid,
+}
+
+pub struct PlaceLiquidArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state_id: BlockStateId,
+    pub position: &'a BlockPos,
+    pub fluid: &'a Fluid,
 }
 
 pub struct CanUpdateAtArgs<'a> {

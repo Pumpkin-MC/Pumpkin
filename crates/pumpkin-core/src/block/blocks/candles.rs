@@ -1,4 +1,7 @@
+use pumpkin_data::fluid::Fluid;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{
     BlockDirection, BlockStateId, block_properties::CandleLikeProperties, entity::EntityPose,
 };
@@ -8,7 +11,7 @@ use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::{GetStateForNeighborUpdateArgs, OnScheduledTickArgs};
+use crate::block::{GetStateForNeighborUpdateArgs, OnScheduledTickArgs, PlaceLiquidArgs};
 use crate::{
     block::{
         BlockIsReplacing,
@@ -24,7 +27,51 @@ use crate::{
 #[pumpkin_block_from_tag("minecraft:candles")]
 pub struct CandleBlock;
 
+impl CandleBlock {
+    fn extinguish(args: &PlaceLiquidArgs<'_>, mut properties: CandleLikeProperties) {
+        properties.lit = false;
+        args.world.set_block_state(
+            args.position,
+            properties.to_state_id(args.block),
+            BlockFlags::NOTIFY_ALL,
+        );
+        args.world.play_sound(
+            Sound::BlockCandleExtinguish,
+            SoundCategory::Blocks,
+            &args.position.to_f64(),
+        );
+        args.world.emit_game_event(
+            GameEvent::BlockChange.name(),
+            args.position.to_centered_f64(),
+        );
+    }
+}
+
 impl BlockBehaviour for CandleBlock {
+    fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
+        let mut properties = CandleLikeProperties::from_state_id(args.state_id);
+        if properties.waterlogged || args.fluid != &Fluid::WATER {
+            return false;
+        }
+        properties.waterlogged = true;
+        if properties.lit {
+            Self::extinguish(&args, properties);
+        } else {
+            args.world.set_block_state(
+                args.position,
+                properties.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            );
+        }
+        args.world.schedule_fluid_tick(
+            args.fluid,
+            *args.position,
+            args.fluid.flow_speed as u8,
+            TickPriority::Normal,
+        );
+        true
+    }
+
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         if args.player.get_entity().pose.load() != EntityPose::Crouching
             && let BlockIsReplacing::Itself(state_id) = args.replacing

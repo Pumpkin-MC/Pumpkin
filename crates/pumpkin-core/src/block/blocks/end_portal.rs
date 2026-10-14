@@ -4,13 +4,19 @@ use crate::block::BlockBehaviour;
 use crate::block::OnEntityCollisionArgs;
 use crate::block::PlacedArgs;
 use crate::block::entities::end_portal::EndPortalBlockEntity;
+use pumpkin_data::BlockState;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_macros::pumpkin_block;
 
 #[pumpkin_block("minecraft:end_portal")]
 pub struct EndPortalBlock;
 
 impl BlockBehaviour for EndPortalBlock {
+    fn can_be_replaced_with_fluid(&self, _state: &BlockState, _fluid: &Fluid) -> bool {
+        false
+    }
+
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         let target_world =
             if args.world.dimension.minecraft_name == Dimension::THE_END.minecraft_name {

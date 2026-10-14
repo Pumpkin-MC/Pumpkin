@@ -2,11 +2,12 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use crate::{
+    block::{CanPlaceLiquidArgs, PlaceLiquidArgs},
     entity::{EntityBase, player::Player, r#type::from_type},
     item::{ItemBehaviour, ItemMetadata},
 };
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block, BlockDirection, BlockState,
     entity::EntityType,
     fluid::Fluid,
     item::Item,
@@ -218,7 +219,11 @@ pub(crate) fn play_bucket_evaporation(world: &Arc<World>, position: &Vector3<f64
     );
 }
 
-fn try_place_powder_snow(world: &Arc<World>, pos: BlockPos, direction: BlockDirection) -> bool {
+fn try_place_powder_snow(
+    world: &Arc<World>,
+    pos: BlockPos,
+    direction: BlockDirection,
+) -> Option<BlockPos> {
     let state = world.get_block_state(&pos);
     let target_pos = if state.replaceable() {
         pos
@@ -227,48 +232,95 @@ fn try_place_powder_snow(world: &Arc<World>, pos: BlockPos, direction: BlockDire
     };
     let target_state = world.get_block_state(&target_pos);
     if !target_state.is_air() && !target_state.is_liquid() && !target_state.replaceable() {
-        return false;
+        return None;
     }
     world.set_block_state(
         &target_pos,
         Block::POWDER_SNOW.default_state.id,
         BlockFlags::NOTIFY_NEIGHBORS,
     );
+    Some(target_pos)
+}
+
+fn try_place_water_in_container(
+    world: &Arc<World>,
+    player: Option<&Player>,
+    block: &Block,
+    state: &BlockState,
+    pos: BlockPos,
+) -> bool {
+    if !world.block_registry.is_liquid_block_container(block)
+        || !(world
+            .block_registry
+            .can_be_replaced_with_fluid(block, state, &Fluid::WATER)
+            || world.block_registry.can_place_liquid(
+                block,
+                CanPlaceLiquidArgs {
+                    player,
+                    state_id: state.id,
+                    fluid: &Fluid::WATER,
+                },
+            ))
+    {
+        return false;
+    }
+
+    // Vanilla ignores placeLiquid's result: bucket use succeeds for kelp and full containers.
+    world.block_registry.place_liquid(PlaceLiquidArgs {
+        world,
+        block,
+        state_id: state.id,
+        position: &pos,
+        fluid: &Fluid::WATER,
+    });
     true
 }
 
 pub(crate) fn try_place_filled_bucket(
     world: &Arc<World>,
+    player: Option<&Player>,
     item: &Item,
     pos: BlockPos,
     direction: BlockDirection,
-) -> bool {
+) -> Option<BlockPos> {
     let (block, state) = world.get_block_and_state(&pos);
     if item.id == Item::POWDER_SNOW_BUCKET.id {
         return try_place_powder_snow(world, pos, direction);
     }
 
-    if item.id == Item::WATER_BUCKET.id && block.is_waterloggable() {
-        let state_id = block.set_waterlogged(state.id, true).unwrap_or(state.id);
-        world.set_block_state(&pos, state_id, BlockFlags::NOTIFY_ALL);
-        world.schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal);
-        return true;
+    let fluid = if item.id == Item::LAVA_BUCKET.id {
+        &Fluid::LAVA
+    } else {
+        &Fluid::WATER
+    };
+    if fluid == &Fluid::WATER
+        && !player.is_some_and(|player| player.get_entity().is_sneaking())
+        && try_place_water_in_container(world, player, block, state, pos)
+    {
+        return Some(pos);
     }
 
     let target_pos = pos.offset(direction.to_offset());
     let (block, state) = world.get_block_and_state(&target_pos);
 
-    if block.is_waterloggable() {
-        if item.id == Item::LAVA_BUCKET.id {
-            return false;
-        }
-        let state_id = block.set_waterlogged(state.id, true).unwrap_or(state.id);
-        world.set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_ALL);
-        world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
-        return true;
+    if fluid == &Fluid::WATER
+        && try_place_water_in_container(world, player, block, state, target_pos)
+    {
+        return Some(target_pos);
     }
 
-    if state.id == Block::AIR.default_state.id || state.is_liquid() {
+    if world
+        .block_registry
+        .can_be_replaced_with_fluid(block, state, fluid)
+    {
+        if !state.is_air()
+            && !state.is_liquid()
+            && world
+                .break_block(&target_pos, None, BlockFlags::NOTIFY_ALL)
+                .is_none()
+        {
+            return None;
+        }
         world.set_block_state(
             &target_pos,
             if item.id == Item::LAVA_BUCKET.id {
@@ -278,10 +330,10 @@ pub(crate) fn try_place_filled_bucket(
             },
             BlockFlags::NOTIFY_ALL,
         );
-        return true;
+        return Some(target_pos);
     }
 
-    false
+    None
 }
 
 impl ItemBehaviour for EmptyBucketItem {
@@ -393,9 +445,10 @@ impl ItemBehaviour for FilledBucketItem {
             play_bucket_evaporation(&world, &player.position());
             return;
         }
-        if !try_place_filled_bucket(&world, item, pos, direction) {
+        let Some(place_pos) = try_place_filled_bucket(&world, Some(player), item, pos, direction)
+        else {
             return;
-        }
+        };
 
         if let Some(server) = world.server.upgrade()
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
@@ -408,16 +461,6 @@ impl ItemBehaviour for FilledBucketItem {
                 );
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
-
-        let place_pos = if world
-            .get_block_and_state(&pos)
-            .0
-            .is_waterlogged(world.get_block_state_id(&pos))
-        {
-            pos
-        } else {
-            pos.offset(direction.to_offset())
-        };
 
         world.play_sound(
             get_empty_sound(item),
