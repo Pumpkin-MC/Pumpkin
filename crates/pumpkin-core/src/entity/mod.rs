@@ -2536,6 +2536,18 @@ impl Entity {
         self.touching_water.load(Ordering::Relaxed)
     }
 
+    pub fn is_in_water_or_rain(&self) -> bool {
+        let world = self.world.load();
+        let pos = self.block_pos.load();
+        self.is_in_water()
+            || world.is_raining_at(&pos)
+            || world.is_raining_at(&BlockPos::new(
+                pos.0.x,
+                self.bounding_box.load().max.y.floor() as i32,
+                pos.0.z,
+            ))
+    }
+
     #[must_use]
     pub fn is_submerged_in_water(&self) -> bool {
         let pos = self.pos.load();
@@ -3209,7 +3221,7 @@ impl Entity {
         )
     }
 
-    /// No solid block between the two eye positions.
+    /// No visual-blocking block between the two eye positions (matching vanilla `ClipContext.Block.VISUAL`).
     #[must_use]
     pub fn has_line_of_sight(&self, other: &Self) -> bool {
         let from = self.get_eye_pos();
@@ -3219,10 +3231,13 @@ impl Entity {
         }
         self.world
             .load_full()
-            .raycast(from, to, |block_pos, world| {
-                world.get_block_state(block_pos).is_solid()
-            })
-            .is_none()
+            .clip(&pumpkin_world::clip::ClipContext::new(
+                from,
+                to,
+                pumpkin_world::clip::ClipBlock::Visual,
+                pumpkin_world::clip::ClipFluid::None,
+            ))
+            .is_miss
     }
 
     pub fn get_eye_y(&self) -> f64 {

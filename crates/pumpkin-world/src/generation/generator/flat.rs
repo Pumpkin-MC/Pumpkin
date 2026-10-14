@@ -65,6 +65,7 @@ impl FlatGenerator {
     }
 
     pub const fn step_to_carvers(&self, chunk: &mut ProtoChunk) {
+        chunk.snapshot_wg_heightmaps();
         chunk.stage = StagedChunkEnum::Carvers;
     }
 }
