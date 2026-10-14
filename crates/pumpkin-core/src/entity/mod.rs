@@ -1431,20 +1431,16 @@ impl Entity {
             [Axis::Y, Axis::X, Axis::Z]
         };
         let mut adjusted_movement = Vector3::new(0.0, 0.0, 0.0);
-        let mut floor_box = None;
         for axis in order {
             let wanted = movement.get_axis(axis);
             if wanted == 0.0 {
                 continue;
             }
-            let (allowed, blocker) =
+            let (allowed, _) =
                 bounding_box
                     .shift(adjusted_movement)
                     .collide_along(axis, &collisions, wanted);
             adjusted_movement.set_axis(axis, allowed);
-            if axis == Axis::Y && wanted < 0.0 && allowed != wanted {
-                floor_box = blocker;
-            }
         }
 
         // Vanilla `Mth.equal`: sideways cuts under 1e-5 are not a collision.
@@ -1456,16 +1452,60 @@ impl Entity {
         let on_ground = movement.y < 0.0 && adjusted_movement.y != movement.y;
         self.on_ground.store(on_ground, Ordering::SeqCst);
         if on_ground {
-            let supporting_block_pos = floor_box.and_then(|i| {
-                block_positions
-                    .iter()
-                    .find(|(end, _)| i < *end)
-                    .map(|(_, pos)| *pos)
-            });
+            // Vanilla `Entity.checkSupportingBlock`: a thin box under the final position, then
+            // under the start X/Z if nothing is there. The swept collisions cover both areas.
+            let final_box = bounding_box.shift(adjusted_movement);
+            let test_area = BoundingBox::new(
+                Vector3::new(final_box.min.x, final_box.min.y - 1.0e-6, final_box.min.z),
+                Vector3::new(final_box.max.x, final_box.min.y, final_box.max.z),
+            );
+            let position = self.pos.load() + adjusted_movement;
+            let supporting_block_pos =
+                Self::find_supporting_block(&collisions, &block_positions, &test_area, &position)
+                    .or_else(|| {
+                        Self::find_supporting_block(
+                            &collisions,
+                            &block_positions,
+                            &test_area.shift(Vector3::new(
+                                -adjusted_movement.x,
+                                0.0,
+                                -adjusted_movement.z,
+                            )),
+                            &position,
+                        )
+                    });
             self.supporting_block_pos.store(supporting_block_pos);
         }
 
         adjusted_movement
+    }
+
+    /// Vanilla `CollisionGetter.findSupportingBlock`: the colliding block closest to `position`.
+    fn find_supporting_block(
+        collisions: &[BoundingBox],
+        block_positions: &[(usize, BlockPos)],
+        area: &BoundingBox,
+        position: &Vector3<f64>,
+    ) -> Option<BlockPos> {
+        let mut best: Option<(f64, BlockPos)> = None;
+        let mut start = 0;
+        for &(end, pos) in block_positions {
+            if collisions[start..end].iter().any(|s| s.intersects(area)) {
+                let distance = pos.to_centered_f64().squared_distance_to_vec(position);
+                // Ties go to the larger position in vanilla `Vec3i.compareTo` order (y, z, x).
+                let better = best.is_none_or(|(best_distance, best_pos)| {
+                    distance < best_distance
+                        || (distance == best_distance
+                            && (best_pos.0.y, best_pos.0.z, best_pos.0.x)
+                                < (pos.0.y, pos.0.z, pos.0.x))
+                });
+                if better {
+                    best = Some((distance, pos));
+                }
+            }
+            start = end;
+        }
+        best.map(|(_, pos)| pos)
     }
 
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
