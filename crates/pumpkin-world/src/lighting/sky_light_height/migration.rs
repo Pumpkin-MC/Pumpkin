@@ -108,6 +108,16 @@ impl SkyLightHeightMigration {
         installed
     }
 
+    /// The cached value, or the persisted one installed into the cache. Never computes:
+    /// a value computed later sees the current blocks anyway.
+    pub fn cached_or_persisted(chunk: &ChunkData) -> Option<SkyLightHeight> {
+        let cached = chunk.sky_light_height_cache.load(Ordering::Relaxed);
+        if cached != 0 {
+            return Some(SkyLightHeight::from_raw(cached));
+        }
+        Self::load_persisted(chunk).map(|height| Self::install(chunk, height))
+    }
+
     /// Publishes a derived value unless another worker got there first. A plain store
     /// would let a thread that began computing before a divergence was found overwrite
     /// that flag; both views are equally right, so first one wins.

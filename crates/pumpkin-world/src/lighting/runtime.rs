@@ -13,7 +13,6 @@ use pumpkin_data::BlockStateId;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use rustc_hash::FxHashSet;
-use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tracing::debug;
@@ -203,11 +202,10 @@ impl DynamicLightEngine {
     fn refresh_sky_cut_after_change(cursor: &mut ChunkCursor, pos: &BlockPos) {
         let (chunk_pos, relative) = pos.chunk_and_chunk_relative_position();
         if let Some(chunk) = cursor.chunk_at(chunk_pos) {
-            let cached = chunk.sky_light_height_cache.load(Ordering::Relaxed);
-            if cached == 0 {
+            // A persisted value predates this change and has to be checked against it too
+            let Some(height) = SkyLightHeightMigration::cached_or_persisted(chunk) else {
                 return; // Never computed: the first compute will see this change anyway.
-            }
-            let height = SkyLightHeight::from_raw(cached);
+            };
             if !height.quadrant_uses_limit(relative.x, relative.z) {
                 return; // Already diverged, nothing left to invalidate.
             }
