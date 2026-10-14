@@ -3898,6 +3898,10 @@ impl World {
         if !matches!(subject.client.as_ref(), ClientPlatform::Java(_)) {
             return;
         }
+        // The download can finish after the player left, and no Bedrock tab list has them then.
+        if self.get_player_by_uuid(subject.gameprofile.id).is_none() {
+            return;
+        }
 
         let skin = subject.bedrock_skin.load_full();
         let update = CPlayerSkin {
