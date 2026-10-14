@@ -89,7 +89,10 @@ impl PufferfishEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(PufferfishPuffGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(
+                1,
+                Box::new(PufferfishPuffGoal::new(Arc::downgrade(&mob_arc))),
+            );
             goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 2,
