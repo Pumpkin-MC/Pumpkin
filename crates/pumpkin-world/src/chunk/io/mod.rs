@@ -195,3 +195,9 @@ pub(crate) fn write_file_atomically(path: &Path, bytes: &[u8], sync: bool) -> st
     drop(file);
     std::fs::rename(temp_path, path)
 }
+
+/// Syncs a file that an earlier `write_file_atomically` wrote without syncing.
+pub(crate) fn sync_file(path: &Path) -> std::io::Result<()> {
+    // Windows needs write access to flush a file's buffers.
+    File::options().write(true).open(path)?.sync_data()
+}

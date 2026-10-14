@@ -195,7 +195,7 @@ impl AnvilChunkData {
 
     fn from_bytes(bytes: Bytes) -> Result<Self, ChunkReadingError> {
         let mut bytes = bytes;
-        if bytes.len() < 5 {
+        if bytes.len() < size_of::<u32>() {
             return Err(ChunkReadingError::IoError(
                 std::io::ErrorKind::UnexpectedEof.into(),
             ));

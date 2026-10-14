@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::chunk::io::{RegionFile, write_file_atomically};
+use crate::chunk::io::{RegionFile, sync_file, write_file_atomically};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::Bytes;
 use pumpkin_util::math::vector2::Vector2;
@@ -14,6 +14,8 @@ pub struct PumpFile {
     path: PathBuf,
     pub data: PumpData,
     staged: bool,
+    /// The file was written without a sync since the last sync.
+    unsynced: bool,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -79,6 +81,7 @@ impl RegionFile for PumpFile {
                 ..data
             },
             staged: false,
+            unsynced: false,
         })
     }
 
@@ -110,6 +113,10 @@ impl RegionFile for PumpFile {
 
     fn flush(&mut self, sync: bool) -> std::io::Result<()> {
         if !self.staged {
+            if sync && self.unsynced {
+                sync_file(&self.path)?;
+                self.unsynced = false;
+            }
             return Ok(());
         }
         let mut root = pumpkin_nbt::compound::NbtCompound::new();
@@ -124,6 +131,7 @@ impl RegionFile for PumpFile {
         let bytes = pumpkin_nbt::Nbt::from(root).write_unnamed();
         write_file_atomically(&self.path, &bytes, sync)?;
         self.staged = false;
+        self.unsynced = !sync;
         Ok(())
     }
 }
@@ -147,5 +155,19 @@ mod tests {
         assert_eq!(read_file.data.chunks.len(), 1);
         let raw = read_file.read_chunk(0).unwrap().unwrap();
         assert_eq!(PumpFile::decode_chunk(raw).unwrap(), nbt);
+    }
+
+    #[test]
+    fn sync_flush_syncs_an_unsynced_write() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("r.0.0.pump");
+        let mut pump_file = PumpFile::open(&file_path, Vector2::new(0, 0)).unwrap();
+        let nbt = Bytes::from_static(&[1, 2, 3]);
+        pump_file.stage_chunk(0, PumpFile::encode_chunk(nbt, &()).unwrap());
+        pump_file.flush(false).unwrap();
+
+        // The sync opens the written file, so it fails once the file is gone.
+        std::fs::remove_file(&file_path).unwrap();
+        assert!(pump_file.flush(true).is_err());
     }
 }

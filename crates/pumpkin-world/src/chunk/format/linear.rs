@@ -3,7 +3,7 @@ use std::io::{ErrorKind, Read};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::chunk::io::{RegionFile, write_file_atomically};
+use crate::chunk::io::{RegionFile, sync_file, write_file_atomically};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::{Buf, BufMut, Bytes};
 use pumpkin_util::math::vector2::Vector2;
@@ -223,6 +223,14 @@ impl BucketSizeEntry {
     }
 }
 
+/// A bucket's data as stored in the file, with the hash its size entry records.
+#[derive(Clone, PartialEq, Debug)]
+struct CompressedBucket {
+    data: Box<[u8]>,
+    compression_level: i8,
+    xxhash: u64,
+}
+
 // ---------------------------------------------------------------------------
 // Per-chunk record inside a decompressed bucket
 // ---------------------------------------------------------------------------
@@ -305,10 +313,12 @@ pub struct LinearV2File {
     /// Per-chunk NBT data (None = chunk absent).
     chunks_data: Box<[Option<Bytes>]>,
 
-    /// The compressed bytes and compression level of each bucket as last compressed. `None` marks
-    /// a bucket with staged chunks, the only ones a flush compresses again.
-    buckets: Vec<Option<(Box<[u8]>, i8)>>,
+    /// The compressed bytes, compression level and xxhash64 of each bucket as last compressed.
+    /// `None` marks a bucket with staged chunks, the only ones a flush compresses again.
+    buckets: Vec<Option<CompressedBucket>>,
     staged: bool,
+    /// The file was written without a sync since the last sync.
+    unsynced: bool,
 }
 
 impl LinearV2File {
@@ -322,6 +332,7 @@ impl LinearV2File {
             chunks_data: vec![None; CHUNK_COUNT].into_boxed_slice(),
             buckets: vec![None; Self::bucket_count(DEFAULT_GRID_SIZE)],
             staged: false,
+            unsynced: false,
         }
     }
 
@@ -428,14 +439,22 @@ impl LinearV2File {
 
         let mut timestamps = vec![0u64; CHUNK_COUNT].into_boxed_slice();
         let mut chunks_data: Box<[Option<Bytes>]> = vec![None; CHUNK_COUNT].into_boxed_slice();
-        // A corrupt bucket stays `None`, so the next flush writes it again from what was read.
         let mut buckets = vec![None; bucket_count];
 
         for (bucket_idx, entry) in bucket_entries.iter().enumerate() {
             let compressed_size = entry.size as usize;
 
+            let compressed_slice = &buf[..compressed_size];
+            // A corrupt bucket keeps its bytes and stored hash, so a flush writes it back
+            // unchanged until one of its chunks is saved.
+            buckets[bucket_idx] = Some(CompressedBucket {
+                data: Box::from(compressed_slice),
+                compression_level: entry.compression_level,
+                xxhash: entry.xxhash,
+            });
+
             // xxhash64 integrity check.
-            let actual_hash = xxh64(&buf[..compressed_size], 0);
+            let actual_hash = xxh64(compressed_slice, 0);
             if actual_hash != entry.xxhash {
                 error!(
                     "Linear v2: xxhash mismatch for bucket {bucket_idx} \
@@ -448,8 +467,6 @@ impl LinearV2File {
                 continue;
             }
 
-            let compressed_slice = &buf[..compressed_size];
-            buckets[bucket_idx] = Some((Box::from(compressed_slice), entry.compression_level));
             let mut decompressed = Vec::new();
             {
                 let mut decoder = StreamingDecoder::new(compressed_slice)
@@ -471,7 +488,6 @@ impl LinearV2File {
             }
         }
 
-        let staged = buckets.iter().any(Option::is_none);
         Ok(Self {
             path: path.to_path_buf(),
             region_x: superblock.region_x,
@@ -480,7 +496,8 @@ impl LinearV2File {
             timestamps,
             chunks_data,
             buckets,
-            staged,
+            staged: false,
+            unsynced: false,
         })
     }
 }
@@ -534,15 +551,24 @@ impl RegionFile for LinearV2File {
     }
 
     fn flush(&mut self, sync: bool) -> std::io::Result<()> {
-        if !self.has_staged() {
+        if !self.staged {
+            if sync && self.unsynced {
+                sync_file(&self.path)?;
+                self.unsynced = false;
+            }
             return Ok(());
         }
         for bucket_idx in 0..self.buckets.len() {
             if self.buckets[bucket_idx].is_none() {
                 let raw = self.serialise_bucket(bucket_idx);
-                let compressed =
+                let data =
                     compress_to_vec(raw.as_slice(), CompressionLevel::Fastest).into_boxed_slice();
-                self.buckets[bucket_idx] = Some((compressed, 1));
+                let xxhash = xxh64(&data, 0);
+                self.buckets[bucket_idx] = Some(CompressedBucket {
+                    data,
+                    compression_level: 1,
+                    xxhash,
+                });
             }
         }
 
@@ -563,21 +589,22 @@ impl RegionFile for LinearV2File {
         out.extend_from_slice(&superblock.to_bytes());
         out.extend_from_slice(&bitmap.0);
         out.extend_from_slice(&NbtFeatures::empty().to_bytes());
-        for (compressed, compression_level) in self.buckets.iter().flatten() {
+        for bucket in self.buckets.iter().flatten() {
             let entry = BucketSizeEntry {
-                size: compressed.len() as u32,
-                compression_level: *compression_level,
-                xxhash: xxh64(compressed, 0),
+                size: bucket.data.len() as u32,
+                compression_level: bucket.compression_level,
+                xxhash: bucket.xxhash,
             };
             out.extend_from_slice(&entry.to_bytes());
         }
-        for (compressed, _) in self.buckets.iter().flatten() {
-            out.extend_from_slice(compressed);
+        for bucket in self.buckets.iter().flatten() {
+            out.extend_from_slice(&bucket.data);
         }
         out.extend_from_slice(&SIGNATURE);
 
         write_file_atomically(&self.path, &out, sync)?;
         self.staged = false;
+        self.unsynced = !sync;
         Ok(())
     }
 }
@@ -638,6 +665,57 @@ mod tests {
 
         let reopened = LinearV2File::open(&path, Vector2::new(0, 0)).unwrap();
         assert_eq!(reopened.read_chunk(0).unwrap().unwrap(), fake_nbt(2));
+    }
+
+    #[test]
+    fn corrupt_bucket_survives_flushes() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("r.0.0.linear");
+        let mut file = LinearV2File::open(&path, Vector2::new(0, 0)).unwrap();
+        file.stage_chunk(0, fake_nbt(1));
+        file.stage_chunk(CHUNK_COUNT - 1, fake_nbt(2));
+        file.flush(true).unwrap();
+
+        // Damage the stored hash of bucket 0, which holds chunk 0. It follows the empty
+        // features dictionary (1 byte) and the bucket's size and compression level (5 bytes).
+        let hash_offset = LinearV2Superblock::SIZE + ChunkBitmap::SIZE + 1 + 5;
+        let mut bytes = std::fs::read(&path).unwrap();
+        let hash_bytes = &mut bytes[hash_offset..hash_offset + 8];
+        let stored_hash: [u8; 8] = hash_bytes.try_into().unwrap();
+        hash_bytes.copy_from_slice(&0u64.to_be_bytes());
+        std::fs::write(&path, &bytes).unwrap();
+
+        let mut file = LinearV2File::open(&path, Vector2::new(0, 0)).unwrap();
+        assert!(file.read_chunk(0).unwrap().is_none());
+        assert!(!file.has_staged());
+        file.flush(true).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+
+        file.stage_chunk(CHUNK_COUNT - 1, fake_nbt(3));
+        file.flush(true).unwrap();
+        let mut bytes = std::fs::read(&path).unwrap();
+        bytes[hash_offset..hash_offset + 8].copy_from_slice(&stored_hash);
+        std::fs::write(&path, &bytes).unwrap();
+
+        let file = LinearV2File::open(&path, Vector2::new(0, 0)).unwrap();
+        assert_eq!(file.read_chunk(0).unwrap().unwrap(), fake_nbt(1));
+        assert_eq!(
+            file.read_chunk(CHUNK_COUNT - 1).unwrap().unwrap(),
+            fake_nbt(3)
+        );
+    }
+
+    #[test]
+    fn sync_flush_syncs_an_unsynced_write() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("r.0.0.linear");
+        let mut file = LinearV2File::open(&path, Vector2::new(0, 0)).unwrap();
+        file.stage_chunk(0, fake_nbt(1));
+        file.flush(false).unwrap();
+
+        // The sync opens the written file, so it fails once the file is gone.
+        std::fs::remove_file(&path).unwrap();
+        assert!(file.flush(true).is_err());
     }
 
     #[test]
