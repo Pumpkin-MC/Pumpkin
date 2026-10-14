@@ -136,19 +136,26 @@ impl ToFromWasmEvent for BlockBreakEvent {
 }
 
 impl ToFromWasmEvent for BlockBurnEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let target_world = state
+            .add(self.world.clone())
+            .expect("failed to add world resource");
         Event::BlockBurnEvent(BlockBurnEventData {
             igniting_block: to_wasm_block_name(self.igniting_block),
             block: to_wasm_block_name(self.block),
+            block_pos: to_wasm_block_position(self.block_pos),
+            target_world,
             cancelled: self.cancelled,
         })
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::BlockBurnEvent(data) => Self {
+                world: consume_world(state, &data.target_world),
                 igniting_block: from_wasm_block_name(&data.igniting_block),
                 block: from_wasm_block_name(&data.block),
+                block_pos: from_wasm_block_position(data.block_pos),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -701,6 +708,10 @@ impl ToFromWasmEvent for BlockDamageAbortEvent {
             target_world,
             item_in_hand,
         })
+    }
+
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
     }
 
     fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
