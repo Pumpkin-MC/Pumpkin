@@ -1522,20 +1522,12 @@ impl World {
     #[expect(clippy::too_many_lines)]
     pub fn tick(self: &Arc<Self>, server: &Arc<Server>) {
         const ENTITY_TICK_BATCH_SIZE: usize = 16;
-        #[cfg(all(
-            feature = "memory-profiler",
-            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-            any(target_arch = "x86_64", target_arch = "aarch64")
-        ))]
+        #[cfg(profiler)]
         let _profile = pumpkin_profiler::cpu::world(self.uuid, self.dimension.minecraft_name);
 
         let start = std::time::Instant::now();
 
-        #[cfg(all(
-            feature = "memory-profiler",
-            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-            any(target_arch = "x86_64", target_arch = "aarch64")
-        ))]
+        #[cfg(profiler)]
         let profile_setup = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::WorldSetup);
         self.flush_block_updates();
         self.flush_synced_block_events();
@@ -1561,11 +1553,7 @@ impl World {
             *guard = raids;
         };
 
-        #[cfg(all(
-            feature = "memory-profiler",
-            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-            any(target_arch = "x86_64", target_arch = "aarch64")
-        ))]
+        #[cfg(profiler)]
         drop(profile_setup);
         let t_chunks = std::time::Instant::now();
         self.tick_chunks(server);
@@ -1593,11 +1581,7 @@ impl World {
         let player_handle = handle.clone();
         players.par_iter().for_each(|player| {
             let _guard = player_handle.enter();
-            #[cfg(all(
-                feature = "memory-profiler",
-                any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                any(target_arch = "x86_64", target_arch = "aarch64")
-            ))]
+            #[cfg(profiler)]
             let _profile = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::Players);
             player.tick(server);
         });
@@ -1636,19 +1620,11 @@ impl World {
             .par_chunks(ENTITY_TICK_BATCH_SIZE)
             .for_each(|batch| {
                 let _guard = entity_handle.enter();
-                #[cfg(all(
-                    feature = "memory-profiler",
-                    any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                    any(target_arch = "x86_64", target_arch = "aarch64")
-                ))]
+                #[cfg(profiler)]
                 let _profile = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::Entities);
 
                 for (entity, entity_chunk) in batch {
-                    #[cfg(all(
-                        feature = "memory-profiler",
-                        any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                        any(target_arch = "x86_64", target_arch = "aarch64")
-                    ))]
+                    #[cfg(profiler)]
                     let _detail = pumpkin_profiler::cpu::detail(
                         pumpkin_profiler::cpu::Detail::Entity {
                             name: entity.get_entity().entity_type.resource_name,
@@ -1682,16 +1658,12 @@ impl World {
             });
         let entity_elapsed = t_entities.elapsed();
 
-        {
-            #[cfg(all(
-                feature = "memory-profiler",
-                any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                any(target_arch = "x86_64", target_arch = "aarch64")
-            ))]
-            let _profile =
-                pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::EntityTracking);
-            self.entity_tracker.update_all(self);
-        }
+        #[cfg(profiler)]
+        let profile_tracking =
+            pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::EntityTracking);
+        self.entity_tracker.update_all(self);
+        #[cfg(profiler)]
+        drop(profile_tracking);
 
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
         if self.block_entities.len() < active_chunks.len() {
@@ -1713,18 +1685,10 @@ impl World {
         let be_handle = handle;
         block_entities.par_chunks(16).for_each(|batch| {
             let _guard = be_handle.enter();
-            #[cfg(all(
-                feature = "memory-profiler",
-                any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                any(target_arch = "x86_64", target_arch = "aarch64")
-            ))]
+            #[cfg(profiler)]
             let _profile = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::BlockEntities);
             for be in batch {
-                #[cfg(all(
-                    feature = "memory-profiler",
-                    any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                    any(target_arch = "x86_64", target_arch = "aarch64")
-                ))]
+                #[cfg(profiler)]
                 let _detail = {
                     let chunk = be.get_position().chunk_position();
                     pumpkin_profiler::cpu::detail(
@@ -2054,22 +2018,14 @@ impl World {
             .par_chunks(BATCH_SIZE)
             .for_each(|batch| {
                 let _guard = block_handle.enter();
-                #[cfg(all(
-                    feature = "memory-profiler",
-                    any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                    any(target_arch = "x86_64", target_arch = "aarch64")
-                ))]
+                #[cfg(profiler)]
                 let _profile = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::Blocks);
                 let world = world.clone();
                 for scheduled_tick in batch {
                     let pos = scheduled_tick.position;
                     let block = world.get_block(&pos);
                     if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(block.id) {
-                        #[cfg(all(
-                            feature = "memory-profiler",
-                            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                            any(target_arch = "x86_64", target_arch = "aarch64")
-                        ))]
+                        #[cfg(profiler)]
                         let _detail = {
                             let chunk = pos.chunk_position();
                             pumpkin_profiler::cpu::detail(
@@ -2101,22 +2057,14 @@ impl World {
             .par_chunks(BATCH_SIZE)
             .for_each(|batch| {
                 let _guard = fluid_handle.enter();
-                #[cfg(all(
-                    feature = "memory-profiler",
-                    any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                    any(target_arch = "x86_64", target_arch = "aarch64")
-                ))]
+                #[cfg(profiler)]
                 let _profile = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::Fluids);
                 let world = world.clone();
                 for scheduled_tick in batch {
                     let pos = scheduled_tick.position;
                     let fluid = world.get_fluid(&pos);
                     if let Some(pumpkin_fluid) = world.block_registry.get_pumpkin_fluid(fluid.id) {
-                        #[cfg(all(
-                            feature = "memory-profiler",
-                            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                            any(target_arch = "x86_64", target_arch = "aarch64")
-                        ))]
+                        #[cfg(profiler)]
                         let _detail = {
                             let chunk = pos.chunk_position();
                             pumpkin_profiler::cpu::detail(
@@ -2144,11 +2092,7 @@ impl World {
             .par_chunks(BATCH_SIZE)
             .for_each(|batch| {
                 let _guard = random_handle.enter();
-                #[cfg(all(
-                    feature = "memory-profiler",
-                    any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                    any(target_arch = "x86_64", target_arch = "aarch64")
-                ))]
+                #[cfg(profiler)]
                 let _profile =
                     pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::RandomTicks);
                 let world = world.clone();
@@ -2169,11 +2113,7 @@ impl World {
                         && let Some(pumpkin_block) =
                             world.block_registry.get_pumpkin_block(block.id)
                     {
-                        #[cfg(all(
-                            feature = "memory-profiler",
-                            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                            any(target_arch = "x86_64", target_arch = "aarch64")
-                        ))]
+                        #[cfg(profiler)]
                         let _detail = {
                             let chunk = pos.chunk_position();
                             pumpkin_profiler::cpu::detail(
@@ -2199,11 +2139,7 @@ impl World {
                         && let Some(pumpkin_fluid) =
                             world.block_registry.get_pumpkin_fluid(fluid.id)
                     {
-                        #[cfg(all(
-                            feature = "memory-profiler",
-                            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                            any(target_arch = "x86_64", target_arch = "aarch64")
-                        ))]
+                        #[cfg(profiler)]
                         let _detail = {
                             let chunk = pos.chunk_position();
                             pumpkin_profiler::cpu::detail(
@@ -2259,21 +2195,13 @@ impl World {
             let spawn_handle = handle;
             spawning_chunks.par_chunks(8).for_each(|batch| {
                 let _guard = spawn_handle.enter();
-                #[cfg(all(
-                    feature = "memory-profiler",
-                    any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                    any(target_arch = "x86_64", target_arch = "aarch64")
-                ))]
+                #[cfg(profiler)]
                 let _profile = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::Spawning);
                 let world = world.clone();
                 let s_list = spawn_list.clone();
                 let s_state = spawn_state.clone();
                 for (pos, chunk) in batch {
-                    #[cfg(all(
-                        feature = "memory-profiler",
-                        any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-                        any(target_arch = "x86_64", target_arch = "aarch64")
-                    ))]
+                    #[cfg(profiler)]
                     let _detail = pumpkin_profiler::cpu::detail(
                         pumpkin_profiler::cpu::Detail::Chunk {
                             world: world.uuid,

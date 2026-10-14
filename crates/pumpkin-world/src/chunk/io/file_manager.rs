@@ -265,11 +265,7 @@ where
         chunk_coords: &'a [Vector2<i32>],
         stream: mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
-        #[cfg(all(
-            feature = "memory-profiler",
-            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-            any(target_arch = "x86_64", target_arch = "aarch64")
-        ))]
+        #[cfg(profiler)]
         let _profile =
             pumpkin_profiler::cpu::async_span(pumpkin_profiler::cpu::Phase::ChunkLoading);
         // Group requested chunk coords by their region file.
@@ -335,11 +331,7 @@ where
         folder: &'a LevelFolder,
         chunks_data: Vec<(Vector2<i32>, Self::Data)>,
     ) -> Result<(), ChunkWritingError> {
-        #[cfg(all(
-            feature = "memory-profiler",
-            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-            any(target_arch = "x86_64", target_arch = "aarch64")
-        ))]
+        #[cfg(profiler)]
         let _profile = pumpkin_profiler::cpu::async_span(pumpkin_profiler::cpu::Phase::ChunkSaving);
         // Group chunks by region file.
         let mut regions_chunks: BTreeMap<String, Vec<Self::Data>> = BTreeMap::new();

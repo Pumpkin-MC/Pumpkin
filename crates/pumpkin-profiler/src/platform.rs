@@ -131,3 +131,64 @@ fn native_capture(path: &Path) -> io::Result<(Value, Option<String>)> {
     crate::capture::write_json(&path.join("darwin.json"), &native)?;
     Ok((native, None))
 }
+
+pub fn create_root(path: &Path) -> io::Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700)
+    };
+    builder.create(path)
+}
+
+pub fn tempdir(root: &Path, prefix: &str) -> io::Result<tempfile::TempDir> {
+    let mut builder = tempfile::Builder::new();
+    builder.prefix(prefix);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        builder.permissions(std::fs::Permissions::from_mode(0o700))
+    };
+    builder.tempdir_in(root)
+}
+
+#[cfg(windows)]
+fn native_capture(path: &Path) -> io::Result<(Value, Option<String>)> {
+    use windows_sys::Win32::System::{
+        ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX},
+        Threading::{GetCurrentProcess, GetProcessHandleCount, GetProcessIoCounters, IO_COUNTERS},
+    };
+    // SAFETY: This pseudo-handle refers to the current process and is never closed.
+    let process = unsafe { GetCurrentProcess() };
+    let mut memory = PROCESS_MEMORY_COUNTERS_EX {
+        cb: std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32,
+        ..PROCESS_MEMORY_COUNTERS_EX::default()
+    };
+    let mut io = IO_COUNTERS::default();
+    let mut handles = 0;
+    // SAFETY: All output buffers match the API layouts. The extended memory buffer
+    // is cast to the base pointer as required by GetProcessMemoryInfo; cb carries its size.
+    let result = unsafe {
+        GetProcessMemoryInfo(process, (&raw mut memory).cast(), memory.cb) != 0
+            && GetProcessIoCounters(process, &raw mut io) != 0
+            && GetProcessHandleCount(process, &raw mut handles) != 0
+    };
+    if !result {
+        return Err(io::Error::last_os_error());
+    }
+    let native = serde_json::json!({
+        "os": "windows", "allocator": "System", "physical_memory_kind": "working_set",
+        "virtual_memory_kind": "commit_charge", "working_set_bytes": memory.WorkingSetSize,
+        "peak_working_set_bytes": memory.PeakWorkingSetSize,
+        "commit_bytes": memory.PagefileUsage, "peak_commit_bytes": memory.PeakPagefileUsage,
+        "private_bytes": memory.PrivateUsage, "page_faults": memory.PageFaultCount,
+        "handle_count": handles, "io_read_bytes": io.ReadTransferCount,
+        "io_written_bytes": io.WriteTransferCount, "io_other_bytes": io.OtherTransferCount,
+        "io_read_operations": io.ReadOperationCount, "io_write_operations": io.WriteOperationCount,
+        "io_other_operations": io.OtherOperationCount,
+    });
+    crate::capture::write_json(&path.join("windows.json"), &native)?;
+    Ok((native, None))
+}

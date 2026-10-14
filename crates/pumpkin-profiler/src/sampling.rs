@@ -1,3 +1,4 @@
+#[cfg(unix)]
 use std::{
     cmp::Reverse,
     collections::{HashMap, HashSet},
@@ -5,10 +6,13 @@ use std::{
     path::Path,
 };
 
+#[cfg(unix)]
 use flate2::{Compression, write::GzEncoder};
+#[cfg(unix)]
 use prost::Message;
 use serde::Serialize;
 
+#[cfg(unix)]
 use crate::capture::{BoundedWriter, write_file};
 
 pub const CPU_FREQUENCY: i32 = 100;
@@ -31,14 +35,22 @@ pub struct Thread {
 
 #[derive(Serialize)]
 pub struct Analysis {
-    pub frequency: i32,
+    pub frequency: Option<i32>,
+    pub unavailable_reason: Option<&'static str>,
     pub samples: usize,
     pub missed_samples: u64,
     pub functions: Vec<Function>,
     pub threads: Vec<Thread>,
 }
 
-pub fn start() -> io::Result<rpprof::ProfilerGuard<'static>> {
+#[cfg(unix)]
+pub type Sampler = rpprof::ProfilerGuard<'static>;
+
+#[cfg(windows)]
+pub struct Sampler;
+
+#[cfg(unix)]
+pub fn start() -> io::Result<Sampler> {
     #[cfg(target_os = "linux")]
     let blocked = &["libc", "libgcc", "pthread", "vdso"][..];
     #[cfg(target_os = "macos")]
@@ -58,7 +70,8 @@ pub fn start() -> io::Result<rpprof::ProfilerGuard<'static>> {
         .map_err(io::Error::other)
 }
 
-pub fn capture(guard: &rpprof::ProfilerGuard<'_>, path: &Path) -> io::Result<Analysis> {
+#[cfg(unix)]
+pub fn capture(guard: &Sampler, path: &Path) -> io::Result<Analysis> {
     let report = guard.report().build().map_err(io::Error::other)?;
     let mut functions = HashMap::<(String, String, u32), (u64, u64)>::new();
     let mut threads = HashMap::<(String, u64), u64>::new();
@@ -122,10 +135,36 @@ pub fn capture(guard: &rpprof::ProfilerGuard<'_>, path: &Path) -> io::Result<Ana
     compressed.write_all(&profile.encode_to_vec())?;
     write_file(&path.join("cpu.pb.gz"), &compressed.finish()?.0)?;
     Ok(Analysis {
-        frequency: CPU_FREQUENCY,
+        frequency: Some(CPU_FREQUENCY),
+        unavailable_reason: None,
         samples: report.total_samples(),
         missed_samples: report.missed_samples,
         functions,
         threads,
+    })
+}
+
+#[cfg(windows)]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Shares the fallible Unix sampler API."
+)]
+pub const fn start() -> std::io::Result<Sampler> {
+    Ok(Sampler)
+}
+
+#[cfg(windows)]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Shares the fallible Unix capture API."
+)]
+pub const fn capture(_sampler: &Sampler, _path: &std::path::Path) -> std::io::Result<Analysis> {
+    Ok(Analysis {
+        frequency: None,
+        unavailable_reason: Some("use a separate WPR/ETW recording on Windows"),
+        samples: 0,
+        missed_samples: 0,
+        functions: Vec::new(),
+        threads: Vec::new(),
     })
 }

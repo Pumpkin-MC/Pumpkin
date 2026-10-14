@@ -1,7 +1,5 @@
 use std::{
-    fs::{self, Permissions},
     io,
-    os::unix::fs::{DirBuilderExt, PermissionsExt},
     path::{Path, PathBuf},
     time::Instant,
 };
@@ -52,7 +50,7 @@ struct Session {
     started: Instant,
     snapshots: usize,
     previous: Option<capture::Snapshot>,
-    sampler: rpprof::ProfilerGuard<'static>,
+    sampler: sampling::Sampler,
 }
 
 impl Profiler {
@@ -164,14 +162,8 @@ impl State {
         self.next_generation = generation
             .checked_add(1)
             .ok_or_else(|| io::Error::other("profiler generation exhausted"))?;
-        fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(root)?;
-        let directory = tempfile::Builder::new()
-            .prefix("session-")
-            .permissions(Permissions::from_mode(0o700))
-            .tempdir_in(root)?;
+        crate::platform::create_root(root)?;
+        let directory = crate::platform::tempdir(root, "session-")?;
         let mut session = Session {
             directory: directory.path().to_owned(),
             started: Instant::now(),
@@ -189,7 +181,7 @@ impl State {
                 "max_frames": MAX_FRAMES, "max_live_samples": MAX_SAMPLES,
                 "max_file_bytes": capture::MAX_FILE_BYTES,
                 "max_native_xml_bytes": crate::platform::MAX_NATIVE_BYTES,
-                "cpu_sampling_frequency": sampling::CPU_FREQUENCY,
+                "cpu_sampling_frequency": if cfg!(windows) { None } else { Some(sampling::CPU_FREQUENCY) },
                 "coverage": "Rust allocations created or successfully reallocated after start; native malloc and mmap excluded"
             }),
         )?;

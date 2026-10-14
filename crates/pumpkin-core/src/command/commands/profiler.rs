@@ -46,7 +46,7 @@ impl CommandExecutor for ProfilerExecutor {
             pumpkin_profiler::without_tracking(|| match result {
                 Ok(Ok(message)) => source.send_feedback(TextComponent::text(message), false),
                 Ok(Err(error)) => {
-                    source.send_error(TextComponent::text(format!("Profiler: {error}")))
+                    source.send_error(TextComponent::text(format!("Profiler: {error}")));
                 }
                 Err(error) => source.send_error(TextComponent::text(format!(
                     "Profiler task failed: {error}"

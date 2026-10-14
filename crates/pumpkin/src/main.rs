@@ -44,11 +44,7 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 
-#[cfg(all(
-    feature = "memory-profiler",
-    any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-    any(target_arch = "x86_64", target_arch = "aarch64")
-))]
+#[cfg(profiler)]
 #[global_allocator]
 static ALLOCATOR: pumpkin_profiler::TrackingAllocator = pumpkin_profiler::TrackingAllocator;
 
@@ -58,11 +54,7 @@ static ALLOCATOR: pumpkin_profiler::TrackingAllocator = pumpkin_profiler::Tracki
 #[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() {
-    #[cfg(all(
-        feature = "memory-profiler",
-        any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-        any(target_arch = "x86_64", target_arch = "aarch64")
-    ))]
+    #[cfg(profiler)]
     pumpkin_profiler::register_allocator();
     let _ = MAIN_THREAD.set(thread::current().id());
 
@@ -90,14 +82,8 @@ async fn main() {
 
     pumpkin_core::init_logger(&config.advanced);
 
-    #[cfg(all(
-        feature = "memory-profiler",
-        not(all(
-            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
-            any(target_arch = "x86_64", target_arch = "aarch64")
-        ))
-    ))]
-    warn!("Profiling requires x86_64 or aarch64 macOS or Linux with glibc");
+    #[cfg(all(feature = "memory-profiler", not(profiler)))]
+    warn!("Profiling requires x86_64 or aarch64 Windows, macOS or Linux with glibc");
 
     info!(
         "{}",

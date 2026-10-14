@@ -1,6 +1,8 @@
 # pumpkin-profiler
 
-Memory and CPU profiling for Pumpkin on x86_64 and aarch64 macOS and Linux with glibc. It records live Rust allocations, samples CPU call stacks, and times server work by subsystem, world, entity type, block type, chunk and plugin event.
+Memory and CPU profiling for Pumpkin on x86_64 and aarch64 Windows, macOS and Linux with glibc. It records live Rust allocations, samples CPU call stacks (macOS and Linux), and times server work by subsystem, world, entity type, block type, chunk and plugin event.
+
+The default build contains no profiler hooks or commands.
 
 ## Run
 
@@ -16,29 +18,34 @@ profiler snapshot
 profiler stop
 ```
 
-Start before the workload. Take a snapshot after warmup, repeat the workload, then take another after unloading and saves. Each command prints a summary and the report path. `profiler status` shows the active session. `profiler cancel` ends it without a final capture. Orderly server shutdown saves a final capture.
+Start before the workload. Take a snapshot after warmup, repeat the workload, then take another after unloading and saves. Each command prints a summary and the report path. `profiler status` shows the active session and `profiler cancel` ends it without a final capture. An orderly server shutdown saves a final capture.
 
-Wait for each command to finish. Concurrent requests are rejected; a failed snapshot or stop can be retried. In-game commands require `pumpkin:command.profiler` (operator level 4). The old `memory-profiler` command and build feature still work.
+Wait for each command to finish. Concurrent requests are rejected, and a failed snapshot or stop can be retried. In-game use requires `pumpkin:command.profiler` (operator level 4). The old `memory-profiler` command and build feature still work.
+
+The `profiling` build profile keeps release optimizations and debug symbols, which give readable function names and file/line attribution. Keep that binary together with its reports.
+
+On macOS, Xcode Command Line Tools are required. On Windows, build with the MSVC toolchain.
 
 ## Read a report
 
-Captures are under `debug/profiler/session-*/snapshot-NNN/`.
+Captures are written to `debug/profiler/session-*/snapshot-NNN/`.
 
 | File | Use |
 | --- | --- |
-| `summary.txt` | CPU usage, RSS/heap changes, largest allocation sites and expensive work |
+| `summary.txt` | CPU usage, RSS/heap changes, largest allocation sites and most expensive work |
 | `report.json` | Full function/thread rankings, phase timings, world/type/chunk/plugin timings and server counters |
 | `cpu.flamegraph.svg` | Open in a browser to explore CPU call stacks |
 | `cpu.speedscope.json` | Open in Speedscope for interactive CPU analysis |
 | `cpu.pb.gz` | CPU profile for pprof |
 | `heap.pb.gz` | Live heap call stacks for pprof |
+| `windows.json` | Working set, commit charge, private bytes, handles, I/O and page faults (Windows) |
 | `darwin.json` | Physical footprint, CPU/I/O counters and malloc zone totals (macOS) |
 | `glibc.xml` | Native allocator arenas (Linux) |
 | `status.txt`, `smaps_rollup.txt`, `maps.txt` | Process memory and mappings from `/proc/self` (Linux) |
 
-`session.json` records the build and collection settings. Directories have mode `0700`. Reports remain until deleted.
+`session.json` records the build and collection settings. Report directories have mode `0700` and stay until you delete them.
 
-For function rankings or a heap comparison with Go's pprof tool:
+To rank functions or compare two heap snapshots with Go's pprof tool:
 
 ```sh
 cd debug/profiler/session-<id>
@@ -46,39 +53,29 @@ go tool pprof -top -cum snapshot-001/cpu.pb.gz
 go tool pprof -http=127.0.0.1:8080 -base snapshot-001/heap.pb.gz snapshot-002/heap.pb.gz
 ```
 
-Heap profiles default to live bytes. Use `-sample_index=inuse_objects` for allocation counts. Profiler allocation frames are hidden.
-
-On macOS, build and run the same commands with Xcode Command Line Tools installed.
-
-Debug symbols are optional for collection. Keep them for readable function names and file/line attribution. The `profiling` build keeps release optimization and debug symbols. Keep that binary with its reports.
+Heap profiles show live bytes by default. Use `-sample_index=inuse_objects` for allocation counts.
 
 ## CPU and tick measurements
 
-The CPU sampler runs at 100 Hz and records native thread stacks. Reports contain self and inclusive sample counts per function, thread totals, and call stacks. Short or idle sessions can have few samples. `missed_samples` counts lock-contention misses; blocked libraries and failed unwinds are not included in that counter. Wasm guest functions are not resolved by the native sampler.
+The CPU sampler records native thread stacks at 100 Hz on macOS and Linux. Short or idle sessions can have few samples, and Wasm guest functions are not resolved. Windows has no stack sampling. Use Windows Performance Recorder (WPR) for CPU call stacks there, and this profiler for heap and timing data.
 
-Timed phases cover:
+Timed phases cover the tick and each world, players, entities, block entities, plugin tick hooks, scheduled and random block/fluid ticks, spawning, chunk generation, chunk I/O and lighting. Results are broken down by world, entity type, block type, chunk and plugin event. Up to 4,096 chunk entries and 4,096 other entries are kept, and the report counts the ones it left out.
 
-- Tick and world totals; world setup/environment and entity tracking.
-- Functions/plugin tick hooks, players, entities and block entities.
-- Scheduled block/fluid ticks, random ticks and spawning.
-- Chunk generation, chunk loading/saving and lighting.
-
-Synchronous spans measure wall time and current-thread CPU time. Async chunk I/O and plugin event handlers measure elapsed wall time, including waits; their CPU time is null. The sampled CPU profile shows where CPU execution occurred separately.
-
-World timings identify the dimension and world UUID. Entity and block entity timings identify the type. Block/fluid timings distinguish scheduled and random ticks. Chunk timings combine measured entity, block entity, block/fluid and spawning work in that chunk. Plugin timings identify the handler source and event; handlers without a source appear as `unattributed`. A maximum of 4,096 distinct detail keys is retained; omitted entries are counted in the report.
-
-Timings and CPU samples are cumulative since start. Tick timing includes tick events and excludes sleeping before the next tick. A phase call may be one player tick, a worker batch, one generation job or one I/O batch. Timings are inclusive: nested work overlaps, and parallel worker wall times cannot be added to obtain tick duration. Main-thread CPU excludes Rayon workers. Process CPU includes every thread and profiling overhead, is measured between snapshots, and can exceed 100% because 100% means one core.
+All timings are cumulative since `start` and inclusive, so nested work overlaps. Parallel worker times cannot be added up to get the tick duration. Async chunk I/O and plugin handlers measure wall time including waits, so they have no CPU time. On Windows, thread CPU time is too coarse for single spans, so all timings are wall time only. Process CPU includes every thread and can exceed 100%, which means one core.
 
 ## Memory measurements
 
-`memory-stats` reads process RSS and virtual memory on both platforms. Linux also saves `/proc` diagnostics and glibc arena XML. macOS uses Mach task information through `memory-stats`, `proc_pid_rusage(RUSAGE_INFO_V4)` for footprint, CPU time, I/O, page-ins and wakeups, and `malloc_zone_statistics` for totals across all malloc zones. Footprint, wired memory and malloc usage are current values; CPU, I/O, page-ins and wakeups accumulate over the process lifetime. These values are included in `report.json` and `darwin.json`.
+Each capture records process RSS and virtual memory on every platform, plus the platform files listed above. `report.json` combines them.
 
-Heap stacks cover Rust allocations created or successfully reallocated after `start`. Native `malloc`, direct `mmap` and older allocations are absent. Sampling uses inverse power-of-two weights with a 512 KiB interval; allocations larger than 256 KiB are always selected. Small changes can be sampling noise. Compare heap growth with world/entity/cache counters; rising RSS alone does not establish a leak.
+Heap stacks only cover Rust allocations made after `start`. Native `malloc`, direct `mmap` and older allocations are not included. Allocations are sampled every 512 KiB on average, and any allocation over 256 KiB is always recorded, so small changes can be sampling noise.
 
-The heap collector holds up to 32,768 live samples with 32 frames each. Dropped samples make the estimate incomplete. Heap sample storage is released on stop/cancel. Captures read live data while the server runs; they are not atomic process snapshots. A busy region-cache lock produces a null count. Unavailable `smaps_rollup` data is recorded as an error.
+Rising RSS alone does not prove a leak. Compare heap growth with the world, entity and cache counters in the report.
 
-On macOS, CPU stack coverage can be limited in dyld shared-cache libraries and Apple Silicon frames with signed return addresses. The sampler uses available unwind data and does not provide complete coverage of those system frames. System allocator/unwinder libraries are excluded from CPU sampling.
+The collector keeps up to 32,768 live samples with 32 frames each. If it drops samples, the estimate is incomplete. Captures read live data while the server runs, so they are not atomic snapshots.
 
-Each output file is limited to 32 MiB. CPU collection can use temporary disk space and resolves its report in memory before the output limit is applied, so long sessions can consume more resources. Load native plugins before the first session: the CPU unwinder caches module information. CPU sampling owns `SIGPROF` and its process timer; do not run another sampler using those resources simultaneously.
+## Limitations
 
-The default build has no profiler hooks or commands. The profiler uses the existing `System` allocator. Its CPU dependency is `rpprof` with `framehop-unwinder`, `flamegraph` and `prost-codec`; default C++ demangling features are disabled.
+- Each output file is limited to 32 MiB. Long sessions can use noticeable memory and temporary disk space while the CPU report is built.
+- Load native plugins before the first session, because the CPU unwinder caches module information.
+- CPU sampling uses `SIGPROF` and the process timer. Don't run another sampler that uses them at the same time.
+- On macOS, stacks through system libraries and Apple Silicon frames with signed return addresses can be incomplete.

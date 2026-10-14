@@ -1,7 +1,6 @@
 use std::{
-    fs::{self, File, Permissions},
+    fs::{self, File},
     io::{self, Write},
-    os::unix::fs::PermissionsExt,
     path::Path,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
@@ -30,13 +29,10 @@ pub fn save(
     counters: &Value,
     started: Instant,
     previous: Option<&Snapshot>,
-    sampler: &rpprof::ProfilerGuard<'_>,
+    sampler: &sampling::Sampler,
 ) -> io::Result<Snapshot> {
     let capture_started = unix_nanos();
-    let directory = tempfile::Builder::new()
-        .prefix(".snapshot-")
-        .permissions(Permissions::from_mode(0o700))
-        .tempdir_in(root)?;
+    let directory = platform::tempdir(root, ".snapshot-")?;
     let path = directory.path();
     let process = platform::capture(path)?;
     let (samples, dropped) = COLLECTOR.snapshot();
@@ -48,14 +44,7 @@ pub fn save(
         return Err(io::Error::other("heap profile exceeds output size limit"));
     }
     let cpu_samples = sampling::capture(sampler, path)?;
-    let snapshot = Snapshot::new(
-        &process,
-        &heap,
-        &timings,
-        previous,
-        &cpu_samples,
-        &details,
-    );
+    let snapshot = Snapshot::new(&process, &heap, &timings, previous, &cpu_samples, &details);
     let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
     encoder.write_all(&profile.encode_to_vec())?;
     write_file(&path.join("heap.pb.gz"), &encoder.finish()?)?;
@@ -105,7 +94,8 @@ impl Snapshot {
         }
         if let Some(rss) = rss_bytes {
             lines.push(format!(
-                "RSS: {:.2} MiB{}",
+                "{}: {:.2} MiB{}",
+                if cfg!(windows) { "Working set" } else { "RSS" },
                 mib(rss as f64),
                 delta(
                     rss as f64,
@@ -116,7 +106,12 @@ impl Snapshot {
             ));
         }
         lines.push(format!(
-            "Virtual memory: {:.2} MiB",
+            "{}: {:.2} MiB",
+            if cfg!(windows) {
+                "Process commit"
+            } else {
+                "Virtual memory"
+            },
             mib(process.virtual_bytes as f64)
         ));
         if let Some(footprint) = process
@@ -171,10 +166,14 @@ fn cpu_summary(
     details: &cpu::Details,
 ) -> Vec<String> {
     let mut lines = Vec::new();
-    lines.push(format!(
-        "CPU stack samples: {}, lock-contention misses: {}",
-        cpu_samples.samples, cpu_samples.missed_samples
-    ));
+    if let Some(reason) = cpu_samples.unavailable_reason {
+        lines.push(format!("CPU stack sampling: {reason}"));
+    } else {
+        lines.push(format!(
+            "CPU stack samples: {}, lock-contention misses: {}",
+            cpu_samples.samples, cpu_samples.missed_samples
+        ));
+    }
     for function in cpu_samples.functions.iter().take(5) {
         let percent = if cpu_samples.samples == 0 {
             0.0

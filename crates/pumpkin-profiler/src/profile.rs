@@ -214,20 +214,23 @@ impl Builder {
         }
         let mut symbols = Vec::new();
         // Backtrace PCs point past the call instruction.
-        backtrace::resolve(address.saturating_sub(1) as *mut libc::c_void, |symbol| {
-            if symbols.len() == MAX_FRAMES {
-                return;
-            }
-            if let Some(name) = symbol.name() {
-                symbols.push((
-                    bounded_text(name),
-                    symbol
-                        .filename()
-                        .map_or_else(String::new, |path| bounded_text(path.display())),
-                    i64::from(symbol.lineno().unwrap_or(0)),
-                ));
-            }
-        });
+        backtrace::resolve(
+            address.saturating_sub(1) as *mut std::ffi::c_void,
+            |symbol| {
+                if symbols.len() == MAX_FRAMES {
+                    return;
+                }
+                if let Some(name) = symbol.name() {
+                    symbols.push((
+                        bounded_text(name),
+                        symbol
+                            .filename()
+                            .map_or_else(String::new, |path| bounded_text(path.display())),
+                        i64::from(symbol.lineno().unwrap_or(0)),
+                    ));
+                }
+            },
+        );
         let resolved = !symbols.is_empty();
         if !resolved {
             symbols.push((format!("0x{address:x}"), String::new(), 0));

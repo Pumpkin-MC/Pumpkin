@@ -100,8 +100,19 @@ fn record(address: usize, size: usize, generation: u64) {
     let mut frames = [std::ptr::null_mut(); MAX_FRAMES];
     // SAFETY: The writable buffer holds MAX_FRAMES pointers. HookGuard prevents
     // recursive collector access if the unwinder allocates or frees Rust memory.
+    #[cfg(unix)]
     let frame_count =
         unsafe { libc::backtrace(frames.as_mut_ptr(), MAX_FRAMES as i32) }.max(0) as usize;
+    // SAFETY: Same buffer and recursion guarantees as above; no hash output is requested.
+    #[cfg(windows)]
+    let frame_count = unsafe {
+        windows_sys::Win32::System::Diagnostics::Debug::RtlCaptureStackBackTrace(
+            0,
+            MAX_FRAMES as u32,
+            frames.as_mut_ptr(),
+            std::ptr::null_mut(),
+        )
+    } as usize;
     COLLECTOR.insert(
         &Sample {
             address,

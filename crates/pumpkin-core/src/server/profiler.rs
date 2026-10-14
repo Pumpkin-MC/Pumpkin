@@ -6,7 +6,7 @@ use std::{
 
 use super::Server;
 
-pub(crate) fn counters(server: &Server) -> Value {
+pub fn counters(server: &Server) -> Value {
     pumpkin_profiler::without_tracking(|| collect_counters(server))
 }
 
