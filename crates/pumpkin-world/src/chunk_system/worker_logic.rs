@@ -260,6 +260,12 @@ pub fn run_generation(
     stage: StagedChunkEnum,
     level: &Level,
 ) -> RecvChunk {
+    #[cfg(all(
+        feature = "memory-profiler",
+        any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    let _profile = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::ChunkGeneration);
     let portal = level.world_portal.load_full();
     let Some(portal_ref) = portal.as_deref() else {
         error!("Chunk generation FAILED at {pos:?} ({stage:?}): World portal is not initialized");

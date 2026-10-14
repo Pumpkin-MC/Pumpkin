@@ -781,6 +781,12 @@ impl LightEngine {
             return;
         }
 
+        #[cfg(all(
+            feature = "memory-profiler",
+            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
+        let _profile = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::Lighting);
         self.sky_light.convert_light(cache);
         self.block_light.propagate_light(cache);
 
@@ -821,6 +827,12 @@ impl LightEngine {
     }
 
     pub fn run_light_updates(&mut self, cache: &mut Cache) {
+        #[cfg(all(
+            feature = "memory-profiler",
+            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
+        let _profile = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::Lighting);
         if !self.block_light.decrease_queue.is_empty() {
             self.block_light.process_decrease_queue(cache);
         }

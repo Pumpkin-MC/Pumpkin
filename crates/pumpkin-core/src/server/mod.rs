@@ -55,6 +55,12 @@ mod connection_cache;
 pub(crate) mod debug_profiler;
 pub mod enchantment;
 mod key_store;
+#[cfg(all(
+    feature = "memory-profiler",
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+pub(crate) mod profiler;
 pub mod recipe;
 pub mod scheduler;
 pub mod seasonal_events;
@@ -782,6 +788,23 @@ impl Server {
             error!("Failed to save level.dat: {err}");
         }
         info!("Completed worlds");
+        #[cfg(all(
+            feature = "memory-profiler",
+            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
+        {
+            let counters = profiler::counters(self);
+            match tokio::task::spawn_blocking(move || {
+                pumpkin_profiler::PROFILER.shutdown(&counters)
+            })
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => error!("Failed to save profiler report on shutdown: {error}"),
+                Err(error) => error!("Profiler shutdown task failed: {error}"),
+            }
+        }
     }
 
     /// Broadcasts a packet to all players in all worlds.
@@ -1173,6 +1196,12 @@ impl Server {
             let player_handle = handle.clone();
             players.par_iter().for_each(|player| {
                 let _guard = player_handle.enter();
+                #[cfg(all(
+                    feature = "memory-profiler",
+                    any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+                    any(target_arch = "x86_64", target_arch = "aarch64")
+                ))]
+                let _profile = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::Players);
                 player.tick(self);
             });
         }
@@ -1180,6 +1209,13 @@ impl Server {
 
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub fn tick_worlds(self: &Arc<Self>) {
+        #[cfg(all(
+            feature = "memory-profiler",
+            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
+        let functions_profile =
+            pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::Functions);
         let source = crate::command::CommandSender::Console
             .into_source(self)
             .with_silent();
@@ -1192,6 +1228,12 @@ impl Server {
             self,
             self.tick_count.load(std::sync::atomic::Ordering::Relaxed) as u64,
         );
+        #[cfg(all(
+            feature = "memory-profiler",
+            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
+        drop(functions_profile);
 
         self.sync_game_time();
 

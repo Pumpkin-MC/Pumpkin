@@ -87,6 +87,12 @@ impl Ticker {
             // following iteration catch-up-runs with no park.
             schedule.next_tick_nanos += this_tick_nanos;
 
+            #[cfg(all(
+                feature = "memory-profiler",
+                any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+                any(target_arch = "x86_64", target_arch = "aarch64")
+            ))]
+            let profile_tick = pumpkin_profiler::cpu::tick(this_tick_nanos.max(0) as u64);
             manager.tick();
 
             let tick_number = server.tick_count.load(Ordering::Relaxed);
@@ -129,6 +135,12 @@ impl Ticker {
             }
 
             server.update_tick_times(tick_duration_nanos);
+            #[cfg(all(
+                feature = "memory-profiler",
+                any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+                any(target_arch = "x86_64", target_arch = "aarch64")
+            ))]
+            drop(profile_tick);
 
             if STOP_INTERRUPT.is_cancelled() {
                 break 'ticker;

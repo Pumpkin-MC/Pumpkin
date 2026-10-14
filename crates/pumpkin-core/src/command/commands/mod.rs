@@ -53,6 +53,12 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod posteffect;
+#[cfg(all(
+    feature = "memory-profiler",
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+mod profiler;
 mod pumpkin;
 mod raid;
 mod random;
@@ -113,6 +119,12 @@ pub fn default_dispatcher(
     banlist::register(&mut dispatcher, registry);
     difficulty::register(&mut dispatcher, registry);
     debug::register(&mut dispatcher, registry);
+    #[cfg(all(
+        feature = "memory-profiler",
+        any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    profiler::register(&mut dispatcher, registry);
     dialog::register(&mut dispatcher, registry);
     execute::register(&mut dispatcher, registry);
     fillbiome::register(&mut dispatcher, registry);

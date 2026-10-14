@@ -1,0 +1,23 @@
+[package]
+name = "pumpkin-profiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Heap memory and tick CPU profiling for Pumpkin."
+
+[target.'cfg(all(any(target_os = "macos", all(target_os = "linux", target_env = "gnu")), any(target_arch = "x86_64", target_arch = "aarch64")))'.dependencies]
+memory-stats = { version = "1.2.0", default-features = false }
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+flate2.workspace = true
+backtrace = "0.3.76"
+prost = "0.14.4"
+tokio = { workspace = true, features = ["sync"] }
+rpprof = { version = "0.18.3", default-features = false, features = ["framehop-unwinder", "flamegraph", "prost-codec"] }
+uuid.workspace = true
+
+[lints]
+workspace = true

@@ -125,6 +125,11 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
 }
 
 impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkFileManager<S> {
+    #[cfg(feature = "memory-profiler")]
+    pub fn cached_region_count(&self) -> Option<usize> {
+        self.file_locks.try_read().ok().map(|files| files.len())
+    }
+
     pub fn new(chunk_config: S::ChunkConfig) -> Self {
         Self {
             file_locks: RwLock::new(BTreeMap::new()),
@@ -260,6 +265,13 @@ where
         chunk_coords: &'a [Vector2<i32>],
         stream: mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
+        #[cfg(all(
+            feature = "memory-profiler",
+            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
+        let _profile =
+            pumpkin_profiler::cpu::async_span(pumpkin_profiler::cpu::Phase::ChunkLoading);
         // Group requested chunk coords by their region file.
         let mut regions_chunks: BTreeMap<String, Vec<Vector2<i32>>> = BTreeMap::new();
         for at in chunk_coords {
@@ -323,6 +335,12 @@ where
         folder: &'a LevelFolder,
         chunks_data: Vec<(Vector2<i32>, Self::Data)>,
     ) -> Result<(), ChunkWritingError> {
+        #[cfg(all(
+            feature = "memory-profiler",
+            any(target_os = "macos", all(target_os = "linux", target_env = "gnu")),
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
+        let _profile = pumpkin_profiler::cpu::async_span(pumpkin_profiler::cpu::Phase::ChunkSaving);
         // Group chunks by region file.
         let mut regions_chunks: BTreeMap<String, Vec<Self::Data>> = BTreeMap::new();
         for (at, chunk) in chunks_data {
@@ -448,6 +466,22 @@ where
     Linear(ChunkFileManager<Linear>),
     Anvil(ChunkFileManager<Anvil>),
     Pump(ChunkFileManager<Pump>),
+}
+
+#[cfg(feature = "memory-profiler")]
+impl<Linear, Anvil, Pump> LevelFileIO<Linear, Anvil, Pump>
+where
+    Linear: ChunkSerializer<WriteBackend = PathBuf>,
+    Anvil: ChunkSerializer<WriteBackend = PathBuf>,
+    Pump: ChunkSerializer<WriteBackend = PathBuf>,
+{
+    pub fn cached_region_count(&self) -> Option<usize> {
+        match self {
+            Self::Linear(manager) => manager.cached_region_count(),
+            Self::Anvil(manager) => manager.cached_region_count(),
+            Self::Pump(manager) => manager.cached_region_count(),
+        }
+    }
 }
 
 impl<P, Linear, Anvil, Pump> FileIO for LevelFileIO<Linear, Anvil, Pump>

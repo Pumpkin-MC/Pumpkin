@@ -18,6 +18,7 @@ members = [
     "crates/pumpkin-plugin-runtime",
     "crates/pumpkin-plugin-utils",
     "crates/pumpkin-protocol",
+    "crates/pumpkin-profiler",
     "crates/pumpkin-util",
     "crates/pumpkin-wasm-host",
     "crates/pumpkin-wasm-host-common",
@@ -224,6 +225,7 @@ pumpkin-plugin-api = { path = "crates/pumpkin-plugin-api", default-features = fa
 pumpkin-plugin-runtime = { path = "crates/pumpkin-plugin-runtime", default-features = false }
 pumpkin-plugin-utils = { path = "crates/pumpkin-plugin-utils", default-features = false }
 pumpkin-protocol = { path = "crates/pumpkin-protocol", default-features = false }
+pumpkin-profiler = { path = "crates/pumpkin-profiler", default-features = false }
 pumpkin-util = { path = "crates/pumpkin-util", default-features = false }
 pumpkin-wasm-host = { path = "crates/pumpkin-wasm-host", default-features = false }
 pumpkin-wasm-host-common = { path = "crates/pumpkin-wasm-host-common", default-features = false }
