@@ -34,6 +34,18 @@ impl JavaClient {
             return;
         };
 
+        let vehicle_entity = vehicle.get_entity();
+        // Only the controlling passenger (the first one) steers.
+        let is_controlling = vehicle_entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .first()
+            .is_some_and(|passenger| passenger.get_entity().entity_id == entity.entity_id);
+        if !is_controlling {
+            return;
+        }
+
         let last_pos = entity.pos.load();
         let pos = Vector3::new(
             crate::net::clamp_horizontal_position(packet.x),
@@ -41,7 +53,17 @@ impl JavaClient {
             crate::net::clamp_horizontal_position(packet.z),
         );
 
-        let vehicle_entity = vehicle.get_entity();
+        // Vanilla's "moved too quickly" check: drop steps over 10 blocks.
+        if vehicle_entity.pos.load().squared_distance_to_vec(&pos) > 100.0 {
+            warn!(
+                "{} moved a vehicle too quickly ({:?} -> {:?})",
+                player.gameprofile.name,
+                vehicle_entity.pos.load(),
+                pos
+            );
+            return;
+        }
+
         vehicle_entity.set_pos(pos);
         vehicle_entity.set_rotation(packet.yaw, packet.pitch);
         entity.set_pos(pos);
