@@ -729,6 +729,8 @@ impl PluginManager {
         };
 
         if let Err(loader_data) = reserved {
+            // The rejected instance's code lives in the library, so drop it before unloading
+            drop(instance);
             // Nothing owns the runtime the loader built -> release it again
             loader.unload(loader_data).await.ok();
             return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
