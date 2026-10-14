@@ -122,6 +122,9 @@ pub struct BedrockClient {
     /// The next form ID to use for custom forms.
     pub next_form_id: AtomicU32,
     pub inventory_opened: AtomicBool,
+    /// Whether the player has been spawned into its world; set by the first completed
+    /// resource pack response so later ones cannot spawn it again.
+    spawned: AtomicBool,
     /// Separate from normal vitals caching so the first rejected use always gets corrected.
     last_food_rejection_tick: AtomicCell<Option<i32>>,
     pub client_cache_supported: AtomicBool,
@@ -162,6 +165,7 @@ impl BedrockClient {
             pending_bytes: Arc::new(AtomicUsize::new(0)),
             next_form_id: AtomicU32::new(0),
             inventory_opened: AtomicBool::new(false),
+            spawned: AtomicBool::new(false),
             last_food_rejection_tick: AtomicCell::new(None),
             client_cache_supported: AtomicBool::new(false),
             blob_cache: std::sync::Mutex::new(HashMap::new()),

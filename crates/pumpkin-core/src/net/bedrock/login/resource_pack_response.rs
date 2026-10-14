@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
@@ -7,8 +9,6 @@ impl BedrockClient {
         packet: SResourcePackClientResponse,
         server: &Arc<Server>,
     ) {
-        // TODO: warn & ignore if the player is already spawned in
-
         match packet.response {
             SResourcePackClientResponse::STATUS_REFUSED => {
                 debug!("Bedrock: SResourcePackResponse::STATUS_REFUSED");
@@ -56,6 +56,15 @@ impl BedrockClient {
                 debug!("Bedrock: SResourcePackResponse::STATUS_COMPLETED");
                 let player = self.player.load_full();
                 if let Some(player) = player.as_ref() {
+                    // Responses run concurrently, so the flag is swapped: only the
+                    // first completed response may spawn the player.
+                    if self.spawned.swap(true, Ordering::AcqRel) {
+                        debug!(
+                            "Bedrock: ignoring repeated SResourcePackResponse::STATUS_COMPLETED from {}",
+                            self.address
+                        );
+                        return;
+                    }
                     player
                         .world()
                         .spawn_bedrock_player(&server.basic_config, player.clone(), server)
