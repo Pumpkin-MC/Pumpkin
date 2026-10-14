@@ -8,19 +8,27 @@ use crate::{
     serial::{PacketRead, PacketWrite},
 };
 
+/// Bidirectional packet managing player respawning and client spawn readiness.
 #[derive(PacketRead, PacketWrite)]
 #[packet(45)]
 pub struct SRespawn {
+    /// World coordinates where the player is to respawn.
     pub position: Vector3<f32>,
+    /// Stage of the respawn lifecycle.
     pub state: RespawnState,
+    /// Runtime entity ID of the respawning player.
     pub player_runtime_id: VarULong,
 }
 
+/// Lifecycle stage for player respawning.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PacketRead, PacketWrite)]
 #[repr(u8)]
 pub enum RespawnState {
+    /// Server is searching for a valid spawn position point.
     SearchingForSpawn,
+    /// Server indicates client is ready to spawn at target coordinates.
     ReadyToSpawn,
+    /// Client confirms it has loaded the surrounding world and is ready to spawn.
     ClientReadyToSpawn,
 }
 
