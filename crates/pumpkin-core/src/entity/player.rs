@@ -286,6 +286,7 @@ use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
+use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::{Difficulty, GameMode, Hand};
 use pumpkin_world::biome;
@@ -297,6 +298,7 @@ use crate::command::context::command_source::CommandSource;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::{CommandSender, client_suggestions};
 use crate::data::SaveJSONConfiguration;
+use crate::log_at_level;
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
@@ -1436,7 +1438,7 @@ impl Player {
             return;
         }
 
-        if damage >= 100.0 {
+        if is_mace_smash && damage >= 100.0 {
             self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::DealtOverkillDamage);
         }
 
@@ -2266,7 +2268,7 @@ impl Player {
 
     fn can_fit_pose(&self, pose: EntityPose) -> bool {
         let entity = self.get_entity();
-        let dimensions = Entity::get_entity_dimensions(pose);
+        let dimensions = entity.get_dimensions(pose);
         let position = entity.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimensions);
         entity
@@ -2684,7 +2686,8 @@ impl Player {
                                 )));
                             }
                         }
-                        tracing::error!(
+                        log_at_level!(
+                            e.severity(),
                             "Failed to handle play packet id {} (payload {} bytes): {}",
                             packet.id,
                             packet.payload.len(),
@@ -3983,8 +3986,17 @@ impl Player {
             pitch_rad.cos() * yaw_rad.sin(),
         );
         let end_pos = eye_pos + dir * max_distance;
-        let res = world.raycast(eye_pos, end_pos, |pos, w| !w.get_block_state(pos).is_air());
-        res.map(|(pos, _)| pos)
+        let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
+            eye_pos,
+            end_pos,
+            pumpkin_world::clip::ClipBlock::Outline,
+            pumpkin_world::clip::ClipFluid::None,
+        ));
+        if hit.is_miss {
+            None
+        } else {
+            Some(hit.block_pos)
+        }
     }
 
     pub async fn unload_watched_chunks(&self, world: &World) {
@@ -5851,8 +5863,13 @@ impl Player {
             self.open_container_pos.store(block_pos);
             Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
         } else {
-            //TODO: Send message if spectator
-
+            if self.is_spectator() {
+                self.send_system_message_raw(
+                    &TextComponent::translate(translation::java::CONTAINER_SPECTATORCANTOPEN, [])
+                        .color_named(NamedColor::Red),
+                    true,
+                );
+            }
             None
         }
     }
