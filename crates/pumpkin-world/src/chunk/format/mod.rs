@@ -219,6 +219,25 @@ fn restore_open_sky(sky_lights: &mut [LightContainer]) {
     }
 }
 
+/// The highest sky section the writer must store for `restore_open_sky` to rebuild the column:
+/// the topmost section that isn't open sky, or the bottom one when every section is. `None` when
+/// the whole column is dark, which reloads correctly without any array.
+fn top_stored_sky_section(sky_lights: &[LightContainer]) -> Option<usize> {
+    if sky_lights
+        .iter()
+        .all(|container| matches!(container, LightContainer::Empty(0)))
+    {
+        return None;
+    }
+
+    Some(
+        sky_lights
+            .iter()
+            .rposition(|container| !matches!(container, LightContainer::Empty(15)))
+            .unwrap_or(0),
+    )
+}
+
 impl ChunkData {
     #[allow(clippy::too_many_lines)]
     pub fn internal_from_bytes(
@@ -573,6 +592,8 @@ impl ChunkData {
         }
         root_compound.put_compound("Heightmaps", heightmaps_compound);
 
+        let top_stored_sky = top_stored_sky_section(&light_lock.sky_light);
+
         let mut sections_list = Vec::new();
         for i in 0..self.section.count {
             let mut section_comp = NbtCompound::new();
@@ -642,10 +663,20 @@ impl ChunkData {
                 section_comp.put("BlockLight", NbtTag::ByteArray(bytes));
             }
 
-            // sky_light
-            if let Some(light_data) = extract_light_ref(light_lock.sky_light.get(i)) {
-                let bytes: Box<[i8]> = light_data.iter().map(|&x| x as i8).collect();
-                section_comp.put("SkyLight", NbtTag::ByteArray(bytes));
+            // sky_light, uniform sections included where the reader can't infer them
+            match light_lock.sky_light.get(i) {
+                Some(LightContainer::Full(data)) => {
+                    let bytes: Box<[i8]> = data.iter().map(|&x| x as i8).collect();
+                    section_comp.put("SkyLight", NbtTag::ByteArray(bytes));
+                }
+                Some(LightContainer::Empty(level))
+                    if top_stored_sky.is_some_and(|top| i == top || (i < top && *level != 0)) =>
+                {
+                    let packed = (*level << 4 | *level) as i8;
+                    let bytes: Box<[i8]> = vec![packed; LightContainer::ARRAY_SIZE].into();
+                    section_comp.put("SkyLight", NbtTag::ByteArray(bytes));
+                }
+                _ => {}
             }
 
             sections_list.push(NbtTag::Compound(section_comp));
@@ -1277,6 +1308,14 @@ mod tests {
 
     /// A chunk whose open-sky sections are uniform, the shape the light pass produces.
     fn chunk_with_uniform_sky(top_lit_section: usize) -> ChunkData {
+        chunk_with_sky(|index| match index {
+            i if i < top_lit_section => LightContainer::Empty(0),
+            i if i == top_lit_section => LightContainer::new_filled(7),
+            _ => LightContainer::Empty(15),
+        })
+    }
+
+    fn chunk_with_sky(sky: impl Fn(usize) -> LightContainer) -> ChunkData {
         let chunk = ChunkData::empty(0, 0);
         let count = chunk.section.count;
         chunk
@@ -1287,13 +1326,7 @@ mod tests {
                 .light_engine
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            light.sky_light = (0..count)
-                .map(|index| match index {
-                    i if i < top_lit_section => LightContainer::Empty(0),
-                    i if i == top_lit_section => LightContainer::new_filled(7),
-                    _ => LightContainer::Empty(15),
-                })
-                .collect();
+            light.sky_light = (0..count).map(sky).collect();
             light.block_light = (0..count).map(|_| LightContainer::Empty(0)).collect();
         };
         chunk
@@ -1324,5 +1357,31 @@ mod tests {
             before,
             "sections above {top_lit_section} are omitted from disk and must reload as open sky"
         );
+    }
+
+    fn assert_sky_round_trip(chunk: &ChunkData) {
+        let before = sky_levels(chunk);
+        let bytes = chunk.to_bytes().expect("serializes");
+        let reloaded = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("deserializes");
+        assert_eq!(sky_levels(&reloaded), before);
+    }
+
+    #[test]
+    fn all_uniform_sky_sections_survive_the_disk_round_trip() {
+        // Fully open sky
+        assert_sky_round_trip(&chunk_with_sky(|_| LightContainer::Empty(15)));
+        // Fully dark
+        assert_sky_round_trip(&chunk_with_sky(|_| LightContainer::Empty(0)));
+        // Uniform but neither dark nor open, under open sky
+        assert_sky_round_trip(&chunk_with_sky(|index| match index {
+            0..=2 => LightContainer::Empty(0),
+            3..=5 => LightContainer::Empty(9),
+            _ => LightContainer::Empty(15),
+        }));
+        // Dark sections at the top of the column
+        assert_sky_round_trip(&chunk_with_sky(|index| match index {
+            0..=10 => LightContainer::Empty(15),
+            _ => LightContainer::Empty(0),
+        }));
     }
 }
