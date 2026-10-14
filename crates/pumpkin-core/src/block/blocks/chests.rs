@@ -6,6 +6,7 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{ChestLikeProperties, ChestType, HorizontalFacing};
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::loot_table::get_loot_table;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::Inventory;
 use pumpkin_inventory::double::DoubleInventory;
@@ -356,6 +357,30 @@ impl BlockBehaviour for ChestBlock {
 /// Copper chests have the same behavior as wooden chests but also oxidize over time.
 #[pumpkin_block_from_tag("minecraft:copper_chests")]
 pub struct CopperChestBlock;
+
+impl CopperChestBlock {
+    pub(crate) fn get_hinge_sound(block: &Block, open: bool) -> Sound {
+        let (open_sound, close_sound) = if block == &Block::WEATHERED_COPPER_CHEST
+            || block == &Block::WAXED_WEATHERED_COPPER_CHEST
+        {
+            (
+                Sound::BlockCopperChestWeatheredOpen,
+                Sound::BlockCopperChestWeatheredClose,
+            )
+        } else if block == &Block::OXIDIZED_COPPER_CHEST
+            || block == &Block::WAXED_OXIDIZED_COPPER_CHEST
+        {
+            (
+                Sound::BlockCopperChestOxidizedOpen,
+                Sound::BlockCopperChestOxidizedClose,
+            )
+        } else {
+            (Sound::BlockCopperChestOpen, Sound::BlockCopperChestClose)
+        };
+
+        if open { open_sound } else { close_sound }
+    }
+}
 
 impl
     crate::block::blocks::weathering_copper::ChangeOverTimeBlock<
