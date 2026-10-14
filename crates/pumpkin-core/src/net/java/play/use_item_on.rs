@@ -26,6 +26,14 @@ impl JavaClient {
             return Err(BlockPlacingError::BlockOutOfReach);
         }
 
+        // Vanilla validates the hit relative to the clicked block's center for every item.
+        if ![cursor_pos.x, cursor_pos.y, cursor_pos.z]
+            .into_iter()
+            .all(|coordinate| (f64::from(coordinate) - 0.5).abs() < 1.000_000_1)
+        {
+            return Ok(());
+        }
+
         let Ok(face) = BlockDirection::try_from(use_item_on.face.0) else {
             return Err(BlockPlacingError::InvalidBlockFace);
         };
