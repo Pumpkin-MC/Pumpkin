@@ -6,7 +6,10 @@ use std::sync::{
 
 use pumpkin_data::{damage::DamageType, entity::EntityType};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{
+    boundingbox::BoundingBox,
+    vector3::{Axis, Vector3},
+};
 
 use crate::{server::Server, world::World};
 
@@ -57,7 +60,44 @@ impl ExperienceOrbEntity {
         let offset = direction.normalize() * (size * 0.5);
         orb.entity.set_pos(position.add(&offset));
         orb.entity.set_velocity(velocity);
+        if !world.is_space_empty(orb.entity.bounding_box.load()) {
+            orb.unstuck_if_possible(size);
+        }
         orb
+    }
+
+    fn unstuck_if_possible(&self, max_distance: f64) {
+        let bounding_box = self.entity.bounding_box.load();
+        let size = bounding_box.max - bounding_box.min;
+        let center = (bounding_box.min + bounding_box.max) * 0.5;
+        let half_distance = Vector3::new(max_distance, max_distance, max_distance) * 0.5;
+        let allowed_centers = BoundingBox {
+            min: center - half_distance,
+            max: center + half_distance,
+        };
+        let world = self.entity.world.load();
+        let (mut collisions, _) =
+            world.get_block_collisions(allowed_centers.expand(size.x, size.y, size.z), self);
+        {
+            let border = world
+                .worldborder
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let half = border.new_diameter * 0.5;
+            collisions.retain(|shape| {
+                shape.max.x > border.center_x - half
+                    && shape.min.x < border.center_x + half
+                    && shape.max.z > border.center_z - half
+                    && shape.min.z < border.center_z + half
+            });
+        };
+        let expanded_collisions = collisions
+            .into_iter()
+            .map(|shape| shape.expand(size.x * 0.5, size.y * 0.5, size.z * 0.5));
+        if let Some(position) = closest_free_center(allowed_centers, center, expanded_collisions) {
+            self.entity
+                .set_pos(position.add_raw(0.0, -size.y * 0.5, 0.0));
+        }
     }
 
     pub fn spawn_with_direction(
@@ -100,6 +140,52 @@ impl ExperienceOrbEntity {
             1
         }
     }
+}
+
+fn closest_free_center(
+    allowed_centers: BoundingBox,
+    center: Vector3<f64>,
+    collisions: impl Iterator<Item = BoundingBox>,
+) -> Option<Vector3<f64>> {
+    // Subtract expanded collision boxes, matching vanilla's ONLY_FIRST shape operation.
+    let mut free_boxes = vec![allowed_centers];
+    for collision in collisions {
+        let mut remaining = Vec::new();
+        for mut free in free_boxes {
+            if !free.intersects(&collision) {
+                remaining.push(free);
+                continue;
+            }
+            for axis in [Axis::X, Axis::Y, Axis::Z] {
+                if free.min.get_axis(axis) < collision.min.get_axis(axis) {
+                    let mut piece = free;
+                    piece.max.set_axis(axis, collision.min.get_axis(axis));
+                    remaining.push(piece);
+                    free.min.set_axis(axis, collision.min.get_axis(axis));
+                }
+                if free.max.get_axis(axis) > collision.max.get_axis(axis) {
+                    let mut piece = free;
+                    piece.min.set_axis(axis, collision.max.get_axis(axis));
+                    remaining.push(piece);
+                    free.max.set_axis(axis, collision.max.get_axis(axis));
+                }
+            }
+        }
+        free_boxes = remaining;
+    }
+    free_boxes
+        .into_iter()
+        .map(|free| {
+            Vector3::new(
+                center.x.clamp(free.min.x, free.max.x),
+                center.y.clamp(free.min.y, free.max.y),
+                center.z.clamp(free.min.z, free.max.z),
+            )
+        })
+        .min_by(|a, b| {
+            a.squared_distance_to_vec(&center)
+                .total_cmp(&b.squared_distance_to_vec(&center))
+        })
 }
 
 impl EntityBase for ExperienceOrbEntity {
@@ -240,5 +326,35 @@ impl EntityBase for ExperienceOrbEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unstuck_selects_nearest_free_center_and_leaves_enclosed_orbs_in_place() {
+        let allowed = BoundingBox {
+            min: Vector3::new(0.0, 0.0, 0.0),
+            max: Vector3::new(1.0, 1.0, 1.0),
+        };
+        let center = Vector3::new(0.5, 0.5, 0.5);
+        let wall = BoundingBox {
+            min: Vector3::new(-1.0, -1.0, -1.0),
+            max: Vector3::new(0.75, 2.0, 2.0),
+        };
+        let floor = BoundingBox {
+            min: Vector3::new(-1.0, -1.0, -1.0),
+            max: Vector3::new(2.0, 0.625, 2.0),
+        };
+        assert_eq!(
+            closest_free_center(allowed, center, [wall, floor].into_iter()),
+            Some(Vector3::new(0.75, 0.625, 0.5))
+        );
+        assert_eq!(
+            closest_free_center(allowed, center, [allowed].into_iter()),
+            None
+        );
     }
 }
