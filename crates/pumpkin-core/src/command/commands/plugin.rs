@@ -279,6 +279,11 @@ impl CommandExecutor for ReloadExecutor {
                 return;
             }
 
+            // A plugin still initializing counts as loaded until it finishes or fails
+            server_clone
+                .plugin_manager
+                .wait_for_initialization(&plugin_name)
+                .await;
             if server_clone.plugin_manager.is_plugin_loaded(&plugin_name)
                 && let Err(e) = server_clone
                     .plugin_manager

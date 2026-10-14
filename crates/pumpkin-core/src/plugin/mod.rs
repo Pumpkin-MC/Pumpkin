@@ -1238,6 +1238,21 @@ impl PluginManager {
             })
     }
 
+    /// Wait until a plugin is no longer initializing, whether it succeeded or failed
+    pub async fn wait_for_initialization(&self, plugin_name: &str) {
+        loop {
+            // Create the waiter before checking, so a notify in between is not missed
+            let notified = self.state_notify.notified();
+            if !matches!(
+                self.plugin_states.read().await.get(plugin_name),
+                Some(PluginState::Loading)
+            ) {
+                return;
+            }
+            notified.await;
+        }
+    }
+
     /// Wait for a plugin to finish loading
     pub async fn wait_for_plugin(&self, plugin_name: &str) -> Result<(), ManagerError> {
         loop {
@@ -1457,6 +1472,9 @@ impl PluginManager {
 
     /// Unload a plugin by name
     pub async fn unload_plugin(&self, name: &str) -> Result<(), ManagerError> {
+        // on_load runs inside the library, so it must finish before the library is released
+        self.wait_for_initialization(name).await;
+
         let mut plugin = {
             let mut plugins = self
                 .plugins
