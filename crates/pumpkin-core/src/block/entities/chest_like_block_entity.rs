@@ -29,6 +29,7 @@ macro_rules! impl_block_entity_for_chest {
                     })),
                     dirty: std::sync::atomic::AtomicBool::new(false),
                     comparator_dirty: std::sync::atomic::AtomicBool::new(false),
+                    golem_reserved: std::sync::atomic::AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
                     loot_table: StdMutex::new(loot_table_key),
                     loot_table_seed,
@@ -348,10 +349,25 @@ macro_rules! impl_chest_helper_methods {
                     items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
                     dirty: AtomicBool::new(false),
                     comparator_dirty: AtomicBool::new(false),
+                    golem_reserved: AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
                     loot_table: StdMutex::new(None),
                     loot_table_seed: 0,
                 }
+            }
+
+            pub(crate) fn modify_stack<R>(
+                &self,
+                slot: usize,
+                update: impl FnOnce(&mut ItemStack) -> R,
+            ) -> Option<R> {
+                let mut items = self
+                    .items
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let result = update(items.get_mut(slot)?);
+                pumpkin_inventory::Inventory::mark_dirty(self);
+                Some(result)
             }
 
             fn play_sound(&self, world: &Arc<$crate::world::World>, open: bool) {

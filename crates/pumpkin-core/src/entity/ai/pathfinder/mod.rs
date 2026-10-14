@@ -1037,7 +1037,10 @@ impl PathNavigation {
 
         if let Some(path) = &mut self.path {
             if path.is_done() {
+                // Vanilla keeps a completed path so Brain behaviors can observe arrival.
+                let completed_path = self.path.take();
                 self.stop();
+                self.path = completed_path;
                 return None;
             }
 

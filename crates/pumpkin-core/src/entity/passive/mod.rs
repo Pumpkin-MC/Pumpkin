@@ -10,6 +10,7 @@ pub mod cat;
 pub mod chicken;
 pub mod cod;
 pub mod copper_golem;
+mod copper_golem_ai;
 pub mod cow;
 pub mod dolphin;
 pub mod donkey;
