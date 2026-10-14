@@ -2085,6 +2085,11 @@ impl LivingEntity {
                         .load(std::sync::atomic::Ordering::Relaxed)
                         > 0,
                 ),
+                direct_attacker_weapon: source.and_then(|direct| {
+                    direct
+                        .get_living_entity()
+                        .map(|living| living.held_item(direct))
+                }),
                 ..Default::default()
             };
 
