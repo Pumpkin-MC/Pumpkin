@@ -1,9 +1,16 @@
 use super::BrainTick;
 use super::memory::MemoryModuleId;
 
+pub mod animal_panic;
+pub mod count_down_cooldown_ticks;
 pub mod do_nothing;
 pub mod gate;
+pub mod interact_with_door;
+pub mod look_at_target_sink;
+pub mod move_to_target_sink;
 pub mod one_shot;
+pub mod random_stroll;
+pub mod set_entity_look_target_sometimes;
 pub mod shuffling_list;
 pub mod timed;
 pub mod utils;
