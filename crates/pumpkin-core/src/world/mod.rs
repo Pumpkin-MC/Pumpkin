@@ -4941,6 +4941,14 @@ impl World {
             return;
         }
         base_entity.removed.store(true, Ordering::Release);
+        if let Some(entity) = self.get_entity_by_uuid(base_entity.entity_uuid)
+            && let Some(golem) = entity
+                .cast_any()
+                .downcast_ref::<crate::entity::passive::copper_golem::CopperGolemEntity>(
+            )
+        {
+            golem.on_removed();
+        }
 
         self.spawn_state.load().remove_entity(self, entity);
         self.entity_tracker.remove_entity(entity, self);
@@ -4981,6 +4989,12 @@ impl World {
             .await;
 
         for entity in entities_to_remove {
+            if let Some(golem) = entity
+                .cast_any()
+                .downcast_ref::<crate::entity::passive::copper_golem::CopperGolemEntity>(
+            ) {
+                golem.on_removed();
+            }
             self.entity_tracker.remove_entity(entity.as_ref(), self);
             self.spawn_state.load().remove_entity(self, entity.as_ref());
         }
@@ -5109,6 +5123,7 @@ impl World {
 
     /// Everything `set_block_state` does after the chunk write: callbacks, neighbour updates,
     /// client sync, POI and lighting.
+    #[expect(clippy::too_many_lines)]
     fn on_block_state_set(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -5124,8 +5139,16 @@ impl World {
         let new_block = Block::from_state_id(block_state_id);
         let is_new_block = old_block != new_block;
         let block_moved = flags.contains(BlockFlags::MOVED);
+        let keeps_copper_block_entity = old_block.default_state.block_entity_type != u16::MAX
+            && [
+                pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS,
+                pumpkin_data::tag::Block::MINECRAFT_COPPER_GOLEM_STATUES,
+            ]
+            .into_iter()
+            .any(|tag| old_block.id.has_tag(tag) && new_block.id.has_tag(tag));
 
         if is_new_block
+            && !keeps_copper_block_entity
             && old_block.default_state.block_entity_type != u16::MAX
             && let Some(entity) = self.get_block_entity(position)
         {

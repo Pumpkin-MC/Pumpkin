@@ -534,7 +534,10 @@ impl PathNavigation {
     }
 
     pub fn finish_navigation(&mut self, entity: &LivingEntity) {
+        // Vanilla keeps completed paths so Brain behaviors can observe arrival.
+        let completed_path = self.path.take().filter(Path::is_done);
         self.stop();
+        self.path = completed_path;
         entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
         entity.jumping.store(false, Ordering::Relaxed);
     }

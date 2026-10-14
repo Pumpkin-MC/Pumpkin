@@ -57,6 +57,7 @@ pub mod bed;
 pub mod carpet;
 pub mod chiseled_bookshelf;
 pub mod conduit;
+pub mod copper_golem_statue;
 pub mod flower_pots;
 pub mod jukebox;
 pub mod lectern;

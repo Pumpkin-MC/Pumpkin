@@ -13,6 +13,7 @@ pub mod random_stroll;
 pub mod set_entity_look_target_sometimes;
 pub mod shuffling_list;
 pub mod timed;
+pub mod transport_items_between_containers;
 pub mod utils;
 
 pub use do_nothing::DoNothing;
