@@ -344,6 +344,14 @@ impl PluginManager {
 
     /// Unload all loaded plugins
     pub async fn unload_all_plugins(&self) -> Result<(), ManagerError> {
+        self.unload_active_plugins(|_| true).await
+    }
+
+    /// Unload the active plugins matching `filter`, reporting the first failure
+    async fn unload_active_plugins(
+        &self,
+        filter: impl Fn(&LoadedPlugin) -> bool,
+    ) -> Result<(), ManagerError> {
         let plugin_names: Vec<String> = {
             let plugins = self
                 .plugins
@@ -351,7 +359,7 @@ impl PluginManager {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             plugins
                 .iter()
-                .filter(|p| p.is_active)
+                .filter(|p| p.is_active && filter(p))
                 .map(|p| p.metadata.name.clone())
                 .collect()
         };
@@ -372,12 +380,20 @@ impl PluginManager {
     /// Unload everything that can be unloaded, then rescan the plugin directory.
     ///
     /// Picks up files added since the last scan, which is what separates it from reloading
-    /// plugins one by one.
+    /// plugins one by one. Plugins whose loader can't unload stay loaded, because the rescan
+    /// would skip their retained records and leave them inactive until restart.
     pub async fn reload_all_plugins(
         self: &Arc<Self>,
         server: &Arc<Server>,
     ) -> Result<(), ManagerError> {
-        self.unload_all_plugins().await?;
+        if !server.advanced_config.plugins.enabled {
+            return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
+                "Plugin system is disabled in configuration".to_string(),
+            )));
+        }
+
+        self.unload_active_plugins(|p| p.loader.can_unload())
+            .await?;
         self.prune_missing_files().await;
         self.load_plugins(server).await?;
         Ok(())
