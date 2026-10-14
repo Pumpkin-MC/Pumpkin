@@ -972,6 +972,10 @@ pub struct Entity {
 }
 
 impl Entity {
+    const WATER_FLOW_SCALE: f64 = 0.014;
+    const LAVA_FAST_FLOW_SCALE: f64 = 0.007;
+    const LAVA_SLOW_FLOW_SCALE: f64 = 0.002_333_333_333_333_333_5;
+
     pub fn new(
         world: Arc<World>,
         position: Vector3<f64>,
@@ -1801,12 +1805,12 @@ impl Entity {
         }
 
         let lava_speed = if world.dimension.fast_lava {
-            0.007
+            Self::LAVA_FAST_FLOW_SCALE
         } else {
-            0.002_333_333
+            Self::LAVA_SLOW_FLOW_SCALE
         };
 
-        self.push_by_fluid(0.014, fluid_push[0], fluid_n[0]);
+        self.push_by_fluid(Self::WATER_FLOW_SCALE, fluid_push[0], fluid_n[0]);
 
         self.push_by_fluid(lava_speed, fluid_push[1], fluid_n[1]);
 
@@ -1850,26 +1854,31 @@ impl Entity {
     }
 
     fn push_by_fluid(&self, speed: f64, mut push: Vector3<f64>, n: usize) {
-        if push.length_squared() != 0.0 {
-            if n > 0 {
-                push = push * (1.0 / (n as f64));
-            }
-
-            if self.entity_type != &EntityType::PLAYER {
-                push = push.normalize();
-            }
-
-            push = push * speed;
-
-            let velo = self.velocity.load();
-
-            if velo.x.abs() < 0.003 && velo.z.abs() < 0.003 && velo.length_squared() < 0.000_020_25
-            {
-                push = push.normalize() * 0.0045;
-            }
-
-            self.velocity.store(velo + push);
+        const MIN_CURRENT_SPEED: f64 = 0.003;
+        const MIN_CURRENT_IMPULSE: f64 = MIN_CURRENT_SPEED * 1.5;
+        if n == 0 || push.length_squared() < f64::from(1.0e-5f32) {
+            return;
         }
+        push = if self.entity_type == &EntityType::PLAYER {
+            push * (1.0 / n as f64)
+        } else {
+            push / push.length()
+        };
+        push = push * speed;
+
+        let velocity = self.velocity.load();
+        let impulse_length = push.length();
+        if velocity.x.abs() < MIN_CURRENT_SPEED
+            && velocity.z.abs() < MIN_CURRENT_SPEED
+            && impulse_length < MIN_CURRENT_IMPULSE
+        {
+            push = if impulse_length < f64::from(1.0e-5f32) {
+                Vector3::default()
+            } else {
+                push / impulse_length * MIN_CURRENT_IMPULSE
+            };
+        }
+        self.velocity.store(velocity + push);
     }
 
     fn get_pos_with_y_offset(
