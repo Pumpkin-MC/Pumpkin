@@ -305,9 +305,10 @@ pub struct LinearV2File {
     /// Per-chunk NBT data (None = chunk absent).
     chunks_data: Box<[Option<Bytes>]>,
 
-    /// The compressed bytes and compression level of each bucket as last written. `None` marks
+    /// The compressed bytes and compression level of each bucket as last compressed. `None` marks
     /// a bucket with staged chunks, the only ones a flush compresses again.
     buckets: Vec<Option<(Box<[u8]>, i8)>>,
+    staged: bool,
 }
 
 impl LinearV2File {
@@ -320,6 +321,7 @@ impl LinearV2File {
             timestamps: vec![0; CHUNK_COUNT].into_boxed_slice(),
             chunks_data: vec![None; CHUNK_COUNT].into_boxed_slice(),
             buckets: vec![None; Self::bucket_count(DEFAULT_GRID_SIZE)],
+            staged: false,
         }
     }
 
@@ -469,6 +471,7 @@ impl LinearV2File {
             }
         }
 
+        let staged = buckets.iter().any(Option::is_none);
         Ok(Self {
             path: path.to_path_buf(),
             region_x: superblock.region_x,
@@ -477,6 +480,7 @@ impl LinearV2File {
             timestamps,
             chunks_data,
             buckets,
+            staged,
         })
     }
 }
@@ -522,10 +526,11 @@ impl RegionFile for LinearV2File {
             .map_or(0, |d| d.as_secs());
         self.chunks_data[index] = Some(chunk);
         self.buckets[Self::chunk_bucket_index(index, self.grid_size)] = None;
+        self.staged = true;
     }
 
     fn has_staged(&self) -> bool {
-        self.buckets.iter().any(Option::is_none)
+        self.staged
     }
 
     fn flush(&mut self, sync: bool) -> std::io::Result<()> {
@@ -571,7 +576,9 @@ impl RegionFile for LinearV2File {
         }
         out.extend_from_slice(&SIGNATURE);
 
-        write_file_atomically(&self.path, &out, sync)
+        write_file_atomically(&self.path, &out, sync)?;
+        self.staged = false;
+        Ok(())
     }
 }
 
@@ -610,6 +617,27 @@ mod tests {
             );
         }
         assert!(file.read_chunk(1).unwrap().is_none());
+    }
+
+    #[test]
+    fn failed_flush_keeps_changes_pending_for_retry() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("r.0.0.linear");
+        let mut file = LinearV2File::open(&path, Vector2::new(0, 0)).unwrap();
+        file.flush(true).unwrap();
+        assert!(!path.exists());
+        file.stage_chunk(0, fake_nbt(1));
+        file.flush(false).unwrap();
+        file.stage_chunk(0, fake_nbt(2));
+
+        std::fs::create_dir(path.with_extension("tmp")).unwrap();
+        assert!(file.flush(false).is_err());
+        assert!(file.has_staged());
+        std::fs::remove_dir(path.with_extension("tmp")).unwrap();
+        file.flush(true).unwrap();
+
+        let reopened = LinearV2File::open(&path, Vector2::new(0, 0)).unwrap();
+        assert_eq!(reopened.read_chunk(0).unwrap().unwrap(), fake_nbt(2));
     }
 
     #[test]

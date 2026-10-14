@@ -195,6 +195,11 @@ impl AnvilChunkData {
 
     fn from_bytes(bytes: Bytes) -> Result<Self, ChunkReadingError> {
         let mut bytes = bytes;
+        if bytes.len() < 5 {
+            return Err(ChunkReadingError::IoError(
+                std::io::ErrorKind::UnexpectedEof.into(),
+            ));
+        }
         // Minus one for the compression byte, which the length covers, so
         // anything below one does not describe a chunk at all.
         let declared_length = bytes.get_u32() as usize;
@@ -407,10 +412,125 @@ pub struct AnvilRegion {
     timestamps: Box<[u32]>,
     used_sectors: SectorBitmap,
     staged: FxHashMap<usize, AnvilChunkData>,
+    pending_external_deletes: Vec<PathBuf>,
     unsynced: bool,
 }
 
 impl AnvilRegion {
+    fn flush_with_sync(
+        &mut self,
+        sync: bool,
+        sync_file: impl Fn(&File) -> std::io::Result<()>,
+    ) -> std::io::Result<()> {
+        if self.staged.is_empty() {
+            if sync
+                && self.unsynced
+                && let Some(file) = &self.file
+            {
+                sync_file(file)?;
+                self.unsynced = false;
+            }
+            return Ok(());
+        }
+
+        // Plan on copies so a failed write leaves the region as it was, staged chunks included.
+        let mut used_sectors = self.used_sectors.clone();
+        let mut free_runs = self.used_sectors.free_runs();
+        let mut locations = self.locations.clone();
+        let mut timestamps = self.timestamps.clone();
+        let mut freed = Vec::new();
+        let mut stale_external = self.pending_external_deletes.clone();
+        let mut writes = Vec::with_capacity(self.staged.len());
+        let now = epoch_seconds();
+
+        let mut staged: Vec<_> = self.staged.iter().collect();
+        staged.sort_unstable_by_key(|(index, _)| **index);
+        for (&index, chunk) in staged {
+            let (record, count) = if chunk.sector_count() >= EXTERNAL_CHUNK_THRESHOLD {
+                let path = self.external_path(index);
+                write_file_atomically(&path, &chunk.compressed_data, sync)?;
+                stale_external.retain(|pending| pending != &path);
+                let mut stub = Vec::with_capacity(SECTOR_BYTES);
+                stub.put_u32(1);
+                stub.put_u8(
+                    chunk
+                        .compression
+                        .map_or(Compression::NO_COMPRESSION_ID, |c| c as u8)
+                        | EXTERNAL_STREAM_FLAG,
+                );
+                stub.resize(SECTOR_BYTES, 0);
+                (stub, 1)
+            } else {
+                if self.is_external_stub(locations[index])? {
+                    stale_external.push(self.external_path(index));
+                }
+                (chunk.to_record(), chunk.sector_count())
+            };
+
+            let offset = free_runs.allocate(count);
+            used_sectors.set(offset, count, true);
+            if locations[index] != 0 {
+                freed.push(locations[index]);
+            }
+            locations[index] = (offset << 8) | count;
+            timestamps[index] = now;
+            writes.push((offset, record));
+        }
+
+        writes.sort_unstable_by_key(|(offset, _)| *offset);
+        let file = self.file()?;
+        let mut file_end = 0;
+        let mut run_start = 0;
+        let mut run: Vec<u8> = Vec::new();
+        for (offset, record) in writes {
+            let position = u64::from(offset) * SECTOR_BYTES as u64;
+            // Neighbouring records go out in one write.
+            if !run.is_empty() && run_start + run.len() as u64 != position {
+                write_all_at(file, &run, run_start)?;
+                run.clear();
+            }
+            if run.is_empty() {
+                run_start = position;
+            }
+            run.extend_from_slice(&record);
+            file_end = position + record.len() as u64;
+        }
+        if !run.is_empty() {
+            write_all_at(file, &run, run_start)?;
+        }
+
+        let old_locations = std::mem::replace(&mut self.locations, locations);
+        let old_timestamps = std::mem::replace(&mut self.timestamps, timestamps);
+        let header = self.header_bytes();
+        let file = self.file()?;
+        if let Err(err) = write_all_at(file, &header, 0) {
+            self.locations = old_locations;
+            self.timestamps = old_timestamps;
+            return Err(err);
+        }
+        for location in freed {
+            used_sectors.set(sector_offset(location), sector_count(location), false);
+        }
+        self.file_len = self.file_len.max(file_end).max(HEADER_BYTES as u64);
+        self.used_sectors = used_sectors;
+        self.pending_external_deletes = stale_external;
+        self.unsynced = true;
+        if sync && let Some(file) = &self.file {
+            sync_file(file)?;
+            self.unsynced = false;
+        }
+        for path in self.pending_external_deletes.drain(..) {
+            if let Err(err) = std::fs::remove_file(&path)
+                && err.kind() != std::io::ErrorKind::NotFound
+            {
+                warn!("Failed to remove {}: {err}", path.display());
+            }
+        }
+        self.truncate_unused_tail();
+        self.staged.clear();
+        Ok(())
+    }
+
     fn external_path(&self, index: usize) -> PathBuf {
         let x = self.region.x * REGION_SIZE as i32 + (index % REGION_SIZE) as i32;
         let z = self.region.y * REGION_SIZE as i32 + (index / REGION_SIZE) as i32;
@@ -502,6 +622,7 @@ impl RegionFile for AnvilRegion {
             timestamps: vec![0; CHUNK_COUNT].into_boxed_slice(),
             used_sectors: SectorBitmap::default(),
             staged: FxHashMap::default(),
+            pending_external_deletes: Vec::new(),
             unsynced: false,
         };
         this.used_sectors.set(0, 2, true);
@@ -606,110 +727,7 @@ impl RegionFile for AnvilRegion {
     }
 
     fn flush(&mut self, sync: bool) -> std::io::Result<()> {
-        if self.staged.is_empty() {
-            if sync
-                && self.unsynced
-                && let Some(file) = &self.file
-            {
-                file.sync_data()?;
-                self.unsynced = false;
-            }
-            return Ok(());
-        }
-
-        // Plan on copies so a failed write leaves the region as it was, staged chunks included.
-        let mut used_sectors = self.used_sectors.clone();
-        let mut free_runs = self.used_sectors.free_runs();
-        let mut locations = self.locations.clone();
-        let mut timestamps = self.timestamps.clone();
-        let mut freed = Vec::new();
-        let mut stale_external = Vec::new();
-        let mut writes = Vec::with_capacity(self.staged.len());
-        let now = epoch_seconds();
-
-        let mut staged: Vec<_> = self.staged.iter().collect();
-        staged.sort_unstable_by_key(|(index, _)| **index);
-        for (&index, chunk) in staged {
-            let (record, count) = if chunk.sector_count() >= EXTERNAL_CHUNK_THRESHOLD {
-                write_file_atomically(&self.external_path(index), &chunk.compressed_data, sync)?;
-                let mut stub = Vec::with_capacity(SECTOR_BYTES);
-                stub.put_u32(1);
-                stub.put_u8(
-                    chunk
-                        .compression
-                        .map_or(Compression::NO_COMPRESSION_ID, |c| c as u8)
-                        | EXTERNAL_STREAM_FLAG,
-                );
-                stub.resize(SECTOR_BYTES, 0);
-                (stub, 1)
-            } else {
-                if self.is_external_stub(locations[index])? {
-                    stale_external.push(self.external_path(index));
-                }
-                (chunk.to_record(), chunk.sector_count())
-            };
-
-            let offset = free_runs.allocate(count);
-            used_sectors.set(offset, count, true);
-            if locations[index] != 0 {
-                freed.push(locations[index]);
-            }
-            locations[index] = (offset << 8) | count;
-            timestamps[index] = now;
-            writes.push((offset, record));
-        }
-
-        writes.sort_unstable_by_key(|(offset, _)| *offset);
-        let file = self.file()?;
-        let mut file_end = 0;
-        let mut run_start = 0;
-        let mut run: Vec<u8> = Vec::new();
-        for (offset, record) in writes {
-            let position = u64::from(offset) * SECTOR_BYTES as u64;
-            // Neighbouring records go out in one write.
-            if !run.is_empty() && run_start + run.len() as u64 != position {
-                write_all_at(file, &run, run_start)?;
-                run.clear();
-            }
-            if run.is_empty() {
-                run_start = position;
-            }
-            run.extend_from_slice(&record);
-            file_end = position + record.len() as u64;
-        }
-        if !run.is_empty() {
-            write_all_at(file, &run, run_start)?;
-        }
-
-        let old_locations = std::mem::replace(&mut self.locations, locations);
-        let old_timestamps = std::mem::replace(&mut self.timestamps, timestamps);
-        let header = self.header_bytes();
-        let file = self.file()?;
-        if let Err(err) = write_all_at(file, &header, 0) {
-            self.locations = old_locations;
-            self.timestamps = old_timestamps;
-            return Err(err);
-        }
-        if sync {
-            file.sync_data()?;
-        }
-
-        for location in freed {
-            used_sectors.set(sector_offset(location), sector_count(location), false);
-        }
-        for path in stale_external {
-            if let Err(err) = std::fs::remove_file(&path)
-                && err.kind() != std::io::ErrorKind::NotFound
-            {
-                warn!("Failed to remove {}: {err}", path.display());
-            }
-        }
-        self.file_len = self.file_len.max(file_end).max(HEADER_BYTES as u64);
-        self.used_sectors = used_sectors;
-        self.truncate_unused_tail();
-        self.staged.clear();
-        self.unsynced = !sync;
-        Ok(())
+        self.flush_with_sync(sync, File::sync_data)
     }
 }
 
@@ -818,6 +836,57 @@ mod tests {
     }
 
     #[test]
+    fn truncated_record_headers_return_an_error() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("r.0.0.mca");
+        for remaining in 0..5 {
+            let mut bytes = vec![0; SECTOR_BYTES * 2 + remaining];
+            bytes[..4].copy_from_slice(&((2u32 << 8) | 1).to_be_bytes());
+            std::fs::write(&path, bytes).unwrap();
+            let region = AnvilRegion::open(&path, Vector2::new(0, 0)).unwrap();
+            assert!(region.read_chunk(0).is_err());
+        }
+    }
+
+    #[test]
+    fn sync_failure_keeps_live_sectors_allocated_for_retry() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("r.0.0.mca");
+        let config = AnvilChunkConfig::default();
+        let mut region = AnvilRegion::open(&path, Vector2::new(0, 0)).unwrap();
+        region.stage_chunk(
+            0,
+            AnvilRegion::encode_chunk(Bytes::from(vec![1; 64]), &config).unwrap(),
+        );
+        region.flush(false).unwrap();
+        let expected = Bytes::from(vec![2; 64]);
+        region.stage_chunk(
+            0,
+            AnvilRegion::encode_chunk(expected.clone(), &config).unwrap(),
+        );
+
+        assert!(
+            region
+                .flush_with_sync(true, |_| Err(std::io::Error::other("sync failed")))
+                .is_err()
+        );
+        assert!(region.has_staged());
+        region.flush(false).unwrap();
+        region.stage_chunk(
+            1,
+            AnvilRegion::encode_chunk(Bytes::from(vec![3; 64]), &config).unwrap(),
+        );
+        region.flush(false).unwrap();
+
+        let reopened = AnvilRegion::open(&path, Vector2::new(0, 0)).unwrap();
+        assert_eq!(
+            AnvilRegion::decode_chunk(reopened.read_chunk(0).unwrap().unwrap()).unwrap(),
+            expected
+        );
+        assert_no_overlap(&reopened);
+    }
+
+    #[test]
     fn allocation_takes_the_smallest_hole_that_fits() {
         let mut bitmap = SectorBitmap::default();
         // Used 0..2, hole of 3 at 2..5, used 5..6, hole of 1 at 6, used 7..8, then a used
@@ -894,6 +963,27 @@ mod tests {
         assert_eq!(AnvilRegion::decode_chunk(raw).unwrap(), big);
 
         let mut region = reopened;
+        region.stage_chunk(
+            33,
+            AnvilRegion::encode_chunk(noise(2, 100), &config).unwrap(),
+        );
+        assert!(
+            region
+                .flush_with_sync(true, |_| Err(std::io::Error::other("sync failed")))
+                .is_err()
+        );
+        assert!(external.exists());
+        let replacement = noise(3, SECTOR_BYTES * 300);
+        region.stage_chunk(
+            33,
+            AnvilRegion::encode_chunk(replacement.clone(), &config).unwrap(),
+        );
+        region.flush(false).unwrap();
+        let reopened = AnvilRegion::open(&path, Vector2::new(0, 0)).unwrap();
+        assert_eq!(
+            AnvilRegion::decode_chunk(reopened.read_chunk(33).unwrap().unwrap()).unwrap(),
+            replacement
+        );
         region.stage_chunk(
             33,
             AnvilRegion::encode_chunk(noise(2, 100), &config).unwrap(),
