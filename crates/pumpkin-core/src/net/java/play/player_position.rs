@@ -2,11 +2,11 @@
 use super::*;
 
 impl JavaClient {
-    const fn clamp_horizontal(pos: f64) -> f64 {
+    pub(super) const fn clamp_horizontal(pos: f64) -> f64 {
         pos.clamp(-3.0E7, 3.0E7)
     }
 
-    const fn clamp_vertical(pos: f64) -> f64 {
+    pub(super) const fn clamp_vertical(pos: f64) -> f64 {
         pos.clamp(-2.0E7, 2.0E7)
     }
 
@@ -105,6 +105,10 @@ impl JavaClient {
                 let pos = event.to;
                 let entity = &player.get_entity();
                 let last_pos = entity.pos.load();
+                if entity.has_new_boat_collision(player.as_ref(), pos - last_pos) {
+                    self.force_tp(player, last_pos);
+                    return;
+                }
                 player.get_entity().set_pos(pos);
 
                 let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
@@ -246,6 +250,11 @@ impl JavaClient {
                 let pos = event.to;
                 let entity = &player.get_entity();
                 let last_pos = entity.pos.load();
+                if entity.has_new_boat_collision(player.as_ref(), pos - last_pos) {
+                    entity.set_rotation(wrap_degrees(packet.yaw), wrap_degrees(packet.pitch));
+                    self.force_tp(player, last_pos);
+                    return;
+                }
                 player.get_entity().set_pos(pos);
 
                 let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
