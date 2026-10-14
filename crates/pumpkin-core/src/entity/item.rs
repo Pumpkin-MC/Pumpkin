@@ -633,8 +633,11 @@ impl EntityBase for ItemEntity {
         world: Arc<World>,
     ) {
         self.entity.teleport(position, yaw, pitch, &world);
-        // Vanilla `ItemEntity.teleport`: merge at the destination right away.
-        self.merge_with_neighbours();
+        // Vanilla `ItemEntity.teleport`: merge at the destination right away. Only when the
+        // item lives there: `Entity::teleport` doesn't move it into another world.
+        if Arc::ptr_eq(&self.entity.world.load(), &world) {
+            self.merge_with_neighbours();
+        }
     }
 
     fn init_data_tracker(&self) {
