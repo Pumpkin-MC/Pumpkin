@@ -5,30 +5,40 @@ use pumpkin_macros::packet;
 
 use crate::serial::{PacketRead, PacketWrite};
 
+/// Magic byte sequence present in offline `RakNet` message headers to verify protocol validity.
 pub const OFFLINE_MESSAGE_MAGIC: [u8; 16] = [
     0x00, 0xff, 0xff, 0x00, 0xfe, 0xfe, 0xfe, 0xfe, 0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78,
 ];
 
+/// Unconnected ping sent by a Bedrock client over UDP to discover servers and query status.
 #[derive(PacketRead)]
 #[packet(0x01)]
 pub struct SUnconnectedPing {
+    /// Client-side timestamp in milliseconds.
     #[serial(big_endian)]
     pub time: u64,
+    /// `RakNet` offline message magic identifier.
     pub magic: [u8; 16],
+    /// Unique 64-bit client GUID identifying the sender.
     #[serial(big_endian)]
     pub client_guid: u64,
 }
 
+/// Unconnected ping sent by a client requesting status only if open connection slots remain.
 #[derive(PacketRead)]
 #[packet(0x02)]
 pub struct SUnconnectedPingOpenConnections {
+    /// Client-side timestamp in milliseconds.
     #[serial(big_endian)]
     pub time: u64,
+    /// `RakNet` offline message magic identifier.
     pub magic: [u8; 16],
+    /// Unique 64-bit client GUID identifying the sender.
     #[serial(big_endian)]
     pub client_guid: u64,
 }
 
+/// Unconnected pong sent by the server containing the Bedrock MOTD server advertisement string.
 #[packet(0x1c)]
 pub struct CUnconnectedPong {
     time: u64,
@@ -61,6 +71,7 @@ impl PacketWrite for CUnconnectedPong {
     }
 }
 
+/// Sent by the server when the client attempts to connect using an unsupported `RakNet` protocol version.
 #[derive(PacketWrite)]
 #[packet(0x19)]
 pub struct CIncompatibleProtocolVersion {
@@ -81,17 +92,29 @@ impl CIncompatibleProtocolVersion {
     }
 }
 
+/// Server advertisement metadata formatted for the Bedrock LAN/server list.
 pub struct ServerInfo<'a> {
+    /// Primary server MOTD description line.
     pub motd: &'a str,
+    /// Bedrock network protocol version number.
     pub protocol: u32,
+    /// Game version display string (e.g. `1.26.45`).
     pub version: &'static str,
+    /// Current count of connected players.
     pub players: i32,
+    /// Maximum player capacity.
     pub max_players: u32,
+    /// Server GUID identifier.
     pub server_guid: u64,
+    /// World or level name.
     pub level_name: &'a str,
+    /// Game mode name (e.g. `Survival`, `Creative`).
     pub game_mode: &'static str,
+    /// Numeric game mode identifier.
     pub game_mode_id: u32,
+    /// IPv4 port number.
     pub ipv4_port: u16,
+    /// IPv6 port number.
     pub ipv6_port: u16,
 }
 

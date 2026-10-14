@@ -443,9 +443,7 @@ impl CommandSource {
         self.server.as_ref().map_or(
             matches!(
                 self.output,
-                crate::command::CommandSender::Console
-                    | crate::command::CommandSender::Rcon(_)
-                    | crate::command::CommandSender::Dummy
+                crate::command::CommandSender::Console | crate::command::CommandSender::Dummy
             ),
             |server| self.output.has_permission(server, permission),
         )

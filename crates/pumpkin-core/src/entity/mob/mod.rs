@@ -340,19 +340,6 @@ impl MobEntity {
         }
     }
 
-    pub fn spawn_at_location(&self, stack: ItemStack) {
-        if stack.is_empty() {
-            return;
-        }
-        let entity = &self.living_entity.entity;
-        let world = entity.world.load();
-        let item_entity = crate::entity::item::ItemEntity::new(
-            Entity::new(world.clone(), entity.pos.load(), &EntityType::ITEM),
-            stack,
-        );
-        world.spawn_entity(Arc::new(item_entity));
-    }
-
     #[must_use]
     pub fn drop_chance(&self, slot: &EquipmentSlot) -> f32 {
         self.living_entity
@@ -644,9 +631,9 @@ impl MobEntity {
         Self::check_surface_water_animal_spawn_rules(world, pos)
     }
 
-    pub fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
+    pub fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) -> bool {
         if self.living_entity.dead.load(Relaxed) {
-            return;
+            return false;
         }
 
         let attack_damage: f32 =
@@ -670,6 +657,8 @@ impl MobEntity {
                 .last_attack_time
                 .store(self.living_entity.entity.age.load(Relaxed), Relaxed);
         }
+
+        damaged
     }
 
     fn get_attack_box(&self, attack_range: f64) -> BoundingBox {
