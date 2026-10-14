@@ -901,7 +901,16 @@ impl TextComponentBase {
 fn nbt_compound_to_json(compound: &pumpkin_nbt::NbtCompound) -> serde_json::Value {
     let mut map = serde_json::Map::new();
     for (k, v) in &compound.child_tags {
-        map.insert(k.to_string(), nbt_tag_to_json(v));
+        let value = if let pumpkin_nbt::tag::NbtTag::Byte(value) = v
+            && matches!(
+                k.as_ref(),
+                "bold" | "italic" | "underlined" | "strikethrough" | "obfuscated" | "hat"
+            ) {
+            serde_json::Value::Bool(*value != 0)
+        } else {
+            nbt_tag_to_json(v)
+        };
+        map.insert(k.to_string(), value);
     }
     serde_json::Value::Object(map)
 }
@@ -2182,12 +2191,19 @@ mod test {
     }
 
     #[test]
-    fn styled_components_parse_from_nbt() {
+    fn styled_components_parse_from_nbt_without_coercing_numeric_fields() {
         let mut styled = pumpkin_nbt::compound::NbtCompound::new();
         styled.put_string("text", "hi".to_string());
         styled.put_string("color", "red".to_string());
+        styled.put_bool("bold", true);
+        styled.put_bool("italic", false);
+        let mut numeric = pumpkin_nbt::compound::NbtCompound::new();
+        numeric.put_byte("count", 1);
+        assert_eq!(super::nbt_compound_to_json(&numeric)["count"], 1);
         let component = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(styled));
         assert_eq!(component.0.style.color, Some(Color::Named(NamedColor::Red)));
+        assert_eq!(component.0.style.bold, Some(true));
+        assert_eq!(component.0.style.italic, Some(false));
         assert_eq!(component.get_text(), "hi");
     }
 }
