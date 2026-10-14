@@ -49,7 +49,10 @@ use super::features::{
     nether_forest_vegetation::NetherForestVegetationFeature,
     netherrack_replace_blobs::ReplaceBlobsFeature,
     ore::OreFeature,
+    overlay::OverlayFeature,
+    projected_random_patchy_square::ProjectedRandomPatchySquareFeature,
     random_boolean_selector::RandomBooleanFeature,
+    random_neighbor_spread::RandomNeighborSpreadFeature,
     random_patch::RandomPatchFeature,
     random_selector::RandomFeature,
     replace_single_block::ReplaceSingleBlockFeature,
@@ -60,7 +63,9 @@ use super::features::{
     seagrass::SeagrassFeature,
     simple_block::SimpleBlockFeature,
     simple_random_selector::SimpleRandomFeature,
+    single_block_pillar::SingleBlockPillarFeature,
     spring_feature::SpringFeatureFeature,
+    stepped_column_cluster::SteppedColumnClusterFeature,
     tree::TreeFeature,
     twisting_vines::TwistingVinesFeature,
     underwater_magma::UnderwaterMagmaFeature,
@@ -159,6 +164,11 @@ pub enum ConfiguredFeature {
     LargeDripstone(LargeDripstoneFeature),
     PointedDripstone(SmallDripstoneFeature),
     SculkPatch(SculkPatchFeature),
+    Overlay(OverlayFeature),
+    ProjectedRandomPatchySquare(ProjectedRandomPatchySquareFeature),
+    RandomNeighborSpread(RandomNeighborSpreadFeature),
+    SingleBlockPillar(SingleBlockPillarFeature),
+    SteppedColumnCluster(SteppedColumnClusterFeature),
 }
 
 // Yes this may look ugly and you wonder why this is hard coded, but it makes sense to hardcode since we have to add logic for these in code
@@ -486,6 +496,45 @@ impl ConfiguredFeature {
             }
             Self::WeepingVines(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::Overlay(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::ProjectedRandomPatchySquare(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::RandomNeighborSpread(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::SingleBlockPillar(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::SteppedColumnCluster(feature) => {
+                feature.generate(chunk, block_registry, random, pos)
             }
             Self::NoOp => false,
         }
