@@ -1,3 +1,5 @@
+use pumpkin_protocol::java::client::play::CMoveVehicle;
+
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
@@ -53,14 +55,22 @@ impl JavaClient {
             crate::net::clamp_horizontal_position(packet.z),
         );
 
-        // Vanilla's "moved too quickly" check: drop steps over 10 blocks.
-        if vehicle_entity.pos.load().squared_distance_to_vec(&pos) > 100.0 {
+        // Vanilla's "moved too quickly" check, net of the vehicle's own motion. The
+        // vehicle is sent back so the client doesn't stay out of sync.
+        let vehicle_pos = vehicle_entity.pos.load();
+        let expected = vehicle_entity.velocity.load().length_squared();
+        if vehicle_pos.squared_distance_to_vec(&pos) - expected > 100.0 {
             warn!(
-                "{} moved a vehicle too quickly ({:?} -> {:?})",
-                player.gameprofile.name,
-                vehicle_entity.pos.load(),
-                pos
+                "{} moved a vehicle too quickly ({vehicle_pos:?} -> {pos:?})",
+                player.gameprofile.name
             );
+            self.try_send_packet(&CMoveVehicle::new(
+                vehicle_pos.x,
+                vehicle_pos.y,
+                vehicle_pos.z,
+                vehicle_entity.yaw.load(),
+                vehicle_entity.pitch.load(),
+            ));
             return;
         }
 
