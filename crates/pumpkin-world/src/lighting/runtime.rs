@@ -56,9 +56,12 @@ impl Default for DynamicLightEngine {
     }
 }
 impl DynamicLightEngine {
-    /// Open sky above `pos`. Scan only to `WorldSurface` (air above it).
-    fn has_open_sky_above(cursor: &mut ChunkCursor, pos: &BlockPos) -> bool {
+    /// Open sky above `pos`, which holds `state`. Scan only to `WorldSurface` (air above it).
+    fn has_open_sky_above(cursor: &mut ChunkCursor, pos: &BlockPos, state: BlockStateId) -> bool {
         cursor.counters.bump(Counter::SkyColumnScan);
+        if occlusion::face_occludes(state, BlockDirection::Up) {
+            return false;
+        }
         let Some(chunk) = cursor.chunk_for(pos) else {
             return false;
         };
@@ -89,16 +92,16 @@ impl DynamicLightEngine {
             for y in (pos.0.y + 1)..=surface {
                 reads += 1;
                 let rel_y = (y - min_y) as usize;
-                let opacity = sections
+                let blocks = sections
                     .get(rel_y / BlockPalette::SIZE)
-                    .map_or(0, |section| {
-                        crate::lighting::opacity_of(section.get(
-                            local_x,
-                            rel_y % BlockPalette::SIZE,
-                            local_z,
-                        ))
+                    .is_some_and(|section| {
+                        occlusion::sky_ceiling_of(
+                            section.get(local_x, rel_y % BlockPalette::SIZE, local_z),
+                            y,
+                        )
+                        .is_some()
                     });
-                if opacity > 0 {
+                if blocks {
                     return (true, reads);
                 }
             }
@@ -644,8 +647,8 @@ impl DynamicLightEngine {
                     if ChunkCursor::write_light_at(chunk, cell, 0, false) {
                         self.queue_sky_light_decrease(neighbor_pos, neighbor_light);
                     }
-                } else if neighbor_light > removed_light {
-                    // Neighbor has brighter light from another source
+                } else {
+                    // Neighbor has at least as much light from another source
                     // Re-propagate from it to fill in the gap we left
                     self.queue_sky_light_increase(neighbor_pos, neighbor_light);
                 }
@@ -697,7 +700,7 @@ impl DynamicLightEngine {
                 }
                 SkyLightTier::Unknown => {
                     cursor.counters.bump(Counter::SkyTier3);
-                    Self::has_open_sky_above(cursor, &pos)
+                    Self::has_open_sky_above(cursor, &pos, state.id)
                 }
             };
 
@@ -709,7 +712,8 @@ impl DynamicLightEngine {
                 let mut best_light = 0;
 
                 for dir in BlockDirection::all() {
-                    let neighbor_light = cursor.sky_light(&pos.offset(dir.to_offset()));
+                    let neighbor_pos = pos.offset(dir.to_offset());
+                    let neighbor_light = cursor.sky_light(&neighbor_pos);
                     // Sky light at 15 from directly above stays 15 through transparent blocks
                     let potential =
                         if neighbor_light == 15 && dir == BlockDirection::Up && opacity == 0 {
@@ -717,8 +721,15 @@ impl DynamicLightEngine {
                         } else {
                             decayed(neighbor_light, opacity)
                         };
+                    if potential <= best_light {
+                        continue;
+                    }
+                    let neighbor_state = cursor.block_state(&neighbor_pos).id;
+                    if occlusion::shape_occludes(neighbor_state, state.id, dir.opposite()) {
+                        continue;
+                    }
 
-                    best_light = best_light.max(potential);
+                    best_light = potential;
                     if best_light == 15 {
                         break;
                     }
@@ -740,6 +751,10 @@ impl DynamicLightEngine {
         }
 
         if expected_light == current_light && expected_light > 0 {
+            // An occluding face can cut off light this cell used to pass on
+            if occlusion::has_occluding_face(state.id) {
+                self.queue_sky_light_decrease(pos, current_light);
+            }
             self.queue_sky_light_increase(pos, expected_light);
         }
     }
@@ -797,8 +812,8 @@ mod tests {
     use crate::chunk::format::LightContainer;
     use crate::level::Level;
     use pumpkin_config::world::LevelConfig;
-    use pumpkin_data::Block;
     use pumpkin_data::dimension::Dimension;
+    use pumpkin_data::{Block, BlockStateId};
     use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector2::Vector2;
     use std::sync::Arc;
@@ -1010,6 +1025,145 @@ mod tests {
             once.get_block_light_level(&level, &pos),
             after_many,
             "collapsing the repeats changed the result"
+        );
+    }
+
+    /// Sky light 15 above the flat surface, dark below, as the initial pass leaves it.
+    fn open_sky(chunk: &ChunkData) {
+        let min_y = chunk.section.min_y;
+        let mut light = chunk
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for (index, section) in light.sky_light.iter_mut().enumerate() {
+            for y in 0..16 {
+                if min_y + (index * 16 + y) as i32 <= SURFACE {
+                    continue;
+                }
+                for x in 0..16 {
+                    for z in 0..16 {
+                        section.set(x, y, z, 15);
+                    }
+                }
+            }
+        }
+    }
+
+    fn settle(engine: &DynamicLightEngine, level: &Arc<Level>) {
+        assert!(
+            (0..64).any(|_| !engine.drain_queued(level).leftover),
+            "light updates did not converge"
+        );
+    }
+
+    /// Places `state` at `pos` in a sunlit flat world and returns the settled level.
+    fn place_in_open_sky(
+        pos: BlockPos,
+        state: BlockStateId,
+        extra: &[(BlockPos, BlockStateId)],
+    ) -> (DynamicLightEngine, Arc<Level>, TempDir) {
+        let (level, dir) = level_with(&[(0, 0)]);
+        let chunk = level
+            .loaded_chunks
+            .get(&Vector2::new(0, 0))
+            .expect("loaded")
+            .clone();
+        open_sky(&chunk);
+        let engine = DynamicLightEngine::new();
+        for &(at, id) in extra {
+            chunk.set_block_absolute_y(at.0.x as usize, at.0.y, at.0.z as usize, id);
+            engine.update_lighting_at(&level, at);
+        }
+        settle(&engine, &level);
+
+        chunk.set_block_absolute_y(pos.0.x as usize, pos.0.y, pos.0.z as usize, state);
+        *chunk
+            .heightmap
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = chunk.calculate_heightmap();
+        engine.update_lighting_at(&level, pos);
+        settle(&engine, &level);
+        (engine, level, dir)
+    }
+
+    /// A bottom slab keeps its own sky but cuts the column below, which refills from the
+    /// side at one less.
+    #[tokio::test]
+    async fn a_bottom_slab_darkens_the_column_below_it() {
+        let slab = Block::OAK_SLAB.default_state;
+        assert_eq!(slab.opacity, 0, "premise: a bottom slab is not opaque");
+
+        let pos = BlockPos::new(8, SURFACE + 3, 8);
+        let (engine, level, _dir) = place_in_open_sky(pos, slab.id, &[]);
+
+        assert_eq!(engine.get_sky_light_level(&level, &pos), 15);
+        for y in [SURFACE + 2, SURFACE + 1] {
+            assert_eq!(
+                engine.get_sky_light_level(&level, &BlockPos::new(8, y, 8)),
+                14,
+                "the cell at y={y} under the slab kept direct sky"
+            );
+        }
+    }
+
+    /// A top slab covers its own top face, so not even its own cell sees the sky.
+    #[tokio::test]
+    async fn a_top_slab_has_no_direct_sky() {
+        let slab = Block::OAK_SLAB
+            .from_properties(&[("type", "top"), ("waterlogged", "false")])
+            .to_state_id(&Block::OAK_SLAB);
+        assert_eq!(
+            BlockStateId::to_state(slab).opacity,
+            0,
+            "premise: not opaque"
+        );
+
+        let pos = BlockPos::new(8, SURFACE + 3, 8);
+        let (engine, level, _dir) = place_in_open_sky(pos, slab, &[]);
+
+        assert_eq!(engine.get_sky_light_level(&level, &pos), 14);
+        assert_eq!(
+            engine.get_sky_light_level(&level, &BlockPos::new(8, SURFACE + 2, 8)),
+            14
+        );
+    }
+
+    /// A stair's side face cuts a cell that was lit only through the stair's position.
+    #[tokio::test]
+    async fn a_stair_side_face_darkens_a_cell_lit_only_through_it() {
+        let stair = Block::OAK_STAIRS
+            .from_properties(&[
+                ("facing", "east"),
+                ("half", "bottom"),
+                ("shape", "straight"),
+                ("waterlogged", "false"),
+            ])
+            .to_state_id(&Block::OAK_STAIRS);
+        assert!(
+            crate::lighting::occlusion::face_occludes(stair, pumpkin_data::BlockDirection::East),
+            "premise: an east-facing stair covers its east face"
+        );
+
+        // Pocket east of the stair, closed everywhere else
+        let y = SURFACE + 1;
+        let pocket = BlockPos::new(9, y, 8);
+        let stone = Block::STONE.default_state.id;
+        let walls = [
+            BlockPos::new(9, y + 1, 8),
+            BlockPos::new(10, y, 8),
+            BlockPos::new(9, y, 7),
+            BlockPos::new(9, y, 9),
+        ]
+        .map(|at| (at, stone));
+
+        let pos = BlockPos::new(8, y, 8);
+        let (engine, level, _dir) = place_in_open_sky(pos, stair, &walls);
+
+        assert_eq!(engine.get_sky_light_level(&level, &pos), 15);
+        assert_eq!(
+            engine.get_sky_light_level(&level, &pocket),
+            0,
+            "light still leaks through the stair's covered face"
         );
     }
 

@@ -4,7 +4,8 @@ use super::{SPREAD_SCALES, SkyLightHeight, SkyLightHeightMigration, SkyLightTier
 use crate::ProtoChunk;
 use crate::chunk::format::anvil::SingleChunkDataSerializer;
 use crate::chunk::{ChunkData, ChunkSections};
-use pumpkin_data::{Block, BlockState, BlockStateId};
+use crate::lighting::occlusion::face_occludes;
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::vector2::Vector2;
 use std::sync::atomic::Ordering;
@@ -145,16 +146,19 @@ fn shape(name: &str) -> ChunkData {
     )
 }
 
-/// "Light-blocking" is `opacity > 0` -> the predicate the spec names when it corrects the
-/// `WorldSurface` caveat: glass is not air, but it does not stop sky light.
+/// "Light-blocking" is `opacity > 0` or an occluding top/bottom face -> glass is not air,
+/// but it does not stop sky light; a slab does, at opacity 0.
 fn true_ceiling(chunk: &ChunkData, x: usize, z: usize) -> i32 {
     let min_y = chunk.section.min_y;
     let mut y = min_y + SkyLightHeight::chunk_height(chunk) - 1;
     while y >= min_y {
-        if let Some(id) = chunk.section.get_block_absolute_y(x, y, z)
-            && BlockState::from_id(id).opacity > 0
-        {
-            return y;
+        if let Some(id) = chunk.section.get_block_absolute_y(x, y, z) {
+            if BlockState::from_id(id).opacity > 0 || face_occludes(id, BlockDirection::Up) {
+                return y;
+            }
+            if face_occludes(id, BlockDirection::Down) {
+                return y - 1;
+            }
         }
         y -= 1;
     }
@@ -418,6 +422,42 @@ fn a_glass_roof_does_not_raise_the_cut() {
         tier_at(&chunk, height, 4, 4, 75),
         SkyLightTier::OpenSky,
         "a cell under glass and above stone was not treated as sunlit"
+    );
+}
+
+/// A bottom slab passes no light down at opacity 0, so the cells below it are not sunlit.
+#[test]
+fn a_slab_roof_lowers_the_open_sky_to_above_it() {
+    let slab = Block::OAK_SLAB.default_state;
+    assert_eq!(slab.opacity, 0, "premise: a bottom slab is not opaque");
+    assert!(
+        face_occludes(slab.id, BlockDirection::Down),
+        "premise: a bottom slab covers its bottom face"
+    );
+
+    let chunk = shape("flat");
+    let roof_y = 75;
+    let mut updates = Vec::new();
+    for x in 0..16usize {
+        for z in 0..16usize {
+            updates.push((x, roof_y, z, slab.id));
+        }
+    }
+    chunk.set_blocks_batch(updates);
+    *chunk
+        .heightmap
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = chunk.calculate_heightmap();
+    let height = SkyLightHeight::compute_from_chunk(&chunk);
+
+    assert_ne!(
+        tier_at(&chunk, height, 4, 4, roof_y - 1),
+        SkyLightTier::OpenSky,
+        "the cell under the slab was treated as sunlit"
+    );
+    assert_eq!(
+        tier_at(&chunk, height, 4, 4, roof_y + 5),
+        SkyLightTier::OpenSky
     );
 }
 

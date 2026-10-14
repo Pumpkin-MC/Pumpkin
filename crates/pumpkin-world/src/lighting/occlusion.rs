@@ -66,6 +66,28 @@ pub fn face_occludes(state_id: BlockStateId, face: BlockDirection) -> bool {
         .is_some_and(|mask| mask & (1 << face as u8) != 0)
 }
 
+/// Whether any face of `state_id` occludes light.
+#[inline]
+#[must_use]
+pub fn has_occluding_face(state_id: BlockStateId) -> bool {
+    OCCLUDING_FACES
+        .get(state_id.as_u16() as usize)
+        .is_some_and(|mask| *mask != 0)
+}
+
+/// Highest cell a block at `y` keeps from direct sky: its own cell when light can't enter
+/// it, the one below when light can't leave through its bottom face.
+#[must_use]
+pub fn sky_ceiling_of(state_id: BlockStateId, y: i32) -> Option<i32> {
+    if crate::lighting::opacity_of(state_id) > 0 || face_occludes(state_id, BlockDirection::Up) {
+        Some(y)
+    } else if face_occludes(state_id, BlockDirection::Down) {
+        Some(y - 1)
+    } else {
+        None
+    }
+}
+
 /// Vanilla `shapeOccludes`: union of leaving face and entered opposite face.
 #[inline]
 #[must_use]

@@ -3,7 +3,8 @@
 use super::{DECODE_SAFETY_MARGIN, SPREAD_SCALES, SkyLightTier};
 use crate::ProtoChunk;
 use crate::chunk::{ChunkData, ChunkHeightmapType};
-use pumpkin_data::{BlockState, BlockStateId};
+use crate::lighting::occlusion;
+use pumpkin_data::BlockStateId;
 
 /// 24-bit Sky Light Cut Height
 ///
@@ -212,11 +213,11 @@ impl SkyLightHeight {
         }
     }
 
-    /// Highest light-blocking block in a column, or `min_y - 1` if the column has none.
+    /// Highest cell without direct sky in a column, or `min_y - 1` if the column has none.
     ///
     /// Starts from the already-maintained `WorldSurface` heightmap and walks down. The
     /// heightmap value alone is not usable:
-    /// not air -> light needs "opacity > 0"
+    /// not air -> light needs "opacity > 0" or an occluding top/bottom face
     /// glass and leaves sit above their real ceiling and would make the cut too high
     fn column_opaque_ceiling(
         chunk: &ChunkData,
@@ -227,11 +228,10 @@ impl SkyLightHeight {
         let min_y = chunk.section.min_y;
         let mut y = from_y;
         while y >= min_y {
-            let id = chunk.section.get_block_absolute_y(local_x, y, local_z);
-            if let Some(id) = id
-                && BlockState::from_id(id).opacity > 0
+            if let Some(id) = chunk.section.get_block_absolute_y(local_x, y, local_z)
+                && let Some(ceiling) = occlusion::sky_ceiling_of(id, y)
             {
-                return y;
+                return ceiling;
             }
             y -= 1;
         }
@@ -338,8 +338,10 @@ impl SkyLightHeight {
         let mut y = from_y.min(min_y + i32::from(proto.height()) - 1);
         while y >= min_y {
             let id = proto.get_block_state_raw(local_x, y - min_y, local_z);
-            if id != BlockStateId::AIR && BlockState::from_id(id).opacity > 0 {
-                return y;
+            if id != BlockStateId::AIR
+                && let Some(ceiling) = occlusion::sky_ceiling_of(id, y)
+            {
+                return ceiling;
             }
             y -= 1;
         }
