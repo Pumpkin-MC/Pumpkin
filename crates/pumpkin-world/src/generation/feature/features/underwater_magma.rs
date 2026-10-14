@@ -1,7 +1,4 @@
 use crate::generation::proto_chunk::GenerationCache;
-use pumpkin_data::block_properties::BubbleColumnLikeProperties;
-use pumpkin_data::fluid::Fluid;
-use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::{
     math::position::BlockPos,
@@ -96,8 +93,6 @@ impl UnderwaterMagmaFeature {
         // Sample a cube around the floor, placing magma with probability and validity checks
         let mut placed = 0i32;
         let r = self.placement_radius;
-        let bubble_state =
-            BubbleColumnLikeProperties { r#drag: true }.to_state_id(&Block::BUBBLE_COLUMN);
 
         for dx in -r..=r {
             for dy in -r..=r {
@@ -115,21 +110,6 @@ impl UnderwaterMagmaFeature {
 
                     let magma_state = BlockState::from_id(Block::MAGMA_BLOCK.default_state.id);
                     chunk.set_block_state(&target_pos.0, magma_state);
-                    let mut water_pos = target_pos.up();
-                    loop {
-                        let water_state = GenerationCache::get_block_state(chunk, &water_pos.0);
-                        let Some(fluid) = Fluid::from_state_id(water_state) else {
-                            break;
-                        };
-                        if !fluid.has_tag(&tag::Fluid::MINECRAFT_BUBBLE_COLUMN_CAN_OCCUPY)
-                            || !fluid.is_source(water_state)
-                        {
-                            break;
-                        }
-
-                        chunk.set_block_state(&water_pos.0, BlockState::from_id(bubble_state));
-                        water_pos = water_pos.up();
-                    }
                     placed += 1;
                 }
             }
