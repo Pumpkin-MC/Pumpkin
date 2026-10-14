@@ -50,13 +50,15 @@ impl SuggestionProvider for PluginSuggestions {
         };
 
         // The argument is a quotable phrase, so anything with a space has to come back quoted
+        // Typed input is matched against the bare name, not the quoted suggestion
         builder
-            .filter_and_suggest_iter(candidates.into_iter().map(|candidate| {
-                if candidate.contains(' ') {
+            .filter_and_suggest_matching(candidates.into_iter().map(|candidate| {
+                let quoted = if candidate.contains(' ') {
                     format!("\"{candidate}\"")
                 } else {
-                    candidate
-                }
+                    candidate.clone()
+                };
+                (candidate, quoted)
             }))
             .build()
     }
