@@ -721,14 +721,12 @@ impl ChunkData {
             self.inhabited_time.load(Ordering::Relaxed) as i64,
         );
 
-        // Last chance to pick up a cut height that only exists in RAM. Every
-        // write path persists on its own already.
-        crate::lighting::SkyLightHeightMigration::ensure_persisted(self);
-
-        let custom_data = self
+        let mut custom_data = self
             .custom_data
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // Same lock as the copy below, so a late quadrant flag can't slip in between.
+        crate::lighting::SkyLightHeightMigration::persist_locked(self, &mut custom_data);
         if !custom_data.is_empty() {
             root_compound.put_compound("PumpkinCustomData", custom_data.clone());
         }

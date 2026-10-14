@@ -2,6 +2,7 @@
 
 use super::SkyLightHeight;
 use crate::chunk::ChunkData;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use std::sync::atomic::Ordering;
 
@@ -102,7 +103,7 @@ impl SkyLightHeightMigration {
 
         let installed = Self::install(chunk, height);
         if installed == height {
-            Self::persist(chunk, height);
+            Self::ensure_persisted(chunk);
         }
 
         installed
@@ -133,23 +134,35 @@ impl SkyLightHeightMigration {
         }
     }
 
-    /// Persists the given cut height to `PumpkinCustomData`, with geometry tag in bits 24-31.
+    /// Writes the cached cut height into `PumpkinCustomData`, geometry tag in bits 24-31.
     ///
-    /// Writes without marking the chunk dirty -> the value is fully
-    /// derivable from the chunk.
-    pub fn persist(chunk: &ChunkData, height: SkyLightHeight) {
+    /// Reads the cache under the `custom_data` lock: the cache only gains flags, so a
+    /// writer that lost the race can't put an older value back over a newer one.
+    /// Doesn't mark the chunk dirty -> the value is fully derivable from the chunk.
+    pub(crate) fn persist_locked(chunk: &ChunkData, custom_data: &mut NbtCompound) {
+        let cached = chunk.sky_light_height_cache.load(Ordering::Relaxed);
+        if cached == 0 {
+            return;
+        }
         let Some(tag) = Self::chunk_geometry_tag(chunk) else {
             return; // Unverifiable geometry: better to persist nothing at all.
         };
-        let stored = (height.raw() & Self::VALUE_MASK) | (u32::from(tag) << Self::GEOMETRY_SHIFT);
-        chunk.set_derived_custom_data(Self::NAMESPACE, Self::KEY, NbtTag::Int(stored as i32));
+        let stored = (cached & Self::VALUE_MASK) | (u32::from(tag) << Self::GEOMETRY_SHIFT);
 
+        let mut namespace_data = match custom_data.child_tags.remove(Self::NAMESPACE) {
+            Some(NbtTag::Compound(compound)) => compound,
+            _ => NbtCompound::new(),
+        };
+        namespace_data
+            .child_tags
+            .insert(Self::KEY.into(), NbtTag::Int(stored as i32));
         // Discard leftovers of older format versions instead of carrying them forever.
         for legacy in Self::LEGACY_KEYS {
-            if chunk.has_custom_data(Self::NAMESPACE, legacy) {
-                chunk.remove_custom_data(Self::NAMESPACE, legacy);
-            }
+            namespace_data.child_tags.remove(legacy);
         }
+        custom_data
+            .child_tags
+            .insert(Self::NAMESPACE.into(), NbtTag::Compound(namespace_data));
     }
 
     /// Lazy runtime: computes from the chunk itself on first access.
@@ -176,19 +189,17 @@ impl SkyLightHeightMigration {
             },
         );
 
-        if let Ok(previous) = previous {
-            let marked =
-                SkyLightHeight::from_raw(previous).with_quadrant_diverged(local_x, local_z);
-            Self::persist(chunk, marked);
+        if previous.is_ok() {
+            Self::ensure_persisted(chunk);
         }
     }
 
     /// Persist the value if something has been computed.
     pub fn ensure_persisted(chunk: &ChunkData) {
-        let cached = chunk.sky_light_height_cache.load(Ordering::Relaxed);
-        if cached == 0 {
-            return;
-        }
-        Self::persist(chunk, SkyLightHeight::from_raw(cached));
+        let mut custom_data = chunk
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Self::persist_locked(chunk, &mut custom_data);
     }
 }
