@@ -326,6 +326,7 @@ impl PaletteEntry {
         let name = entry_compound
             .get_string("id")
             .or_else(|| entry_compound.get_string("Name"))
+            .or_else(|| entry_compound.get_string(""))
             .ok_or(TemplateError::MissingField("palette.id"))?
             .to_string();
 
