@@ -16,7 +16,7 @@ const MAX_MOVABLE_BLOCKS: usize = 12;
 pub struct PistonHandler<'a> {
     world: &'a World,
     pos_from: BlockPos,
-    retracted: bool,
+    extending: bool,
     pos_to: BlockPos,
     motion_direction: BlockDirection,
     pub moved_blocks: Vec<BlockPos>,
@@ -25,9 +25,9 @@ pub struct PistonHandler<'a> {
 }
 
 impl<'a> PistonHandler<'a> {
-    pub fn new(world: &'a World, pos: BlockPos, dir: BlockDirection, retracted: bool) -> Self {
+    pub fn new(world: &'a World, pos: BlockPos, dir: BlockDirection, extending: bool) -> Self {
         let motion_direction;
-        let pos_to = if retracted {
+        let pos_to = if extending {
             motion_direction = dir;
             pos.offset(dir.to_offset())
         } else {
@@ -38,7 +38,7 @@ impl<'a> PistonHandler<'a> {
             world,
             pos_from: pos,
             piston_direction: dir,
-            retracted,
+            extending,
             motion_direction,
             pos_to,
             moved_blocks: Vec::new(),
@@ -58,7 +58,7 @@ impl<'a> PistonHandler<'a> {
             false,
             self.piston_direction,
         ) {
-            if self.retracted && block_state.piston_behavior == PistonBehavior::Destroy {
+            if self.extending && block_state.piston_behavior == PistonBehavior::Destroy {
                 self.broken_blocks.push(self.pos_to);
                 return true;
             }
@@ -93,7 +93,7 @@ impl<'a> PistonHandler<'a> {
 
     fn is_piston_head_or_base(&self, pos: BlockPos) -> bool {
         pos == self.pos_from
-            || (!self.retracted && pos == self.pos_from.offset(self.piston_direction.to_offset()))
+            || (!self.extending && pos == self.pos_from.offset(self.piston_direction.to_offset()))
     }
 
     fn try_move(&mut self, pos: BlockPos, dir: BlockDirection) -> bool {
@@ -161,7 +161,7 @@ impl<'a> PistonHandler<'a> {
             }
             let (block, block_state) = self.world.get_block_and_state(&block_pos2);
             if block_state.is_air()
-                || (!self.retracted
+                || (!self.extending
                     && block_pos2 == self.pos_from.offset(self.piston_direction.to_offset()))
             {
                 return true;

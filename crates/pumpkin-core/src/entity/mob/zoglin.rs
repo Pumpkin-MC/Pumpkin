@@ -3,10 +3,12 @@ use std::sync::{Arc, Weak};
 
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::boundingbox::EntityDimensions;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -137,9 +139,23 @@ impl ZoglinEntity {
     }
 }
 
+impl CustomSound for ZoglinEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityZoglinDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityZoglinHurt)
+    }
+}
+
 impl Mob for ZoglinEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
     }
 
     fn finalize_spawn(
@@ -165,6 +181,34 @@ impl Mob for ZoglinEntity {
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         self.set_baby(nbt.get_bool("IsBaby").unwrap_or(false));
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        // Ambient sound
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            let sound = if self.mob_entity.get_target().is_some() {
+                Sound::EntityZoglinAngry
+            } else {
+                Sound::EntityZoglinAmbient
+            };
+            let pitch = if self.is_baby.load(Ordering::Relaxed) {
+                (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, 1.5)
+            } else {
+                (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, 1.0)
+            };
+            entity.world.load().play_sound_fine(
+                sound,
+                SoundCategory::Hostile,
+                &entity.pos.load(),
+                1.0,
+                pitch,
+            );
+        }
     }
 
     fn on_attack(&self, target: &dyn EntityBase) {

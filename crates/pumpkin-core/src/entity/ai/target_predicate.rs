@@ -121,11 +121,12 @@ impl TargetPredicate {
         }
 
         if self.base_max_distance > 0.0 {
-            // TODO: use distance_scaling_factor from target
-            // Vanilla `getVisibilityPercent`: sneaking, invisibility (by armor cover) and mob heads
-            // shrink the range, min 2 blocks. Only piglin_ai::visibility_percent has it, move to
-            // `LivingEntity` and gate on `use_distance_scaling_factor` (revenge ignores it).
-            let max_dist = self.base_max_distance.max(MIN_DISTANCE);
+            let scale = if self.use_distance_scaling_factor {
+                target_living.get_visibility_percent(Some(tester))
+            } else {
+                1.0
+            };
+            let max_dist = (self.base_max_distance * scale).max(MIN_DISTANCE);
             let dist_sq = tester
                 .get_entity()
                 .pos

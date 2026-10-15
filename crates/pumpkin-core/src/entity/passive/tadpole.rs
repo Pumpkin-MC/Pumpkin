@@ -8,15 +8,19 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
+use std::sync::atomic::AtomicI32;
 
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
+    ai::control::smooth_swimming_move_control::SmoothSwimmingMoveControl,
     ai::goal::{
         escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-        try_find_water::TryFindWaterGoal, wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, random_swimming::RandomSwimmingGoal, tempt::TemptGoal,
+        try_find_water::TryFindWaterGoal,
     },
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     player::Player,
 };
@@ -26,14 +30,22 @@ const TEMPT_ITEMS: &[&Item] = &[&Item::SLIME_BALL];
 pub struct TadpoleEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
+    pub air_supply: AtomicI32,
 }
 
 impl TadpoleEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
+        *mob_entity
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Box::new(SmoothSwimmingMoveControl::new(85, 10, 1.0, 0.1, true));
+
         let tadpole = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
+            air_supply: AtomicI32::new(300),
         };
         let mob_arc = Arc::new(tadpole);
         let mob_weak: Weak<dyn Mob> = {
@@ -49,10 +61,9 @@ impl TadpoleEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(TryFindWaterGoal));
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(2, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
-            goal_selector.add_goal(3, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(3, Box::new(RandomSwimmingGoal::new(1.0)));
             goal_selector.add_goal(
                 4,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
@@ -67,6 +78,16 @@ impl TadpoleEntity {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_FROG_FOOD)
             || item_stack.item == &Item::SLIME_BALL
     }
+
+    #[must_use]
+    pub const fn can_drown(&self) -> bool {
+        false
+    }
+
+    #[must_use]
+    pub const fn can_breathe_under_water(&self) -> bool {
+        true
+    }
 }
 
 impl AgeableMob for TadpoleEntity {
@@ -76,6 +97,14 @@ impl AgeableMob for TadpoleEntity {
 }
 
 impl Mob for TadpoleEntity {
+    fn can_breathe_under_water(&self) -> bool {
+        true
+    }
+
+    fn can_drown(&self) -> bool {
+        false
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -92,8 +121,53 @@ impl Mob for TadpoleEntity {
         &self.mob_entity
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
+    fn is_pushed_by_fluids(&self) -> bool {
+        false
+    }
+
+    fn mob_tick(&self, caller: &dyn EntityBase) {
         self.ageable_ai_step();
+
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        let in_water = entity.touching_water.load(std::sync::atomic::Ordering::Relaxed);
+
+        // Air supply / drowning on land (matching vanilla AbstractFish / WaterAnimal)
+        if in_water {
+            self.air_supply.store(300, std::sync::atomic::Ordering::Relaxed);
+        } else {
+            let air = self.air_supply.fetch_sub(1, std::sync::atomic::Ordering::Relaxed) - 1;
+            if air <= -20 {
+                self.air_supply.store(0, std::sync::atomic::Ordering::Relaxed);
+                caller.damage(caller, 2.0, pumpkin_data::damage::DamageType::DROWN);
+            }
+        }
+
+        // Flop on land (matching vanilla AbstractFish.aiStep)
+        if !in_water && entity.on_ground.load(std::sync::atomic::Ordering::Relaxed) {
+            let mut rng = rand::rng();
+            let dx = (rng.random::<f32>() * 2.0 - 1.0) * 0.05;
+            let dz = (rng.random::<f32>() * 2.0 - 1.0) * 0.05;
+            let velo = entity.velocity.load();
+            entity.set_velocity(Vector3::new(velo.x + dx as f64, 0.4, velo.z + dz as f64));
+            entity.on_ground.store(false, std::sync::atomic::Ordering::Relaxed);
+            if !entity.silent.load(std::sync::atomic::Ordering::Relaxed) {
+                entity.world.load().play_sound_fine(
+                    Sound::EntityTadpoleFlop,
+                    SoundCategory::Neutral,
+                    &entity.pos.load(),
+                    1.0,
+                    1.0,
+                );
+            }
+        }
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
@@ -142,6 +216,23 @@ impl Mob for TadpoleEntity {
                 }
             }
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            let mut bucket = ItemStack::new(1, &Item::TADPOLE_BUCKET);
+            if item_stack.is_empty() {
+                *item_stack = bucket;
+            } else {
+                let was_added = player.inventory().insert_stack_anywhere(&mut bucket);
+                if !was_added && !bucket.is_empty() {
+                    world.drop_stack(&player.position().to_block_pos(), bucket);
+                }
+            }
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Used,
+                Item::WATER_BUCKET.id as i32,
+                1,
+            );
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::InventoryChanged,
+            );
             let pos = entity.pos.load();
             world.play_sound(Sound::ItemBucketFillTadpole, SoundCategory::Neutral, &pos);
             entity.remove();
@@ -149,5 +240,15 @@ impl Mob for TadpoleEntity {
         }
 
         false
+    }
+}
+
+impl CustomSound for TadpoleEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityTadpoleDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityTadpoleHurt)
     }
 }

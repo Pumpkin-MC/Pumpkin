@@ -21,6 +21,7 @@ use crate::entity::{
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     item::ItemEntity,
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
@@ -319,6 +320,10 @@ impl Mob for ArmadilloEntity {
         }
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -402,6 +407,24 @@ impl Mob for ArmadilloEntity {
             }
             ArmadilloState::Idle => {}
         }
+
+        if entity.is_alive()
+            && !entity.silent.load(Ordering::Relaxed)
+            && !self.is_scared()
+            && rand::random_range(0..100) == 0
+        {
+            world.play_sound_fine(
+                Sound::EntityArmadilloAmbient,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                if entity.age.load(Ordering::Relaxed) < 0 {
+                    1.25
+                } else {
+                    1.0
+                },
+            );
+        }
     }
 
     fn mob_init_data_tracker(&self) {
@@ -424,5 +447,19 @@ impl Mob for ArmadilloEntity {
             return false;
         }
         self.animal_interact(player, item_stack, Sound::EntityArmadilloAmbient)
+    }
+}
+
+impl CustomSound for ArmadilloEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityArmadilloDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(if self.is_scared() {
+            Sound::EntityArmadilloHurtReduced
+        } else {
+            Sound::EntityArmadilloHurt
+        })
     }
 }

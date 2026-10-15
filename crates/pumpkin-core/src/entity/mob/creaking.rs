@@ -17,6 +17,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::block::entities::creaking_heart::CreakingHeartBlockEntity;
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -409,6 +410,10 @@ impl Mob for CreakingEntity {
         &self.mob_entity
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {
@@ -479,6 +484,20 @@ impl Mob for CreakingEntity {
                 self.tear_down();
             }
         }
+
+        // Ambient sound
+        if !self.is_active.load(Ordering::Relaxed)
+            && !entity.silent.load(Ordering::Relaxed)
+            && rand::random_range(0..100) == 0
+        {
+            entity.world.load().play_sound_fine(
+                Sound::EntityCreakingAmbient,
+                SoundCategory::Hostile,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
     }
 
     fn pre_damage(&self, damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
@@ -513,5 +532,15 @@ impl Mob for CreakingEntity {
             return false;
         }
         true
+    }
+}
+
+impl CustomSound for CreakingEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityCreakingDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityCreakingSway)
     }
 }

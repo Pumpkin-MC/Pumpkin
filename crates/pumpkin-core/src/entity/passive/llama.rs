@@ -1,5 +1,5 @@
 use std::sync::{
-    Arc, Weak,
+    Arc, Mutex, Weak,
     atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering},
 };
 
@@ -19,10 +19,12 @@ use crate::entity::{
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
         active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
+        follow_parent::FollowParentGoal, llama_follow_caravan::LlamaFollowCaravanGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        ranged_attack::RangedAttackGoal, revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity, RangedAttackMob},
     passive::animal::{Animal, get_carpet_color_from_item},
     player::Player,
@@ -85,6 +87,9 @@ pub struct LlamaEntity {
     pub has_chest: AtomicBool,
     pub temper: AtomicI32,
     pub owner: AtomicCell<Option<Uuid>>,
+    pub self_weak: Mutex<Option<Weak<Self>>>,
+    pub caravan_head: Mutex<Option<Weak<Self>>>,
+    pub caravan_tail: Mutex<Option<Weak<Self>>>,
 }
 
 impl LlamaEntity {
@@ -104,8 +109,15 @@ impl LlamaEntity {
             has_chest: AtomicBool::new(false),
             temper: AtomicI32::new(0),
             owner: AtomicCell::new(None),
+            self_weak: Mutex::new(None),
+            caravan_head: Mutex::new(None),
+            caravan_tail: Mutex::new(None),
         };
         let mob_arc = Arc::new(llama);
+        *mob_arc
+            .self_weak
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(&mob_arc));
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
@@ -134,6 +146,7 @@ impl LlamaEntity {
                 3,
                 Box::new(RangedAttackGoal::new(ranged_weak, 1.25, 40, 20.0)),
             );
+            goal_selector.add_goal(3, Box::new(LlamaFollowCaravanGoal::new(mob_arc.clone(), 2.1)));
             goal_selector.add_goal(4, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
             goal_selector.add_goal(5, Box::new(FollowParentGoal::new(1.0)));
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(0.7)));
@@ -151,6 +164,65 @@ impl LlamaEntity {
         };
 
         mob_arc
+    }
+
+    pub fn leave_caravan(&self) {
+        let head = self
+            .caravan_head
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some(head) = head.and_then(|w| w.upgrade()) {
+            *head
+                .caravan_tail
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        }
+    }
+
+    pub fn join_caravan(&self, head: &Arc<Self>) {
+        let self_weak = self
+            .self_weak
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        *self
+            .caravan_head
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(head));
+        *head
+            .caravan_tail
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = self_weak;
+    }
+
+    #[must_use]
+    pub fn has_caravan_tail(&self) -> bool {
+        self.caravan_tail
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .is_some()
+    }
+
+    #[must_use]
+    pub fn in_caravan(&self) -> bool {
+        self.caravan_head
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .is_some()
+    }
+
+    #[must_use]
+    pub fn get_caravan_head(&self) -> Option<Arc<Self>> {
+        self.caravan_head
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .and_then(Weak::upgrade)
     }
 
     #[must_use]
@@ -272,6 +344,10 @@ impl Mob for LlamaEntity {
         Some(self)
     }
 
+    fn as_llama(&self) -> Option<&Self> {
+        Some(self)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         self.write_ageable_nbt(nbt);
         nbt.put_int("Variant", self.get_variant().id());
@@ -306,12 +382,35 @@ impl Mob for LlamaEntity {
         }
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.ageable_ai_step();
+
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            entity.world.load().play_sound_fine(
+                Sound::EntityLlamaAmbient,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                if entity.age.load(Ordering::Relaxed) < 0 {
+                    1.25
+                } else {
+                    1.0
+                },
+            );
+        }
     }
 
     fn mob_init_data_tracker(&self) {
@@ -388,5 +487,15 @@ impl Mob for LlamaEntity {
 impl RangedAttackMob for LlamaEntity {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, _power: f32) {
         self.spit(target);
+    }
+}
+
+impl CustomSound for LlamaEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityLlamaDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityLlamaHurt)
     }
 }

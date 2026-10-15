@@ -207,9 +207,10 @@ impl BedBlock {
             world.break_block(&bed_head_pos, None, BlockFlags::SKIP_DROPS);
             world.break_block(&bed_foot_pos, None, BlockFlags::SKIP_DROPS);
 
-            world.explode(
+            world.explode_with_fire(
                 bed_head_pos.to_centered_f64(),
                 5.0,
+                true,
                 crate::world::ExplosionInteraction::Block,
             );
 
@@ -247,15 +248,44 @@ impl BedBlock {
 
         // Make sure the bed is not occupied
         if bed_props.occupied {
-            // TODO: Wake up villager
-
-            player.send_system_message_raw(
-                &pumpkin_macros::translate_cross!(
-                    translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
-                    translation::bedrock::TILE_BED_OCCUPIED
+            let aabb = pumpkin_util::math::boundingbox::BoundingBox::new(
+                pumpkin_util::math::vector3::Vector3::new(
+                    bed_head_pos.0.x as f64 - 1.0,
+                    bed_head_pos.0.y as f64 - 0.5,
+                    bed_head_pos.0.z as f64 - 1.0,
                 ),
-                true,
+                pumpkin_util::math::vector3::Vector3::new(
+                    bed_head_pos.0.x as f64 + 2.0,
+                    bed_head_pos.0.y as f64 + 1.5,
+                    bed_head_pos.0.z as f64 + 2.0,
+                ),
             );
+            let mut woke_up = false;
+            for entity in world.get_entities_at_box(&aabb) {
+                if entity.get_entity().entity_type == &EntityType::VILLAGER
+                    && let Some(villager) = entity
+                        .cast_any()
+                        .downcast_ref::<crate::entity::passive::villager::VillagerEntity>()
+                {
+                    if villager.get_entity().pose.load()
+                        == pumpkin_data::entity::EntityPose::Sleeping
+                    {
+                        villager.wake_up(world);
+                        woke_up = true;
+                        break;
+                    }
+                }
+            }
+
+            if !woke_up {
+                player.send_system_message_raw(
+                    &pumpkin_macros::translate_cross!(
+                        translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
+                        translation::bedrock::TILE_BED_OCCUPIED
+                    ),
+                    true,
+                );
+            }
             return BlockActionResult::SuccessServer;
         }
 

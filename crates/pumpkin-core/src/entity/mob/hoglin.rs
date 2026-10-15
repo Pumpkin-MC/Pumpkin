@@ -7,6 +7,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -169,9 +170,23 @@ impl HoglinEntity {
     }
 }
 
+impl CustomSound for HoglinEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityHoglinDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityHoglinHurt)
+    }
+}
+
 impl Mob for HoglinEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
     }
 
     fn spawn_as_baby(&self) -> bool {
@@ -219,6 +234,27 @@ impl Mob for HoglinEntity {
             }
         } else {
             self.time_in_overworld.store(0, Ordering::Relaxed);
+        }
+
+        // Ambient sound
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            let sound = if self.mob_entity.get_target().is_some() {
+                Sound::EntityHoglinAngry
+            } else {
+                Sound::EntityHoglinAmbient
+            };
+            let pitch = if self.is_baby.load(Ordering::Relaxed) {
+                (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, 1.5)
+            } else {
+                (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, 1.0)
+            };
+            world.play_sound_fine(
+                sound,
+                SoundCategory::Hostile,
+                &entity.pos.load(),
+                1.0,
+                pitch,
+            );
         }
     }
 

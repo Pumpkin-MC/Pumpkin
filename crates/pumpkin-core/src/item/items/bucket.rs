@@ -69,7 +69,7 @@ fn get_start_and_end_pos(player: &Player, yaw: f32, pitch: f32) -> (Vector3<f64>
     (start_pos, end_pos)
 }
 
-const fn get_mob_for_bucket(item: &Item) -> Option<(&'static EntityType, Sound)> {
+pub(crate) const fn get_mob_for_bucket(item: &Item) -> Option<(&'static EntityType, Sound)> {
     if item.id == Item::AXOLOTL_BUCKET.id {
         Some((&EntityType::AXOLOTL, Sound::ItemBucketEmptyAxolotl))
     } else if item.id == Item::COD_BUCKET.id {

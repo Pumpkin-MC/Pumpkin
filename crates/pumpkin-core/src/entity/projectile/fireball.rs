@@ -240,18 +240,31 @@ impl EntityBase for FireballEntity {
 
     fn on_hit(&self, hit: ProjectileHit) {
         let world = self.get_entity().world.load();
+        let owner = self
+            .thrown
+            .owner_id
+            .and_then(|id| world.get_entity_by_id(id));
 
-        if let ProjectileHit::Entity { ref entity, .. } = hit {
+        if let ProjectileHit::Entity {
+            ref entity,
+            hit_pos,
+            ..
+        } = hit
+        {
             entity.get_entity().set_on_fire_for(5.0);
-            let _ = entity.damage(
-                entity.as_ref(),
+            let attacker_ref: &dyn EntityBase = owner.as_deref().unwrap_or(self);
+            let _ = entity.damage_with_context(
+                attacker_ref,
                 6.0,
                 pumpkin_data::damage::DamageType::FIREBALL,
+                Some(hit_pos),
+                Some(self.get_entity()),
+                owner.as_deref(),
             );
         }
 
         let hit_pos = hit.hit_pos();
         let power = self.get_explosion_power();
-        world.explode(hit_pos, power, crate::world::ExplosionInteraction::Mob);
+        world.explode_with_fire(hit_pos, power, true, crate::world::ExplosionInteraction::Mob);
     }
 }

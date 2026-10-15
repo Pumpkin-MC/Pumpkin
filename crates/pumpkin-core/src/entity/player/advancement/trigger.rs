@@ -22,6 +22,48 @@ pub enum AdvancementTrigger {
     Bullseye,
     CuredZombieVillager,
     TradedWithVillager,
+    UsedTotem,
+    BrewedPotion,
+    ConstructBeacon { level: i32 },
+    TamedAnimal { animal_type: String, variant: Option<String> },
+    AvoidVibration,
+    KillMobNearSculkCatalyst,
+    FallAfterExplosion,
+    Blowback,
+    RideEntityInLava { in_overworld: bool },
+    UsingItem { item_id: String, target_entity: Option<String> },
+    ShotCrossbow,
+    ShotTrident,
+    ChanneledLightning,
+    Levitated,
+    FallFromHeight,
+    RideBoatWithGoat,
+    UnderLockAndKey,
+    Revaulting,
+    CrafterCraftedCrafter,
+    LeashedFrog { variant: String },
+    AllayDeliverItemToPlayer,
+    AllayDeliverCakeToNoteBlock,
+    RemoveWolfArmor,
+    RepairWolfArmor,
+    FeedSnifflet,
+    WaxOn,
+    WaxOff,
+    SafelyHarvestHoney,
+    SilkTouchNest,
+    KillAxolotlTarget,
+    UhOh,
+    ChargeRespawnAnchor,
+    SummonWither,
+    DistractPiglin,
+    SummonDragon,
+    NetherTravel,
+    GenerateLoot { loot_table: String },
+    EffectsChanged,
+    WhosThePillagerNow,
+    PlayJukeboxInMeadows,
+    WalkOnPowderSnowWithLeatherBoots,
+    LightenUp,
 }
 
 impl Player {
@@ -197,6 +239,42 @@ impl Player {
                     }
                 }
 
+                if !self.has_advancement(Advancement::NETHER_FIND_FORTRESS) {
+                    let fortress_items = [
+                        &Item::NETHER_BRICKS,
+                        &Item::NETHER_BRICK,
+                        &Item::BLAZE_ROD,
+                        &Item::WITHER_SKELETON_SKULL,
+                    ];
+                    for item in fortress_items {
+                        if self.has_item_in_inventory(item) {
+                            self.trigger_advancement_criterion(
+                                Advancement::NETHER_FIND_FORTRESS,
+                                "fortress",
+                            );
+                            break;
+                        }
+                    }
+                }
+
+                if !self.has_advancement(Advancement::NETHER_FIND_BASTION) {
+                    let bastion_items = [
+                        &Item::PIGLIN_BANNER_PATTERN,
+                        &Item::SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE,
+                        &Item::NETHERITE_UPGRADE_SMITHING_TEMPLATE,
+                        &Item::GILDED_BLACKSTONE,
+                    ];
+                    for item in bastion_items {
+                        if self.has_item_in_inventory(item) {
+                            self.trigger_advancement_criterion(
+                                Advancement::NETHER_FIND_BASTION,
+                                "bastion",
+                            );
+                            break;
+                        }
+                    }
+                }
+
                 if !self.has_advancement(Advancement::HUSBANDRY_TACTICAL_FISHING) {
                     let fish_buckets = [
                         (&Item::COD_BUCKET, "cod_bucket"),
@@ -237,6 +315,27 @@ impl Player {
                         self.trigger_advancement_criterion(
                             Advancement::HUSBANDRY_OBTAIN_NETHERITE_HOE,
                             "netherite_hoe",
+                        );
+                    }
+                }
+
+                if !self.has_advancement(Advancement::HUSBANDRY_FROGLIGHTS) {
+                    if self.has_item_in_inventory(&Item::OCHRE_FROGLIGHT)
+                        && self.has_item_in_inventory(&Item::PEARLESCENT_FROGLIGHT)
+                        && self.has_item_in_inventory(&Item::VERDANT_FROGLIGHT)
+                    {
+                        self.trigger_advancement_criterion(
+                            Advancement::HUSBANDRY_FROGLIGHTS,
+                            "froglights",
+                        );
+                    }
+                }
+
+                if !self.has_advancement(Advancement::HUSBANDRY_OBTAIN_SNIFFER_EGG) {
+                    if self.has_item_in_inventory(&Item::SNIFFER_EGG) {
+                        self.trigger_advancement_criterion(
+                            Advancement::HUSBANDRY_OBTAIN_SNIFFER_EGG,
+                            "obtain_sniffer_egg",
                         );
                     }
                 }
@@ -432,6 +531,48 @@ impl Player {
                         "killed_something",
                     );
                 }
+                if entity_type_resource == "minecraft:ghast" {
+                    if !self.has_advancement(Advancement::NETHER_RETURN_TO_SENDER) {
+                        self.trigger_advancement_criterion(
+                            Advancement::NETHER_RETURN_TO_SENDER,
+                            "killed_ghast",
+                        );
+                    }
+                    if self.world().dimension == pumpkin_data::dimension::Dimension::OVERWORLD
+                        && !self.has_advancement(Advancement::NETHER_UNEASY_ALLIANCE)
+                    {
+                        self.trigger_advancement_criterion(
+                            Advancement::NETHER_UNEASY_ALLIANCE,
+                            "killed_ghast",
+                        );
+                    }
+                }
+                if entity_type_resource == "minecraft:ender_dragon" {
+                    if !self.has_advancement(Advancement::END_KILL_DRAGON) {
+                        self.trigger_advancement_criterion(
+                            Advancement::END_KILL_DRAGON,
+                            "killed_dragon",
+                        );
+                    }
+                }
+                if entity_type_resource == "minecraft:blaze"
+                    || entity_type_resource == "minecraft:wither_skeleton"
+                {
+                    if !self.has_advancement(Advancement::NETHER_FIND_FORTRESS) {
+                        self.trigger_advancement_criterion(
+                            Advancement::NETHER_FIND_FORTRESS,
+                            "fortress",
+                        );
+                    }
+                }
+                if entity_type_resource == "minecraft:piglin_brute" {
+                    if !self.has_advancement(Advancement::NETHER_FIND_BASTION) {
+                        self.trigger_advancement_criterion(
+                            Advancement::NETHER_FIND_BASTION,
+                            "bastion",
+                        );
+                    }
+                }
             }
             AdvancementTrigger::SleptInBed => {
                 if !self.has_advancement(Advancement::ADVENTURE_SLEEP_IN_BED) {
@@ -469,7 +610,9 @@ impl Player {
                         ("minecraft:beetroots", "beetroots"),
                         ("minecraft:nether_wart", "nether_wart"),
                         ("minecraft:torchflower", "torchflower"),
+                        ("minecraft:torchflower_crop", "torchflower"),
                         ("minecraft:pitcher_pod", "pitcher_pod"),
+                        ("minecraft:pitcher_crop", "pitcher_pod"),
                     ];
                     for (block, criterion) in seed_blocks {
                         if block_id == block {
@@ -479,6 +622,29 @@ impl Player {
                             );
                             break;
                         }
+                    }
+                }
+
+                if !self.has_advancement(Advancement::HUSBANDRY_PLANT_ANY_SNIFFER_SEED) {
+                    if block_id == "minecraft:torchflower_crop" || block_id == "minecraft:torchflower" {
+                        self.trigger_advancement_criterion(
+                            Advancement::HUSBANDRY_PLANT_ANY_SNIFFER_SEED,
+                            "torchflower",
+                        );
+                    } else if block_id == "minecraft:pitcher_crop" || block_id == "minecraft:pitcher_pod" {
+                        self.trigger_advancement_criterion(
+                            Advancement::HUSBANDRY_PLANT_ANY_SNIFFER_SEED,
+                            "pitcher_pod",
+                        );
+                    }
+                }
+
+                if !self.has_advancement(Advancement::HUSBANDRY_PLACE_DRIED_GHAST_IN_WATER) {
+                    if block_id == "minecraft:dried_ghast" {
+                        self.trigger_advancement_criterion(
+                            Advancement::HUSBANDRY_PLACE_DRIED_GHAST_IN_WATER,
+                            "place_dried_ghast_in_water",
+                        );
                     }
                 }
             }
@@ -565,7 +731,16 @@ impl Player {
                     &parent_type,
                 );
             }
-            AdvancementTrigger::EnterBlock { block_id: _ } => {}
+            AdvancementTrigger::EnterBlock { block_id } => {
+                if (block_id == "minecraft:end_gateway" || block_id == "end_gateway")
+                    && !self.has_advancement(Advancement::END_ENTER_END_GATEWAY)
+                {
+                    self.trigger_advancement_criterion(
+                        Advancement::END_ENTER_END_GATEWAY,
+                        "entered_end_gateway",
+                    );
+                }
+            }
             AdvancementTrigger::DealtOverkillDamage => {
                 if !self.has_advancement(Advancement::ADVENTURE_OVEROVERKILL) {
                     self.trigger_advancement_criterion(
@@ -621,6 +796,487 @@ impl Player {
                     self.trigger_advancement_criterion(
                         Advancement::ADVENTURE_TRADE_AT_WORLD_HEIGHT,
                         "trade_at_world_height",
+                    );
+                }
+            }
+            AdvancementTrigger::UsedTotem => {
+                if !self.has_advancement(Advancement::ADVENTURE_TOTEM_OF_UNDYING) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_TOTEM_OF_UNDYING,
+                        "used_totem",
+                    );
+                }
+            }
+            AdvancementTrigger::BrewedPotion => {
+                if !self.has_advancement(Advancement::NETHER_BREW_POTION) {
+                    self.trigger_advancement_criterion(
+                        Advancement::NETHER_BREW_POTION,
+                        "potion",
+                    );
+                }
+            }
+            AdvancementTrigger::ConstructBeacon { level } => {
+                if !self.has_advancement(Advancement::NETHER_CREATE_BEACON) {
+                    self.trigger_advancement_criterion(
+                        Advancement::NETHER_CREATE_BEACON,
+                        "beacon",
+                    );
+                }
+                if level >= 4 && !self.has_advancement(Advancement::NETHER_CREATE_FULL_BEACON) {
+                    self.trigger_advancement_criterion(
+                        Advancement::NETHER_CREATE_FULL_BEACON,
+                        "beacon",
+                    );
+                }
+            }
+            AdvancementTrigger::TamedAnimal {
+                animal_type,
+                variant,
+            } => {
+                if !self.has_advancement(Advancement::HUSBANDRY_TAME_AN_ANIMAL) {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_TAME_AN_ANIMAL,
+                        "tamed_animal",
+                    );
+                }
+                if let Some(variant_str) = variant {
+                    if animal_type == "minecraft:cat" {
+                        if !self.has_advancement(Advancement::HUSBANDRY_COMPLETE_CATALOGUE) {
+                            self.trigger_advancement_criterion(
+                                Advancement::HUSBANDRY_COMPLETE_CATALOGUE,
+                                &variant_str,
+                            );
+                        }
+                    } else if animal_type == "minecraft:wolf" {
+                        if !self.has_advancement(Advancement::HUSBANDRY_WHOLE_PACK) {
+                            self.trigger_advancement_criterion(
+                                Advancement::HUSBANDRY_WHOLE_PACK,
+                                &variant_str,
+                            );
+                        }
+                    }
+                }
+            }
+            AdvancementTrigger::AvoidVibration => {
+                if !self.has_advancement(Advancement::ADVENTURE_AVOID_VIBRATION) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_AVOID_VIBRATION,
+                        "avoid_vibration",
+                    );
+                }
+            }
+            AdvancementTrigger::KillMobNearSculkCatalyst => {
+                if !self.has_advancement(Advancement::ADVENTURE_KILL_MOB_NEAR_SCULK_CATALYST) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_KILL_MOB_NEAR_SCULK_CATALYST,
+                        "kill_mob_near_sculk_catalyst",
+                    );
+                }
+            }
+            AdvancementTrigger::FallAfterExplosion => {
+                if !self.has_advancement(Advancement::ADVENTURE_WHO_NEEDS_ROCKETS) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_WHO_NEEDS_ROCKETS,
+                        "who_needs_rockets",
+                    );
+                }
+            }
+            AdvancementTrigger::Blowback => {
+                if !self.has_advancement(Advancement::ADVENTURE_BLOWBACK) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_BLOWBACK,
+                        "blowback",
+                    );
+                }
+            }
+            AdvancementTrigger::RideEntityInLava { in_overworld } => {
+                if !self.has_advancement(Advancement::NETHER_RIDE_STRIDER) {
+                    self.trigger_advancement_criterion(
+                        Advancement::NETHER_RIDE_STRIDER,
+                        "used_warped_fungus_on_a_stick",
+                    );
+                }
+                if in_overworld
+                    && !self.has_advancement(Advancement::NETHER_RIDE_STRIDER_IN_OVERWORLD_LAVA)
+                {
+                    self.trigger_advancement_criterion(
+                        Advancement::NETHER_RIDE_STRIDER_IN_OVERWORLD_LAVA,
+                        "ride_entity_distance",
+                    );
+                }
+            }
+            AdvancementTrigger::UsingItem {
+                item_id,
+                target_entity,
+            } => {
+                if item_id == "minecraft:spyglass" {
+                    if let Some(target) = target_entity.as_deref() {
+                        match target {
+                            "minecraft:parrot" => {
+                                if !self.has_advancement(Advancement::ADVENTURE_SPYGLASS_AT_PARROT) {
+                                    self.trigger_advancement_criterion(
+                                        Advancement::ADVENTURE_SPYGLASS_AT_PARROT,
+                                        "spyglass_at_parrot",
+                                    );
+                                }
+                            }
+                            "minecraft:ghast" => {
+                                if !self.has_advancement(Advancement::ADVENTURE_SPYGLASS_AT_GHAST) {
+                                    self.trigger_advancement_criterion(
+                                        Advancement::ADVENTURE_SPYGLASS_AT_GHAST,
+                                        "spyglass_at_ghast",
+                                    );
+                                }
+                            }
+                            "minecraft:ender_dragon" => {
+                                if !self.has_advancement(Advancement::ADVENTURE_SPYGLASS_AT_DRAGON) {
+                                    self.trigger_advancement_criterion(
+                                        Advancement::ADVENTURE_SPYGLASS_AT_DRAGON,
+                                        "spyglass_at_dragon",
+                                    );
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            AdvancementTrigger::ShotCrossbow => {
+                if !self.has_advancement(Advancement::ADVENTURE_OL_BETSY) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_OL_BETSY,
+                        "shot_crossbow",
+                    );
+                }
+            }
+            AdvancementTrigger::ShotTrident => {
+                if !self.has_advancement(Advancement::ADVENTURE_THROW_TRIDENT) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_THROW_TRIDENT,
+                        "shot_trident",
+                    );
+                }
+            }
+            AdvancementTrigger::ChanneledLightning => {
+                if !self.has_advancement(Advancement::ADVENTURE_VERY_VERY_FRIGHTENING) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_VERY_VERY_FRIGHTENING,
+                        "struck_villager",
+                    );
+                }
+            }
+            AdvancementTrigger::Levitated => {
+                if !self.has_advancement(Advancement::END_LEVITATE) {
+                    self.trigger_advancement_criterion(
+                        Advancement::END_LEVITATE,
+                        "levitated",
+                    );
+                }
+            }
+            AdvancementTrigger::FallFromHeight => {
+                if !self.has_advancement(Advancement::ADVENTURE_FALL_FROM_WORLD_HEIGHT) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_FALL_FROM_WORLD_HEIGHT,
+                        "fall_from_world_height",
+                    );
+                }
+            }
+            AdvancementTrigger::RideBoatWithGoat => {
+                if !self.has_advancement(Advancement::HUSBANDRY_RIDE_A_BOAT_WITH_A_GOAT) {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_RIDE_A_BOAT_WITH_A_GOAT,
+                        "ride_a_boat_with_a_goat",
+                    );
+                }
+            }
+            AdvancementTrigger::UnderLockAndKey => {
+                if !self.has_advancement(Advancement::ADVENTURE_UNDER_LOCK_AND_KEY) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_UNDER_LOCK_AND_KEY,
+                        "under_lock_and_key",
+                    );
+                }
+            }
+            AdvancementTrigger::Revaulting => {
+                if !self.has_advancement(Advancement::ADVENTURE_REVAULTING) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_REVAULTING,
+                        "revaulting",
+                    );
+                }
+            }
+            AdvancementTrigger::CrafterCraftedCrafter => {
+                if !self.has_advancement(Advancement::ADVENTURE_CRAFTERS_CRAFTING_CRAFTERS) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_CRAFTERS_CRAFTING_CRAFTERS,
+                        "crafter_crafted_crafter",
+                    );
+                }
+            }
+            AdvancementTrigger::LeashedFrog { variant } => {
+                self.trigger_advancement_criterion(
+                    Advancement::HUSBANDRY_LEASH_ALL_FROG_VARIANTS,
+                    &variant,
+                );
+            }
+            AdvancementTrigger::AllayDeliverItemToPlayer => {
+                if !self.has_advancement(Advancement::HUSBANDRY_ALLAY_DELIVER_ITEM_TO_PLAYER) {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_ALLAY_DELIVER_ITEM_TO_PLAYER,
+                        "allay_deliver_item_to_player",
+                    );
+                }
+            }
+            AdvancementTrigger::AllayDeliverCakeToNoteBlock => {
+                if !self.has_advancement(Advancement::HUSBANDRY_ALLAY_DELIVER_CAKE_TO_NOTE_BLOCK) {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_ALLAY_DELIVER_CAKE_TO_NOTE_BLOCK,
+                        "allay_deliver_cake_to_note_block",
+                    );
+                }
+            }
+            AdvancementTrigger::RemoveWolfArmor => {
+                if !self.has_advancement(Advancement::HUSBANDRY_REMOVE_WOLF_ARMOR) {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_REMOVE_WOLF_ARMOR,
+                        "remove_wolf_armor",
+                    );
+                }
+            }
+            AdvancementTrigger::RepairWolfArmor => {
+                if !self.has_advancement(Advancement::HUSBANDRY_REPAIR_WOLF_ARMOR) {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_REPAIR_WOLF_ARMOR,
+                        "repair_wolf_armor",
+                    );
+                }
+            }
+            AdvancementTrigger::FeedSnifflet => {
+                if !self.has_advancement(Advancement::HUSBANDRY_FEED_SNIFFLET) {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_FEED_SNIFFLET,
+                        "feed_snifflet",
+                    );
+                }
+            }
+            AdvancementTrigger::WaxOn => {
+                if !self.has_advancement(Advancement::HUSBANDRY_WAX_ON) {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_WAX_ON,
+                        "wax_on",
+                    );
+                }
+            }
+            AdvancementTrigger::WaxOff => {
+                if !self.has_advancement(Advancement::HUSBANDRY_WAX_OFF) {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_WAX_OFF,
+                        "wax_off",
+                    );
+                }
+            }
+            AdvancementTrigger::SafelyHarvestHoney => {
+                if !self.has_advancement(Advancement::HUSBANDRY_SAFELY_HARVEST_HONEY) {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_SAFELY_HARVEST_HONEY,
+                        "safely_harvest_honey",
+                    );
+                }
+            }
+            AdvancementTrigger::SilkTouchNest => {
+                if !self.has_advancement(Advancement::HUSBANDRY_SILK_TOUCH_NEST) {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_SILK_TOUCH_NEST,
+                        "silk_touch_nest",
+                    );
+                }
+            }
+            AdvancementTrigger::KillAxolotlTarget => {
+                if !self.has_advancement(Advancement::HUSBANDRY_KILL_AXOLOTL_TARGET) {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_KILL_AXOLOTL_TARGET,
+                        "kill_axolotl_target",
+                    );
+                }
+            }
+            AdvancementTrigger::UhOh => {
+                if !self.has_advancement(Advancement::HUSBANDRY_UH_OH) {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_UH_OH,
+                        "give_tnt_directly",
+                    );
+                }
+            }
+            AdvancementTrigger::ChargeRespawnAnchor => {
+                if !self.has_advancement(Advancement::NETHER_CHARGE_RESPAWN_ANCHOR) {
+                    self.trigger_advancement_criterion(
+                        Advancement::NETHER_CHARGE_RESPAWN_ANCHOR,
+                        "charge_respawn_anchor",
+                    );
+                }
+            }
+            AdvancementTrigger::SummonWither => {
+                if !self.has_advancement(Advancement::NETHER_SUMMON_WITHER) {
+                    self.trigger_advancement_criterion(
+                        Advancement::NETHER_SUMMON_WITHER,
+                        "summoned",
+                    );
+                }
+            }
+            AdvancementTrigger::DistractPiglin => {
+                if !self.has_advancement(Advancement::NETHER_DISTRACT_PIGLIN) {
+                    self.trigger_advancement_criterion(
+                        Advancement::NETHER_DISTRACT_PIGLIN,
+                        "distract_piglin",
+                    );
+                }
+            }
+            AdvancementTrigger::SummonDragon => {
+                if !self.has_advancement(Advancement::END_RESPAWN_DRAGON) {
+                    self.trigger_advancement_criterion(
+                        Advancement::END_RESPAWN_DRAGON,
+                        "summoned_dragon",
+                    );
+                }
+            }
+            AdvancementTrigger::NetherTravel => {
+                if !self.has_advancement(Advancement::NETHER_FAST_TRAVEL) {
+                    self.trigger_advancement_criterion(
+                        Advancement::NETHER_FAST_TRAVEL,
+                        "travelled",
+                    );
+                }
+            }
+            AdvancementTrigger::GenerateLoot { loot_table } => {
+                let bastion_tables = [
+                    ("minecraft:chests/bastion_other", "loot_bastion_other"),
+                    ("minecraft:chests/bastion_treasure", "loot_bastion_treasure"),
+                    ("minecraft:chests/bastion_hoglin_stable", "loot_bastion_hoglin_stable"),
+                    ("minecraft:chests/bastion_bridge", "loot_bastion_bridge"),
+                ];
+                for (table, criterion) in bastion_tables {
+                    let short_name = table.strip_prefix("minecraft:").unwrap_or(table);
+                    if loot_table == table || loot_table == short_name {
+                        if !self.has_advancement(Advancement::NETHER_LOOT_BASTION) {
+                            self.trigger_advancement_criterion(
+                                Advancement::NETHER_LOOT_BASTION,
+                                criterion,
+                            );
+                        }
+                        if !self.has_advancement(Advancement::NETHER_FIND_BASTION) {
+                            self.trigger_advancement_criterion(
+                                Advancement::NETHER_FIND_BASTION,
+                                "bastion",
+                            );
+                        }
+                        break;
+                    }
+                }
+            }
+            AdvancementTrigger::EffectsChanged => {
+                use pumpkin_data::effect::StatusEffect;
+
+                if !self.has_advancement(Advancement::NETHER_ALL_POTIONS) {
+                    let potion_effects = [
+                        &StatusEffect::FIRE_RESISTANCE,
+                        &StatusEffect::INFESTED,
+                        &StatusEffect::INVISIBILITY,
+                        &StatusEffect::JUMP_BOOST,
+                        &StatusEffect::NIGHT_VISION,
+                        &StatusEffect::OOZING,
+                        &StatusEffect::POISON,
+                        &StatusEffect::REGENERATION,
+                        &StatusEffect::RESISTANCE,
+                        &StatusEffect::SLOW_FALLING,
+                        &StatusEffect::SLOWNESS,
+                        &StatusEffect::SPEED,
+                        &StatusEffect::STRENGTH,
+                        &StatusEffect::WATER_BREATHING,
+                        &StatusEffect::WEAKNESS,
+                        &StatusEffect::WEAVING,
+                        &StatusEffect::WIND_CHARGED,
+                    ];
+                    if potion_effects.iter().all(|eff| self.has_effect(eff)) {
+                        self.trigger_advancement_criterion(
+                            Advancement::NETHER_ALL_POTIONS,
+                            "all_effects",
+                        );
+                    }
+                }
+                if !self.has_advancement(Advancement::NETHER_ALL_EFFECTS) {
+                    let all_effects = [
+                        &StatusEffect::ABSORPTION,
+                        &StatusEffect::BAD_OMEN,
+                        &StatusEffect::BLINDNESS,
+                        &StatusEffect::BREATH_OF_THE_NAUTILUS,
+                        &StatusEffect::CONDUIT_POWER,
+                        &StatusEffect::DARKNESS,
+                        &StatusEffect::DOLPHINS_GRACE,
+                        &StatusEffect::FIRE_RESISTANCE,
+                        &StatusEffect::GLOWING,
+                        &StatusEffect::HASTE,
+                        &StatusEffect::HERO_OF_THE_VILLAGE,
+                        &StatusEffect::HUNGER,
+                        &StatusEffect::INFESTED,
+                        &StatusEffect::INVISIBILITY,
+                        &StatusEffect::JUMP_BOOST,
+                        &StatusEffect::LEVITATION,
+                        &StatusEffect::MINING_FATIGUE,
+                        &StatusEffect::NAUSEA,
+                        &StatusEffect::NIGHT_VISION,
+                        &StatusEffect::OOZING,
+                        &StatusEffect::POISON,
+                        &StatusEffect::RAID_OMEN,
+                        &StatusEffect::REGENERATION,
+                        &StatusEffect::RESISTANCE,
+                        &StatusEffect::SLOW_FALLING,
+                        &StatusEffect::SLOWNESS,
+                        &StatusEffect::SPEED,
+                        &StatusEffect::STRENGTH,
+                        &StatusEffect::TRIAL_OMEN,
+                        &StatusEffect::WATER_BREATHING,
+                        &StatusEffect::WEAKNESS,
+                        &StatusEffect::WEAVING,
+                        &StatusEffect::WIND_CHARGED,
+                        &StatusEffect::WITHER,
+                    ];
+                    if all_effects.iter().all(|eff| self.has_effect(eff)) {
+                        self.trigger_advancement_criterion(
+                            Advancement::NETHER_ALL_EFFECTS,
+                            "all_effects",
+                        );
+                    }
+                }
+            }
+            AdvancementTrigger::WhosThePillagerNow => {
+                if !self.has_advancement(Advancement::ADVENTURE_WHOS_THE_PILLAGER_NOW) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_WHOS_THE_PILLAGER_NOW,
+                        "kill_pillager",
+                    );
+                }
+            }
+            AdvancementTrigger::PlayJukeboxInMeadows => {
+                if !self.has_advancement(Advancement::ADVENTURE_PLAY_JUKEBOX_IN_MEADOWS) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_PLAY_JUKEBOX_IN_MEADOWS,
+                        "play_jukebox_in_meadows",
+                    );
+                }
+            }
+            AdvancementTrigger::WalkOnPowderSnowWithLeatherBoots => {
+                if !self.has_advancement(Advancement::ADVENTURE_WALK_ON_POWDER_SNOW_WITH_LEATHER_BOOTS) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_WALK_ON_POWDER_SNOW_WITH_LEATHER_BOOTS,
+                        "walk_on_powder_snow_with_leather_boots",
+                    );
+                }
+            }
+            AdvancementTrigger::LightenUp => {
+                if !self.has_advancement(Advancement::ADVENTURE_LIGHTEN_UP) {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_LIGHTEN_UP,
+                        "lighten_up",
                     );
                 }
             }

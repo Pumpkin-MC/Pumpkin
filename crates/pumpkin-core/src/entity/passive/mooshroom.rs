@@ -24,6 +24,7 @@ use crate::entity::{
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     item::ItemEntity,
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
@@ -168,8 +169,50 @@ impl Mob for MooshroomEntity {
         &self.mob_entity
     }
 
+    fn mob_on_lightning_strike(
+        &self,
+        caller: &dyn EntityBase,
+        lightning: &crate::entity::lightning::LightningBoltEntity,
+    ) {
+        let new_variant = if self.get_variant() == MooshroomVariant::Red {
+            MooshroomVariant::Brown
+        } else {
+            MooshroomVariant::Red
+        };
+        self.set_variant(new_variant);
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        world.play_sound(
+            Sound::EntityMooshroomConvert,
+            SoundCategory::Neutral,
+            &entity.pos.load(),
+        );
+        self.mob_entity
+            .living_entity
+            .on_lightning_strike(caller, lightning);
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.ageable_ai_step();
+
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            entity.world.load().play_sound_fine(
+                Sound::EntityCowAmbient,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
     }
 
     fn mob_init_data_tracker(&self) {
@@ -193,12 +236,17 @@ impl Mob for MooshroomEntity {
             let world = entity.world.load();
             let pos = entity.pos.load();
             let is_suspicious = self.stew_effect.swap(None).is_some();
-            let sound = if is_suspicious {
-                Sound::EntityMooshroomSuspiciousMilk
+            let (sound, stew_item) = if is_suspicious {
+                (Sound::EntityMooshroomSuspiciousMilk, &Item::SUSPICIOUS_STEW)
             } else {
-                Sound::EntityMooshroomMilk
+                (Sound::EntityMooshroomMilk, &Item::MUSHROOM_STEW)
             };
             world.play_sound(sound, SoundCategory::Neutral, &pos);
+            let mut stew = ItemStack::new(1, stew_item);
+            let was_added = player.inventory.insert_stack_anywhere(&mut stew);
+            if !was_added && !stew.is_empty() {
+                world.drop_stack(&entity.block_pos.load(), stew);
+            }
             return true;
         }
 
@@ -211,6 +259,11 @@ impl Mob for MooshroomEntity {
                 SoundCategory::Neutral,
                 &entity.pos.load(),
             );
+            let mut milk = ItemStack::new(1, &Item::MILK_BUCKET);
+            let was_added = player.inventory.insert_stack_anywhere(&mut milk);
+            if !was_added && !milk.is_empty() {
+                world.drop_stack(&entity.block_pos.load(), milk);
+            }
             return true;
         }
 
@@ -267,5 +320,15 @@ impl Mob for MooshroomEntity {
         }
 
         self.animal_interact(player, item_stack, Sound::EntityCowAmbient)
+    }
+}
+
+impl CustomSound for MooshroomEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityCowDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityCowHurt)
     }
 }

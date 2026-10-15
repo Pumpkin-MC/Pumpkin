@@ -5,24 +5,24 @@ use std::sync::Arc;
 mod charging;
 mod circling;
 mod dying;
-mod fly_to_portal;
 mod hovering;
 mod landing;
 mod landing_approach;
 mod sit_attacking;
 mod sit_breathing;
+mod sitting_scanning;
 mod strafing;
 mod taking_off;
 
 pub use charging::ChargingPhase;
 pub use circling::CirclingPhase;
 pub use dying::DyingPhase;
-pub use fly_to_portal::FlyToPortalPhase;
 pub use hovering::HoveringPhase;
 pub use landing::LandingPhase;
 pub use landing_approach::LandingApproachPhase;
 pub use sit_attacking::SitAttackingPhase;
 pub use sit_breathing::SitBreathingPhase;
+pub use sitting_scanning::SittingScanningPhase;
 pub use strafing::StrafingPhase;
 pub use taking_off::TakingOffPhase;
 
@@ -45,20 +45,21 @@ pub trait Phase: Send + Sync {
     }
 }
 
+/// Matches vanilla `net.minecraft.world.entity.boss.enderdragon.phases.EnderDragonPhase` IDs exactly.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum EnderDragonPhase {
     #[default]
-    Circling = 0,
-    Strafing = 1,
-    Charging = 2,
-    FlyToPortal = 3,
-    LandingApproach = 4,
-    Landing = 5,
-    SitAttacking = 6,
-    SitBreathing = 7,
-    TakingOff = 8,
-    Hovering = 9,
-    Dying = 10,
+    HoldingPattern = 0,
+    StrafePlayer = 1,
+    LandingApproach = 2,
+    Landing = 3,
+    Takeoff = 4,
+    SittingFlaming = 5,
+    SittingScanning = 6,
+    SittingAttacking = 7,
+    ChargingPlayer = 8,
+    Dying = 9,
+    Hovering = 10,
 }
 
 impl EnderDragonPhase {
@@ -66,11 +67,10 @@ impl EnderDragonPhase {
     pub const fn is_sitting(self) -> bool {
         matches!(
             self,
-            Self::LandingApproach
-                | Self::Landing
-                | Self::SitAttacking
-                | Self::SitBreathing
-                | Self::TakingOff
+            Self::SittingFlaming
+                | Self::SittingScanning
+                | Self::SittingAttacking
+                | Self::Hovering
         )
     }
 
@@ -95,17 +95,17 @@ impl PhaseManager {
     pub fn new() -> Self {
         Self {
             phases: [
-                Arc::new(CirclingPhase),
-                Arc::new(StrafingPhase),
-                Arc::new(ChargingPhase),
-                Arc::new(FlyToPortalPhase),
-                Arc::new(LandingApproachPhase),
-                Arc::new(LandingPhase),
-                Arc::new(SitAttackingPhase),
-                Arc::new(SitBreathingPhase),
-                Arc::new(TakingOffPhase),
-                Arc::new(HoveringPhase),
-                Arc::new(DyingPhase),
+                Arc::new(CirclingPhase),        // 0: HoldingPattern
+                Arc::new(StrafingPhase),        // 1: StrafePlayer
+                Arc::new(LandingApproachPhase), // 2: LandingApproach
+                Arc::new(LandingPhase),         // 3: Landing
+                Arc::new(TakingOffPhase),       // 4: Takeoff
+                Arc::new(SitBreathingPhase),     // 5: SittingFlaming
+                Arc::new(SittingScanningPhase::new()), // 6: SittingScanning
+                Arc::new(SitAttackingPhase),     // 7: SittingAttacking
+                Arc::new(ChargingPhase::new()),  // 8: ChargingPlayer
+                Arc::new(DyingPhase),           // 9: Dying
+                Arc::new(HoveringPhase),        // 10: Hovering
             ],
         }
     }

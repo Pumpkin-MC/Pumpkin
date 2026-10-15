@@ -11,6 +11,7 @@ use crate::entity::item::ItemEntity;
 use crate::world::World;
 use pumpkin_data::data_component_impl::JukeboxPlayableImpl;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::jukebox_song::JukeboxSong;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockStateId, block_properties::JukeboxLikeProperties};
@@ -35,8 +36,9 @@ impl JukeboxBlock {
         world.set_block_state(
             position,
             new_state.to_state_id(block),
-            BlockFlags::NOTIFY_LISTENERS,
+            BlockFlags::NOTIFY_ALL,
         );
+        world.update_neighbors(position, None);
     }
 
     /// Drops the record from the jukebox - matches vanilla's `JukeboxBlockEntity.dropRecord()`
@@ -155,7 +157,17 @@ impl BlockBehaviour for JukeboxBlock {
             1,
         );
 
-        // TODO: world.emitGameEvent(GameEvent.BLOCK_CHANGE, pos, ...)
+        let biome = world.get_biome(args.position);
+        if biome.registry_id == "minecraft:meadow" || biome.registry_id == "meadow" {
+            args.player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::PlayJukeboxInMeadows,
+            );
+        }
+
+        world.emit_game_event(
+            GameEvent::BlockChange.name(),
+            args.position.to_centered_f64(),
+        );
 
         BlockActionResult::Success
     }
@@ -170,9 +182,9 @@ impl BlockBehaviour for JukeboxBlock {
     }
 
     /// Vanilla: `JukeboxBlock.onStateReplaced()` -> `ItemScatterer.onStateReplaced()`
-    fn on_state_replaced(&self, _args: OnStateReplacedArgs<'_>) {
+    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
         // Vanilla calls ItemScatterer.onStateReplaced which updates comparators
-        // TODO: world.updateComparators(pos, block) when implemented
+        args.world.update_neighbors(args.position, None);
     }
 
     /// Vanilla: `JukeboxBlock.emitsRedstonePower()` returns true

@@ -7,11 +7,27 @@ pub struct AmbientStandGoal {
     cooldown: i32,
 }
 
+impl Default for AmbientStandGoal {
+    fn default() -> Self {
+        Self {
+            goal_control: Controls::MOVE | Controls::JUMP,
+            cooldown: -120,
+        }
+    }
+}
+
 impl AmbientStandGoal {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            goal_control: Controls::MOVE | Controls::JUMP,
+            cooldown: -120,
+        }
+    }
+
     const fn reset_cooldown(&mut self) {
-        // TODO: should be: this.cooldown = -entity.getMinAmbientStandDelay();
-        // TODO: implement when Horses are implemented
-        self.cooldown = 0;
+        // Vanilla: -getAmbientStandInterval()
+        self.cooldown = -120;
     }
 }
 

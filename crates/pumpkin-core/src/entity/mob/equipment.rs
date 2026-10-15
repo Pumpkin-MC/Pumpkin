@@ -450,6 +450,30 @@ pub static EQUIPMENT_REGISTRY: LazyLock<HashMap<&'static str, MobEquipmentDef>> 
             },
         );
 
+        // ─── Vex ───
+        m.insert(
+            "vex",
+            MobEquipmentDef {
+                entity_type: "vex",
+                weapon: WeaponConfig::Always(&Item::IRON_SWORD),
+                armor: ArmorConfig::None,
+                enchanted: false,
+                can_pick_up_loot: false,
+            },
+        );
+
+        // ─── Piglin Brute ───
+        m.insert(
+            "piglin_brute",
+            MobEquipmentDef {
+                entity_type: "piglin_brute",
+                weapon: WeaponConfig::Always(&Item::GOLDEN_AXE),
+                armor: ArmorConfig::None,
+                enchanted: false,
+                can_pick_up_loot: false,
+            },
+        );
+
         m
     });
 

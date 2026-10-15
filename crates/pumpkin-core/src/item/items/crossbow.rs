@@ -36,8 +36,8 @@ impl ItemBehaviour for CrossbowItem {
             return;
         }
 
-        let has_arrows = player.find_arrow().is_some();
-        if !has_arrows && player.gamemode.load() != GameMode::Creative {
+        let has_ammo = player.find_crossbow_ammo().is_some();
+        if !has_ammo && player.gamemode.load() != GameMode::Creative {
             return;
         }
 
@@ -55,12 +55,12 @@ impl ItemBehaviour for CrossbowItem {
             crate::enchantment::EnchantmentHelper::modify_crossbow_charge_time(&stack, 25);
 
         if use_ticks >= charge_time {
-            let arrow_slot = player.find_arrow();
+            let ammo_slot = player.find_crossbow_ammo();
             let gamemode = player.gamemode.load();
             let is_creative = gamemode == GameMode::Creative;
 
-            if arrow_slot.is_some() || is_creative {
-                let projectile = arrow_slot.map_or_else(
+            if ammo_slot.is_some() || is_creative {
+                let projectile = ammo_slot.map_or_else(
                     || ItemStack::new(1, &Item::ARROW),
                     |slot| {
                         let inventory = player.inventory();
@@ -85,7 +85,7 @@ impl ItemBehaviour for CrossbowItem {
                     ));
                     player.inventory().set_held_item(stack);
 
-                    if let Some(slot) = arrow_slot
+                    if let Some(slot) = ammo_slot
                         && !is_creative
                     {
                         player.consume_arrow(slot);
@@ -113,6 +113,7 @@ impl ItemBehaviour for CrossbowItem {
 
 impl CrossbowItem {
     pub const ARROW_POWER: f32 = 3.15;
+    pub const FIREWORK_POWER: f32 = 1.6;
 
     fn fire_projectiles(player: &Player) {
         let mut held = player.inventory().held_item();
@@ -134,13 +135,22 @@ impl CrossbowItem {
                     &player.position(),
                 );
 
+                let is_firework = projectiles
+                    .iter()
+                    .any(|p| p.item.id == Item::FIREWORK_ROCKET.id);
+                let power = if is_firework {
+                    Self::FIREWORK_POWER
+                } else {
+                    Self::ARROW_POWER
+                };
+
                 let is_creative = player.gamemode.load() == GameMode::Creative;
                 ProjectileWeaponItem::shoot_projectiles(
                     &world,
                     player.get_entity(),
                     &held,
                     &projectiles,
-                    Self::ARROW_POWER,
+                    power,
                     1.0,
                     false,
                     is_creative,
@@ -149,7 +159,18 @@ impl CrossbowItem {
                 held.patch
                     .retain(|(id, _)| *id != DataComponent::ChargedProjectiles);
                 player.inventory().set_held_item(held);
-                player.damage_held_item(1);
+
+                let durability_use = if is_firework { 3 } else { 1 };
+                player.damage_held_item(durability_use);
+
+                player.increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Used,
+                    Item::CROSSBOW.id as i32,
+                    1,
+                );
+                player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::ShotCrossbow,
+                );
             }
         }
     }

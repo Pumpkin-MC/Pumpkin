@@ -63,6 +63,12 @@ impl ItemBehaviour for EnderPearlItem {
                     .set_stack_in_hand(pumpkin_util::Hand::Left, off_hand);
             }
         }
+
+        player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Used,
+            Item::ENDER_PEARL.id as i32,
+            1,
+        );
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

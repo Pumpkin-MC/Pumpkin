@@ -46,6 +46,7 @@ impl BreathManager {
         if player
             .living_entity
             .has_effect(&StatusEffect::WATER_BREATHING)
+            || !player.living_entity.can_drown()
         {
             if self.air_supply.swap(MAX_AIR, Ordering::Relaxed) != MAX_AIR {
                 self.send_air_supply(player);

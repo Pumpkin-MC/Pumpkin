@@ -1,9 +1,11 @@
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 
 use crate::entity::{
@@ -12,6 +14,7 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     player::Player,
 };
@@ -92,6 +95,27 @@ impl Mob for ParrotEntity {
         &self.mob_entity
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            entity.world.load().play_sound_fine(
+                Sound::EntityParrotAmbient,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
+    }
+
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         // Vanilla checks the poisonous food tag last, after taming, which isn't
         // implemented yet. Nothing in `parrot_food` is also in
@@ -105,6 +129,16 @@ impl Mob for ParrotEntity {
 
         self.eat_cookie(player, item_stack);
         true
+    }
+}
+
+impl CustomSound for ParrotEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityParrotDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityParrotHurt)
     }
 }
 

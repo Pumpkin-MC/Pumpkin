@@ -19,6 +19,7 @@ use crate::entity::{
         escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     player::Player,
 };
@@ -117,6 +118,10 @@ impl Mob for AllayEntity {
         }
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -129,6 +134,21 @@ impl Mob for AllayEntity {
             if next == 0 {
                 self.set_can_duplicate(true);
             }
+        }
+
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            entity.world.load().play_sound_fine(
+                Sound::EntityAllayAmbientWithoutItem,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
         }
     }
 
@@ -173,10 +193,170 @@ impl Mob for AllayEntity {
             return true;
         }
 
+        let current_item = {
+            let equip = self
+                .mob_entity
+                .living_entity
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            equip
+                .equipment
+                .get(&pumpkin_data::data_component_impl::EquipmentSlot::MAIN_HAND)
+                .cloned()
+                .unwrap_or_else(|| ItemStack::EMPTY.clone())
+        };
+
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+
+        if current_item.is_empty() && !item_stack.is_empty() {
+            let mut item_to_give = item_stack.clone();
+            item_to_give.set_count(1);
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+
+            {
+                let mut equip = self
+                    .mob_entity
+                    .living_entity
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                equip
+                    .equipment
+                    .insert(pumpkin_data::data_component_impl::EquipmentSlot::MAIN_HAND, item_to_give.clone());
+            }
+            self.mob_entity.living_entity.send_equipment_changes(&[(
+                pumpkin_data::data_component_impl::EquipmentSlot::MAIN_HAND,
+                item_to_give.clone(),
+            )]);
+
+            self.owner.store(Some(player.gameprofile.id));
+            world.play_sound(Sound::EntityAllayItemGiven, SoundCategory::Neutral, &pos);
+
+            if item_to_give.item.id == Item::CAKE.id {
+                let block_pos = pos.to_block_pos();
+                let mut near_noteblock = false;
+                for dx in -3..=3 {
+                    for dy in -3..=3 {
+                        for dz in -3..=3 {
+                            let check_pos = pumpkin_util::math::position::BlockPos(
+                                pumpkin_util::math::vector3::Vector3::new(
+                                    block_pos.0.x + dx,
+                                    block_pos.0.y + dy,
+                                    block_pos.0.z + dz,
+                                ),
+                            );
+                            if world.get_block(&check_pos).id == pumpkin_data::Block::NOTE_BLOCK.id {
+                                near_noteblock = true;
+                                break;
+                            }
+                        }
+                        if near_noteblock {
+                            break;
+                        }
+                    }
+                    if near_noteblock {
+                        break;
+                    }
+                }
+                if near_noteblock {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::AllayDeliverCakeToNoteBlock,
+                    );
+                }
+            }
+
+            return true;
+        }
+
+        if !current_item.is_empty() && item_stack.is_empty() {
+            {
+                let mut equip = self
+                    .mob_entity
+                    .living_entity
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                equip
+                    .equipment
+                    .remove(&pumpkin_data::data_component_impl::EquipmentSlot::MAIN_HAND);
+            }
+            self.mob_entity.living_entity.send_equipment_changes(&[(
+                pumpkin_data::data_component_impl::EquipmentSlot::MAIN_HAND,
+                ItemStack::EMPTY.clone(),
+            )]);
+
+            world.play_sound(Sound::EntityAllayItemTaken, SoundCategory::Neutral, &pos);
+
+            let mut to_give = current_item.clone();
+            let was_added = player.inventory().insert_stack_anywhere(&mut to_give);
+            if !was_added && !to_give.is_empty() {
+                world.drop_stack(&player.position().to_block_pos(), to_give);
+            }
+            player
+                .current_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .send_content_updates();
+
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::AllayDeliverItemToPlayer,
+            );
+
+            if current_item.item.id == Item::CAKE.id {
+                let block_pos = pos.to_block_pos();
+                let mut near_noteblock = false;
+                for dx in -3..=3 {
+                    for dy in -3..=3 {
+                        for dz in -3..=3 {
+                            let check_pos = pumpkin_util::math::position::BlockPos(
+                                pumpkin_util::math::vector3::Vector3::new(
+                                    block_pos.0.x + dx,
+                                    block_pos.0.y + dy,
+                                    block_pos.0.z + dz,
+                                ),
+                            );
+                            if world.get_block(&check_pos).id == pumpkin_data::Block::NOTE_BLOCK.id {
+                                near_noteblock = true;
+                                break;
+                            }
+                        }
+                        if near_noteblock {
+                            break;
+                        }
+                    }
+                    if near_noteblock {
+                        break;
+                    }
+                }
+                if near_noteblock {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::AllayDeliverCakeToNoteBlock,
+                    );
+                }
+            }
+
+            return true;
+        }
+
         if self.owner.load().is_none() {
             self.owner.store(Some(player.gameprofile.id));
         }
 
         false
+    }
+}
+
+impl CustomSound for AllayEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityAllayDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityAllayHurt)
     }
 }

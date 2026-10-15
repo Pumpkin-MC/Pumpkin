@@ -16,6 +16,7 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
@@ -126,6 +127,10 @@ impl Mob for SheepEntity {
         Some(self)
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }
@@ -190,5 +195,15 @@ impl Mob for SheepEntity {
         }
 
         self.animal_interact(player, item_stack, Sound::EntitySheepAmbient)
+    }
+}
+
+impl CustomSound for SheepEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntitySheepDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntitySheepHurt)
     }
 }

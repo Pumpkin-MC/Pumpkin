@@ -14,6 +14,7 @@ use pumpkin_data::tracked_data;
 
 use crate::entity::{
     Entity, EntityBase,
+    custom_sound::CustomSound,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal, revenge::RevengeGoal,
@@ -155,16 +156,33 @@ impl WitchEntity {
         let mut potion = &Potion::HARMING;
 
         if let Some(target_living) = target.get_living_entity() {
-            let r: f32 = rand::random();
-            if dist >= 8.0 && !target_living.has_effect(&StatusEffect::SLOWNESS) {
-                potion = &Potion::SLOWNESS;
-            } else if target_living.health.load() >= 8.0
-                && !target_living.has_effect(&StatusEffect::POISON)
-            {
-                potion = &Potion::POISON;
-            } else if dist <= 3.0 && !target_living.has_effect(&StatusEffect::WEAKNESS) && r < 0.25
-            {
-                potion = &Potion::WEAKNESS;
+            let is_raider = target
+                .get_entity()
+                .entity_type
+                .has_tag(&tag::EntityType::MINECRAFT_RAIDERS);
+            if is_raider {
+                if target_living.health.load() <= 4.0 {
+                    potion = &Potion::HEALING;
+                } else {
+                    potion = &Potion::REGENERATION;
+                }
+                *self
+                    .mob_entity
+                    .target
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+            } else {
+                let r: f32 = rand::random();
+                if dist >= 8.0 && !target_living.has_effect(&StatusEffect::SLOWNESS) {
+                    potion = &Potion::SLOWNESS;
+                } else if target_living.health.load() >= 8.0
+                    && !target_living.has_effect(&StatusEffect::POISON)
+                {
+                    potion = &Potion::POISON;
+                } else if dist <= 3.0 && !target_living.has_effect(&StatusEffect::WEAKNESS) && r < 0.25
+                {
+                    potion = &Potion::WEAKNESS;
+                }
             }
         }
 
@@ -188,9 +206,23 @@ impl WitchEntity {
     }
 }
 
+impl CustomSound for WitchEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityWitchDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityWitchHurt)
+    }
+}
+
 impl Mob for WitchEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
     }
 
     fn as_patrolling_monster(&self) -> Option<&dyn PatrollingMonster> {
@@ -305,6 +337,14 @@ impl Mob for WitchEntity {
                     let pos = entity.pos.load();
                     world.play_sound(Sound::EntityWitchDrink, SoundCategory::Hostile, &pos);
                 }
+            } else if rand::random_range(0..100) == 0 && !entity.silent.load(Ordering::Relaxed) {
+                world.play_sound_fine(
+                    Sound::EntityWitchAmbient,
+                    SoundCategory::Hostile,
+                    &entity.pos.load(),
+                    1.0,
+                    1.0,
+                );
             }
         }
     }

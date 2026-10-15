@@ -406,6 +406,90 @@ impl BlockBehaviour for CauldronBlock {
         }
     }
 
+    fn on_entity_collision(&self, args: crate::block::OnEntityCollisionArgs<'_>) {
+        let base_ent = args.entity.get_entity();
+        match args.block.id {
+            BlockId::LAVA_CAULDRON => {
+                base_ent.set_frozen_ticks(0);
+                args.entity.set_on_fire_for(15.0);
+                if let Some(living) = args.entity.get_living_entity() {
+                    living.damage(args.entity, 4.0, pumpkin_data::damage::DamageType::LAVA);
+                }
+            }
+            BlockId::WATER_CAULDRON => {
+                if base_ent.is_on_fire() {
+                    base_ent.extinguish();
+                    let state_id = args.world.get_block_state_id(args.position);
+                    let props = WaterCauldronLikeProperties::from_state_id(state_id);
+                    if props.level > 0 {
+                        let next_level = props.level - 1;
+                        if next_level > 0 {
+                            let next_level_str = match next_level {
+                                2 => "2",
+                                _ => "1",
+                            };
+                            let new_state_id = Block::WATER_CAULDRON
+                                .from_properties(&[("level", next_level_str)])
+                                .to_state_id(&Block::WATER_CAULDRON);
+                            args.world.set_block_state(
+                                args.position,
+                                new_state_id,
+                                BlockFlags::NOTIFY_ALL,
+                            );
+                        } else {
+                            args.world.set_block_state(
+                                args.position,
+                                Block::CAULDRON.default_state.id,
+                                BlockFlags::NOTIFY_ALL,
+                            );
+                        }
+                        args.world.play_sound(
+                            Sound::BlockFireExtinguish,
+                            SoundCategory::Blocks,
+                            &args.position.to_f64(),
+                        );
+                    }
+                }
+            }
+            BlockId::POWDER_SNOW_CAULDRON => {
+                if base_ent.is_on_fire() {
+                    base_ent.extinguish();
+                    let state_id = args.world.get_block_state_id(args.position);
+                    let props = WaterCauldronLikeProperties::from_state_id(state_id);
+                    if props.level > 0 {
+                        let next_level = props.level - 1;
+                        if next_level > 0 {
+                            let next_level_str = match next_level {
+                                2 => "2",
+                                _ => "1",
+                            };
+                            let new_state_id = Block::WATER_CAULDRON
+                                .from_properties(&[("level", next_level_str)])
+                                .to_state_id(&Block::WATER_CAULDRON);
+                            args.world.set_block_state(
+                                args.position,
+                                new_state_id,
+                                BlockFlags::NOTIFY_ALL,
+                            );
+                        } else {
+                            args.world.set_block_state(
+                                args.position,
+                                Block::CAULDRON.default_state.id,
+                                BlockFlags::NOTIFY_ALL,
+                            );
+                        }
+                        args.world.play_sound(
+                            Sound::BlockFireExtinguish,
+                            SoundCategory::Blocks,
+                            &args.position.to_f64(),
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
         false
     }

@@ -915,7 +915,10 @@ impl World {
             .synced_block_event_queue
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        queue.push(BlockEvent { pos, r#type, data });
+        let event = BlockEvent { pos, r#type, data };
+        if !queue.contains(&event) {
+            queue.push(event);
+        }
     }
 
     pub fn flush_synced_block_events(self: &Arc<Self>) {
@@ -3772,6 +3775,18 @@ impl World {
         self.explode_with_calculator(position, power, interaction, None);
     }
 
+    pub fn explode_with_fire(
+        self: &Arc<Self>,
+        position: Vector3<f64>,
+        power: f32,
+        create_fire: bool,
+        interaction: ExplosionInteraction,
+    ) {
+        let block_interaction = self.get_block_interaction(interaction);
+        let explosion = Explosion::new(power, position, block_interaction).with_fire(create_fire);
+        self.run_explosion(&explosion, position, power);
+    }
+
     pub fn explode_with_calculator(
         self: &Arc<Self>,
         position: Vector3<f64>,
@@ -5290,6 +5305,28 @@ impl World {
                 ..Default::default()
             };
             crate::block::drop_loot(self, broken_block, position, true, &params);
+        }
+
+        if let Some(player) = cause {
+            if (broken_block == &Block::BEE_NEST || broken_block == &Block::BEEHIVE)
+                && let Some(block_entity) = self.get_block_entity(position)
+                && let Some(beehive) = block_entity.as_any().downcast_ref::<crate::block::entities::beehive::BeehiveBlockEntity>()
+            {
+                let count = beehive
+                    .bees
+                    .lock()
+                    .ok()
+                    .and_then(|b| b.as_ref().map(|v| v.len()))
+                    .unwrap_or(0);
+                let held_item = player.inventory().held_item();
+                if count >= 3
+                    && held_item.get_enchantment_level(&pumpkin_data::enchantment::Enchantment::SILK_TOUCH) > 0
+                {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::SilkTouchNest,
+                    );
+                }
+            }
         }
 
         let new_state_id = if broken_block.is_waterlogged(broken_block_state.id) {

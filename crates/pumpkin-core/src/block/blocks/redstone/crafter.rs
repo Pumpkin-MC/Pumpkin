@@ -148,6 +148,15 @@ impl CrafterBlock {
             }
             Self::dispense_item(world, pos, crafter, &mut result_stack, props.orientation);
 
+            if item.id == Item::CRAFTER.id {
+                let center = pos.to_centered_f64();
+                for player in world.get_nearby_players(center, 10.0) {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::CrafterCraftedCrafter,
+                    );
+                }
+            }
+
             for i in 0..CrafterBlockEntity::INVENTORY_SIZE {
                 let stack = crafter.get_stack(i);
                 if !stack.is_empty()

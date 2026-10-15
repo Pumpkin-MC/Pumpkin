@@ -1,5 +1,5 @@
 use super::{Controls, Goal, to_goal_ticks};
-use crate::entity::ai::util::default_random_pos;
+use crate::entity::ai::util::{default_random_pos, land_random_pos};
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -41,7 +41,17 @@ impl WanderAroundGoal {
     }
 
     fn get_position(mob: &dyn Mob) -> Option<Vector3<f64>> {
-        default_random_pos::get_pos(mob, 10, 7)
+        if mob
+            .get_entity()
+            .touching_water
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            land_random_pos::get_pos(mob, 15, 7)
+                .or_else(|| default_random_pos::get_pos(mob, 10, 7))
+        } else {
+            land_random_pos::get_pos(mob, 10, 7)
+                .or_else(|| default_random_pos::get_pos(mob, 10, 7))
+        }
     }
 }
 

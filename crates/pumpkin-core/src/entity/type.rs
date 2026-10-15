@@ -14,8 +14,11 @@ use crate::entity::decoration::{
     display::{BlockDisplayEntity, ItemDisplayEntity, TextDisplayEntity},
     end_crystal::EndCrystalEntity,
     item_frame::ItemFrameEntity,
+    leash_knot::LeashKnotEntity,
+    mannequin::MannequinEntity,
     painting::PaintingEntity,
 };
+use crate::entity::ominous_item_spawner::OminousItemSpawnerEntity;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::falling::FallingEntity;
 use crate::entity::interaction::InteractionEntity;
@@ -107,11 +110,14 @@ use crate::entity::passive::wolf::WolfEntity;
 use crate::entity::passive::zombie_horse::ZombieHorseEntity;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::ArrowEntity;
+use crate::entity::projectile::dragon_fireball::DragonFireballEntity;
 use crate::entity::projectile::egg::EggEntity;
 use crate::entity::projectile::ender_pearl::EnderPearlEntity;
+use crate::entity::projectile::experience_bottle::ExperienceBottleEntity;
 use crate::entity::projectile::eye_of_ender::EyeOfEnder;
 use crate::entity::projectile::fireball::FireballEntity;
 use crate::entity::projectile::firework_rocket::FireworkRocketEntity;
+use crate::entity::projectile::fishing_bobber::FishingBobberEntity;
 use crate::entity::projectile::lingering_potion::LingeringPotionEntity;
 use crate::entity::projectile::llama_spit::LlamaSpitEntity;
 use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
@@ -145,6 +151,7 @@ pub fn from_type(
         id if id == EntityType::HUSK.id => HuskEntity::new(entity),
         id if id == EntityType::ZOMBIE_VILLAGER.id => ZombieVillagerEntity::new(entity),
         id if id == EntityType::ZOMBIFIED_PIGLIN.id => ZombifiedPiglinEntity::new(entity),
+        id if id == EntityType::ZOMBIE_NAUTILUS.id => DrownedEntity::new(entity),
 
         // Skeleton
         id if id == EntityType::SKELETON.id => SkeletonEntity::new(entity),
@@ -244,6 +251,14 @@ pub fn from_type(
         id if id == EntityType::ITEM_FRAME.id || id == EntityType::GLOW_ITEM_FRAME.id => {
             Arc::new(ItemFrameEntity::new(entity))
         }
+        id if id == EntityType::LEASH_KNOT.id => {
+            let block_pos = entity.block_pos.load();
+            Arc::new(LeashKnotEntity::new(entity, block_pos))
+        }
+        id if id == EntityType::MANNEQUIN.id => Arc::new(MannequinEntity::new(entity)),
+        id if id == EntityType::OMINOUS_ITEM_SPAWNER.id => {
+            Arc::new(OminousItemSpawnerEntity::new(entity))
+        }
         id if id == EntityType::EVOKER_FANGS.id => Arc::new(
             crate::entity::projectile::evoker_fangs::EvokerFangsEntity::new(entity, 0, 0.0, None),
         ),
@@ -311,6 +326,13 @@ pub fn from_type(
         id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(entity)),
         id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity)),
         id if id == EntityType::LINGERING_POTION.id => Arc::new(LingeringPotionEntity::new(entity)),
+        id if id == EntityType::EXPERIENCE_BOTTLE.id => {
+            Arc::new(ExperienceBottleEntity::new(entity))
+        }
+        id if id == EntityType::DRAGON_FIREBALL.id => Arc::new(DragonFireballEntity::new(entity)),
+        id if id == EntityType::FISHING_BOBBER.id => {
+            Arc::new(FishingBobberEntity::new_unowned(entity))
+        }
         id if id == EntityType::LLAMA_SPIT.id => Arc::new(LlamaSpitEntity::new(entity)),
         id if id == EntityType::EYE_OF_ENDER.id => Arc::new(EyeOfEnder::new(entity)),
         id if id == EntityType::ACACIA_BOAT.id

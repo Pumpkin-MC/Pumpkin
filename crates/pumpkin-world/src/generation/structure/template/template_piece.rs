@@ -296,6 +296,13 @@ impl StructurePieceBase for TemplatePiece {
         chunk_box: &BlockBox,
     ) {
         self.place_blocks(chunk, chunk_box);
+        super::place_template_entities(
+            chunk,
+            &self.template,
+            self.template_position,
+            self.place_settings.rotation,
+            chunk_box,
+        );
     }
 
     fn translate(&mut self, x: i32, y: i32, z: i32) {

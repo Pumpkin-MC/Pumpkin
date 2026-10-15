@@ -18,6 +18,7 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
@@ -133,6 +134,10 @@ impl Mob for GoatEntity {
         Some(self)
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }
@@ -161,6 +166,30 @@ impl Mob for GoatEntity {
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.ageable_ai_step();
+
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            let sound = if self.is_screaming() {
+                Sound::EntityGoatScreamingAmbient
+            } else {
+                Sound::EntityGoatAmbient
+            };
+            entity.world.load().play_sound_fine(
+                sound,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                if entity.age.load(Ordering::Relaxed) < 0 {
+                    1.25
+                } else {
+                    1.0
+                },
+            );
+        }
     }
 
     fn mob_init_data_tracker(&self) {
@@ -195,6 +224,11 @@ impl Mob for GoatEntity {
                 Sound::EntityGoatMilk
             };
             world.play_sound(sound, SoundCategory::Neutral, &entity.pos.load());
+            let mut milk = ItemStack::new(1, &Item::MILK_BUCKET);
+            let was_added = player.inventory.insert_stack_anywhere(&mut milk);
+            if !was_added && !milk.is_empty() {
+                world.drop_stack(&entity.block_pos.load(), milk);
+            }
             return true;
         }
 
@@ -204,5 +238,23 @@ impl Mob for GoatEntity {
             Sound::EntityGoatAmbient
         };
         self.animal_interact(player, item_stack, ambient_sound)
+    }
+}
+
+impl CustomSound for GoatEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(if self.is_screaming() {
+            Sound::EntityGoatScreamingDeath
+        } else {
+            Sound::EntityGoatDeath
+        })
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(if self.is_screaming() {
+            Sound::EntityGoatScreamingHurt
+        } else {
+            Sound::EntityGoatHurt
+        })
     }
 }

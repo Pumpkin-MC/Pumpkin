@@ -17,6 +17,7 @@ use crate::entity::{
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     item_steerable::{ItemBasedSteering, ItemSteerable},
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
@@ -122,6 +123,10 @@ impl Mob for StriderEntity {
         }
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -144,6 +149,25 @@ impl Mob for StriderEntity {
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.ageable_ai_step();
+
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            entity.world.load().play_sound_fine(
+                Sound::EntityStriderAmbient,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                if entity.age.load(Ordering::Relaxed) < 0 {
+                    1.25
+                } else {
+                    1.0
+                },
+            );
+        }
     }
 
     fn mob_init_data_tracker(&self) {
@@ -193,5 +217,15 @@ impl ItemSteerable for StriderEntity {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+impl CustomSound for StriderEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityStriderDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityStriderHurt)
     }
 }

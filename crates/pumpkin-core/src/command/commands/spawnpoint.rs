@@ -115,7 +115,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         PermissionDefault::Op(PermissionLvl::Two),
     ));
 
-    dispatcher.register(
+    dispatcher.register_with_aliases(
         command("spawnpoint", DESCRIPTION)
             .requires(PERMISSION)
             .executes(SpawnpointExecutor(SpawnpointMode::SelfDefault))
@@ -132,5 +132,6 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                             ),
                     ),
             ),
+        &["setspawn"],
     );
 }

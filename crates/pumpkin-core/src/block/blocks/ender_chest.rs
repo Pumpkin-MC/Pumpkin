@@ -87,7 +87,11 @@ impl BlockBehaviour for EnderChestBlock {
             );
             args.player
                 .open_handled_screen(factory.as_ref(), Some(*args.position));
-            // TODO: PiglinBrain.onGuardedBlockInteracted(serverWorld, player, true);
+            crate::entity::mob::piglin_ai::PiglinAi::anger_nearby_piglins(
+                args.world,
+                args.player,
+                true,
+            );
         }
 
         BlockActionResult::Success
@@ -132,8 +136,8 @@ impl BlockBehaviour for EnderChestBlock {
 }
 
 fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
-    // TODO: Block opening when a cat is sitting on top.
     has_block_on_top(world, block_pos)
+        || crate::block::blocks::chests::is_cat_sitting_on_chest(world, block_pos)
 }
 fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
     let above_pos = block_pos.up();

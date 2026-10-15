@@ -11,7 +11,9 @@ use pumpkin_data::{
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use uuid::Uuid;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -125,12 +127,66 @@ impl CreeperEntity {
             radius * multiplier,
             crate::world::ExplosionInteraction::Mob,
         );
-        // TODO: spawn area effect cloud with potion effects
+        // Vanilla Creeper.spawnLingeringCloud:
+        // When exploding with active potion effects, spawn an AreaEffectCloud carrying them.
+        let active_effects: Vec<_> = self
+            .mob_entity
+            .living_entity
+            .active_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .map(|eff| {
+                (
+                    eff.effect_type,
+                    (eff.duration as f32 * 0.25) as i32,
+                    eff.amplifier,
+                    eff.ambient,
+                    eff.show_particles,
+                    eff.show_icon,
+                )
+            })
+            .collect();
+
+        if !active_effects.is_empty() {
+            let cloud_entity = Entity::from_uuid(
+                Uuid::new_v4(),
+                world.clone(),
+                pos,
+                &EntityType::AREA_EFFECT_CLOUD,
+            );
+            let cloud = crate::entity::area_effect_cloud::AreaEffectCloudEntity::create(
+                cloud_entity,
+                ItemStack::new(0, &Item::AIR),
+                active_effects,
+                300,
+                2.5,
+                20,
+                10,
+                -0.5,
+                0,
+            );
+            world.spawn_entity(cloud);
+        }
         entity.remove();
     }
 }
 
+impl CustomSound for CreeperEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityCreeperDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityCreeperHurt)
+    }
+}
+
 impl Mob for CreeperEntity {
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("powered", self.charged.load(Ordering::Relaxed));
         nbt.put_short("Fuse", self.fuse_time.load(Ordering::Relaxed) as i16);

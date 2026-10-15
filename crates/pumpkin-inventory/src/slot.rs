@@ -29,6 +29,7 @@ use crate::inventory::Inventory;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{self, Taggable};
 
 /// A slot in an inventory.
 ///
@@ -275,6 +276,72 @@ impl Slot for NormalSlot {
         self.id.store(id as u8, Ordering::Relaxed);
     }
 
+    fn can_insert(&self, stack: &ItemStack) -> bool {
+        self.inventory.is_valid_slot_for(self.index, stack)
+    }
+
+    fn mark_dirty(&self) {
+        self.inventory.mark_dirty();
+    }
+}
+
+/// Checks if an item stack can fit inside container items (such as Shulker Boxes).
+///
+/// Matches vanilla Minecraft `Item.canFitInsideContainerItems()` and `BlockItem.canFitInsideContainerItems()`.
+/// Returns `false` for any Shulker Box item.
+#[must_use]
+pub fn can_fit_inside_container_items(stack: &ItemStack) -> bool {
+    if stack.is_empty() {
+        return true;
+    }
+    !stack.item.has_tag(&tag::Item::MINECRAFT_SHULKER_BOXES)
+        && !stack.item.registry_key.ends_with("shulker_box")
+}
+
+/// A shulker box inventory slot.
+///
+/// Disallows placing shulker boxes into this slot, matching vanilla Minecraft `ShulkerBoxSlot.java`.
+pub struct ShulkerBoxSlot {
+    /// The inventory containing this slot.
+    pub inventory: Arc<dyn Inventory>,
+    /// Index of this slot within its inventory.
+    pub index: usize,
+    /// Protocol ID for this slot (assigned by screen handler).
+    pub id: AtomicU8,
+}
+
+impl ShulkerBoxSlot {
+    /// Creates a new shulker box slot.
+    ///
+    /// # Arguments
+    /// - `inventory` - The containing inventory
+    /// - `index` - The slot index within the inventory
+    pub fn new(inventory: Arc<dyn Inventory>, index: usize) -> Self {
+        Self {
+            inventory,
+            index,
+            id: AtomicU8::new(0),
+        }
+    }
+}
+
+impl Slot for ShulkerBoxSlot {
+    fn get_inventory(&self) -> Arc<dyn Inventory> {
+        self.inventory.clone()
+    }
+
+    fn get_index(&self) -> usize {
+        self.index
+    }
+
+    fn set_id(&self, id: usize) {
+        self.id.store(id as u8, Ordering::Relaxed);
+    }
+
+    fn can_insert(&self, stack: &ItemStack) -> bool {
+        can_fit_inside_container_items(stack) && self.inventory.is_valid_slot_for(self.index, stack)
+    }
+
     fn mark_dirty(&self) {
         self.inventory.mark_dirty();
     }
@@ -374,5 +441,40 @@ impl Slot for ArmorSlot {
     /// TODO: Check for curse of binding enchantment.
     fn can_take_items(&self, _player: &dyn InventoryPlayer) -> bool {
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::inventory::SimpleInventory;
+
+    #[test]
+    fn test_can_fit_inside_container_items_shulker_box() {
+        let shulker = ItemStack::new(1, &Item::SHULKER_BOX);
+        assert!(!can_fit_inside_container_items(&shulker));
+
+        let white_shulker = ItemStack::new(1, &Item::WHITE_SHULKER_BOX);
+        assert!(!can_fit_inside_container_items(&white_shulker));
+
+        let black_shulker = ItemStack::new(1, &Item::BLACK_SHULKER_BOX);
+        assert!(!can_fit_inside_container_items(&black_shulker));
+
+        let diamond = ItemStack::new(64, &Item::DIAMOND);
+        assert!(can_fit_inside_container_items(&diamond));
+
+        assert!(can_fit_inside_container_items(&ItemStack::EMPTY));
+    }
+
+    #[test]
+    fn test_shulker_box_slot_rejects_shulker_boxes() {
+        let inventory = Arc::new(SimpleInventory::new(27));
+        let slot = ShulkerBoxSlot::new(inventory, 0);
+
+        let shulker = ItemStack::new(1, &Item::SHULKER_BOX);
+        assert!(!slot.can_insert(&shulker));
+
+        let diamond = ItemStack::new(1, &Item::DIAMOND);
+        assert!(slot.can_insert(&diamond));
     }
 }

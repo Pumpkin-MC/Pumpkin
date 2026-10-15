@@ -41,6 +41,9 @@ impl GlowingInkSacItem {
             pumpkin_data::sound::SoundCategory::Blocks,
             *args.position,
         );
+        args.player.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::GlowedSign,
+        );
         BlockActionResult::Success
     }
 }

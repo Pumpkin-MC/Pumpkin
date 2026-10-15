@@ -5,11 +5,12 @@ use std::sync::{
 
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -206,6 +207,28 @@ impl Mob for PillagerEntity {
         }
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        // Ambient sound
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            entity.world.load().play_sound_fine(
+                Sound::EntityPillagerAmbient,
+                SoundCategory::Hostile,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
+    }
+
     fn on_damage(
         &self,
         _damage_type: pumpkin_data::damage::DamageType,
@@ -214,6 +237,16 @@ impl Mob for PillagerEntity {
         if self.mob_entity.living_entity.dead.load(Ordering::Relaxed) {
             self.drop_inventory();
         }
+    }
+}
+
+impl CustomSound for PillagerEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPillagerDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPillagerHurt)
     }
 }
 

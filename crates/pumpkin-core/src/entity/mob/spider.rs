@@ -4,14 +4,18 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::difficulty::Difficulty;
+use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 use uuid::Uuid;
 
 use crate::entity::{
     Entity, EntityBase,
+    custom_sound::CustomSound,
     ai::goal::{
         active_target::{ActiveTargetGoal, TargetCondition},
+        leap_at_target::LeapAtTargetGoal,
         look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal,
         revenge::RevengeGoal,
@@ -59,7 +63,8 @@ impl SpiderEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(3, SpiderAttackGoal::new(1.0, false));
+            goal_selector.add_goal(3, Box::new(LeapAtTargetGoal::new(0.4)));
+            goal_selector.add_goal(4, SpiderAttackGoal::new(1.0, false));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(
                 6,
@@ -145,6 +150,16 @@ pub fn finalize_spider_spawn(
     Some(group_data)
 }
 
+impl CustomSound for SpiderEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntitySpiderDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntitySpiderHurt)
+    }
+}
+
 impl Mob for SpiderEntity {
     fn finalize_spawn(
         &self,
@@ -158,6 +173,10 @@ impl Mob for SpiderEntity {
         &self.mob_entity
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {
@@ -167,5 +186,19 @@ impl Mob for SpiderEntity {
         let vel = entity.velocity.load();
         let is_colliding_horizontally = vel.x.abs() < 1e-4 && vel.z.abs() < 1e-4;
         self.set_climbing(is_colliding_horizontally);
+        if is_colliding_horizontally && vel.y < 0.2 {
+            entity.set_velocity(Vector3::new(vel.x, 0.2, vel.z));
+        }
+
+        // Ambient sound
+        if rand::random_range(0..100) == 0 && !entity.silent.load(Ordering::Relaxed) {
+            entity.world.load().play_sound_fine(
+                Sound::EntitySpiderAmbient,
+                SoundCategory::Hostile,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
     }
 }

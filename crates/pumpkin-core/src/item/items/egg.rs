@@ -1,3 +1,4 @@
+use rand::{RngExt, rng};
 use std::sync::Arc;
 
 use crate::entity::Entity;
@@ -24,10 +25,12 @@ impl ItemBehaviour for EggItem {
     fn normal_use(&self, _block: &Item, player: &Player) {
         let position = player.position();
         let world = player.world();
-        world.play_sound(
+        world.play_sound_fine(
             Sound::EntityEggThrow,
             pumpkin_data::sound::SoundCategory::Players,
             &position,
+            0.5,
+            0.4 / (rng().random::<f32>() * 0.4 + 0.8),
         );
 
         // Capture the held item stack and pass it to the thrown egg entity
@@ -62,6 +65,12 @@ impl ItemBehaviour for EggItem {
                     .set_stack_in_hand(pumpkin_util::Hand::Left, off_hand);
             }
         }
+
+        player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Used,
+            _block.id as i32,
+            1,
+        );
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

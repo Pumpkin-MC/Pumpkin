@@ -11,10 +11,11 @@ use crate::block::{
 };
 
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
+use pumpkin_data::FacingExt;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::translation;
 use pumpkin_inventory::Inventory;
-use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
+use pumpkin_inventory::generic_container_screen_handler::create_shulker_box;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
@@ -31,7 +32,7 @@ impl ScreenHandlerFactory for ShulkerBoxScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
-        let handler = create_generic_9x3(sync_id, player_inventory, self.0.clone(), player);
+        let handler = create_shulker_box(sync_id, player_inventory, self.0.clone(), player);
         let screen_handler_arc = Arc::new(Mutex::new(handler));
 
         Some(screen_handler_arc as SharedScreenHandler)
@@ -71,6 +72,15 @@ impl BlockBehaviour for ShulkerBoxBlock {
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        let state = args.world.get_block_state(args.position);
+        let props = EndRodLikeProperties::from_state_id(state.id);
+        let open_dir = props.facing.to_block_direction();
+        let open_pos = args.position.offset(open_dir.to_offset());
+        let open_state = args.world.get_block_state(&open_pos);
+        if open_state.is_solid_block() {
+            return BlockActionResult::Pass;
+        }
+
         if let Some(factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
             server: args.server,
             world: args.world,
@@ -85,6 +95,11 @@ impl BlockBehaviour for ShulkerBoxBlock {
             );
             args.player
                 .open_handled_screen(factory.as_ref(), Some(*args.position));
+            crate::entity::mob::piglin_ai::PiglinAi::anger_nearby_piglins(
+                args.world,
+                args.player,
+                true,
+            );
         }
 
         BlockActionResult::Success

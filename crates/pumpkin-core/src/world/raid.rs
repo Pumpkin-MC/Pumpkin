@@ -428,14 +428,37 @@ impl Raid {
     }
 
     pub fn play_sound(&self, world: &World, pos: BlockPos) {
-        let sound_pos = pos.to_centered_f64();
-        world.play_sound_fine(
-            Sound::EventRaidHorn,
-            pumpkin_data::sound::SoundCategory::Neutral,
-            &sound_pos,
-            64.0,
-            1.0,
-        );
+        let raid_loc = pos.to_centered_f64();
+        let players = world.players.load();
+        let seed = rand::random::<i64>();
+
+        for player in players.iter() {
+            let player_loc = player.get_entity().pos.load();
+            let dx = raid_loc.x - player_loc.x;
+            let dz = raid_loc.z - player_loc.z;
+            let dist_btwn = (dx * dx + dz * dz).sqrt();
+
+            let (x3, z3) = if dist_btwn > 0.0001 {
+                (
+                    player_loc.x + 13.0 / dist_btwn * dx,
+                    player_loc.z + 13.0 / dist_btwn * dz,
+                )
+            } else {
+                (player_loc.x, player_loc.z)
+            };
+
+            if dist_btwn <= 64.0 || self.players_in_raid.contains(&player.gameprofile.id) {
+                let sound_pos = Vector3::new(x3, player_loc.y, z3);
+                player.play_sound(
+                    Sound::EventRaidHorn as u16,
+                    pumpkin_data::sound::SoundCategory::Neutral,
+                    &sound_pos,
+                    64.0,
+                    1.0,
+                    seed,
+                );
+            }
+        }
     }
 
     pub fn update_players(&mut self, world: &World) {

@@ -15,6 +15,7 @@ use crate::screen_handler::{
     InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenProperty,
 };
 use crate::slot::Slot;
+use pumpkin_data::statistic::{CustomStatistic, StatisticCategory};
 
 #[must_use]
 pub fn is_fuel(stack: &ItemStack) -> bool {
@@ -127,7 +128,7 @@ impl ScreenHandler for BrewingScreenHandler {
         self.default_on_closed(player);
     }
 
-    fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+    fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
         let mut clicked = ItemStack::EMPTY.clone();
         let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();
 
@@ -179,6 +180,7 @@ impl ScreenHandler for BrewingScreenHandler {
                 }
 
                 slot.on_quick_move_crafted(stack.clone(), clicked.clone());
+                slot.on_take_item(player, &clicked);
             }
 
             if stack.is_empty() {
@@ -258,6 +260,20 @@ impl Slot for BrewingPotionSlot {
 
     fn mark_dirty(&self) {
         self.inventory.mark_dirty();
+    }
+
+    fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
+        if stack.item.id == Item::POTION.id
+            || stack.item.id == Item::SPLASH_POTION.id
+            || stack.item.id == Item::LINGERING_POTION.id
+        {
+            player.increment_stat(
+                StatisticCategory::Custom,
+                CustomStatistic::InteractWithBrewingstand as i32,
+                1,
+            );
+        }
+        self.mark_dirty();
     }
 }
 

@@ -8,18 +8,23 @@ use crate::entity::ai::goal::wander_around::WanderAroundGoal;
 use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
 use crate::entity::mob::equipment::RegionalDifficulty;
 use crate::entity::{
-    Entity,
+    Entity, EntityBase,
     ai::goal::{Goal, active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
 };
 use crate::world::World;
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
+use uuid::Uuid;
 
 pub mod drowned;
 pub mod husk;
@@ -31,6 +36,7 @@ pub struct ZombieEntityBase {
     pub mob_entity: MobEntity,
     pub can_break_doors: AtomicBool,
     pub is_baby: AtomicBool,
+    pub reinforcement_chance: AtomicCell<f32>,
 }
 
 impl ZombieEntityBase {
@@ -40,10 +46,17 @@ impl ZombieEntityBase {
 
     pub fn with_can_break_doors(entity: Entity, can_break_doors: bool) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
+        let mut rng = rand::rng();
+        let reinforcement_chance = if rng.random::<f32>() < 0.05 {
+            0.55
+        } else {
+            rng.random_range(0.0..0.1)
+        };
         let zombie = Self {
             mob_entity,
             can_break_doors: AtomicBool::new(can_break_doors),
             is_baby: AtomicBool::new(false),
+            reinforcement_chance: AtomicCell::new(reinforcement_chance),
         };
         let mob_arc = Arc::new(zombie);
         let mob_weak: Weak<dyn Mob> = {
@@ -138,13 +151,32 @@ impl ZombieEntityBase {
 
 impl ZombieEntityBase {
     /// Vanilla `Zombie.setBaby`: the baby state is only the synced flag, it never ages up.
-    // TODO: vanilla baby zombies get the +50% SPEED_MODIFIER_BABY and 2.5x XP
-    // (`Zombie.getBaseExperienceReward`), unlike passive babies which drop none.
+    /// Vanilla baby zombies receive the +50% `SPEED_MODIFIER_BABY` and 2.5x XP
+    /// (`Zombie.getBaseExperienceReward`).
     pub fn set_baby(&self, baby: bool) {
         self.mob_entity.set_baby_flag(
             &self.is_baby,
             pumpkin_data::tracked_data::zombie::BABY,
             baby,
+        );
+        let living = &self.mob_entity.living_entity;
+        if baby {
+            let modifier = crate::entity::attributes::Modifier {
+                id: "minecraft:baby".to_string(),
+                amount: 0.5,
+                operation: crate::entity::attributes::ModifierOperation::MultiplyBase,
+            };
+            living.update_attribute(&pumpkin_data::attributes::Attributes::MOVEMENT_SPEED, |inst| {
+                inst.add_or_replace_modifier(modifier);
+            });
+        } else {
+            living.update_attribute(&pumpkin_data::attributes::Attributes::MOVEMENT_SPEED, |inst| {
+                inst.remove_modifier("minecraft:baby");
+            });
+        }
+        crate::entity::attributes::send_attribute_updates_for_living(
+            living,
+            vec![pumpkin_data::attributes::Attributes::MOVEMENT_SPEED],
         );
     }
 
@@ -162,6 +194,20 @@ impl Mob for ZombieEntityBase {
     fn spawn_as_baby(&self) -> bool {
         self.set_baby(true);
         true
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        let base = self
+            .mob_entity
+            .living_entity
+            .entity
+            .entity_type
+            .experience_reward;
+        if self.is_baby() {
+            (base as f32 * 2.5) as u32
+        } else {
+            base
+        }
     }
 
     fn populate_default_equipment_slots(
@@ -234,12 +280,86 @@ impl Mob for ZombieEntityBase {
         if self.can_break_doors() {
             nbt.put_bool("CanBreakDoors", true);
         }
+        nbt.put_float("SpawnReinforcementsChance", self.reinforcement_chance.load());
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         self.set_baby(nbt.get_bool("IsBaby").unwrap_or(false));
         if let Some(can_break_doors) = nbt.get_bool("CanBreakDoors") {
             self.set_can_break_doors(can_break_doors, self);
+        }
+        if let Some(chance) = nbt.get_float("SpawnReinforcementsChance") {
+            self.reinforcement_chance.store(chance);
+        }
+    }
+}
+
+impl ZombieEntityBase {
+    pub fn try_spawn_reinforcements(&self, source: Option<&dyn EntityBase>) {
+        let world = self.mob_entity.living_entity.entity.world.load_full();
+        let level_info = world.level_info.load();
+        if level_info.difficulty != Difficulty::Hard {
+            return;
+        }
+
+        let target = self.mob_entity.get_target().or_else(|| {
+            source.and_then(|s| {
+                let id = s.get_entity().entity_id;
+                world
+                    .get_player_by_id(id)
+                    .map(|p| p as Arc<dyn EntityBase>)
+                    .or_else(|| world.get_entity_by_id(id))
+            })
+        });
+        let Some(target) = target else {
+            return;
+        };
+
+        let mut rng = rand::rng();
+        let chance = self.reinforcement_chance.load();
+        if rng.random::<f32>() >= chance {
+            return;
+        }
+
+        let zombie_pos = self.mob_entity.living_entity.entity.pos.load();
+        let entity_type = &self.mob_entity.living_entity.entity.entity_type;
+        for _ in 0..50 {
+            let offset_x = (rng.random_range(7..=40) * if rng.random_bool(0.5) { 1 } else { -1 }) as f64;
+            let offset_y = rng.random_range(-7..=7) as f64;
+            let offset_z = (rng.random_range(7..=40) * if rng.random_bool(0.5) { 1 } else { -1 }) as f64;
+            let spawn_pos = Vector3::new(
+                zombie_pos.x + offset_x,
+                zombie_pos.y + offset_y,
+                zombie_pos.z + offset_z,
+            );
+            let block_pos = BlockPos(Vector3::new(
+                spawn_pos.x.floor() as i32,
+                spawn_pos.y.floor() as i32,
+                spawn_pos.z.floor() as i32,
+            ));
+            let state = world.get_block_state(&block_pos);
+            let up = world.get_block_state(&block_pos.up());
+            let down = world.get_block_state(&block_pos.down());
+            if !state.is_air() || !up.is_air() || down.is_air() {
+                continue;
+            }
+            if world.get_nearest_player(spawn_pos, 7.0, |_| true).is_some() {
+                continue;
+            }
+
+            let reinforcement = crate::entity::r#type::from_type(
+                entity_type,
+                spawn_pos,
+                &world,
+                Uuid::new_v4(),
+            );
+            crate::entity::mob::spawn::finalize_spawn(&reinforcement, &world, None);
+            if let Some(mob) = reinforcement.get_mob() {
+                mob.set_mob_target(Some(target.clone()));
+            }
+            world.spawn_entity(reinforcement);
+            self.reinforcement_chance.store((chance - 0.05).max(0.0));
+            break;
         }
     }
 }

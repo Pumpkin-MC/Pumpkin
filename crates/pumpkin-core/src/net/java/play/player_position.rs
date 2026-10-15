@@ -120,7 +120,9 @@ impl JavaClient {
                 }
 
                 let new_on_ground = packet.collision & FLAG_ON_GROUND != 0;
+                let horizontal_collision = packet.collision & FLAG_IN_WALL != 0;
                 entity.on_ground.store(new_on_ground, Ordering::Relaxed);
+                entity.horizontal_collision.store(horizontal_collision, Ordering::Relaxed);
                 if new_on_ground && entity.is_fall_flying() {
                     entity.set_fall_flying(false);
                 }
@@ -171,6 +173,12 @@ impl JavaClient {
                 if delta.length_squared() > 1.0E-5 {
                     player.update_last_action_time();
                     player.check_location_enchantments(pos, packet.collision & FLAG_ON_GROUND != 0);
+                }
+                if entity.is_fall_flying() && horizontal_collision {
+                    let last_movement = entity.velocity.load();
+                    let last_speed = (last_movement.x * last_movement.x + last_movement.z * last_movement.z).sqrt();
+                    let new_speed = (delta.x * delta.x + delta.z * delta.z).sqrt();
+                    player.handle_fall_flying_collision(last_speed, new_speed);
                 }
                 player.progress_motion(delta);
             }
@@ -262,9 +270,13 @@ impl JavaClient {
                 {
                     player.jump();
                 }
-                entity
-                    .on_ground
-                    .store((packet.collision & FLAG_ON_GROUND) != 0, Ordering::Relaxed);
+                let new_on_ground = (packet.collision & FLAG_ON_GROUND) != 0;
+                let horizontal_collision = (packet.collision & FLAG_IN_WALL) != 0;
+                entity.on_ground.store(new_on_ground, Ordering::Relaxed);
+                entity.horizontal_collision.store(horizontal_collision, Ordering::Relaxed);
+                if new_on_ground && entity.is_fall_flying() {
+                    entity.set_fall_flying(false);
+                }
 
                 entity.set_rotation(wrap_degrees(packet.yaw) % 360.0, wrap_degrees(packet.pitch));
 
@@ -330,6 +342,12 @@ impl JavaClient {
                 if delta.length_squared() > 1.0E-5 {
                     player.update_last_action_time();
                     player.check_location_enchantments(pos, (packet.collision & FLAG_ON_GROUND) != 0);
+                }
+                if entity.is_fall_flying() && horizontal_collision {
+                    let last_movement = entity.velocity.load();
+                    let last_speed = (last_movement.x * last_movement.x + last_movement.z * last_movement.z).sqrt();
+                    let new_speed = (delta.x * delta.x + delta.z * delta.z).sqrt();
+                    player.handle_fall_flying_collision(last_speed, new_speed);
                 }
                 player.progress_motion(delta);
             }

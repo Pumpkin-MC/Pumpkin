@@ -4,8 +4,10 @@ use std::sync::{Arc, Weak};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_data::tag::Taggable;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::position::BlockPos;
@@ -169,22 +171,21 @@ impl SlimeEntity {
         // For now, we assume natural spawning as that's what we are implementing.
 
         // Swamp/Surface Spawning
-        // TODO: fix
-        // let biome = world.get_biome(pos);
-        // if biome.has_tag(&pumpkin_data::tag::WorldgenBiome::MINECRAFT_ALLOWS_SURFACE_SLIME_SPAWNS)
-        //     && pos.0.y > 50
-        //     && pos.0.y < 70
-        // {
-        //     let time = world.level_time.lock().await.time_of_day;
-        //     let moon_phase = (time / 24000) % 8;
-        //     let surface_slime_spawn_chance = Self::get_spawn_chance(moon_phase);
-        //     let mut rng = rand::rng();
-        //     if rng.random::<f32>() < surface_slime_spawn_chance
-        //         && world.get_max_local_raw_brightness(pos) <= rng.random_range(0..8)
-        //     {
-        //         return true;
-        //     }
-        // }
+        let biome = world.get_biome(pos);
+        if biome.has_tag(&pumpkin_data::tag::WorldgenBiome::MINECRAFT_ALLOWS_SURFACE_SLIME_SPAWNS)
+            && pos.0.y > 50
+            && pos.0.y < 70
+        {
+            let time = world.get_time_of_day();
+            let moon_phase = (time / 24000).rem_euclid(8);
+            let surface_slime_spawn_chance = Self::get_spawn_chance(moon_phase);
+            let mut rng = rand::rng();
+            if rng.random::<f32>() < surface_slime_spawn_chance
+                && world.get_max_local_raw_brightness(pos) <= rng.random_range(0..8)
+            {
+                return true;
+            }
+        }
 
         // Slime Chunk Spawning
         let chunk_pos = pos.chunk_position();
@@ -205,15 +206,15 @@ impl SlimeEntity {
         false
     }
 
-    // const fn get_spawn_chance(moon_phase: i64) -> f32 {
-    //     match moon_phase {
-    //         0 => 1.0,
-    //         1 | 7 => 0.75,
-    //         2 | 6 => 0.5,
-    //         3 | 5 => 0.25,
-    //         _ => 0.0,
-    //     }
-    // }
+    const fn get_spawn_chance(moon_phase: i64) -> f32 {
+        match moon_phase {
+            0 => 1.0,
+            1 | 7 => 0.75,
+            2 | 6 => 0.5,
+            3 | 5 => 0.25,
+            _ => 0.0,
+        }
+    }
 
     fn get_jump_delay() -> i32 {
         rand::random_range(10..30)
@@ -312,13 +313,30 @@ impl Mob for SlimeEntity {
         let was_on_ground = self.was_on_ground.load(Ordering::Relaxed);
 
         if on_ground && !was_on_ground {
-            // TODO: particles
-
             let world = self.entity.living_entity.entity.world.load();
+            let pos = self.entity.living_entity.entity.pos.load();
+            let size = self.get_size() as f32;
+            let count = (size * 8.0).max(4.0) as u32;
+            let offset_xz = (size * 0.25).max(0.15);
+            let is_magma_cube =
+                self.entity.living_entity.entity.entity_type == &EntityType::MAGMA_CUBE;
+            let particle = if is_magma_cube {
+                Particle::Flame
+            } else {
+                Particle::ItemSlime
+            };
+            world.spawn_particles(
+                particle,
+                pos,
+                count,
+                Vector3::new(offset_xz, 0.1, offset_xz),
+                0.15,
+            );
+
             world.play_sound_fine(
                 self.get_squish_sound(),
                 SoundCategory::Hostile,
-                &self.entity.living_entity.entity.pos.load(),
+                &pos,
                 self.get_sound_volume(),
                 ((rand::random_range(0.0..1.0) - rand::random_range(0.0..1.0)) * 0.2 + 1.0) / 0.8,
             );

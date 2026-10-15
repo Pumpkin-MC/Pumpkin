@@ -11,6 +11,7 @@ use crate::{
         BlockBehaviour, BrokenArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
         OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs, PlacedArgs,
     },
+    entity::EntityBase,
     world::World,
 };
 
@@ -22,8 +23,29 @@ type TripwireHookProperties = pumpkin_data::block_properties::TripwireHookLikePr
 #[pumpkin_block("minecraft:tripwire")]
 pub struct TripwireBlock;
 
+fn is_ignoring_block_triggers(entity: &dyn EntityBase) -> bool {
+    if let Some(player) = entity.get_player() {
+        return player.gamemode.load() == pumpkin_util::GameMode::Spectator;
+    }
+    let e = entity.get_entity();
+    if e.entity_type == &pumpkin_data::entity::EntityType::BAT {
+        return true;
+    }
+    if let Some(armor_stand) = entity
+        .cast_any()
+        .downcast_ref::<crate::entity::decoration::armor_stand::ArmorStandEntity>()
+    {
+        return armor_stand.is_marker();
+    }
+    false
+}
+
 impl BlockBehaviour for TripwireBlock {
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        if is_ignoring_block_triggers(args.entity) {
+            return;
+        }
+
         let mut props = TripwireProperties::from_state_id(args.state.id);
         if props.powered {
             return;
@@ -81,8 +103,7 @@ impl BlockBehaviour for TripwireBlock {
                 props.to_state_id(args.block),
                 BlockFlags::empty(),
             );
-            // TODO world.emitGameEvent(player, GameEvent.SHEAR, pos);
-            // TODO: Deduct 1 durability from held shears (skip in Creative mode).
+            args.player.damage_held_item(1);
         }
     }
 
@@ -113,10 +134,18 @@ impl BlockBehaviour for TripwireBlock {
         }
 
         let aabb = BoundingBox::from_block(args.position);
-        // TODO entity.canAvoidTraps()
-        if args.world.get_entities_at_box(&aabb).is_empty()
-            && args.world.get_players_at_box(&aabb).is_empty()
-        {
+        let has_triggering_entities = args
+            .world
+            .get_entities_at_box(&aabb)
+            .iter()
+            .any(|e| !is_ignoring_block_triggers(e.as_ref()))
+            || args
+                .world
+                .get_players_at_box(&aabb)
+                .iter()
+                .any(|p| p.gamemode.load() != pumpkin_util::GameMode::Spectator);
+
+        if !has_triggering_entities {
             props.powered = false;
             let state_id = props.to_state_id(args.block);
             args.world

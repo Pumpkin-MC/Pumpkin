@@ -80,7 +80,23 @@ impl Goal for PlaceBlockGoal {
             return;
         }
 
-        // TODO: also check the carried block can survive there.
+        // Check the carried block can survive there.
+        let block = Block::from_state_id(block_state_id);
+        let would_survive = world_clone.block_registry.can_place_at(
+            None,
+            Some(&*world_clone),
+            &*world_clone,
+            None,
+            block,
+            block_state_id.to_state(),
+            &target_pos,
+            None,
+            None,
+        );
+        if !would_survive {
+            return;
+        }
+
         world_clone.set_block_state(&target_pos, block_state_id, BlockFlags::NOTIFY_ALL);
         self.enderman.set_carried_block(None);
     }

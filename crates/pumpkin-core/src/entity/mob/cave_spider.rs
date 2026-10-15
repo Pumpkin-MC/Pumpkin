@@ -1,11 +1,15 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
     Entity, EntityBase,
+    custom_sound::CustomSound,
     ai::goal::{
         active_target::{ActiveTargetGoal, TargetCondition},
         look_around::RandomLookAroundGoal,
@@ -20,12 +24,16 @@ use crate::entity::{
 
 pub struct CaveSpiderEntity {
     pub mob_entity: MobEntity,
+    pub is_climbing: AtomicBool,
 }
 
 impl CaveSpiderEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let cave_spider = Self { mob_entity };
+        let cave_spider = Self {
+            mob_entity,
+            is_climbing: AtomicBool::new(false),
+        };
         let mob_arc = Arc::new(cave_spider);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -68,6 +76,30 @@ impl CaveSpiderEntity {
 
         mob_arc
     }
+
+    pub fn is_climbing(&self) -> bool {
+        self.is_climbing.load(Ordering::Relaxed)
+    }
+
+    pub fn set_climbing(&self, climbing: bool) {
+        if self.is_climbing.swap(climbing, Ordering::Relaxed) != climbing {
+            let flags = i8::from(climbing);
+            self.mob_entity
+                .living_entity
+                .entity
+                .set_synced_data(pumpkin_data::tracked_data::cave_spider::DATA_FLAGS_ID, flags);
+        }
+    }
+}
+
+impl CustomSound for CaveSpiderEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntitySpiderDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntitySpiderHurt)
+    }
 }
 
 impl Mob for CaveSpiderEntity {
@@ -81,6 +113,10 @@ impl Mob for CaveSpiderEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
     }
 
     fn on_attack(&self, target: &dyn EntityBase) {
@@ -102,6 +138,31 @@ impl Mob for CaveSpiderEntity {
                     blend: false,
                 });
             }
+        }
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        let vel = entity.velocity.load();
+        let is_colliding_horizontally = vel.x.abs() < 1e-4 && vel.z.abs() < 1e-4;
+        self.set_climbing(is_colliding_horizontally);
+        if is_colliding_horizontally && vel.y < 0.2 {
+            entity.set_velocity(Vector3::new(vel.x, 0.2, vel.z));
+        }
+
+        // Ambient sound
+        if rand::random_range(0..100) == 0 && !entity.silent.load(Ordering::Relaxed) {
+            entity.world.load().play_sound_fine(
+                Sound::EntitySpiderAmbient,
+                SoundCategory::Hostile,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
         }
     }
 }

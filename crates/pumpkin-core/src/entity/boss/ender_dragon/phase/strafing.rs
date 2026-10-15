@@ -1,19 +1,22 @@
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+
 use super::EnderDragonPhase;
 use crate::entity::EntityBase;
 use crate::entity::{
     Entity,
-    area_effect_cloud::AreaEffectCloudEntity,
     boss::ender_dragon::{EnderDragonEntity, Vector3Ext, find_path},
+    projectile::dragon_fireball::DragonFireballEntity,
 };
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::vector3::Vector3;
-use std::sync::atomic::Ordering;
 
 pub struct StrafingPhase;
 
 impl super::Phase for StrafingPhase {
     fn get_type(&self) -> EnderDragonPhase {
-        EnderDragonPhase::Strafing
+        EnderDragonPhase::StrafePlayer
     }
 
     fn begin(&self, dragon: &EnderDragonEntity) {
@@ -27,7 +30,6 @@ impl super::Phase for StrafingPhase {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
-    #[expect(clippy::too_many_lines)]
     fn tick(&self, dragon: &EnderDragonEntity) {
         let target_id = *dragon
             .target_player
@@ -48,7 +50,7 @@ impl super::Phase for StrafingPhase {
         };
 
         let Some(player) = player_target else {
-            dragon.set_phase(EnderDragonPhase::Circling);
+            dragon.set_phase(EnderDragonPhase::HoldingPattern);
             return;
         };
 
@@ -152,37 +154,34 @@ impl super::Phase for StrafingPhase {
                 *charge = 0;
                 drop(charge);
 
-                let cloud_entity =
-                    Entity::new(world.clone(), player_pos, &EntityType::AREA_EFFECT_CLOUD);
-                let cloud = AreaEffectCloudEntity::create(
-                    cloud_entity,
-                    pumpkin_data::item_stack::ItemStack::new(
-                        0,
-                        &pumpkin_data::item::Item::DRAGON_BREATH,
-                    ),
-                    vec![(
-                        &pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE,
-                        1,
-                        0,
-                        false,
-                        true,
-                        true,
-                    )],
-                    600,
-                    3.0,
-                    20,
-                    20,
-                    0.5,
-                    -100,
+                // Launch DragonFireball projectile from head towards player
+                let head_pos = dragon.parts[0].entity.pos.load();
+                let shoot_dir = (player_pos - head_pos).normalize();
+
+                let fireball_entity = Entity::new(
+                    world.clone(),
+                    head_pos,
+                    &EntityType::DRAGON_FIREBALL,
                 );
-                world.spawn_entity(cloud);
+                let fireball = DragonFireballEntity::new_shot(
+                    fireball_entity,
+                    &dragon.mob_entity.living_entity.entity,
+                    shoot_dir,
+                );
+                world.spawn_entity(Arc::new(fireball));
+
+                world.play_sound(
+                    Sound::EntityEnderDragonShoot,
+                    SoundCategory::Hostile,
+                    &head_pos,
+                );
 
                 dragon
                     .path
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .clear();
-                dragon.set_phase(EnderDragonPhase::Circling);
+                dragon.set_phase(EnderDragonPhase::HoldingPattern);
             }
         } else {
             let mut charge = dragon

@@ -7,7 +7,7 @@ impl BedrockClient {
     pub fn handle_player_action(
         &self,
         player: &Arc<Player>,
-        server: &Server,
+        server: &Arc<Server>,
         packet: &SPlayerAction,
     ) {
         if !player.has_client_loaded()
@@ -239,7 +239,189 @@ impl BedrockClient {
                     player_c.world().respawn_player(&player_c, false).await;
                 });
             }
-            // TODO
+            PlayerAction::StartSprinting => {
+                if !player.get_entity().is_sprinting() {
+                    send_cancellable_blocking! {{
+                        server;
+                        PlayerToggleSprintEvent::new(player.clone(), true);
+                        'after: {
+                            player.set_sprinting(event.is_sprinting);
+                            player.update_player_pose();
+                        }
+                    }}
+                }
+            }
+            PlayerAction::StopSprinting => {
+                if player.get_entity().is_sprinting() {
+                    send_cancellable_blocking! {{
+                        server;
+                        PlayerToggleSprintEvent::new(player.clone(), false);
+                        'after: {
+                            player.set_sprinting(event.is_sprinting);
+                            player.update_player_pose();
+                        }
+                    }}
+                }
+            }
+            PlayerAction::StartSneaking => {
+                let entity = player.get_entity();
+                if !entity.is_sneaking() {
+                    send_cancellable_blocking! {{
+                        server;
+                        PlayerToggleSneakEvent::new(player.clone(), true);
+                        'after: {
+                            entity.set_sneaking(event.is_sneaking);
+                            if event.is_sneaking {
+                                let vehicle = entity
+                                    .vehicle
+                                    .lock()
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                    .clone();
+                                if let Some(vehicle) = vehicle {
+                                    vehicle.get_entity().remove_passenger(player.entity_id());
+                                }
+                            }
+                            player.update_player_pose();
+                        }
+                    }}
+                }
+            }
+            PlayerAction::StopSneaking => {
+                let entity = player.get_entity();
+                if entity.is_sneaking() {
+                    send_cancellable_blocking! {{
+                        server;
+                        PlayerToggleSneakEvent::new(player.clone(), false);
+                        'after: {
+                            entity.set_sneaking(event.is_sneaking);
+                            player.update_player_pose();
+                        }
+                    }}
+                }
+            }
+            PlayerAction::StartGliding => {
+                let entity = player.get_entity();
+                let fall_flying = entity.check_fall_flying();
+                if entity.is_fall_flying() != fall_flying {
+                    let mut event = crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent::new(
+                        entity.entity_id,
+                        fall_flying,
+                    );
+                    server.plugin_manager.fire_blocking(server, &mut event);
+                    if !event.cancelled {
+                        entity.set_fall_flying(event.is_gliding);
+                        player.update_player_pose();
+                    }
+                }
+            }
+            PlayerAction::StopGliding => {
+                let entity = player.get_entity();
+                if entity.is_fall_flying() {
+                    let mut event = crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent::new(
+                        entity.entity_id,
+                        false,
+                    );
+                    server.plugin_manager.fire_blocking(server, &mut event);
+                    if !event.cancelled {
+                        entity.set_fall_flying(false);
+                        player.update_player_pose();
+                    }
+                }
+            }
+            PlayerAction::StartSwimming => {
+                player.get_entity().set_swimming(true);
+                player.update_player_pose();
+            }
+            PlayerAction::StopSwimming => {
+                player.get_entity().set_swimming(false);
+                player.update_player_pose();
+            }
+            PlayerAction::StartSpinAttack => {
+                player.living_entity.set_auto_spin_attack(true);
+                player.update_player_pose();
+            }
+            PlayerAction::StopSpinAttack => {
+                player.living_entity.set_auto_spin_attack(false);
+                player.update_player_pose();
+            }
+            PlayerAction::StartCrawling => {
+                player.get_entity().set_pose(pumpkin_data::entity::EntityPose::Swimming);
+            }
+            PlayerAction::StopCrawling => {
+                player.update_player_pose();
+            }
+            PlayerAction::StartFlying => {
+                let flying = {
+                    player
+                        .abilities
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .flying
+                };
+                if !flying {
+                    send_cancellable_blocking! {{
+                        server;
+                        PlayerToggleFlightEvent::new(player.clone(), true);
+                        'after: {
+                            player.living_entity.fall_distance.store(0.0);
+                            {
+                                player.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying = true;
+                            };
+                            player.send_abilities_update();
+                        }
+                        'cancelled: {
+                            player.send_abilities_update();
+                        }
+                    }}
+                }
+            }
+            PlayerAction::StopFlying => {
+                let flying = {
+                    player
+                        .abilities
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .flying
+                };
+                if flying {
+                    send_cancellable_blocking! {{
+                        server;
+                        PlayerToggleFlightEvent::new(player.clone(), false);
+                        'after: {
+                            {
+                                player.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying = false;
+                            };
+                            player.send_abilities_update();
+                        }
+                        'cancelled: {
+                            player.send_abilities_update();
+                        }
+                    }}
+                }
+            }
+            PlayerAction::StopSleeping => {
+                player.wake_up();
+            }
+            PlayerAction::StartJump => {
+                player.increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Custom,
+                    pumpkin_data::statistic::CustomStatistic::Jump as i32,
+                    1,
+                );
+            }
+            PlayerAction::StopItemUseOn => {
+                let item_in_use = player
+                    .living_entity
+                    .item_in_use
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if let Some(stack) = item_in_use {
+                    server.item_registry.on_stopped_using(&stack, player);
+                }
+
+                player.living_entity.clear_active_hand();
+            }
             _ => {}
         }
     }

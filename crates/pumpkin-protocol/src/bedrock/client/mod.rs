@@ -13,6 +13,7 @@ pub mod chunk_radius_updated;
 pub mod client_cache_miss_response;
 pub mod common;
 pub mod container_open;
+pub mod container_close;
 pub mod correct_player_move_prediction;
 pub mod crafting_data;
 pub mod creative_content;

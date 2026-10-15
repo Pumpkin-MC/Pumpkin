@@ -5,7 +5,7 @@ use std::sync::{
 
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
@@ -23,6 +23,7 @@ use crate::entity::{
         swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{
         Mob, MobEntity,
         neutral::{NeutralData, NeutralMob},
@@ -91,7 +92,33 @@ impl PolarBearEntity {
                         .alerting_only(|other| !is_baby(other)),
                 ),
             );
-            // TODO: PolarBearAttackPlayersGoal at 2 -> adults charge when a cub is near.
+            // Vanilla PolarBear.PolarBearAttackPlayersGoal at priority 2:
+            // Adults charge and target players when a baby cub is nearby (within 8x4x8 blocks).
+            target_selector.add_goal(
+                2,
+                Box::new(ActiveTargetGoal::new(
+                    &mob_arc.mob_entity,
+                    &EntityType::PLAYER,
+                    20,
+                    true,
+                    true,
+                    None::<fn(&crate::entity::living::LivingEntity, &crate::world::World) -> bool>,
+                ))
+                .gated_by(|mob| {
+                    if is_baby(mob) {
+                        return false;
+                    }
+                    let mob_entity = mob.get_mob_entity();
+                    let entity = &mob_entity.living_entity.entity;
+                    let world = entity.world.load();
+                    let bb = entity.bounding_box.load().expand(8.0, 4.0, 8.0);
+                    let nearby = world.get_entities_at_box(&bb);
+                    nearby.iter().any(|other| {
+                        other.get_entity().entity_type == &EntityType::POLAR_BEAR
+                            && other.get_entity().age.load(Ordering::Relaxed) < 0
+                    })
+                }),
+            );
             apply_targets(&mut target_selector, &mob_arc.mob_entity, 3, 5, false);
             target_selector.add_goal(
                 4,
@@ -141,6 +168,10 @@ impl Mob for PolarBearEntity {
         Some(self)
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }
@@ -163,6 +194,26 @@ impl Mob for PolarBearEntity {
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.ageable_ai_step();
+
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            let sound = if entity.age.load(Ordering::Relaxed) < 0 {
+                Sound::EntityPolarBearAmbientBaby
+            } else {
+                Sound::EntityPolarBearAmbient
+            };
+            entity.world.load().play_sound_fine(
+                sound,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
     }
 
     fn mob_init_data_tracker(&self) {
@@ -179,5 +230,15 @@ impl Mob for PolarBearEntity {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         self.animal_interact(player, item_stack, Sound::EntityPolarBearAmbient)
+    }
+}
+
+impl CustomSound for PolarBearEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPolarBearDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPolarBearHurt)
     }
 }

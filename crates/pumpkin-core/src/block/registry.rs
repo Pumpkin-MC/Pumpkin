@@ -1254,6 +1254,10 @@ impl BlockRegistry {
         server: &Server,
         state: &BlockState,
     ) {
+        if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_GUARDED_BY_PIGLINS) {
+            crate::entity::mob::piglin_ai::PiglinAi::anger_nearby_piglins(world, player, false);
+        }
+
         let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block.broken(BrokenArgs {

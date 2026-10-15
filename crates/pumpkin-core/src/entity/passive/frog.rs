@@ -6,7 +6,7 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -18,6 +18,7 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
@@ -105,6 +106,10 @@ impl Mob for FrogEntity {
         Some(self)
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }
@@ -129,6 +134,25 @@ impl Mob for FrogEntity {
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.ageable_ai_step();
+
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            entity.world.load().play_sound_fine(
+                Sound::EntityFrogAmbient,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                if entity.age.load(Ordering::Relaxed) < 0 {
+                    1.25
+                } else {
+                    1.0
+                },
+            );
+        }
     }
 
     fn mob_init_data_tracker(&self) {
@@ -144,6 +168,43 @@ impl Mob for FrogEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.animal_interact(player, item_stack, Sound::EntityFrogAmbient)
+        let is_lead = item_stack.item.registry_key == "lead"
+            || item_stack.item.registry_key == "minecraft:lead";
+        let was_leashed = self
+            .get_entity()
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some();
+
+        let res = self.animal_interact(player, item_stack, Sound::EntityFrogAmbient);
+
+        if res && is_lead && !was_leashed {
+            let now_leashed = self
+                .get_entity()
+                .leashed_to
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some();
+            if now_leashed {
+                let variant_id = self.get_variant().asset_id().to_string();
+                player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::LeashedFrog {
+                        variant: variant_id,
+                    },
+                );
+            }
+        }
+        res
+    }
+}
+
+impl CustomSound for FrogEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityFrogDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityFrogHurt)
     }
 }

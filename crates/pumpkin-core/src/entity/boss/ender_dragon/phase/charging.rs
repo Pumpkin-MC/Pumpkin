@@ -1,50 +1,79 @@
-use super::EnderDragonPhase;
-use crate::entity::EntityBase;
-use crate::entity::boss::ender_dragon::{EnderDragonEntity, NODE_Y, Vector3Ext};
-use pumpkin_util::math::vector3::Vector3;
+use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 
-pub struct ChargingPhase;
+use super::EnderDragonPhase;
+use crate::entity::boss::ender_dragon::{EnderDragonEntity, Vector3Ext};
+
+pub struct ChargingPhase {
+    time_since_charge: Mutex<i32>,
+}
+
+impl Default for ChargingPhase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ChargingPhase {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            time_since_charge: Mutex::new(0),
+        }
+    }
+}
 
 impl super::Phase for ChargingPhase {
     fn get_type(&self) -> EnderDragonPhase {
-        EnderDragonPhase::Charging
+        EnderDragonPhase::ChargingPlayer
+    }
+
+    fn begin(&self, _dragon: &EnderDragonEntity) {
+        *self
+            .time_since_charge
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = 0;
     }
 
     fn tick(&self, dragon: &EnderDragonEntity) {
-        let target_id = {
-            let guard = dragon
-                .target_player
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            *guard
-        };
-        let world = dragon.mob_entity.living_entity.entity.world.load();
-        let pos = dragon.mob_entity.living_entity.entity.pos.load();
+        let mut time_lock = self
+            .time_since_charge
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        let target_pos = if let Some(id) = target_id
-            && let Some(player) = world.players.load().iter().find(|p| p.gameprofile.id == id)
-        {
-            player.get_entity().pos.load()
-        } else {
-            let origin = {
-                let guard = dragon
-                    .fight_origin
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                guard.0
-            };
-            Vector3::new(origin.x as f64, NODE_Y as f64 - 20.0, origin.z as f64)
-        };
-
-        if pos.distance_squared(target_pos) < 25.0 {
-            dragon.set_phase(EnderDragonPhase::Hovering);
-            return;
-        }
-
-        *dragon
+        let target_location = *dragon
             .target_location
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(target_pos);
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let Some(target) = target_location else {
+            drop(time_lock);
+            dragon.set_phase(EnderDragonPhase::HoldingPattern);
+            return;
+        };
+
+        if *time_lock > 0 {
+            *time_lock += 1;
+            if *time_lock >= 10 {
+                drop(time_lock);
+                dragon.set_phase(EnderDragonPhase::HoldingPattern);
+                return;
+            }
+        } else {
+            let pos = dragon.mob_entity.living_entity.entity.pos.load();
+            let dist_sq = pos.distance_squared(target);
+            if dist_sq < 100.0
+                || dist_sq > 22500.0
+                || dragon
+                    .mob_entity
+                    .living_entity
+                    .entity
+                    .horizontal_collision
+                    .load(Ordering::Relaxed)
+            {
+                *time_lock += 1;
+            }
+        }
     }
 
     fn get_fly_speed(&self) -> f32 {

@@ -4,10 +4,11 @@ use std::sync::{Arc, Weak};
 use uuid::Uuid;
 
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -173,12 +174,42 @@ impl Mob for EvokerEntity {
         &self.mob_entity
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
         let ticks = self.spell_casting_tick_count.load(Ordering::Relaxed);
         if ticks > 0 {
             self.spell_casting_tick_count
                 .store(ticks - 1, Ordering::Relaxed);
         }
+
+        // Ambient sound
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            entity.world.load().play_sound_fine(
+                Sound::EntityEvokerAmbient,
+                SoundCategory::Hostile,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
+    }
+}
+
+impl CustomSound for EvokerEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityEvokerDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityEvokerHurt)
     }
 }
 
@@ -484,6 +515,13 @@ impl Goal for EvokerSummonSpellGoal {
                 );
 
                 let vex = from_type(&EntityType::VEX, spawn_pos, &world, Uuid::new_v4());
+                if let Some(vex_ent) =
+                    vex.cast_any().downcast_ref::<crate::entity::mob::vex::VexEntity>()
+                {
+                    vex_ent.set_owner(Some(evoker_ent.entity_uuid));
+                    let life_ticks = rand::random_range(600..=2400);
+                    vex_ent.set_limited_life(life_ticks);
+                }
                 world.spawn_entity(vex);
             }
         }

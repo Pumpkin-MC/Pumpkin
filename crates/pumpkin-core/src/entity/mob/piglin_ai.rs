@@ -378,4 +378,55 @@ impl PiglinAi {
         )
         .unwrap_or_else(|| piglin.mob_entity.living_entity.entity.pos.load())
     }
+
+    pub fn anger_nearby_piglins(
+        world: &Arc<crate::world::World>,
+        player: &Arc<Player>,
+        only_if_they_see_the_player: bool,
+    ) {
+        if !player.living_entity.is_part_of_game() {
+            return;
+        }
+
+        let player_entity = player.get_entity();
+        let player_pos = player_entity.pos.load();
+        let aabb = pumpkin_util::math::boundingbox::BoundingBox::new(
+            pumpkin_util::math::vector3::Vector3::new(
+                player_pos.x - Self::PLAYER_ANGER_RANGE,
+                player_pos.y - Self::PLAYER_ANGER_RANGE,
+                player_pos.z - Self::PLAYER_ANGER_RANGE,
+            ),
+            pumpkin_util::math::vector3::Vector3::new(
+                player_pos.x + Self::PLAYER_ANGER_RANGE,
+                player_pos.y + Self::PLAYER_ANGER_RANGE,
+                player_pos.z + Self::PLAYER_ANGER_RANGE,
+            ),
+        );
+        let entities = world.get_entities_at_box(&aabb);
+        for entity in entities {
+            if entity.get_entity().entity_type == &EntityType::PIGLIN {
+                if let Some(piglin) = entity.cast_any().downcast_ref::<PiglinEntity>() {
+                    if piglin.is_adult()
+                        && !piglin.has_attack_target()
+                        && (!only_if_they_see_the_player
+                            || Self::is_entity_targetable(piglin, player))
+                    {
+                        piglin
+                            .mob_entity
+                            .set_target(Some(player.clone() as Arc<dyn EntityBase>));
+                        piglin.activity.store(PiglinActivity::Fight);
+                    }
+                }
+            } else if entity.get_entity().entity_type == &EntityType::PIGLIN_BRUTE {
+                if let Some(brute) = entity
+                    .cast_any()
+                    .downcast_ref::<crate::entity::mob::piglin_brute::PiglinBruteEntity>()
+                {
+                    brute
+                        .mob_entity
+                        .set_target(Some(player.clone() as Arc<dyn EntityBase>));
+                }
+            }
+        }
+    }
 }

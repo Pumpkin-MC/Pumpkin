@@ -832,6 +832,16 @@ pub trait Mob: EntityBase + Send + Sync {
             .has_tag(&tag::EntityType::MINECRAFT_BURN_IN_DAYLIGHT)
     }
 
+    /// Whether this mob can breathe underwater. Default: checks if entity has `can_breathe_under_water` tag.
+    fn can_breathe_under_water(&self) -> bool {
+        self.get_mob_entity().living_entity.can_breathe_under_water()
+    }
+
+    /// Whether this mob can drown in water. Returns false if `can_breathe_under_water` is true.
+    fn can_drown(&self) -> bool {
+        !self.can_breathe_under_water()
+    }
+
     /// Slot whose item shields the mob from the sun and takes the wear instead.
     fn sun_protection_slot(&self) -> EquipmentSlot {
         EquipmentSlot::HEAD
@@ -1011,6 +1021,14 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn as_iron_golem(&self) -> Option<&crate::entity::passive::iron_golem::IronGolemEntity> {
+        None
+    }
+
+    fn as_villager(&self) -> Option<&crate::entity::passive::villager::VillagerEntity> {
+        None
+    }
+
+    fn as_llama(&self) -> Option<&crate::entity::passive::llama::LlamaEntity> {
         None
     }
 
@@ -1320,10 +1338,24 @@ pub trait Mob: EntityBase + Send + Sync {
             .living_entity
             .on_lightning_strike(caller, lightning);
     }
+
+    fn is_pushed_by_fluids(&self) -> bool {
+        true
+    }
+
+    /// Override mob movement if the mob has custom travel physics (e.g. Squid).
+    /// Returns true if travel was handled and standard travel should be skipped.
+    fn custom_travel(&self, _caller: &dyn EntityBase) -> bool {
+        false
+    }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)
+    }
+
+    fn is_pushed_by_fluids(&self) -> bool {
+        Mob::is_pushed_by_fluids(self)
     }
 
     fn is_pushable(&self) -> bool {
@@ -1496,6 +1528,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.get_mob_entity().reset_love_ticks();
     }
 
+    fn get_breeder(&self) -> Option<uuid::Uuid> {
+        self.get_mob_entity().breeder.load()
+    }
+
     fn set_breeding_cooldown(&self, ticks: i32) {
         self.get_mob_entity()
             .breeding_cooldown
@@ -1608,9 +1644,14 @@ pub trait PathAwareEntity: Mob + Send + Sync {
         !navigator.is_idle()
     }
 
-    // TODO: implement
     fn is_panicking(&self) -> bool {
-        false
+        use pumpkin_data::tag::Taggable;
+        self.get_mob_entity()
+            .living_entity
+            .get_last_damage_type()
+            .is_some_and(|damage_type| {
+                damage_type.has_tag(&pumpkin_data::tag::DamageType::MINECRAFT_PANIC_CAUSES)
+            })
     }
 
     fn should_follow_leash(&self) -> bool {

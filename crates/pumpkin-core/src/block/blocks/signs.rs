@@ -608,6 +608,11 @@ impl BlockBehaviour for SignBlock {
                 if !args.player.has_infinite_materials() {
                     args.item_stack.decrement(1);
                 }
+                args.player.increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Used,
+                    args.item_stack.item.id as i32,
+                    1,
+                );
                 return BlockActionResult::Success;
             }
         }

@@ -10,6 +10,7 @@ use pumpkin_data::{
     entity::EntityType,
     item::Item,
     item_stack::ItemStack,
+    sound::Sound,
     tag::{self, Taggable},
     tracked_data,
     world::WorldEvent,
@@ -30,6 +31,7 @@ use crate::{
             look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
             revenge::RevengeGoal,
         },
+        custom_sound::CustomSound,
         mob::{Mob, MobEntity},
         projectile::wither_skull::WitherSkullEntity,
     },
@@ -335,6 +337,11 @@ impl WitherEntity {
             if !self.dropped_loot.swap(true, Ordering::SeqCst) {
                 let pos = entity.block_pos.load();
                 world.drop_stack(&pos, ItemStack::new(1, &Item::NETHER_STAR));
+                crate::entity::experience_orb::ExperienceOrbEntity::spawn(
+                    &world,
+                    pos.to_centered_f64(),
+                    50,
+                );
             }
             return;
         }
@@ -382,6 +389,14 @@ impl WitherEntity {
 
             if tick_count % 20 == 0 {
                 living.heal(1.0);
+            }
+
+            if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..80) == 0 {
+                world.play_sound(
+                    Sound::EntityWitherAmbient,
+                    pumpkin_data::sound::SoundCategory::Hostile,
+                    &entity.pos.load(),
+                );
             }
 
             // AI step - movement towards main target
@@ -652,8 +667,21 @@ impl Mob for WitherEntity {
             if !self.dropped_loot.swap(true, Ordering::SeqCst) {
                 let pos = entity.get_entity().block_pos.load();
                 world.drop_stack(&pos, ItemStack::new(1, &Item::NETHER_STAR));
+                crate::entity::experience_orb::ExperienceOrbEntity::spawn(
+                    &world,
+                    pos.to_centered_f64(),
+                    50,
+                );
             }
         }
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        50
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
@@ -664,5 +692,15 @@ impl Mob for WitherEntity {
         if let Some(invul) = nbt.get_int("Invul") {
             self.set_invulnerable_ticks(invul);
         }
+    }
+}
+
+impl CustomSound for WitherEntity {
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityWitherHurt)
+    }
+
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityWitherDeath)
     }
 }

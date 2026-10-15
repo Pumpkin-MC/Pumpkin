@@ -456,7 +456,7 @@ pub struct GetInsideCollisionShapeArgs<'a> {
     pub position: &'a BlockPos,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct BlockEvent {
     pub pos: BlockPos,
     pub r#type: u8,

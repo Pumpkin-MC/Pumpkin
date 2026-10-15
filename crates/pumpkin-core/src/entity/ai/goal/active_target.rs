@@ -28,6 +28,8 @@ pub enum TargetCondition {
     NoDaylight,
     /// Nothing at all while the mob is a baby. (Polar bears hunting foxes)
     Adult,
+    /// Only when the animal is NOT tamed. (Wild wolves hunting sheep/rabbits, wild cats hunting rabbits)
+    NonTamed,
 }
 
 impl TargetCondition {
@@ -40,6 +42,7 @@ impl TargetCondition {
                 neutral.get_persistent_anger_target().is_some() || neutral.is_angry()
             }),
             Self::Adult => !mob.as_ageable().is_some_and(AgeableMob::is_baby),
+            Self::NonTamed => mob.as_tamable().is_none_or(|tamable| !tamable.is_tame()),
             Self::Always => true,
         }
     }
@@ -51,7 +54,7 @@ impl TargetCondition {
             Self::AngryAt => mob
                 .as_neutral()
                 .and_then(NeutralMob::get_persistent_anger_target),
-            Self::Always | Self::NoDaylight | Self::Adult => None,
+            Self::Always | Self::NoDaylight | Self::Adult | Self::NonTamed => None,
         }
     }
 
@@ -62,6 +65,7 @@ impl TargetCondition {
             Self::AngryAt => mob
                 .as_neutral()
                 .is_some_and(|neutral| neutral.is_angry_at(target, world)),
+            Self::NonTamed => mob.as_tamable().is_none_or(|tamable| !tamable.is_tame()),
             Self::Always | Self::NoDaylight | Self::Adult => true,
         }
     }

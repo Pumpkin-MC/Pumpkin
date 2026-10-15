@@ -1,7 +1,11 @@
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
+
+use pumpkin_data::sound::{Sound, SoundCategory};
 
 use crate::entity::{
-    Entity,
+    Entity, EntityBase,
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity, equipment::RegionalDifficulty, skeleton::SkeletonEntityBase},
 };
 use crate::world::World;
@@ -18,9 +22,41 @@ impl SkeletonEntity {
     }
 }
 
+impl CustomSound for SkeletonEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntitySkeletonDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntitySkeletonHurt)
+    }
+}
+
 impl Mob for SkeletonEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let base_entity = &self.entity.mob_entity.living_entity.entity;
+        if !base_entity.is_alive() {
+            return;
+        }
+
+        // Ambient sound
+        if rand::random_range(0..100) == 0 && !base_entity.silent.load(Ordering::Relaxed) {
+            base_entity.world.load().play_sound_fine(
+                Sound::EntitySkeletonAmbient,
+                SoundCategory::Hostile,
+                &base_entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
     }
 
     fn populate_default_equipment_slots(

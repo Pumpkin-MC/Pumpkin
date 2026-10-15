@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
@@ -16,16 +17,27 @@ impl ItemMetadata for NameTagItem {
 }
 
 impl ItemBehaviour for NameTagItem {
-    fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
-        let entity = entity.get_entity();
+    fn use_on_entity(&self, item: &mut ItemStack, player: &Player, target: Arc<dyn EntityBase>) {
+        let entity = target.get_entity();
+        // Vanilla NameTagItem.java: customName != null && target.getType().canSerialize() && target.isAlive() && !(target instanceof Player)
         if entity.entity_type.saveable
+            && entity.is_alive()
+            && target.get_player().is_none()
             && let Some(name) = item.get_data_component::<CustomNameImpl>()
         {
-            // TODO
             entity.set_custom_name(name.name.clone());
+            entity.set_custom_name_visible(true);
+
+            if let Some(mob) = target.get_mob() {
+                mob.get_mob_entity()
+                    .persistence_required
+                    .store(true, Ordering::Relaxed);
+            }
+
             item.decrement_unless_creative(player.gamemode.load(), 1);
         }
     }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

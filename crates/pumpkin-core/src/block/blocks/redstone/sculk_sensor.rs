@@ -4,8 +4,10 @@ use crate::block::entities::calibrated_sculk_sensor::CalibratedSculkSensorBlockE
 use crate::block::entities::sculk_sensor::SculkSensorBlockEntity;
 use crate::block::{
     BlockBehaviour, BlockMetadata, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
-    GetRedstonePowerArgs, OnPlaceArgs, OnScheduledTickArgs, PathComputationType, PlacedArgs,
+    GetRedstonePowerArgs, OnEntityStepArgs, OnPlaceArgs, OnScheduledTickArgs, PathComputationType,
+    PlacedArgs,
 };
+use crate::entity::EntityBase;
 use crate::world::World;
 use pumpkin_data::block_properties::{
     CalibratedSculkSensorLikeProperties, HorizontalFacing, SculkSensorLikeProperties,
@@ -62,6 +64,7 @@ impl SculkSensorBlock {
                 world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
                 world.update_neighbors(pos, None);
                 world.schedule_block_tick(block, *pos, 30, TickPriority::Normal);
+                Self::notify_nearby_shriekers(world, pos);
             }
         } else if block.id == BlockId::CALIBRATED_SCULK_SENSOR {
             let state = world.get_block_state(pos);
@@ -96,6 +99,32 @@ impl SculkSensorBlock {
                 world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
                 world.update_neighbors(pos, None);
                 world.schedule_block_tick(block, *pos, 30, TickPriority::Normal);
+                Self::notify_nearby_shriekers(world, pos);
+            }
+        }
+    }
+
+    pub fn notify_nearby_shriekers(world: &Arc<World>, sensor_pos: &BlockPos) {
+        let players = world.get_nearby_players(sensor_pos.to_centered_f64(), 16.0);
+        let player = players
+            .into_iter()
+            .find(|p| !p.is_spectator() && p.get_entity().is_alive());
+        let Some(player) = player else {
+            return;
+        };
+
+        const SHRIEKER_LISTENER_RADIUS: i32 = 8;
+        for dx in -SHRIEKER_LISTENER_RADIUS..=SHRIEKER_LISTENER_RADIUS {
+            for dy in -SHRIEKER_LISTENER_RADIUS..=SHRIEKER_LISTENER_RADIUS {
+                for dz in -SHRIEKER_LISTENER_RADIUS..=SHRIEKER_LISTENER_RADIUS {
+                    if dx * dx + dy * dy + dz * dz > SHRIEKER_LISTENER_RADIUS * SHRIEKER_LISTENER_RADIUS {
+                        continue;
+                    }
+                    let target_pos = BlockPos::new(sensor_pos.0.x + dx, sensor_pos.0.y + dy, sensor_pos.0.z + dz);
+                    if world.get_block(&target_pos).id == BlockId::SCULK_SHRIEKER {
+                        crate::block::blocks::sculk::sculk_shrieker::SculkShriekerBlock::try_shriek(world, &target_pos, &player);
+                    }
+                }
             }
         }
     }
@@ -236,6 +265,12 @@ impl BlockBehaviour for SculkSensorBlock {
                 }
                 SculkSensorPhase::Inactive => {}
             }
+        }
+    }
+
+    fn on_entity_step(&self, args: OnEntityStepArgs<'_>) {
+        if !args.entity.get_entity().is_sneaking() {
+            Self::trigger(args.world, args.position, args.block, 1);
         }
     }
 

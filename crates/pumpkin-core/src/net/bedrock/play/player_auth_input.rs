@@ -50,9 +50,8 @@ impl BedrockClient {
                 entity.yaw.store(new_yaw);
             }
 
-            // TODO: use `pumpkin_util::math::pack_degrees`.
-            let je_yaw = (new_yaw * 256.0 / 360.0).rem_euclid(256.0);
-            let je_pitch = (new_pitch * 256.0 / 360.0).rem_euclid(256.0);
+            let byte_yaw = pumpkin_util::math::pack_degrees(new_yaw);
+            let byte_pitch = pumpkin_util::math::pack_degrees(new_pitch);
 
             let delta = pumpkin_util::math::vector3::Vector3::new(
                 new_pos.x - old_pos.x,
@@ -85,8 +84,8 @@ impl BedrockClient {
                         player.entity_id().into(),
                         new_pos,
                         pumpkin_util::math::vector3::Vector3::new(0.0, 0.0, 0.0),
-                        je_yaw,
-                        je_pitch,
+                        new_yaw,
+                        new_pitch,
                         on_ground,
                     ),
                 );
@@ -100,8 +99,8 @@ impl BedrockClient {
                             new_pos.y.mul_add(4096.0, -(old_pos.y * 4096.0)) as i16,
                             new_pos.z.mul_add(4096.0, -(old_pos.z * 4096.0)) as i16,
                         ),
-                        je_yaw as u8,   // Use converted Java byte
-                        je_pitch as u8, // Use converted Java byte
+                        byte_yaw,
+                        byte_pitch,
                         on_ground,
                     ),
                     &bedrock_move_packet,
@@ -125,8 +124,8 @@ impl BedrockClient {
                     &[player.gameprofile.id],
                     &pumpkin_protocol::java::client::play::CUpdateEntityRot::new(
                         player.entity_id().into(),
-                        je_yaw as u8,   // Use converted Java byte
-                        je_pitch as u8, // Use converted Java byte
+                        byte_yaw,
+                        byte_pitch,
                         on_ground,
                     ),
                     &bedrock_move_packet,
@@ -139,7 +138,7 @@ impl BedrockClient {
                     // Adjust to `CHeadRot` if that is what your crate currently calls it
                     &pumpkin_protocol::java::client::play::CHeadRot::new(
                         player.entity_id().into(),
-                        je_yaw as u8,
+                        byte_yaw,
                     ),
                 );
             }
@@ -154,15 +153,112 @@ impl BedrockClient {
         let input_data = packet.input_data;
 
         if input_data.get(InputData::StartSprinting as usize) {
-            player.set_sprinting(true);
+            if !player.get_entity().is_sprinting() {
+                send_cancellable_blocking! {{
+                    server;
+                    PlayerToggleSprintEvent::new(player.clone(), true);
+                    'after: {
+                        player.set_sprinting(event.is_sprinting);
+                        player.update_player_pose();
+                    }
+                }}
+            }
         } else if input_data.get(InputData::StopSprinting as usize) {
-            player.set_sprinting(false);
+            if player.get_entity().is_sprinting() {
+                send_cancellable_blocking! {{
+                    server;
+                    PlayerToggleSprintEvent::new(player.clone(), false);
+                    'after: {
+                        player.set_sprinting(event.is_sprinting);
+                        player.update_player_pose();
+                    }
+                }}
+            }
         }
 
         if input_data.get(InputData::StartSneaking as usize) {
-            entity.set_sneaking(true);
+            if !entity.is_sneaking() {
+                send_cancellable_blocking! {{
+                    server;
+                    PlayerToggleSneakEvent::new(player.clone(), true);
+                    'after: {
+                        entity.set_sneaking(event.is_sneaking);
+                        if event.is_sneaking {
+                            let vehicle = entity
+                                .vehicle
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .clone();
+                            if let Some(vehicle) = vehicle {
+                                vehicle.get_entity().remove_passenger(player.entity_id());
+                            }
+                        }
+                        player.update_player_pose();
+                    }
+                }}
+            }
         } else if input_data.get(InputData::StopSneaking as usize) {
-            entity.set_sneaking(false);
+            if entity.is_sneaking() {
+                send_cancellable_blocking! {{
+                    server;
+                    PlayerToggleSneakEvent::new(player.clone(), false);
+                    'after: {
+                        entity.set_sneaking(event.is_sneaking);
+                        player.update_player_pose();
+                    }
+                }}
+            }
+        }
+
+        if input_data.get(InputData::StartGliding as usize) {
+            let fall_flying = entity.check_fall_flying();
+            if entity.is_fall_flying() != fall_flying {
+                let mut event = crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent::new(
+                    entity.entity_id,
+                    fall_flying,
+                );
+                server.plugin_manager.fire_blocking(server, &mut event);
+                if !event.cancelled {
+                    entity.set_fall_flying(event.is_gliding);
+                    player.update_player_pose();
+                }
+            }
+        } else if input_data.get(InputData::StopGliding as usize) {
+            if entity.is_fall_flying() {
+                let mut event = crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent::new(
+                    entity.entity_id,
+                    false,
+                );
+                server.plugin_manager.fire_blocking(server, &mut event);
+                if !event.cancelled {
+                    entity.set_fall_flying(false);
+                    player.update_player_pose();
+                }
+            }
+        }
+
+        if input_data.get(InputData::StartSwimming as usize) {
+            entity.set_swimming(true);
+            player.update_player_pose();
+        } else if input_data.get(InputData::StopSwimming as usize) {
+            entity.set_swimming(false);
+            player.update_player_pose();
+        }
+
+        if input_data.get(InputData::StartSpinAttack as usize) {
+            player.living_entity.set_auto_spin_attack(true);
+            player.update_player_pose();
+        } else if input_data.get(InputData::StopSpinAttack as usize) {
+            player.living_entity.set_auto_spin_attack(false);
+            player.update_player_pose();
+        }
+
+        if input_data.get(InputData::StartJumping as usize) {
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::Jump as i32,
+                1,
+            );
         }
 
         if input_data.get(InputData::StartCrawling as usize) {

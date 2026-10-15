@@ -3,11 +3,14 @@ use std::sync::{
     atomic::{AtomicI32, AtomicU8, Ordering},
 };
 
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::difficulty::Difficulty;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -25,6 +28,7 @@ use crate::entity::{
         tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{
         Mob, MobEntity,
         neutral::{NeutralData, NeutralMob},
@@ -209,6 +213,10 @@ impl Mob for BeeEntity {
         Some(self)
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn as_neutral(&self) -> Option<&dyn NeutralMob> {
         Some(self)
     }
@@ -277,9 +285,54 @@ impl Mob for BeeEntity {
             pumpkin_data::tracked_data::bee::DATA_FLAGS_ID,
             self.flags.load(Ordering::Relaxed) as i8,
         );
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::bee::DATA_ANGER_END_TIME,
+            self.get_anger_end_time(),
+        );
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         self.animal_interact(player, item_stack, Sound::EntityBeePollinate)
+    }
+
+    fn on_attack(&self, target: &dyn EntityBase) {
+        let entity = self.get_entity();
+        let world = entity.world.load_full();
+        let level_info = world.level_info.load();
+        let poison_duration = match level_info.difficulty {
+            Difficulty::Normal => 200,
+            Difficulty::Hard => 360,
+            _ => 0,
+        };
+        if poison_duration > 0
+            && let Some(living) = target.get_living_entity()
+        {
+            living.add_effect(Effect {
+                effect_type: &StatusEffect::POISON,
+                duration: poison_duration,
+                amplifier: 0,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            });
+        }
+        self.set_has_stung(true);
+        self.stop_being_angry();
+        world.play_sound(
+            Sound::EntityBeeSting,
+            pumpkin_data::sound::SoundCategory::Neutral,
+            &entity.pos.load(),
+        );
+    }
+}
+
+impl CustomSound for BeeEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityBeeDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityBeeHurt)
     }
 }

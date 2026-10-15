@@ -70,7 +70,9 @@ mod scoreboard;
 mod seed;
 mod setblock;
 mod setidletimeout;
+mod serverpack;
 mod setworldspawn;
+mod spawn_armor_trims;
 mod spawnpoint;
 mod spectate;
 mod spreadplayers;
@@ -95,7 +97,16 @@ mod waypoint;
 mod weather;
 mod whitelist;
 pub(crate) use whitelist::kick_non_whitelisted_players;
+mod warden_spawn_tracker;
 mod worldborder;
+mod chase;
+mod jfr;
+mod perf;
+mod publish;
+mod unpublish;
+mod debugmobspawning;
+mod debugpath;
+mod debugconfig;
 
 #[allow(clippy::too_many_lines)]
 #[must_use]
@@ -133,6 +144,8 @@ pub fn default_dispatcher(
     saveoff::register(&mut dispatcher, registry);
     saveon::register(&mut dispatcher, registry);
     setidletimeout::register(&mut dispatcher, registry);
+    serverpack::register(&mut dispatcher, registry);
+    spawn_armor_trims::register(&mut dispatcher, registry);
     spreadplayers::register(&mut dispatcher, registry);
     stop::register(&mut dispatcher, registry);
     tag::register(&mut dispatcher, registry);
@@ -198,6 +211,15 @@ pub fn default_dispatcher(
     pardon::register(&mut dispatcher, registry);
     pardonip::register(&mut dispatcher, registry);
     whitelist::register(&mut dispatcher, registry);
+    warden_spawn_tracker::register(&mut dispatcher, registry);
+    publish::register(&mut dispatcher, registry);
+    unpublish::register(&mut dispatcher, registry);
+    perf::register(&mut dispatcher, registry);
+    jfr::register(&mut dispatcher, registry);
+    chase::register(&mut dispatcher, registry);
+    debugmobspawning::register(&mut dispatcher, registry);
+    debugpath::register(&mut dispatcher, registry);
+    debugconfig::register(&mut dispatcher, registry);
 
     apply_command_overrides(&mut dispatcher, registry, commands_config);
 

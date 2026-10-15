@@ -70,6 +70,8 @@ use crate::{
         player_interact_entity_event::PlayerInteractEntityEvent,
         player_interact_event::{InteractAction, PlayerInteractEvent},
         player_toggle_flight_event::PlayerToggleFlightEvent,
+        player_toggle_sneak_event::PlayerToggleSneakEvent,
+        player_toggle_sprint_event::PlayerToggleSprintEvent,
     },
     server::{Server, seasonal_events},
     world::{BlockBreakingProgress, chunker},

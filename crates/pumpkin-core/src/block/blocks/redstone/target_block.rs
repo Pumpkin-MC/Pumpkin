@@ -10,17 +10,20 @@ use crate::block::{
     OnScheduledTickArgs, OnStateReplacedArgs,
 };
 
-fn get_redstone_strength(hit_pos: &Vector3<f64>) -> u8 {
-    let dist_x = ((hit_pos.x - hit_pos.x.floor()) - 0.5).abs();
-    let dist_y = ((hit_pos.y - hit_pos.y.floor()) - 0.5).abs();
-    let dist_z = ((hit_pos.z - hit_pos.z.floor()) - 0.5).abs();
+fn get_redstone_strength(
+    hit_pos: &Vector3<f64>,
+    block_pos: &pumpkin_util::math::position::BlockPos,
+) -> u8 {
+    let dx = (hit_pos.x - (f64::from(block_pos.0.x) + 0.5)).abs();
+    let dy = (hit_pos.y - (f64::from(block_pos.0.y) + 0.5)).abs();
+    let dz = (hit_pos.z - (f64::from(block_pos.0.z) + 0.5)).abs();
 
-    let distance = if dist_x >= dist_y && dist_x >= dist_z {
-        dist_y.max(dist_z)
-    } else if dist_y >= dist_z {
-        dist_x.max(dist_z)
+    let distance = if dy >= dx && dy >= dz {
+        dx.max(dz)
+    } else if dz >= dx && dz >= dy {
+        dx.max(dy)
     } else {
-        dist_x.max(dist_y)
+        dy.max(dz)
     };
 
     let norm = ((0.5 - distance) / 0.5).clamp(0.0, 1.0);
@@ -47,6 +50,7 @@ impl BlockBehaviour for TargetBlock {
     }
 
     fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
+        let power = get_redstone_strength(args.hit_pos, args.position);
         if let Some(owner_id) = args.projectile.get_owner_id()
             && let Some(player) = args.world.get_player_by_id(owner_id)
         {
@@ -55,12 +59,21 @@ impl BlockBehaviour for TargetBlock {
                 pumpkin_data::statistic::CustomStatistic::TargetHit as i32,
                 1,
             );
+            if power == 15 {
+                let player_pos = player.position();
+                let dx = player_pos.x - args.hit_pos.x;
+                let dz = player_pos.z - args.hit_pos.z;
+                if dx.hypot(dz) >= 30.0 {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::Bullseye,
+                    );
+                }
+            }
         }
         if !args
             .world
             .is_block_tick_scheduled(args.position, args.block)
         {
-            let power = get_redstone_strength(args.hit_pos);
             let mut props = TargetProperties::from_state_id(args.state.id);
             props.r#power = power;
             args.world.set_block_state(

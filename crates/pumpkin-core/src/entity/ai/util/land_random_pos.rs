@@ -42,12 +42,27 @@ pub fn move_pos_up_out_of_solid(
     mob: &dyn Mob,
     world: &World,
     context: &mut PathfindingContext,
-    pos: BlockPos,
+    mut pos: BlockPos,
 ) -> Option<BlockPos> {
     let max_y = world.dimension.min_y + world.dimension.height - 1;
-    let pos = random_pos::move_up_out_of_solid(pos, max_y, |candidate| {
-        goal_utils::is_solid(world, candidate)
-    });
+    let min_y = world.dimension.min_y;
+
+    if goal_utils::is_solid(world, &pos) {
+        pos = random_pos::move_up_out_of_solid(pos, max_y, |candidate| {
+            goal_utils::is_solid(world, candidate)
+        });
+    } else {
+        let mut steps = 0;
+        while pos.0.y > min_y && !goal_utils::is_solid(world, &pos.down()) && steps < 7 {
+            pos = pos.down();
+            steps += 1;
+        }
+    }
+
+    if goal_utils::is_not_stable(world, &pos) {
+        return None;
+    }
+
     (!goal_utils::is_water(world, &pos) && !goal_utils::has_malus(mob, context, &pos))
         .then_some(pos)
 }
@@ -64,7 +79,6 @@ pub fn toward_direction(
     let pos =
         random_pos::generate_random_pos_toward_direction(mob, horizontal_dist, rng, direction);
     (!goal_utils::is_outside_limits(&pos, world)
-        && !goal_utils::is_restricted(restrict, mob, &pos)
-        && !goal_utils::is_not_stable(world, &pos))
+        && !goal_utils::is_restricted(restrict, mob, &pos))
     .then_some(pos)
 }

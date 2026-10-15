@@ -74,6 +74,9 @@ trait CropBlockBase: PlantBlockBase {
     }
 
     fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
+        if world.get_raw_brightness(pos, 0) < 9 {
+            return;
+        }
         let (block, state) = world.get_block_and_state_id(pos);
         let age = self.get_age(state, block);
         if age < self.max_age() {
