@@ -1914,14 +1914,12 @@ mod direct_block_write_tests {
 
     #[test]
     fn direct_writes_match_world_coordinate_writes_across_chunk_heights() {
-        for dimension in [Dimension::OVERWORLD, Dimension::THE_NETHER, Dimension::THE_END] {
-            let generator = get_world_gen(
-                Seed(42),
-                dimension,
-                false,
-                Vec::new(),
-                String::new(),
-            );
+        for dimension in [
+            Dimension::OVERWORLD,
+            Dimension::THE_NETHER,
+            Dimension::THE_END,
+        ] {
+            let generator = get_world_gen(Seed(42), dimension, false, Vec::new(), String::new());
             for (chunk_x, chunk_z) in [(0, 0), (-3, 5)] {
                 let mut normal = ProtoChunk::new(chunk_x, chunk_z, &generator);
                 let mut direct = ProtoChunk::new(chunk_x, chunk_z, &generator);
@@ -1945,7 +1943,13 @@ mod direct_block_write_tests {
                     );
                     let local_y = block_y - bottom_y;
                     if (0..height).contains(&local_y) {
-                        direct.set_block_state_direct(local_x, local_y, local_z, block_y as i16, state);
+                        direct.set_block_state_direct(
+                            local_x,
+                            local_y,
+                            local_z,
+                            block_y as i16,
+                            state,
+                        );
                     }
                 }
                 assert_eq!(normal.flat_block_map, direct.flat_block_map);
