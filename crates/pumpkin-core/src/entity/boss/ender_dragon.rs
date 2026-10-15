@@ -588,7 +588,7 @@ impl EnderDragonEntity {
         let zm = f64::midpoint(dragon_bbox.min.z, dragon_bbox.max.z);
         let dragon_id = self.mob_entity.living_entity.entity.entity_id;
 
-        for target in world.get_entities_at_box(&dragon_bbox) {
+        for target in world.get_all_at_box(&dragon_bbox) {
             let target_entity = target.get_entity();
             if target_entity.entity_id == dragon_id
                 || target.get_living_entity().is_none()
