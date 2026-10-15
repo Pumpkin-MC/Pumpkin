@@ -2063,7 +2063,7 @@ impl World {
                 lock.difficulty == Difficulty::Peaceful,
             )
         };
-        let spawn_passives = self.get_time_of_day() % 400 == 0;
+        let spawn_passives = self.get_world_age() % 400 == 0;
         let spawn_enemies = !peaceful && spawn_monsters && spawn_mobs;
         let spawn_passives = spawn_passives && spawn_mobs;
 
@@ -2488,7 +2488,7 @@ impl World {
             is_thundering,
         );
         for entity in entities {
-            self.spawn_entity_non_save(entity);
+            self.spawn_natural_entity(entity);
         }
     }
 
@@ -4835,6 +4835,21 @@ impl World {
         let _base_entity = entity.get_entity();
         self.entity_tracker.add_entity(&entity, self);
         self.spawn_state.load().add_entity(self, entity.as_ref());
+
+        self.entities.rcu(|current_entities| {
+            let mut new_entities = (**current_entities).clone();
+            new_entities.push(entity.clone());
+            new_entities
+        });
+        self.add_pending_riders(&entity);
+    }
+
+    /// Spawns a naturally spawned mob without double-counting it in `spawn_state`
+    /// (since `spawn_state.after_spawn(...)` already tracked its category count and local mob cap).
+    #[expect(clippy::needless_pass_by_value)]
+    pub fn spawn_natural_entity(&self, entity: Arc<dyn EntityBase>) {
+        let _base_entity = entity.get_entity();
+        self.entity_tracker.add_entity(&entity, self);
 
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();

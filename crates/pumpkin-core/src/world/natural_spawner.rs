@@ -614,7 +614,7 @@ pub fn spawn_mobs_for_chunk_generation(
     let zo = chunk_z << 4;
 
     while rand::random::<f32>() < biome.creature_spawn_probability {
-        let Some(spawner_data) = creatures.choose(&mut rand::rng()) else {
+        let Some(spawner_data) = choose_weighted_spawner(creatures) else {
             continue;
         };
 
@@ -934,6 +934,102 @@ pub fn is_right_distance_to_player_and_spawn_point(
                 .contains_block(pos.0.x, pos.0.z))
 }
 
+pub const FORTRESS_ENEMIES: &[Spawner] = &[
+    Spawner {
+        r#type: "minecraft:blaze",
+        min_count: 2,
+        max_count: 3,
+    },
+    Spawner {
+        r#type: "minecraft:wither_skeleton",
+        min_count: 5,
+        max_count: 5,
+    },
+    Spawner {
+        r#type: "minecraft:zombified_piglin",
+        min_count: 4,
+        max_count: 4,
+    },
+    Spawner {
+        r#type: "minecraft:magma_cube",
+        min_count: 4,
+        max_count: 4,
+    },
+    Spawner {
+        r#type: "minecraft:skeleton",
+        min_count: 5,
+        max_count: 5,
+    },
+];
+
+#[must_use]
+#[expect(clippy::match_same_arms)]
+pub fn get_spawner_weight(spawner_type: &str) -> u32 {
+    let name = spawner_type
+        .strip_prefix("minecraft:")
+        .unwrap_or(spawner_type);
+    match name {
+        // High frequency common monsters
+        "zombie" | "skeleton" | "creeper" | "spider" | "slime" => 100,
+        "husk" | "stray" | "drowned" => 80,
+        "bogged" => 30,
+        "cave_spider" => 20,
+        "enderman" => 10,
+        "witch" | "zombie_villager" => 5,
+
+        // Nether Fortress enemies
+        "blaze" => 10,
+        "wither_skeleton" => 8,
+        "magma_cube" => 3,
+        "ghast" => 50,
+        "zombified_piglin" => 100,
+        "piglin" => 15,
+        "hoglin" => 9,
+        "strider" => 60,
+
+        // Animals / Creatures
+        "sheep" => 12,
+        "pig" | "chicken" | "armadillo" | "frog" => 10,
+        "cow" => 8,
+        "horse" | "goat" => 5,
+        "fox" | "rabbit" => 8,
+        "wolf" => 5,
+        "ocelot" | "parrot" => 40,
+        "donkey" | "camel" | "polar_bear" | "panda" => 1,
+
+        // Water
+        "salmon" | "tropical_fish" | "pufferfish" => 15,
+        "cod" | "squid" | "glow_squid" | "axolotl" | "bat" => 10,
+        "turtle" => 5,
+        "dolphin" => 2,
+
+        _ => 10,
+    }
+}
+
+#[must_use]
+pub fn choose_weighted_spawner(spawners: &[Spawner]) -> Option<&Spawner> {
+    if spawners.is_empty() {
+        return None;
+    }
+    if spawners.len() == 1 {
+        return Some(&spawners[0]);
+    }
+    let total_weight: u32 = spawners.iter().map(|s| get_spawner_weight(s.r#type)).sum();
+    if total_weight == 0 {
+        return spawners.choose(&mut rng());
+    }
+    let mut roll = rng().random_range(0..total_weight);
+    for spawner in spawners {
+        let w = get_spawner_weight(spawner.r#type);
+        if roll < w {
+            return Some(spawner);
+        }
+        roll -= w;
+    }
+    spawners.last()
+}
+
 #[must_use]
 pub fn can_spawn_mob_at(
     world: &World,
@@ -941,6 +1037,21 @@ pub fn can_spawn_mob_at(
     spawner_type: &'static str,
     pos: &BlockPos,
 ) -> bool {
+    let target = spawner_type
+        .strip_prefix("minecraft:")
+        .unwrap_or(spawner_type);
+
+    if world.dimension == Dimension::THE_NETHER && category == &MobCategory::MONSTER {
+        let below = pos.down();
+        let below_block = world.get_block(&below);
+        if below_block == &Block::NETHER_BRICKS || below_block == &Block::RED_NETHER_BRICKS {
+            return FORTRESS_ENEMIES.iter().any(|s| {
+                let name = s.r#type.strip_prefix("minecraft:").unwrap_or(s.r#type);
+                name == target
+            });
+        }
+    }
+
     let biome = world.level.get_rough_biome(pos);
     let spawners = match category.id {
         id if id == MobCategory::MONSTER.id => biome.spawners.monster,
@@ -955,9 +1066,6 @@ pub fn can_spawn_mob_at(
         id if id == MobCategory::MISC.id => biome.spawners.misc,
         _ => biome.spawners.misc,
     };
-    let target = spawner_type
-        .strip_prefix("minecraft:")
-        .unwrap_or(spawner_type);
     spawners.iter().any(|s| {
         let name = s.r#type.strip_prefix("minecraft:").unwrap_or(s.r#type);
         name == target
@@ -970,6 +1078,14 @@ pub fn get_random_spawn_mob_at(
     category: &'static MobCategory,
     block_pos: &BlockPos,
 ) -> Option<&'static Spawner> {
+    if world.dimension == Dimension::THE_NETHER && category == &MobCategory::MONSTER {
+        let below = block_pos.down();
+        let below_block = world.get_block(&below);
+        if below_block == &Block::NETHER_BRICKS || below_block == &Block::RED_NETHER_BRICKS {
+            return choose_weighted_spawner(FORTRESS_ENEMIES);
+        }
+    }
+
     let biome = world.level.get_rough_biome(block_pos);
     if category == &MobCategory::WATER_AMBIENT
         && biome.has_tag(&MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS)
@@ -977,7 +1093,7 @@ pub fn get_random_spawn_mob_at(
     {
         None
     } else {
-        match category.id {
+        let spawners = match category.id {
             id if id == MobCategory::MONSTER.id => biome.spawners.monster,
             id if id == MobCategory::CREATURE.id => biome.spawners.creature,
             id if id == MobCategory::AMBIENT.id => biome.spawners.ambient,
@@ -989,8 +1105,8 @@ pub fn get_random_spawn_mob_at(
             id if id == MobCategory::WATER_AMBIENT.id => biome.spawners.water_ambient,
             id if id == MobCategory::MISC.id => biome.spawners.misc,
             _ => biome.spawners.misc,
-        }
-        .choose(&mut rng())
+        };
+        choose_weighted_spawner(spawners)
     }
 }
 
@@ -1206,6 +1322,66 @@ mod tests {
         assert!(!change.is_nan());
         assert!(change > 0.0);
         assert!(change < 1.0);
+    }
+
+    #[test]
+    fn test_weighted_spawner_selection() {
+        let spawners = [
+            Spawner {
+                r#type: "minecraft:zombie",
+                min_count: 4,
+                max_count: 4,
+            },
+            Spawner {
+                r#type: "minecraft:witch",
+                min_count: 1,
+                max_count: 1,
+            },
+        ];
+
+        let zombie_weight = get_spawner_weight("minecraft:zombie");
+        let witch_weight = get_spawner_weight("minecraft:witch");
+        assert_eq!(zombie_weight, 100);
+        assert_eq!(witch_weight, 5);
+        assert!(zombie_weight > witch_weight * 10);
+
+        let mut zombie_count = 0;
+        let mut witch_count = 0;
+        for _ in 0..1000 {
+            let chosen = choose_weighted_spawner(&spawners).expect("Must choose a spawner");
+            if chosen.r#type == "minecraft:zombie" {
+                zombie_count += 1;
+            } else if chosen.r#type == "minecraft:witch" {
+                witch_count += 1;
+            }
+        }
+        // In 1000 trials with weights 100 vs 5 (~95.2% vs ~4.8%), zombie should heavily dominate
+        assert!(zombie_count > 800, "Zombie should spawn in vast majority: {zombie_count}");
+        assert!(witch_count > 0, "Witch should occasionally spawn: {witch_count}");
+    }
+
+    #[test]
+    fn test_fortress_enemies_table_parity() {
+        assert_eq!(FORTRESS_ENEMIES.len(), 5);
+        let names: Vec<&str> = FORTRESS_ENEMIES.iter().map(|s| s.r#type).collect();
+        assert!(names.contains(&"minecraft:blaze"));
+        assert!(names.contains(&"minecraft:wither_skeleton"));
+        assert!(names.contains(&"minecraft:zombified_piglin"));
+        assert!(names.contains(&"minecraft:magma_cube"));
+        assert!(names.contains(&"minecraft:skeleton"));
+
+        for spawner in FORTRESS_ENEMIES {
+            assert!(get_spawner_weight(spawner.r#type) > 0);
+        }
+    }
+
+    #[test]
+    fn test_nether_bricks_floor_allows_fortress_spawns() {
+        assert!(is_valid_spawn_floor(Block::NETHER_BRICKS.default_state, &EntityType::BLAZE));
+        assert!(is_valid_spawn_floor(Block::NETHER_BRICKS.default_state, &EntityType::WITHER_SKELETON));
+        assert!(is_valid_spawn_floor(Block::NETHER_BRICKS.default_state, &EntityType::ZOMBIFIED_PIGLIN));
+        assert!(is_valid_spawn_floor(Block::NETHER_BRICKS.default_state, &EntityType::MAGMA_CUBE));
+        assert!(is_valid_spawn_floor(Block::NETHER_BRICKS.default_state, &EntityType::SKELETON));
     }
 }
 

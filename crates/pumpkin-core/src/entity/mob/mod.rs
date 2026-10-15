@@ -93,6 +93,7 @@ pub struct MobEntity {
     pub breeding_cooldown: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
     pub persistence_required: AtomicBool,
+    pub no_action_time: AtomicI32,
     pending_riders: std::sync::Mutex<Vec<Arc<dyn EntityBase>>>,
     mob_flags: AtomicU8,
 }
@@ -180,6 +181,7 @@ impl MobEntity {
             breeding_cooldown: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
             persistence_required: AtomicBool::new(false),
+            no_action_time: AtomicI32::new(0),
             pending_riders: std::sync::Mutex::new(Vec::new()),
             mob_flags: AtomicU8::new(0),
         }
@@ -237,6 +239,7 @@ impl MobEntity {
 
     /// Vanilla `Mob.serverAiStep`: sensing, goals, navigation and controls.
     pub fn server_ai_step(&self, mob: &dyn Mob, caller: &dyn EntityBase) {
+        self.no_action_time.fetch_add(1, Relaxed);
         let age = self.living_entity.entity.age.load(Relaxed);
         let entity_id = self.living_entity.entity.entity_id;
 
@@ -557,12 +560,11 @@ impl MobEntity {
         }
 
         let current_brightness = if is_thundering {
-            (sky_light - 10).max(block_light)
+            world.get_raw_brightness(pos, 10)
         } else {
-            sky_light.max(block_light)
+            world.get_max_local_raw_brightness(pos)
         };
 
-        // TODO
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
         current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
     }
@@ -739,8 +741,16 @@ impl MobEntity {
 
     pub fn check_despawn(&self, mob: &dyn Mob) {
         let entity = &self.living_entity.entity;
+        let world = entity.world.load();
 
-        if self.persistence_required.load(Relaxed) {
+        if world.level_info.load().difficulty == Difficulty::Peaceful
+            && entity.entity_type.category == &pumpkin_data::entity::MobCategory::MONSTER
+        {
+            mob.get_entity().remove();
+            return;
+        }
+
+        if self.persistence_required.load(Relaxed) || mob.requires_custom_persistence() {
             return;
         }
 
@@ -748,7 +758,6 @@ impl MobEntity {
             return;
         }
 
-        let world = entity.world.load();
         let pos = entity.pos.load();
         let players = world.players.load();
 
@@ -764,23 +773,29 @@ impl MobEntity {
             })
             .fold(f64::MAX, f64::min);
 
-        // Mobs like a converting zombie villager refuse to despawn (`removeWhenFarAway`).
-        if !mob.remove_when_far_away(nearest_dist_sq) {
-            return;
-        }
-
+        // If no non-spectator players are in the world, do not despawn.
         if nearest_dist_sq == f64::MAX {
+            return;
+        }
+
+        let despawn_dist = f64::from(entity.entity_type.category.despawn_distance);
+        let despawn_dist_sq = despawn_dist * despawn_dist;
+        if nearest_dist_sq > despawn_dist_sq && mob.remove_when_far_away(nearest_dist_sq) {
             mob.get_entity().remove();
             return;
         }
 
-        if nearest_dist_sq > 128.0 * 128.0 {
+        let no_despawn_dist = f64::from(pumpkin_data::entity::MobCategory::NO_DESPAWN_DISTANCE);
+        let no_despawn_dist_sq = no_despawn_dist * no_despawn_dist;
+        let no_action_time = self.no_action_time.load(Relaxed);
+        if no_action_time > 600
+            && rand::random::<i32>().wrapping_abs() % 800 == 0
+            && nearest_dist_sq > no_despawn_dist_sq
+            && mob.remove_when_far_away(nearest_dist_sq)
+        {
             mob.get_entity().remove();
-            return;
-        }
-
-        if nearest_dist_sq > 32.0 * 32.0 && rand::random::<i32>().wrapping_abs() % 800 == 0 {
-            mob.get_entity().remove();
+        } else if nearest_dist_sq < no_despawn_dist_sq {
+            self.no_action_time.store(0, Relaxed);
         }
     }
 }
@@ -822,7 +837,7 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn requires_custom_persistence(&self) -> bool {
-        false
+        self.get_entity().is_passenger()
     }
 
     /// Whether daylight burns this mob. Default: entity tag `burn_in_daylight`.
