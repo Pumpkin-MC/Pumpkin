@@ -18,10 +18,7 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            stronghold::{
-                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
-                StrongholdPieceType,
-            },
+            stronghold::{EntranceType, StoneBrickRandomizer, StrongholdPiece},
         },
     },
 };
@@ -75,20 +72,6 @@ impl StructurePieceBase for PortalRoomPiece {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.piece.piece
-    }
-
-    fn fill_openings(
-        &self,
-        _start: &StructurePiece,
-        _random: &mut RandomGenerator,
-        _weights: &mut Vec<PieceWeight>,
-        _last_piece_type: &mut Option<StrongholdPieceType>,
-        has_portal_room: &mut bool,
-
-        _collector: &mut StructurePiecesCollector,
-        _pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        *has_portal_room = true;
     }
 
     #[allow(clippy::too_many_lines)]
