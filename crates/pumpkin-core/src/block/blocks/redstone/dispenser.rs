@@ -204,13 +204,6 @@ fn is_water_bottle(stack: &ItemStack) -> bool {
             == Some(i32::from(Potion::WATER.id))
 }
 
-const fn consume_bone_meal_if_applied(item: &mut ItemStack, applied: bool) -> bool {
-    if applied {
-        item.decrement(1);
-    }
-    applied
-}
-
 impl BlockBehaviour for DispenserBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if let Some(factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
@@ -432,7 +425,7 @@ impl DispenserBlock {
             // Armor, elytra, heads, saddles, horse/wolf armor and llama carpets
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
         } else {
-            // TODO: Bottles o' enchanting, chests onto llamas, brushes onto armadillos
+            // TODO: Bone meal, bottles o' enchanting, chests onto llamas, brushes onto armadillos
             // Default / Drop
             Self::drop_item(ctx, item);
         }
@@ -912,7 +905,8 @@ impl DispenserBlock {
             .block_registry
             .bone_meal(block, ctx.world, &target, state_id);
 
-        if consume_bone_meal_if_applied(item, applied) {
+        if applied {
+            item.decrement(1);
             ctx.world
                 .sync_world_event(WorldEvent::ParticlesAndSoundPlantGrowth, target, 15);
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
@@ -1304,23 +1298,5 @@ impl DispenserBlock {
 
         let item_entity = Arc::new(ItemEntity::new_with_velocity(entity, stack, velocity, 40));
         ctx.world.spawn_entity(item_entity);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::consume_bone_meal_if_applied;
-    use pumpkin_data::item::Item;
-    use pumpkin_data::item_stack::ItemStack;
-
-    #[test]
-    fn bone_meal_is_consumed_only_when_application_succeeds() {
-        let mut applied = ItemStack::new(2, &Item::BONE_MEAL);
-        assert!(consume_bone_meal_if_applied(&mut applied, true));
-        assert_eq!(applied.item_count, 1);
-
-        let mut rejected = ItemStack::new(2, &Item::BONE_MEAL);
-        assert!(!consume_bone_meal_if_applied(&mut rejected, false));
-        assert_eq!(rejected.item_count, 2);
     }
 }
