@@ -24,7 +24,7 @@ impl<W: AsyncWrite + Unpin> EncryptionWriter<W> {
         match self {
             Self::None(stream) => {
                 Self::Encrypt(Box::new(StreamEncryptor::new(cipher, stream.into_inner())))
-            },
+            }
             Self::Encrypt(_) => self,
         }
     }
