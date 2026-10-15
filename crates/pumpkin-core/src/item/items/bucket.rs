@@ -273,7 +273,7 @@ fn try_place_water_in_container(
     }
 
     // Vanilla ignores placeLiquid's result: bucket use succeeds for kelp and full containers.
-    world.block_registry.place_liquid(PlaceLiquidArgs {
+    let _ = world.block_registry.place_liquid(PlaceLiquidArgs {
         world,
         block,
         state_id: state.id,
@@ -295,10 +295,10 @@ pub(crate) fn try_place_filled_bucket(
         return try_place_powder_snow(world, pos, direction);
     }
 
-    let fluid = if item.id == Item::LAVA_BUCKET.id {
-        &Fluid::LAVA
+    let (fluid, fluid_block) = if item.id == Item::LAVA_BUCKET.id {
+        (&Fluid::LAVA, &Block::LAVA)
     } else {
-        &Fluid::WATER
+        (&Fluid::WATER, &Block::WATER)
     };
     if fluid == &Fluid::WATER
         && !player.is_some_and(|player| player.get_entity().is_sneaking())
@@ -330,11 +330,7 @@ pub(crate) fn try_place_filled_bucket(
         }
         world.set_block_state(
             &target_pos,
-            if item.id == Item::LAVA_BUCKET.id {
-                Block::LAVA.default_state.id
-            } else {
-                Block::WATER.default_state.id
-            },
+            fluid_block.default_state.id,
             BlockFlags::NOTIFY_ALL,
         );
         return Some(target_pos);

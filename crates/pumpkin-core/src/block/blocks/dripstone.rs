@@ -89,6 +89,7 @@ impl BlockBehaviour for DripstoneBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        crate::block::schedule_water_tick_if_waterlogged(&args);
         if !can_place_at_pos(args.world, args.position, None, None) {
             return Block::AIR.default_state.id;
         }

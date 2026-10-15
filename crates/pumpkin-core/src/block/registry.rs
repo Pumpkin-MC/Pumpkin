@@ -1347,18 +1347,19 @@ impl BlockRegistry {
         neighbor_location: &BlockPos,
         neighbor_state_id: BlockStateId,
     ) -> BlockStateId {
-        let pumpkin_block = self.get_pumpkin_block(block.id);
-        if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block.get_state_for_neighbor_update(GetStateForNeighborUpdateArgs {
-                world,
-                block,
-                state_id,
-                position,
-                direction,
-                neighbor_position: neighbor_location,
-                neighbor_state_id,
-            });
+        let args = GetStateForNeighborUpdateArgs {
+            world,
+            block,
+            state_id,
+            position,
+            direction,
+            neighbor_position: neighbor_location,
+            neighbor_state_id,
+        };
+        if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
+            return pumpkin_block.get_state_for_neighbor_update(args);
         }
+        super::schedule_water_tick_if_waterlogged(&args);
         state_id
     }
 
@@ -1570,6 +1571,7 @@ impl BlockRegistry {
     }
 
     /// Removes fluid from the block and returns the filled bucket item for the caller to give.
+    #[must_use]
     pub fn pickup_fluid(&self, args: PickupFluidArgs<'_>) -> Option<&'static Item> {
         if let Some(pumpkin_block) = self.get_pumpkin_block(args.block.id) {
             pumpkin_block.pickup_fluid(args)
@@ -1578,6 +1580,7 @@ impl BlockRegistry {
         }
     }
 
+    #[must_use]
     pub fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
         if let Some(pumpkin_block) = self.get_pumpkin_block(args.block.id) {
             pumpkin_block.place_liquid(args)

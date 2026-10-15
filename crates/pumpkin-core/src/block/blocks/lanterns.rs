@@ -35,6 +35,7 @@ impl BlockBehaviour for LanternBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        crate::block::schedule_water_tick_if_waterlogged(&args);
         if !can_place_at(args.world, args.position) {
             args.world
                 .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);

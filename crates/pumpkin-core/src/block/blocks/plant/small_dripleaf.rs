@@ -37,6 +37,7 @@ impl BlockBehaviour for SmallDripleafBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        crate::block::schedule_water_tick_if_waterlogged(&args);
         <Self as PlantBlockBase>::get_state_for_neighbor_update(
             self,
             args.world,

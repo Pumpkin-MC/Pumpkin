@@ -52,18 +52,41 @@ fn place_liquid(args: PlaceLiquidArgs<'_>) -> bool {
     true
 }
 
-/// Clears waterlogging, schedules a water tick, and returns the water bucket item. (Java’s BucketPickup.pickupBlock)
+/// Removes contained water, breaks unsupported blocks, and returns a water bucket.
 fn pickup_fluid(args: PickupFluidArgs<'_>) -> Option<&'static Item> {
     let state_id = args.block.set_waterlogged(args.state_id, false)?;
     args.world
-        .set_block_state(args.position, state_id, BlockFlags::NOTIFY_ALL);
-    args.world.schedule_fluid_tick(
-        &Fluid::WATER,
-        *args.position,
-        Fluid::WATER.flow_speed as u8,
-        TickPriority::Normal,
-    );
+        .set_block_state_if(args.position, state_id, BlockFlags::NOTIFY_ALL, |current| {
+            current == args.state_id
+        })?;
+    // SimpleWaterloggedBlock.pickupBlock checks the original state after draining.
+    if !args.world.block_registry.can_place_at(
+        None,
+        Some(args.world),
+        args.world.as_ref(),
+        None,
+        args.block,
+        args.state_id.to_state(),
+        args.position,
+        None,
+        None,
+    ) {
+        args.world
+            .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
+    }
     Some(&Item::WATER_BUCKET)
+}
+
+// Shared water-tick side effect of waterlogged updateShape implementations.
+fn schedule_water_tick_if_waterlogged(args: &GetStateForNeighborUpdateArgs<'_>) {
+    if args.state_id.is_waterlogged() {
+        args.world.schedule_fluid_tick(
+            &Fluid::WATER,
+            *args.position,
+            Fluid::WATER.flow_speed as u8,
+            TickPriority::Normal,
+        );
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -221,6 +244,7 @@ pub trait BlockBehaviour: Send + Sync {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        schedule_water_tick_if_waterlogged(&args);
         args.state_id
     }
 
@@ -397,6 +421,7 @@ pub struct CanPlaceLiquidArgs<'a> {
     pub fluid: &'a Fluid,
 }
 
+#[derive(Clone, Copy)]
 pub struct PlaceLiquidArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
@@ -405,6 +430,7 @@ pub struct PlaceLiquidArgs<'a> {
     pub fluid: &'a Fluid,
 }
 
+#[derive(Clone, Copy)]
 pub struct PickupFluidArgs<'a> {
     pub player: Option<&'a Player>,
     pub world: &'a Arc<World>,

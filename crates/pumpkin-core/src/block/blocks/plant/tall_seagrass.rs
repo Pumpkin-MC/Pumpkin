@@ -5,7 +5,6 @@ use pumpkin_world::world::BlockAccessor;
 
 use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, CanPlaceLiquidArgs, GetStateForNeighborUpdateArgs,
-    PlaceLiquidArgs,
     blocks::plant::{PlantBlockBase, seagrass::supports_seagrass},
 };
 #[pumpkin_block("minecraft:tall_seagrass")]
@@ -16,10 +15,6 @@ impl BlockBehaviour for TallSeaGrassBlock {
     }
 
     fn can_place_liquid(&self, _args: CanPlaceLiquidArgs<'_>) -> bool {
-        false
-    }
-
-    fn place_liquid(&self, _args: PlaceLiquidArgs<'_>) -> bool {
         false
     }
 

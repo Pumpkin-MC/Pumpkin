@@ -31,6 +31,7 @@ impl BlockBehaviour for WallBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        crate::block::schedule_water_tick_if_waterlogged(&args);
         let wall_props = WallProperties::from_state_id(args.state_id);
         compute_wall_state(wall_props, args.world, args.block, args.position)
     }

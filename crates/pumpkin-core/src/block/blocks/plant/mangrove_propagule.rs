@@ -106,6 +106,7 @@ impl BlockBehaviour for MangrovePropaguleBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        crate::block::schedule_water_tick_if_waterlogged(&args);
         let props = MangrovePropaguleLikeProperties::from_state_id(args.state_id);
         if !Self::can_survive(args.world, args.position, &props) {
             return Block::AIR.default_state.id;

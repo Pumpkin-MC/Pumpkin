@@ -97,12 +97,16 @@ impl BlockBehaviour for BigDripleafBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+        let state_id = <Self as PlantBlockBase>::get_state_for_neighbor_update(
             self,
             args.world,
             args.position,
             args.state_id,
-        )
+        );
+        if args.direction != pumpkin_data::BlockDirection::Down || state_id == args.state_id {
+            crate::block::schedule_water_tick_if_waterlogged(&args);
+        }
+        state_id
     }
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         {

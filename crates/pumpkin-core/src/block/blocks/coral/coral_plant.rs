@@ -59,11 +59,18 @@ impl BlockBehaviour for CoralPlantBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        let is_dead = is_dead_coral(args.block);
+        if is_dead {
+            crate::block::schedule_water_tick_if_waterlogged(&args);
+        }
         if args.direction == BlockDirection::Down {
             let support_block = args.world.get_block_state(&args.position.down());
             if !support_block.is_center_solid(BlockDirection::Up) {
                 return BlockStateId::AIR;
             }
+        }
+        if !is_dead {
+            crate::block::schedule_water_tick_if_waterlogged(&args);
         }
         args.state_id
     }

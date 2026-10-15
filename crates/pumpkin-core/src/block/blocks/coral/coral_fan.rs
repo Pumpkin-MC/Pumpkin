@@ -145,6 +145,10 @@ impl BlockBehaviour for CoralFanBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        let is_dead = is_dead_coral(args.block);
+        if is_dead {
+            crate::block::schedule_water_tick_if_waterlogged(&args);
+        }
         if is_wall_fan(args.block) {
             let props = CoralWallFanLikeProperties::from_state_id(args.state_id);
             if props.facing.to_block_direction().opposite() == args.direction
@@ -159,6 +163,9 @@ impl BlockBehaviour for CoralFanBlock {
             }
         }
 
+        if !is_dead {
+            crate::block::schedule_water_tick_if_waterlogged(&args);
+        }
         args.state_id
     }
 }
