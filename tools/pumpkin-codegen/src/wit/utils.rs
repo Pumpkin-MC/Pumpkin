@@ -29,7 +29,8 @@ pub fn map_type(ty: &Type, defined_types: &HashSet<String>) -> Result<WitType, (
                 "u16" | "i16" => Ok(WitType::S32),
                 "Bytes" | "BoxedU8Slice" | "ChunkData" => Ok(WitType::list(WitType::U8)),
                 "BitSet" | "Bitset" => Ok(WitType::list(WitType::S64)),
-                "NbtCompound" | "Nbt" | "DynamicRecipe" => Ok(WitType::String),
+                "NbtCompound" | "Nbt" => Ok(WitType::Named("nbt-tree".into())),
+                "DynamicRecipe" => Ok(WitType::String),
                 "Option" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments
                         && let Some(GenericArgument::Type(inner_ty)) = args.args.first()
@@ -400,5 +401,30 @@ impl Iterator for RustFilesFinder {
             }
         }
         None
+    }
+}
+
+/// Extracts doc comment lines from a slice of syn attributes, if any.
+pub fn extract_doc_comments(attrs: &[syn::Attribute]) -> Option<String> {
+    let mut lines = Vec::new();
+    for attr in attrs {
+        if attr.path().is_ident("doc") {
+            if let syn::Meta::NameValue(meta) = &attr.meta {
+                if let syn::Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Str(lit_str),
+                    ..
+                }) = &meta.value
+                {
+                    let val = lit_str.value();
+                    let line = val.strip_prefix(' ').unwrap_or(&val);
+                    lines.push(line.to_string());
+                }
+            }
+        }
+    }
+    if lines.is_empty() {
+        None
+    } else {
+        Some(lines.join("\n"))
     }
 }

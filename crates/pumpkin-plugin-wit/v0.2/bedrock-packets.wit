@@ -1,7 +1,7 @@
 package pumpkin:plugin@0.2.0;
 
 interface bedrock-packets {
-  use common.{ inexpressible-host-type };
+  use common.{ inexpressible-host-type, nbt-tree };
   use uuid.{ uuid };
   record s-actor-event {
     target-runtime-id: s64,
@@ -779,7 +779,7 @@ interface bedrock-packets {
   }
   record c-block-actor-data {
     block-position: tuple<s32, s32, s32>,
-    actor-data-tags: string,
+    actor-data-tags: nbt-tree,
   }
   record c-block-event {
     block-position: tuple<s32, s32, s32>,
@@ -1338,7 +1338,7 @@ interface bedrock-packets {
     server-authoritative-block-breaking: bool,
     current-level-time: s64,
     enchantment-seed: s32,
-    block-properties-size: s32,
+    block-properties: list<block-property>,
     multiplayer-correlation-id: string,
     enable-itemstack-net-manager: bool,
     server-version: string,
@@ -1452,11 +1452,9 @@ interface bedrock-packets {
     friends-of-friends,
     public,
   }
-  record gg {
+  record block-property {
     name: string,
-    id: u8,
-    len: s32,
-    end: u8,
+    properties: nbt-tree,
   }
   record c-take-item-actor {
     item-runtime-id: s64,
@@ -1532,14 +1530,14 @@ interface bedrock-packets {
     display-name: string,
     use-new-trade-screen: bool,
     using-economy-trade: bool,
-    data: string,
+    data: nbt-tree,
   }
   record network-item-descriptor {
     id: s32,
     stack-size: s32,
     aux-value: s32,
     block-runtime-id: s32,
-    nbt-data: string,
+    nbt-data: nbt-tree,
     place-on-blocks: list<string>,
     destroy-blocks: list<string>,
     shield-blocking-tick: s64,
@@ -1549,7 +1547,7 @@ interface bedrock-packets {
     stack-size: s32,
     aux-value: s32,
     block-runtime-id: s32,
-    nbt-data: string,
+    nbt-data: nbt-tree,
     place-on-blocks: list<string>,
     destroy-blocks: list<string>,
     shield-blocking-tick: s64,

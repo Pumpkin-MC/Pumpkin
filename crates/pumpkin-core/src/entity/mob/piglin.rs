@@ -429,7 +429,10 @@ impl PiglinEntity {
 
     fn hold_in_off_hand(&self, item: ItemStack) {
         if self.is_holding_item_in_off_hand() {
-            self.mob_entity.spawn_at_location(self.off_hand_item());
+            self.mob_entity
+                .living_entity
+                .entity
+                .spawn_at_location(self.off_hand_item());
         }
         let keep_loaded = !PiglinAi::is_barter_currency(&item);
         *self
@@ -551,12 +554,13 @@ impl PiglinEntity {
                 .map(|(_, candidate)| candidate)
                 .find(|candidate| {
                     world
-                        .raycast(
+                        .clip(&pumpkin_world::clip::ClipContext::new(
                             eye_pos,
                             candidate.get_entity().get_eye_pos(),
-                            |block_pos, w| w.get_block_state(block_pos).is_solid(),
-                        )
-                        .is_none()
+                            pumpkin_world::clip::ClipBlock::Visual,
+                            pumpkin_world::clip::ClipFluid::None,
+                        ))
+                        .is_miss
                 })
         } else {
             None
@@ -896,7 +900,10 @@ impl PiglinEntity {
 
     pub fn cancel_admiring(&self) {
         if self.is_admiring() && self.is_holding_item_in_off_hand() {
-            self.mob_entity.spawn_at_location(self.off_hand_item());
+            self.mob_entity
+                .living_entity
+                .entity
+                .spawn_at_location(self.off_hand_item());
             self.mob_entity
                 .set_item_slot(&EquipmentSlot::OFF_HAND, ItemStack::EMPTY.clone());
             self.admiring_item

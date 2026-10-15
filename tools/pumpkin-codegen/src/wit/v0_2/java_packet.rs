@@ -1,6 +1,6 @@
 use crate::wit::utils::{
-    RustFilesFinder, collect_fields, is_valid_helper_enum, is_valid_helper_struct,
-    process_helper_enum, process_helper_struct, translate_enum_to_wit,
+    RustFilesFinder, collect_fields, extract_doc_comments, is_valid_helper_enum,
+    is_valid_helper_struct, process_helper_enum, process_helper_struct, translate_enum_to_wit,
 };
 use heck::ToKebabCase;
 use semver::Version;
@@ -29,6 +29,7 @@ pub fn build() -> String {
 
     interface.use_type("common", "inexpressible-host-type", None);
     interface.use_type("uuid", "uuid", None);
+    interface.use_type("common", "nbt-tree", None);
 
     let mut serverbound_variant = Variant::empty();
     let mut clientbound_variant = Variant::empty();

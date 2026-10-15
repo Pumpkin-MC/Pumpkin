@@ -76,7 +76,7 @@ pub const fn from_wit_screen(screen: WitScreen) -> WindowType {
 impl gui::Host for PluginHostState {}
 
 impl gui::HostGui for PluginHostState {
-    async fn new(
+    fn new(
         &mut self,
         screen: WitScreen,
         title: Resource<crate::pumpkin::plugin::text::TextComponent>,
@@ -229,7 +229,7 @@ impl gui::HostGui for PluginHostState {
         Ok(gui.allow_put_items)
     }
 
-    async fn drop(&mut self, rep: Resource<Gui>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<Gui>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
 }
