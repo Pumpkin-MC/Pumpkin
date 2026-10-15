@@ -132,10 +132,12 @@ impl PendingConnection {
         let crypt_key: [u8; 16] = shared_secret
             .try_into()
             .map_err(|_| EncryptionError::SharedWrongLength)?;
-        self.network_reader
+        // Validate and switch the writer first: it may reject a transition while
+        // unencrypted bytes are still buffered. The reader must remain untouched.
+        self.network_writer
             .set_encryption(&crypt_key)
             .map_err(|_| EncryptionError::AlreadyEncrypted)?;
-        self.network_writer
+        self.network_reader
             .set_encryption(&crypt_key)
             .map_err(|_| EncryptionError::AlreadyEncrypted)?;
         Ok(())
