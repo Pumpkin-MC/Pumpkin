@@ -141,18 +141,14 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
     pub fn set_encryption(&mut self, key: &[u8; 16]) -> Result<(), PacketEncodeError> {
         if matches!(self.writer, Some(EncryptionWriter::Encrypt(_))) {
-            return Err(PacketEncodeError::Message(
-                "Encryption already enabled".into(),
-            ));
+            return Err(PacketEncodeError::EncryptionAlreadyEnabled);
         }
         // The unencrypted buffer must be drained before changing the wire cipher.
         // Otherwise its plaintext could be discarded or sent after encryption starts.
         if let Some(EncryptionWriter::Buffered(writer)) = self.writer.as_ref()
             && !writer.buffer().is_empty()
         {
-            return Err(PacketEncodeError::Message(
-                "Flush pending unencrypted bytes before enabling encryption".into(),
-            ));
+            return Err(PacketEncodeError::UnflushedPlaintext);
         }
         let cipher = Aes128Cfb8Enc::new_from_slices(key, key)
             .map_err(|_| PacketEncodeError::Message("Invalid key".into()))?;
@@ -843,8 +839,15 @@ mod tests {
             .write_packet(Bytes::from_static(&[1, 2, 3]))
             .await
             .unwrap();
-        assert!(encoder.set_encryption(&[0x12; 16]).is_err());
+        assert!(matches!(
+            encoder.set_encryption(&[0x12; 16]),
+            Err(PacketEncodeError::UnflushedPlaintext)
+        ));
         encoder.flush().await.unwrap();
         assert!(encoder.set_encryption(&[0x12; 16]).is_ok());
+        assert!(matches!(
+            encoder.set_encryption(&[0x12; 16]),
+            Err(PacketEncodeError::EncryptionAlreadyEnabled)
+        ));
     }
 }

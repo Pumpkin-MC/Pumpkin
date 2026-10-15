@@ -313,6 +313,10 @@ pub trait BServerPacket: Packet + Sized {
 /// Errors that can occur during packet encoding.
 #[derive(Error, Debug)]
 pub enum PacketEncodeError {
+    #[error("encryption is already enabled")]
+    EncryptionAlreadyEnabled,
+    #[error("flush pending unencrypted bytes before enabling encryption")]
+    UnflushedPlaintext,
     #[error("Packet exceeds maximum length: {0}")]
     TooLong(usize),
     #[error("Compression failed {0}")]
