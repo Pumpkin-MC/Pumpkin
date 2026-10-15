@@ -63,6 +63,7 @@ impl Cylindrical {
     }
 
     /// Returns an iterator of all chunks within this cylinder using the precomputed LUT
+    #[must_use]
     #[inline]
     pub fn all_chunks_within(self) -> impl ExactSizeIterator<Item = Vector2<i32>> {
         let offsets = Self::get_offsets(self.view_distance.get());
