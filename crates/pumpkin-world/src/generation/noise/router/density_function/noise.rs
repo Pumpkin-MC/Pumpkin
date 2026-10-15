@@ -1,21 +1,28 @@
-use std::array;
-
 use pumpkin_data::noise_router::{InterpolatedNoiseSamplerData, NoiseData, ShiftedNoiseData};
 use pumpkin_util::{
-    math::{clamped_lerp, vector3::Vector3},
-    noise::perlin::OctavePerlinNoiseSampler,
+    math::{lerp, vector3::Vector3},
+    noise::perlin::{Layer, Noise as _, NoiseStack, SmearedPerlinNoise},
     random::RandomImpl,
 };
 
 use crate::generation::{
     noise::perlin::DoublePerlinNoiseSampler,
     noise::router::{
-        chunk_density_function::ChunkNoiseFunctionSampleOptions,
         chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
+        density_volume::{DensityBuffer, DensityVolume},
     },
 };
 
 use super::{NoiseFunctionComponentRange, StaticIndependentChunkNoiseFunctionComponentImpl};
+
+const SHIFT_COORDINATE_FACTOR: f64 = 0.25;
+const SHIFT_VALUE_FACTOR: f32 = 4.0;
+const BLENDED_BASE_SCALE: f64 = 684.412;
+const BLENDED_LIMIT_FACTOR: f64 = 0.999_984_74f32 as f64;
+const BLENDED_MAIN_FACTOR: f64 = 12.75;
+const BLENDED_LIMIT_FIRST_OCTAVE: i32 = -15;
+const BLENDED_MAIN_FIRST_OCTAVE: i32 = -7;
+const SMEARED_RANGE_BASE: f64 = 2.0;
 
 pub struct Noise {
     sampler: DoublePerlinNoiseSampler,
@@ -43,16 +50,17 @@ impl NoiseFunctionComponentRange for Noise {
 impl StaticIndependentChunkNoiseFunctionComponentImpl for Noise {
     fn sample(&self, pos: &Vector3<i32>) -> f32 {
         self.sampler.sample(
-            pos.x as f32 * self.data.xz_scale,
-            pos.y as f32 * self.data.y_scale,
-            pos.z as f32 * self.data.xz_scale,
+            f64::from(pos.x) * self.data.xz_scale,
+            f64::from(pos.y) * self.data.y_scale,
+            f64::from(pos.z) * self.data.xz_scale,
         )
     }
-}
 
-#[inline]
-fn shift_sample_3d(sampler: &DoublePerlinNoiseSampler, x: f32, y: f32, z: f32) -> f32 {
-    sampler.sample(x * 0.25f32, y * 0.25f32, z * 0.25f32) * 4f32
+    fn sample_volume(&self, buffer: &mut [f32], volume: &DensityVolume) {
+        buffer.fill(0.0);
+        self.sampler
+            .add_to_volume(buffer, volume, self.data.xz_scale, self.data.y_scale, 1.0);
+    }
 }
 
 pub struct ShiftA {
@@ -73,13 +81,26 @@ impl NoiseFunctionComponentRange for ShiftA {
 
     #[inline]
     fn max(&self) -> f32 {
-        self.sampler.max_value() * 4.0
+        self.sampler.max_value() * SHIFT_VALUE_FACTOR
     }
 }
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for ShiftA {
     fn sample(&self, pos: &Vector3<i32>) -> f32 {
-        shift_sample_3d(&self.sampler, pos.x as f32, 0.0, pos.z as f32)
+        self.sampler.sample(
+            f64::from(pos.x) * SHIFT_COORDINATE_FACTOR,
+            f64::from(pos.y) * 0.0,
+            f64::from(pos.z) * SHIFT_COORDINATE_FACTOR,
+        ) * SHIFT_VALUE_FACTOR
+    }
+
+    fn sample_volume(&self, buffer: &mut [f32], volume: &DensityVolume) {
+        buffer.fill(0.0);
+        self.sampler
+            .add_to_volume(buffer, volume, SHIFT_COORDINATE_FACTOR, 0.0, 1.0);
+        for value in buffer.iter_mut() {
+            *value *= SHIFT_VALUE_FACTOR;
+        }
     }
 }
 
@@ -101,13 +122,47 @@ impl NoiseFunctionComponentRange for ShiftB {
 
     #[inline]
     fn max(&self) -> f32 {
-        self.sampler.max_value() * 4.0
+        self.sampler.max_value() * SHIFT_VALUE_FACTOR
     }
 }
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for ShiftB {
     fn sample(&self, pos: &Vector3<i32>) -> f32 {
-        shift_sample_3d(&self.sampler, pos.z as f32, pos.x as f32, 0.0)
+        self.sampler.sample(
+            f64::from(pos.z) * SHIFT_COORDINATE_FACTOR,
+            f64::from(pos.x) * SHIFT_COORDINATE_FACTOR,
+            0.0,
+        ) * SHIFT_VALUE_FACTOR
+    }
+
+    fn sample_volume(&self, buffer: &mut [f32], volume: &DensityVolume) {
+        let transposed = DensityVolume::new(
+            volume.size_z,
+            volume.size_x,
+            1,
+            volume.min_block_z,
+            volume.min_block_x,
+            0,
+            volume.step_block_z,
+            volume.step_block_x,
+            1,
+        );
+        let mut columns = DensityBuffer::acquire(&transposed);
+        columns.fill(0.0);
+        self.sampler.add_to_volume(
+            &mut columns,
+            &transposed,
+            SHIFT_COORDINATE_FACTOR,
+            SHIFT_COORDINATE_FACTOR,
+            SHIFT_VALUE_FACTOR,
+        );
+        for z in 0..volume.size_z {
+            for x in 0..volume.size_x {
+                let value = columns[transposed.index_unchecked(z, x, 0)];
+                let index = volume.index_unchecked(x, 0, z);
+                buffer[index..index + volume.size_y].fill(value);
+            }
+        }
     }
 }
 
@@ -128,11 +183,11 @@ impl ShiftedNoise {
         y_shift: f32,
         z_shift: f32,
     ) -> f32 {
-        let translated_x = pos.x as f32 * self.data.xz_scale + x_shift;
-        let translated_y = pos.y as f32 * self.data.y_scale + y_shift;
-        let translated_z = pos.z as f32 * self.data.xz_scale + z_shift;
-        self.sampler
-            .sample(translated_x, translated_y, translated_z)
+        self.sampler.sample(
+            f64::from(pos.x) * self.data.xz_scale + f64::from(x_shift),
+            f64::from(pos.y) * self.data.y_scale + f64::from(y_shift),
+            f64::from(pos.z) * self.data.xz_scale + f64::from(z_shift),
+        )
     }
 }
 
@@ -153,25 +208,61 @@ impl StaticChunkNoiseFunctionComponentImpl for ShiftedNoise {
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
         let x_shift = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_x_index],
             pos,
-            sample_options,
         );
         let y_shift = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_y_index],
             pos,
-            sample_options,
         );
         let z_shift = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_z_index],
             pos,
-            sample_options,
         );
 
         self.sample_with_shifts(pos, x_shift, y_shift, z_shift)
+    }
+
+    fn sample_volume(
+        &self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        buffer: &mut [f32],
+        volume: &DensityVolume,
+    ) {
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.input_x_index],
+            buffer,
+            volume,
+        );
+        let mut y_shifts = DensityBuffer::acquire(volume);
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.input_y_index],
+            &mut y_shifts,
+            volume,
+        );
+        let mut z_shifts = DensityBuffer::acquire(volume);
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.input_z_index],
+            &mut z_shifts,
+            volume,
+        );
+        let mut index = 0;
+        for z in 0..volume.size_z {
+            let base_noise_z = f64::from(volume.block_z(z)) * self.data.xz_scale;
+            for x in 0..volume.size_x {
+                let base_noise_x = f64::from(volume.block_x(x)) * self.data.xz_scale;
+                for y in 0..volume.size_y {
+                    let noise_x = base_noise_x + f64::from(buffer[index]);
+                    let noise_y = f64::from(volume.block_y(y)) * self.data.y_scale
+                        + f64::from(y_shifts[index]);
+                    let noise_z = base_noise_z + f64::from(z_shifts[index]);
+                    buffer[index] = self.sampler.sample(noise_x, noise_y, noise_z);
+                    index += 1;
+                }
+            }
+        }
     }
 }
 
@@ -193,48 +284,96 @@ impl ShiftedNoise {
     }
 }
 
+fn create_fbm(
+    random: &mut impl RandomImpl,
+    first_octave: i32,
+    smear_scale_y: f64,
+    value_factor: f64,
+) -> NoiseStack<SmearedPerlinNoise> {
+    let octaves = -first_octave + 1;
+    let mut factor = 1.0;
+    let mut value_factor = value_factor / (2f64.powi(octaves) - 1.0);
+    let mut layers = Vec::with_capacity(octaves as usize);
+    for _ in (0..octaves).rev() {
+        layers.push(Layer {
+            noise: SmearedPerlinNoise::new(random, smear_scale_y * factor),
+            frequency: factor,
+            amplitude: value_factor as f32,
+        });
+        factor /= 2.0;
+        value_factor *= 2.0;
+    }
+    NoiseStack::new(layers)
+}
+
+fn fbm_range_max(first_octave: i32, smear_scale_y: f64, value_factor: f64) -> f32 {
+    let octaves = -first_octave + 1;
+    let mut factor = 1.0;
+    let mut value_factor = value_factor / (2f64.powi(octaves) - 1.0);
+    let mut range = 0.0f32;
+    for _ in (0..octaves).rev() {
+        let layer_range = ((smear_scale_y * factor).abs() + SMEARED_RANGE_BASE) as f32;
+        range += layer_range * value_factor as f32;
+        factor /= 2.0;
+        value_factor *= 2.0;
+    }
+    range
+}
+
 pub struct InterpolatedNoiseSampler {
-    lower_noise: OctavePerlinNoiseSampler,
-    upper_noise: OctavePerlinNoiseSampler,
-    noise: OctavePerlinNoiseSampler,
-    data: &'static InterpolatedNoiseSamplerData,
-    fractions: [f64; 16],
-    max_value: f32,
+    min_limit_noise: NoiseStack<SmearedPerlinNoise>,
+    max_limit_noise: NoiseStack<SmearedPerlinNoise>,
+    main_noise: NoiseStack<SmearedPerlinNoise>,
+    xz_multiplier: f64,
     y_multiplier: f64,
+    main_xz_multiplier: f64,
+    main_y_multiplier: f64,
+    max_value: f32,
 }
 
 impl InterpolatedNoiseSampler {
     pub fn new(data: &'static InterpolatedNoiseSamplerData, random: &mut impl RandomImpl) -> Self {
-        let big_start = -15;
-        let big_amplitudes = [1.0; 16];
-
-        let little_start = -7;
-        let little_amplitudes = [1.0; 8];
-
-        let lower_noise = OctavePerlinNoiseSampler::new(random, big_start, &big_amplitudes, true);
-        let upper_noise = OctavePerlinNoiseSampler::new(random, big_start, &big_amplitudes, true);
-        let noise = OctavePerlinNoiseSampler::new(random, little_start, &little_amplitudes, true);
-
-        let y_multiplier = (data.scaled_y_scale * data.xz_factor / data.y_factor * 684.412) as f64;
-        let max_value = lower_noise.get_total_amplitude(y_multiplier + 2.0) as f32;
-
-        let fractions = array::from_fn(|index| {
-            let mut o = 1.0;
-            for _ in 0..index {
-                o /= 2.0;
-            }
-            o
-        });
-
+        let xz_multiplier = BLENDED_BASE_SCALE * data.xz_scale;
+        let y_multiplier = BLENDED_BASE_SCALE * data.y_scale;
+        let limit_smear_scale_y = y_multiplier * data.smear_scale_multiplier;
+        let main_smear_scale_y = limit_smear_scale_y / data.y_factor;
+        let min_limit_noise = create_fbm(
+            random,
+            BLENDED_LIMIT_FIRST_OCTAVE,
+            limit_smear_scale_y,
+            BLENDED_LIMIT_FACTOR,
+        );
+        let max_limit_noise = create_fbm(
+            random,
+            BLENDED_LIMIT_FIRST_OCTAVE,
+            limit_smear_scale_y,
+            BLENDED_LIMIT_FACTOR,
+        );
+        let main_noise = create_fbm(
+            random,
+            BLENDED_MAIN_FIRST_OCTAVE,
+            main_smear_scale_y,
+            BLENDED_MAIN_FACTOR,
+        );
         Self {
-            lower_noise,
-            upper_noise,
-            noise,
-            data,
-            fractions,
-            max_value,
+            min_limit_noise,
+            max_limit_noise,
+            main_noise,
+            xz_multiplier,
             y_multiplier,
+            main_xz_multiplier: xz_multiplier / data.xz_factor,
+            main_y_multiplier: y_multiplier / data.y_factor,
+            max_value: fbm_range_max(
+                BLENDED_LIMIT_FIRST_OCTAVE,
+                limit_smear_scale_y,
+                BLENDED_LIMIT_FACTOR,
+            ),
         }
+    }
+
+    #[inline]
+    fn choice(main: f32) -> f32 {
+        (main + 0.5).clamp(0.0, 1.0)
     }
 }
 
@@ -252,93 +391,82 @@ impl NoiseFunctionComponentRange for InterpolatedNoiseSampler {
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for InterpolatedNoiseSampler {
     fn sample(&self, pos: &Vector3<i32>) -> f32 {
-        let xz_multiplier = (self.data.scaled_xz_scale * 684.412) as f64;
+        let x = f64::from(pos.x);
+        let y = f64::from(pos.y);
+        let z = f64::from(pos.z);
+        let alpha = Self::choice(self.main_noise.get(
+            x * self.main_xz_multiplier,
+            y * self.main_y_multiplier,
+            z * self.main_xz_multiplier,
+        ));
+        if alpha == 0.0 {
+            return self.min_limit_noise.get(
+                x * self.xz_multiplier,
+                y * self.y_multiplier,
+                z * self.xz_multiplier,
+            );
+        }
+        if alpha == 1.0 {
+            return self.max_limit_noise.get(
+                x * self.xz_multiplier,
+                y * self.y_multiplier,
+                z * self.xz_multiplier,
+            );
+        }
+        lerp(
+            alpha,
+            self.min_limit_noise.get(
+                x * self.xz_multiplier,
+                y * self.y_multiplier,
+                z * self.xz_multiplier,
+            ),
+            self.max_limit_noise.get(
+                x * self.xz_multiplier,
+                y * self.y_multiplier,
+                z * self.xz_multiplier,
+            ),
+        )
+    }
 
-        let d = pos.x as f64 * xz_multiplier;
-        let e = pos.y as f64 * self.y_multiplier;
-        let f = pos.z as f64 * xz_multiplier;
-
-        let g = d / self.data.xz_factor as f64;
-        let h = e / self.data.y_factor as f64;
-        let i = f / self.data.xz_factor as f64;
-
-        let j = self.y_multiplier * self.data.smear_scale_multiplier as f64;
-        let k = j / self.data.y_factor as f64;
-
-        // It's ok the the fractions are more than this; zip will cut it short
-        let n: f64 = self
-            .noise
-            .samplers
-            .iter()
-            .rev()
-            .zip(self.fractions)
-            .map(|(data, fraction)| {
-                let mapped_x = OctavePerlinNoiseSampler::maintain_precision(g * fraction);
-                let mapped_y = OctavePerlinNoiseSampler::maintain_precision(h * fraction);
-                let mapped_z = OctavePerlinNoiseSampler::maintain_precision(i * fraction);
-
-                data.sampler.sample_no_fade(
-                    mapped_x,
-                    mapped_y,
-                    mapped_z,
-                    k * fraction,
-                    h * fraction,
-                ) / fraction
-            })
-            .sum();
-
-        let q = f64::midpoint(n / 10.0, 1.0);
-        let bl2 = q >= 1.0;
-        let bl3 = q <= 0.0;
-
-        let l = if bl2 {
-            0.0
-        } else {
-            self.lower_noise
-                .samplers
-                .iter()
-                .rev()
-                .zip(self.fractions)
-                .map(|(data, fraction)| {
-                    let mapped_x = OctavePerlinNoiseSampler::maintain_precision(d * fraction);
-                    let mapped_y = OctavePerlinNoiseSampler::maintain_precision(e * fraction);
-                    let mapped_z = OctavePerlinNoiseSampler::maintain_precision(f * fraction);
-
-                    data.sampler.sample_no_fade(
-                        mapped_x,
-                        mapped_y,
-                        mapped_z,
-                        j * fraction,
-                        e * fraction,
-                    ) / fraction
-                })
-                .sum()
-        };
-
-        let m = if bl3 {
-            0.0
-        } else {
-            self.upper_noise
-                .samplers
-                .iter()
-                .rev()
-                .zip(self.fractions)
-                .map(|(data, fraction)| {
-                    let mapped_x = OctavePerlinNoiseSampler::maintain_precision(d * fraction);
-                    let mapped_y = OctavePerlinNoiseSampler::maintain_precision(e * fraction);
-                    let mapped_z = OctavePerlinNoiseSampler::maintain_precision(f * fraction);
-
-                    data.sampler.sample_no_fade(
-                        mapped_x,
-                        mapped_y,
-                        mapped_z,
-                        j * fraction,
-                        e * fraction,
-                    ) / fraction
-                })
-                .sum()
-        };
-
-        (clamped_lerp(l / 512.0, m / 512.0, q) / 128.0) as f32
+    fn sample_volume(&self, buffer: &mut [f32], volume: &DensityVolume) {
+        buffer.fill(0.0);
+        self.main_noise.add_to_volume(
+            buffer,
+            volume,
+            self.main_xz_multiplier,
+            self.main_y_multiplier,
+            1.0,
+        );
+        for value in buffer.iter_mut() {
+            *value = Self::choice(*value);
+        }
+        let mut first = DensityBuffer::acquire(volume);
+        first.fill(0.0);
+        self.min_limit_noise.add_to_volume(
+            &mut first,
+            volume,
+            self.xz_multiplier,
+            self.y_multiplier,
+            1.0,
+        );
+        let mut second = DensityBuffer::acquire(volume);
+        second.fill(0.0);
+        self.max_limit_noise.add_to_volume(
+            &mut second,
+            volume,
+            self.xz_multiplier,
+            self.y_multiplier,
+            1.0,
+        );
+        for ((value, first), second) in buffer.iter_mut().zip(first.iter()).zip(second.iter()) {
+            let alpha = *value;
+            *value = if alpha == 0.0 {
+                *first
+            } else if alpha == 1.0 {
+                *second
+            } else {
+                lerp(alpha, *first, *second)
+            };
+        }
     }
 }

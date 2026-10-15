@@ -396,12 +396,7 @@ impl NbtTag {
                     return Err(Error::LargeLength(len));
                 }
 
-                let mut int_array = Vec::with_capacity(len.min(4096));
-                for _ in 0..len {
-                    let int = reader.get_i32()?;
-                    int_array.push(int);
-                }
-                Ok(Self::IntArray(int_array))
+                Ok(Self::IntArray(reader.get_i32_array(len)?))
             }
             LONG_ARRAY_ID => {
                 let len = reader.get_i32()?;
@@ -414,12 +409,7 @@ impl NbtTag {
                     return Err(Error::LargeLength(len));
                 }
 
-                let mut long_array = Vec::with_capacity(len.min(4096));
-                for _ in 0..len {
-                    let long = reader.get_i64()?;
-                    long_array.push(long);
-                }
-                Ok(Self::LongArray(long_array))
+                Ok(Self::LongArray(reader.get_i64_array(len)?))
             }
             _ => Err(Error::UnknownTagId(tag_id)),
         }
@@ -475,6 +465,36 @@ impl NbtTag {
     pub const fn extract_double(&self) -> Option<f64> {
         match self {
             Self::Double(double) => Some(*double),
+            _ => None,
+        }
+    }
+
+    /// Converts any numeric tag to a short, `NumericTag.shortValue`.
+    #[must_use]
+    #[expect(clippy::cast_possible_truncation)]
+    pub fn as_numeric_short(&self) -> Option<i16> {
+        match *self {
+            Self::Byte(byte) => Some(byte.into()),
+            Self::Short(short) => Some(short),
+            Self::Int(int) => Some(int as i16),
+            Self::Long(long) => Some(long as i16),
+            Self::Float(float) => Some(float.floor() as i32 as i16),
+            Self::Double(double) => Some(double.floor() as i32 as i16),
+            _ => None,
+        }
+    }
+
+    /// Converts any numeric tag to a float, `NumericTag.floatValue`.
+    #[must_use]
+    #[expect(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    pub fn as_numeric_float(&self) -> Option<f32> {
+        match *self {
+            Self::Byte(byte) => Some(byte.into()),
+            Self::Short(short) => Some(short.into()),
+            Self::Int(int) => Some(int as f32),
+            Self::Long(long) => Some(long as f32),
+            Self::Float(float) => Some(float),
+            Self::Double(double) => Some(double as f32),
             _ => None,
         }
     }

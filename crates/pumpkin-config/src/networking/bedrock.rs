@@ -27,11 +27,40 @@ pub struct NetherNetConfig {
     /// TCP signaling and shared UDP status/ICE address.
     pub address: SocketAddr,
     /// Optional public IP advertised when the ICE address is behind NAT.
+    #[serde(with = "optional_ip")]
     pub external_ip: Option<IpAddr>,
     /// PKCS#8 P-384 identity key retained across restarts for Trust On First Use.
     pub identity_key: PathBuf,
     /// Optional ICE server URLs. Use `external_ip` for NAT with the single-port UDP mux.
     pub stun_servers: Vec<String>,
+}
+
+mod optional_ip {
+    use serde::{Deserialize, Deserializer, Serializer, de};
+    use std::net::IpAddr;
+
+    #[expect(
+        clippy::ref_option,
+        reason = "serde passes the configured field by reference"
+    )]
+    pub fn serialize<S: Serializer>(ip: &Option<IpAddr>, serializer: S) -> Result<S::Ok, S::Error> {
+        match ip {
+            Some(ip) => serializer.collect_str(ip),
+            None => serializer.serialize_str(""),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<IpAddr>, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        let value = value.trim();
+        if value.is_empty() {
+            Ok(None)
+        } else {
+            value.parse().map(Some).map_err(de::Error::custom)
+        }
+    }
 }
 
 impl Default for NetherNetConfig {
@@ -57,6 +86,28 @@ impl Default for BedrockAuthenticationConfig {
             connect_timeout: 5000,
             read_timeout: 5000,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NetherNetConfig;
+
+    #[test]
+    fn empty_external_ip_uses_automatic_detection() {
+        let config: NetherNetConfig = toml::from_str("external_ip = \"\"").unwrap();
+        assert_eq!(config.external_ip, None);
+        assert!(
+            toml::to_string(&config)
+                .unwrap()
+                .contains("external_ip = \"\"")
+        );
+    }
+
+    #[test]
+    fn explicit_external_ip_is_preserved() {
+        let config: NetherNetConfig = toml::from_str("external_ip = \"203.0.113.7\"").unwrap();
+        assert_eq!(config.external_ip.unwrap().to_string(), "203.0.113.7");
     }
 }
 

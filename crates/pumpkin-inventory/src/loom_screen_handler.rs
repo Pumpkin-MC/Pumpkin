@@ -8,6 +8,9 @@ use crate::screen_handler::{
 };
 use crate::slot::Slot;
 
+use crate::inventory::Inventory;
+use crate::inventory::SimpleInventory;
+use crate::window_property::PropertyDelegate;
 use pumpkin_data::data_component_impl::{BannerPatternLayer, BannerPatternsImpl};
 use pumpkin_data::dye_color::DyeColor;
 use pumpkin_data::item::Item;
@@ -16,9 +19,6 @@ use pumpkin_data::screen::WindowType;
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::tag::{BannerPattern, RegistryKey, get_tag_values};
 use pumpkin_protocol::java::server::play::SlotActionType;
-use pumpkin_world::block::entities::PropertyDelegate;
-use pumpkin_world::inventory::Inventory;
-use pumpkin_world::inventory::SimpleInventory;
 
 pub const NO_ITEM_REQUIRED_PATTERNS: &[&str] = BannerPattern::MINECRAFT_NO_ITEM_REQUIRED.0;
 

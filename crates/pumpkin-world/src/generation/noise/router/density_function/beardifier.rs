@@ -1,7 +1,7 @@
-use crate::generation::noise::router::chunk_density_function::ChunkNoiseFunctionSampleOptions;
 use crate::generation::noise::router::chunk_noise_router::{
     ChunkNoiseFunctionComponent, MutableChunkNoiseFunctionComponentImpl,
 };
+use crate::generation::noise::router::density_volume::DensityVolume;
 pub use pumpkin_data::structures::TerrainAdaptation;
 use pumpkin_util::math::{block_box::BlockBox, vector3::Vector3};
 use std::sync::OnceLock;
@@ -203,9 +203,55 @@ impl MutableChunkNoiseFunctionComponentImpl for Beardifier {
         &mut self,
         _component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        _sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
         StaticIndependentChunkNoiseFunctionComponentImpl::sample(self, pos)
+    }
+
+    fn sample_volume(
+        &mut self,
+        _component_stack: &mut [ChunkNoiseFunctionComponent],
+        buffer: &mut [f32],
+        volume: &DensityVolume,
+    ) {
+        buffer.fill(0.0);
+        let Some(affected_box) = self.affected_box else {
+            return;
+        };
+        if affected_box.min.x > volume.max_block_x()
+            || affected_box.max.x < volume.min_block_x
+            || affected_box.min.y > volume.max_block_y()
+            || affected_box.max.y < volume.min_block_y
+            || affected_box.min.z > volume.max_block_z()
+            || affected_box.max.z < volume.min_block_z
+        {
+            return;
+        }
+        let min_x = 0
+            .max(affected_box.min.x - volume.min_block_x)
+            .div_euclid(volume.step_block_x);
+        let min_y = 0
+            .max(affected_box.min.y - volume.min_block_y)
+            .div_euclid(volume.step_block_y);
+        let min_z = 0
+            .max(affected_box.min.z - volume.min_block_z)
+            .div_euclid(volume.step_block_z);
+        let max_x = (volume.size_x as i32 - 1)
+            .min((affected_box.max.x - volume.min_block_x).div_euclid(volume.step_block_x));
+        let max_y = (volume.size_y as i32 - 1)
+            .min((affected_box.max.y - volume.min_block_y).div_euclid(volume.step_block_y));
+        let max_z = (volume.size_z as i32 - 1)
+            .min((affected_box.max.z - volume.min_block_z).div_euclid(volume.step_block_z));
+        for z in min_z..=max_z {
+            let block_z = volume.block_z(z as usize);
+            for x in min_x..=max_x {
+                let block_x = volume.block_x(x as usize);
+                for y in min_y..=max_y {
+                    let index = volume.index_unchecked(x as usize, y as usize, z as usize);
+                    buffer[index] =
+                        self.sample_value_unchecked(block_x, volume.block_y(y as usize), block_z);
+                }
+            }
+        }
     }
 }
 

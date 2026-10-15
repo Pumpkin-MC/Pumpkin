@@ -232,21 +232,38 @@ pub fn nbt_tag_to_json(tag: &NbtTag) -> serde_json::Value {
     }
 }
 
+#[must_use]
 pub fn read_world_gen_settings(level_folder: &Path) -> Option<WorldGenSettings> {
-    let path = minecraft_data_dir(level_folder).join("world_gen_settings.dat");
-    if !path.exists() {
-        return None;
+    // Support world generation settings locations used by vanilla and Paper-derived 26.x worlds.
+    let paths = [
+        minecraft_data_dir(level_folder).join("world_gen_settings.dat"),
+        level_folder
+            .join("dimensions")
+            .join("minecraft")
+            .join("overworld")
+            .join("data")
+            .join("minecraft")
+            .join("world_gen_settings.dat"),
+    ];
+
+    for path in paths.iter().filter(|path| path.exists()) {
+        if let Some(settings) = read_world_gen_settings_file(path) {
+            return Some(settings);
+        }
     }
-    match File::open(&path) {
+
+    None
+}
+
+fn read_world_gen_settings_file(path: &Path) -> Option<WorldGenSettings> {
+    match File::open(path) {
         Ok(f) => match read_gzip_compound_tag(f) {
             Ok(compound) => {
-                let data_compound = compound.get_compound("data");
-                let c = data_compound.as_ref().map_or(&compound, |v| v);
-                let seed = c.get_long("seed");
-                if seed.is_none() {
-                    warn!("world_gen_settings.dat has no seed");
-                }
-                let seed = seed?;
+                let Some(c) = world_gen_settings_payload(&compound) else {
+                    warn!("{} has no seed", path.display());
+                    return None;
+                };
+                let seed = c.get_long("seed")?;
                 let mut dimensions = std::collections::HashMap::new();
                 if let Some(dims_comp) = c.get_compound("dimensions") {
                     for (dim_name, dim_tag) in &dims_comp.child_tags {
@@ -277,16 +294,18 @@ pub fn read_world_gen_settings(level_folder: &Path) -> Option<WorldGenSettings> 
                                         .get_string("type")
                                         .unwrap_or("minecraft:multi_noise")
                                         .to_string();
-                                    match bs_c.get_string("preset") {
-                                        Some(preset) => {
-                                            crate::world_info::BiomeSource::WithPreset {
-                                                preset: preset.to_string(),
-                                                biome_type,
-                                            }
+                                    if let Some(preset) = bs_c.get_string("preset") {
+                                        crate::world_info::BiomeSource::WithPreset {
+                                            preset: preset.to_string(),
+                                            biome_type,
                                         }
-                                        None => {
-                                            crate::world_info::BiomeSource::Simple { biome_type }
+                                    } else if let Some(biome) = bs_c.get_string("biome") {
+                                        crate::world_info::BiomeSource::Fixed {
+                                            biome: biome.to_string(),
+                                            biome_type,
                                         }
+                                    } else {
+                                        crate::world_info::BiomeSource::Simple { biome_type }
                                     }
                                 });
                                 dimensions.insert(
@@ -307,14 +326,26 @@ pub fn read_world_gen_settings(level_folder: &Path) -> Option<WorldGenSettings> 
                 Some(WorldGenSettings { seed, dimensions })
             }
             Err(e) => {
-                warn!("Failed to deserialize world_gen_settings.dat: {e}");
+                warn!("Failed to deserialize {}: {e}", path.display());
                 None
             }
         },
         Err(e) => {
-            warn!("Failed to open world_gen_settings.dat: {e}");
+            warn!("Failed to open {}: {e}", path.display());
             None
         }
+    }
+}
+
+fn world_gen_settings_payload(mut compound: &NbtCompound) -> Option<&NbtCompound> {
+    loop {
+        if compound.get_long("seed").is_some() {
+            return Some(compound);
+        }
+
+        compound = compound
+            .get_compound("data")
+            .or_else(|| compound.get_compound("Data"))?;
     }
 }
 
@@ -354,6 +385,10 @@ pub fn write_world_gen_settings(
             match bs {
                 crate::world_info::BiomeSource::WithPreset { preset, biome_type } => {
                     bs_comp.put_string("preset", preset.clone());
+                    bs_comp.put_string("type", biome_type.clone());
+                }
+                crate::world_info::BiomeSource::Fixed { biome, biome_type } => {
+                    bs_comp.put_string("biome", biome.clone());
                     bs_comp.put_string("type", biome_type.clone());
                 }
                 crate::world_info::BiomeSource::Simple { biome_type } => {

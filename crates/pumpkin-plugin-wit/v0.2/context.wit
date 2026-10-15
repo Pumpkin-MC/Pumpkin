@@ -1,0 +1,61 @@
+/// The core context provided to a plugin during initialization and event handling.
+interface context {
+    use server.{server};
+    use event.{event-type, event-priority};
+    use command.{command};
+    use permission.{permission};
+
+    /// Verified marketplace metadata for signed plugins.
+    record marketplace-metadata {
+        /// The marketplace base URL where this plugin is registered.
+        marketplace-url: string,
+        /// The unique plugin ID on the marketplace.
+        plugin-id: s64,
+        /// The canonical plugin name.
+        plugin-name: string,
+        /// The semver version string of the plugin.
+        version: string,
+        /// Developer ID.
+        dev-id: s64,
+        /// Developer display name or username.
+        dev-name: string,
+        /// Whether this is a paid marketplace plugin.
+        is-paid: bool,
+        /// The buyer / licensee user ID (0 for free/open-source).
+        user-id: s64,
+        /// Unique license key issued to the buyer, if paid.
+        license-key: option<string>,
+        /// ISO-8601 timestamp of when this binary/license was issued.
+        issued-at: string,
+    }
+
+    /// A contextual handle for plugin-related operations.
+    resource context {
+        /// Registers a handler for a specific event.
+        ///
+        /// * `handler-id`: Unique ID for the event handler.
+        /// * `event-type`: The type of event to listen for.
+        /// * `event-priority`: When this handler should be called relative to others.
+        /// * `blocking`: Whether the event should wait for this handler to finish.
+        register-event: func(handler-id: u32, event-type: event-type, event-priority: event-priority, blocking: bool);
+
+        /// Registers a new command.
+        ///
+        /// * `command`: The command definition.
+        /// * `permission`: The required permission node to execute this command.
+        register-command: func(command: command, permission: string);
+
+        /// Registers a permission node with the server.
+        register-permission: func(permission: permission) -> result<_, string>;
+
+        /// Returns the path to the plugin's private data folder.
+        get-data-folder: func() -> string;
+
+        /// Returns the global server instance.
+        get-server: func() -> server;
+
+        /// Returns verified marketplace metadata if this plugin binary is signed, or none if unsigned.
+        get-marketplace-metadata: func() -> option<marketplace-metadata>;
+    }
+}
+

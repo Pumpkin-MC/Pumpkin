@@ -34,6 +34,7 @@ tracing.workspace = true
 crossbeam.workspace = true
 
 sha2.workspace = true
+md5.workspace = true
 bitflags.workspace = true
 arc-swap.workspace = true
 
@@ -77,11 +78,15 @@ name = "chunk_gen_concurrent"
 harness = false
 
 [[bench]]
+name = "jigsaw"
+harness = false
+
+[[bench]]
 name = "noise_router"
 harness = false
 
 [[bench]]
-name = "noise_gen"
+name = "template_pool"
 harness = false
 
 
