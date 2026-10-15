@@ -102,7 +102,7 @@ impl PendingConnection {
             version: AtomicCell::new(CURRENT_MC_VERSION),
             connection_state: AtomicCell::new(ConnectionState::HandShake),
             close_token: CancellationToken::new(),
-            network_writer: TCPNetworkEncoder::new(write),
+            network_writer: TCPNetworkEncoder::new_buffered(write),
             network_reader: TCPNetworkDecoder::new(BufReader::new(read)),
             gameprofile: None,
             config: None,
