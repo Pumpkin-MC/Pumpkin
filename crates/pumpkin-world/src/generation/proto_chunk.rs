@@ -658,37 +658,7 @@ impl ProtoChunk {
         if local_y < 0 || local_y >= self.height() as i32 {
             return;
         }
-        if !block_state.is_air() {
-            let index = Self::local_position_to_height_map_index(local_x, local_z);
-            let y = y as i16;
-            self.maybe_update_surface_height_map(index, y);
-            let block = BlockId::from_state_id(block_state.id);
-
-            let blocks_movement = blocks_movement(block_state, block);
-            if blocks_movement {
-                self.maybe_update_ocean_floor_height_map(index, y);
-            }
-            if blocks_movement || block_state.is_liquid() {
-                self.maybe_update_motion_blocking_height_map(index, y);
-                if !block.has_tag(tag::Block::MINECRAFT_LEAVES) {
-                    {
-                        self.maybe_update_motion_blocking_no_leaves_height_map(index, y);
-                    }
-                }
-            }
-        }
-
-        let index = Self::local_pos_to_block_index(local_x, local_y, local_z);
-        if index >= self.flat_block_map.len() {
-            if block_state.id == BlockStateId::AIR {
-                return;
-            }
-            let section_end = ((local_y as usize >> 4) + 1) * BlockPalette::VOLUME;
-            self.flat_block_map
-                .reserve_exact(section_end - self.flat_block_map.len());
-            self.flat_block_map.resize(section_end, BlockStateId::AIR);
-        }
-        self.flat_block_map[index] = block_state.id;
+        self.set_block_state_direct(local_x, local_y, local_z, y as i16, block_state);
     }
 
     /// The noise-generation fast path: coordinates are chunk-local and already
@@ -1967,9 +1937,9 @@ mod direct_block_write_tests {
                     _ => Block::WATER.default_state,
                 };
                 normal.set_block_state(
-                    normal.x * 16 + local_x,
+                    normal.start_block_x() + local_x,
                     block_y,
-                    normal.z * 16 + local_z,
+                    normal.start_block_z() + local_z,
                     state,
                 );
                 let local_y = block_y - bottom_y;
