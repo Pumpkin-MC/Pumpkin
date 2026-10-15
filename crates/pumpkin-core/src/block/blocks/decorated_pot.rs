@@ -87,9 +87,21 @@ impl BlockBehaviour for DecoratedPotBlock {
             && let Some(pot_entity) = block_entity
                 .as_any()
                 .downcast_ref::<DecoratedPotBlockEntity>()
-            && let Some(contained) = pot_entity.take_item()
         {
-            args.world.drop_stack(args.position, contained);
+            if let Some((loot_key, seed)) = pot_entity.take_loot_table() {
+                if let Some(handle) = args.world.get_loot_table(&loot_key) {
+                    let items = crate::world::loot::generate_loot_from_handle(
+                        &handle,
+                        seed,
+                        &crate::world::loot::LootContextParameters::default(),
+                    );
+                    for item in items {
+                        args.world.drop_stack(args.position, item);
+                    }
+                }
+            } else if let Some(contained) = pot_entity.take_item() {
+                args.world.drop_stack(args.position, contained);
+            }
         }
 
         args.world.play_sound(

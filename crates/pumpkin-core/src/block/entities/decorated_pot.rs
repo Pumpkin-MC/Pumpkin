@@ -9,6 +9,8 @@ pub struct DecoratedPotBlockEntity {
     pub position: BlockPos,
     pub sherds: Mutex<Option<Vec<NbtTag>>>,
     pub item: Mutex<Option<ItemStack>>,
+    pub loot_table: Mutex<Option<String>>,
+    pub loot_table_seed: i64,
 }
 
 impl BlockEntity for DecoratedPotBlockEntity {
@@ -25,6 +27,8 @@ impl BlockEntity for DecoratedPotBlockEntity {
         Self: Sized,
     {
         let sherds = nbt.get_list("sherds").map(<[_]>::to_vec);
+        let loot_table = nbt.get_string("LootTable").map(ToString::to_string);
+        let loot_table_seed = nbt.get_long("LootTableSeed").unwrap_or(0);
         let item = nbt
             .get_compound("item")
             .and_then(ItemStack::read_item_stack);
@@ -32,6 +36,8 @@ impl BlockEntity for DecoratedPotBlockEntity {
             position,
             sherds: Mutex::new(sherds),
             item: Mutex::new(item),
+            loot_table: Mutex::new(loot_table),
+            loot_table_seed,
         }
     }
 
@@ -41,7 +47,16 @@ impl BlockEntity for DecoratedPotBlockEntity {
         {
             nbt.put_list("sherds", sh.clone());
         }
-        if let Ok(item) = self.item.lock()
+        if let Some(ref key) = *self
+            .loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        {
+            nbt.put_string("LootTable", key.clone());
+            if self.loot_table_seed != 0 {
+                nbt.put_long("LootTableSeed", self.loot_table_seed);
+            }
+        } else if let Ok(item) = self.item.lock()
             && let Some(it) = item.as_ref()
         {
             let mut it_nbt = NbtCompound::new();
@@ -70,17 +85,34 @@ impl BlockEntity for DecoratedPotBlockEntity {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn take_loot_table(&self) -> Option<(String, i64)> {
+        let mut guard = self
+            .loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard.take().map(|key| (key, self.loot_table_seed))
+    }
+
+    fn has_loot_table(&self) -> bool {
+        self.loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
+    }
 }
 
 impl DecoratedPotBlockEntity {
     pub const ID: &'static str = "minecraft:decorated_pot";
 
     #[must_use]
-    pub const fn new(position: BlockPos) -> Self {
+    pub fn new(position: BlockPos) -> Self {
         Self {
             position,
             sherds: Mutex::new(None),
             item: Mutex::new(None),
+            loot_table: Mutex::new(None),
+            loot_table_seed: 0,
         }
     }
 
@@ -98,7 +130,25 @@ impl DecoratedPotBlockEntity {
             .take()
     }
 
+    pub fn take_loot_table(&self) -> Option<(String, i64)> {
+        let mut guard = self
+            .loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard.take().map(|key| (key, self.loot_table_seed))
+    }
+
+    pub fn has_loot_table(&self) -> bool {
+        self.loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
+    }
+
     pub fn try_insert_item(&self, stack: &mut ItemStack, count: u8) -> bool {
+        if self.has_loot_table() {
+            return false;
+        }
         let mut item_guard = self
             .item
             .lock()
