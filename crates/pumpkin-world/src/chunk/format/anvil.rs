@@ -144,6 +144,20 @@ impl Compression {
         }
     }
 
+    /// Recognises the compression id of a payload by its leading bytes.
+    fn id_from_payload(data: &[u8]) -> Option<u8> {
+        match data {
+            [0x1f, 0x8b, ..] => Some(Self::GZIP_ID),
+            // A zlib header uses the deflate method and is a multiple of 31 (RFC 1950)
+            [cmf, flg, ..] if cmf & 0x0f == 8 && u16::from_be_bytes([*cmf, *flg]) % 31 == 0 => {
+                Some(Self::ZLIB_ID)
+            }
+            _ if data.starts_with(b"LZ4Block") => Some(Self::LZ4_ID),
+            [pumpkin_nbt::COMPOUND_ID, ..] => Some(Self::NO_COMPRESSION_ID),
+            _ => None,
+        }
+    }
+
     /// Returns Ok when a compression is found otherwise an Err
     #[expect(clippy::result_unit_err)]
     pub const fn from_byte(byte: u8) -> Result<Option<Self>, ()> {
@@ -692,12 +706,24 @@ impl RegionFile for AnvilRegion {
         if let Some(&compression_byte) = record.get(4)
             && compression_byte & EXTERNAL_STREAM_FLAG != 0
         {
-            let compression = Compression::from_byte(compression_byte & !EXTERNAL_STREAM_FLAG)
-                .map_err(|()| {
-                    ChunkReadingError::Compression(CompressionError::UnknownCompression)
-                })?;
+            let marker = compression_byte & !EXTERNAL_STREAM_FLAG;
             let compressed_data =
                 std::fs::read(self.external_path(index)).map_err(ChunkReadingError::IoError)?;
+            // A flush replaces the .mcc before the header that points at the new stub, so after
+            // a crash in between the old stub's marker can name the compression used before
+            let compression_id = match Compression::id_from_payload(&compressed_data) {
+                Some(detected) if detected != marker => {
+                    warn!(
+                        "External chunk {} has compression {detected} but its marker says {marker}",
+                        self.external_path(index).display()
+                    );
+                    detected
+                }
+                _ => marker,
+            };
+            let compression = Compression::from_byte(compression_id).map_err(|()| {
+                ChunkReadingError::Compression(CompressionError::UnknownCompression)
+            })?;
             return Ok(Some(AnvilChunkData {
                 compression,
                 compressed_data: compressed_data.into(),
@@ -990,6 +1016,32 @@ mod tests {
         );
         region.flush(false).unwrap();
         assert!(!external.exists());
+    }
+
+    #[test]
+    fn external_chunk_written_with_another_compression_still_reads() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("r.0.0.mca");
+        let mut zlib = AnvilChunkConfig::default();
+        zlib.compression.algorithm = pumpkin_config::chunk::Compression::ZLib;
+        let mut region = AnvilRegion::open(&path, Vector2::new(0, 0)).unwrap();
+        region.stage_chunk(
+            33,
+            AnvilRegion::encode_chunk(noise(1, SECTOR_BYTES * 300), &zlib).unwrap(),
+        );
+        region.flush(false).unwrap();
+
+        // A crash after a save with LZ4 replaced the payload but before the header changed.
+        let replacement = noise(2, SECTOR_BYTES * 300);
+        let lz4 =
+            AnvilRegion::encode_chunk(replacement.clone(), &AnvilChunkConfig::default()).unwrap();
+        std::fs::write(dir.path().join("c.1.1.mcc"), &lz4.compressed_data).unwrap();
+
+        let reopened = AnvilRegion::open(&path, Vector2::new(0, 0)).unwrap();
+        assert_eq!(
+            AnvilRegion::decode_chunk(reopened.read_chunk(33).unwrap().unwrap()).unwrap(),
+            replacement
+        );
     }
 
     #[test]
