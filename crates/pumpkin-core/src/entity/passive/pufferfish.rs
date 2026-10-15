@@ -1,5 +1,5 @@
 use std::sync::{
-    Arc, Weak,
+    Arc,
     atomic::{AtomicI32, Ordering},
 };
 
@@ -74,10 +74,7 @@ impl PufferfishEntity {
         };
 
         let mob_arc = Arc::new(pufferfish);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
+        let mob_weak = Arc::downgrade(&mob_arc);
 
         mob_arc.refresh_dimensions();
 
@@ -89,10 +86,7 @@ impl PufferfishEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(
-                1,
-                Box::new(PufferfishPuffGoal::new(Arc::downgrade(&mob_arc))),
-            );
+            goal_selector.add_goal(1, Box::new(PufferfishPuffGoal::new(mob_weak.clone())));
             goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 2,
