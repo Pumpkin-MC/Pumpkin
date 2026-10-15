@@ -22,6 +22,7 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::item::ItemEntity;
 use crate::entity::living::LivingEntity;
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::mob::equipment as mob_equipment;
 use crate::entity::player::Player;
 use crate::entity::{
@@ -827,6 +828,13 @@ impl PiglinEntity {
             self.time_trying_to_reach_item.store(-1, Ordering::Relaxed);
             self.hold_in_off_hand(taken);
             self.admire_gold_item();
+            if self.is_adult() {
+                if let Some(player) = self.nearest_visible_player() {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::DistractPiglin,
+                    );
+                }
+            }
         } else if PiglinAi::is_food(&taken) && !self.has_eaten_recently() {
             self.eat_cooldown_timer
                 .store(PiglinAi::EAT_COOLDOWN, Ordering::Relaxed);
@@ -1247,12 +1255,26 @@ impl Mob for PiglinEntity {
                 )
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn as_crossbow_attack_mob(&self) -> Option<&dyn CrossbowAttackMob> {
         Some(self)
     }
 
     fn get_base_experience_reward(&self) -> u32 {
         Self::XP_REWARD
+    }
+}
+
+impl CustomSound for PiglinEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPiglinDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPiglinHurt)
     }
 }
 

@@ -1,3 +1,4 @@
+use rand::{RngExt, rng};
 use std::sync::Arc;
 
 use crate::entity::Entity;
@@ -23,10 +24,12 @@ impl ItemBehaviour for SnowBallItem {
     fn normal_use(&self, _block: &Item, player: &Player) {
         let position = player.position();
         let world = player.world();
-        world.play_sound(
+        world.play_sound_fine(
             Sound::EntitySnowballThrow,
             pumpkin_data::sound::SoundCategory::Neutral,
             &position,
+            0.5,
+            0.4 / (rng().random::<f32>() * 0.4 + 0.8),
         );
         let entity = Entity::new(world.clone(), position, &EntityType::SNOWBALL);
         let snowball = SnowballEntity::new_shot(entity, player.get_entity());
@@ -55,6 +58,12 @@ impl ItemBehaviour for SnowBallItem {
                     .set_stack_in_hand(pumpkin_util::Hand::Left, off_hand);
             }
         }
+
+        player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Used,
+            Item::SNOWBALL.id as i32,
+            1,
+        );
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

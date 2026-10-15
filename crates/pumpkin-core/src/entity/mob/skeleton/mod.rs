@@ -31,6 +31,10 @@ pub struct SkeletonEntityBase {
 
 impl SkeletonEntityBase {
     pub fn new(entity: Entity) -> Arc<Self> {
+        Self::new_with_attack_interval(entity, 20)
+    }
+
+    pub fn new_with_attack_interval(entity: Entity, attack_interval: i32) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let mob = Self { mob_entity };
         let mob_arc = Arc::new(mob);
@@ -51,7 +55,7 @@ impl SkeletonEntityBase {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, Box::new(BowAttackGoal::new(1.0, 20, 15.0)));
+            goal_selector.add_goal(2, Box::new(BowAttackGoal::new(1.0, attack_interval, 15.0)));
             goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.2, false)));
             goal_selector.add_goal(
                 3,
@@ -73,6 +77,87 @@ impl SkeletonEntityBase {
 
         mob_arc
     }
+
+    pub fn new_wither(entity: Entity) -> Arc<Self> {
+        let mob_entity = MobEntity::new(entity);
+        let mob = Self { mob_entity };
+        let mob_arc = Arc::new(mob);
+        let mob_weak: Weak<dyn Mob> = {
+            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
+            Arc::downgrade(&mob_arc)
+        };
+        {
+            let mut goal_selector = mob_arc
+                .mob_entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut target_selector = mob_arc
+                .mob_entity
+                .target_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.2, false)));
+            goal_selector.add_goal(
+                3,
+                Box::new(AvoidEntityGoal::new(&EntityType::WOLF, 6.0, 1.0, 1.2)),
+            );
+            goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(
+                8,
+                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
+            );
+            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
+
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(
+                2,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
+            );
+            target_selector.add_goal(
+                3,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PIGLIN, true),
+            );
+            target_selector.add_goal(
+                3,
+                ActiveTargetGoal::with_default(
+                    &mob_arc.mob_entity,
+                    &EntityType::PIGLIN_BRUTE,
+                    true,
+                ),
+            );
+            target_selector.add_goal(
+                3,
+                ActiveTargetGoal::with_default(
+                    &mob_arc.mob_entity,
+                    &EntityType::IRON_GOLEM,
+                    true,
+                ),
+            );
+        };
+
+        // Vanilla WitherSkeleton has base attack damage 4.0
+        {
+            let mut attributes = mob_arc
+                .mob_entity
+                .living_entity
+                .attributes
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(damage) =
+                attributes.get_mut(&pumpkin_data::attributes::Attributes::ATTACK_DAMAGE.id)
+            {
+                damage.base_value = 4.0;
+                damage
+                    .dirty
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+
+        mob_arc
+    }
 }
 
 impl Mob for SkeletonEntityBase {
@@ -85,6 +170,16 @@ impl Mob for SkeletonEntityBase {
         _world: &Arc<World>,
         difficulty: &RegionalDifficulty,
     ) {
+        let living = &self.mob_entity.living_entity;
+        if living.entity.entity_type == &EntityType::WITHER_SKELETON {
+            let mut equipment = living
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            equipment.put(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, &Item::STONE_SWORD));
+            return;
+        }
+
         // Default armor slots (super.populateDefaultEquipmentSlots)
         if rand::random::<f32>()
             < MobEntity::MAX_WEARING_ARMOR_CHANCE * difficulty.special_multiplier

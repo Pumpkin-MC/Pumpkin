@@ -178,6 +178,16 @@ impl ArmorStandEntity {
         self.get_entity().invisible.load(Ordering::Relaxed)
     }
 
+    pub fn set_item_slot(&self, slot: EquipmentSlot, stack: ItemStack) {
+        self.living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .insert(slot.clone(), stack.clone());
+        self.living_entity.send_equipment_changes(&[(slot, stack)]);
+    }
+
     pub fn pack_rotation(&self) -> PackedRotation {
         self.rotation.load()
     }
@@ -188,19 +198,17 @@ impl ArmorStandEntity {
 
     fn break_and_drop_items(&self) {
         let entity = self.get_entity();
-        //let name = entity.custom_name.unwrap_or(entity.get_name());
-
-        //TODO: i am stupid! let armor_stand_item = ItemStack::new_with_component(1, &Item::ARMOR_STAND, vec![(DataComponent::CustomName, self.get_custom_name())]);
         let armor_stand_item = ItemStack::new(1, &Item::ARMOR_STAND);
         entity
             .world
             .load()
             .drop_stack(&entity.block_pos.load(), armor_stand_item);
 
-        Self::on_break(entity);
+        self.on_break();
     }
 
-    fn on_break(entity: &Entity) {
+    fn on_break(&self) {
+        let entity = self.get_entity();
         let world = entity.world.load();
         world.play_sound(
             Sound::EntityArmorStandBreak,
@@ -208,7 +216,18 @@ impl ArmorStandEntity {
             &entity.pos.load(),
         );
 
-        // TODO: Implement equipment slots and make them drop all of their stored items.
+        let mut equipment = self
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let drop_pos = entity.block_pos.load().up();
+        for (_, item_stack) in equipment.equipment.drain() {
+            if !item_stack.is_empty() {
+                world.drop_stack(&drop_pos, item_stack);
+            }
+        }
     }
 
     /// Spawns break particles at the armor stand's position.
@@ -345,13 +364,28 @@ impl EntityBase for ArmorStandEntity {
         }
 
         if damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION) {
-            Self::on_break(entity);
+            self.on_break();
             entity.remove();
             return false;
         }
 
-        // TODO: IGNITES_ARMOR_STANDS (in_fire, campfire) - set on fire
-        // TODO: BURNS_ARMOR_STANDS (on_fire) - reduce health
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_IGNITES_ARMOR_STANDS) {
+            entity.fire_ticks.store(160, Ordering::Relaxed);
+            return false;
+        }
+
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_BURNS_ARMOR_STANDS) {
+            let current_hp = self.living_entity.health.load();
+            let new_hp = current_hp - 0.7;
+            if new_hp <= 0.5 {
+                Self::spawn_break_particles(entity);
+                self.break_and_drop_items();
+                entity.remove();
+            } else {
+                self.living_entity.health.store(new_hp);
+            }
+            return false;
+        }
 
         let can_break = damage_type.has_tag(&tag::DamageType::MINECRAFT_CAN_BREAK_ARMOR_STAND);
         let always_kills =

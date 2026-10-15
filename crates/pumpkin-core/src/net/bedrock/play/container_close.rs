@@ -8,7 +8,7 @@ impl BedrockClient {
         }
         player.on_handled_screen_closed();
 
-        self.try_enqueue_client_packet(&SContainerClose {
+        self.try_enqueue_client_packet(&pumpkin_protocol::bedrock::client::container_close::CContainerClose {
             container_id: packet.container_id,
             container_type: packet.container_type,
             server_initiated_close: false,

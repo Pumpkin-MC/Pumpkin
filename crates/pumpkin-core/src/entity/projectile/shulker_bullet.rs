@@ -488,9 +488,8 @@ impl EntityBase for ShulkerBulletEntity {
                 None,
             );
 
-            if damaged && let Some(living) = hit_entity.get_living_entity() {
-                // Apply levitation for 200 ticks
-                living.add_effect(Effect {
+            if damaged {
+                let effect = Effect {
                     effect_type: &StatusEffect::LEVITATION,
                     duration: 200,
                     amplifier: 0,
@@ -498,10 +497,22 @@ impl EntityBase for ShulkerBulletEntity {
                     show_particles: true,
                     show_icon: true,
                     blend: false,
-                });
+                };
+                if let Some(player) = hit_entity.get_player() {
+                    player.add_effect(effect);
+                } else if let Some(living) = hit_entity.get_living_entity() {
+                    living.add_effect(effect);
+                }
             }
 
             let pos = entity.pos.load();
+            world.play_sound_fine(
+                Sound::EntityShulkerBulletHit,
+                SoundCategory::Hostile,
+                &pos,
+                1.0,
+                1.0,
+            );
             world.spawn_particle(
                 pos,
                 Vector3::new(0.2, 0.2, 0.2),

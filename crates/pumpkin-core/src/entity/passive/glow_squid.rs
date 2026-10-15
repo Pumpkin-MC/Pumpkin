@@ -1,55 +1,202 @@
-use std::sync::{Arc, Weak};
+use crossbeam::atomic::AtomicCell;
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::Arc;
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::damage::DamageType;
+use pumpkin_data::particle::Particle;
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 
 use crate::entity::{
-    Entity,
-    ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
-    },
+    Entity, EntityBase,
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
 };
 
-/// Represents a Glow Squid, a passive aquatic mob that emits a glowing particle effect.
-///
-/// Wiki: <https://minecraft.wiki/w/Glow_Squid>
 pub struct GlowSquidEntity {
     pub mob_entity: MobEntity,
+    pub movement_vector: AtomicCell<Vector3<f64>>,
+    pub tentacle_movement: AtomicCell<f32>,
+    pub tentacle_speed: AtomicCell<f32>,
+    pub rotate_speed: AtomicCell<f32>,
+    pub air_supply: AtomicI32,
+    pub dark_ticks_remaining: AtomicI32,
 }
 
 impl GlowSquidEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let glow_squid = Self { mob_entity };
-        let mob_arc = Arc::new(glow_squid);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
+        let mut rng = rand::rng();
+        let tentacle_speed = 1.0 / (rng.random::<f32>() + 1.0) * 0.2;
+        let glow_squid = Self {
+            mob_entity,
+            movement_vector: AtomicCell::new(Vector3::default()),
+            tentacle_movement: AtomicCell::new(0.0),
+            tentacle_speed: AtomicCell::new(tentacle_speed),
+            rotate_speed: AtomicCell::new(0.0),
+            air_supply: AtomicI32::new(300),
+            dark_ticks_remaining: AtomicI32::new(0),
         };
-
-        {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
-            goal_selector.add_goal(
-                2,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
-            );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
-        };
-
-        mob_arc
+        Arc::new(glow_squid)
     }
 }
 
 impl Mob for GlowSquidEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
+    fn is_pushed_by_fluids(&self) -> bool {
+        false
+    }
+
+    fn custom_travel(&self, caller: &dyn EntityBase) -> bool {
+        let entity = &self.mob_entity.living_entity.entity;
+        entity.move_entity(caller, entity.velocity.load());
+        true
+    }
+
+    fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {
+        self.dark_ticks_remaining.store(100, Ordering::Relaxed);
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.silent.load(Ordering::Relaxed) {
+            entity.world.load().play_sound_fine(
+                Sound::EntityGlowSquidSquirt,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
+        entity.world.load().spawn_particle(
+            entity.pos.load() + Vector3::new(0.0, 0.5, 0.0),
+            Vector3::new(0.3, 0.3, 0.3),
+            0.1,
+            20,
+            Particle::GlowSquidInk,
+        );
+    }
+
+    fn mob_tick(&self, caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        let in_water = entity.touching_water.load(Ordering::Relaxed);
+
+        // Air supply / drowning on land (matching vanilla WaterAnimal / AgeableWaterCreature)
+        if in_water {
+            self.air_supply.store(300, Ordering::Relaxed);
+        } else {
+            let air = self.air_supply.fetch_sub(1, Ordering::Relaxed) - 1;
+            if air <= -20 {
+                self.air_supply.store(0, Ordering::Relaxed);
+                caller.damage(caller, 2.0, DamageType::DROWN);
+            }
+        }
+
+        let mut rng = rand::rng();
+
+        // Glow particles when not in dark ticks
+        if self.dark_ticks_remaining.load(Ordering::Relaxed) > 0 {
+            self.dark_ticks_remaining.fetch_sub(1, Ordering::Relaxed);
+        } else if rng.random_range(0..2) == 0 {
+            let pos = entity.pos.load();
+            let dx = (rng.random::<f64>() * 2.0 - 1.0) * 0.4;
+            let dy = rng.random::<f64>() * 0.7;
+            let dz = (rng.random::<f64>() * 2.0 - 1.0) * 0.4;
+            entity.world.load().spawn_particle(
+                pos + Vector3::new(dx, dy, dz),
+                Vector3::new(0.0, 0.0, 0.0),
+                0.0,
+                1,
+                Particle::Glow,
+            );
+        }
+
+        // 1. Random movement vector selection (SquidRandomMovementGoal from vanilla Squid.java)
+        let mut movement_vec = self.movement_vector.load();
+        if !in_water || movement_vec.length_squared() < 1e-5 || rng.random_range(0..50) == 0 {
+            let angle = rng.random::<f32>() * std::f32::consts::TAU;
+            movement_vec = Vector3::new(
+                (angle.cos() * 0.2) as f64,
+                (-0.1 + rng.random::<f32>() * 0.2) as f64,
+                (angle.sin() * 0.2) as f64,
+            );
+            self.movement_vector.store(movement_vec);
+        }
+
+        // 2. Tentacle thrust cycle (Squid.aiStep from vanilla Squid.java)
+        let mut tentacle_movement = self.tentacle_movement.load() + self.tentacle_speed.load();
+        if tentacle_movement > std::f32::consts::TAU {
+            tentacle_movement -= std::f32::consts::TAU;
+            if rng.random_range(0..10) == 0 {
+                let speed = 1.0 / (rng.random::<f32>() + 1.0) * 0.2;
+                self.tentacle_speed.store(speed);
+            }
+        }
+        self.tentacle_movement.store(tentacle_movement);
+
+        if in_water {
+            let mut rotate_speed = self.rotate_speed.load();
+            if tentacle_movement < std::f32::consts::PI {
+                let tentacle_scale = tentacle_movement / std::f32::consts::PI;
+                if tentacle_scale > 0.75 {
+                    entity.velocity.store(movement_vec);
+                    rotate_speed = 1.0;
+                } else {
+                    rotate_speed *= 0.8;
+                }
+            } else {
+                entity.velocity.store(entity.velocity.load() * 0.9);
+                rotate_speed *= 0.99;
+            }
+            self.rotate_speed.store(rotate_speed);
+
+            let vel = entity.velocity.load();
+            let horizontal_dist = (vel.x * vel.x + vel.z * vel.z).sqrt();
+            if horizontal_dist > 1e-4 {
+                let target_yaw = (-vel.x.atan2(vel.z).to_degrees()) as f32;
+                let cur_yaw = entity.yaw.load();
+                let new_yaw = cur_yaw + (target_yaw - cur_yaw) * 0.1;
+                entity.yaw.store(new_yaw);
+                entity.body_yaw.store(new_yaw);
+                entity.head_yaw.store(new_yaw);
+            }
+            let target_pitch = (-horizontal_dist.atan2(vel.y).to_degrees()) as f32;
+            let cur_pitch = entity.pitch.load();
+            entity.pitch.store(cur_pitch + (target_pitch - cur_pitch) * 0.1);
+
+            if !entity.silent.load(Ordering::Relaxed) && rng.random_range(0..120) == 0 {
+                entity.world.load().play_sound_fine(
+                    Sound::EntityGlowSquidAmbient,
+                    SoundCategory::Neutral,
+                    &entity.pos.load(),
+                    1.0,
+                    1.0,
+                );
+            }
+        } else {
+            let vel = entity.velocity.load();
+            entity.velocity.store(Vector3::new(0.0, (vel.y - 0.08) * 0.98, 0.0));
+            let cur_pitch = entity.pitch.load();
+            entity.pitch.store(cur_pitch + (-90.0 - cur_pitch) * 0.02);
+        }
+    }
+}
+
+impl CustomSound for GlowSquidEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityGlowSquidDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityGlowSquidHurt)
     }
 }

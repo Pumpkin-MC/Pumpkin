@@ -63,32 +63,39 @@ impl EntityBase for SmallFireballEntity {
     }
 
     fn on_hit(&self, hit: ProjectileHit) {
+        let world = self.get_entity().world.load();
+        let owner = self
+            .thrown
+            .owner_id
+            .and_then(|id| world.get_entity_by_id(id));
+
         match hit {
-            ProjectileHit::Entity { ref entity, .. } => {
+            ProjectileHit::Entity {
+                ref entity,
+                hit_pos,
+                ..
+            } => {
                 entity.get_entity().set_on_fire_for(5.0);
-                let _ = entity.damage(
-                    entity.as_ref(),
+                let attacker_ref: &dyn EntityBase = owner.as_deref().unwrap_or(self);
+                let _ = entity.damage_with_context(
+                    attacker_ref,
                     5.0,
                     pumpkin_data::damage::DamageType::FIREBALL,
+                    Some(hit_pos),
+                    Some(self.get_entity()),
+                    owner.as_deref(),
                 );
             }
             ProjectileHit::Block { pos, face, .. } => {
-                // Try to place fire
-                let block_to_place = match face {
-                    pumpkin_data::BlockDirection::Up => pos.up(),
-                    pumpkin_data::BlockDirection::Down => pos.down(),
-                    pumpkin_data::BlockDirection::North => pos.north(),
-                    pumpkin_data::BlockDirection::South => pos.south(),
-                    pumpkin_data::BlockDirection::West => pos.west(),
-                    pumpkin_data::BlockDirection::East => pos.east(),
-                };
-                let world = self.get_entity().world.load();
-                let fire_state = pumpkin_data::Block::FIRE.default_state.id;
-                world.set_block_state(
-                    &block_to_place,
-                    fire_state,
-                    pumpkin_world::world::BlockFlags::NOTIFY_ALL,
-                );
+                let block_to_place = pos.offset(face.to_offset());
+                if world.get_block_state(&block_to_place).is_air() {
+                    let fire_state = pumpkin_data::Block::FIRE.default_state.id;
+                    world.set_block_state(
+                        &block_to_place,
+                        fire_state,
+                        pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                    );
+                }
             }
         }
     }

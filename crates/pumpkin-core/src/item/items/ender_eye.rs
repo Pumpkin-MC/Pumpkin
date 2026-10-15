@@ -61,6 +61,11 @@ impl ItemBehaviour for EnderEyeItem {
         world.set_block_state(&location, new_state_id, BlockFlags::NOTIFY_LISTENERS);
         // Consume one item.
         item.decrement_unless_creative(player.gamemode.load(), 1);
+        player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Used,
+            Item::ENDER_EYE.id as i32,
+            1,
+        );
         world.sync_world_event(WorldEvent::EndPortalFrameFill, location, 0);
 
         // Try to complete the portal.
@@ -124,6 +129,11 @@ impl ItemBehaviour for EnderEyeItem {
         let mut stack = player.inventory.held_item();
         stack.decrement_unless_creative(player.gamemode.load(), 1);
         player.inventory.set_held_item(stack);
+        player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Used,
+            Item::ENDER_EYE.id as i32,
+            1,
+        );
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

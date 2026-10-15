@@ -14,14 +14,8 @@ pub struct LilyPadBlock;
 impl BlockBehaviour for LilyPadBlock {
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         {
-            // Proberbly not the best solution, but works
-            if args
-                .entity
-                .get_entity()
-                .entity_type
-                .resource_name
-                .ends_with("_boat")
-            {
+            let name = args.entity.get_entity().entity_type.resource_name;
+            if name.ends_with("_boat") || name.ends_with("_raft") {
                 args.world
                     .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
             }
@@ -47,11 +41,14 @@ impl BlockBehaviour for LilyPadBlock {
 
 impl PlantBlockBase for LilyPadBlock {
     fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        // TODO: get and use fluids not blocks
-        let block = block_accessor.get_block(pos);
-        let above_fluid = block_accessor.get_block(&pos.up());
-        (block.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_LILY_PAD)
-            || block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_LILY_PAD))
-            && above_fluid.is_air()
+        let (block, state) = block_accessor.get_block_and_state(pos);
+        let has_fluid = pumpkin_data::fluid::Fluid::from_state_id(state.id)
+            .is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_LILY_PAD))
+            || state.is_waterlogged();
+        let above_state = block_accessor.get_block_state(&pos.up());
+        let above_fluid_empty = pumpkin_data::fluid::Fluid::from_state_id(above_state.id).is_none()
+            && !above_state.is_waterlogged();
+        (has_fluid || block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_LILY_PAD))
+            && above_fluid_empty
     }
 }

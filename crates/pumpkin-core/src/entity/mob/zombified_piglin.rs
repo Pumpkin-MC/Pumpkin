@@ -1,12 +1,15 @@
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::{Sound, SoundCategory};
 
 use crate::entity::ai::util::goal_utils;
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::behavior::neutral::apply_targets,
@@ -109,9 +112,23 @@ impl ZombifiedPiglinEntity {
 
 crate::impl_neutral_mob!(ZombifiedPiglinEntity, neutral_data);
 
+impl CustomSound for ZombifiedPiglinEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityZombifiedPiglinDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityZombifiedPiglinHurt)
+    }
+}
+
 impl Mob for ZombifiedPiglinEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
     }
 
     fn spawn_as_baby(&self) -> bool {
@@ -142,6 +159,24 @@ impl Mob for ZombifiedPiglinEntity {
         equipment.put(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, weapon));
     }
 
+    fn on_damage(&self, _damage_type: DamageType, source: Option<&dyn EntityBase>) {
+        if let Some(attacker) = source {
+            if attacker.get_living_entity().is_some() {
+                let world = self.mob_entity.living_entity.entity.world.load();
+                if let Some(attacker_arc) = world.get_entity_by_id(attacker.get_entity().entity_id) {
+                    self.mob_entity.set_target(Some(attacker_arc.clone()));
+                    for other in goal_utils::nearby_same_type(self) {
+                        if let Some(other_mob) = other.get_mob() {
+                            if other_mob.get_mob_entity().get_target().is_none() {
+                                other_mob.set_mob_target(Some(attacker_arc.clone()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {
@@ -150,6 +185,15 @@ impl Mob for ZombifiedPiglinEntity {
 
         let Some(target) = self.mob_entity.get_target() else {
             self.had_target.store(false, Ordering::Relaxed);
+            if rand::random_range(0..100) == 0 && !entity.silent.load(Ordering::Relaxed) {
+                entity.world.load().play_sound_fine(
+                    Sound::EntityZombifiedPiglinAmbient,
+                    SoundCategory::Hostile,
+                    &entity.pos.load(),
+                    1.0,
+                    (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, 1.0),
+                );
+            }
             return;
         };
 
@@ -160,5 +204,20 @@ impl Mob for ZombifiedPiglinEntity {
         }
 
         self.maybe_alert_others(&target);
+
+        // Angry ambient sound
+        if rand::random_range(0..40) == 0 && !entity.silent.load(Ordering::Relaxed) {
+            entity.world.load().play_sound_fine(
+                Sound::EntityZombifiedPiglinAngry,
+                SoundCategory::Hostile,
+                &entity.pos.load(),
+                1.0,
+                (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, 1.0),
+            );
+        }
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        Self::XP_REWARD
     }
 }

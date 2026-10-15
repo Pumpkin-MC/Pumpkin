@@ -1,10 +1,14 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::ai::util::RandomExt;
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -17,14 +21,20 @@ use crate::entity::{
 pub struct BlazeEntity {
     pub entity: Arc<MobEntity>,
     pub is_charged: AtomicBool,
+    pub allowed_height_offset: AtomicCell<f32>,
+    pub next_height_offset_change_tick: AtomicI32,
 }
 
 impl BlazeEntity {
+    pub const XP_REWARD: u32 = 10;
+
     pub fn new(entity: Entity) -> Arc<Self> {
         let entity = Arc::new(MobEntity::new(entity));
         let blaze = Self {
             entity,
             is_charged: AtomicBool::new(false),
+            allowed_height_offset: AtomicCell::new(0.5),
+            next_height_offset_change_tick: AtomicI32::new(0),
         };
         let mob_arc = Arc::new(blaze);
         let mob_weak: Weak<dyn Mob> = {
@@ -70,6 +80,7 @@ impl BlazeEntity {
         mob_arc
     }
 
+    #[must_use]
     pub fn is_charged(&self) -> bool {
         self.is_charged.load(Ordering::Relaxed)
     }
@@ -84,9 +95,23 @@ impl BlazeEntity {
     }
 }
 
+impl CustomSound for BlazeEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityBlazeDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityBlazeHurt)
+    }
+}
+
 impl Mob for BlazeEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
     }
 
     fn mob_tick(&self, caller: &dyn EntityBase) {
@@ -106,5 +131,47 @@ impl Mob for BlazeEntity {
         if base_entity.touching_water.load(Ordering::Relaxed) {
             caller.damage(caller, 1.0, DamageType::DROWN);
         }
+
+        // Vanilla height offset tracking & aerial flight boost
+        let next_offset_tick = self.next_height_offset_change_tick.load(Ordering::Relaxed);
+        if next_offset_tick <= 0 {
+            self.next_height_offset_change_tick
+                .store(100, Ordering::Relaxed);
+            let mut rng = rand::rng();
+            let new_offset = rng.triangle(0.5, 6.891) as f32;
+            self.allowed_height_offset.store(new_offset);
+        } else {
+            self.next_height_offset_change_tick
+                .store(next_offset_tick - 1, Ordering::Relaxed);
+        }
+
+        if let Some(target) = self.entity.get_target() {
+            let target_entity = target.get_entity();
+            if target_entity.is_alive() {
+                let target_eye_y = target_entity.pos.load().y + target_entity.get_eye_height();
+                let my_eye_y = base_entity.pos.load().y + base_entity.get_eye_height();
+                let allowed = f64::from(self.allowed_height_offset.load());
+                if target_eye_y > my_eye_y + allowed {
+                    let mut current_vel = base_entity.velocity.load();
+                    current_vel.y += (0.3 - current_vel.y) * 0.3;
+                    base_entity.velocity.store(current_vel);
+                }
+            }
+        }
+
+        // Ambient sound
+        if rand::random_range(0..100) == 0 && !base_entity.silent.load(Ordering::Relaxed) {
+            base_entity.world.load().play_sound_fine(
+                Sound::EntityBlazeAmbient,
+                SoundCategory::Hostile,
+                &base_entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        Self::XP_REWARD
     }
 }

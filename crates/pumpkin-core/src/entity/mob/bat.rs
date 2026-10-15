@@ -12,6 +12,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::chunk::ChunkHeightmapType;
 use rand::RngExt;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
@@ -228,6 +229,10 @@ impl Mob for BatEntity {
         &self.mob_entity
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         let block_pos = entity.block_pos.load();
@@ -275,5 +280,15 @@ impl Mob for BatEntity {
                 0.95,
             );
         }
+    }
+}
+
+impl CustomSound for BatEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityBatDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityBatHurt)
     }
 }

@@ -78,6 +78,18 @@ fn spawn_wither(world: &Arc<World>, pattern: &WitherPattern) {
     let wither = WitherEntity::new(entity);
     wither.make_invulnerable();
     world.spawn_entity(wither);
+
+    let center_f64 = pattern.center.to_centered_f64();
+    let min = [center_f64.x - 50.0, center_f64.y - 50.0, center_f64.z - 50.0];
+    let max = [center_f64.x + 50.0, center_f64.y + 50.0, center_f64.z + 50.0];
+    let search_box = pumpkin_util::math::boundingbox::BoundingBox::new_array(min, max);
+    for candidate in world.get_entities_at_box(&search_box) {
+        if let Some(player) = candidate.get_player() {
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::SummonWither,
+            );
+        }
+    }
 }
 
 #[pumpkin_block("wither_skeleton_skull")]

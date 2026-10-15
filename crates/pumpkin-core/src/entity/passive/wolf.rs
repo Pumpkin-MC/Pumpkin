@@ -19,7 +19,7 @@ use crate::entity::{
     ageable::AgeableMob,
     ai::behavior::neutral::apply_targets,
     ai::goal::{
-        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, beg::BegGoal,
+        active_target::{ActiveTargetGoal, TargetCondition}, avoid_entity::AvoidEntityGoal, beg::BegGoal,
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
         follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
@@ -120,15 +120,18 @@ impl WolfEntity {
             // 5: NonTameRandomTarget (Sheep, Rabbit, Fox)
             target_selector.add_goal(
                 5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SHEEP, false),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SHEEP, false)
+                    .when(TargetCondition::NonTamed),
             );
             target_selector.add_goal(
                 5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false)
+                    .when(TargetCondition::NonTamed),
             );
             target_selector.add_goal(
                 5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, false),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, false)
+                    .when(TargetCondition::NonTamed),
             );
             // 7: NearestAttackableTarget (Skeleton)
             target_selector.add_goal(
@@ -187,6 +190,10 @@ impl Mob for WolfEntity {
     }
 
     fn as_tamable(&self) -> Option<&dyn TamableAnimal> {
+        Some(self)
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
         Some(self)
     }
 
@@ -283,10 +290,6 @@ impl Mob for WolfEntity {
         &self.mob_entity
     }
 
-    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
-        Some(self)
-    }
-
     fn mob_set_variant_name(&self, name: &str) {
         let variant = WolfVariant::from_name(name).map_or(WolfVariant::Pale.id(), |v| v.id());
         self.variant.store(variant, Ordering::Relaxed);
@@ -324,6 +327,10 @@ impl Mob for WolfEntity {
             pumpkin_data::tracked_data::wolf::OWNER_UUID,
             self.get_owner(),
         );
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::wolf::DATA_ANGER_END_TIME,
+            self.get_anger_end_time(),
+        );
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
@@ -351,6 +358,102 @@ impl Mob for WolfEntity {
                     return true;
                 }
 
+                let current_armor = {
+                    let equip = self
+                        .mob_entity
+                        .living_entity
+                        .entity_equipment
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    equip
+                        .equipment
+                        .get(&pumpkin_data::data_component_impl::EquipmentSlot::BODY)
+                        .cloned()
+                        .unwrap_or_else(|| ItemStack::EMPTY.clone())
+                };
+
+                // Equip wolf armor
+                if item.id == Item::WOLF_ARMOR.id && current_armor.is_empty() && !self.is_baby() {
+                    let mut armor_to_equip = item_stack.clone();
+                    armor_to_equip.set_count(1);
+                    item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+                    {
+                        let mut equip = self
+                            .mob_entity
+                            .living_entity
+                            .entity_equipment
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        equip
+                            .equipment
+                            .insert(pumpkin_data::data_component_impl::EquipmentSlot::BODY, armor_to_equip.clone());
+                    }
+                    self.mob_entity.living_entity.send_equipment_changes(&[(
+                        pumpkin_data::data_component_impl::EquipmentSlot::BODY,
+                        armor_to_equip,
+                    )]);
+                    let pos = self.get_entity().pos.load();
+                    self.get_entity().world.load().play_sound(
+                        pumpkin_data::sound::Sound::ItemArmorEquipWolf,
+                        pumpkin_data::sound::SoundCategory::Neutral,
+                        &pos,
+                    );
+                    return true;
+                }
+
+                // Shear wolf armor
+                if item.id == Item::SHEARS.id && !current_armor.is_empty() {
+                    {
+                        let mut equip = self
+                            .mob_entity
+                            .living_entity
+                            .entity_equipment
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        equip
+                            .equipment
+                            .remove(&pumpkin_data::data_component_impl::EquipmentSlot::BODY);
+                    }
+                    self.mob_entity.living_entity.send_equipment_changes(&[(
+                        pumpkin_data::data_component_impl::EquipmentSlot::BODY,
+                        ItemStack::EMPTY.clone(),
+                    )]);
+                    let entity = self.get_entity();
+                    let world = entity.world.load();
+                    let pos = entity.pos.load();
+                    world.play_sound(
+                        pumpkin_data::sound::Sound::ItemArmorUnequipWolf,
+                        pumpkin_data::sound::SoundCategory::Neutral,
+                        &pos,
+                    );
+                    let mut dropped_armor = current_armor;
+                    if !player.inventory().insert_stack_anywhere(&mut dropped_armor) {
+                        world.drop_stack(&pos.to_block_pos(), dropped_armor);
+                    }
+                    if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                        let _ = item_stack.damage_item(1);
+                    }
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::RemoveWolfArmor,
+                    );
+                    return true;
+                }
+
+                // Repair wolf armor with armadillo scute
+                if item.id == Item::ARMADILLO_SCUTE.id && !current_armor.is_empty() {
+                    item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+                    let pos = self.get_entity().pos.load();
+                    self.get_entity().world.load().play_sound(
+                        pumpkin_data::sound::Sound::ItemWolfArmorRepair,
+                        pumpkin_data::sound::SoundCategory::Neutral,
+                        &pos,
+                    );
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::RepairWolfArmor,
+                    );
+                    return true;
+                }
+
                 let parent_interaction = self.animal_interact(player, item_stack, ambient);
                 if !parent_interaction {
                     self.set_ordered_to_sit(!self.is_ordered_to_sit());
@@ -364,7 +467,19 @@ impl Mob for WolfEntity {
             if rng.random_range(0..3) == 0 {
                 TamableAnimal::tame(self, player.gameprofile.id);
                 self.set_ordered_to_sit(true);
+                self.mob_entity.living_entity.set_max_health(40.0);
+                self.mob_entity.living_entity.set_health(40.0);
                 self.spawn_taming_particles(true);
+                let variant_id = self.variant.load(Ordering::Relaxed);
+                let variant_str = WolfVariant::all()
+                    .get(variant_id as usize)
+                    .map_or("minecraft:pale", WolfVariant::asset_id);
+                player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::TamedAnimal {
+                        animal_type: "minecraft:wolf".to_string(),
+                        variant: Some(variant_str.to_string()),
+                    },
+                );
             } else {
                 self.spawn_taming_particles(false);
             }

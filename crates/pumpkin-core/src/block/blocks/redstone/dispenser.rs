@@ -34,8 +34,8 @@ use crate::entity::{Entity, EntityBase};
 use crate::item::ItemMetadata;
 use crate::item::items::boat::BoatItem;
 use crate::item::items::bucket::{
-    FilledBucketItem, play_bucket_evaporation, should_evaporate_in_nether, try_pickup_fluid_at,
-    try_place_filled_bucket,
+    FilledBucketItem, get_mob_for_bucket, play_bucket_evaporation, should_evaporate_in_nether,
+    try_pickup_fluid_at, try_place_filled_bucket,
 };
 use crate::item::items::honeycomb::try_wax_block;
 use crate::item::items::ignite::ignition::Ignition;
@@ -420,8 +420,15 @@ impl DispenserBlock {
         } else if Self::dispense_equipment(ctx, item) {
             // Armor, elytra, heads, saddles, horse/wolf armor and llama carpets
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+        } else if item.item.id == Item::BONE_MEAL.id {
+            if Self::dispense_bone_meal(ctx, item) {
+                Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+            } else {
+                Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserFail);
+            }
+        } else if item.item.id == Item::CHEST.id && Self::dispense_chest(ctx, item) {
+            Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
         } else {
-            // TODO: Bone meal, bottles o' enchanting, chests onto llamas, brushes onto armadillos
             // Default / Drop
             Self::drop_item(ctx, item);
         }
@@ -832,8 +839,8 @@ impl DispenserBlock {
 
     fn dispense_filled_bucket(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
         let front = Self::target_position(ctx);
+        let item_ref = item.item;
 
-        // TODO: Spawn the stored entity for axolotl/fish/tadpole buckets, like the player path.
         let emptied = if should_evaporate_in_nether(item.item, ctx.world) {
             play_bucket_evaporation(ctx.world, &front.to_f64());
             true
@@ -847,6 +854,20 @@ impl DispenserBlock {
         };
 
         if emptied {
+            if let Some((entity_type, sound)) = get_mob_for_bucket(item_ref) {
+                let spawn_coord = Vector3::new(
+                    f64::from(front.0.x) + 0.5,
+                    f64::from(front.0.y),
+                    f64::from(front.0.z) + 0.5,
+                );
+                let mob = from_type(entity_type, spawn_coord, ctx.world, Uuid::new_v4());
+                ctx.world.spawn_entity(mob);
+                ctx.world.play_sound(
+                    sound,
+                    pumpkin_data::sound::SoundCategory::Blocks,
+                    &spawn_coord,
+                );
+            }
             *item = ItemStack::new(1, &Item::BUCKET);
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
         } else {
@@ -1276,5 +1297,80 @@ impl DispenserBlock {
 
         let item_entity = Arc::new(ItemEntity::new_with_velocity(entity, stack, velocity, 40));
         ctx.world.spawn_entity(item_entity);
+    }
+
+    fn dispense_bone_meal(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
+        let target = Self::target_position(ctx);
+        let (target_block, target_state_id) = ctx.world.get_block_and_state_id(&target);
+        if let Some(server) = ctx.world.server.upgrade() {
+            if server
+                .block_registry
+                .bone_meal(target_block, ctx.world, &target, target_state_id)
+            {
+                let _ = item.split(1);
+                ctx.world
+                    .sync_world_event(WorldEvent::ParticlesAndSoundPlantGrowth, target, 15);
+                return true;
+            }
+        }
+        false
+    }
+
+    fn dispense_chest(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
+        let target_box = BoundingBox::from_block(&Self::target_position(ctx));
+        let entities = ctx.world.get_entities_at_box(&target_box);
+        for entity in entities {
+            let entity_type = entity.get_entity().entity_type;
+            if entity_type == &EntityType::LLAMA || entity_type == &EntityType::TRADER_LLAMA {
+                if let Some(llama) = entity
+                    .cast_any()
+                    .downcast_ref::<crate::entity::passive::llama::LlamaEntity>()
+                {
+                    if llama.is_tame() && !llama.has_chest() && !llama.is_baby() {
+                        llama.set_has_chest(true);
+                        let _ = item.split(1);
+                        ctx.world.play_sound(
+                            Sound::EntityDonkeyChest,
+                            SoundCategory::Neutral,
+                            &llama.get_entity().pos.load(),
+                        );
+                        return true;
+                    }
+                }
+            } else if entity_type == &EntityType::DONKEY {
+                if let Some(donkey) = entity
+                    .cast_any()
+                    .downcast_ref::<crate::entity::passive::donkey::DonkeyEntity>()
+                {
+                    if donkey.is_tame() && !donkey.has_chest() && !donkey.is_baby() {
+                        donkey.set_has_chest(true);
+                        let _ = item.split(1);
+                        ctx.world.play_sound(
+                            Sound::EntityDonkeyChest,
+                            SoundCategory::Neutral,
+                            &donkey.get_entity().pos.load(),
+                        );
+                        return true;
+                    }
+                }
+            } else if entity_type == &EntityType::MULE {
+                if let Some(mule) = entity
+                    .cast_any()
+                    .downcast_ref::<crate::entity::passive::mule::MuleEntity>()
+                {
+                    if mule.is_tame() && !mule.has_chest() && !mule.is_baby() {
+                        mule.set_has_chest(true);
+                        let _ = item.split(1);
+                        ctx.world.play_sound(
+                            Sound::EntityDonkeyChest,
+                            SoundCategory::Neutral,
+                            &mule.get_entity().pos.load(),
+                        );
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 }

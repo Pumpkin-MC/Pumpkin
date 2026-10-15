@@ -2,8 +2,10 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -20,6 +22,8 @@ pub struct EndermiteEntity {
 }
 
 impl EndermiteEntity {
+    pub const XP_REWARD: u32 = 3;
+
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let endermite = Self {
@@ -63,9 +67,23 @@ impl EndermiteEntity {
     }
 }
 
+impl CustomSound for EndermiteEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityEndermiteDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityEndermiteHurt)
+    }
+}
+
 impl Mob for EndermiteEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
@@ -87,6 +105,21 @@ impl Mob for EndermiteEntity {
         let life = self.lifetime.fetch_add(1, Ordering::Relaxed) + 1;
         if life >= 2400 {
             entity.remove();
+            return;
         }
+
+        if rand::random_range(0..100) == 0 && !entity.silent.load(Ordering::Relaxed) {
+            entity.world.load().play_sound_fine(
+                Sound::EntityEndermiteAmbient,
+                SoundCategory::Hostile,
+                &entity.pos.load(),
+                1.0,
+                (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, 1.0),
+            );
+        }
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        Self::XP_REWARD
     }
 }

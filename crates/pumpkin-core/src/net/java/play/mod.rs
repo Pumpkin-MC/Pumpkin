@@ -61,7 +61,7 @@ use pumpkin_protocol::java::client::play::{
     CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction, PlayerInfoFlags,
 };
 use pumpkin_protocol::java::server::play::{
-    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SAttack, SBundleItemSelected,
+    Action, ActionType, CommandBlockMode, FLAG_IN_WALL, FLAG_ON_GROUND, SAttack, SBundleItemSelected,
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClientCommand,
     SClientInformationPlay, SCommandSuggestion, SConfirmTeleport,
     SCookieResponse as SPCookieResponse, SEditBook, SInteract, SJigsawGenerate, SKeepAlive,

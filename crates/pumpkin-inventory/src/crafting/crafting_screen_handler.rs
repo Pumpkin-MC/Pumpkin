@@ -581,6 +581,9 @@ impl ScreenHandler for CraftingTableScreenHandler {
     fn on_closed(&mut self, player: &dyn InventoryPlayer) {
         self.default_on_closed(player);
         self.drop_inventory(player, self.crafting_inventory.clone());
+        if !self.get_behaviour().slots.is_empty() {
+            self.get_behaviour().slots[0].set_stack(ItemStack::EMPTY.clone());
+        }
     }
     fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
         let slot = self.get_behaviour().slots[slot_index as usize].clone();

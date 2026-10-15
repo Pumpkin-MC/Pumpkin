@@ -14,6 +14,7 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal,
         wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     item::ItemEntity,
     mob::{Mob, MobEntity, RangedAttackMob},
     player::Player,
@@ -133,6 +134,27 @@ impl Mob for SnowGolemEntity {
         &self.mob_entity
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            entity.world.load().play_sound_fine(
+                Sound::EntitySnowGolemAmbient,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
+    }
+
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let flags = if self.has_pumpkin() { 16u8 } else { 0u8 };
@@ -158,6 +180,16 @@ impl Mob for SnowGolemEntity {
             return true;
         }
         false
+    }
+}
+
+impl CustomSound for SnowGolemEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntitySnowGolemDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntitySnowGolemHurt)
     }
 }
 

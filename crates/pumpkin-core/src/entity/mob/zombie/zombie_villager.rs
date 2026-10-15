@@ -8,6 +8,7 @@ use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::world::WorldEvent;
@@ -18,6 +19,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
 use uuid::Uuid;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::passive::villager::VillagerEntity;
@@ -261,6 +263,10 @@ impl Mob for ZombieVillagerEntity {
         &self.mob_entity.mob_entity
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn spawn_as_baby(&self) -> bool {
         self.mob_entity.spawn_as_baby()
     }
@@ -299,6 +305,11 @@ impl Mob for ZombieVillagerEntity {
                 .has_effect(&StatusEffect::WEAKNESS)
             {
                 item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+                player.increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Used,
+                    Item::GOLDEN_APPLE.id as i32,
+                    1,
+                );
                 self.start_converting(
                     Some(player.get_entity().entity_uuid),
                     rand::random_range(
@@ -312,7 +323,22 @@ impl Mob for ZombieVillagerEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        if !self.get_entity().is_alive() || !self.is_converting() {
+        let entity = self.get_entity();
+        if !entity.is_alive() {
+            return;
+        }
+
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            entity.world.load().play_sound_fine(
+                Sound::EntityZombieVillagerAmbient,
+                SoundCategory::Hostile,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
+
+        if !self.is_converting() {
             return;
         }
         let progress = self.conversion_progress();
@@ -320,6 +346,16 @@ impl Mob for ZombieVillagerEntity {
             self.conversion_time.store(0, Ordering::Relaxed);
             self.finish_conversion();
         }
+    }
+
+    fn on_damage(&self, _damage_type: pumpkin_data::damage::DamageType, source: Option<&dyn EntityBase>) {
+        if !self.is_converting() {
+            self.mob_entity.try_spawn_reinforcements(source);
+        }
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        Mob::get_base_experience_reward(self.mob_entity.as_ref())
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
@@ -398,6 +434,16 @@ impl Mob for ZombieVillagerEntity {
         {
             self.start_converting(nbt.get_uuid("ConversionPlayer"), conversion_time);
         }
+    }
+}
+
+impl CustomSound for ZombieVillagerEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityZombieVillagerDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityZombieVillagerHurt)
     }
 }
 

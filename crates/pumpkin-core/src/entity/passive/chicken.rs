@@ -230,7 +230,7 @@ impl Mob for ChickenEntity {
         if (!on_ground) && current_velocity.y < 0.0 {
             entity.set_velocity(current_velocity.multiply(1.0, 0.6, 1.0));
         }
-        if self.egg_lay_time.fetch_sub(1, Ordering::Relaxed) <= 1 {
+        if !self.is_baby() && self.egg_lay_time.fetch_sub(1, Ordering::Relaxed) <= 1 {
             let next_time = rand::rng().random_range(6000..12000);
             let world = entity.world.load_full();
             let pos = entity.block_pos.load();
@@ -247,6 +247,11 @@ impl Mob for ChickenEntity {
                     .fire_blocking(&server, &mut drop_event);
             }
             if !drop_event.cancelled {
+                world.play_sound(
+                    Sound::EntityChickenEgg,
+                    pumpkin_data::sound::SoundCategory::Neutral,
+                    &entity.pos.load(),
+                );
                 world.drop_stack(&pos, ItemStack::new(1, &Item::EGG));
             }
             self.egg_lay_time.store(next_time, Ordering::Relaxed);

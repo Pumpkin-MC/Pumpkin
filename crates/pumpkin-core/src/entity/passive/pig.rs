@@ -215,6 +215,31 @@ impl Mob for PigEntity {
         &self.mob_entity
     }
 
+    fn mob_on_lightning_strike(
+        &self,
+        caller: &dyn EntityBase,
+        lightning: &crate::entity::lightning::LightningBoltEntity,
+    ) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let difficulty = world.level_info.load().difficulty;
+        if difficulty != pumpkin_util::Difficulty::Peaceful {
+            let pos = entity.pos.load();
+            let new_entity = Entity::new(world.clone(), pos, &EntityType::ZOMBIFIED_PIGLIN);
+            new_entity.yaw.store(entity.yaw.load());
+            new_entity.pitch.store(entity.pitch.load());
+            new_entity.head_yaw.store(entity.head_yaw.load());
+            let zombified =
+                crate::entity::mob::zombified_piglin::ZombifiedPiglinEntity::new(new_entity);
+            world.spawn_entity(zombified);
+            entity.remove();
+        } else {
+            self.mob_entity
+                .living_entity
+                .on_lightning_strike(caller, lightning);
+        }
+    }
+
     fn get_item_steerable(&self) -> Option<&dyn ItemSteerable> {
         Some(self)
     }

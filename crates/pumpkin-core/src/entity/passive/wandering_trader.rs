@@ -42,6 +42,7 @@ use crate::entity::ai::goal::trade_with_player::TradeWithPlayerGoal;
 use crate::entity::ai::goal::wander_around::WanderAroundGoal;
 use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::player::Player;
@@ -851,6 +852,10 @@ impl Mob for WanderingTraderEntity {
         true
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         // Despawn delay handling (vanilla aiStep / maybeDespawn)
         if !self.is_trading.load(Ordering::Relaxed) {
@@ -877,22 +882,32 @@ impl Mob for WanderingTraderEntity {
             let mut rng = rand::rng();
             self.ambient_sound_timer
                 .store(rng.random_range(80..=160), Ordering::Relaxed);
-            let sound = if self.is_trading.load(Ordering::Relaxed) {
-                Sound::EntityWanderingTraderTrade
-            } else {
-                Sound::EntityWanderingTraderAmbient
-            };
-            self.mob_entity
-                .living_entity
-                .entity
-                .world
-                .load()
-                .play_sound(
+            let entity = &self.mob_entity.living_entity.entity;
+            if entity.is_alive() && !entity.silent.load(Ordering::Relaxed) {
+                let sound = if self.is_trading.load(Ordering::Relaxed) {
+                    Sound::EntityWanderingTraderTrade
+                } else {
+                    Sound::EntityWanderingTraderAmbient
+                };
+                entity.world.load().play_sound_fine(
                     sound,
                     SoundCategory::Neutral,
-                    &self.mob_entity.living_entity.entity.pos.load(),
+                    &entity.pos.load(),
+                    1.0,
+                    1.0,
                 );
+            }
         }
+    }
+}
+
+impl CustomSound for WanderingTraderEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityWanderingTraderDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityWanderingTraderHurt)
     }
 }
 

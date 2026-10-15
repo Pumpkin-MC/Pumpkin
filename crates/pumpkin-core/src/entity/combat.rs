@@ -124,9 +124,7 @@ pub fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type: Attac
         AttackType::Weak => {
             world.play_sound(Sound::EntityPlayerAttackWeak, SoundCategory::Players, pos);
         }
-        AttackType::MaceSmash => {
-            world.play_sound(Sound::ItemMaceSmashAir, SoundCategory::Players, pos);
-        }
+        AttackType::MaceSmash => {}
     }
 }
 

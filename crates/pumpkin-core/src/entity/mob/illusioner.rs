@@ -1,11 +1,13 @@
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
-    Entity,
+    Entity, EntityBase,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
@@ -88,6 +90,10 @@ impl Mob for IllusionerEntity {
         &self.mob_entity
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn as_patrolling_monster(&self) -> Option<&dyn PatrollingMonster> {
         Some(self)
     }
@@ -96,12 +102,40 @@ impl Mob for IllusionerEntity {
         Some(self)
     }
 
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        // Ambient sound
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            entity.world.load().play_sound_fine(
+                Sound::EntityIllusionerAmbient,
+                SoundCategory::Hostile,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         self.write_raider_nbt(nbt);
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         self.read_raider_nbt(nbt);
+    }
+}
+
+impl CustomSound for IllusionerEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityIllusionerDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityIllusionerHurt)
     }
 }
 
@@ -117,6 +151,6 @@ impl Raider for IllusionerEntity {
     }
 
     fn get_celebrate_sound(&self) -> Sound {
-        Sound::EntityEvokerCelebrate
+        Sound::EntityIllusionerAmbient
     }
 }

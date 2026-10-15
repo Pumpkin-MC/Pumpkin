@@ -108,7 +108,18 @@ pub trait NeutralMob: Mob {
         self.get_neutral_data()
             .anger_end_time
             .store(end_time, Relaxed);
-        // TODO: sync DATA_ANGER_END_TIME so the client shows the angry pose.
+        let entity = self.get_entity();
+        if entity.entity_type == &pumpkin_data::entity::EntityType::WOLF {
+            entity.set_synced_data(
+                pumpkin_data::tracked_data::wolf::DATA_ANGER_END_TIME,
+                end_time,
+            );
+        } else if entity.entity_type == &pumpkin_data::entity::EntityType::BEE {
+            entity.set_synced_data(
+                pumpkin_data::tracked_data::bee::DATA_ANGER_END_TIME,
+                end_time,
+            );
+        }
     }
 
     fn set_time_to_remain_angry(&self, ticks: i32) {

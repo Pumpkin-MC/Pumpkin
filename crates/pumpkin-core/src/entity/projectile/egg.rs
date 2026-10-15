@@ -99,6 +99,46 @@ impl EntityBase for EggEntity {
         // Chicken spawn position offset slightly from hit position
         let spawn_pos = hit_pos.add(&normal.multiply(0.5, 0.5, 0.5));
 
+        let attacker = self
+            .thrown
+            .owner_id
+            .and_then(|id| world.get_entity_by_id(id));
+
+        if let (
+            crate::entity::projectile::ProjectileHit::Entity {
+                entity: hit_entity,
+                hit_pos: entity_hit_pos,
+                ..
+            },
+            Some(owner),
+        ) = (&hit, &attacker)
+        {
+            let victim_ref = &**hit_entity;
+            hit_entity.damage_with_context(
+                victim_ref,
+                0.0,
+                pumpkin_data::damage::DamageType::THROWN,
+                Some(*entity_hit_pos),
+                Some(owner.get_entity()),
+                Some(victim_ref),
+            );
+        } else if let crate::entity::projectile::ProjectileHit::Entity {
+            entity: hit_entity,
+            hit_pos: entity_hit_pos,
+            ..
+        } = &hit
+        {
+            let victim_ref = &**hit_entity;
+            hit_entity.damage_with_context(
+                victim_ref,
+                0.0,
+                pumpkin_data::damage::DamageType::THROWN,
+                Some(*entity_hit_pos),
+                Some(self.get_entity()),
+                Some(victim_ref),
+            );
+        }
+
         // Play egg break particles
         world.send_entity_status(
             self.get_entity(),

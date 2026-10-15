@@ -1,10 +1,14 @@
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
+use crate::entity::experience_orb::ExperienceOrbEntity;
+use crate::entity::item::ItemEntity;
 use crate::entity::projectile::{ProjectileHit, is_projectile};
 use crate::{
     entity::{Entity, EntityBase, living::LivingEntity, player::Player},
     server::Server,
 };
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -18,6 +22,8 @@ pub struct FishingBobberEntity {
     pub has_hit: AtomicBool,
     pub wait_countdown: AtomicI32,
     pub bite_countdown: AtomicI32,
+    pub luck: i32,
+    pub lure_speed: i32,
 }
 
 impl FishingBobberEntity {
@@ -25,10 +31,45 @@ impl FishingBobberEntity {
     const AIR_INERTIA: f64 = 0.92;
     const GRAVITY: f64 = 0.03;
 
-    pub fn new(entity: Entity, owner: &Player) -> Self {
-        let mut owner_pos = owner.living_entity.entity.pos.load();
-        owner_pos.y += owner.living_entity.entity.get_eye_height() - 0.1;
-        entity.pos.store(owner_pos);
+    pub fn new(entity: Entity, owner: &Player, luck: i32, lure_speed: i32) -> Self {
+        let yaw = owner.living_entity.entity.yaw.load();
+        let pitch = owner.living_entity.entity.pitch.load();
+        let yaw_rad = -yaw * (std::f32::consts::PI / 180.0) - std::f32::consts::PI;
+        let pitch_rad = -pitch * (std::f32::consts::PI / 180.0);
+        let y_cos = yaw_rad.cos();
+        let y_sin = yaw_rad.sin();
+        let x_cos = -pitch_rad.cos();
+        let x_sin = pitch_rad.sin();
+
+        let owner_pos = owner.living_entity.entity.pos.load();
+        let spawn_pos = Vector3::new(
+            owner_pos.x - f64::from(y_sin) * 0.3,
+            owner_pos.y + f64::from(owner.living_entity.entity.get_eye_height()),
+            owner_pos.z - f64::from(y_cos) * 0.3,
+        );
+        entity.pos.store(spawn_pos);
+        entity.yaw.store(yaw);
+        entity.pitch.store(pitch);
+
+        let tan_pitch = if x_cos.abs() < 1e-6 {
+            0.0
+        } else {
+            -(x_sin / x_cos)
+        };
+        let new_movement = Vector3::new(
+            -f64::from(y_sin),
+            f64::from(tan_pitch.clamp(-5.0, 5.0)),
+            -f64::from(y_cos),
+        );
+        let dist = new_movement.length();
+        let spread = 0.5 + (rand::random::<f64>() - rand::random::<f64>()) * 0.010_336_5;
+        let factor = 0.6 / dist + spread;
+        let vel = new_movement.multiply(factor, factor, factor);
+        entity.velocity.store(vel);
+
+        let luck = luck.max(0);
+        let lure_speed = lure_speed.max(0);
+        let initial_wait = (rand::random::<i32>().abs() % 501 + 100 - lure_speed).max(1);
 
         Self {
             entity,
@@ -36,13 +77,29 @@ impl FishingBobberEntity {
             hooked_entity_id: AtomicI32::new(0),
             in_ground: AtomicBool::new(false),
             has_hit: AtomicBool::new(false),
-            wait_countdown: AtomicI32::new(rand::random::<i32>().abs() % 600 + 100),
+            wait_countdown: AtomicI32::new(initial_wait),
             bite_countdown: AtomicI32::new(0),
+            luck,
+            lure_speed,
+        }
+    }
+
+    #[must_use]
+    pub fn new_unowned(entity: Entity) -> Self {
+        Self {
+            entity,
+            owner_id: 0,
+            hooked_entity_id: AtomicI32::new(0),
+            in_ground: AtomicBool::new(false),
+            has_hit: AtomicBool::new(false),
+            wait_countdown: AtomicI32::new(rand::random::<i32>().abs() % 501 + 100),
+            bite_countdown: AtomicI32::new(0),
+            luck: 0,
+            lure_speed: 0,
         }
     }
 
     pub fn reel_in(&self, player: &Player) -> i32 {
-        use pumpkin_data::item::Item;
         let world = self.entity.world.load();
         let hooked_id = self.hooked_entity_id.load(Ordering::Relaxed);
 
@@ -57,10 +114,17 @@ impl FishingBobberEntity {
                     .multiply(0.1, 0.1, 0.1)
                     .add_raw(0.0, delta.length().sqrt() * 0.08, 0.0);
             hooked.get_entity().add_velocity(motion);
-            return 1;
+            let is_item = hooked.get_entity().entity_type == &EntityType::ITEM;
+            return if is_item { 3 } else { 5 };
         }
 
         if self.bite_countdown.load(Ordering::Relaxed) > 0 {
+            self.bite_countdown.store(0, Ordering::Relaxed);
+            self.entity.set_synced_data(
+                pumpkin_data::tracked_data::fishing_bobber::BITING,
+                false,
+            );
+
             // Caught something!
             player.increment_stat(
                 pumpkin_data::statistic::StatisticCategory::Custom,
@@ -68,15 +132,61 @@ impl FishingBobberEntity {
                 1,
             );
 
-            // TODO: Use actual loot tables. For now, just give a raw cod.
-            let item_stack = ItemStack::new(1, &Item::COD);
-            // player.inventory().add_item(item_stack).await; // Need public add_item
+            // Sample loot table: gameplay/fishing
+            let params = crate::world::loot::LootContextParameters {
+                luck: self.luck as f32,
+                position: Some(self.entity.pos.load()),
+                ..Default::default()
+            };
+            let items = if let Some(handle) = world.get_loot_table("gameplay/fishing") {
+                crate::world::loot::generate_loot_from_handle(
+                    &handle,
+                    rand::random(),
+                    &params,
+                )
+            } else {
+                Vec::new()
+            };
 
-            player.trigger_advancement(
-                crate::entity::player::advancement::trigger::AdvancementTrigger::FishedItem {
-                    item_id: format!("minecraft:{}", item_stack.item.registry_key),
-                },
+            let items = if items.is_empty() {
+                vec![ItemStack::new(1, &pumpkin_data::item::Item::COD)]
+            } else {
+                items
+            };
+
+            let bobber_pos = self.entity.pos.load();
+            let player_pos = player.get_entity().pos.load();
+            let xa = player_pos.x - bobber_pos.x;
+            let ya = player_pos.y - bobber_pos.y;
+            let za = player_pos.z - bobber_pos.z;
+            let dist_sq = xa * xa + ya * ya + za * za;
+            let vel = Vector3::new(
+                xa * 0.1,
+                ya * 0.1 + dist_sq.sqrt().sqrt() * 0.08,
+                za * 0.1,
             );
+
+            for item_stack in items {
+                player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::FishedItem {
+                        item_id: format!("minecraft:{}", item_stack.item.registry_key),
+                    },
+                );
+
+                let item_entity = Entity::new(world.clone(), bobber_pos, &EntityType::ITEM);
+                let item = Arc::new(ItemEntity::new_with_velocity(
+                    item_entity,
+                    item_stack,
+                    vel,
+                    10,
+                ));
+                world.spawn_entity(item);
+            }
+
+            // Experience orb: random(1..=6)
+            let xp = rand::random_range(1..=6);
+            let orb_pos = Vector3::new(player_pos.x, player_pos.y + 0.5, player_pos.z);
+            ExperienceOrbEntity::spawn(&world, orb_pos, xp);
 
             world.play_sound(
                 Sound::EntityExperienceOrbPickup,
@@ -84,6 +194,10 @@ impl FishingBobberEntity {
                 &player.position(),
             );
             return 1;
+        }
+
+        if self.in_ground.load(Ordering::Relaxed) {
+            return 2;
         }
 
         0
@@ -103,6 +217,10 @@ impl FishingBobberEntity {
             if let Some(hooked) = world.get_entity_by_id(hooked_id) {
                 if hooked.get_entity().removed.load(Ordering::Relaxed) {
                     self.hooked_entity_id.store(0, Ordering::Relaxed);
+                    entity.set_synced_data(
+                        pumpkin_data::tracked_data::fishing_bobber::HOOKED_ENTITY,
+                        0,
+                    );
                 } else {
                     let mut hooked_pos = hooked.get_entity().pos.load();
                     hooked_pos.y += hooked.get_entity().get_eye_height() * 0.8;
@@ -111,6 +229,10 @@ impl FishingBobberEntity {
                 }
             } else {
                 self.hooked_entity_id.store(0, Ordering::Relaxed);
+                entity.set_synced_data(
+                    pumpkin_data::tracked_data::fishing_bobber::HOOKED_ENTITY,
+                    0,
+                );
             }
         }
 
@@ -122,8 +244,17 @@ impl FishingBobberEntity {
 
             let bite = self.bite_countdown.load(Ordering::Relaxed);
             if bite > 0 {
-                self.bite_countdown.store(bite - 1, Ordering::Relaxed);
-                if bite % 5 == 0 {
+                let new_bite = bite - 1;
+                self.bite_countdown.store(new_bite, Ordering::Relaxed);
+                if new_bite == 0 {
+                    self.entity.set_synced_data(
+                        pumpkin_data::tracked_data::fishing_bobber::BITING,
+                        false,
+                    );
+                    let new_wait =
+                        (rand::random::<i32>().abs() % 501 + 100 - self.lure_speed).max(1);
+                    self.wait_countdown.store(new_wait, Ordering::Relaxed);
+                } else if new_bite % 5 == 0 {
                     world.spawn_particle(
                         entity.pos.load(),
                         Vector3::new(0.1f32, 0.1f32, 0.1f32),
@@ -138,9 +269,12 @@ impl FishingBobberEntity {
                     self.wait_countdown.store(wait - 1, Ordering::Relaxed);
                 } else {
                     // Start bite
-                    self.bite_countdown.store(40, Ordering::Relaxed);
-                    self.wait_countdown
-                        .store(rand::random::<i32>().abs() % 600 + 100, Ordering::Relaxed);
+                    let bite_ticks = rand::random_range(20..=40);
+                    self.bite_countdown.store(bite_ticks, Ordering::Relaxed);
+                    self.entity.set_synced_data(
+                        pumpkin_data::tracked_data::fishing_bobber::BITING,
+                        true,
+                    );
 
                     world.play_sound(
                         Sound::EntityFishingBobberSplash,

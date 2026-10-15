@@ -46,6 +46,24 @@ impl ItemBehaviour for AxeItem {
             }
             if let Some(particle) = result.entry.particle {
                 world.sync_world_event(particle, location, 0);
+                if particle == pumpkin_data::world::WorldEvent::ParticlesWaxOff {
+                    player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::WaxOff);
+                }
+            }
+
+            let copper_bulb_blocks = [
+                &Block::EXPOSED_COPPER_BULB,
+                &Block::WEATHERED_COPPER_BULB,
+                &Block::OXIDIZED_COPPER_BULB,
+                &Block::WAXED_EXPOSED_COPPER_BULB,
+                &Block::WAXED_WEATHERED_COPPER_BULB,
+                &Block::WAXED_OXIDIZED_COPPER_BULB,
+            ];
+            if copper_bulb_blocks.contains(&block) {
+                let current_state = world.get_block_state(&location);
+                if current_state.luminance > 0 {
+                    player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::LightenUp);
+                }
             }
 
             if block.has_tag(&tag::Block::MINECRAFT_DOORS) {

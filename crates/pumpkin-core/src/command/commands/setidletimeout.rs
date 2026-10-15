@@ -60,12 +60,13 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         PermissionDefault::Op(PermissionLvl::Three),
     ));
 
-    dispatcher.register(
+    dispatcher.register_with_aliases(
         command("setidletimeout", DESCRIPTION)
             .requires(PERMISSION)
             .then(
                 argument(ARG_MINUTES, IntegerArgumentType::with_min(0))
                     .executes(SetIdleTimeoutExecutor),
             ),
+        &["setplayeridletimeout"],
     );
 }

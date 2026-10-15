@@ -7,7 +7,7 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use crate::world::World;
-use pumpkin_data::block_properties::OakDoorLikeProperties;
+use pumpkin_data::block_properties::{OakDoorLikeProperties, OakTrapdoorLikeProperties};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::Taggable;
@@ -40,6 +40,7 @@ impl ItemBehaviour for HoneyCombItem {
         let world = player.world();
         if try_wax_block(&world, location, block) {
             item.decrement_unless_creative(player.gamemode.load(), 1);
+            player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::WaxOn);
             BlockActionResult::Success
         } else {
             BlockActionResult::Pass
@@ -70,8 +71,18 @@ pub(crate) fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Bloc
         new_door_properties.hinge = door_props.hinge;
         new_door_properties.powered = door_props.powered;
         new_door_properties.to_state_id(new_block)
+    } else if block.has_tag(&tag::Block::MINECRAFT_TRAPDOORS) {
+        // Carry the trapdoor state over to the waxed trapdoor.
+        let trapdoor_info = world.get_block_state_id(&location);
+        let trapdoor_props = OakTrapdoorLikeProperties::from_state_id(trapdoor_info);
+        let mut new_trapdoor_props = OakTrapdoorLikeProperties::default(new_block);
+        new_trapdoor_props.facing = trapdoor_props.facing;
+        new_trapdoor_props.open = trapdoor_props.open;
+        new_trapdoor_props.half = trapdoor_props.half;
+        new_trapdoor_props.powered = trapdoor_props.powered;
+        new_trapdoor_props.waterlogged = trapdoor_props.waterlogged;
+        new_trapdoor_props.to_state_id(new_block)
     } else {
-        // TODO: Also carry over the properties of trapdoors.
         new_block.default_state.id
     };
 

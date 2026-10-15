@@ -100,6 +100,21 @@ impl EntityBase for EndCrystalEntity {
             fight.on_crystal_destroyed(&world, self.entity.entity_uuid);
         }
 
+        for entity in world.entities.load().iter() {
+            if entity.get_entity().entity_type == &pumpkin_data::entity::EntityType::ENDER_DRAGON {
+                if let Some(dragon) = entity
+                    .cast_any()
+                    .downcast_ref::<crate::entity::boss::ender_dragon::EnderDragonEntity>()
+                {
+                    dragon.on_crystal_destroyed(
+                        self.entity.entity_uuid,
+                        self.entity.pos.load(),
+                        _source,
+                    );
+                }
+            }
+        }
+
         true
     }
 

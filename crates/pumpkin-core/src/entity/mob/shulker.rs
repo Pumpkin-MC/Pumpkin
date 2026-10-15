@@ -19,6 +19,7 @@ use crate::entity::ai::goal::look_around::RandomLookAroundGoal;
 use crate::entity::ai::goal::look_at_entity::LookAtEntityGoal;
 use crate::entity::ai::goal::revenge::RevengeGoal;
 use crate::entity::ai::goal::{Controls, Goal};
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
 use crate::entity::{Entity, EntityBase};
@@ -308,6 +309,20 @@ impl ShulkerEntity {
     }
 }
 
+impl CustomSound for ShulkerEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityShulkerDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(if self.is_closed() {
+            Sound::EntityShulkerHurtClosed
+        } else {
+            Sound::EntityShulkerHurt
+        })
+    }
+}
+
 impl Mob for ShulkerEntity {
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_byte("AttachFace", self.attach_face.load(Ordering::Relaxed) as i8);
@@ -331,6 +346,10 @@ impl Mob for ShulkerEntity {
         &self.mob_entity
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn get_mob_gravity(&self) -> f64 {
         0.0
     }
@@ -350,6 +369,17 @@ impl Mob for ShulkerEntity {
         let face = self.get_attach_face();
         if !self.can_stay_at(&pos, face) {
             self.find_new_attachment();
+        }
+
+        // Ambient sound
+        if !self.is_closed() && !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            entity.world.load().play_sound_fine(
+                Sound::EntityShulkerAmbient,
+                SoundCategory::Hostile,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
         }
     }
 

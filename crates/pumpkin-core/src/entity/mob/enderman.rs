@@ -23,6 +23,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use rand::RngExt;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::{
@@ -396,8 +397,22 @@ impl NeutralMob for EndermanEntity {
     }
 }
 
+impl CustomSound for EndermanEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityEndermanDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityEndermanHurt)
+    }
+}
+
 impl Mob for EndermanEntity {
     fn as_neutral(&self) -> Option<&dyn NeutralMob> {
+        Some(self)
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
         Some(self)
     }
 
@@ -421,18 +436,59 @@ impl Mob for EndermanEntity {
         self.set_target(self.as_valid_target(target));
     }
 
-    // TODO: sunlight avoidance, carried block drop on death, angerable system, ambient sound override
     fn mob_tick(&self, caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
+        let world = entity.world.load_full();
+
+        // Carried block drop on death
         if !entity.is_alive() {
+            if let Some(block_state) = self.carried_block.load() {
+                self.set_carried_block(None);
+                let block = pumpkin_data::Block::from_state_id(block_state);
+                if block.item_id != 0
+                    && let Some(item) = Item::from_id(block.item_id)
+                {
+                    world.drop_stack(
+                        &entity.block_pos.load(),
+                        pumpkin_data::item_stack::ItemStack::new(1, item),
+                    );
+                }
+            }
             return;
         }
 
-        let world = entity.world.load();
         let raining_at_feet = world.is_raining_at(&entity.block_pos.load());
         let raining_at_head = world.is_raining_at(&entity.bounding_box.load().max_block_pos());
         if entity.touching_water.load(Ordering::SeqCst) || raining_at_feet || raining_at_head {
             caller.damage(caller, 1.0, DamageType::DROWN);
+        }
+
+        // Vanilla sunlight avoidance:
+        // When in daylight and seeing sky, Enderman teleports away randomly
+        if self.mob_entity.is_in_daylight() && world.can_see_sky(&entity.block_pos.load()) {
+            if rand::random_range(0..60) == 0 {
+                self.set_target(None);
+                self.teleport_randomly();
+            }
+        }
+
+        // Vanilla ambient sound: screaming when creepy, normal ambient when calm
+        if !entity.silent.load(Ordering::Relaxed) {
+            if self.is_creepy() {
+                if rand::random_range(0..80) == 0 {
+                    world.play_sound(
+                        Sound::EntityEndermanScream,
+                        SoundCategory::Hostile,
+                        &entity.pos.load(),
+                    );
+                }
+            } else if rand::random_range(0..100) == 0 {
+                world.play_sound(
+                    Sound::EntityEndermanAmbient,
+                    SoundCategory::Hostile,
+                    &entity.pos.load(),
+                );
+            }
         }
     }
 
@@ -441,9 +497,10 @@ impl Mob for EndermanEntity {
         if is_projectile {
             for _ in 0..64 {
                 if self.teleport_randomly() {
-                    return false;
+                    break;
                 }
             }
+            return false;
         }
         true
     }

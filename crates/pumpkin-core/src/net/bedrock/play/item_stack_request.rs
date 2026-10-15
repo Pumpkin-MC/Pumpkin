@@ -111,6 +111,20 @@ impl BedrockClient {
                                     break;
                                 }
 
+                                if let Some(dest_slot) = map_bedrock_container_slot(
+                                    &*screen_handler,
+                                    destination.container_name.container_name,
+                                    destination.slot_id,
+                                ) {
+                                    if !screen_handler.get_behaviour().slots[dest_slot]
+                                        .can_insert(&dest_stack)
+                                    {
+                                        tracing::debug!("Destination slot cannot accept item");
+                                        result = 1;
+                                        break;
+                                    }
+                                }
+
                                 let merchant_result = screen_handler.window_type()
                                     == Some(pumpkin_data::screen::WindowType::Merchant)
                                     && matches!(
@@ -222,6 +236,31 @@ impl BedrockClient {
                                 get_slot_stack(&*screen_handler, &slot1, created_item.as_ref());
                             let stack2 =
                                 get_slot_stack(&*screen_handler, &slot2, created_item.as_ref());
+
+                            let screen_slot1 = map_bedrock_container_slot(
+                                &*screen_handler,
+                                slot1.container_name.container_name,
+                                slot1.slot_id,
+                            );
+                            let screen_slot2 = map_bedrock_container_slot(
+                                &*screen_handler,
+                                slot2.container_name.container_name,
+                                slot2.slot_id,
+                            );
+                            if let Some(s1) = screen_slot1 {
+                                if !screen_handler.get_behaviour().slots[s1].can_insert(&stack2) {
+                                    tracing::debug!("Slot 1 cannot accept swapped item");
+                                    result = 1;
+                                    break;
+                                }
+                            }
+                            if let Some(s2) = screen_slot2 {
+                                if !screen_handler.get_behaviour().slots[s2].can_insert(&stack1) {
+                                    tracing::debug!("Slot 2 cannot accept swapped item");
+                                    result = 1;
+                                    break;
+                                }
+                            }
 
                             update_slot_stack(player, &mut *screen_handler, &slot1, stack2.clone());
                             update_slot_stack(player, &mut *screen_handler, &slot2, stack1.clone());

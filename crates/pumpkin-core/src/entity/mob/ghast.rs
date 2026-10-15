@@ -11,6 +11,7 @@ use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::ai::goal::active_target::ActiveTargetGoal;
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::living::LivingEntity;
 use crate::entity::projectile::fireball::FireballEntity;
 use crate::entity::{
@@ -121,9 +122,39 @@ impl GhastEntity {
     }
 }
 
+impl CustomSound for GhastEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityGhastDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityGhastHurt)
+    }
+}
+
 impl Mob for GhastEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if entity.is_alive()
+            && rand::random_range(0..100) == 0
+            && !entity.silent.load(Ordering::Relaxed)
+        {
+            entity.world.load().play_sound_fine(
+                Sound::EntityGhastAmbient,
+                SoundCategory::Hostile,
+                &entity.pos.load(),
+                5.0,
+                (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, 1.0),
+            );
+        }
     }
 
     fn get_mob_gravity(&self) -> f64 {

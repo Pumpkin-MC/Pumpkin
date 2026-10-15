@@ -87,6 +87,7 @@ pub mod lightning;
 pub mod living;
 pub mod marker;
 pub mod mob;
+pub mod ominous_item_spawner;
 pub mod passive;
 pub mod player;
 pub mod projectile;
@@ -507,7 +508,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         if entity.fire_ticks.load(Ordering::Relaxed) < ticks as i32 {
             entity.fire_ticks.store(ticks as i32, Ordering::Relaxed);
         }
-        // TODO: defrost
+        // Vanilla: clearTicksFrozen when set on fire
+        entity.set_frozen_ticks(0);
     }
 
     /// Called when a player collides with an entity
@@ -715,6 +717,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn reset_love(&self) {}
+
+    fn get_breeder(&self) -> Option<uuid::Uuid> {
+        None
+    }
 
     fn set_breeding_cooldown(&self, _ticks: i32) {}
 
@@ -1016,7 +1022,7 @@ impl Entity {
             .level
             .get_rough_biome(&BlockPos::new(floor_x, floor_y, floor_z));
 
-        Self {
+        let entity = Self {
             entity_id,
             entity_uuid,
             entity_type,
@@ -1094,7 +1100,12 @@ impl Entity {
             last_sent_pos: AtomicCell::new(position),
             last_sent_velocity: AtomicCell::new(Vector3::default()),
             custom_data: std::sync::Mutex::new(NbtCompound::new()),
-        }
+        };
+        entity.set_synced_data(
+            tracked_data::entity::DATA_AIR_SUPPLY_ID,
+            VarInt(300),
+        );
+        entity
     }
 
     pub fn add_velocity(&self, velocity: Vector3<f64>) {
@@ -2721,13 +2732,13 @@ impl Entity {
         self.sprinting.load(Ordering::Relaxed)
     }
     pub fn check_fall_flying(&self) -> bool {
-        !self.on_ground.load(Relaxed)
+        !self.on_ground.load(Relaxed) && !self.touching_water.load(Relaxed)
     }
 
     pub fn set_fall_flying(&self, fall_flying: bool) {
-        assert_ne!(self.fall_flying.load(Relaxed), fall_flying);
-        self.fall_flying.store(fall_flying, Relaxed);
-        self.set_flag(Flag::FallFlying, fall_flying);
+        if self.fall_flying.swap(fall_flying, Relaxed) != fall_flying {
+            self.set_flag(Flag::FallFlying, fall_flying);
+        }
     }
     pub fn is_fall_flying(&self) -> bool {
         self.fall_flying.load(Ordering::Relaxed)
@@ -3646,10 +3657,13 @@ impl Entity {
 
             // Vanilla: ridingCooldown = 60 (prevents immediate re-mount)
             passenger_entity.riding_cooldown.store(60, Relaxed);
-            // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
+            let world = self.world.load();
+            world.emit_game_event(
+                pumpkin_data::game_event::GameEvent::EntityDismount.name(),
+                self.pos.load(),
+            );
 
             // Send CSetPassengers directly to the dismounting player before broadcasting it.
-            let world = self.world.load();
             let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
             if let Some(player) = passenger.get_player() {
                 player.try_send_client_packet(&passengers_packet);

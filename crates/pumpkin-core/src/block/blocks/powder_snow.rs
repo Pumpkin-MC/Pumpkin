@@ -72,6 +72,11 @@ pub(crate) fn collision_shape_for_entity(
         && is_entity_above_block(base, position)
         && !is_entity_descending(base)
     {
+        if let Some(player) = entity.get_player() {
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::WalkOnPowderSnowWithLeatherBoots,
+            );
+        }
         return Some(BoundingBox::full_block());
     }
 
@@ -103,6 +108,14 @@ impl BlockBehaviour for PowderSnowBlock {
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         let entity = args.entity.get_entity();
         entity.slow_movement(args.state, Vector3::new(0.9, 1.5, 0.9));
+
+        if can_entity_walk_on_powder_snow(args.entity) {
+            if let Some(player) = args.entity.get_player() {
+                player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::WalkOnPowderSnowWithLeatherBoots,
+                );
+            }
+        }
 
         if entity.fire_ticks.load(std::sync::atomic::Ordering::Relaxed) > 0 {
             let can_destroy = args.entity.get_player().is_some()

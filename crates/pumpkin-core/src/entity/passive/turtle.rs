@@ -6,7 +6,7 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 
@@ -15,9 +15,10 @@ use crate::entity::{
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+        look_at_entity::LookAtEntityGoal, tempt::TemptGoal,
         try_find_water::TryFindWaterGoal, wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
@@ -55,8 +56,7 @@ impl TurtleEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(TryFindWaterGoal));
-            goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, EscapeDangerGoal::new(1.2));
+            goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
             goal_selector.add_goal(3, BreedGoal::new(1.0));
             goal_selector.add_goal(4, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS, false)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
@@ -127,12 +127,40 @@ impl Mob for TurtleEntity {
         }
     }
 
+    fn is_pushed_by_fluids(&self) -> bool {
+        false
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.ageable_ai_step();
+
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        if !entity.silent.load(Ordering::Relaxed)
+            && !entity.touching_water.load(Ordering::Relaxed)
+            && entity.on_ground.load(Ordering::Relaxed)
+            && !self.is_baby()
+            && rand::random_range(0..100) == 0
+        {
+            entity.world.load().play_sound_fine(
+                Sound::EntityTurtleAmbientLand,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
     }
 
     fn mob_init_data_tracker(&self) {
@@ -150,5 +178,23 @@ impl Mob for TurtleEntity {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         self.animal_interact(player, item_stack, Sound::EntityTurtleAmbientLand)
+    }
+}
+
+impl CustomSound for TurtleEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        if self.is_baby() {
+            Some(Sound::EntityTurtleDeathBaby)
+        } else {
+            Some(Sound::EntityTurtleDeath)
+        }
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        if self.is_baby() {
+            Some(Sound::EntityTurtleHurtBaby)
+        } else {
+            Some(Sound::EntityTurtleHurt)
+        }
     }
 }

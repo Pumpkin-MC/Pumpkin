@@ -13,12 +13,14 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
     Entity, EntityBase,
+    ai::control::smooth_swimming_move_control::SmoothSwimmingMoveControl,
     ai::goal::{
         escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, tempt::TemptGoal, try_find_water::TryFindWaterGoal,
-        wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+        random_swimming::RandomSwimmingGoal, revenge::RevengeGoal, tempt::TemptGoal,
+        try_find_water::TryFindWaterGoal,
     },
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     player::Player,
 };
@@ -34,6 +36,12 @@ pub struct DolphinEntity {
 impl DolphinEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
+        *mob_entity
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Box::new(SmoothSwimmingMoveControl::new(85, 10, 1.0, 0.1, true));
+
         let dolphin = Self {
             mob_entity,
             got_fish: AtomicBool::new(false),
@@ -53,11 +61,10 @@ impl DolphinEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(TryFindWaterGoal));
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.6));
             goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.2, true)));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.2, TEMPT_ITEMS, false)));
-            goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(4, Box::new(RandomSwimmingGoal::new(1.2)));
             goal_selector.add_goal(
                 5,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
@@ -103,8 +110,38 @@ impl Mob for DolphinEntity {
         }
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
+    fn is_pushed_by_fluids(&self) -> bool {
+        false
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            let sound = if entity.touching_water.load(Ordering::Relaxed) {
+                Sound::EntityDolphinAmbientWater
+            } else {
+                Sound::EntityDolphinAmbient
+            };
+            entity.world.load().play_sound_fine(
+                sound,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
@@ -129,5 +166,15 @@ impl Mob for DolphinEntity {
         }
 
         false
+    }
+}
+
+impl CustomSound for DolphinEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityDolphinDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityDolphinHurt)
     }
 }

@@ -86,6 +86,10 @@ impl JavaClient {
     fn prepare_hand_item_for_use(player: &Arc<Player>, hand: Hand, held: &mut ItemStack) {
         let inventory = player.inventory();
 
+        if player.has_item_cooldown(held.item.registry_key) {
+            return;
+        }
+
         if let Some(cooldown) = held.get_use_cooldown() {
             let group = cooldown
                 .cooldown_group

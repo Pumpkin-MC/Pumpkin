@@ -675,7 +675,10 @@ pub trait ScreenHandler: Send + Sync {
                 let slot = self.get_behaviour().slots[current_index as usize].clone();
                 let mut slot_stack = slot.get_stack();
 
-                if !slot_stack.is_empty() && slot_stack.are_items_and_components_equal(stack) {
+                if !slot_stack.is_empty()
+                    && slot.can_insert(stack)
+                    && slot_stack.are_items_and_components_equal(stack)
+                {
                     let combined_count = slot_stack.item_count + stack.item_count;
                     let max_slot_count = slot.get_max_item_count_for_stack(&slot_stack);
                     if combined_count <= max_slot_count {

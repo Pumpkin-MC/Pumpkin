@@ -106,7 +106,18 @@ impl WardenSpawnTracker {
         }
     }
 
-    const fn set_warning_level(&mut self, warning_level: i32) {
+    pub const fn reset(&mut self) {
+        self.ticks_since_last_warning = 0;
+        self.warning_level = 0;
+        self.cooldown_ticks = 0;
+    }
+
+    #[must_use]
+    pub const fn warning_level(&self) -> i32 {
+        self.warning_level
+    }
+
+    pub const fn set_warning_level(&mut self, warning_level: i32) {
         self.warning_level = if warning_level < 0 {
             0
         } else if warning_level > MAX_WARNING_LEVEL {
@@ -132,5 +143,37 @@ impl WardenSpawnTracker {
         nbt.put_int("warning_level", self.warning_level);
         nbt.put_int("cooldown_ticks", self.cooldown_ticks);
         nbt
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_warden_spawn_tracker_warning_levels() {
+        let mut tracker = WardenSpawnTracker::default();
+        assert_eq!(tracker.warning_level(), 0);
+        assert_eq!(MAX_WARNING_LEVEL, 4);
+
+        tracker.set_warning_level(1);
+        assert_eq!(tracker.warning_level(), 1);
+
+        tracker.set_warning_level(4);
+        assert_eq!(tracker.warning_level(), 4);
+
+        // Clamping above MAX_WARNING_LEVEL
+        tracker.set_warning_level(5);
+        assert_eq!(tracker.warning_level(), 4);
+
+        // Clamping below 0
+        tracker.set_warning_level(-1);
+        assert_eq!(tracker.warning_level(), 0);
+
+        // NBT serialization / deserialization roundtrip
+        tracker.set_warning_level(3);
+        let nbt = tracker.to_nbt();
+        let from = WardenSpawnTracker::from_nbt(&nbt);
+        assert_eq!(from.warning_level(), 3);
     }
 }

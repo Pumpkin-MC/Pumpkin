@@ -29,6 +29,9 @@ pub struct TridentEntity {
     pub shake_time: AtomicU8,
     pub has_hit: AtomicBool,
     pub last_block_pos: Arc<std::sync::RwLock<Option<BlockPos>>>,
+    pub loyalty: u8,
+    pub has_channeling: bool,
+    pub client_side_return_tick_count: AtomicU32,
 }
 
 impl TridentEntity {
@@ -50,6 +53,9 @@ impl TridentEntity {
             shake_time: AtomicU8::new(0),
             has_hit: AtomicBool::new(false),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
+            loyalty: 0,
+            has_channeling: false,
+            client_side_return_tick_count: AtomicU32::new(0),
         }
     }
 
@@ -64,6 +70,23 @@ impl TridentEntity {
         entity.pos.store(owner_pos);
         entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
 
+        let loyalty = item_stack
+            .get_enchantment_level(&pumpkin_data::Enchantment::LOYALTY)
+            .clamp(0, 127) as u8;
+        let has_channeling = item_stack
+            .get_enchantment_level(&pumpkin_data::Enchantment::CHANNELING)
+            > 0;
+        let has_foil = item_stack.has_enchantments();
+
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::trident::ID_LOYALTY,
+            loyalty,
+        );
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::trident::ID_FOIL,
+            has_foil,
+        );
+
         Self {
             entity,
             owner_id: Some(shooter.entity_id),
@@ -75,6 +98,9 @@ impl TridentEntity {
             shake_time: AtomicU8::new(0),
             has_hit: AtomicBool::new(false),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
+            loyalty,
+            has_channeling,
+            client_side_return_tick_count: AtomicU32::new(0),
         }
     }
 
@@ -169,6 +195,94 @@ impl EntityBase for TridentEntity {
         let shake = self.shake_time.load(Ordering::Relaxed);
         if shake > 0 {
             self.shake_time.store(shake - 1, Ordering::Relaxed);
+        }
+
+        // Handle Loyalty return
+        if self.loyalty > 0
+            && (self.has_hit.load(Ordering::Relaxed) || self.in_ground.load(Ordering::Relaxed))
+        {
+            if let Some(owner_id) = self.owner_id {
+                if let Some(owner_base) = world.get_entity_by_id(owner_id) {
+                    let owner_ent = owner_base.get_entity();
+                    if !owner_ent.removed.load(Ordering::Relaxed) {
+                        let owner_eye = Vector3::new(
+                            owner_ent.pos.load().x,
+                            owner_ent.pos.load().y + f64::from(owner_ent.get_eye_height()),
+                            owner_ent.pos.load().z,
+                        );
+                        let current_pos = entity.pos.load();
+                        let delta = owner_eye.sub(&current_pos);
+                        let dist = delta.length();
+
+                        if dist < 1.5 {
+                            if let Some(player) = owner_base.cast_any().downcast_ref::<Player>() {
+                                let mut stack = self
+                                    .item_stack
+                                    .lock()
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                    .clone();
+                                if player.is_creative()
+                                    || player.inventory.insert_stack_anywhere(&mut stack)
+                                {
+                                    player.increment_stat(
+                                        pumpkin_data::statistic::StatisticCategory::PickedUp,
+                                        stack.item.id as i32,
+                                        1,
+                                    );
+                                    player.living_entity.pickup(&self.entity, 1);
+                                    world.play_sound(
+                                        Sound::ItemTridentReturn,
+                                        SoundCategory::Players,
+                                        &owner_ent.pos.load(),
+                                    );
+                                    entity.remove();
+                                    return;
+                                }
+                            }
+                        }
+
+                        let ticks =
+                            self.client_side_return_tick_count.fetch_add(1, Ordering::Relaxed);
+                        if ticks == 0 {
+                            world.play_sound_fine(
+                                Sound::ItemTridentReturn,
+                                SoundCategory::Neutral,
+                                &current_pos,
+                                10.0,
+                                1.0,
+                            );
+                        }
+
+                        self.in_ground.store(false, Ordering::Relaxed);
+                        let accel = 0.05 * f64::from(self.loyalty);
+                        let norm = if dist > 1e-4 {
+                            delta.multiply(1.0 / dist, 1.0 / dist, 1.0 / dist)
+                        } else {
+                            Vector3::new(0.0, 0.0, 0.0)
+                        };
+                        let mut vel = entity
+                            .velocity
+                            .load()
+                            .multiply(0.95, 0.95, 0.95)
+                            .add(&norm.multiply(accel, accel, accel));
+                        vel.y += delta.y * 0.015 * f64::from(self.loyalty);
+                        entity.velocity.store(vel);
+
+                        let new_pos = current_pos.add(&vel);
+                        entity.set_pos(new_pos);
+
+                        let len = vel.horizontal_length();
+                        entity.set_rotation(
+                            vel.x.atan2(vel.z) as f32 * 57.295_776,
+                            vel.y.atan2(len) as f32 * 57.295_776,
+                        );
+
+                        let packet = CEntityVelocity::new(entity.entity_id.into(), vel);
+                        world.broadcast_to_chunk(entity.chunk_pos.load(), &packet);
+                        return;
+                    }
+                }
+            }
         }
 
         if self.in_ground.load(Ordering::Relaxed) {
@@ -336,6 +450,11 @@ impl EntityBase for TridentEntity {
                 );
                 let chunk_pos = entity.chunk_pos.load();
                 world.broadcast_to_chunk(chunk_pos, &sound_packet);
+
+                // Channeling effect on block hit
+                if self.has_channeling && world.is_thundering() && world.can_see_sky(&pos) {
+                    world.strike_lightning(hit_pos, false);
+                }
             }
             ProjectileHit::Entity {
                 entity: target,
@@ -363,7 +482,51 @@ impl EntityBase for TridentEntity {
                 }
 
                 let damage_val = damage as f32;
-                target.damage(&*target, damage_val, DamageType::TRIDENT);
+                let owner = self
+                    .owner_id
+                    .and_then(|id| world.get_entity_by_id(id));
+                let attacker_ref: &dyn EntityBase = owner.as_deref().unwrap_or(self);
+                target.damage_with_context(
+                    attacker_ref,
+                    damage_val,
+                    DamageType::TRIDENT,
+                    Some(hit_pos),
+                    Some(&self.entity),
+                    owner.as_deref(),
+                );
+
+                // Trigger Throw Trident advancement if thrown by player
+                if let Some(owner_ent) = &owner {
+                    if let Some(player) = owner_ent.cast_any().downcast_ref::<Player>() {
+                        player.trigger_advancement(
+                            crate::entity::player::advancement::trigger::AdvancementTrigger::ShotTrident,
+                        );
+                    }
+                }
+
+                // Channeling effect on entity hit
+                if self.has_channeling && world.is_thundering() {
+                    let block_pos = BlockPos(Vector3::new(
+                        hit_pos.x.floor() as i32,
+                        hit_pos.y.floor() as i32 + 1,
+                        hit_pos.z.floor() as i32,
+                    ));
+                    if world.can_see_sky(&block_pos) {
+                        world.strike_lightning(hit_pos, false);
+                        if target.get_entity().entity_type
+                            == &pumpkin_data::entity::EntityType::VILLAGER
+                        {
+                            if let Some(owner_ent) = &owner {
+                                if let Some(player) = owner_ent.cast_any().downcast_ref::<Player>()
+                                {
+                                    player.trigger_advancement(
+                                        crate::entity::player::advancement::trigger::AdvancementTrigger::ChanneledLightning,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // Play hit sound
                 let sound_packet = CSoundEffect::new(
@@ -379,7 +542,9 @@ impl EntityBase for TridentEntity {
 
                 // Standard bounce/fall-back behavior
                 entity.velocity.store(Vector3::new(0.0, -0.1, 0.0));
-                self.has_hit.store(false, Ordering::Relaxed); // Let it hit the ground
+                if self.loyalty == 0 {
+                    self.has_hit.store(false, Ordering::Relaxed);
+                }
             }
         }
     }

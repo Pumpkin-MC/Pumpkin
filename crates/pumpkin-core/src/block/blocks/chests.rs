@@ -192,12 +192,18 @@ fn get_chest_screen_handler_factory(
     };
 
     let unpack = |entity: &Arc<dyn BlockEntity>| {
-        if let Some((loot_key, seed)) = entity.take_loot_table()
-            && let Some(table) = get_loot_table(&loot_key)
-            && let Some(inv) = entity.clone().get_inventory()
-        {
-            fill_chest_inventory(&inv, table, seed);
-            inv.mark_dirty();
+        if let Some((loot_key, seed)) = entity.take_loot_table() {
+            args.player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::GenerateLoot {
+                    loot_table: loot_key.clone(),
+                },
+            );
+            if let Some(table) = get_loot_table(&loot_key)
+                && let Some(inv) = entity.clone().get_inventory()
+            {
+                fill_chest_inventory(&inv, table, seed);
+                inv.mark_dirty();
+            }
         }
     };
 
@@ -282,6 +288,11 @@ fn normal_use_chest_impl(args: &NormalUseArgs<'_>) -> BlockActionResult {
     }) {
         args.player
             .open_handled_screen(factory.as_ref(), Some(*args.position));
+        crate::entity::mob::piglin_ai::PiglinAi::anger_nearby_piglins(
+            args.world,
+            args.player,
+            true,
+        );
     }
 
     BlockActionResult::Success
@@ -611,13 +622,41 @@ fn get_chest_properties_if_can_connect(
 }
 
 fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
-    // TODO: Block opening when a cat is sitting on top.
-    has_block_on_top(world, block_pos)
+    has_block_on_top(world, block_pos) || is_cat_sitting_on_chest(world, block_pos)
 }
 fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
     let above_pos = block_pos.up();
     let above_state = world.get_block_state(&above_pos);
     above_state.is_solid_block()
+}
+
+pub fn is_cat_sitting_on_chest(world: &World, block_pos: &BlockPos) -> bool {
+    let aabb = pumpkin_util::math::boundingbox::BoundingBox::new(
+        pumpkin_util::math::vector3::Vector3::new(
+            block_pos.0.x as f64,
+            block_pos.0.y as f64 + 1.0,
+            block_pos.0.z as f64,
+        ),
+        pumpkin_util::math::vector3::Vector3::new(
+            block_pos.0.x as f64 + 1.0,
+            block_pos.0.y as f64 + 2.0,
+            block_pos.0.z as f64 + 1.0,
+        ),
+    );
+    let entities = world.get_entities_at_box(&aabb);
+    for entity in entities {
+        if entity.get_entity().entity_type == &pumpkin_data::entity::EntityType::CAT {
+            if let Some(cat) = entity
+                .cast_any()
+                .downcast_ref::<crate::entity::passive::cat::CatEntity>()
+            {
+                if cat.is_sitting() || cat.is_lying() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 trait ChestTypeExt {

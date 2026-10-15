@@ -660,6 +660,33 @@ impl DragonFight {
             self.respawn_stage = None;
             self.dragon_killed = false;
             self.create_new_dragon(world);
+
+            let mut players_to_trigger = Vec::new();
+            for player_uuid in &self.bossbar_players {
+                if let Some(player) = world.get_player_by_uuid(*player_uuid) {
+                    players_to_trigger.push(player);
+                }
+            }
+            if players_to_trigger.is_empty() {
+                let radius = ARENA_RADIUS;
+                let min = [
+                    self.origin.0.x as f64 - radius,
+                    0.0,
+                    self.origin.0.z as f64 - radius,
+                ];
+                let max = [
+                    self.origin.0.x as f64 + radius,
+                    256.0,
+                    self.origin.0.z as f64 + radius,
+                ];
+                let aabb = pumpkin_util::math::boundingbox::BoundingBox::new_array(min, max);
+                players_to_trigger = world.get_players_at_box(&aabb);
+            }
+            for player in players_to_trigger {
+                player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::SummonDragon,
+                );
+            }
         } else {
             self.respawn_stage = Some(stage);
         }

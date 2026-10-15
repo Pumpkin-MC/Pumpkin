@@ -50,6 +50,7 @@ impl CustomSound for MagmaCubeEntity {
             Sound::EntityMagmaCubeDeath
         })
     }
+
     fn hurt_sound(&self) -> Option<Sound> {
         let size = self.slime.get_size();
         Some(if size == 1 {
@@ -65,8 +66,23 @@ impl Mob for MagmaCubeEntity {
         self.slime.get_mob_entity()
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn mob_tick(&self, caller: &dyn EntityBase) {
         self.slime.mob_tick(caller);
+
+        let base_entity = &self.slime.get_mob_entity().living_entity.entity;
+        if base_entity.touching_lava.load(Ordering::Relaxed) {
+            let size = f64::from(self.slime.get_size());
+            let mut vel = base_entity.velocity.load();
+            let target_jump = 0.22 + size * 0.05;
+            if vel.y < target_jump {
+                vel.y = target_jump;
+                base_entity.velocity.store(vel);
+            }
+        }
     }
 
     fn post_tick(&self) {
@@ -81,5 +97,9 @@ impl Mob for MagmaCubeEntity {
         if damaged {
             self.slime.on_attack(&**player);
         }
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        self.slime.get_size().max(1) as u32
     }
 }

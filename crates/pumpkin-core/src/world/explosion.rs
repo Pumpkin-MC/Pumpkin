@@ -1,3 +1,4 @@
+use rand::RngExt;
 use std::sync::Arc;
 
 use pumpkin_data::{
@@ -190,6 +191,7 @@ pub struct Explosion {
     block_interaction: BlockInteraction,
     damage_calculator: Option<Arc<dyn ExplosionDamageCalculator>>,
     preserve_rails: bool,
+    create_fire: bool,
 }
 
 impl Explosion {
@@ -201,6 +203,7 @@ impl Explosion {
             block_interaction,
             damage_calculator: None,
             preserve_rails: false,
+            create_fire: false,
         }
     }
 
@@ -210,6 +213,12 @@ impl Explosion {
         calculator: Arc<dyn ExplosionDamageCalculator>,
     ) -> Self {
         self.damage_calculator = Some(calculator);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_fire(mut self, create_fire: bool) -> Self {
+        self.create_fire = create_fire;
         self
     }
 
@@ -571,7 +580,22 @@ impl Explosion {
                         });
                     }
                 }
-                // TODO: fire
+                if self.create_fire {
+                    for pos in blocks.keys() {
+                        if rand::rng().random_range(0..3) == 0
+                            && world.get_block_state(pos).is_air()
+                            && world
+                                .get_block_state(&pos.down())
+                                .is_side_solid(pumpkin_data::BlockDirection::Up)
+                        {
+                            world.set_block_state(
+                                pos,
+                                Block::FIRE.default_state.id,
+                                BlockFlags::NOTIFY_ALL,
+                            );
+                        }
+                    }
+                }
                 blocks.len() as u32
             }
         }

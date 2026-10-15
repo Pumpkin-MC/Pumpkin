@@ -22,8 +22,7 @@ impl BlockBehaviour for PistonExtensionBlock {
             if &Block::PISTON == new_block || &Block::STICKY_PISTON == new_block {
                 let props = PistonProps::from_state_id(new_state);
                 if props.extended {
-                    // TODO: use player
-                    args.world.break_block(&pos, None, BlockFlags::SKIP_DROPS);
+                    args.world.break_block(&pos, Some(args.player), BlockFlags::SKIP_DROPS);
                 }
             }
         }

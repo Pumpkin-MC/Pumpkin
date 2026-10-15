@@ -1,4 +1,4 @@
-use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::data_component_impl::{DataComponentImpl, EquipmentSlot};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -82,8 +82,46 @@ impl BowAttackGoal {
         let world = entity.world.load();
         let world_full = entity.world.load_full();
 
-        let arrow_entity = Entity::new(world.clone(), entity.pos.load(), &EntityType::ARROW);
-        let projectile = ItemStack::new(1, &Item::ARROW);
+        let projectile = match entity.entity_type {
+            t if t == &EntityType::STRAY => {
+                let mut tipped = ItemStack::new(1, &Item::TIPPED_ARROW);
+                tipped.patch.push((
+                    pumpkin_data::data_component::DataComponent::PotionContents,
+                    Some(
+                        pumpkin_data::data_component_impl::PotionContentsImpl {
+                            potion_id: Some(i32::from(pumpkin_data::potion::Potion::SLOWNESS.id)),
+                            custom_color: None,
+                            custom_effects: Vec::new(),
+                            custom_name: None,
+                        }
+                        .to_dyn(),
+                    ),
+                ));
+                tipped
+            }
+            t if t == &EntityType::BOGGED => {
+                let mut tipped = ItemStack::new(1, &Item::TIPPED_ARROW);
+                tipped.patch.push((
+                    pumpkin_data::data_component::DataComponent::PotionContents,
+                    Some(
+                        pumpkin_data::data_component_impl::PotionContentsImpl {
+                            potion_id: Some(i32::from(pumpkin_data::potion::Potion::POISON.id)),
+                            custom_color: None,
+                            custom_effects: Vec::new(),
+                            custom_name: None,
+                        }
+                        .to_dyn(),
+                    ),
+                ));
+                tipped
+            }
+            _ => ItemStack::new(1, &Item::ARROW),
+        };
+        let arrow_entity = Entity::new(
+            world.clone(),
+            entity.pos.load(),
+            ArrowEntity::entity_type_for_item(projectile.item),
+        );
         let bow_item = Self::main_hand_item(mob);
         let arrow = ArrowEntity::new_shot_with_weapon(
             arrow_entity,
@@ -106,7 +144,7 @@ impl BowAttackGoal {
             std::sync::atomic::Ordering::Relaxed,
         );
         arrow.apply_on_projectile_spawned(&projectile);
-        if entity.is_on_fire() {
+        if entity.is_on_fire() || entity.entity_type == &EntityType::WITHER_SKELETON {
             arrow.set_flame(true);
         }
 

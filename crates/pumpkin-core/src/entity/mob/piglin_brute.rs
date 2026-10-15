@@ -4,12 +4,16 @@ use std::sync::{
 };
 
 use pumpkin_data::Block;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -17,7 +21,7 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, open_door::OpenDoorGoal,
         revenge::RevengeGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, equipment::RegionalDifficulty},
 };
 use crate::world::World;
 
@@ -172,9 +176,36 @@ impl PiglinBruteEntity {
     }
 }
 
+impl CustomSound for PiglinBruteEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPiglinBruteDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPiglinBruteHurt)
+    }
+}
+
 impl Mob for PiglinBruteEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
+    fn populate_default_equipment_slots(
+        &self,
+        _world: &Arc<World>,
+        _difficulty: &RegionalDifficulty,
+    ) {
+        let living = &self.mob_entity.living_entity;
+        let mut equipment = living
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        equipment.put(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, &Item::GOLDEN_AXE));
     }
 
     fn mob_init_data_tracker(&self) {
@@ -221,6 +252,29 @@ impl Mob for PiglinBruteEntity {
             }
         } else {
             self.time_in_overworld.store(0, Ordering::Relaxed);
+        }
+
+        // Ambient sound
+        if !entity.silent.load(Ordering::Relaxed) {
+            if self.mob_entity.get_target().is_some() {
+                if rand::random_range(0..40) == 0 {
+                    world.play_sound_fine(
+                        Sound::EntityPiglinBruteAngry,
+                        SoundCategory::Hostile,
+                        &entity.pos.load(),
+                        1.0,
+                        (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, 1.0),
+                    );
+                }
+            } else if rand::random_range(0..100) == 0 {
+                world.play_sound_fine(
+                    Sound::EntityPiglinBruteAmbient,
+                    SoundCategory::Hostile,
+                    &entity.pos.load(),
+                    1.0,
+                    (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, 1.0),
+                );
+            }
         }
     }
 

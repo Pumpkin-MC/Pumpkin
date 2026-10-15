@@ -65,6 +65,11 @@ impl BlockBehaviour for BeaconBlock {
         })
     }
 
+    fn placed(&self, args: crate::block::PlacedArgs<'_>) {
+        let be = crate::block::entities::beacon::BeaconBlockEntity::new(*args.position);
+        args.world.add_block_entity(Arc::new(be));
+    }
+
     fn get_screen_handler_factory(
         &self,
         args: GetScreenHandlerFactoryArgs<'_>,

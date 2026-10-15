@@ -1,11 +1,20 @@
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
-use crate::entity::mob::zombie::ZombieEntityBase;
-use crate::entity::{
-    Entity,
-    mob::{Mob, MobEntity},
-};
+use pumpkin_data::damage::DamageType;
+use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::effect::StatusEffect;
+use pumpkin_data::potion::Effect;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::Difficulty;
+
+use crate::entity::custom_sound::CustomSound;
+use crate::entity::mob::equipment::RegionalDifficulty;
+use crate::entity::mob::zombie::ZombieEntityBase;
+use crate::entity::mob::{Mob, MobEntity};
+use crate::entity::{Entity, EntityBase};
+use crate::world::World;
 
 pub struct HuskEntity {
     entity: Arc<ZombieEntityBase>,
@@ -26,9 +35,93 @@ impl HuskEntity {
     }
 }
 
+impl CustomSound for HuskEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityHuskDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityHuskHurt)
+    }
+}
+
 impl Mob for HuskEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
+    // Husks do not burn in daylight in vanilla
+    fn burns_in_daylight(&self) -> bool {
+        false
+    }
+
+    fn on_attack(&self, target: &dyn EntityBase) {
+        let equipment = self
+            .get_mob_entity()
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let main_hand = equipment.get(&EquipmentSlot::MAIN_HAND);
+        // Vanilla Husk: unarmed attacks inflict Hunger (140 * difficulty ticks)
+        if main_hand.is_empty() {
+            if let Some(living) = target.get_living_entity() {
+                let world = self.get_entity().world.load();
+                let multiplier = match world.level_info.load().difficulty {
+                    Difficulty::Peaceful => 0,
+                    Difficulty::Easy => 1,
+                    Difficulty::Normal => 2,
+                    Difficulty::Hard => 3,
+                };
+                if multiplier > 0 {
+                    living.add_effect(Effect {
+                        effect_type: &StatusEffect::HUNGER,
+                        duration: 140 * multiplier,
+                        amplifier: 0,
+                        ambient: false,
+                        show_particles: true,
+                        show_icon: true,
+                        blend: false,
+                    });
+                }
+            }
+        }
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let base_entity = &self.entity.mob_entity.living_entity.entity;
+        if !base_entity.is_alive() {
+            return;
+        }
+
+        // Ambient sound
+        if rand::random_range(0..100) == 0 && !base_entity.silent.load(Ordering::Relaxed) {
+            base_entity.world.load().play_sound_fine(
+                Sound::EntityHuskAmbient,
+                SoundCategory::Hostile,
+                &base_entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
+    }
+
+    fn populate_default_equipment_slots(
+        &self,
+        world: &Arc<World>,
+        difficulty: &RegionalDifficulty,
+    ) {
+        self.entity
+            .populate_default_equipment_slots(world, difficulty);
+    }
+
+    fn populate_default_equipment_enchantments(&self, difficulty: &RegionalDifficulty) {
+        self.entity
+            .populate_default_equipment_enchantments(difficulty);
     }
 
     fn spawn_as_baby(&self) -> bool {
@@ -41,5 +134,13 @@ impl Mob for HuskEntity {
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         self.entity.mob_read_nbt(nbt);
+    }
+
+    fn on_damage(&self, _damage_type: DamageType, source: Option<&dyn EntityBase>) {
+        self.entity.try_spawn_reinforcements(source);
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        Mob::get_base_experience_reward(self.entity.as_ref())
     }
 }

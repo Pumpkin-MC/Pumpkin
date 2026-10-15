@@ -14,11 +14,12 @@ use crate::entity::{
     Entity, EntityBase,
     ai::behavior::neutral::apply_targets,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
-        move_towards_target::MoveTowardsTargetGoal, offer_flower::OfferFlowerGoal,
-        revenge::RevengeGoal, wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, defend_village::DefendVillageTargetGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, move_towards_target::MoveTowardsTargetGoal,
+        offer_flower::OfferFlowerGoal, revenge::RevengeGoal, wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{
         Mob, MobEntity,
         neutral::{NeutralData, NeutralMob},
@@ -75,7 +76,7 @@ impl IronGolemEntity {
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
-            // TODO: DefendVillageTargetGoal at 1.
+            target_selector.add_goal(1, Box::new(DefendVillageTargetGoal::new()));
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
             apply_targets(&mut target_selector, &mob_arc.mob_entity, 3, 4, false);
             // Mirrors NearestAttackableTargetGoal<Mob>: any monster but creepers.
@@ -167,6 +168,10 @@ impl Mob for IronGolemEntity {
         &self.mob_entity
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn as_iron_golem(&self) -> Option<&crate::entity::passive::iron_golem::IronGolemEntity> {
         Some(self)
     }
@@ -207,5 +212,15 @@ impl Mob for IronGolemEntity {
             }
         }
         false
+    }
+}
+
+impl CustomSound for IronGolemEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityIronGolemDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityIronGolemHurt)
     }
 }

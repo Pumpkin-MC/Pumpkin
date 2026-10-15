@@ -12,6 +12,8 @@ pub mod arrow;
 pub mod egg;
 pub mod ender_pearl;
 pub mod evoker_fangs;
+pub mod dragon_fireball;
+pub mod experience_bottle;
 pub mod eye_of_ender;
 pub mod fireball;
 pub mod firework_rocket;
@@ -39,9 +41,11 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::SPLASH_POTION
         || *entity_type == EntityType::LINGERING_POTION
         || *entity_type == EntityType::ENDER_PEARL
+        || *entity_type == EntityType::EXPERIENCE_BOTTLE
         || *entity_type == EntityType::SHULKER_BULLET
         || *entity_type == EntityType::FIREBALL
         || *entity_type == EntityType::SMALL_FIREBALL
+        || *entity_type == EntityType::DRAGON_FIREBALL
         || *entity_type == EntityType::FISHING_BOBBER
         || *entity_type == EntityType::WITHER_SKULL
         || *entity_type == EntityType::LLAMA_SPIT

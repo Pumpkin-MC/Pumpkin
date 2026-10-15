@@ -541,14 +541,59 @@ pub fn get_random_pos_within(
 
     let x = (chunk_pos.x << 4) + rng.next_bounded_i32(16);
     let z = (chunk_pos.y << 4) + rng.next_bounded_i32(16);
-    let temp_y = chunk
+    let mut heightmaps_guard = chunk
         .heightmap
         .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if heightmaps_guard.world_surface.is_none() {
+        *heightmaps_guard = chunk.calculate_heightmap();
+    }
+    let mut temp_y = heightmaps_guard
         .get(ChunkHeightmapType::WorldSurface, x, z, chunk.section.min_y)
         + 1;
+    if temp_y <= min_y {
+        temp_y = 64.max(min_y + 16);
+    }
     let y = rng.next_inbetween_i32(min_y, temp_y);
     BlockPos::new(x, y, z)
+}
+
+fn is_spawn_rules_ok_cache(
+    cache: &dyn GenerationCache,
+    entity_type: &'static EntityType,
+    pos: &BlockPos,
+) -> bool {
+    let below_pos = pos.down().0;
+    let below_state = GenerationCache::get_block_state(cache, &below_pos).to_state();
+    let below_block = Block::from_state_id(below_state.id);
+
+    let id = entity_type.id;
+    if id == EntityType::ARMADILLO.id {
+        below_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_ARMADILLO_SPAWNABLE_ON)
+    } else if id == EntityType::CAMEL.id {
+        below_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_CAMELS_SPAWNABLE_ON)
+    } else if id == EntityType::FROG.id {
+        below_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FROGS_SPAWNABLE_ON)
+    } else if id == EntityType::GOAT.id {
+        below_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_GOATS_SPAWNABLE_ON)
+    } else if id == EntityType::MOOSHROOM.id {
+        below_block.id == Block::MYCELIUM.id
+    } else if id == EntityType::RABBIT.id {
+        below_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_RABBITS_SPAWNABLE_ON)
+    } else if id == EntityType::WOLF.id {
+        below_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_WOLVES_SPAWNABLE_ON)
+    } else if id == EntityType::FOX.id {
+        below_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FOXES_SPAWNABLE_ON)
+    } else if id == EntityType::POLAR_BEAR.id {
+        below_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_POLAR_BEARS_SPAWNABLE_ON_ALTERNATE)
+            || below_block.id == Block::ICE.id
+            || below_block.id == Block::BLUE_ICE.id
+            || below_block.id == Block::PACKED_ICE.id
+            || below_block.id == Block::FROSTED_ICE.id
+    } else {
+        below_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_ANIMALS_SPAWNABLE_ON)
+            || below_state.is_side_solid(BlockDirection::Up)
+    }
 }
 
 pub fn spawn_mobs_for_chunk_generation(
@@ -608,12 +653,7 @@ pub fn spawn_mobs_for_chunk_generation(
                     let spawn_pos_f64 = Vector3::new(fx, f64::from(pos.0.y), fz);
                     let check_pos = BlockPos::new(fx.floor() as i32, pos.0.y, fz.floor() as i32);
 
-                    if world.is_space_empty(entity_type.get_spawn_bounding_box(
-                        fx,
-                        f64::from(pos.0.y),
-                        fz,
-                    )) && check_spawn_rules(entity_type, world, &check_pos, false)
-                    {
+                    if is_spawn_rules_ok_cache(cache, entity_type, &check_pos) {
                         let entity = from_type(entity_type, spawn_pos_f64, world, Uuid::new_v4());
                         entity
                             .get_entity()

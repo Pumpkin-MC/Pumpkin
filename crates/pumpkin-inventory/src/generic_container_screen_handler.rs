@@ -17,8 +17,28 @@ use pumpkin_data::{item_stack::ItemStack, screen::WindowType};
 use crate::{
     player::player_inventory::PlayerInventory,
     screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour},
-    slot::NormalSlot,
+    slot::{NormalSlot, ShulkerBoxSlot, Slot},
 };
+
+/// Creates a shulker box container (27 slots, 9x3 layout).
+///
+/// Disallows placing shulker boxes inside other shulker boxes.
+pub fn create_shulker_box(
+    sync_id: u8,
+    player_inventory: &Arc<PlayerInventory>,
+    inventory: Arc<dyn Inventory>,
+    player: &dyn InventoryPlayer,
+) -> GenericContainerScreenHandler {
+    GenericContainerScreenHandler::new(
+        WindowType::ShulkerBox,
+        sync_id,
+        player_inventory,
+        inventory,
+        3,
+        9,
+        player.is_spectator(),
+    )
+}
 
 /// Creates a generic 9x3 container (single chest).
 ///
@@ -176,12 +196,16 @@ impl GenericContainerScreenHandler {
 
     /// Adds slots for the container's inventory grid.
     fn add_inventory_slots(&mut self) {
+        let is_shulker_box = self.behaviour.window_type == Some(WindowType::ShulkerBox);
         for i in 0..self.rows {
             for j in 0..self.columns {
-                self.add_slot(Arc::new(NormalSlot::new(
-                    self.inventory.clone(),
-                    (j + i * self.columns) as usize,
-                )));
+                let index = (j + i * self.columns) as usize;
+                let slot: Arc<dyn Slot> = if is_shulker_box {
+                    Arc::new(ShulkerBoxSlot::new(self.inventory.clone(), index))
+                } else {
+                    Arc::new(NormalSlot::new(self.inventory.clone(), index))
+                };
+                self.add_slot(slot);
             }
         }
     }

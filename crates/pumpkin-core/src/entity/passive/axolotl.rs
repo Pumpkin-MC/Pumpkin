@@ -19,9 +19,10 @@ use crate::entity::{
         active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
         follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, tempt::TemptGoal, try_find_water::TryFindWaterGoal,
+        tempt::TemptGoal, try_find_water::TryFindWaterGoal,
         wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
@@ -108,7 +109,6 @@ impl AxolotlEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(TryFindWaterGoal));
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
@@ -216,6 +216,35 @@ impl AxolotlEntity {
             from_bucket,
         );
     }
+
+    pub fn apply_supporting_effects(&self, player: &Player) {
+        use pumpkin_data::effect::StatusEffect;
+        use pumpkin_data::potion::Effect;
+
+        player.add_effect(Effect {
+            effect_type: &StatusEffect::REGENERATION,
+            duration: 100,
+            amplifier: 0,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: false,
+        });
+        player.remove_effect(&StatusEffect::MINING_FATIGUE);
+        player.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::KillAxolotlTarget,
+        );
+    }
+
+    #[must_use]
+    pub const fn can_drown(&self) -> bool {
+        false
+    }
+
+    #[must_use]
+    pub const fn can_breathe_under_water(&self) -> bool {
+        true
+    }
 }
 
 impl AgeableMob for AxolotlEntity {
@@ -233,6 +262,14 @@ impl Animal for AxolotlEntity {
 }
 
 impl Mob for AxolotlEntity {
+    fn can_breathe_under_water(&self) -> bool {
+        true
+    }
+
+    fn can_drown(&self) -> bool {
+        false
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -255,6 +292,14 @@ impl Mob for AxolotlEntity {
         }
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
+    fn is_pushed_by_fluids(&self) -> bool {
+        false
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -269,6 +314,30 @@ impl Mob for AxolotlEntity {
             if remaining == 0 {
                 self.set_playing_dead(false);
             }
+        }
+
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            let sound = if entity.touching_water.load(Ordering::Relaxed) {
+                Sound::EntityAxolotlIdleWater
+            } else {
+                Sound::EntityAxolotlIdleAir
+            };
+            entity.world.load().play_sound_fine(
+                sound,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                if entity.age.load(Ordering::Relaxed) < 0 {
+                    1.25
+                } else {
+                    1.0
+                },
+            );
         }
     }
 
@@ -311,6 +380,23 @@ impl Mob for AxolotlEntity {
                 }
             }
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            let mut bucket = ItemStack::new(1, &Item::AXOLOTL_BUCKET);
+            if item_stack.is_empty() {
+                *item_stack = bucket;
+            } else {
+                let was_added = player.inventory().insert_stack_anywhere(&mut bucket);
+                if !was_added && !bucket.is_empty() {
+                    world.drop_stack(&player.position().to_block_pos(), bucket);
+                }
+            }
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Used,
+                Item::WATER_BUCKET.id as i32,
+                1,
+            );
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::InventoryChanged,
+            );
             let pos = entity.pos.load();
             world.play_sound(Sound::ItemBucketFillAxolotl, SoundCategory::Neutral, &pos);
             entity.remove();
@@ -318,5 +404,15 @@ impl Mob for AxolotlEntity {
         }
 
         self.animal_interact(player, item_stack, Sound::EntityAxolotlIdleAir)
+    }
+}
+
+impl CustomSound for AxolotlEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityAxolotlDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityAxolotlHurt)
     }
 }

@@ -20,6 +20,7 @@ use pumpkin_data::{
     tag,
     tag::Taggable,
 };
+use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 
@@ -126,12 +127,12 @@ impl ChiseledBookshelfBlock {
         slot: i8,
         item: &mut ItemStack,
     ) {
-        // TODO: Increment used stats for chiseled bookshelf on the player
+        player.increment_stat(StatisticCategory::Used, item.item.id as i32, 1);
 
         let sound = if item.get_item() == &Item::ENCHANTED_BOOK {
-            Sound::BlockChiseledBookshelfPickupEnchanted
+            Sound::BlockChiseledBookshelfInsertEnchanted
         } else {
-            Sound::BlockChiseledBookshelfPickup
+            Sound::BlockChiseledBookshelfInsert
         };
 
         entity.set_book(

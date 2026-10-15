@@ -530,6 +530,10 @@ pub struct Player {
     pub advancements: Arc<Mutex<PlayerAdvancement>>,
     pub enchantment_seed: AtomicI32,
     pub fishing_bobber: AtomicI32,
+    pub levitation_start_y: AtomicCell<Option<f64>>,
+    pub entered_lava_on_vehicle_pos: AtomicCell<Option<Vector3<f64>>>,
+    pub starting_to_fall_pos: AtomicCell<Option<Vector3<f64>>>,
+    pub entered_nether_pos: AtomicCell<Option<Vector3<f64>>>,
     pub bedrock_skin: arc_swap::ArcSwap<pumpkin_protocol::bedrock::client::Skin>,
     pub seen_credits: AtomicBool,
     pub warden_spawn_tracker: std::sync::Mutex<WardenSpawnTracker>,
@@ -833,6 +837,10 @@ impl Player {
             respawn_location: AtomicCell::new(None),
             hidden_players: Mutex::new(std::collections::HashSet::new()),
             fishing_bobber: AtomicI32::new(-1),
+            levitation_start_y: AtomicCell::new(None),
+            entered_lava_on_vehicle_pos: AtomicCell::new(None),
+            starting_to_fall_pos: AtomicCell::new(None),
+            entered_nether_pos: AtomicCell::new(None),
             bedrock_skin: ArcSwap::new(Arc::new(bedrock_skin)),
             seen_credits: AtomicBool::new(false),
             warden_spawn_tracker: std::sync::Mutex::new(WardenSpawnTracker::default()),
@@ -1419,14 +1427,21 @@ impl Player {
 
         let is_mace_smash = matches!(attack_type, AttackType::MaceSmash);
         if is_mace_smash {
-            let fall_distance = self.living_entity.fall_distance.load();
-            let mut smash_bonus_per_block = 0.0f64;
+            let fall_distance = self.living_entity.fall_distance.load() as f64;
+            let mut density_bonus_per_block = 0.0f64;
             if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
                 for (enchantment, level) in enchantments.enchantment.iter() {
-                    enchantment.modify_fall_based_damage(*level, &mut smash_bonus_per_block);
+                    enchantment.modify_fall_based_damage(*level, &mut density_bonus_per_block);
                 }
             }
-            damage += (1.5 + smash_bonus_per_block) * f64::from(fall_distance);
+            let base_smash_damage = if fall_distance <= 3.0 {
+                4.0 * fall_distance
+            } else if fall_distance <= 8.0 {
+                12.0 + 2.0 * (fall_distance - 3.0)
+            } else {
+                22.0 + (fall_distance - 8.0)
+            };
+            damage += base_smash_damage + density_bonus_per_block * fall_distance;
         }
 
         if !victim.damage_with_context(
@@ -1472,27 +1487,86 @@ impl Player {
         if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
             self.living_entity.fall_distance.store(0.0);
-            if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
-                for (enchantment, level) in enchantments.enchantment.iter() {
-                    if **enchantment == Enchantment::WIND_BURST {
-                        let boost_y = 0.5 + 0.25 * (*level as f64);
-                        let vel = self.living_entity.entity.velocity.load();
-                        self.living_entity
-                            .entity
-                            .velocity
-                            .store(Vector3::new(vel.x, boost_y, vel.z));
-                    }
-                }
-            }
-            world.play_sound(
+
+            let victim_on_ground = victim_entity.on_ground.load(Ordering::Relaxed);
+            let smash_sound = if victim_on_ground {
                 if fall_distance > 5.0 {
                     Sound::ItemMaceSmashGroundHeavy
                 } else {
                     Sound::ItemMaceSmashGround
-                },
+                }
+            } else {
+                Sound::ItemMaceSmashAir
+            };
+            world.play_sound(
+                smash_sound,
                 SoundCategory::Players,
-                &pos,
+                &self.living_entity.entity.pos.load(),
             );
+
+            // ParticlesSmashAttack (2013, data 750)
+            world.sync_world_event(
+                pumpkin_data::world::WorldEvent::ParticlesSmashAttack,
+                victim_entity.block_pos.load(),
+                750,
+            );
+
+            // Smash knockback wave: 3.5 block radius around victim
+            let victim_pos = victim_entity.pos.load();
+            let search_box = victim_entity.bounding_box.load().expand(3.5, 3.5, 3.5);
+            let nearby_entities = world.get_entities_at_box(&search_box);
+            let attacker_id = self.entity_id();
+            let victim_id = victim_entity.entity_id;
+            let heavy_mult = if fall_distance > 5.0 { 2.0 } else { 1.0 };
+
+            for nearby in nearby_entities {
+                let ent = nearby.get_entity();
+                if ent.entity_id == attacker_id || ent.entity_id == victim_id {
+                    continue;
+                }
+                if nearby.get_living_entity().is_none() {
+                    continue;
+                }
+                let nearby_pos = ent.pos.load();
+                let dir = nearby_pos - victim_pos;
+                let dist = dir.length();
+                if dist <= 3.5 && dist > 0.0001 {
+                    let knockback_power = (3.5 - dist) * 0.7 * heavy_mult;
+                    if knockback_power > 0.0 {
+                        let norm = dir.normalize();
+                        ent.add_velocity(Vector3::new(
+                            norm.x * knockback_power,
+                            0.7,
+                            norm.z * knockback_power,
+                        ));
+                        if let Some(other_player) = nearby.cast_any().downcast_ref::<Player>() {
+                            other_player.try_send_client_packet(&CEntityVelocity::new(
+                                other_player.entity_id().into(),
+                                ent.velocity.load(),
+                            ));
+                        }
+                    }
+                }
+            }
+
+            // Attacker bounce / vertical velocity
+            let mut bounce_y = 0.01;
+            if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
+                for (enchantment, level) in enchantments.enchantment.iter() {
+                    if **enchantment == Enchantment::WIND_BURST {
+                        bounce_y = 0.5 + 0.25 * (*level as f64);
+                    }
+                }
+            }
+            let vel = self.living_entity.entity.velocity.load();
+            self.living_entity
+                .entity
+                .velocity
+                .store(Vector3::new(vel.x, bounce_y, vel.z));
+            self.try_send_client_packet(&CEntityVelocity::new(
+                self.entity_id().into(),
+                self.living_entity.entity.velocity.load(),
+            ));
         }
 
         player_attack_sound(&pos, &world, attack_type);
@@ -1532,34 +1606,55 @@ impl Player {
                 AttackType::Sweeping => {
                     combat::spawn_sweep_particle(attacker_entity, &world, &pos);
 
-                    let mut sweep_damage = 1.0;
+                    let mut sweeping_ratio = self
+                        .living_entity
+                        .get_attribute_value(&Attributes::SWEEPING_DAMAGE_RATIO) as f32;
                     if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>()
                     {
                         for (enchantment, level) in enchantments.enchantment.iter() {
                             if **enchantment == Enchantment::SWEEPING_EDGE {
-                                sweep_damage +=
-                                    damage as f32 * (*level as f32 / (*level as f32 + 1.0));
+                                sweeping_ratio += *level as f32 / (*level as f32 + 1.0);
                             }
                         }
                     }
+                    let sweep_damage = 1.0 + sweeping_ratio * (damage as f32);
 
                     let search_box = BoundingBox::new(
-                        Vector3::new(pos.x - 1.0, pos.y - 0.5, pos.z - 1.0),
-                        Vector3::new(pos.x + 1.0, pos.y + 0.5, pos.z + 1.0),
+                        Vector3::new(pos.x - 1.0, pos.y - 0.25, pos.z - 1.0),
+                        Vector3::new(pos.x + 1.0, pos.y + 0.25, pos.z + 1.0),
                     );
                     let victims = world.get_all_at_box(&search_box);
+                    let attacker_yaw = (self.living_entity.entity.yaw.load() as f64).to_radians();
+                    let sin_yaw = attacker_yaw.sin();
+                    let cos_yaw = -attacker_yaw.cos();
+
                     for other_victim in victims {
-                        if other_victim.get_entity().entity_id != victim_entity.entity_id
-                            && other_victim.get_entity().entity_id != attacker_entity.entity_id
+                        let other_ent = other_victim.get_entity();
+                        if other_ent.entity_id != victim_entity.entity_id
+                            && other_ent.entity_id != attacker_entity.entity_id
+                            && other_victim.get_living_entity().is_some()
                         {
-                            other_victim.damage_with_context(
-                                other_victim.as_ref(),
-                                sweep_damage,
-                                DamageType::PLAYER_ATTACK,
-                                None,
-                                Some(self),
-                                Some(self),
-                            );
+                            let dist_sq = (other_ent.pos.load() - self.living_entity.entity.pos.load()).length_squared();
+                            if dist_sq < 9.0 {
+                                if other_victim.damage_with_context(
+                                    other_victim.as_ref(),
+                                    sweep_damage,
+                                    DamageType::PLAYER_ATTACK,
+                                    None,
+                                    Some(self),
+                                    Some(self),
+                                ) && config.knockback {
+                                    other_ent.knockback(0.4, sin_yaw, cos_yaw);
+                                    if let Some(other_player) =
+                                        other_victim.cast_any().downcast_ref::<Player>()
+                                    {
+                                        other_player.try_send_client_packet(&CEntityVelocity::new(
+                                            other_player.entity_id().into(),
+                                            other_ent.velocity.load(),
+                                        ));
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1758,7 +1853,8 @@ impl Player {
         false
     }
 
-    /// Checks and triggers location-based enchantments (e.g. Frost Walker) on the player's equipped armor.
+    /// Checks and triggers location-based enchantments (e.g. Frost Walker) on the player's equipped armor,
+    /// as well as movement/location-based advancements (Levitation, End Gateway).
     pub fn check_location_enchantments(&self, pos: Vector3<f64>, on_ground: bool) {
         if on_ground {
             let boots = self.inventory.get_slot(36);
@@ -1769,6 +1865,127 @@ impl Player {
                     pos,
                 );
             }
+            if let Some(start_pos) = self.starting_to_fall_pos.swap(None) {
+                if self.living_entity.health.load() > 0.0
+                    && start_pos.y >= 319.0
+                    && pos.y <= -59.0
+                {
+                    self.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::FallFromHeight,
+                    );
+                }
+            }
+        } else if self.living_entity.fall_distance.load() > 0.0
+            && self.starting_to_fall_pos.load().is_none()
+        {
+            self.starting_to_fall_pos.store(Some(pos));
+        }
+
+        if self.living_entity.has_effect(&StatusEffect::LEVITATION) {
+            let start_y = match self.levitation_start_y.load() {
+                Some(y) => y,
+                None => {
+                    self.levitation_start_y.store(Some(pos.y));
+                    pos.y
+                }
+            };
+            if pos.y - start_y >= 50.0 {
+                self.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::Levitated,
+                );
+            }
+        } else {
+            self.levitation_start_y.store(None);
+        }
+
+        let feet_pos = BlockPos::new(
+            pos.x.floor() as i32,
+            pos.y.floor() as i32,
+            pos.z.floor() as i32,
+        );
+        let block = self.world().get_block(&feet_pos);
+        if block.id == pumpkin_data::BlockId::END_GATEWAY {
+            self.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::EnterBlock {
+                    block_id: "minecraft:end_gateway".to_string(),
+                },
+            );
+        }
+
+        if self.get_entity().is_sneaking()
+            && !self.has_advancement(pumpkin_data::advancement::Advancement::ADVENTURE_AVOID_VIBRATION)
+        {
+            let world = self.world();
+            let p_pos = self.living_entity.entity.block_pos.load();
+            let mut found_sensor = false;
+            'outer: for dx in -8..=8 {
+                for dz in -8..=8 {
+                    for dy in -4..=4 {
+                        let check_pos = BlockPos::new(p_pos.0.x + dx, p_pos.0.y + dy, p_pos.0.z + dz);
+                        let b = world.get_block(&check_pos);
+                        if matches!(
+                            b.id,
+                            pumpkin_data::BlockId::SCULK_SENSOR
+                                | pumpkin_data::BlockId::CALIBRATED_SCULK_SENSOR
+                                | pumpkin_data::BlockId::SCULK_SHRIEKER
+                        ) {
+                            found_sensor = true;
+                            break 'outer;
+                        }
+                    }
+                }
+            }
+            if found_sensor {
+                self.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::AvoidVibration,
+                );
+            }
+        }
+
+        let vehicle_opt = self
+            .get_entity()
+            .vehicle
+            .try_lock()
+            .ok()
+            .and_then(|guard| guard.clone());
+        if let Some(vehicle) = vehicle_opt {
+            let vehicle_ent = vehicle.get_entity();
+            if vehicle_ent.entity_type.resource_name.ends_with("boat")
+                && !self.has_advancement(pumpkin_data::advancement::Advancement::HUSBANDRY_RIDE_A_BOAT_WITH_A_GOAT)
+            {
+                let passengers = vehicle_ent.passengers.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let has_goat = passengers.iter().any(|p| p.get_entity().entity_type.id == EntityType::GOAT.id);
+                if has_goat {
+                    self.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::RideBoatWithGoat,
+                    );
+                }
+            }
+
+            if vehicle_ent.touching_lava.load(std::sync::atomic::Ordering::Relaxed) {
+                let start_pos = match self.entered_lava_on_vehicle_pos.load() {
+                    Some(p) => p,
+                    None => {
+                        self.entered_lava_on_vehicle_pos.store(Some(pos));
+                        pos
+                    }
+                };
+                let horizontal_dist = (pos.x - start_pos.x).hypot(pos.z - start_pos.z);
+                if horizontal_dist >= 50.0
+                    && vehicle_ent.entity_type.id == EntityType::STRIDER.id
+                {
+                    let in_overworld = self.world().dimension == Dimension::OVERWORLD;
+                    self.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::RideEntityInLava {
+                            in_overworld,
+                        },
+                    );
+                }
+            } else {
+                self.entered_lava_on_vehicle_pos.store(None);
+            }
+        } else {
+            self.entered_lava_on_vehicle_pos.store(None);
         }
     }
 
@@ -2182,6 +2399,22 @@ impl Player {
             statistics::CustomStatistic::TimeSinceRest as i32,
             0,
         );
+        self.increment_custom_stat(statistics::CustomStatistic::SleepInBed, 1);
+        self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::SleptInBed);
+    }
+
+    pub fn reset_warden_spawn_tracker(&self) {
+        self.warden_spawn_tracker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .reset();
+    }
+
+    pub fn set_warden_warning_level(&self, warning_level: i32) {
+        self.warden_spawn_tracker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set_warning_level(warning_level);
     }
 
     pub fn get_off_ground_speed(&self) -> f64 {
@@ -2214,9 +2447,9 @@ impl Player {
         self.living_entity.get_block_speed_factor()
     }
 
-    fn is_sleeping(&self) -> bool {
-        // TODO: Track sleeping position state explicitly (vanilla checks sleepingPosition.isPresent()).
-        self.sleeping_since.load().is_some()
+    #[must_use]
+    pub fn is_sleeping(&self) -> bool {
+        self.sleeping_bed_pos.load().is_some() || self.sleeping_since.load().is_some()
     }
 
     #[must_use]
@@ -2252,9 +2485,9 @@ impl Player {
         }
     }
 
-    const fn is_auto_spin_attack() -> bool {
-        // TODO: Track active auto-spin/riptide state and return true while it is active.
-        false
+    #[must_use]
+    pub fn is_auto_spin_attack(&self) -> bool {
+        self.living_entity.is_auto_spin_attack()
     }
 
     fn can_fit_pose(&self, pose: EntityPose) -> bool {
@@ -2277,7 +2510,7 @@ impl Player {
             EntityPose::Swimming
         } else if entity.is_fall_flying() {
             EntityPose::FallFlying
-        } else if Self::is_auto_spin_attack() {
+        } else if self.is_auto_spin_attack() {
             EntityPose::SpinAttack
         } else if entity.is_sneaking() && !self.is_flying() {
             EntityPose::Crouching
@@ -3403,6 +3636,18 @@ impl Player {
         if let Ok(mut stats) = self.stats.try_lock() {
             stats.increment(category, stat, final_amount);
         }
+
+        if category == statistics::StatisticCategory::Custom {
+            if stat == pumpkin_data::statistic::CustomStatistic::TradedWithVillager as i32 {
+                self.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::TradedWithVillager,
+                );
+            } else if stat == pumpkin_data::statistic::CustomStatistic::InteractWithBrewingstand as i32 {
+                self.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::BrewedPotion,
+                );
+            }
+        }
     }
 
     pub fn set_stat(&self, category: statistics::StatisticCategory, stat: i32, value: i32) {
@@ -4058,6 +4303,33 @@ impl Player {
 
                 self.change_world_chunks(&current_world.level, &new_world);
                 self.living_entity.entity.set_world(new_world.clone());
+
+                let old_dim = current_world.dimension.clone();
+                let new_dim = new_world.dimension.clone();
+
+                if old_dim == pumpkin_data::dimension::Dimension::OVERWORLD
+                    && new_dim == pumpkin_data::dimension::Dimension::THE_NETHER
+                {
+                    self.entered_nether_pos
+                        .store(Some(self.living_entity.entity.pos.load()));
+                } else if old_dim == pumpkin_data::dimension::Dimension::THE_NETHER
+                    && new_dim == pumpkin_data::dimension::Dimension::OVERWORLD
+                {
+                    if let Some(entered_pos) = self.entered_nether_pos.load() {
+                        let dx = position.x - entered_pos.x;
+                        let dz = position.z - entered_pos.z;
+                        let horizontal_dist = dx.hypot(dz);
+                        if horizontal_dist >= 7000.0 {
+                            self.trigger_advancement(
+                                crate::entity::player::advancement::trigger::AdvancementTrigger::NetherTravel,
+                            );
+                        }
+                    }
+                }
+
+                if new_dim != pumpkin_data::dimension::Dimension::THE_NETHER {
+                    self.entered_nether_pos.store(None);
+                }
 
                 if new_world.dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
                     self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::EnterDimension {
@@ -4951,6 +5223,13 @@ impl Player {
         true
     }
 
+    pub fn handle_fall_flying_collision(&self, last_speed: f64, new_speed: f64) {
+        if self.get_entity().is_fall_flying() {
+            self.living_entity
+                .handle_fall_flying_collisions(self, last_speed, new_speed);
+        }
+    }
+
     /// Send the player's skin layers and used hand to all players.
     pub fn send_client_information(&self) {
         let config = self.config.load();
@@ -5386,6 +5665,9 @@ impl Player {
 
     pub fn add_effect(&self, effect: Effect) {
         self.living_entity.add_effect(effect);
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::EffectsChanged,
+        );
     }
 
     pub fn has_effect(&self, effect_type: &'static StatusEffect) -> bool {
@@ -5668,7 +5950,7 @@ impl Player {
 
         self.try_enqueue_packet_editioned(
             &CCloseContainer::new(sync_id.into()),
-            &pumpkin_protocol::bedrock::server::container_close::SContainerClose {
+            &pumpkin_protocol::bedrock::client::container_close::CContainerClose {
                 container_id: sync_id,
                 container_type: bedrock_window_type,
                 server_initiated_close: true,
@@ -6472,6 +6754,50 @@ impl Player {
                     || id == Item::SPECTRAL_ARROW.id
             ) && stack.item_count > 0
             {
+                return Some(slot);
+            }
+        }
+
+        None
+    }
+
+    /// Find crossbow ammo in inventory:
+    /// In vanilla, fireworks can only be loaded if held in offhand (or main hand if crossbow in offhand).
+    /// Arrows can be loaded from offhand, main hand, or any inventory slot.
+    pub fn find_crossbow_ammo(&self) -> Option<usize> {
+        use pumpkin_data::item::Item;
+        let inventory = &self.inventory;
+
+        let is_arrow_or_firework = |id: u16| {
+            id == Item::ARROW.id
+                || id == Item::TIPPED_ARROW.id
+                || id == Item::SPECTRAL_ARROW.id
+                || id == Item::FIREWORK_ROCKET.id
+        };
+
+        let is_arrow = |id: u16| {
+            id == Item::ARROW.id
+                || id == Item::TIPPED_ARROW.id
+                || id == Item::SPECTRAL_ARROW.id
+        };
+
+        // Check offhand first (arrows or fireworks)
+        let offhand = inventory.get_slot(PlayerInventory::OFF_HAND_SLOT);
+        if is_arrow_or_firework(offhand.item.id) && offhand.item_count > 0 {
+            return Some(PlayerInventory::OFF_HAND_SLOT);
+        }
+
+        // Check main hand if held weapon is in offhand
+        let selected_slot = inventory.get_selected_slot() as usize;
+        let mainhand = inventory.get_slot(selected_slot);
+        if is_arrow_or_firework(mainhand.item.id) && mainhand.item_count > 0 {
+            return Some(selected_slot);
+        }
+
+        // Check hotbar and main inventory for arrows ONLY
+        for slot in 0..PlayerInventory::MAIN_SIZE {
+            let stack = inventory.get_slot(slot);
+            if is_arrow(stack.item.id) && stack.item_count > 0 {
                 return Some(slot);
             }
         }

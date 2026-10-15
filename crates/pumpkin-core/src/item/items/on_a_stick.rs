@@ -36,6 +36,12 @@ impl ItemBehaviour for CarrotOnAStickItem {
                     .inventory
                     .set_held_item(ItemStack::new(1, &Item::FISHING_ROD));
             }
+        } else {
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Used,
+                Item::CARROT_ON_A_STICK.id as i32,
+                1,
+            );
         }
     }
 
@@ -63,6 +69,11 @@ impl ItemBehaviour for WarpedFungusOnAStickItem {
             && let Some(steerable) = vehicle.get_item_steerable()
             && steerable.boost()
         {
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::RideEntityInLava {
+                    in_overworld: false,
+                },
+            );
             let before = player.inventory.held_item();
             player.damage_held_item(1);
             if !before.is_empty() && player.inventory.held_item().is_empty() {
@@ -70,6 +81,12 @@ impl ItemBehaviour for WarpedFungusOnAStickItem {
                     .inventory
                     .set_held_item(ItemStack::new(1, &Item::FISHING_ROD));
             }
+        } else {
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Used,
+                Item::WARPED_FUNGUS_ON_A_STICK.id as i32,
+                1,
+            );
         }
     }
 

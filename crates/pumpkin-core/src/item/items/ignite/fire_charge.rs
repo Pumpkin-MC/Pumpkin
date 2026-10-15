@@ -81,6 +81,11 @@ impl ItemBehaviour for FireChargeItem {
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
                 item.decrement(1);
             }
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Used,
+                Item::FIRE_CHARGE.id as i32,
+                1,
+            );
             BlockActionResult::Success
         } else {
             BlockActionResult::Fail

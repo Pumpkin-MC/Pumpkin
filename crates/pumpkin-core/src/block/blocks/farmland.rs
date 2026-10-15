@@ -6,6 +6,7 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::block_properties::FarmlandLikeProperties;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
@@ -23,7 +24,7 @@ pub struct FarmlandBlock;
 
 impl BlockBehaviour for FarmlandBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        // TODO: push up entities
+        super::dirt_path::push_entities_up(args.world, args.position);
         args.world.set_block_state(
             args.position,
             Block::DIRT.default_state.id,
@@ -87,7 +88,7 @@ impl BlockBehaviour for FarmlandBlock {
                     .get_block(&args.position.up())
                     .has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
                 {
-                    //TODO push entities up
+                    super::dirt_path::push_entities_up(args.world, args.position);
                     args.world.set_block_state(
                         args.position,
                         Block::DIRT.default_state.id,
@@ -124,8 +125,10 @@ impl BlockBehaviour for FarmlandBlock {
 }
 
 fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-    let state = world.get_block_state(&block_pos.up());
-    !state.is_solid() // TODO: add fence gate block
+    let (block, state) = world.get_block_and_state(&block_pos.up());
+    !state.is_solid()
+        || block.has_tag(&tag::Block::MINECRAFT_FENCE_GATES)
+        || block.has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
 }
 
 fn is_water_nearby(world: &Arc<World>, block_pos: &BlockPos) -> bool {
@@ -137,8 +140,8 @@ fn is_water_nearby(world: &Arc<World>, block_pos: &BlockPos) -> bool {
                     y: dy,
                     z: dz,
                 });
-                //TODO this should use tag water. It does not seem to work rn.
-                if world.get_block(&check_pos) == &Block::WATER {
+                let fluid = world.get_fluid(&check_pos);
+                if fluid.matches_type(&Fluid::WATER) {
                     return true;
                 }
             }

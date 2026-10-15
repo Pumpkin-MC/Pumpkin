@@ -21,7 +21,9 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
+    experience_orb::ExperienceOrbEntity,
     item::ItemEntity,
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
@@ -292,6 +294,32 @@ impl SnifferEntity {
         let egg_arc = Arc::new(ItemEntity::new(egg_entity, item_stack));
         world.spawn_entity_non_save(egg_arc as Arc<dyn EntityBase>);
 
+        let breeder_id = self
+            .mob_entity
+            .breeder
+            .load()
+            .or_else(|| partner.get_breeder());
+        if let Some(uuid) = breeder_id {
+            if let Some(player) = world.get_player_by_uuid(uuid) {
+                player.increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Custom,
+                    pumpkin_data::statistic::CustomStatistic::AnimalsBred as i32,
+                    1,
+                );
+                player.trigger_advancement_criterion(
+                    pumpkin_data::advancement::Advancement::HUSBANDRY_BREED_AN_ANIMAL,
+                    "bred",
+                );
+                player.trigger_advancement_criterion(
+                    pumpkin_data::advancement::Advancement::HUSBANDRY_BRED_ALL_ANIMALS,
+                    "minecraft:sniffer",
+                );
+            }
+        }
+
+        let xp = rand::random_range(1..=7);
+        ExperienceOrbEntity::spawn(&world, pos, xp);
+
         world.play_sound(Sound::BlockSnifferEggPlop, SoundCategory::Neutral, &pos);
 
         self.mob_entity.reset_love_ticks();
@@ -346,6 +374,10 @@ impl Mob for SnifferEntity {
         }
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -371,6 +403,26 @@ impl Mob for SnifferEntity {
             }
             _ => {}
         }
+
+        let entity = self.get_entity();
+        if entity.is_alive()
+            && !entity.silent.load(Ordering::Relaxed)
+            && state != SnifferState::Digging
+            && state != SnifferState::Searching
+            && rand::random_range(0..100) == 0
+        {
+            entity.world.load().play_sound_fine(
+                Sound::EntitySnifferIdle,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                if entity.age.load(Ordering::Relaxed) < 0 {
+                    1.25
+                } else {
+                    1.0
+                },
+            );
+        }
     }
 
     fn mob_init_data_tracker(&self) {
@@ -390,6 +442,24 @@ impl Mob for SnifferEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.animal_interact(player, item_stack, Sound::EntitySnifferEat)
+        let is_baby = self.get_entity().age.load(std::sync::atomic::Ordering::Relaxed) < 0;
+        let is_food = self.is_food(item_stack);
+        let res = self.animal_interact(player, item_stack, Sound::EntitySnifferEat);
+        if res && is_baby && is_food {
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::FeedSnifflet,
+            );
+        }
+        res
+    }
+}
+
+impl CustomSound for SnifferEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntitySnifferDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntitySnifferHurt)
     }
 }

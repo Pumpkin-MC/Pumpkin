@@ -6,7 +6,7 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 
@@ -17,6 +17,7 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
@@ -187,6 +188,25 @@ impl Mob for HappyGhastEntity {
                 }
             }
         }
+
+        if !entity.silent.load(Ordering::Relaxed) && rand::random_range(0..100) == 0 {
+            let sound = if self.is_baby() {
+                Sound::EntityGhastlingAmbient
+            } else {
+                Sound::EntityHappyGhastAmbient
+            };
+            entity.world.load().play_sound_fine(
+                sound,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
+        }
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
     }
 
     fn mob_init_data_tracker(&self) {
@@ -211,5 +231,23 @@ impl Mob for HappyGhastEntity {
         }
 
         self.animal_interact(player, item_stack, Sound::EntityHappyGhastAmbient)
+    }
+}
+
+impl CustomSound for HappyGhastEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(if self.is_baby() {
+            Sound::EntityGhastlingDeath
+        } else {
+            Sound::EntityHappyGhastDeath
+        })
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(if self.is_baby() {
+            Sound::EntityGhastlingHurt
+        } else {
+            Sound::EntityHappyGhastHurt
+        })
     }
 }
