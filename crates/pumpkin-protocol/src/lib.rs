@@ -9,7 +9,7 @@ use std::{
 
 use aes::cipher::BlockSizeUser;
 use bytes::Bytes;
-use codec::var_int::VarInt;
+pub use codec::var_int::VarInt;
 use pumpkin_util::{
     resource_location::ResourceLocation,
     text::{TextComponent, style::Style},
@@ -28,7 +28,6 @@ pub mod java;
 pub mod packet;
 #[cfg(feature = "query")]
 pub mod query;
-pub mod rcon;
 pub mod ser;
 pub mod serial;
 

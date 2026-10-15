@@ -19,10 +19,18 @@ pub enum RuleTest {
     TagMatch(TagMatchRuleTest),
     RandomBlockMatch(RandomBlockMatchRuleTest),
     RandomBlockStateMatch(RandomBlockStateMatchRuleTest),
+    // Added in 26.3
+    AnyOf(Vec<Self>),
+    AllOf(Vec<Self>),
+    Not(Box<Self>),
+    HeightMatch {
+        min_inclusive: i32,
+        max_inclusive: i32,
+    },
 }
 
 impl RuleTest {
-    pub fn test(&self, state: BlockStateId, random: &mut RandomGenerator) -> bool {
+    pub fn test(&self, state: BlockStateId, y: i32, random: &mut RandomGenerator) -> bool {
         match self {
             Self::AlwaysTrue => true,
             Self::BlockMatch(rule) => rule.test(state),
@@ -30,6 +38,13 @@ impl RuleTest {
             Self::TagMatch(rule) => rule.test(state),
             Self::RandomBlockMatch(rule) => rule.test(state, random),
             Self::RandomBlockStateMatch(rule) => rule.test(state, random),
+            Self::AnyOf(rules) => rules.iter().any(|rule| rule.test(state, y, random)),
+            Self::AllOf(rules) => rules.iter().all(|rule| rule.test(state, y, random)),
+            Self::Not(rule) => !rule.test(state, y, random),
+            Self::HeightMatch {
+                min_inclusive,
+                max_inclusive,
+            } => y >= *min_inclusive && y <= *max_inclusive,
         }
     }
 }

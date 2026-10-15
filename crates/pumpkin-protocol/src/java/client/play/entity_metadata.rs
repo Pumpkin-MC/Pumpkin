@@ -1,8 +1,6 @@
 use std::io::{Cursor, Write};
 
 use pumpkin_data::{
-    block_state_remap::remap_block_state_for_version,
-    item_id_remap::remap_item_id_for_version,
     meta_data_type::MetaDataType,
     packet::clientbound::play::SET_ENTITY_DATA,
     tracked_data::{TrackedData, TrackedId},
@@ -15,8 +13,6 @@ use crate::{
     codec::var_long::VarLong,
     ser::{NetworkWriteExt, WritingError},
 };
-
-use super::particle::particle_id_for_version;
 
 pub trait MetadataSerializer {
     fn write_metadata(
@@ -144,46 +140,23 @@ impl<T> Metadata<T> {
         if self.r#type == MetaDataType::BLOCK_STATE
             || self.r#type == MetaDataType::OPTIONAL_BLOCK_STATE
         {
-            let mut serialized_value = Vec::new();
-            self.value.write_metadata(&mut serialized_value, version)?;
-
-            let mut cursor = Cursor::new(serialized_value);
-            let decoded_state = VarInt::decode(&mut cursor).map_err(|e| {
-                WritingError::Message(format!("Failed to decode block state metadata: {e}"))
-            })?;
-            let remapped_state = u16::try_from(decoded_state.0).map_or(decoded_state, |state_id| {
-                VarInt(i32::from(remap_block_state_for_version(state_id, *version)))
-            });
             if *version >= JavaMinecraftVersion::V_1_9 {
-                writer.write_var_int(&remapped_state)?;
+                self.value.write_metadata(&mut writer, version)?;
             } else {
-                writer.write_i32(remapped_state.0)?;
+                let mut serialized_value = Vec::new();
+                self.value.write_metadata(&mut serialized_value, version)?;
+
+                let mut cursor = Cursor::new(serialized_value);
+                let decoded_state = VarInt::decode(&mut cursor).map_err(|e| {
+                    WritingError::Message(format!("Failed to decode block state metadata: {e}"))
+                })?;
+                writer.write_i32(decoded_state.0)?;
             }
             return Ok(());
         }
 
         if self.r#type == MetaDataType::ITEM_STACK {
-            let mut serialized_value = Vec::new();
-            self.value.write_metadata(&mut serialized_value, version)?;
-
-            let mut cursor = Cursor::new(serialized_value);
-            let item_count = VarInt::decode(&mut cursor).map_err(|e| {
-                WritingError::Message(format!("Failed to decodeitem stack count: {e}"))
-            })?;
-
-            if item_count.0 <= 0 {
-                writer.write_var_int(&item_count)?;
-            } else {
-                let item_id = VarInt::decode(&mut cursor)
-                    .map_err(|e| WritingError::Message(format!("Failed to decode item id: {e}")))?;
-                let remapped_id = u16::try_from(item_id.0)
-                    .map_or(0, |id| remap_item_id_for_version(id, *version));
-                writer.write_var_int(&item_count)?;
-                writer.write_var_int(&VarInt(i32::from(remapped_id)))?;
-                let remainder_start = cursor.position() as usize;
-                let inner = cursor.into_inner();
-                writer.write_slice(&inner[remainder_start..])?;
-            }
+            self.value.write_metadata(&mut writer, version)?;
             return Ok(());
         }
 
@@ -195,11 +168,38 @@ impl<T> Metadata<T> {
             let particle_id = VarInt::decode(&mut cursor).map_err(|e| {
                 WritingError::Message(format!("Failed to decode particle metadata: {e}"))
             })?;
-            writer.write_var_int(&particle_id_for_version(particle_id, *version))?;
+            writer.write_var_int(&particle_id)?;
 
             let remainder_start = cursor.position() as usize;
             let inner = cursor.into_inner();
             writer.write_slice(&inner[remainder_start..])?;
+            return Ok(());
+        }
+
+        if self.r#type == MetaDataType::PARTICLES {
+            let mut serialized_value = Vec::new();
+            self.value.write_metadata(&mut serialized_value, version)?;
+
+            let mut cursor = Cursor::new(serialized_value);
+            let count = VarInt::decode(&mut cursor).map_err(|e| {
+                WritingError::Message(format!("Failed to decode effect particle count: {e}"))
+            })?;
+            writer.write_var_int(&count)?;
+            for _ in 0..count.0 {
+                let particle_id = VarInt::decode(&mut cursor).map_err(|e| {
+                    WritingError::Message(format!("Failed to decode effect particle id: {e}"))
+                })?;
+                writer.write_var_int(&particle_id)?;
+                let remainder_start = cursor.position() as usize;
+                let inner = cursor.get_ref();
+                if remainder_start + 4 > inner.len() {
+                    return Err(WritingError::Message(
+                        "Truncated effect particle color".into(),
+                    ));
+                }
+                writer.write_slice(&inner[remainder_start..remainder_start + 4])?;
+                cursor.set_position((remainder_start + 4) as u64);
+            }
             return Ok(());
         }
 
@@ -525,6 +525,7 @@ mod tests {
 
     use super::{Metadata, MetadataSerializer};
 
+    #[derive(Clone, Copy)]
     struct ParticleMetadata {
         particle_id: VarInt,
         data: [u8; 4],
@@ -543,15 +544,17 @@ mod tests {
 
     fn encoded_particle(version: JavaMinecraftVersion) -> (VarInt, Vec<u8>) {
         let particle_data = [0x12, 0x34, 0x56, 0x78];
-        let metadata = Metadata::new(
-            pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE,
-            ParticleMetadata {
-                particle_id: VarInt(Particle::ExplosionEmitter as i32),
-                data: particle_data,
-            },
-        );
+        let particle = ParticleMetadata {
+            particle_id: VarInt(Particle::ExplosionEmitter as i32),
+            data: particle_data,
+        };
         let mut bytes = Vec::new();
-        metadata.write(&mut bytes, &version).unwrap();
+        Metadata::new(
+            pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE,
+            particle,
+        )
+        .write(&mut bytes, &version)
+        .unwrap();
 
         assert_eq!(
             bytes[0],
@@ -567,16 +570,8 @@ mod tests {
     }
 
     #[test]
-    fn particle_metadata_id_remaps_for_1_21_11() {
-        let (particle_id, data) = encoded_particle(JavaMinecraftVersion::V_1_21_11);
-
-        assert_eq!(particle_id, VarInt(22));
-        assert_eq!(data, [0x12, 0x34, 0x56, 0x78]);
-    }
-
-    #[test]
-    fn particle_metadata_id_stays_latest_for_26_2() {
-        let (particle_id, data) = encoded_particle(JavaMinecraftVersion::V_26_2);
+    fn particle_metadata_id_stays_latest_for_26_3() {
+        let (particle_id, data) = encoded_particle(JavaMinecraftVersion::V_26_3);
 
         assert_eq!(particle_id, VarInt(29));
         assert_eq!(data, [0x12, 0x34, 0x56, 0x78]);

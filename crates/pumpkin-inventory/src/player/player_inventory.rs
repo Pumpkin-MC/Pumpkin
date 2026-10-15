@@ -10,12 +10,12 @@
 use crate::entity_equipment::EntityEquipment;
 use crate::screen_handler::InventoryPlayer;
 
+use crate::inventory::{Clearable, Inventory};
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::java::client::play::CSetPlayerInventory;
 use pumpkin_util::Hand;
-use pumpkin_world::inventory::{Clearable, Inventory};
 use rustc_hash::FxHashMap;
 use std::any::Any;
 use std::sync::atomic::{AtomicU8, Ordering};

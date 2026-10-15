@@ -16,10 +16,14 @@ pub struct EntityType {
     pub experience_reward: Option<u32>,
     /// Static hurt sound event name when it is safely derivable from extracted entity data.
     pub hurt_sound: Option<String>,
+    /// Static death sound event name when it is safely derivable from extracted entity data.
+    pub death_sound: Option<String>,
     /// Whether this entity can be attacked by players or other entities.
     pub attackable: Option<bool>,
     /// Whether this entity is classified as a mob (affects spawning mechanics).
     pub mob: Option<bool>,
+    /// Whether the vanilla entity implements the Enemy marker interface.
+    pub is_enemy: bool,
     /// Maximum number of this entity type allowed per chunk, if capped.
     pub limit_per_chunk: Option<i32>,
     /// Whether this entity can be summoned by the `/summon` command.
@@ -118,6 +122,13 @@ impl ToTokens for NamedEntityType<'_> {
             quote! { None }
         };
 
+        let death_sound = if let Some(sound_name) = entity.death_sound.as_ref() {
+            let sound_ident = format_ident!("{}", sound_name.to_pascal_case());
+            quote! { Some(Sound::#sound_ident) }
+        } else {
+            quote! { None }
+        };
+
         let hurt_sound = if let Some(sound_name) = entity.hurt_sound.as_ref() {
             let sound_ident = format_ident!("{}", sound_name.to_pascal_case());
             quote! { Some(Sound::#sound_ident) }
@@ -172,6 +183,7 @@ impl ToTokens for NamedEntityType<'_> {
             "missing field 'mob', entity name {name}"
         );
         let mob = entity.mob.unwrap_or(false);
+        let is_enemy = entity.is_enemy;
         let limit_per_chunk = entity.limit_per_chunk.unwrap_or(0);
         let can_spawn_far_from_player = entity.can_spawn_far_from_player;
 
@@ -189,8 +201,10 @@ impl ToTokens for NamedEntityType<'_> {
                 attributes: #attributes_field,
                 experience_reward: #experience_reward,
                 hurt_sound: #hurt_sound,
+                death_sound: #death_sound,
                 attackable: #attackable,
                 mob: #mob,
+                is_enemy: #is_enemy,
                 saveable: #saveable,
                 limit_per_chunk: #limit_per_chunk,
                 summonable: #summonable,
@@ -262,8 +276,10 @@ pub fn build() -> TokenStream {
             pub attributes: &'static [(Attributes, f64)],
             pub experience_reward: u32,
             pub hurt_sound: Option<Sound>,
+            pub death_sound: Option<Sound>,
             pub attackable: Option<bool>,
             pub mob: bool,
+            pub is_enemy: bool,
             pub saveable: bool,
             pub limit_per_chunk: i32,
             pub summonable: bool,

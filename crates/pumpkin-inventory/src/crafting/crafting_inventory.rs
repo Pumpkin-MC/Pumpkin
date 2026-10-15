@@ -12,8 +12,8 @@
 use std::any::Any;
 use std::sync::RwLock;
 
+use crate::inventory::{Clearable, Inventory};
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_world::inventory::{Clearable, Inventory};
 
 use super::recipes::RecipeInputInventory;
 

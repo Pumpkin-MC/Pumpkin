@@ -29,7 +29,9 @@ impl ClientPacket for CServerData<'_> {
             if let Some(icon) = self.icon_base64 {
                 write.write_bool(true)?;
                 let raw_b64 = icon.strip_prefix("data:image/png;base64,").unwrap_or(icon);
-                if let Ok(bytes) = pumpkin_util::jwt::decode_b64_standard(raw_b64) {
+                if let Ok(bytes) =
+                    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, raw_b64)
+                {
                     write.write_slice(&bytes)?;
                 } else {
                     write.write_slice(&[])?;

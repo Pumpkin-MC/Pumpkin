@@ -18,7 +18,7 @@ pub mod rule;
 pub mod structure;
 mod surface;
 
-use generator::{GeneratorInit, VanillaGenerator};
+use generator::VanillaGenerator;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::{
     random::xoroshiro128::{Xoroshiro, XoroshiroSplitter},
@@ -33,13 +33,55 @@ pub fn get_world_gen(
     flat_layers: Vec<generator::FlatLayer>,
     flat_biome: String,
 ) -> Box<generator::WorldGenerator> {
+    get_world_gen_with_settings(seed, dimension, is_flat, flat_layers, flat_biome, None)
+}
+
+#[must_use]
+pub fn get_world_gen_with_settings(
+    seed: Seed,
+    dimension: Dimension,
+    is_flat: bool,
+    flat_layers: Vec<generator::FlatLayer>,
+    flat_biome: String,
+    generator_settings: Option<&str>,
+) -> Box<generator::WorldGenerator> {
+    get_world_gen_with_all_settings(
+        seed,
+        dimension,
+        is_flat,
+        flat_layers,
+        flat_biome,
+        generator_settings,
+        None,
+        None,
+    )
+}
+
+#[expect(clippy::too_many_arguments)]
+#[must_use]
+pub fn get_world_gen_with_all_settings(
+    seed: Seed,
+    dimension: Dimension,
+    is_flat: bool,
+    flat_layers: Vec<generator::FlatLayer>,
+    flat_biome: String,
+    generator_settings: Option<&str>,
+    biome_source: Option<&crate::world_info::BiomeSource>,
+    structure_overrides: Option<&[String]>,
+) -> Box<generator::WorldGenerator> {
     if is_flat {
-        Box::new(generator::WorldGenerator::Flat(
+        Box::new(generator::WorldGenerator::Flat(Box::new(
             generator::flat::FlatGenerator::new(seed, dimension, flat_layers, flat_biome),
-        ))
+        )))
     } else {
         Box::new(generator::WorldGenerator::Noise(Box::new(
-            VanillaGenerator::new(seed, dimension),
+            VanillaGenerator::new_with_all_settings(
+                seed,
+                dimension,
+                generator_settings,
+                biome_source,
+                structure_overrides,
+            ),
         )))
     }
 }
