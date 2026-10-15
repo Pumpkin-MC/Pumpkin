@@ -30,6 +30,8 @@ pub struct BarrelBlockEntity {
 
     // Viewer
     viewers: ViewerCountTracker,
+    pub loot_table: std::sync::Mutex<Option<String>>,
+    pub loot_table_seed: i64,
 }
 
 impl BlockEntity for BarrelBlockEntity {
@@ -45,27 +47,50 @@ impl BlockEntity for BarrelBlockEntity {
     where
         Self: Sized,
     {
+        let loot_table_key = nbt.get_string("LootTable").map(|s| s.to_string());
+        let loot_table_seed = nbt.get_long("LootTableSeed").unwrap_or(0);
+
         let mut barrel = Self {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
+            loot_table: std::sync::Mutex::new(loot_table_key),
+            loot_table_seed,
         };
 
-        pumpkin_inventory::sync_read_items_from_nbt(
-            nbt,
-            barrel
-                .items
-                .get_mut()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        let has_loot_table = barrel
+            .loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some();
+        if !has_loot_table {
+            pumpkin_inventory::sync_read_items_from_nbt(
+                nbt,
+                barrel
+                    .items
+                    .get_mut()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
+        }
 
         barrel
     }
 
     fn write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_inventory_nbt(nbt, true);
+        if let Some(ref key) = *self
+            .loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        {
+            nbt.put_string("LootTable", key.clone());
+            if self.loot_table_seed != 0 {
+                nbt.put_long("LootTableSeed", self.loot_table_seed);
+            }
+        } else {
+            self.write_inventory_nbt(nbt, true);
+        }
     }
 
     fn tick(&self, world: &Arc<World>) {
@@ -94,8 +119,13 @@ impl BlockEntity for BarrelBlockEntity {
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let has_loot_table = self
+            .loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some();
         let mut nbt = NbtCompound::new();
-        if let Ok(guard) = self.items.try_read() {
+        if !has_loot_table && let Ok(guard) = self.items.try_read() {
             sync_write_items_to_nbt(&*guard, &mut nbt);
         }
         Some(nbt)
@@ -103,6 +133,21 @@ impl BlockEntity for BarrelBlockEntity {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn take_loot_table(&self) -> Option<(String, i64)> {
+        let mut guard = self
+            .loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard.take().map(|key| (key, self.loot_table_seed))
+    }
+
+    fn has_loot_table(&self) -> bool {
+        self.loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
     }
 }
 
@@ -130,6 +175,8 @@ impl BarrelBlockEntity {
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
+            loot_table: std::sync::Mutex::new(None),
+            loot_table_seed: 0,
         }
     }
 

@@ -55,6 +55,22 @@ impl BlockBehaviour for BarrelBlock {
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        if let Some(block_entity) = args.world.get_block_entity(args.position) {
+            if let Some((loot_key, seed)) = block_entity.take_loot_table() {
+                args.player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::GenerateLoot {
+                        loot_table: loot_key.clone(),
+                    },
+                );
+                if let Some(table) = pumpkin_data::loot_table::get_loot_table(&loot_key)
+                    && let Some(inv) = block_entity.clone().get_inventory()
+                {
+                    crate::world::loot::fill_chest_inventory(&inv, table, seed);
+                    inv.mark_dirty();
+                }
+            }
+        }
+
         if let Some(factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
             server: args.server,
             world: args.world,
