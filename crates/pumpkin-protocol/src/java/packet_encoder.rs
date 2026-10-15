@@ -15,14 +15,16 @@ use crate::{
 
 pub enum EncryptionWriter<W: AsyncWrite + Unpin> {
     Encrypt(Box<StreamEncryptor<W>>),
-    None(BufWriter<W>),
+    None(W),
+    Buffered(BufWriter<W>),
 }
 
 impl<W: AsyncWrite + Unpin> EncryptionWriter<W> {
     #[must_use]
     pub fn upgrade(self, cipher: Aes128Cfb8Enc) -> Self {
         match self {
-            Self::None(stream) => {
+            Self::None(stream) => Self::Encrypt(Box::new(StreamEncryptor::new(cipher, stream))),
+            Self::Buffered(stream) => {
                 Self::Encrypt(Box::new(StreamEncryptor::new(cipher, stream.into_inner())))
             }
             Self::Encrypt(_) => self,
@@ -45,6 +47,10 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
                 let writer = std::pin::Pin::new(writer);
                 writer.poll_write(cx, buf)
             }
+            Self::Buffered(writer) => {
+                let writer = std::pin::Pin::new(writer);
+                writer.poll_write(cx, buf)
+            }
         }
     }
 
@@ -61,6 +67,10 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
                 let writer = std::pin::Pin::new(writer);
                 writer.poll_flush(cx)
             }
+            Self::Buffered(writer) => {
+                let writer = std::pin::Pin::new(writer);
+                writer.poll_flush(cx)
+            }
         }
     }
 
@@ -74,6 +84,10 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
                 writer.poll_shutdown(cx)
             }
             Self::None(writer) => {
+                let writer = std::pin::Pin::new(writer);
+                writer.poll_shutdown(cx)
+            }
+            Self::Buffered(writer) => {
                 let writer = std::pin::Pin::new(writer);
                 writer.poll_shutdown(cx)
             }
@@ -96,14 +110,25 @@ pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
 }
 
 impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
-    pub fn new(writer: W) -> Self {
+    const fn with_writer(writer: EncryptionWriter<W>) -> Self {
         Self {
-            writer: Some(EncryptionWriter::None(BufWriter::new(writer))),
+            writer: Some(writer),
             compression: None,
             compressor: None,
             compression_scratch: Vec::new(),
             frame_scratch: Vec::new(),
         }
+    }
+
+    /// Wrap an already configured writer; does not add buffering.
+    pub const fn new(writer: W) -> Self {
+        Self::with_writer(EncryptionWriter::None(writer))
+    }
+
+    /// Buffer plaintext writes until encryption is activated. Once encrypted,
+    /// the 16 KiB ciphertext buffer takes over without retaining this layer.
+    pub fn new_buffered(writer: W) -> Self {
+        Self::with_writer(EncryptionWriter::Buffered(BufWriter::new(writer)))
     }
 
     pub const fn set_compression(
@@ -122,12 +147,12 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
         }
         // The unencrypted buffer must be drained before changing the wire cipher.
         // Otherwise its plaintext could be discarded or sent after encryption starts.
-        if let Some(EncryptionWriter::None(writer)) = self.writer.as_ref() {
-            if !writer.buffer().is_empty() {
-                return Err(PacketEncodeError::Message(
-                    "Flush pending unencrypted bytes before enabling encryption".into(),
-                ));
-            }
+        if let Some(EncryptionWriter::Buffered(writer)) = self.writer.as_ref()
+            && !writer.buffer().is_empty()
+        {
+            return Err(PacketEncodeError::Message(
+                "Flush pending unencrypted bytes before enabling encryption".into(),
+            ));
         }
         let cipher = Aes128Cfb8Enc::new_from_slices(key, key)
             .map_err(|_| PacketEncodeError::Message("Invalid key".into()))?;
@@ -813,7 +838,7 @@ mod tests {
     #[tokio::test]
     async fn encryption_upgrade_rejects_pending_unencrypted_data() {
         let mut data = Vec::new();
-        let mut encoder = TCPNetworkEncoder::new(&mut data);
+        let mut encoder = TCPNetworkEncoder::new_buffered(&mut data);
         encoder
             .write_packet(Bytes::from_static(&[1, 2, 3]))
             .await
