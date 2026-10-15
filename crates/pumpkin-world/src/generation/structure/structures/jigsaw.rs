@@ -1320,4 +1320,120 @@ mod tests {
             (1216, 97, -1296)
         );
     }
+
+    #[test]
+    fn test_village_plains_templates_and_pieces() {
+        let unemployed = crate::generation::structure::template::get_template(
+            "minecraft:village/plains/villagers/unemployed",
+        );
+        assert!(unemployed.is_some(), "unemployed template must exist");
+        let t = unemployed.unwrap();
+        assert!(!t.entities.is_empty(), "unemployed template must have entities");
+        assert_eq!(t.entities[0].nbt.get_string("id"), Some("minecraft:villager"));
+
+        let golem = crate::generation::structure::template::get_template(
+            "minecraft:village/common/iron_golem",
+        );
+        assert!(golem.is_some(), "iron_golem template must exist");
+        let g = golem.unwrap();
+        assert!(!g.entities.is_empty(), "iron_golem template must have entities");
+        assert_eq!(g.entities[0].nbt.get_string("id"), Some("minecraft:iron_golem"));
+
+        // Now run a village generation to see which pieces are assembled
+        const SEED: i64 = 1_782_124_772_053_846_960;
+        let world_gen = crate::generation::get_world_gen(
+            pumpkin_util::world_seed::Seed(SEED as u64),
+            pumpkin_data::dimension::Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let crate::generation::generator::WorldGenerator::Noise(noise_gen) = world_gen.as_ref()
+        else {
+            unreachable!()
+        };
+        let mut height_sampler =
+            crate::generation::structure::height_sampler::NoiseHeightSampler::new(noise_gen);
+        let generator = JigsawGenerator::new("minecraft:village/plains/town_centers", 6)
+            .with_expansion_hack(true);
+
+        let context = StructureGeneratorContext {
+            seed: SEED,
+            chunk_x: 0,
+            chunk_z: 0,
+            random: super::super::create_chunk_random(SEED, 0, 0),
+            sea_level: 63,
+            min_y: -64,
+            height: 384,
+            height_sampler: Some(&mut height_sampler),
+            structure_key: Some(pumpkin_data::structures::StructureKeys::VillagePlains),
+        };
+
+        let position = generator
+            .get_structure_position(context)
+            .expect("village plains graph should generate");
+        let mut collector = position.collector.lock().unwrap();
+        let mut villagers_count = 0;
+        let mut golems_count = 0;
+        for piece in &collector.pieces {
+            if let Some(pool_piece) = piece.as_any().downcast_ref::<PoolElementStructurePiece>() {
+                pool_piece.element.for_each_template(|name, _, _, _| {
+                    if name.contains("villager") {
+                        villagers_count += 1;
+                    }
+                    if name.contains("iron_golem") {
+                        golems_count += 1;
+                    }
+                });
+            }
+        }
+        assert!(villagers_count > 0, "Village graph must generate villager pool pieces");
+        assert!(golems_count > 0, "Village graph must generate iron golem pool pieces");
+
+        // Now test generating these pieces into proto-chunks
+        let mut villager_entities_in_chunks = 0;
+        let mut golem_entities_in_chunks = 0;
+        let bounding_box = collector.get_bounding_box();
+        let min_cx = bounding_box.min.x >> 4;
+        let max_cx = bounding_box.max.x >> 4;
+        let min_cz = bounding_box.min.z >> 4;
+        let max_cz = bounding_box.max.z >> 4;
+
+        struct DummyRegistry;
+        impl crate::world::WorldPortalExt for DummyRegistry {
+            fn can_place_at(&self, _: &pumpkin_data::Block, _: &pumpkin_data::BlockState, _: &dyn crate::world::BlockAccessor, _: &pumpkin_util::math::position::BlockPos) -> bool { true }
+            fn mirror(&self, b: &pumpkin_data::Block, s: pumpkin_data::BlockStateId, m: pumpkin_data::Mirror) -> &'static pumpkin_data::BlockState { b.mirror(s, m) }
+            fn rotate(&self, b: &pumpkin_data::Block, s: pumpkin_data::BlockStateId, r: pumpkin_data::Rotation) -> &'static pumpkin_data::BlockState { b.rotate(s, r) }
+            fn spawn_mobs_for_chunk_generation(
+                &self,
+                _cache: &mut dyn crate::generation::proto_chunk::GenerationCache,
+                _biome: &'static pumpkin_data::biome::Biome,
+                _chunk_x: i32,
+                _chunk_z: i32,
+            ) {
+            }
+        }
+
+        let mut rng = super::super::create_chunk_random(SEED, 0, 0);
+
+        for cx in min_cx..=max_cx {
+            for cz in min_cz..=max_cz {
+                let mut chunk = crate::ProtoChunk::new(cx, cz, world_gen.as_ref());
+                collector.generate_in_chunk(&mut chunk, &DummyRegistry, &mut rng, SEED);
+                let entities = chunk.take_pending_structure_entities();
+                for e in entities {
+                    let id = e.get_string("id").unwrap_or("");
+                    if id == "minecraft:villager" {
+                        villager_entities_in_chunks += 1;
+                        assert!(e.get_list("Pos").is_some(), "Villager must have Pos");
+                    } else if id == "minecraft:iron_golem" {
+                        golem_entities_in_chunks += 1;
+                        assert!(e.get_list("Pos").is_some(), "Iron golem must have Pos");
+                    }
+                }
+            }
+        }
+        assert!(villager_entities_in_chunks > 0, "Village chunks must have placed villagers!");
+        assert!(golem_entities_in_chunks > 0, "Village chunks must have placed iron golems!");
+    }
 }

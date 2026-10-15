@@ -2552,6 +2552,24 @@ impl Mob for VillagerEntity {
         }
     }
 
+    fn finalize_spawn(
+        &self,
+        world: &Arc<World>,
+        group_data: Option<crate::entity::mob::spawn::SpawnGroupData>,
+    ) -> Option<crate::entity::mob::spawn::SpawnGroupData> {
+        self.mob_entity.finalize_spawn_base();
+        let pos = self.get_entity().block_pos.load();
+        let biome = world.level.get_rough_biome(&pos);
+        let villager_type = VillagerType::from_biome_name(biome.registry_id);
+        let mut data = *self
+            .villager_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        data.r#type = VarInt(villager_type as i32);
+        self.set_villager_data(data);
+        group_data
+    }
+
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.villager_mob_tick();
 
@@ -2866,5 +2884,24 @@ mod tests {
     #[test]
     fn villager_lightning_conversion_target_type() {
         assert_eq!(pumpkin_data::entity::EntityType::WITCH.resource_name, "witch");
+    }
+
+    #[test]
+    fn villager_type_from_biome_parity() {
+        assert_eq!(VillagerType::from_biome_name("minecraft:desert"), VillagerType::Desert);
+        assert_eq!(VillagerType::from_biome_name("minecraft:badlands"), VillagerType::Desert);
+        assert_eq!(VillagerType::from_biome_name("minecraft:eroded_badlands"), VillagerType::Desert);
+        assert_eq!(VillagerType::from_biome_name("minecraft:jungle"), VillagerType::Jungle);
+        assert_eq!(VillagerType::from_biome_name("minecraft:bamboo_jungle"), VillagerType::Jungle);
+        assert_eq!(VillagerType::from_biome_name("minecraft:savanna"), VillagerType::Savanna);
+        assert_eq!(VillagerType::from_biome_name("minecraft:savanna_plateau"), VillagerType::Savanna);
+        assert_eq!(VillagerType::from_biome_name("minecraft:snowy_plains"), VillagerType::Snow);
+        assert_eq!(VillagerType::from_biome_name("minecraft:ice_spikes"), VillagerType::Snow);
+        assert_eq!(VillagerType::from_biome_name("minecraft:swamp"), VillagerType::Swamp);
+        assert_eq!(VillagerType::from_biome_name("minecraft:mangrove_swamp"), VillagerType::Swamp);
+        assert_eq!(VillagerType::from_biome_name("minecraft:taiga"), VillagerType::Taiga);
+        assert_eq!(VillagerType::from_biome_name("minecraft:old_growth_pine_taiga"), VillagerType::Taiga);
+        assert_eq!(VillagerType::from_biome_name("minecraft:plains"), VillagerType::Plains);
+        assert_eq!(VillagerType::from_biome_name("minecraft:forest"), VillagerType::Plains);
     }
 }

@@ -4326,13 +4326,13 @@ impl World {
                         world.add_entity_silent(entity.clone());
                         player.try_restore_vehicle(&entity);
                     }
-                } else {
-                    // Already live for other watchers: pair this player now so
-                    // spawn packets and vehicle restore do not wait on a tracker tick.
-                    world
-                        .entity_tracker
-                        .update_player_chunks(&player, &world, &[position]);
                 }
+
+                // Pair this player with all live entities in the chunk (both freshly deserialized
+                // and already existing world-gen structure entities).
+                world
+                    .entity_tracker
+                    .update_player_chunks(&player, &world, &[position]);
             }
 
             #[cfg(debug_assertions)]
@@ -7313,14 +7313,31 @@ impl WorldPortalExt for WorldPortal {
                 warn!("Unknown structure entity type: {id}");
                 continue;
             };
+            let pos = if let Some(pos_list) = nbt.get_list("Pos")
+                && pos_list.len() >= 3
+            {
+                Vector3::new(
+                    pos_list[0].extract_double().unwrap_or(0.0),
+                    pos_list[1].extract_double().unwrap_or(0.0),
+                    pos_list[2].extract_double().unwrap_or(0.0),
+                )
+            } else {
+                Vector3::new(0.0, 0.0, 0.0)
+            };
             let entity = from_type(
                 entity_type,
-                Vector3::new(0.0, 0.0, 0.0),
+                pos,
                 &self.0,
                 Uuid::new_v4(),
             );
             entity.get_entity().read_nbt_non_mut(&nbt);
             entity.read_nbt_non_mut(&nbt);
+            crate::entity::mob::spawn::finalize_spawn(&entity, &self.0, None);
+            if let Some(mob) = entity.get_mob() {
+                mob.get_mob_entity()
+                    .persistence_required
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+            }
             self.0.spawn_entity(entity);
         }
     }
