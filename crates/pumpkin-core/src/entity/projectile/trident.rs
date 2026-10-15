@@ -169,6 +169,11 @@ impl TridentEntity {
             return true;
         }
 
+        // Spectators can't be hit
+        if other.get_player().is_some_and(|p| p.is_spectator()) {
+            return true;
+        }
+
         // Skip other projectiles and item entities
         if other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::TRIDENT
@@ -374,8 +379,8 @@ impl EntityBase for TridentEntity {
             }
         }
 
-        // Entity collisions
-        let candidates = world.get_entities_at_box(&search_box);
+        // Entity collisions, players included
+        let candidates = world.get_all_at_box(&search_box);
         for cand in candidates {
             if self.should_skip_collision(entity, &cand) {
                 continue;

@@ -109,13 +109,17 @@ impl MoveControlTrait for SmoothSwimmingMoveControl {
                     -(sin * water_speed) as f64,
                     (cos * water_speed) as f64,
                 ));
-            } else {
+            } else if self.outside_water_speed_modifier > 0.0 {
                 let left_to_turn = wrap_degrees(entity.yaw.load() - y_rot_d).abs();
                 let factor = Self::get_turning_speed_factor(left_to_turn);
                 let land_speed = speed * self.outside_water_speed_modifier * factor;
                 living_entity
                     .movement_input
                     .store(Vector3::new(0.0, 0.0, land_speed as f64));
+            } else {
+                living_entity
+                    .movement_input
+                    .store(Vector3::new(0.0, 0.0, 0.0));
             }
         } else {
             living_entity

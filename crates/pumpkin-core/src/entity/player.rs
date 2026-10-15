@@ -20,7 +20,6 @@ use crossbeam::channel::Receiver;
 use crossbeam::queue::SegQueue;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_inventory::Inventory;
-use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::RawPacket;
 use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
@@ -2987,8 +2986,11 @@ impl Player {
             let is_invalid = current_screen_handler
                 .try_lock()
                 .is_ok_and(|screen_handler| {
-                    screen_handler.as_any().is::<MerchantScreenHandler>()
-                        && !screen_handler.can_use(self)
+                    if let Some(pos) = self.open_container_pos.load() {
+                        !self.can_interact_with_block_at(&pos, 4.0) || !screen_handler.can_use(self)
+                    } else {
+                        !screen_handler.can_use(self)
+                    }
                 });
 
             if is_invalid {
@@ -6239,7 +6241,8 @@ impl Player {
             let container_slots = b.container_slots;
             let allow_grab_items = b.allow_grab_items;
             let allow_put_items = b.allow_put_items;
-            let can_use = screen_handler.can_use(self.as_ref());
+            let can_use = screen_handler.can_use(self.as_ref())
+                && self.open_container_pos.load().map_or(true, |pos| self.can_interact_with_block_at(&pos, 4.0));
             let is_slot_valid = screen_handler.is_slot_valid(i32::from(packet.slot));
             let available_slots = b.slots.len();
 
@@ -6291,6 +6294,7 @@ impl Player {
                 "Player {} interacted with invalid menu {:?}",
                 self.gameprofile.name, window_type
             );
+            self.close_handled_screen();
             return;
         }
 

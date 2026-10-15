@@ -17,6 +17,7 @@ pub struct PistonBlockEntity {
     pub facing: BlockDirection,
     pub current_progress: AtomicCell<f32>,
     pub last_progress: AtomicCell<f32>,
+    pub last_ticked: AtomicCell<i64>,
     pub extending: bool,
     pub source: bool,
 }
@@ -232,13 +233,19 @@ impl PistonBlockEntity {
             let pos = self.position;
             world.remove_block_entity(&pos);
             if world.get_block(&pos) == &Block::MOVING_PISTON {
-                let state = if self.source && self.extending {
-                    Block::AIR.default_state.id
+                let state = if self.source {
+                    if self.extending {
+                        Block::AIR.default_state.id
+                    } else {
+                        self.pushed_block_state.id
+                    }
                 } else {
                     world.update_from_neighbor_shapes(self.pushed_block_state.id, &pos)
                 };
+                let new_block = Block::from_state_id(state);
+                let state = new_block.set_waterlogged(state, false).unwrap_or(state);
                 world.set_block_state(&pos, state, BlockFlags::NOTIFY_ALL | BlockFlags::MOVED);
-                world.update_neighbors(&pos, None);
+                world.update_neighbor(&pos, new_block);
             }
         }
     }
@@ -283,6 +290,7 @@ impl BlockEntity for PistonBlockEntity {
     }
 
     fn tick(&self, world: &Arc<World>) {
+        self.last_ticked.store(world.get_world_age());
         let current_progress = self.current_progress.load();
         self.last_progress.store(current_progress);
         if current_progress >= 1.0 {
@@ -299,12 +307,27 @@ impl BlockEntity for PistonBlockEntity {
                 } else {
                     let updated_state =
                         world.update_from_neighbor_shapes(self.pushed_block_state.id, &pos);
-                    world.set_block_state(
-                        &pos,
-                        updated_state,
-                        BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
-                    );
-                    world.update_neighbors(&pos, None);
+                    let updated_block = Block::from_state_id(updated_state);
+                    if updated_block == &Block::AIR {
+                        world.set_block_state(
+                            &pos,
+                            self.pushed_block_state.id,
+                            BlockFlags::NOTIFY_LISTENERS
+                                | BlockFlags::MOVED
+                                | BlockFlags::UPDATE_KNOWN_SHAPE,
+                        );
+                        world.break_block(&pos, None, BlockFlags::NOTIFY_ALL);
+                    } else {
+                        let new_state = updated_block
+                            .set_waterlogged(updated_state, false)
+                            .unwrap_or(updated_state);
+                        world.set_block_state(
+                            &pos,
+                            new_state,
+                            BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
+                        );
+                        world.update_neighbor(&pos, updated_block);
+                    }
                 }
             }
             return;
@@ -337,6 +360,7 @@ impl BlockEntity for PistonBlockEntity {
             facing: BlockDirection::from_index(facing as u8).unwrap_or(BlockDirection::Down),
             current_progress: last_progress.into(),
             last_progress: last_progress.into(),
+            last_ticked: 0.into(),
             extending,
             source,
         }
@@ -358,6 +382,11 @@ impl BlockEntity for PistonBlockEntity {
         nbt.put_bool(EXTENDING, self.extending);
         nbt.put_bool(SOURCE, self.source);
         Some(nbt)
+    }
+
+    // The client animates moving blocks itself from the piston block event.
+    fn update_packet_nbt(&self) -> Option<NbtCompound> {
+        None
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

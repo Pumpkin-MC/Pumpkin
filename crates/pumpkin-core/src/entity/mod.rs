@@ -1712,7 +1712,7 @@ impl Entity {
             }
         }
 
-        suffocating
+        suffocating && self.pose.load() != pumpkin_data::entity::EntityPose::Sleeping
     }
 
     pub fn update_last_pos(&self) -> Vector3<f64> {

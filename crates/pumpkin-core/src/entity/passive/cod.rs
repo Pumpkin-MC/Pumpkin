@@ -33,7 +33,7 @@ impl CodEntity {
             .move_control
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            Box::new(SmoothSwimmingMoveControl::new(85, 10, 1.0, 0.1, true));
+            Box::new(SmoothSwimmingMoveControl::new(85, 10, 1.0, 0.0, true));
 
         let cod = Self {
             mob_entity,
@@ -97,6 +97,10 @@ impl Mob for CodEntity {
         }
 
         // Flop on land (matching vanilla AbstractFish.aiStep)
+        if !in_water {
+            self.mob_entity.living_entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+        }
+
         if !in_water && entity.on_ground.load(Ordering::Relaxed) {
             let mut rng = rand::rng();
             let dx = (rng.random::<f32>() * 2.0 - 1.0) * 0.05;

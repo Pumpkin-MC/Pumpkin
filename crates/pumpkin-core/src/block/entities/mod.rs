@@ -117,6 +117,12 @@ pub trait BlockEntity: Any + Send + Sync {
         None
     }
 
+    /// Obtain NBT data for sending to the client in `CBlockEntityData` update packets.
+    /// Defaults to `chunk_data_nbt()`.
+    fn update_packet_nbt(&self) -> Option<NbtCompound> {
+        self.chunk_data_nbt()
+    }
+
     /// Obtain block actor NBT for fields Bedrock does not include in its block state.
     fn bedrock_block_actor_data(&self, _state_id: BlockStateId) -> Option<NbtCompound> {
         None

@@ -1,6 +1,6 @@
 use crate::block::{
-    BlockBehaviour, BlockMetadata, NormalUseArgs, OnEntityCollisionArgs, OnEntityStepArgs,
-    RandomTickArgs, registry::BlockActionResult,
+    BlockBehaviour, BlockMetadata, OnEntityCollisionArgs, OnEntityStepArgs, RandomTickArgs,
+    UseWithItemArgs, registry::BlockActionResult,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::RedstoneOreLikeProperties;
@@ -28,10 +28,14 @@ impl RedstoneOreBlock {
 }
 
 impl BlockBehaviour for RedstoneOreBlock {
-    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.position);
         Self::light_up(args.world, args.position, args.block, state);
-        BlockActionResult::Success
+        if !args.item_stack.is_empty() && Block::from_item_id(args.item_stack.item.id).is_some() {
+            BlockActionResult::Pass
+        } else {
+            BlockActionResult::Success
+        }
     }
 
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {

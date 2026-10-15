@@ -325,7 +325,7 @@ fn register_permissions(registry: &PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.selector",
             "Allows a player to use selector variables",
-            PermissionDefault::Allow,
+            PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap_or_else(|e| tracing::warn!("{e}"));
     // Checked with vanilla's isOp mapped to level One, see `NBT_PLACE_PERMISSION`.

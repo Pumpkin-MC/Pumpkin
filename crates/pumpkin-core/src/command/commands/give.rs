@@ -8,12 +8,18 @@ use crate::command::argument_types::core::integer::IntegerArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::argument_types::item::ItemStackArgumentType;
 use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
 
 const DESCRIPTION: &str = "Give items to player(s).";
 const PERMISSION: &str = "minecraft:command.give";
+
+const ERROR_TOO_MANY_ITEMS: CommandErrorType<2> = CommandErrorType::new(
+    pumpkin_data::translation::java::COMMANDS_GIVE_FAILED_TOOMANYITEMS,
+    pumpkin_data::translation::java::COMMANDS_GIVE_FAILED_TOOMANYITEMS,
+);
 
 struct GiveExecutor {
     has_count: bool,
@@ -30,6 +36,15 @@ impl CommandExecutor for GiveExecutor {
         } else {
             1
         };
+
+        let max_stack = i32::from(parsed_stack.get_max_stack_size());
+        let max_allowed = max_stack * 100;
+        if item_count > max_allowed {
+            return Err(ERROR_TOO_MANY_ITEMS.create_without_context(
+                TextComponent::text(max_allowed.to_string()),
+                item.translated_name(),
+            ));
+        }
 
         for target in &targets {
             let max_stack = i32::from(parsed_stack.get_max_stack_size());

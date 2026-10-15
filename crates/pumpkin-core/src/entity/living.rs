@@ -1494,7 +1494,7 @@ impl LivingEntity {
 
         let suffocating = self.entity.tick_block_collisions(caller);
 
-        if suffocating {
+        if suffocating && self.entity.pose.load() != pumpkin_data::entity::EntityPose::Sleeping {
             caller.damage(caller, 1.0, DamageType::IN_WALL);
         }
 
@@ -3700,7 +3700,7 @@ impl EntityBase for LivingEntity {
             self.apply_travel_friction();
 
             let suffocating = self.entity.tick_block_collisions(caller);
-            if suffocating {
+            if suffocating && self.entity.pose.load() != pumpkin_data::entity::EntityPose::Sleeping {
                 caller.damage(caller, 1.0, DamageType::IN_WALL);
             }
 

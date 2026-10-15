@@ -448,6 +448,7 @@ impl Slot for ResultSlot {
         for i in 0..self.inventory.size() {
             self.inventory.remove_stack_specific(i, 1);
         }
+        self.refill_output();
         self.mark_dirty();
     }
     fn can_insert(&self, _stack: &ItemStack) -> bool {

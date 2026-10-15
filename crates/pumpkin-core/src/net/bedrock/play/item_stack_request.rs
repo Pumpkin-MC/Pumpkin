@@ -598,10 +598,14 @@ pub(crate) fn map_bedrock_container_slot(
 
     match container_name {
         ContainerName::HotBar => {
-            if is_player_screen {
-                Some(36 + slot_id as usize)
+            if slot_id < 9 {
+                if is_player_screen {
+                    Some(36 + slot_id as usize)
+                } else {
+                    Some(container_slots + 27 + slot_id as usize)
+                }
             } else {
-                Some(container_slots + 27 + slot_id as usize)
+                None
             }
         }
         ContainerName::Inventory | ContainerName::CombinedHotBarAndInventory => {
@@ -899,9 +903,10 @@ fn get_slot_stack(
         slot_info.container_name.container_name,
         slot_info.slot_id,
     )
+    .and_then(|screen_slot| screen_handler.get_behaviour().slots.get(screen_slot))
     .map_or_else(
         || ItemStack::EMPTY.clone(),
-        |screen_slot| screen_handler.get_behaviour().slots[screen_slot].get_cloned_stack(),
+        |slot| slot.get_cloned_stack(),
     )
 }
 
@@ -926,6 +931,9 @@ fn update_slot_stack(
         slot_info.container_name.container_name,
         slot_info.slot_id,
     ) {
+        if screen_slot >= screen_handler.get_behaviour().slots.len() {
+            return;
+        }
         let is_player_screen = screen_handler.window_type().is_none();
         if is_player_screen {
             let current_stack =

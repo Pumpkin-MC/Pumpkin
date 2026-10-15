@@ -2,7 +2,6 @@ use pumpkin_data::{Block, BlockState, FacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::blocks::piston::piston::try_move;
 use crate::block::{BlockBehaviour, BrokenArgs, OnNeighborUpdateArgs, PathComputationType};
 
 use super::piston::PistonProps;
@@ -21,9 +20,14 @@ impl BlockBehaviour for PistonHeadBlock {
             .offset(props.facing.opposite().to_block_direction().to_offset());
         let (new_block, new_state) = args.world.get_block_and_state_id(&pos);
         if &Block::PISTON == new_block || &Block::STICKY_PISTON == new_block {
-            let props = PistonProps::from_state_id(new_state);
-            if props.extended {
-                args.world.break_block(&pos, Some(args.player), BlockFlags::SKIP_DROPS);
+            let base_props = PistonProps::from_state_id(new_state);
+            if base_props.extended && base_props.facing == props.facing {
+                let flags = if args.player.gamemode.load() == pumpkin_util::GameMode::Creative {
+                    BlockFlags::SKIP_DROPS
+                } else {
+                    BlockFlags::empty()
+                };
+                args.world.break_block(&pos, Some(args.player), flags);
             }
         }
     }
@@ -53,14 +57,25 @@ impl BlockBehaviour for PistonHeadBlock {
         };
 
         if !can_survive {
-            args.world
-                .break_block(args.position, None, BlockFlags::SKIP_DROPS);
+            // Drop to AIR without breaking base piston (matching jvmc updateShape)
+            args.world.set_block_state(
+                args.position,
+                Block::AIR.default_state.id,
+                BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_ALL,
+            );
             return;
         }
 
-        // Forward neighbor update to piston base (matching jvmc neighborChanged)
-        args.world.update_neighbors_at(&base_pos, &Block::PISTON_HEAD, None);
-        try_move(args.world, base_block, &base_pos);
+        // Do not forward update back to the base if the update originated from the base itself!
+        if args.source_block == &Block::PISTON
+            || args.source_block == &Block::STICKY_PISTON
+            || args.source_block == &Block::MOVING_PISTON
+        {
+            return;
+        }
+
+        // Forward neighbor update ONLY to piston base (matching jvmc neighborChanged)
+        args.world.update_neighbor(&base_pos, &Block::PISTON_HEAD);
     }
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
