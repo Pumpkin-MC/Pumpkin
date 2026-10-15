@@ -1,38 +1,42 @@
 use heck::ToKebabCase;
-use std::collections::HashSet;
-use syn::{GenericArgument, PathArguments, Type, TypePath};
-use wit_encoder::Type as WitType;
+use quote::ToTokens;
+use std::{
+    collections::HashSet,
+    fs,
+    path::{Path, PathBuf},
+};
+use syn::{Fields, GenericArgument, PathArguments, Type, TypePath};
+use wit_encoder::{
+    Enum, EnumCase, Field, Interface, Record, Type as WitType, TypeDef, TypeDefKind, Variant,
+    VariantCase,
+};
 
-pub fn map_type(ty: &Type) -> WitType {
-    map_type_with_defined(ty, None)
-}
-
-pub fn map_type_with_defined(ty: &Type, defined_types: Option<&HashSet<String>>) -> WitType {
+pub fn map_type(ty: &Type, defined_types: &HashSet<String>) -> Result<WitType, ()> {
     match ty {
         Type::Path(TypePath { path, .. }) => {
             let last_segment = path.segments.last().unwrap();
             let ident_str = last_segment.ident.to_string();
             match ident_str.as_str() {
                 "String" | "TextComponent" | "str" | "Identifier" | "ResourceLocation"
-                | "LpVector3d" => WitType::String,
-                "Uuid" => WitType::Named("uuid".into()),
-                "i32" | "VarInt" | "u32" | "VarUInt" | "usize" | "u24" => WitType::S32,
-                "i64" | "u64" | "VarLong" | "VarULong" => WitType::S64,
-                "bool" => WitType::Bool,
-                "f32" => WitType::F32,
-                "f64" => WitType::F64,
-                "u8" | "i8" => WitType::U8,
-                "u16" | "i16" => WitType::S32,
-                "Bytes" | "BoxedU8Slice" | "ChunkData" => WitType::list(WitType::U8),
-                "BitSet" | "Bitset" => WitType::list(WitType::S64),
-                "NbtCompound" | "Nbt" | "DynamicRecipe" => WitType::String,
+                | "LpVector3d" => Ok(WitType::String),
+                "Uuid" => Ok(WitType::Named("uuid".into())),
+                "i32" | "VarInt" | "u32" | "VarUInt" | "usize" | "u24" => Ok(WitType::S32),
+                "i64" | "u64" | "VarLong" | "VarULong" => Ok(WitType::S64),
+                "bool" => Ok(WitType::Bool),
+                "f32" => Ok(WitType::F32),
+                "f64" => Ok(WitType::F64),
+                "u8" | "i8" => Ok(WitType::U8),
+                "u16" | "i16" => Ok(WitType::S32),
+                "Bytes" | "BoxedU8Slice" | "ChunkData" => Ok(WitType::list(WitType::U8)),
+                "BitSet" | "Bitset" => Ok(WitType::list(WitType::S64)),
+                "NbtCompound" | "Nbt" | "DynamicRecipe" => Ok(WitType::String),
                 "Option" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments
                         && let Some(GenericArgument::Type(inner_ty)) = args.args.first()
                     {
-                        return WitType::option(map_type_with_defined(inner_ty, defined_types));
+                        return Ok(WitType::option(map_type(inner_ty, defined_types)?));
                     }
-                    WitType::String
+                    Err(())
                 }
                 "Box" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments
@@ -42,18 +46,18 @@ pub fn map_type_with_defined(ty: &Type, defined_types: Option<&HashSet<String>>)
                             if let Type::Path(tp) = &*ts.elem
                                 && tp.path.segments.last().unwrap().ident == "u8"
                             {
-                                return WitType::list(WitType::U8);
+                                return Ok(WitType::list(WitType::U8));
                             }
-                            return WitType::list(map_type_with_defined(&ts.elem, defined_types));
+                            return Ok(WitType::list(map_type(&ts.elem, defined_types)?));
                         }
                         if let Type::Path(tp) = inner_ty
                             && tp.path.segments.last().unwrap().ident == "str"
                         {
-                            return WitType::String;
+                            return Ok(WitType::String);
                         }
-                        return map_type_with_defined(inner_ty, defined_types);
+                        return map_type(inner_ty, defined_types);
                     }
-                    WitType::String
+                    Err(())
                 }
                 "Vec" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments
@@ -62,11 +66,11 @@ pub fn map_type_with_defined(ty: &Type, defined_types: Option<&HashSet<String>>)
                         if let Type::Path(tp) = inner_ty
                             && tp.path.segments.last().unwrap().ident == "u8"
                         {
-                            return WitType::list(WitType::U8);
+                            return Ok(WitType::list(WitType::U8));
                         }
-                        return WitType::list(map_type_with_defined(inner_ty, defined_types));
+                        return Ok(WitType::list(map_type(inner_ty, defined_types)?));
                     }
-                    WitType::String
+                    Err(())
                 }
                 "Cow" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments {
@@ -75,21 +79,21 @@ pub fn map_type_with_defined(ty: &Type, defined_types: Option<&HashSet<String>>)
                                 if let Type::Path(tp) = inner_ty
                                     && tp.path.segments.last().unwrap().ident == "str"
                                 {
-                                    return WitType::String;
+                                    return Ok(WitType::String);
                                 }
-                                return map_type_with_defined(inner_ty, defined_types);
+                                return map_type(inner_ty, defined_types);
                             }
                         }
                     }
-                    WitType::String
+                    Err(())
                 }
                 "NonZero" | "EnumAsStr" | "IdOr" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments
                         && let Some(GenericArgument::Type(inner_ty)) = args.args.first()
                     {
-                        return map_type_with_defined(inner_ty, defined_types);
+                        return map_type(inner_ty, defined_types);
                     }
-                    WitType::String
+                    Err(())
                 }
                 "HashMap" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments {
@@ -102,69 +106,299 @@ pub fn map_type_with_defined(ty: &Type, defined_types: Option<&HashSet<String>>)
                             })
                             .collect();
                         if type_args.len() == 2 {
-                            return WitType::list(WitType::tuple(vec![
-                                map_type_with_defined(type_args[0], defined_types),
-                                map_type_with_defined(type_args[1], defined_types),
-                            ]));
+                            return Ok(WitType::list(WitType::tuple(vec![
+                                map_type(type_args[0], defined_types)?,
+                                map_type(type_args[1], defined_types)?,
+                            ])));
                         }
                     }
-                    WitType::String
+                    Err(())
                 }
                 "Vector3" | "BlockPos" => {
                     if ident_str == "Vector3" {
-                        WitType::tuple(vec![WitType::F64, WitType::F64, WitType::F64])
+                        Ok(WitType::tuple(vec![
+                            WitType::F64,
+                            WitType::F64,
+                            WitType::F64,
+                        ]))
                     } else {
-                        WitType::tuple(vec![WitType::S32, WitType::S32, WitType::S32])
+                        Ok(WitType::tuple(vec![
+                            WitType::S32,
+                            WitType::S32,
+                            WitType::S32,
+                        ]))
                     }
                 }
-                "Vector2" => WitType::tuple(vec![WitType::F64, WitType::F64]),
+                "Vector2" => Ok(WitType::tuple(vec![WitType::F64, WitType::F64])),
                 _ => {
                     let kebab = ident_str.to_kebab_case();
-                    if let Some(defined) = defined_types {
-                        if defined.contains(&kebab) {
-                            WitType::named(kebab)
-                        } else {
-                            WitType::String
-                        }
+                    if defined_types.contains(&kebab) {
+                        Ok(WitType::named(kebab))
                     } else {
-                        WitType::named(kebab)
+                        Err(())
                     }
                 }
             }
         }
-        Type::Reference(tr) => map_type_with_defined(&tr.elem, defined_types),
+        Type::Reference(tr) => map_type(&tr.elem, defined_types),
         Type::Slice(ts) => {
             if let Type::Path(tp) = &*ts.elem
                 && tp.path.segments.last().unwrap().ident == "u8"
             {
-                WitType::list(WitType::U8)
+                Ok(WitType::list(WitType::U8))
             } else {
-                WitType::list(map_type_with_defined(&ts.elem, defined_types))
+                Ok(WitType::list(map_type(&ts.elem, defined_types)?))
             }
         }
         Type::Array(ta) => {
             if let Type::Path(tp) = &*ta.elem
                 && tp.path.segments.last().unwrap().ident == "u8"
             {
-                WitType::list(WitType::U8)
+                Ok(WitType::list(WitType::U8))
             } else {
-                WitType::list(map_type_with_defined(&ta.elem, defined_types))
+                Ok(WitType::list(map_type(&ta.elem, defined_types)?))
             }
         }
         Type::Tuple(tt) => {
             if tt.elems.is_empty() {
-                WitType::String
+                Ok(WitType::String)
             } else {
-                WitType::tuple(
+                Ok(WitType::tuple(
                     tt.elems
                         .iter()
-                        .map(|e| map_type_with_defined(e, defined_types))
-                        .collect::<Vec<_>>(),
-                )
+                        .map(|e| map_type(e, defined_types))
+                        .collect::<Result<Vec<_>, _>>()?,
+                ))
             }
         }
-        Type::Paren(tp) => map_type_with_defined(&tp.elem, defined_types),
-        Type::Group(tg) => map_type_with_defined(&tg.elem, defined_types),
-        _ => WitType::String,
+        Type::Paren(tp) => map_type(&tp.elem, defined_types),
+        Type::Group(tg) => map_type(&tg.elem, defined_types),
+        _ => Err(()),
+    }
+}
+
+pub fn collect_fields(
+    named_fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>,
+    defined_types: &HashSet<String>,
+) -> Vec<Field> {
+    named_fields
+        .into_iter()
+        .map(|field| {
+            let field_name = field.ident.as_ref().unwrap().to_string().to_kebab_case();
+            let field_type = map_type(&field.ty, defined_types);
+            let docs = field_type.as_ref().err().map(|_| {
+                format!(
+                    "WARNING: Could not translate type `{}` to WIT",
+                    field.ty.to_token_stream()
+                )
+            });
+
+            let mut wit_field = Field::new(
+                field_name,
+                field_type.unwrap_or_else(|()| WitType::Named("inexpressible-host-type".into())),
+            );
+            wit_field.set_docs(docs);
+            wit_field
+        })
+        .collect()
+}
+
+pub fn translate_enum_to_wit(
+    e: syn::ItemEnum,
+    enum_wit_name: String,
+    defined_types: &HashSet<String>,
+) -> (TypeDef, Vec<TypeDef>) {
+    let case_names = e
+        .variants
+        .iter()
+        .map(|v| v.ident.to_string().to_kebab_case())
+        .collect::<Vec<_>>();
+
+    if e.variants.iter().all(|v| matches!(v.fields, Fields::Unit)) {
+        (
+            TypeDef::new(
+                enum_wit_name,
+                TypeDefKind::Enum(Enum::from_iter(case_names.into_iter().map(EnumCase::new))),
+            ),
+            Vec::new(),
+        )
+    } else {
+        let helper_types = e
+            .variants
+            .iter()
+            .zip(case_names.iter())
+            .filter_map(|(v, name)| match &v.fields {
+                Fields::Named(fields) => Some((fields, name)),
+                _ => None,
+            })
+            .map(|(fields, name)| {
+                let fields_list = collect_fields(&fields.named, defined_types);
+                TypeDef::new(
+                    format!("{}-{}", &enum_wit_name, name),
+                    TypeDefKind::Record(Record::new(fields_list)),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let case_fields = e
+            .variants
+            .iter()
+            .zip(case_names.into_iter())
+            .map(|(v, variant_wit_name)| match &v.fields {
+                Fields::Named(fields) => {
+                    let sub_record_name = format!("{}-{}", enum_wit_name, variant_wit_name);
+                    let fields_list = collect_fields(&fields.named, defined_types);
+                    VariantCase::value(variant_wit_name, WitType::named(sub_record_name))
+                }
+                Fields::Unnamed(fields) => match fields.unnamed.len() {
+                    0 => VariantCase::empty(variant_wit_name),
+                    1 => {
+                        let ty = map_type(&fields.unnamed[0].ty, defined_types);
+                        let docs = ty.as_ref().err().map(|_| {
+                            format!(
+                                "WARNING: Could not translate type `{}` to WIT",
+                                fields.unnamed[0].ty.to_token_stream()
+                            )
+                        });
+                        let mut case = VariantCase::value(
+                            variant_wit_name,
+                            ty.unwrap_or_else(|_| WitType::Named("inexpressible-host-type".into())),
+                        );
+                        case.set_docs(docs);
+                        case
+                    }
+                    _ => {
+                        let types: Vec<_> = fields
+                            .unnamed
+                            .iter()
+                            .map(|f| map_type(&f.ty, defined_types))
+                            .collect();
+                        let docs = types.iter().any(|t| t.is_err()).then(|| {
+                            format!(
+                                "WARNING: Could not translate some types to WIT: {}",
+                                fields
+                                    .unnamed
+                                    .iter()
+                                    .zip(types.iter())
+                                    .filter(|(rust, wit)| wit.is_err())
+                                    .map(|(rust, wit)| rust.to_token_stream().to_string())
+                                    .fold(String::new(), |accum, str| accum + "\n - " + &str)
+                            )
+                        });
+                        let mut case = VariantCase::value(
+                            variant_wit_name,
+                            WitType::tuple(types.into_iter().map(|t| {
+                                t.unwrap_or_else(|_| {
+                                    WitType::Named("inexpressible-host-type".into())
+                                })
+                            })),
+                        );
+                        case.set_docs(docs);
+                        case
+                    }
+                },
+                Fields::Unit => VariantCase::empty(variant_wit_name),
+            })
+            .collect::<Vec<_>>();
+
+        (
+            TypeDef::new(
+                enum_wit_name.clone(),
+                TypeDefKind::Variant(Variant::from(case_fields)),
+            ),
+            helper_types,
+        )
+    }
+}
+
+pub fn is_valid_helper_struct(s: &syn::ItemStruct) -> bool {
+    matches!(s.vis, syn::Visibility::Public(_))
+        && matches!(s.fields, Fields::Named(_))
+        && s.generics.type_params().next().is_none()
+        && s.generics.const_params().next().is_none()
+}
+
+pub fn is_valid_helper_enum(e: &syn::ItemEnum) -> bool {
+    matches!(e.vis, syn::Visibility::Public(_))
+        && e.generics.type_params().next().is_none()
+        && e.generics.const_params().next().is_none()
+}
+
+pub fn process_helper_struct(
+    s: syn::ItemStruct,
+    interface: &mut Interface,
+    processed_types: &mut HashSet<String>,
+    defined_types: &HashSet<String>,
+) {
+    let wit_name = s.ident.to_string().to_kebab_case();
+    if !processed_types.insert(wit_name.clone()) {
+        panic!("Encountered duplicate type: {}", wit_name);
+    }
+
+    let fields_list = match s.fields {
+        Fields::Named(fields) => collect_fields(&fields.named, defined_types),
+        _ => Vec::new(),
+    };
+
+    if !fields_list.is_empty() {
+        interface.type_def(TypeDef::new(
+            wit_name,
+            TypeDefKind::Record(Record::new(fields_list)),
+        ));
+    }
+}
+
+pub fn process_helper_enum(
+    e: syn::ItemEnum,
+    interface: &mut Interface,
+    processed_types: &mut HashSet<String>,
+    defined_types: &HashSet<String>,
+) {
+    let enum_wit_name = e.ident.to_string().to_kebab_case();
+    if !processed_types.insert(enum_wit_name.clone()) {
+        panic!("Encountered duplicate type: {}", enum_wit_name);
+    }
+
+    let (main_def, helper_defs) = translate_enum_to_wit(e, enum_wit_name, defined_types);
+    for def in helper_defs {
+        if !processed_types.insert(def.name().to_string()) {
+            panic!("Encountered duplicate type: {}", def.name());
+        }
+        interface.type_def(def);
+    }
+    interface.type_def(main_def);
+}
+
+pub struct RustFilesFinder {
+    stack: Vec<PathBuf>,
+}
+
+impl RustFilesFinder {
+    pub fn new(root: impl AsRef<Path>) -> Self {
+        Self {
+            stack: vec![root.as_ref().to_path_buf()],
+        }
+    }
+}
+
+impl Iterator for RustFilesFinder {
+    type Item = PathBuf;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(path) = self.stack.pop() {
+            if path.is_dir() {
+                if let Ok(entries) = fs::read_dir(path) {
+                    let mut paths = entries.flatten().map(|e| e.path()).collect::<Vec<_>>();
+                    paths.sort();
+                    self.stack.extend(paths.into_iter().rev());
+                }
+            } else if path.is_file()
+                && path.extension().is_some_and(|ext| ext == "rs")
+                && path.file_name().is_some_and(|name| name != "mod.rs")
+            {
+                return Some(path);
+            }
+        }
+        None
     }
 }

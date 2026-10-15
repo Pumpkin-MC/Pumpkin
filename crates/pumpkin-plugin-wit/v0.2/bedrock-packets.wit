@@ -1,6 +1,7 @@
 package pumpkin:plugin@0.2.0;
 
 interface bedrock-packets {
+  use common.{ inexpressible-host-type };
   use uuid.{ uuid };
   record s-actor-event {
     target-runtime-id: s64,
@@ -156,8 +157,10 @@ interface bedrock-packets {
     unknown(s32),
   }
   variant transaction-data {
-    normal(string),
-    mismatch(string),
+    /// WARNING: Could not translate type `NormalTransactionData` to WIT
+    normal(inexpressible-host-type),
+    /// WARNING: Could not translate type `MismatchTransactionData` to WIT
+    mismatch(inexpressible-host-type),
     use-item(use-item-transaction-data),
     use-item-on-entity(use-item-on-entity-transaction-data),
     release-item(release-item-transaction-data),
@@ -336,7 +339,7 @@ interface bedrock-packets {
     jwt: list<u8>,
     raw-token: list<u8>,
   }
-  record skin-animation {
+  record login-skin-animation {
     frames: f64,
     image: string,
     image-height: s32,
@@ -344,14 +347,14 @@ interface bedrock-packets {
     animation-type: s32,
     animation-expression: s32,
   }
-  record persona-piece {
+  record login-persona-piece {
     is-default: bool,
     pack-id: string,
     piece-id: string,
     piece-type: string,
     product-id: string,
   }
-  record persona-piece-tint-colour {
+  record login-persona-piece-tint-colour {
     colours: list<string>,
     piece-type: string,
   }
@@ -399,10 +402,10 @@ interface bedrock-packets {
     skin-geometry: string,
     skin-geometry-version: string,
     skin-resource-patch: string,
-    animated-image-data: list<skin-animation>,
+    animated-image-data: list<login-skin-animation>,
     skin-animation-data: string,
-    persona-pieces: list<persona-piece>,
-    piece-tint-colours: list<persona-piece-tint-colour>,
+    persona-pieces: list<login-persona-piece>,
+    piece-tint-colours: list<login-persona-piece-tint-colour>,
   }
   record s-mob-equipment {
     entity-runtime-id: s64,
@@ -684,7 +687,8 @@ interface bedrock-packets {
     y-head-rotation: f32,
     y-body-rotation: f32,
     attributes-list: list<synced-attribute>,
-    actor-data: string,
+    /// WARNING: Could not translate type `SyncedActorDataList` to WIT
+    actor-data: inexpressible-host-type,
     synced-properties: property-sync-data,
     actor-links: list<actor-link>,
   }
@@ -700,7 +704,8 @@ interface bedrock-packets {
     item: item-stack-wrapper,
     position: tuple<f64, f64, f64>,
     velocity: tuple<f64, f64, f64>,
-    entity-data: string,
+    /// WARNING: Could not translate type `SyncedActorDataList` to WIT
+    entity-data: inexpressible-host-type,
     is-from-fishing: bool,
   }
   record c-add-player {
@@ -714,7 +719,8 @@ interface bedrock-packets {
     y-head-rotation: f32,
     carried-item: network-item-stack-descriptor,
     player-game-type: game-type,
-    entity-data: string,
+    /// WARNING: Could not translate type `SyncedActorDataList` to WIT
+    entity-data: inexpressible-host-type,
     synced-properties: property-sync-data,
     abilities-data: serialized-abilities-data,
     actor-links: list<actor-link>,
@@ -1160,6 +1166,21 @@ interface bedrock-packets {
     is-trusted: bool,
     profile-hash: string,
   }
+  record skin-animation {
+    image-width: s32,
+    image-height: s32,
+    image-data: list<u8>,
+    animation-type: s32,
+    frames: f32,
+    expression-type: s32,
+  }
+  record persona-piece {
+    piece-id: string,
+    piece-type: s32,
+    pack-id: uuid,
+    is-default: bool,
+    product-id: string,
+  }
   record piece-tint-color {
     piece-type: string,
     colors: list<s32>,
@@ -1207,7 +1228,8 @@ interface bedrock-packets {
   }
   record c-set-actor-data {
     target-runtime-id: s64,
-    actor-data: string,
+    /// WARNING: Could not translate type `SyncedActorDataList` to WIT
+    actor-data: inexpressible-host-type,
     synced-properties: property-sync-data,
     tick: s64,
   }
