@@ -1773,6 +1773,12 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
 
     #[allow(clippy::too_many_lines)]
     fn tick(&mut self, entity: &LivingEntity) {
+        if !self.allow_breaching && !entity.entity.touching_water.load(Ordering::Relaxed) {
+            self.stop();
+            entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+            return;
+        }
+
         self.inner.tick_count += 1;
         let world_age = entity.entity.world.load().get_world_age() as u64;
 

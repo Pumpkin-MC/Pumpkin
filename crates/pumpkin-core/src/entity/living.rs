@@ -820,8 +820,10 @@ impl LivingEntity {
                 let tester_type = tester_base.get_entity().entity_type;
                 if (tester_type == &EntityType::SKELETON && head.item.id == Item::SKELETON_SKULL.id)
                     || (tester_type == &EntityType::ZOMBIE && head.item.id == Item::ZOMBIE_HEAD.id)
-                    || (tester_type == &EntityType::CREEPER && head.item.id == Item::CREEPER_HEAD.id)
-                    || ((tester_type == &EntityType::PIGLIN || tester_type == &EntityType::PIGLIN_BRUTE)
+                    || (tester_type == &EntityType::CREEPER
+                        && head.item.id == Item::CREEPER_HEAD.id)
+                    || ((tester_type == &EntityType::PIGLIN
+                        || tester_type == &EntityType::PIGLIN_BRUTE)
                         && head.item.id == Item::PIGLIN_HEAD.id)
                 {
                     percent *= 0.5;
@@ -1476,7 +1478,9 @@ impl LivingEntity {
 
         if !effective_ai {
             // No travel.
-        } else if let Some(mob) = caller.get_mob() && mob.custom_travel(caller) {
+        } else if let Some(mob) = caller.get_mob()
+            && mob.custom_travel(caller)
+        {
             // Handled by custom mob travel (e.g. Squid)
         } else if (touching_water || self.entity.touching_lava.load(SeqCst))
             && should_swim_in_fluids
@@ -1494,7 +1498,10 @@ impl LivingEntity {
 
         let suffocating = self.entity.tick_block_collisions(caller);
 
-        if suffocating && self.entity.pose.load() != pumpkin_data::entity::EntityPose::Sleeping {
+        if suffocating
+            && !caller.get_player().is_some_and(|p| p.is_sleeping())
+            && self.entity.pose.load() != pumpkin_data::entity::EntityPose::Sleeping
+        {
             caller.damage(caller, 1.0, DamageType::IN_WALL);
         }
 
@@ -1655,14 +1662,17 @@ impl LivingEntity {
         }
 
         let last_movement = self.entity.velocity.load();
-        let last_speed = (last_movement.x * last_movement.x + last_movement.z * last_movement.z).sqrt();
+        let last_speed =
+            (last_movement.x * last_movement.x + last_movement.z * last_movement.z).sqrt();
 
         let new_movement = self.update_fall_flying_movement(last_movement, caller);
         self.entity.velocity.store(new_movement);
         self.make_move(caller);
 
         let current_movement = self.entity.velocity.load();
-        let new_speed = (current_movement.x * current_movement.x + current_movement.z * current_movement.z).sqrt();
+        let new_speed = (current_movement.x * current_movement.x
+            + current_movement.z * current_movement.z)
+            .sqrt();
         self.handle_fall_flying_collisions(caller, last_speed, new_speed);
 
         if self.entity.on_ground.load(Relaxed) {
@@ -2260,7 +2270,11 @@ impl LivingEntity {
                 for dx in -8..=8 {
                     for dz in -8..=8 {
                         if dx * dx + dy * dy + dz * dz <= 64 {
-                            let check_pos = BlockPos::new(death_pos.0.x + dx, death_pos.0.y + dy, death_pos.0.z + dz);
+                            let check_pos = BlockPos::new(
+                                death_pos.0.x + dx,
+                                death_pos.0.y + dy,
+                                death_pos.0.z + dz,
+                            );
                             let block = world.get_block(&check_pos);
                             if block.id == pumpkin_data::BlockId::SCULK_CATALYST {
                                 crate::block::blocks::sculk::sculk_catalyst::SculkCatalystBlock::bloom(&world, &check_pos);
@@ -2282,8 +2296,12 @@ impl LivingEntity {
                 let max = [p_pos.x + 20.0, p_pos.y + 20.0, p_pos.z + 20.0];
                 let search_box = pumpkin_util::math::boundingbox::BoundingBox::new_array(min, max);
                 for entity in world.get_entities_at_box(&search_box) {
-                    if entity.get_entity().entity_type == &pumpkin_data::entity::EntityType::AXOLOTL {
-                        if let Some(axolotl) = entity.cast_any().downcast_ref::<crate::entity::passive::axolotl::AxolotlEntity>() {
+                    if entity.get_entity().entity_type == &pumpkin_data::entity::EntityType::AXOLOTL
+                    {
+                        if let Some(axolotl) = entity
+                            .cast_any()
+                            .downcast_ref::<crate::entity::passive::axolotl::AxolotlEntity>(
+                        ) {
                             axolotl.apply_supporting_effects(&player);
                             break;
                         }
@@ -2694,14 +2712,11 @@ impl LivingEntity {
         damage_amount: f32,
         damage_type: &DamageType,
     ) {
-        if damage_amount <= 0.0
-            || damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_ARMOR)
-        {
+        if damage_amount <= 0.0 || damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_ARMOR) {
             return;
         }
 
-        let is_helmet_damage =
-            damage_type.has_tag(&tag::DamageType::MINECRAFT_DAMAGES_HELMET);
+        let is_helmet_damage = damage_type.has_tag(&tag::DamageType::MINECRAFT_DAMAGES_HELMET);
 
         // Formula: armor loses floor(incoming_damage / 4) durability, minimum 1.
         let armor_damage = (damage_amount / 4.0).floor().max(1.0) as i32;
@@ -3343,8 +3358,9 @@ impl LivingEntity {
             if source_to_player.dot(&look_vec) < 0.0 {
                 let mut disable_blocking = false;
                 if let Some(attacker) = source.or(cause) {
-                    if let Some(attacker_player) =
-                        attacker.cast_any().downcast_ref::<crate::entity::player::Player>()
+                    if let Some(attacker_player) = attacker
+                        .cast_any()
+                        .downcast_ref::<crate::entity::player::Player>()
                     {
                         if attacker_player.inventory().held_item().is_axe() {
                             disable_blocking = true;
@@ -3700,7 +3716,10 @@ impl EntityBase for LivingEntity {
             self.apply_travel_friction();
 
             let suffocating = self.entity.tick_block_collisions(caller);
-            if suffocating && self.entity.pose.load() != pumpkin_data::entity::EntityPose::Sleeping {
+            if suffocating
+                && !caller.get_player().is_some_and(|p| p.is_sleeping())
+                && self.entity.pose.load() != pumpkin_data::entity::EntityPose::Sleeping
+            {
                 caller.damage(caller, 1.0, DamageType::IN_WALL);
             }
 

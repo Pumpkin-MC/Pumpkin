@@ -626,6 +626,27 @@ impl Level {
 
         // We do not clean them here because we want the caller to save any active entities in them first.
 
+        // Prune loaded_chunks that are no longer watched to prevent unbounded memory growth on player disconnects.
+        // Save dirty chunks to disk before dropping them from memory.
+        let mut chunks_to_write = Vec::new();
+        self.loaded_chunks.retain(|pos, chunk| {
+            if self.chunk_watchers.contains_key(pos) {
+                true
+            } else {
+                if chunk.is_dirty() {
+                    chunks_to_write.push((*pos, chunk.clone()));
+                }
+                false
+            }
+        });
+
+        if !chunks_to_write.is_empty() {
+            let level = self.clone();
+            self.spawn_task(async move {
+                level.write_chunks(chunks_to_write).await;
+            });
+        }
+
         // if the difference is too big, we can shrink the loaded chunks
         // (1024 chunks is the equivalent to a 32x32 chunks area)
         if self.chunk_watchers.capacity() - self.chunk_watchers.len() >= 4096 {
@@ -1076,5 +1097,33 @@ mod tests {
 
         let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END);
         assert_eq!(end_level.level_folder.dim_folder, root.join("DIM1"));
+    }
+
+    #[tokio::test]
+    async fn clean_memory_prunes_unwatched_chunks() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path().to_path_buf();
+        let config = LevelConfig::default();
+        let level = Level::from_root_folder(&config, root, 0, Dimension::OVERWORLD);
+
+        let pos1 = Vector2::new(0, 0);
+        let pos2 = Vector2::new(1, 1);
+        let dummy_chunk = Arc::new(ChunkData::empty(0, 0));
+
+        // Insert chunks directly into loaded_chunks
+        level.loaded_chunks.insert(pos1, dummy_chunk.clone());
+        level.loaded_chunks.insert(pos2, dummy_chunk.clone());
+
+        // Watch only pos1
+        level.chunk_watchers.insert(pos1, 1);
+
+        assert_eq!(level.loaded_chunk_count(), 2);
+
+        // clean_memory should drop pos2 because it is unwatched and not dirty
+        level.clean_memory();
+
+        assert_eq!(level.loaded_chunk_count(), 1);
+        assert!(level.is_chunk_loaded(&pos1));
+        assert!(!level.is_chunk_loaded(&pos2));
     }
 }

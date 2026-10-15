@@ -101,45 +101,50 @@ impl GeodeFeature {
         pos: BlockPos,
     ) -> bool {
         let origin = pos;
-        let num_points = self.distribution_points.get(random);
+        let num_points = if self.distribution_points.get_max() == 0 {
+            random.next_bounded_i32(2) + 3 // Vanilla default: UniformInt(3, 4)
+        } else {
+            self.distribution_points.get(random)
+        };
         let noise = NormalNoise::create(random, -4, &[1.0]);
 
-        // Precompute sets of raw block ids for fast lookups
+        // Precompute sets of raw block ids for fast lookups (supporting both block names and #tags)
         let mut invalid_raw_ids: HashSet<BlockId> = HashSet::new();
-        match &self.invalid_blocks {
-            BlockWrapper::Single(s) => {
-                if let Some(b) = Block::from_name(s.as_str()) {
-                    invalid_raw_ids.insert(b.id);
+        let add_wrapper_blocks = |wrapper: &BlockWrapper, set: &mut HashSet<BlockId>| {
+            let add_single = |s: &str, set: &mut HashSet<BlockId>| {
+                if let Some(tag_str) = s.strip_prefix('#') {
+                    if let Some(ids) = pumpkin_data::tag::get_tag_ids(
+                        pumpkin_data::tag::RegistryKey::Block,
+                        tag_str,
+                    ) {
+                        for id in ids {
+                            if let Some(bid) = BlockId::new(*id) {
+                                set.insert(bid);
+                            }
+                        }
+                    }
+                } else if let Some(b) = Block::from_name(s) {
+                    set.insert(b.id);
                 }
-            }
-            BlockWrapper::Multi(v) => {
-                for s in v {
-                    if let Some(b) = Block::from_name(s.as_str()) {
-                        invalid_raw_ids.insert(b.id);
+            };
+            match wrapper {
+                BlockWrapper::Single(s) => add_single(s, set),
+                BlockWrapper::Multi(v) => {
+                    for s in v {
+                        add_single(s, set);
                     }
                 }
             }
-        }
+        };
+        add_wrapper_blocks(&self.invalid_blocks, &mut invalid_raw_ids);
 
         let mut cannot_replace_raw_ids: HashSet<BlockId> = HashSet::new();
-        match &self.cannot_replace {
-            BlockWrapper::Single(s) => {
-                if let Some(b) = Block::from_name(s.as_str()) {
-                    cannot_replace_raw_ids.insert(b.id);
-                }
-            }
-            BlockWrapper::Multi(v) => {
-                for s in v {
-                    if let Some(b) = Block::from_name(s.as_str()) {
-                        cannot_replace_raw_ids.insert(b.id);
-                    }
-                }
-            }
-        }
+        add_wrapper_blocks(&self.cannot_replace, &mut cannot_replace_raw_ids);
 
         let mut points: Vec<(BlockPos, i32)> = Vec::with_capacity(num_points as usize);
         let mut crack_points: Vec<BlockPos> = Vec::new();
-        let crack_size_adjustment = num_points as f64 / (self.outer_wall_distance.get_max() as f64);
+        let max_outer_wall = self.outer_wall_distance.get_max().max(1);
+        let crack_size_adjustment = num_points as f64 / (max_outer_wall as f64);
         let inner_air = 1.0 / self.filling.sqrt();
         let innermost_block_layer = 1.0 / (self.inner_layer + crack_size_adjustment).sqrt();
         let inner_crust = 1.0 / (self.middle_layer + crack_size_adjustment).sqrt();
@@ -173,7 +178,11 @@ impl GeodeFeature {
                     return false;
                 }
             }
-            let offset = self.point_offset.get(random);
+            let offset = if self.point_offset.get_max() == 0 {
+                random.next_bounded_i32(2) + 1 // Vanilla default: UniformInt(1, 2)
+            } else {
+                self.point_offset.get(random)
+            };
             points.push((p, offset));
         }
 
@@ -360,5 +369,119 @@ impl GeodeFeature {
         }
 
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generation::feature::configured_features::{CONFIGURED_FEATURES, ConfiguredFeature};
+    use crate::generation::get_world_gen;
+    use crate::generation::proto_chunk::ProtoChunk;
+    use crate::world::BlockAccessor;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::random::xoroshiro128::Xoroshiro;
+    use pumpkin_util::world_seed::Seed;
+
+    struct DummyPortalExt;
+    impl WorldPortalExt for DummyPortalExt {
+        fn can_place_at(
+            &self,
+            _: &Block,
+            _: &BlockState,
+            _: &dyn BlockAccessor,
+            _: &BlockPos,
+        ) -> bool {
+            true
+        }
+        fn mirror(
+            &self,
+            _: &Block,
+            s: BlockStateId,
+            m: pumpkin_data::Mirror,
+        ) -> &'static BlockState {
+            BlockState::from_id(s).mirror(m)
+        }
+        fn rotate(
+            &self,
+            _: &Block,
+            s: BlockStateId,
+            r: pumpkin_data::Rotation,
+        ) -> &'static BlockState {
+            BlockState::from_id(s).rotate(r)
+        }
+        fn spawn_mobs_for_chunk_generation(
+            &self,
+            _: &mut dyn GenerationCache,
+            _: &'static pumpkin_data::biome::Biome,
+            _: i32,
+            _: i32,
+        ) {
+        }
+    }
+
+    #[test]
+    fn test_geode_feature_generates_blocks() {
+        let Some(ConfiguredFeature::Geode(feature)) = CONFIGURED_FEATURES
+            .get(&pumpkin_data::configured_feature::ConfiguredFeature::AmethystGeode)
+        else {
+            panic!("AmethystGeode must be present in CONFIGURED_FEATURES");
+        };
+
+        let world_gen = get_world_gen(
+            Seed(1_790_201_723_474_643_596),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+        // Fill chunk area around y=0..30 with stone so it has solid terrain
+        for x in 0..16 {
+            for z in 0..16 {
+                for y in -10..40 {
+                    chunk.set_block_state(x, y, z, pumpkin_data::Block::STONE.default_state);
+                }
+            }
+        }
+
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(42));
+        let portal_ext = DummyPortalExt;
+        let pos = BlockPos::new(8, 15, 8);
+
+        let generated = feature.generate(
+            &mut chunk,
+            &portal_ext,
+            -64,
+            384,
+            pumpkin_data::placed_feature::PlacedFeature::AmethystGeode,
+            &mut random,
+            pos,
+        );
+
+        assert!(generated, "Geode feature must report generated = true");
+
+        // Verify that geode blocks (calcite, smooth basalt, budding amethyst, amethyst block) were placed
+        let mut found_geode_blocks = 0;
+        for x in 0..16 {
+            for z in 0..16 {
+                for y in -10..40 {
+                    let block = chunk
+                        .get_block_state_raw(x, y - chunk.bottom_y() as i32, z)
+                        .to_block_id();
+                    if block == pumpkin_data::BlockId::CALCITE
+                        || block == pumpkin_data::BlockId::SMOOTH_BASALT
+                        || block == pumpkin_data::BlockId::AMETHYST_BLOCK
+                        || block == pumpkin_data::BlockId::BUDDING_AMETHYST
+                    {
+                        found_geode_blocks += 1;
+                    }
+                }
+            }
+        }
+        assert!(
+            found_geode_blocks > 0,
+            "Geode must place calcite/basalt/amethyst blocks, found: {found_geode_blocks}"
+        );
     }
 }

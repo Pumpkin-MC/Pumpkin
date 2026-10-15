@@ -1610,7 +1610,8 @@ impl Player {
 
                     let mut sweeping_ratio = self
                         .living_entity
-                        .get_attribute_value(&Attributes::SWEEPING_DAMAGE_RATIO) as f32;
+                        .get_attribute_value(&Attributes::SWEEPING_DAMAGE_RATIO)
+                        as f32;
                     if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>()
                     {
                         for (enchantment, level) in enchantments.enchantment.iter() {
@@ -1636,7 +1637,9 @@ impl Player {
                             && other_ent.entity_id != attacker_entity.entity_id
                             && other_victim.get_living_entity().is_some()
                         {
-                            let dist_sq = (other_ent.pos.load() - self.living_entity.entity.pos.load()).length_squared();
+                            let dist_sq = (other_ent.pos.load()
+                                - self.living_entity.entity.pos.load())
+                            .length_squared();
                             if dist_sq < 9.0 {
                                 if other_victim.damage_with_context(
                                     other_victim.as_ref(),
@@ -1645,7 +1648,8 @@ impl Player {
                                     None,
                                     Some(self),
                                     Some(self),
-                                ) && config.knockback {
+                                ) && config.knockback
+                                {
                                     other_ent.knockback(0.4, sin_yaw, cos_yaw);
                                     if let Some(other_player) =
                                         other_victim.cast_any().downcast_ref::<Player>()
@@ -1868,9 +1872,7 @@ impl Player {
                 );
             }
             if let Some(start_pos) = self.starting_to_fall_pos.swap(None) {
-                if self.living_entity.health.load() > 0.0
-                    && start_pos.y >= 319.0
-                    && pos.y <= -59.0
+                if self.living_entity.health.load() > 0.0 && start_pos.y >= 319.0 && pos.y <= -59.0
                 {
                     self.trigger_advancement(
                         crate::entity::player::advancement::trigger::AdvancementTrigger::FallFromHeight,
@@ -1915,7 +1917,8 @@ impl Player {
         }
 
         if self.get_entity().is_sneaking()
-            && !self.has_advancement(pumpkin_data::advancement::Advancement::ADVENTURE_AVOID_VIBRATION)
+            && !self
+                .has_advancement(pumpkin_data::advancement::Advancement::ADVENTURE_AVOID_VIBRATION)
         {
             let world = self.world();
             let p_pos = self.living_entity.entity.block_pos.load();
@@ -1923,7 +1926,8 @@ impl Player {
             'outer: for dx in -8..=8 {
                 for dz in -8..=8 {
                     for dy in -4..=4 {
-                        let check_pos = BlockPos::new(p_pos.0.x + dx, p_pos.0.y + dy, p_pos.0.z + dz);
+                        let check_pos =
+                            BlockPos::new(p_pos.0.x + dx, p_pos.0.y + dy, p_pos.0.z + dz);
                         let b = world.get_block(&check_pos);
                         if matches!(
                             b.id,
@@ -1953,10 +1957,17 @@ impl Player {
         if let Some(vehicle) = vehicle_opt {
             let vehicle_ent = vehicle.get_entity();
             if vehicle_ent.entity_type.resource_name.ends_with("boat")
-                && !self.has_advancement(pumpkin_data::advancement::Advancement::HUSBANDRY_RIDE_A_BOAT_WITH_A_GOAT)
+                && !self.has_advancement(
+                    pumpkin_data::advancement::Advancement::HUSBANDRY_RIDE_A_BOAT_WITH_A_GOAT,
+                )
             {
-                let passengers = vehicle_ent.passengers.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                let has_goat = passengers.iter().any(|p| p.get_entity().entity_type.id == EntityType::GOAT.id);
+                let passengers = vehicle_ent
+                    .passengers
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let has_goat = passengers
+                    .iter()
+                    .any(|p| p.get_entity().entity_type.id == EntityType::GOAT.id);
                 if has_goat {
                     self.trigger_advancement(
                         crate::entity::player::advancement::trigger::AdvancementTrigger::RideBoatWithGoat,
@@ -1964,7 +1975,10 @@ impl Player {
                 }
             }
 
-            if vehicle_ent.touching_lava.load(std::sync::atomic::Ordering::Relaxed) {
+            if vehicle_ent
+                .touching_lava
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
                 let start_pos = match self.entered_lava_on_vehicle_pos.load() {
                     Some(p) => p,
                     None => {
@@ -1973,9 +1987,7 @@ impl Player {
                     }
                 };
                 let horizontal_dist = (pos.x - start_pos.x).hypot(pos.z - start_pos.z);
-                if horizontal_dist >= 50.0
-                    && vehicle_ent.entity_type.id == EntityType::STRIDER.id
-                {
+                if horizontal_dist >= 50.0 && vehicle_ent.entity_type.id == EntityType::STRIDER.id {
                     let in_overworld = self.world().dimension == Dimension::OVERWORLD;
                     self.trigger_advancement(
                         crate::entity::player::advancement::trigger::AdvancementTrigger::RideEntityInLava {
@@ -2384,10 +2396,9 @@ impl Player {
     pub fn sleep(&self, bed_head_pos: BlockPos) {
         // TODO: Stop riding
 
+        let sleep_pos = bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5);
+        self.living_entity.entity.set_pos(sleep_pos);
         self.get_entity().set_pose(EntityPose::Sleeping);
-        self.living_entity
-            .entity
-            .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
         self.get_entity().set_synced_data(
             pumpkin_data::tracked_data::player::SLEEPING_POS_ID,
             Some(bed_head_pos),
@@ -2402,7 +2413,9 @@ impl Player {
             0,
         );
         self.increment_custom_stat(statistics::CustomStatistic::SleepInBed, 1);
-        self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::SleptInBed);
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::SleptInBed,
+        );
     }
 
     pub fn reset_warden_spawn_tracker(&self) {
@@ -2522,6 +2535,11 @@ impl Player {
     }
 
     pub fn update_player_pose(&self) {
+        if self.is_sleeping() {
+            self.get_entity().set_pose(EntityPose::Sleeping);
+            return;
+        }
+
         if !self.can_fit_pose(EntityPose::Swimming) {
             return;
         }
@@ -3651,7 +3669,9 @@ impl Player {
                 self.trigger_advancement(
                     crate::entity::player::advancement::trigger::AdvancementTrigger::TradedWithVillager,
                 );
-            } else if stat == pumpkin_data::statistic::CustomStatistic::InteractWithBrewingstand as i32 {
+            } else if stat
+                == pumpkin_data::statistic::CustomStatistic::InteractWithBrewingstand as i32
+            {
                 self.trigger_advancement(
                     crate::entity::player::advancement::trigger::AdvancementTrigger::BrewedPotion,
                 );
@@ -4671,8 +4691,14 @@ impl Player {
         {
             return false;
         }
-        let damaged = self.living_entity
-            .damage_with_context(caller, amount, damage_type, position, source, cause);
+        let damaged = self.living_entity.damage_with_context(
+            caller,
+            amount,
+            damage_type,
+            position,
+            source,
+            cause,
+        );
         if damaged && self.is_sleeping() {
             self.wake_up();
         }
@@ -6256,7 +6282,10 @@ impl Player {
             let allow_grab_items = b.allow_grab_items;
             let allow_put_items = b.allow_put_items;
             let can_use = screen_handler.can_use(self.as_ref())
-                && self.open_container_pos.load().map_or(true, |pos| self.can_interact_with_block_at(&pos, 4.0));
+                && self
+                    .open_container_pos
+                    .load()
+                    .map_or(true, |pos| self.can_interact_with_block_at(&pos, 4.0));
             let is_slot_valid = screen_handler.is_slot_valid(i32::from(packet.slot));
             let available_slots = b.slots.len();
 
@@ -6794,9 +6823,7 @@ impl Player {
         };
 
         let is_arrow = |id: u16| {
-            id == Item::ARROW.id
-                || id == Item::TIPPED_ARROW.id
-                || id == Item::SPECTRAL_ARROW.id
+            id == Item::ARROW.id || id == Item::TIPPED_ARROW.id || id == Item::SPECTRAL_ARROW.id
         };
 
         // Check offhand first (arrows or fireworks)

@@ -513,6 +513,10 @@ impl<S: CommandSource> CommandDispatcher<S> {
     /// If the input starts with one slash (`/`), it is removed
     /// inside the call itself.
     pub fn handle_command<'a>(&'a self, source: &S, mut input: &'a str) {
+        if input.trim().is_empty() {
+            return;
+        }
+
         // If input starts with '/', but the command with that leading slash is NOT
         // registered, while the stripped command IS registered (or if it's an unknown command
         // starting with a single slash, e.g. from console input), strip one leading slash.
@@ -1313,5 +1317,15 @@ mod test {
         assert_eq!(dispatcher.execute_input("//set", &source), Ok(42));
         // Execution via /set alias (as sent by Java client for //set)
         assert_eq!(dispatcher.execute_input("/set", &source), Ok(42));
+    }
+
+    #[test]
+    fn empty_command_handling() {
+        let dispatcher = CommandDispatcher::new();
+        let source = DummySource::dummy();
+        // Empty strings and whitespace-only input should be ignored safely
+        dispatcher.handle_command(&source, "");
+        dispatcher.handle_command(&source, "   ");
+        dispatcher.handle_command(&source, "\t\n");
     }
 }

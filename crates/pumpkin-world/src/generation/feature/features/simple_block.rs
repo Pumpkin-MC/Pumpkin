@@ -20,6 +20,11 @@ impl SimpleBlockFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
+        let current_state = BlockAccessor::get_block_state(chunk, &pos);
+        if !current_state.replaceable() {
+            return false;
+        }
+
         let state = self.to_place.get(random, pos, chunk, block_registry);
         let block = Block::from_state_id(state.id);
         let block_accessor: &dyn BlockAccessor = chunk;

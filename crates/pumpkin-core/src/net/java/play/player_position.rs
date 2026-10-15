@@ -76,8 +76,17 @@ impl JavaClient {
             self.force_tp(player, player.get_entity().pos.load());
             return;
         }
-        // y = feet Y
         let position = packet.position;
+        if player.is_sleeping() {
+            let entity = player.get_entity();
+            let current_pos = entity.pos.load();
+            let delta = position - current_pos;
+            if delta.length_squared() > 1.0 {
+                self.force_tp(player, current_pos);
+            }
+            return;
+        }
+        // y = feet Y
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
             self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
@@ -220,8 +229,18 @@ impl JavaClient {
             self.force_tp(player, entity.pos.load());
             return;
         }
-        // y = feet Y
         let position = packet.position;
+        if player.is_sleeping() {
+            let entity = player.get_entity();
+            entity.set_rotation(packet.yaw, packet.pitch);
+            let current_pos = entity.pos.load();
+            let delta = position - current_pos;
+            if delta.length_squared() > 1.0 {
+                self.force_tp(player, current_pos);
+            }
+            return;
+        }
+        // y = feet Y
         if !position.x.is_finite()
             || !position.y.is_finite()
             || !position.z.is_finite()
