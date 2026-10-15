@@ -188,10 +188,10 @@ struct PointCharge(BlockPos, f64);
 
 impl PointCharge {
     fn get_potential_change(&self, pos: &BlockPos) -> f64 {
-        let dx = self.0.0.x - pos.0.x;
-        let dy = self.0.0.y - pos.0.y;
-        let dz = self.0.0.z - pos.0.z;
-        let dist_sq = (dx * dx + dy * dy + dz * dz) as f64;
+        let dx = f64::from(self.0.0.x) - f64::from(pos.0.x);
+        let dy = f64::from(self.0.0.y) - f64::from(pos.0.y);
+        let dz = f64::from(self.0.0.z) - f64::from(pos.0.z);
+        let dist_sq = dx * dx + dy * dy + dz * dz;
         if dist_sq == 0.0 {
             f64::INFINITY
         } else {
@@ -1196,4 +1196,16 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_point_charge_distance_does_not_overflow() {
+        let charge = PointCharge(BlockPos(pumpkin_util::math::vector3::Vector3::new(0, 64, 0)), 1.0);
+        // Distance > 46,341 blocks would overflow i32 squared distance
+        let far_pos = BlockPos(pumpkin_util::math::vector3::Vector3::new(50_000, 64, 50_000));
+        let change = charge.get_potential_change(&far_pos);
+        assert!(!change.is_nan());
+        assert!(change > 0.0);
+        assert!(change < 1.0);
+    }
 }
+

@@ -206,19 +206,6 @@ impl FreeSpace {
             && !self.occupied.iter().any(|b| boxes_intersect(b, candidate))
     }
 
-    #[must_use]
-    pub fn can_fit_inside(&self, candidate: &BlockBox, is_inside: bool) -> bool {
-        if is_inside {
-            let center_x = (candidate.min.x + candidate.max.x) / 2;
-            let center_z = (candidate.min.z + candidate.max.z) / 2;
-            (self.bounds.contains(center_x, candidate.min.y, center_z)
-                || is_box_inside(&self.bounds, candidate))
-                && !self.occupied.iter().any(|b| boxes_intersect(b, candidate))
-        } else {
-            self.can_fit(candidate)
-        }
-    }
-
     pub fn occupy(&mut self, bbox: BlockBox) {
         self.occupied.push(bbox);
     }
@@ -356,10 +343,7 @@ impl Placer {
             };
 
             let mut target_pieces = Vec::new();
-            if depth != self.max_depth
-                || attach_inside_source
-                || pool_name.contains("villager")
-            {
+            if depth != self.max_depth {
                 target_pieces.extend(target_pool.get_shuffled_elements(random));
             }
             if let Some(fb) = &fallback_pool {
@@ -466,10 +450,7 @@ impl Placer {
                                 target_bb.max.y = target_bb.min.y + new_size;
                             }
 
-                            if children_free
-                                .borrow()
-                                .can_fit_inside(&target_bb, attach_inside_source)
-                            {
+                            if children_free.borrow().can_fit(&target_bb) {
                                 children_free.borrow_mut().occupy(target_bb);
 
                                 let source_ground_level_delta =

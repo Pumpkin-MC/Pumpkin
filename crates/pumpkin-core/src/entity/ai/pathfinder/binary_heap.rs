@@ -19,11 +19,8 @@ pub struct BinaryHeap {
 impl BinaryHeap {
     #[must_use]
     pub fn new() -> Self {
-        let mut heap = Vec::with_capacity(1024);
-        heap.push(None);
-
         Self {
-            heap,
+            heap: vec![None],
             position_map: FxHashMap::default(),
             size: 0,
         }

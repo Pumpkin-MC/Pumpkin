@@ -102,6 +102,11 @@ impl BedrockClient {
             ));
         }
 
+        if let Some(reason) = crate::net::can_not_join(&profile, &self.address, server).await {
+            self.kick(DisconnectReason::NotAllowed, reason.get_text()).await;
+            return Ok(PacketHandlerResult::Stop);
+        }
+
         self.enqueue_client_packet(&CPlayStatus::LoginSuccess).await;
         let br_config = &server.advanced_config.resource_pack.bedrock;
 

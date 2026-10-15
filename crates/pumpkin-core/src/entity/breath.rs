@@ -28,6 +28,10 @@ impl Default for BreathManager {
 
 impl BreathManager {
     pub fn tick(&self, player: &Player) {
+        if player.living_entity.health.load() <= 0.0 {
+            return;
+        }
+
         let mode = player.gamemode.load();
 
         if matches!(mode, GameMode::Creative | GameMode::Spectator) {
