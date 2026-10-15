@@ -461,7 +461,7 @@ impl CommandExecutor for LootExecutor {
                 let loot_table = context
                     .server()
                     .datapack_manager
-                    .get_loot_table(&key)
+                    .get_loot_table(key)
                     .ok_or_else(|| {
                         ERROR_NO_BLOCK_LOOT_TABLE
                             .create_without_context(TextComponent::text(block.name.to_string()))
