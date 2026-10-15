@@ -1,9 +1,10 @@
 use crate::block::{
-    BlockBehaviour, CanPlaceLiquidArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    BlockBehaviour, CanPlaceLiquidArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, PickupFluidArgs,
 };
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::MangroveRootsLikeProperties as BarrierLikeProperties;
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::item::Item;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::GameMode;
 use pumpkin_world::tick::TickPriority;
@@ -17,6 +18,12 @@ impl BlockBehaviour for BarrierBlock {
             && args
                 .player
                 .is_some_and(|player| player.gamemode.load() == GameMode::Creative)
+    }
+
+    fn pickup_fluid(&self, args: PickupFluidArgs<'_>) -> Option<&'static Item> {
+        args.player
+            .filter(|player| player.gamemode.load() == GameMode::Creative)?;
+        crate::block::pickup_fluid(args)
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {

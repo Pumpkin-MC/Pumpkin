@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use crate::{
-    block::{CanPlaceLiquidArgs, PlaceLiquidArgs},
+    block::{CanPlaceLiquidArgs, PickupFluidArgs, PlaceLiquidArgs},
     entity::{EntityBase, player::Player, r#type::from_type},
     item::{ItemBehaviour, ItemMetadata},
 };
@@ -18,7 +18,7 @@ use pumpkin_util::{
     GameMode,
     math::{position::BlockPos, vector3::Vector3},
 };
-use pumpkin_world::{tick::TickPriority, world::BlockFlags};
+use pumpkin_world::world::BlockFlags;
 use uuid::Uuid;
 
 use crate::world::World;
@@ -147,6 +147,7 @@ fn give_player_bucket_item(player: &Player, item: &'static Item) {
 
 pub(crate) fn try_pickup_fluid_at(
     world: &Arc<World>,
+    player: Option<&Player>,
     block_pos: BlockPos,
 ) -> Option<&'static Item> {
     let (block, state) = world.get_block_and_state_id(&block_pos);
@@ -161,10 +162,13 @@ pub(crate) fn try_pickup_fluid_at(
     }
 
     if block.is_waterlogged(state) {
-        let state_id = block.set_waterlogged(state, false).unwrap_or(state);
-        world.set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_ALL);
-        world.schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal);
-        return Some(&Item::WATER_BUCKET);
+        return world.block_registry.pickup_fluid(PickupFluidArgs {
+            player,
+            world,
+            block,
+            state_id: state,
+            position: &block_pos,
+        });
     }
 
     if state == Block::LAVA.default_state.id || state == Block::WATER.default_state.id {
@@ -186,21 +190,24 @@ pub(crate) fn try_pickup_fluid_at(
 
 fn try_pickup_bucket_item(
     world: &Arc<World>,
+    player: &Player,
     block_pos: BlockPos,
     direction: BlockDirection,
 ) -> Option<&'static Item> {
-    if let Some(item) = try_pickup_fluid_at(world, block_pos) {
+    if let Some(item) = try_pickup_fluid_at(world, Some(player), block_pos) {
         return Some(item);
     }
 
     let target_pos = block_pos.offset(direction.to_offset());
     let (block, state) = world.get_block_and_state_id(&target_pos);
 
-    let unwaterlogged = block.set_waterlogged(state, false)?;
-
-    world.set_block_state(&target_pos, unwaterlogged, BlockFlags::NOTIFY_ALL);
-    world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
-    Some(&Item::WATER_BUCKET)
+    world.block_registry.pickup_fluid(PickupFluidArgs {
+        player: Some(player),
+        world,
+        block,
+        state_id: state,
+        position: &target_pos,
+    })
 }
 
 pub(crate) const fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
@@ -359,7 +366,7 @@ impl ItemBehaviour for EmptyBucketItem {
         let block_pos = hit.block_pos;
         let direction = hit.direction;
 
-        let Some(item) = try_pickup_bucket_item(&world, block_pos, direction) else {
+        let Some(item) = try_pickup_bucket_item(&world, player, block_pos, direction) else {
             return;
         };
 

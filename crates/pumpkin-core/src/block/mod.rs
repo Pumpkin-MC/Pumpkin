@@ -1,4 +1,5 @@
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::item::Item;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockId, BlockState};
 
@@ -49,6 +50,20 @@ fn place_liquid(args: PlaceLiquidArgs<'_>) -> bool {
         TickPriority::Normal,
     );
     true
+}
+
+/// Clears waterlogging, schedules a water tick, and returns the water bucket item. (Java’s BucketPickup.pickupBlock)
+fn pickup_fluid(args: PickupFluidArgs<'_>) -> Option<&'static Item> {
+    let state_id = args.block.set_waterlogged(args.state_id, false)?;
+    args.world
+        .set_block_state(args.position, state_id, BlockFlags::NOTIFY_ALL);
+    args.world.schedule_fluid_tick(
+        &Fluid::WATER,
+        *args.position,
+        Fluid::WATER.flow_speed as u8,
+        TickPriority::Normal,
+    );
+    Some(&Item::WATER_BUCKET)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -166,6 +181,11 @@ pub trait BlockBehaviour: Send + Sync {
     /// Bucket use may still succeed when this returns false.
     fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
         place_liquid(args)
+    }
+
+    /// Removes contained water if permitted and returns the bucket item for the caller to give.
+    fn pickup_fluid(&self, args: PickupFluidArgs<'_>) -> Option<&'static Item> {
+        pickup_fluid(args)
     }
 
     fn can_be_replaced_with_fluid(&self, state: &BlockState, _fluid: &Fluid) -> bool {
@@ -383,6 +403,14 @@ pub struct PlaceLiquidArgs<'a> {
     pub state_id: BlockStateId,
     pub position: &'a BlockPos,
     pub fluid: &'a Fluid,
+}
+
+pub struct PickupFluidArgs<'a> {
+    pub player: Option<&'a Player>,
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state_id: BlockStateId,
+    pub position: &'a BlockPos,
 }
 
 pub struct CanUpdateAtArgs<'a> {

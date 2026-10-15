@@ -208,7 +208,7 @@ use super::{
     AttackArgs, BrokenArgs, CanPlaceAtArgs, CanPlaceLiquidArgs, CanUpdateAtArgs,
     EmitsRedstonePowerArgs, ExplodeArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs,
     NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnStateReplacedArgs, OnSyncedBlockEventArgs,
-    PlaceLiquidArgs, PlacedArgs, PlayerPlacedArgs, PrepareArgs, UseWithItemArgs,
+    PickupFluidArgs, PlaceLiquidArgs, PlacedArgs, PlayerPlacedArgs, PrepareArgs, UseWithItemArgs,
 };
 use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
 use crate::block::blocks::chain::ChainBlock;
@@ -1567,6 +1567,15 @@ impl BlockRegistry {
                 .map_or(args.fluid == &Fluid::WATER, |pumpkin_block| {
                     pumpkin_block.can_place_liquid(args)
                 })
+    }
+
+    /// Removes fluid from the block and returns the filled bucket item for the caller to give.
+    pub fn pickup_fluid(&self, args: PickupFluidArgs<'_>) -> Option<&'static Item> {
+        if let Some(pumpkin_block) = self.get_pumpkin_block(args.block.id) {
+            pumpkin_block.pickup_fluid(args)
+        } else {
+            super::pickup_fluid(args)
+        }
     }
 
     pub fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
