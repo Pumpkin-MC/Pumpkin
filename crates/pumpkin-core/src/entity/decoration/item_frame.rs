@@ -312,6 +312,7 @@ impl EntityBase for ItemFrameEntity {
         );
         self.fixed
             .store(nbt.get_bool("Fixed").unwrap_or(false), Ordering::Relaxed);
+        self.init_data_tracker();
     }
 
     fn get_entity(&self) -> &Entity {
