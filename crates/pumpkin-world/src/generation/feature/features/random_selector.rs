@@ -33,24 +33,24 @@ impl RandomFeature {
                 continue;
             }
             if let Some(f) = feature.feature.get() {
-                return f.generate(
-                    chunk,
-                    block_registry,
-                    min_y,
-                    height,
-                    feature_name,
-                    random,
-                    pos,
-                );
+                let sub_name = match feature.feature {
+                    PlacedFeatureWrapper::Named(name) => name,
+                    PlacedFeatureWrapper::Direct(_) => feature_name,
+                };
+                return f.generate(chunk, block_registry, min_y, height, sub_name, random, pos);
             }
         }
+        let default_name = match self.default.as_ref() {
+            PlacedFeatureWrapper::Named(name) => *name,
+            PlacedFeatureWrapper::Direct(_) => feature_name,
+        };
         self.default.get().is_some_and(|default_feature| {
             default_feature.generate(
                 chunk,
                 block_registry,
                 min_y,
                 height,
-                feature_name,
+                default_name,
                 random,
                 pos,
             )
