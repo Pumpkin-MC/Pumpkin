@@ -580,40 +580,41 @@ impl EnderDragonEntity {
             .cloned()
     }
 
-    fn handle_player_collisions(&self) {
+    fn handle_entity_collisions(&self) {
         let world = self.mob_entity.living_entity.entity.world.load();
 
         let dragon_bbox = self.mob_entity.living_entity.entity.bounding_box.load();
         let xm = f64::midpoint(dragon_bbox.min.x, dragon_bbox.max.x);
         let zm = f64::midpoint(dragon_bbox.min.z, dragon_bbox.max.z);
+        let dragon_id = self.mob_entity.living_entity.entity.entity_id;
 
-        for player in world.players.load().iter() {
-            if player
-                .living_entity
-                .entity
-                .bounding_box
-                .load()
-                .intersects(&dragon_bbox)
+        for target in world.get_entities_at_box(&dragon_bbox) {
+            let target_entity = target.get_entity();
+            if target_entity.entity_id == dragon_id
+                || target.get_living_entity().is_none()
+                || target.is_spectator()
+                || target.get_player().is_some_and(Player::is_creative)
+                || !target_entity.bounding_box.load().intersects(&dragon_bbox)
             {
-                let player_pos = player.get_entity().pos.load();
-                let xd = player_pos.x - xm;
-                let zd = player_pos.z - zm;
-                let dd = (xd * xd + zd * zd).max(0.1);
+                continue;
+            }
 
-                player
-                    .living_entity
-                    .entity
-                    .apply_knockback(4.0, xd / dd, zd / dd);
-                player.get_entity().send_velocity();
+            let target_pos = target_entity.pos.load();
+            let xd = target_pos.x - xm;
+            let zd = target_pos.z - zm;
+            let dd = (xd * xd + zd * zd).max(0.1);
 
-                if !self
-                    .phase
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .is_sitting()
-                {
-                    player.damage(self, 5.0, DamageType::MOB_ATTACK);
-                }
+            target_entity.apply_knockback(4.0, xd / dd, zd / dd);
+            target_entity.send_velocity();
+
+            if !self
+                .phase
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_sitting()
+                && self.do_teams_allow_damage(target.as_ref())
+            {
+                target.damage(self, 5.0, DamageType::MOB_ATTACK);
             }
         }
     }
@@ -807,7 +808,7 @@ impl EnderDragonEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
         } else {
-            self.handle_player_collisions();
+            self.handle_entity_collisions();
             self.tick_block_breaking();
         }
 

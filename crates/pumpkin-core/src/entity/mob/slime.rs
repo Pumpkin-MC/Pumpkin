@@ -336,7 +336,7 @@ impl Mob for SlimeEntity {
     }
 
     fn mob_player_collision(&self, player: &Arc<crate::entity::player::Player>) {
-        if !self.is_tiny() {
+        if !self.is_tiny() && self.do_teams_allow_damage(&**player) {
             // dealDamage
             let damaged = self.entity.try_attack(self, &**player);
             if damaged {

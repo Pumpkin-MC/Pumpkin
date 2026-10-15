@@ -224,8 +224,8 @@ impl Mob for WolfEntity {
                 if owner_player.gameprofile.id == target_player.gameprofile.id {
                     return false;
                 }
-                let world = target_player.world();
-                if !world.level_info.load().game_rules.pvp {
+
+                if !owner_player.can_harm_player(target_player) {
                     return false;
                 }
             }
