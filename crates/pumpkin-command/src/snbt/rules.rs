@@ -692,7 +692,24 @@ impl SnbtParser<'_, '_> {
         })
     }
 
+    /// Maps and lists reach `literal` again through their entries, so the nesting is capped here.
+    /// Vanilla stops at the same depth it allows anywhere else in NBT.
+    fn nested(&mut self, parse: impl FnOnce(&mut Self) -> Option<NbtTag>) -> Option<NbtTag> {
+        if self.depth >= pumpkin_nbt::MAX_NBT_DEPTH {
+            return None;
+        }
+
+        self.depth += 1;
+        let tag = parse(self);
+        self.depth -= 1;
+        tag
+    }
+
     fn map_literal(&mut self) -> Option<NbtTag> {
+        self.nested(Self::map_literal_nested)
+    }
+
+    fn map_literal_nested(&mut self) -> Option<NbtTag> {
         let entries = self.parse_or_revert(|parser| {
             parser.reader.skip_whitespace();
             if parser.reader.peek() != Some('{') {
@@ -752,6 +769,10 @@ impl SnbtParser<'_, '_> {
     }
 
     fn list_literal(&mut self) -> Option<NbtTag> {
+        self.nested(Self::list_literal_nested)
+    }
+
+    fn list_literal_nested(&mut self) -> Option<NbtTag> {
         self.parse_or_revert(|parser| {
             parser.reader.skip_whitespace();
             if parser.reader.peek() != Some('[') {
