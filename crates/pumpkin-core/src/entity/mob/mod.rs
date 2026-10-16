@@ -152,6 +152,15 @@ impl MobEntity {
         }
     }
 
+    /// Vanilla `Mob.onAttributeUpdated`: follow and tempt range changes resize the path search.
+    pub(crate) fn on_attribute_updated(&self, attribute: u8) {
+        if attribute == Attributes::FOLLOW_RANGE.id || attribute == Attributes::TEMPT_RANGE.id {
+            self.steered()
+                .navigator()
+                .update_pathfinder_max_visited_nodes();
+        }
+    }
+
     pub fn set_speed(&self, speed: f32) {
         self.living_entity.set_speed(speed);
         let input = self.living_entity.movement_input.load();

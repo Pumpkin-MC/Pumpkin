@@ -520,7 +520,7 @@ impl LivingEntity {
                     continue;
                 }
                 instance.modifiers = modifiers;
-                instance.dirty.store(true, Ordering::Relaxed);
+                instance.mark_dirty();
                 changed.push(attribute);
             }
         }
@@ -895,7 +895,24 @@ impl LivingEntity {
         });
 
         f(inst);
-        inst.dirty.store(true, Ordering::Relaxed);
+        inst.mark_dirty();
+    }
+
+    /// Vanilla `refreshDirtyAttributes`: reports every attribute modified since the last refresh.
+    fn refresh_dirty_attributes(&self, caller: &dyn EntityBase) {
+        let updated: Vec<u8> = self
+            .attributes
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter(|(_, instance)| instance.updated.swap(false, Relaxed))
+            .map(|(id, _)| *id)
+            .collect();
+        if let Some(mob) = caller.get_mob() {
+            for attribute in updated {
+                mob.get_mob_entity().on_attribute_updated(attribute);
+            }
+        }
     }
 
     /// Returns the computed value for `attribute` using the local instance, falling back
@@ -938,10 +955,10 @@ impl LivingEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(inst) = map.get_mut(&attribute.id) {
             inst.base_value = new_base;
-            inst.dirty.store(true, Ordering::Relaxed);
+            inst.mark_dirty();
         } else {
             let ai = AttributeInstance::new(new_base);
-            ai.dirty.store(true, Ordering::Relaxed);
+            ai.mark_dirty();
             map.insert(attribute.id, ai);
         }
     }
@@ -3648,6 +3665,9 @@ impl EntityBase for LivingEntity {
         if self.hurt_cooldown.load(Relaxed) > 0 {
             self.hurt_cooldown.fetch_sub(1, Relaxed);
         }
+
+        self.refresh_dirty_attributes(caller);
+
         if self.health.load() <= 0.0 {
             let time = self
                 .death_time
@@ -4146,7 +4166,7 @@ mod ai_step_tests {
     use crate::entity::ai::goal::Goal;
     use crate::entity::ai::pathfinder::node::Node;
     use crate::entity::ai::pathfinder::path::Path;
-    use crate::entity::ai::pathfinder::{NavigationTarget, NavigatorGoal};
+    use crate::entity::ai::pathfinder::{NavigationTarget, Navigator, NavigatorGoal};
     use crate::entity::ai::test_support::world;
     use crate::entity::mob::{Mob, MobEntity};
     use crate::world::World;
@@ -4254,6 +4274,36 @@ mod ai_step_tests {
             mob,
             immobile: false,
         }
+    }
+
+    #[tokio::test]
+    async fn follow_range_updates_resize_the_search_budget_even_when_reverted() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        *mob.mob
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Navigator::flying();
+        let reaches_target = || {
+            mob.mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .create_path(living, Vector3::new(8.0, 64.0, 0.0), 0)
+                .is_some_and(|path| path.can_reach())
+        };
+        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 0.0);
+        let initial = reaches_target();
+        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 16.0);
+        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 0.0);
+        living.refresh_dirty_attributes(&mob);
+        let updated = reaches_target();
+        world.level.shutdown().await;
+        assert!(!initial);
+        assert!(updated);
+        Ok(())
     }
 
     #[tokio::test]

@@ -422,6 +422,8 @@ pub trait PathNavigationTrait: Send + Sync {
     fn can_float(&self) -> bool;
     fn can_navigate_ground(&self) -> bool;
     fn set_required_path_length(&mut self, length: f32);
+    /// Vanilla `updatePathfinderMaxVisitedNodes`, applied before the next search.
+    fn update_pathfinder_max_visited_nodes(&mut self);
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32);
     fn reset_max_visited_nodes_multiplier(&mut self);
     fn get_target_pos(&self) -> Option<BlockPos>;
@@ -463,7 +465,6 @@ pub struct PathNavigation {
     pub can_path_to_targets_below_surface: bool,
     path_finder: Option<PathFinder>,
     update_pathfinder_max_visited_nodes: bool,
-    last_pathfinding_attributes: Option<[u64; 4]>,
     pub is_idle: AtomicBool,
 }
 
@@ -510,7 +511,6 @@ impl PathNavigation {
             can_path_to_targets_below_surface: false,
             path_finder: None,
             update_pathfinder_max_visited_nodes: false,
-            last_pathfinding_attributes: None,
             is_idle: AtomicBool::new(true),
         }
     }
@@ -650,24 +650,16 @@ impl PathNavigation {
     ) -> Option<Path> {
         let world_change = self.prepare_evaluator(entity);
 
-        let attributes = [
-            entity.get_attribute_base(&Attributes::FOLLOW_RANGE),
-            entity.get_attribute_value(&Attributes::FOLLOW_RANGE),
-            entity.get_attribute_base(&Attributes::TEMPT_RANGE),
-            entity.get_attribute_value(&Attributes::TEMPT_RANGE),
-        ];
-        let attribute_bits = attributes.map(f64::to_bits);
-        let attributes_changed = self
-            .last_pathfinding_attributes
-            .replace(attribute_bits)
-            .is_some_and(|previous| previous != attribute_bits);
         let max_path_length = self.mob_max_follow_range(entity);
+        // Vanilla sizes the search from the base follow range until the first update request.
         let finder = self.path_finder.get_or_insert_with(|| {
             PathFinder::new(
-                (attributes[0] * f64::from(MAX_VISITED_NODES_MULTIPLIER)).floor() as usize,
+                (entity.get_attribute_base(&Attributes::FOLLOW_RANGE)
+                    * f64::from(MAX_VISITED_NODES_MULTIPLIER))
+                .floor() as usize,
             )
         });
-        if self.update_pathfinder_max_visited_nodes || attributes_changed {
+        if self.update_pathfinder_max_visited_nodes {
             finder.set_max_visited_nodes(
                 (max_path_length * MAX_VISITED_NODES_MULTIPLIER).floor() as usize
             );
@@ -1329,6 +1321,10 @@ impl PathNavigationTrait for GroundPathNavigation {
         self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
+    fn update_pathfinder_max_visited_nodes(&mut self) {
+        self.inner.update_pathfinder_max_visited_nodes = true;
+    }
+
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32) {
         self.inner.max_visited_nodes_multiplier = multiplier;
     }
@@ -1558,6 +1554,10 @@ impl PathNavigationTrait for FlyingPathNavigation {
 
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.required_path_length = length;
+        self.inner.update_pathfinder_max_visited_nodes = true;
+    }
+
+    fn update_pathfinder_max_visited_nodes(&mut self) {
         self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
@@ -1803,6 +1803,10 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
+    fn update_pathfinder_max_visited_nodes(&mut self) {
+        self.inner.update_pathfinder_max_visited_nodes = true;
+    }
+
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32) {
         self.inner.max_visited_nodes_multiplier = multiplier;
     }
@@ -2030,6 +2034,10 @@ impl PathNavigationTrait for WallClimberNavigation {
 
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.set_required_path_length(length);
+    }
+
+    fn update_pathfinder_max_visited_nodes(&mut self) {
+        self.inner.update_pathfinder_max_visited_nodes();
     }
 
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32) {
@@ -2273,6 +2281,10 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
 
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.required_path_length = length;
+        self.inner.update_pathfinder_max_visited_nodes = true;
+    }
+
+    fn update_pathfinder_max_visited_nodes(&mut self) {
         self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
@@ -2676,33 +2688,6 @@ mod tests {
         let target = navigation.get_path().map(Path::get_target);
         world.level.shutdown().await;
         assert_eq!(target, Some(BlockPos::new(8, 64, 0)));
-        Ok(())
-    }
-    #[tokio::test]
-    async fn attribute_changes_refresh_the_search_budget() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let living = living(world.clone(), &EntityType::BAT);
-        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 0.0);
-        let mut navigation = FlyingPathNavigation::new();
-        let target = Vector3::new(8.0, 64.0, 0.0);
-        let initial = navigation.create_path(&living, target, 0);
-        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 16.0);
-        let updated = navigation.create_path(&living, target, 0);
-        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 0.0);
-        let mut tempted = FlyingPathNavigation::new();
-        let before_tempt = tempted.create_path(&living, target, 0);
-        living.set_attribute_base(
-            &Attributes::TEMPT_RANGE,
-            living.get_attribute_base(&Attributes::TEMPT_RANGE) + 1.0,
-        );
-        let after_tempt = tempted.create_path(&living, target, 0);
-        world.level.shutdown().await;
-        assert_eq!(initial.as_ref().map(Path::get_node_count), Some(1));
-        assert!(initial.is_some_and(|path| !path.can_reach()));
-        assert!(updated.is_some_and(|path| path.can_reach() && path.get_node_count() > 1));
-        assert!(before_tempt.is_some_and(|path| !path.can_reach()));
-        assert!(after_tempt.is_some_and(|path| path.can_reach()));
         Ok(())
     }
     #[tokio::test]
