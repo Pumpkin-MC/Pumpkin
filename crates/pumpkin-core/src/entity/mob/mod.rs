@@ -259,22 +259,11 @@ impl MobEntity {
             GoalSelector::tick(&self.goals_selector, mob);
         }
 
-        let mut navigator = {
-            let mut guard = self
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            std::mem::take(&mut *guard)
-        };
-
-        let navigation_target = navigator.tick(&self.living_entity);
-
-        {
-            *self
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = navigator;
-        };
+        let navigation_target = self
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick(&self.living_entity);
 
         if let Some(target) = navigation_target {
             self.move_control

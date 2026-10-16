@@ -368,6 +368,8 @@ impl EvaluatorKind {
     }
 }
 
+/// Navigation methods run under their owning mob's navigator mutex.
+/// Implementations must not relock it or invoke callbacks that can acquire it.
 pub trait PathNavigationTrait: Send + Sync {
     fn set_progress(&mut self, goal: NavigatorGoal);
     fn set_speed(&mut self, speed: f64);
