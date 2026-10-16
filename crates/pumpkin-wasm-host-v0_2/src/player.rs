@@ -1,16 +1,22 @@
 use super::{AccessorExt, in_active_context, run_blocking};
 use crate::LockIgnorePoison;
 use crate::RequireServer;
+
+use crate::forms::FormsHostStateExt;
+use pumpkin_protocol::bedrock::client::PackIdVersion;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use wasmtime::component::{Accessor, HasSelf, Resource};
+
+use crate::pumpkin::plugin::forms::Form;
+use crate::pumpkin::plugin::java_dialogs::Dialog;
 use crate::{
     events::{from_wasm_game_mode, from_wasm_position, to_wasm_game_mode, to_wasm_position},
-    forms::FormsHostStateExt,
     living_entity::from_wit_damage_type,
     pumpkin::{
         self,
         plugin::{
             damage_types::DamageType as WitDamageType,
-            forms::Form,
-            java_dialogs::Dialog,
             player::{Player, PlayerSkin, SkinParts},
             statistics::{
                 CustomStatistic as WitCustomStatistic, StatisticCategory as WitStatisticCategory,
@@ -21,6 +27,7 @@ use crate::{
     },
     uuid::UuidExt,
 };
+use pumpkin_core::plugin::api::gui::PluginScreenHandler;
 use pumpkin_core::{
     entity::{
         EntityBase,
@@ -30,32 +37,21 @@ use pumpkin_core::{
         },
     },
     net::DisconnectReason,
-    plugin::api::gui::PluginScreenHandler,
 };
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
-use pumpkin_protocol::{
-    Property,
-    bedrock::client::{
-        PackIdVersion,
-        modal_form_request::CModalFormRequest,
-        set_actor_data::{
-            CSetActorData, MetadataValue, PropertySyncData, SyncedActorDataList, entity_data_key,
-        },
-    },
-    codec::var_ulong::VarULong,
-    java::client::dialog::DialogNBT,
-};
-use pumpkin_util::{
-    permission::PermissionLvl,
-    translation::Locale,
-    version::{BedrockMinecraftVersion, JavaMinecraftVersion},
-};
+use pumpkin_protocol::Property;
+use pumpkin_protocol::bedrock::client::modal_form_request::CModalFormRequest;
+use pumpkin_protocol::java::client::dialog::DialogNBT;
+use pumpkin_util::permission::PermissionLvl;
+use pumpkin_util::translation::Locale;
 use pumpkin_wasm_host_common::state::PluginHostState;
-use std::{
-    str::FromStr,
-    sync::{Arc, atomic::Ordering},
+use std::str::FromStr;
+
+use pumpkin_protocol::bedrock::client::set_actor_data::{
+    CSetActorData, MetadataValue, PropertySyncData, SyncedActorDataList, entity_data_key,
 };
-use wasmtime::component::{Accessor, HasSelf, Resource};
+use pumpkin_protocol::codec::var_ulong::VarULong;
+use pumpkin_util::version::{BedrockMinecraftVersion, JavaMinecraftVersion};
 
 const fn from_wit_client_game_event(
     event: pumpkin::plugin::player::ClientGameEvent,
@@ -84,8 +80,7 @@ pub(crate) fn from_wit_server_link(
     state: &mut PluginHostState,
     link: pumpkin::plugin::player::ServerLink,
 ) -> wasmtime::Result<(pumpkin_protocol::Label, String)> {
-    use pumpkin::plugin::player::KnownServerLink;
-    use pumpkin::plugin::player::ServerLinkLabel;
+    use pumpkin::plugin::player::{KnownServerLink, ServerLinkLabel};
     let label = match link.label {
         ServerLinkLabel::Known(known) => {
             let link_type = match known {
@@ -1075,7 +1070,6 @@ impl pumpkin::plugin::player::Host for PluginHostState {
         Ok(players)
     }
 }
-
 use crate::events::from_wasm_hand;
 use pumpkin_inventory::Clearable;
 use pumpkin_inventory::Inventory;
@@ -1087,10 +1081,6 @@ use pumpkin_protocol::java::client::play::CSetContainerSlot;
 use crate::pumpkin::plugin::item_stack::ItemStack as WitHostItemStack;
 
 impl pumpkin::plugin::player::HostPlayer for PluginHostState {
-    fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_inventory(
         &mut self,
         player: Resource<Player>,
@@ -2102,6 +2092,15 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(None)
     }
 
+    fn get_target_entity(
+        &mut self,
+        player: Resource<Player>,
+        max_distance: f64,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::world::Entity>>> {
+        let res = self.ray_trace_entity(player, max_distance)?;
+        Ok(res.map(|r| r.entity))
+    }
+
     fn get_target_block(
         &mut self,
         player: Resource<Player>,
@@ -2120,6 +2119,15 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             );
             to_wasm_position(vec3)
         }))
+    }
+
+    fn get_target_block_exact(
+        &mut self,
+        player: Resource<Player>,
+        max_distance: f64,
+        include_fluids: bool,
+    ) -> wasmtime::Result<Option<pumpkin::plugin::world::RayTraceBlockResult>> {
+        self.ray_trace_block(player, max_distance, include_fluids)
     }
 
     fn launch_projectile(
@@ -2625,22 +2633,8 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         }
     }
 
-    fn get_target_entity(
-        &mut self,
-        player: Resource<Player>,
-        max_distance: f64,
-    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::world::Entity>>> {
-        let res = self.ray_trace_entity(player, max_distance)?;
-        Ok(res.map(|r| r.entity))
-    }
-
-    fn get_target_block_exact(
-        &mut self,
-        player: Resource<Player>,
-        max_distance: f64,
-        include_fluids: bool,
-    ) -> wasmtime::Result<Option<pumpkin::plugin::world::RayTraceBlockResult>> {
-        self.ray_trace_block(player, max_distance, include_fluids)
+    fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 
@@ -3237,10 +3231,6 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
 }
 
 impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
-    fn drop(&mut self, rep: Resource<pumpkin::plugin::player::JavaPlayer>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_version(
         &mut self,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
@@ -3375,6 +3365,10 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         );
         player.try_send_client_packet(&packet);
         Ok(())
+    }
+
+    fn drop(&mut self, rep: Resource<pumpkin::plugin::player::JavaPlayer>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 
@@ -3639,13 +3633,6 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
 }
 
 impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
-    fn drop(
-        &mut self,
-        rep: Resource<pumpkin::plugin::player::BedrockPlayer>,
-    ) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_version(
         &mut self,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
@@ -3807,6 +3794,13 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         let player = self.get(&player)?.clone();
         player.reset_scoreboard();
         Ok(())
+    }
+
+    fn drop(
+        &mut self,
+        rep: Resource<pumpkin::plugin::player::BedrockPlayer>,
+    ) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

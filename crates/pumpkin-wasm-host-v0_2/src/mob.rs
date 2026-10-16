@@ -1,5 +1,12 @@
 use super::run_blocking;
 use crate::LockIgnorePoison;
+use crate::pumpkin::plugin::world::HostMobWithStore;
+
+use std::sync::Arc;
+use wasmtime::component::{Accessor, HasSelf, Resource};
+
+use pumpkin_util::math::vector3::Vector3;
+
 use crate::{
     pumpkin::plugin::{
         common::Position,
@@ -8,23 +15,20 @@ use crate::{
             AgeableData as WitAgeableData, BlockDirection as WitBlockDirection,
             CatData as WitCatData, CreeperData as WitCreeperData, DyeColor as WitDyeColor,
             EndermanData as WitEndermanData, Entity, FoxData as WitFoxData, HostMob,
-            HostMobWithStore, IronGolemData as WitIronGolemData, LivingEntity as WitLivingEntity,
-            Mob as WitMob, MobData as WitMobData, PathNodeType as WitPathNodeType,
-            SheepData as WitSheepData, ShulkerData as WitShulkerData, SlimeData as WitSlimeData,
+            IronGolemData as WitIronGolemData, LivingEntity as WitLivingEntity, Mob as WitMob,
+            MobData as WitMobData, PathNodeType as WitPathNodeType, SheepData as WitSheepData,
+            ShulkerData as WitShulkerData, SlimeData as WitSlimeData,
             VillagerData as WitVillagerData, VillagerProfession as WitVillagerProfession,
             WolfData as WitWolfData, ZombieData as WitZombieData,
         },
     },
     uuid::UuidExt,
 };
-use pumpkin_core::{
-    entity::{ai::goal::Goal, mob::Mob as InternalMob, passive::tamable::TamableAnimal},
-    server::Server,
-};
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_core::entity::ai::goal::Goal;
+use pumpkin_core::entity::mob::Mob as InternalMob;
+use pumpkin_core::entity::passive::tamable::TamableAnimal;
+use pumpkin_core::server::Server;
 use pumpkin_wasm_host_common::{plugin::WasmPlugin, state::PluginHostState};
-use std::sync::Arc;
-use wasmtime::component::{Accessor, HasSelf, Resource};
 
 #[must_use]
 pub const fn from_wit_path_node_type(
@@ -289,10 +293,6 @@ impl Goal for CustomWasmGoal {
 }
 
 impl HostMob for PluginHostState {
-    fn drop(&mut self, rep: Resource<WitMob>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn as_entity(&mut self, this: Resource<WitMob>) -> wasmtime::Result<Resource<Entity>> {
         self.add(self.get(&this)?.clone())
     }
@@ -336,12 +336,12 @@ impl HostMob for PluginHostState {
                 }
                 crate::pumpkin::plugin::world::BuiltinAiGoal::LookAtPlayer(range) => {
                     mob_entity.add_goal(priority, pumpkin_core::entity::ai::goal::look_at_entity::LookAtEntityGoal::new(
-                            std::sync::Weak::<pumpkin_core::entity::mob::zombie::zombie::ZombieEntity>::new() as std::sync::Weak<dyn pumpkin_core::entity::mob::Mob>,
-                            &pumpkin_data::entity::EntityType::PLAYER,
-                            range,
-                            0.02,
-                            false,
-                        ));
+                        std::sync::Weak::<pumpkin_core::entity::mob::zombie::zombie::ZombieEntity>::new() as std::sync::Weak<dyn pumpkin_core::entity::mob::Mob>,
+                        &pumpkin_data::entity::EntityType::PLAYER,
+                        range,
+                        0.02,
+                        false,
+                    ));
                 }
                 crate::pumpkin::plugin::world::BuiltinAiGoal::LookAround => {
                     mob_entity.add_goal(
@@ -862,6 +862,10 @@ impl HostMob for PluginHostState {
     fn get_freeze_ticks(&mut self, this: Resource<WitMob>) -> wasmtime::Result<i32> {
         let entity = self.get(&this)?;
         Ok(entity.get_entity().get_frozen_ticks())
+    }
+
+    fn drop(&mut self, rep: Resource<WitMob>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

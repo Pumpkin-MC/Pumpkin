@@ -1,9 +1,11 @@
 use super::AccessorExt;
+use crate::pumpkin::plugin::recipe::HostRecipeManagerWithStore;
+
 use crate::pumpkin::plugin::recipe::{
     CookingRecipe as WitCookingRecipe, CookingType as WitCookingType, Host as RecipeHost,
-    HostRecipeManager, HostRecipeManagerWithStore, Ingredient as WitIngredient,
-    RecipeCategory as WitRecipeCategory, RecipeManager as WitRecipeManager,
-    ShapedRecipe as WitShapedRecipe, ShapelessRecipe as WitShapelessRecipe,
+    HostRecipeManager, Ingredient as WitIngredient, RecipeCategory as WitRecipeCategory,
+    RecipeManager as WitRecipeManager, ShapedRecipe as WitShapedRecipe,
+    ShapelessRecipe as WitShapelessRecipe,
 };
 use pumpkin_data::recipes::RecipeCategoryTypes;
 use pumpkin_protocol::codec::recipe::{

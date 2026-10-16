@@ -85,7 +85,9 @@ world plugin {
 
     /// Called by the host once to initialize the plugin.
     /// Internal use only; plugins should use the `register_plugin!` macro.
-    export init-plugin: async func();
+    /// This callback is synchronous and only wires up the plugin
+    /// Perform setup that needs to await host calls in `on-load`
+    export init-plugin: func();
 
     /// Called when the plugin is being loaded.
     /// Use this to register commands, events, and perform initial setup.
@@ -101,8 +103,9 @@ world plugin {
 
     /// Dispatches an event to the plugin and returns the updated event.
     ///
-    /// The event is transferred by value. The host applies the returned value
-    /// for blocking handlers and ignores it for nonblocking handlers.
+    /// The event is transferred by value
+    /// For blocking handlers, the host applies supported changes from the returned event
+    /// For nonblocking handlers, the host ignores returned changes
     /// If the returned variant case differs from the dispatched case, the host
     /// treats the result as a handler error and keeps the original event.
     export handle-event: async func(event-id: u32, server: server-instance, event: event) -> event;

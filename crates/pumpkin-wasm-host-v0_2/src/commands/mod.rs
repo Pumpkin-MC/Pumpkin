@@ -1,3 +1,5 @@
+use wasmtime::component::{Accessor, HasSelf, Resource};
+
 use super::{AccessorExt, run_blocking};
 use crate::{
     commands::executor::{WasmCommandExecutor, WasmCommandSuggestionProvider},
@@ -40,17 +42,12 @@ use pumpkin_core::command::{
     },
 };
 use pumpkin_wasm_host_common::state::{PluginHostState, WasmCommand, WasmCommandNode};
-use wasmtime::component::{Accessor, HasSelf, Resource};
 
 pub mod executor;
 
 impl pumpkin::plugin::command::Host for PluginHostState {}
 
 impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
-    fn drop(&mut self, rep: Resource<ConsumedArgs>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     #[expect(clippy::too_many_lines)]
     fn get_value(
         &mut self,
@@ -76,8 +73,7 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
             OwnedArg::BlockPredicate(s) => Arg::BlockPredicate(s),
             OwnedArg::Time(t) => Arg::Time(t),
             OwnedArg::Num(n) => {
-                use pumpkin_wasm_host_common::args::NotInBounds;
-                use pumpkin_wasm_host_common::args::Number;
+                use pumpkin_wasm_host_common::args::{NotInBounds, Number};
                 let convert_num = |n: Number| match n {
                     Number::F64(v) => pumpkin::plugin::command::Number::Float64(v),
                     Number::F32(v) => pumpkin::plugin::command::Number::Float32(v),
@@ -221,13 +217,13 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
             }
         })
     }
+
+    fn drop(&mut self, rep: Resource<ConsumedArgs>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 impl pumpkin::plugin::command::HostCommand for PluginHostState {
-    fn drop(&mut self, rep: Resource<Command>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn new(
         &mut self,
         names: Vec<String>,
@@ -274,13 +270,13 @@ impl pumpkin::plugin::command::HostCommand for PluginHostState {
         *command_res = cmd.executes(executor);
         Ok(())
     }
+
+    fn drop(&mut self, rep: Resource<Command>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
-    fn drop(&mut self, rep: Resource<CommandSender>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_command_sender_type(
         &mut self,
         res: Resource<CommandSender>,
@@ -437,6 +433,10 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
     fn should_track_output(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<bool> {
         Ok(self.get(&sender)?.should_track_output())
     }
+
+    fn drop(&mut self, rep: Resource<CommandSender>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 impl pumpkin::plugin::command::HostCommandSenderWithStore<PluginHostState>
@@ -455,10 +455,6 @@ impl pumpkin::plugin::command::HostCommandSenderWithStore<PluginHostState>
 }
 
 impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
-    fn drop(&mut self, rep: Resource<CommandNode>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn literal(&mut self, name: String) -> wasmtime::Result<Resource<CommandNode>> {
         self.add(WasmCommandNode::Literal(literal(name)))
             .map_err(|_| wasmtime::Error::msg("Failed to add literal node"))
@@ -632,6 +628,10 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
         Err(wasmtime::Error::msg(
             "require_with_handler_id not implemented",
         ))
+    }
+
+    fn drop(&mut self, rep: Resource<CommandNode>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

@@ -1,4 +1,8 @@
 use crate::LockIgnorePoison;
+use pumpkin_core::entity::player::CustomScoreboard;
+
+use wasmtime::component::Resource;
+
 use crate::pumpkin::{
     self,
     plugin::scoreboard::{
@@ -6,11 +10,10 @@ use crate::pumpkin::{
         TeamSettings,
     },
 };
-use pumpkin_core::entity::player::CustomScoreboard;
 use pumpkin_core::world::scoreboard::{ScoreboardObjective, ScoreboardScore, Team};
-use pumpkin_protocol::{NumberFormat, codec::var_int::VarInt};
+use pumpkin_protocol::NumberFormat;
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_wasm_host_common::state::{PluginHostState, ScoreboardProvider};
-use wasmtime::component::Resource;
 
 fn map_number_format(
     nf: Option<scoreboard::NumberFormat>,
@@ -26,11 +29,8 @@ fn map_number_format(
     }
 }
 
-/// Returns the player's Java scoreboard, first replacing a missing or Bedrock one with an empty
-/// Java scoreboard.
-///
-/// The error can't happen after the replacement. It only lets callers use `?` instead of a
-/// `let ... else`.
+/// Returns the player's Java scoreboard, creating an empty one if needed
+/// Replaces an existing Bedrock scoreboard and discards its contents
 fn java_scoreboard(
     custom_scoreboard: &mut Option<CustomScoreboard>,
 ) -> wasmtime::Result<&mut pumpkin_core::world::scoreboard::Scoreboard> {
@@ -45,10 +45,8 @@ fn java_scoreboard(
     }
 }
 
-/// Returns the player's Bedrock scoreboard, first replacing a missing or Java one with an empty
-/// Bedrock scoreboard.
-///
-/// The error can't happen after the replacement, see [`java_scoreboard`].
+/// Returns the player's Bedrock scoreboard, creating an empty one if needed
+/// Replaces an existing Java scoreboard and discards its contents
 fn bedrock_scoreboard(
     custom_scoreboard: &mut Option<CustomScoreboard>,
 ) -> wasmtime::Result<&mut pumpkin_core::world::scoreboard::BedrockScoreboard> {
@@ -66,10 +64,6 @@ fn bedrock_scoreboard(
 impl scoreboard::Host for PluginHostState {}
 
 impl scoreboard::HostScoreboard for PluginHostState {
-    fn drop(&mut self, rep: Resource<scoreboard::Scoreboard>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn add_objective(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
@@ -586,6 +580,10 @@ impl scoreboard::HostScoreboard for PluginHostState {
         };
         Ok(team_name)
     }
+
+    fn drop(&mut self, rep: Resource<scoreboard::Scoreboard>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 const fn map_display_slot(slot: DisplaySlot) -> pumpkin_data::scoreboard::ScoreboardDisplaySlot {
@@ -800,10 +798,6 @@ const fn map_named_color_rev(
 }
 
 impl HostBedrockScoreboard for PluginHostState {
-    fn drop(&mut self, res: Resource<scoreboard::BedrockScoreboard>) -> wasmtime::Result<()> {
-        self.drop(res)
-    }
-
     fn add_objective(
         &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
@@ -982,5 +976,9 @@ impl HostBedrockScoreboard for PluginHostState {
             sb.reset_scores_for_entity(player.as_ref(), &entity_name);
         }
         Ok(())
+    }
+
+    fn drop(&mut self, res: Resource<scoreboard::BedrockScoreboard>) -> wasmtime::Result<()> {
+        self.drop(res)
     }
 }

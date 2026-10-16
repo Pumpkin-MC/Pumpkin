@@ -139,13 +139,14 @@ jobs:
         with:
           sparse-checkout: "crates/pumpkin-plugin-wit"
       - uses: bytecodealliance/actions/wit-bindgen/setup@v1
-      - name: Generate v0.1 bindings
-        run: wit-bindgen rust crates/pumpkin-plugin-wit/v0.1
       - uses: bytecodealliance/actions/wasm-tools/setup@v1
-      - name: Validate v0.2 WIT package
+      - name: Generate bindings and validate both WIT packages
         run: |
-          wasm-tools component wit crates/pumpkin-plugin-wit/v0.2 --wasm -o "$RUNNER_TEMP/pumpkin-v0.2.wasm"
-          wasm-tools validate "$RUNNER_TEMP/pumpkin-v0.2.wasm"
+          for version in v0.1 v0.2; do
+            wit-bindgen rust "crates/pumpkin-plugin-wit/$version" --out-dir "$RUNNER_TEMP/bindings-$version"
+            wasm-tools component wit "crates/pumpkin-plugin-wit/$version" --wasm -o "$RUNNER_TEMP/pumpkin-$version.wasm"
+            wasm-tools validate "$RUNNER_TEMP/pumpkin-$version.wasm"
+          done
 
   test:
     name: Test (${{ matrix.name }})

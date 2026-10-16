@@ -3,12 +3,12 @@
 // Not warn event sending macros
 #![allow(unused_labels, deprecated)]
 
+use pumpkin_wasm_host_common::state::FromResource;
+
 use crate::bindings::PluginPre;
 use pumpkin_core::plugin::PluginMetadata;
 use pumpkin_wasm_host_common::{
-    concurrent_store::LegacySyncReentry,
-    plugin::PluginInitError,
-    state::{FromResource, PluginHostState},
+    concurrent_store::LegacySyncReentry, plugin::PluginInitError, state::PluginHostState,
 };
 use wasmtime::component::{Accessor, HasSelf, InstancePre, Linker, Resource};
 use wasmtime::{Engine, Store};
@@ -63,9 +63,10 @@ fn active_plugin(
     })
 }
 
-/// Runs synchronous server work on Tokio's blocking pool while the store keeps servicing the guest,
-/// keeping the active guest call's reentry context so guest calls made from `operation` stay in
-/// the same chain.
+/// Runs synchronous server work on Tokio's blocking pool without holding a store borrow
+///
+/// Callbacks from `operation` inherit the active guest call's chain and root admission
+/// The reentry depth is checked before the operation is spawned
 pub(crate) async fn run_blocking<R: Send + 'static>(
     accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
     operation: impl FnOnce() -> R + Send + 'static,
@@ -76,16 +77,18 @@ pub(crate) async fn run_blocking<R: Send + 'static>(
         .await
 }
 
-/// Awaits a host operation that can fire plugin events under the active guest call's reentry
-/// context.
+/// Awaits host work with the active guest call's chain and root admission
+///
+/// Use this when the operation can call back into plugins so callbacks stay in the same chain
+/// The reentry depth is checked before the future is polled
 pub(crate) async fn in_active_context<R>(
     accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
     future: impl std::future::Future<Output = R>,
 ) -> wasmtime::Result<R> {
-    Ok(active_plugin(accessor)?
+    active_plugin(accessor)?
         .store
         .in_active_context(future)
-        .await)
+        .await
 }
 
 /// Resource-table access from an [`Accessor`] without holding the store borrow across an
@@ -137,8 +140,8 @@ impl RequireServer for PluginHostState {
 
 /// Locking for a standard [`Mutex`](std::sync::Mutex) that ignores poisoning.
 ///
-/// Poisoning only records that another thread panicked while holding the lock. The host keeps
-/// going with the data as that thread left it instead of failing every later call on the lock.
+/// Returns the guard even after a panic has poisoned the mutex
+/// The protected data is left as the panicking thread left it, with no validation or repair
 pub(crate) trait LockIgnorePoison<T: ?Sized> {
     /// Locks the mutex, taking the guard out of the poison error if it was poisoned.
     fn lock_ignore_poison(&self) -> std::sync::MutexGuard<'_, T>;

@@ -402,7 +402,6 @@ interface %world {
         id: u16,
     }
 
-    /// Opaque entity handle; operations may run in the entity's owning domain.
     resource entity {
         get-id: func() -> u32;
         get-uuid: func() -> uuid;
@@ -787,8 +786,7 @@ interface %world {
         east,
     }
 
-    /// Opaque handle to a Minecraft world (dimension).
-    /// Operations may run in the world's owning domain.
+    /// Represents a Minecraft world (dimension).
     resource %world {
         /// Returns the unique identifier of this world.
         get-id: func() -> string;
@@ -963,7 +961,6 @@ interface %world {
     }
 
     /// Mutable chunk buffer representing a 16x16 column during custom world generation.
-    /// Operations may run in the chunk's owning domain.
     resource chunk-buffer {
         /// Returns the chunk X coordinate.
         get-x: func() -> s32;

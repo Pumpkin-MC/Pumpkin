@@ -1,5 +1,12 @@
 use super::{AccessorExt, run_blocking};
 use crate::LockIgnorePoison;
+use crate::pumpkin::plugin::world::HostEntityWithStore;
+
+use std::sync::Arc;
+use wasmtime::component::{Accessor, HasSelf, Resource};
+
+use pumpkin_util::math::vector3::Vector3;
+
 use crate::{
     events::to_wasm_position,
     pumpkin::plugin::{
@@ -10,7 +17,7 @@ use crate::{
         uuid::Uuid,
         world::{
             BlockPos as WitBlockPos, BoundingBox as WitBoundingBox, Entity, HostEntity,
-            HostEntityWithStore, LivingEntity as WitLivingEntity, Mob as WitMob,
+            LivingEntity as WitLivingEntity, Mob as WitMob,
             RayTraceBlockResult as WitRayTraceBlockResult,
             RayTraceEntityResult as WitRayTraceEntityResult, RaycastResult as WitRaycastResult,
             World,
@@ -20,10 +27,7 @@ use crate::{
     world::to_wasm_block_direction,
 };
 use pumpkin_data::entity::EntityPose as InternalEntityPose;
-use pumpkin_util::math::vector3::Vector3;
 use pumpkin_wasm_host_common::state::PluginHostState;
-use std::sync::Arc;
-use wasmtime::component::{Accessor, HasSelf, Resource};
 
 impl Host for PluginHostState {}
 impl entity_types::Host for PluginHostState {}
@@ -52,10 +56,6 @@ const fn map_entity_pose(pose: InternalEntityPose) -> EntityPose {
 }
 
 impl HostEntity for PluginHostState {
-    fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_id(&mut self, entity: Resource<Entity>) -> wasmtime::Result<u32> {
         let entity = self.get(&entity)?;
         Ok(entity.get_entity().entity_id as u32)
@@ -641,6 +641,15 @@ impl HostEntity for PluginHostState {
         Ok(None)
     }
 
+    fn get_target_entity(
+        &mut self,
+        entity: Resource<Entity>,
+        max_distance: f64,
+    ) -> wasmtime::Result<Option<Resource<Entity>>> {
+        let res = self.ray_trace_entity(entity, max_distance)?;
+        Ok(res.map(|r| r.entity))
+    }
+
     fn set_custom_data(
         &mut self,
         this: Resource<Entity>,
@@ -721,13 +730,8 @@ impl HostEntity for PluginHostState {
         Ok(entity.get_mob().is_some())
     }
 
-    fn get_target_entity(
-        &mut self,
-        entity: Resource<Entity>,
-        max_distance: f64,
-    ) -> wasmtime::Result<Option<Resource<Entity>>> {
-        let res = self.ray_trace_entity(entity, max_distance)?;
-        Ok(res.map(|r| r.entity))
+    fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

@@ -237,9 +237,7 @@ interface command {
     }
 
     resource command {
-        /// Creates a command from its names and description.
-        ///
-        /// The first name is primary; the remaining names are aliases.
+        /// First name is primary, rest are aliases
         constructor(names: list<string>, description: string);
         then: func(node: command-node);
         execute-with-handler-id: func(handler-id: u32);

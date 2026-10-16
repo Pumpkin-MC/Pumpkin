@@ -1,5 +1,10 @@
 use super::AccessorExt;
 use crate::RwLockIgnorePoison;
+
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use wasmtime::component::{Accessor, HasSelf, Resource};
+
 use crate::pumpkin::plugin::{
     gui::{self, Gui},
     item_stack::ItemStack as WitHostItemStack,
@@ -8,9 +13,6 @@ use crate::pumpkin::plugin::{
 use pumpkin_core::plugin::api::gui::{PluginGui, PluginInventory};
 use pumpkin_data::screen::WindowType;
 use pumpkin_wasm_host_common::state::PluginHostState;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use wasmtime::component::{Accessor, HasSelf, Resource};
 
 #[must_use]
 pub const fn to_wit_screen(window_type: WindowType) -> WitScreen {
@@ -77,10 +79,6 @@ pub const fn from_wit_screen(screen: WitScreen) -> WindowType {
 impl gui::Host for PluginHostState {}
 
 impl gui::HostGui for PluginHostState {
-    fn drop(&mut self, rep: Resource<Gui>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn new(
         &mut self,
         screen: WitScreen,
@@ -110,6 +108,10 @@ impl gui::HostGui for PluginHostState {
         }));
 
         self.add(gui)
+    }
+
+    fn drop(&mut self, rep: Resource<Gui>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

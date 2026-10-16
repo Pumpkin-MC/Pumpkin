@@ -1,21 +1,24 @@
-use super::{
-    AccessorExt, in_active_context,
-    player::{from_wit_permission_level, parse_ban_expiry, to_wit_permission_level},
-    run_blocking,
-};
+use super::{AccessorExt, in_active_context, run_blocking};
 use crate::RequireServer;
 use crate::RwLockIgnorePoison;
+
+use pumpkin_util::text::TextComponent;
+use wasmtime::component::{Accessor, HasSelf, Resource};
+
+use crate::pumpkin::plugin::enchantments::{
+    CustomEnchantment as WitCustomEnchantment, EnchantmentManager as WitEnchantmentManager,
+};
+use crate::pumpkin::plugin::recipe::RecipeManager as WitRecipeManager;
+use pumpkin::plugin::server::CommandSender as WasmCommandSender;
+use pumpkin_core::command::CommandSender;
+
+use super::player::{from_wit_permission_level, parse_ban_expiry, to_wit_permission_level};
 use crate::{
     pumpkin::{
         self,
         plugin::{
             datapack::DatapackManager as WitDatapackManager,
-            enchantments::{
-                CustomEnchantment as WitCustomEnchantment,
-                EnchantmentManager as WitEnchantmentManager,
-            },
             player::{BanIpOptions, BanPlayerOptions, Player},
-            recipe::RecipeManager as WitRecipeManager,
             server::{
                 BanManager as WitBanManager, BannedIpEntry, BannedPlayerEntry, Difficulty,
                 Dimension, OpEntry, OpManager as WitOpManager, Server, SysInfo,
@@ -26,19 +29,13 @@ use crate::{
     },
     uuid::UuidExt,
 };
-use pumpkin::plugin::server::CommandSender as WasmCommandSender;
-use pumpkin_core::{command::CommandSender, data::SaveJSONConfiguration, plugin::permissions};
-use pumpkin_util::text::TextComponent;
+use pumpkin_core::data::SaveJSONConfiguration;
+use pumpkin_core::plugin::permissions;
 use pumpkin_wasm_host_common::state::PluginHostState;
-use wasmtime::component::{Accessor, HasSelf, Resource};
 
 impl pumpkin::plugin::server::Host for PluginHostState {}
 
 impl pumpkin::plugin::server::HostServer for PluginHostState {
-    fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_sys_info(&mut self, _res: Resource<Server>) -> wasmtime::Result<SysInfo> {
         let has_perm = |p: &str| self.permissions.iter().any(|perm| perm == p);
 
@@ -397,6 +394,10 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         server.broadcast_server_links(&protocol_links);
         Ok(())
     }
+
+    fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<PluginHostState> {
@@ -549,10 +550,6 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
 }
 
 impl pumpkin::plugin::server::HostOpManager for PluginHostState {
-    fn drop(&mut self, rep: Resource<WitOpManager>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn is_op(&mut self, _res: Resource<WitOpManager>, id: WitUuid) -> wasmtime::Result<bool> {
         let server = self.require_server()?;
         let uuid = WitUuid::from_wit(&id);
@@ -603,6 +600,10 @@ impl pumpkin::plugin::server::HostOpManager for PluginHostState {
                 bypasses_player_limit: entry.bypasses_player_limit,
             })
             .collect())
+    }
+
+    fn drop(&mut self, rep: Resource<WitOpManager>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 
@@ -679,10 +680,6 @@ impl pumpkin::plugin::server::HostOpManagerWithStore<PluginHostState> for HasSel
 }
 
 impl pumpkin::plugin::server::HostBanManager for PluginHostState {
-    fn drop(&mut self, rep: Resource<WitBanManager>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn is_player_banned(
         &mut self,
         _res: Resource<WitBanManager>,
@@ -874,6 +871,10 @@ impl pumpkin::plugin::server::HostBanManager for PluginHostState {
             })
             .collect())
     }
+
+    fn drop(&mut self, rep: Resource<WitBanManager>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 impl pumpkin::plugin::server::HostBanManagerWithStore<PluginHostState>
@@ -1006,10 +1007,6 @@ impl pumpkin::plugin::server::HostBanManagerWithStore<PluginHostState>
 }
 
 impl pumpkin::plugin::server::HostWhitelistManager for PluginHostState {
-    fn drop(&mut self, rep: Resource<WitWhitelistManager>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn is_enabled(&mut self, _res: Resource<WitWhitelistManager>) -> wasmtime::Result<bool> {
         let server = self.require_server()?;
         Ok(server.white_list.load(std::sync::atomic::Ordering::Relaxed))
@@ -1079,6 +1076,10 @@ impl pumpkin::plugin::server::HostWhitelistManager for PluginHostState {
                 name: e.name.clone(),
             })
             .collect())
+    }
+
+    fn drop(&mut self, rep: Resource<WitWhitelistManager>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

@@ -12,10 +12,6 @@ use wasmtime::component::{Accessor, HasSelf, Resource};
 impl DatapackHost for PluginHostState {}
 
 impl HostDatapackManager for PluginHostState {
-    fn drop(&mut self, rep: Resource<WitDatapackManager>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn list_all_packs(
         &mut self,
         _res: Resource<WitDatapackManager>,
@@ -60,6 +56,10 @@ impl HostDatapackManager for PluginHostState {
     ) -> wasmtime::Result<bool> {
         let server = self.require_server()?;
         Ok(DatapackManager::is_pack_enabled(server, &name))
+    }
+
+    fn drop(&mut self, rep: Resource<WitDatapackManager>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

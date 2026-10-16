@@ -1,13 +1,12 @@
 use super::AccessorExt;
 use crate::RequireServer;
+
 use crate::pumpkin::plugin::boss_bar::{
     self, BossBar, BossBarColor as WitColor, BossBarDivision as WitDivision,
     BossBarMetadata as WitMetadata,
 };
-use pumpkin_core::{
-    server::Server,
-    world::bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags},
-};
+use pumpkin_core::server::Server;
+use pumpkin_core::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags};
 use pumpkin_wasm_host_common::state::PluginHostState;
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
@@ -112,12 +111,6 @@ async fn remove_all_players(pbb: &Arc<Mutex<PluginBossBar>>) {
 impl boss_bar::Host for PluginHostState {}
 
 impl boss_bar::HostBossBar for PluginHostState {
-    async fn drop(&mut self, res: Resource<BossBar>) -> wasmtime::Result<()> {
-        let pbb_handle = self.get(&res)?.clone();
-        remove_all_players(&pbb_handle).await;
-        self.drop(res)
-    }
-
     fn new(
         &mut self,
         title: Resource<crate::pumpkin::plugin::text::TextComponent>,
@@ -136,6 +129,12 @@ impl boss_bar::HostBossBar for PluginHostState {
             Arc::downgrade(&server),
         )));
         self.add(plugin_bossbar)
+    }
+
+    async fn drop(&mut self, res: Resource<BossBar>) -> wasmtime::Result<()> {
+        let pbb_handle = self.get(&res)?.clone();
+        remove_all_players(&pbb_handle).await;
+        self.drop(res)
     }
 }
 

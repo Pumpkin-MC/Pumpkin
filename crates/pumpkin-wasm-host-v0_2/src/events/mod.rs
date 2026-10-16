@@ -300,7 +300,8 @@ impl WasmPluginEventHandler {
                         }
                     })?;
                     let dispatched_case = std::mem::discriminant(&wasm_event);
-                    // Lowering transfers these resources to the guest, allowing successfully returned events to be owned by the host again
+                    // The guest owns the input resources once lowered
+                    // Only a successful return transfers the returned event's resources back to the host
                     let (returned_event,) = guest
                         .call(function, (handler_id, server_res, wasm_event))
                         .await?;

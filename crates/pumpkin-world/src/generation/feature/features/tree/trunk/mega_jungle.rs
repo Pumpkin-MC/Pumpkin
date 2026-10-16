@@ -1,8 +1,6 @@
-use core::f32;
-
 use pumpkin_data::BlockState;
 use pumpkin_util::{
-    math::position::BlockPos,
+    math::{cos, position::BlockPos, sin},
     random::{RandomGenerator, RandomImpl},
 };
 
@@ -48,15 +46,15 @@ impl MegaJungleTrunkPlacer {
         let mut k_val = 0;
 
         while i > height as i32 / 2 {
-            let f = random.next_f32() * (f32::consts::PI * 2.0);
+            let f = random.next_f32() * (std::f64::consts::PI * 2.0) as f32;
 
             for l in 0..5 {
-                j_val = (1.5f32 + f.cos() * l as f32) as i32;
-                k_val = (1.5f32 + f.sin() * l as f32) as i32;
+                j_val = (1.5f32 + cos(f) * l as f32) as i32;
+                k_val = (1.5f32 + sin(f) * l as f32) as i32;
 
                 let block_pos = start_pos.add(j_val, i - 3 + l / 2, k_val);
 
-                if TrunkPlacer::try_place(chunk, &block_pos, trunk_block) {
+                if TrunkPlacer::place(chunk, &block_pos, trunk_block) {
                     trunk_poses.push(block_pos);
                 }
             }

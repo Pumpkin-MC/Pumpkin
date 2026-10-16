@@ -833,8 +833,7 @@ interface player {
         log-to-console: bool,
     }
 
-    /// Opaque handle to a player on the server.
-    /// Operations may run in the player's owning domain.
+    /// A handle to a player on the server.
     resource player {
         /// Returns the player as an entity.
         as-entity: func () -> entity;
