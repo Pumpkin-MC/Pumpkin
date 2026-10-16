@@ -1361,7 +1361,16 @@ impl LivingEntity {
 
         self.movement_input.store(movement_input);
 
-        // TODO: Tick AI
+        if self.health.load() <= 0.0 || self.dead.load(Relaxed) {
+            self.jumping.store(false, Relaxed);
+            let input = self.movement_input.load();
+            self.movement_input.store(Vector3::new(0.0, input.y, 0.0));
+        } else if let Some(mob) = caller.get_mob()
+            && !mob.get_mob_entity().is_no_ai()
+        {
+            // Prepare old motion before controllers produce this tick's inputs.
+            mob.get_mob_entity().server_ai_step(mob, caller);
+        }
 
         if self.jumping.load(SeqCst) && should_swim_in_fluids {
             let in_lava = self.entity.touching_lava.load(SeqCst);
@@ -4060,5 +4069,190 @@ mod tests {
             .unwrap();
 
         assert_eq!(bytes, [10, 17, 1, 28, 0xff, 0xcd, 0x5c, 0xab]);
+    }
+}
+
+#[cfg(test)]
+mod ai_step_tests {
+    use std::error::Error;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex, Weak};
+
+    use crate::block::registry::default_registry;
+    use crate::entity::Entity;
+    use crate::entity::ai::control::{Control, MoveControlTrait};
+    use crate::entity::ai::goal::Goal;
+    use crate::entity::mob::{Mob, MobEntity};
+    use crate::world::World;
+    use arc_swap::ArcSwap;
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::vector3::Vector3;
+    use pumpkin_util::world_seed::Seed;
+    use pumpkin_world::level::Level;
+    use pumpkin_world::world_info::LevelData;
+
+    type TestResult = Result<(), Box<dyn Error>>;
+
+    struct ProbeMob {
+        mob: MobEntity,
+    }
+
+    impl Mob for ProbeMob {
+        fn get_mob_entity(&self) -> &MobEntity {
+            &self.mob
+        }
+    }
+
+    #[derive(Default)]
+    struct Observation {
+        velocity: Vector3<f64>,
+        input: Vector3<f64>,
+    }
+
+    struct ObserveGoal(Arc<Mutex<Observation>>);
+
+    impl Goal for ObserveGoal {
+        fn can_start(&mut self, mob: &dyn Mob) -> bool {
+            let living = &mob.get_mob_entity().living_entity;
+            *self
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Observation {
+                velocity: living.entity.velocity.load(),
+                input: living.movement_input.load(),
+            };
+            false
+        }
+    }
+
+    struct ProbeControl(Arc<AtomicUsize>);
+
+    impl Control for ProbeControl {}
+
+    impl MoveControlTrait for ProbeControl {
+        fn tick(&mut self, mob: &dyn Mob) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            let living = &mob.get_mob_entity().living_entity;
+            living.entity.velocity.store(Vector3::new(0.002, 0.0, 0.0));
+            living.movement_input.store(Vector3::new(0.0, 0.0, 0.5));
+        }
+    }
+
+    fn world(folder: &tempfile::TempDir) -> Arc<World> {
+        let dimension = Dimension::OVERWORLD.clone();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().to_path_buf(),
+            0,
+            dimension.clone(),
+        );
+        Arc::new(World::load(
+            level,
+            Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
+            dimension,
+            default_registry(),
+            Weak::new(),
+        ))
+    }
+
+    fn probe(world: Arc<World>, calls: Arc<AtomicUsize>) -> ProbeMob {
+        let mob = MobEntity::new(Entity::new(
+            world,
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        *mob.move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(ProbeControl(calls));
+        ProbeMob { mob }
+    }
+
+    #[tokio::test]
+    async fn ai_step_preserves_controller_motion_after_input_preparation() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mob = probe(world.clone(), calls.clone());
+        let observation = Arc::new(Mutex::new(Observation::default()));
+        mob.mob
+            .goals_selector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .add_goal(0, Box::new(ObserveGoal(observation.clone())));
+        let living = &mob.mob.living_entity;
+        living.entity.velocity.store(Vector3::new(0.001, 0.0, 0.0));
+        living.movement_input.store(Vector3::new(0.0, 0.25, 0.5));
+
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        let observed = observation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(observed.velocity.x, 0.0);
+        assert_eq!(observed.input.y, 0.25);
+        assert!((observed.input.z - 0.49).abs() < f64::EPSILON);
+        assert!((living.entity.pos.load().x - 0.002).abs() < f64::EPSILON);
+        assert_eq!(living.movement_input.load().z, 0.5);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn no_ai_skips_controller_and_travel() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mob = probe(world.clone(), calls.clone());
+        mob.mob.set_no_ai(true);
+        let living = &mob.mob.living_entity;
+        let position = living.entity.pos.load();
+        living.entity.velocity.store(Vector3::new(0.1, 0.0, 0.0));
+
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert_eq!(calls.load(Ordering::Relaxed), 0);
+        assert_eq!(living.entity.pos.load(), position);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dead_ai_step_clears_input_without_discarding_knockback() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mut results = Vec::new();
+        for dead_flag in [false, true] {
+            let calls = Arc::new(AtomicUsize::new(0));
+            let mob = probe(world.clone(), calls.clone());
+            let living = &mob.mob.living_entity;
+            if dead_flag {
+                living.dead.store(true, Ordering::Relaxed);
+            } else {
+                living.health.store(0.0);
+            }
+            living.entity.velocity.store(Vector3::new(0.1, 0.0, 0.0));
+            living.movement_input.store(Vector3::new(0.5, 0.25, 0.5));
+            living.jumping.store(true, Ordering::Relaxed);
+
+            living.tick_movement(&mob);
+            results.push((
+                calls.load(Ordering::Relaxed),
+                living.movement_input.load(),
+                living.jumping.load(Ordering::Relaxed),
+                living.entity.pos.load().x,
+            ));
+        }
+        world.level.shutdown().await;
+
+        for (calls, input, jumping, position_x) in results {
+            assert_eq!(calls, 0);
+            assert_eq!(input, Vector3::new(0.0, 0.25, 0.0));
+            assert!(!jumping);
+            assert!(position_x > 0.05);
+        }
+        Ok(())
     }
 }

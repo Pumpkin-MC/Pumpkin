@@ -1403,8 +1403,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
         self.mob_tick(caller);
 
-        // Vanilla Mob.isEffectiveAi: NoAI skips the whole serverAiStep.
-        //
         // TODO NoAI: move these vanilla `customServerAiStep` parts of `mob_tick`
         // into `custom_server_ai_step`:
         // Bat `tick_flying`/`tick_roosting` (not `tick_ambient_sound`)
@@ -1419,10 +1417,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         // Piglin timers, `tick_sensors`, admiring, dancing (conversion already checks NoAI)
         // Bee and ZombifiedPiglin `update_persistent_anger` (Enderman, Wolf, IronGolem and
         // PolarBear run it outside the AI step, so the shared call stays for them).
-        if !mob_entity.is_no_ai() {
-            mob_entity.server_ai_step(self, caller);
-        }
-
         mob_entity.living_entity.tick(caller, server);
         self.post_tick();
     }
