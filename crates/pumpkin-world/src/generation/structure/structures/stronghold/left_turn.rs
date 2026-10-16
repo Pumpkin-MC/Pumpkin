@@ -11,10 +11,7 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            stronghold::{
-                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
-                StrongholdPieceType,
-            },
+            stronghold::{EntranceType, StoneBrickRandomizer, StrongholdPiece},
         },
     },
 };
@@ -65,44 +62,6 @@ impl StructurePieceBase for LeftTurnPiece {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.piece.piece
-    }
-
-    fn fill_openings(
-        &self,
-        start: &StructurePiece,
-        random: &mut RandomGenerator,
-        weights: &mut Vec<PieceWeight>,
-        last_piece_type: &mut Option<StrongholdPieceType>,
-        _has_portal_room: &mut bool,
-
-        collector: &mut StructurePiecesCollector,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        let facing = self.piece.piece.facing.unwrap_or(BlockDirection::North);
-
-        if facing == BlockDirection::North || facing == BlockDirection::East {
-            self.piece.fill_nw_opening(
-                start,
-                collector,
-                random,
-                weights,
-                last_piece_type,
-                1,
-                1,
-                pieces_to_process,
-            );
-        } else {
-            self.piece.fill_se_opening(
-                start,
-                collector,
-                random,
-                weights,
-                last_piece_type,
-                1,
-                1,
-                pieces_to_process,
-            );
-        }
     }
 
     fn place(

@@ -219,11 +219,8 @@ impl Mob for WitchEntity {
     }
 
     fn modify_incoming_damage(&self, mut amount: f32, damage_type: DamageType) -> f32 {
-        if damage_type == DamageType::MAGIC
-            || damage_type == DamageType::INDIRECT_MAGIC
-            || damage_type == DamageType::THORNS
-            || damage_type == DamageType::WITHER
-        {
+        // Vanilla `Witch.getDamageAfterMagicAbsorb`.
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_WITCH_RESISTANT_TO) {
             amount *= 0.15;
         }
         amount

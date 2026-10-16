@@ -2134,6 +2134,11 @@ impl LivingEntity {
                         .load(std::sync::atomic::Ordering::Relaxed)
                         > 0,
                 ),
+                direct_attacker_weapon: source.and_then(|direct| {
+                    direct
+                        .get_living_entity()
+                        .map(|living| living.held_item(direct))
+                }),
                 ..Default::default()
             };
 
@@ -2984,7 +2989,7 @@ impl LivingEntity {
         let mut amount = amount;
 
         // Check invulnerability before applying damage
-        if self.entity.is_invulnerable_to(&damage_type) {
+        if self.entity.is_invulnerable_to(&damage_type, cause) {
             return false;
         }
 

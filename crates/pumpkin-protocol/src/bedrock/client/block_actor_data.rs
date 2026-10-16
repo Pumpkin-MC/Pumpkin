@@ -10,11 +10,14 @@ use crate::serial::PacketWrite;
 #[derive(PacketWrite)]
 #[packet(56)]
 pub struct CBlockActorData {
+    /// World coordinates of the block entity being updated.
     pub block_position: BlockPos,
+    /// Network NBT compound containing all properties and state of the block entity.
     pub actor_data_tags: NbtCompound,
 }
 
 impl CBlockActorData {
+    /// Creates a new block actor update packet for the given position and NBT data.
     #[must_use]
     pub const fn new(block_position: BlockPos, actor_data_tags: NbtCompound) -> Self {
         Self {

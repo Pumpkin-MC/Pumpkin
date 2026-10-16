@@ -4,7 +4,7 @@ use pumpkin_util::random::{
     RandomGenerator, RandomImpl, get_carver_seed, get_region_seed, legacy_rand::LegacyRand,
     xoroshiro128::Xoroshiro,
 };
-use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
+use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, RelativeToSeaLevel, YOffset};
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum StructureKeys {
     PillagerOutpost,

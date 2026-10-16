@@ -324,18 +324,17 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         caller: &dyn EntityBase,
         lightning: &lightning::LightningBoltEntity,
     ) {
-        if self.get_living_entity().is_some() {
-            self.set_on_fire_for(8.0);
-            let cause = lightning.get_cause();
-            self.damage_with_context(
-                caller,
-                5.0,
-                DamageType::LIGHTNING_BOLT,
-                None,
-                Some(lightning),
-                cause.as_deref().map(|p| p as &dyn EntityBase),
-            );
-        }
+        // Vanilla `Entity.thunderHit` hits entities with 5 damage and sets them on fire for 8 seconds.
+        self.set_on_fire_for(8.0);
+        let cause = lightning.get_cause();
+        self.damage_with_context(
+            caller,
+            5.0,
+            DamageType::LIGHTNING_BOLT,
+            None,
+            Some(lightning),
+            cause.as_deref().map(|p| p as &dyn EntityBase),
+        );
     }
 
     fn is_spectator(&self) -> bool {
@@ -488,7 +487,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     fn set_on_fire_for(&self, seconds: f32) {
         let entity = self.get_entity();
         // Exclude fire-immune entities (ex. certain items) from burn damage
-        if !entity.fire_immune.load(Ordering::Relaxed) {
+        if !entity.is_fire_immune() {
             self.set_on_fire_for_ticks((seconds * 20.0).floor() as u32);
         }
     }
@@ -1289,20 +1288,25 @@ impl Entity {
     }
 
     #[must_use]
-    pub const fn get_entity_dimensions(pose: EntityPose) -> EntityDimensions {
-        match pose {
-            EntityPose::Sleeping => EntityDimensions::new(0.2, 0.2, 0.2),
-            EntityPose::FallFlying | EntityPose::Swimming | EntityPose::SpinAttack => {
-                EntityDimensions::new(0.6, 0.6, 0.4)
-            }
-            EntityPose::Crouching => EntityDimensions::new(0.6, 1.5, 1.27),
-            EntityPose::Dying => EntityDimensions::new(0.2, 0.2, 1.62),
-            _ => EntityDimensions::new(0.6, 1.8, 1.62),
+    pub fn get_dimensions(&self, pose: EntityPose) -> EntityDimensions {
+        if pose == EntityPose::Sleeping {
+            return EntityDimensions::new(0.2, 0.2, 0.2);
         }
+        if self.entity_type == &EntityType::PLAYER {
+            match pose {
+                EntityPose::FallFlying | EntityPose::Swimming | EntityPose::SpinAttack => {
+                    return EntityDimensions::new(0.6, 0.6, 0.4);
+                }
+                EntityPose::Crouching => return EntityDimensions::new(0.6, 1.5, 1.27),
+                EntityPose::Dying => return EntityDimensions::new(0.2, 0.2, 1.62),
+                _ => {}
+            }
+        }
+        Self::type_dimensions(self.entity_type)
     }
 
     pub fn get_eye_height(&self) -> f64 {
-        f64::from(Self::get_entity_dimensions(self.pose.load()).eye_height)
+        f64::from(self.entity_dimension.load().eye_height)
     }
 
     /// Updates the entity's position, block position, and chunk position.
@@ -1658,10 +1662,7 @@ impl Entity {
                 continue;
             }
 
-            // TODO: this is default predicate, vanilla overwrites it for some blocks,
-            // see .suffocates(...) in Blocks.java
-            let check_suffocation =
-                !suffocating && blocks_movement(state, block.id) && state.is_full_cube();
+            let check_suffocation = !suffocating && state.is_suffocating();
 
             World::check_collision(
                 &bounding_box,
@@ -1714,6 +1715,17 @@ impl Entity {
     // updateWaterState() in yarn
 
     fn update_fluid_state(&self, caller: &dyn EntityBase) {
+        let world = self.world.load();
+        for fluid in self.update_fluid_interaction(caller) {
+            world
+                .block_registry
+                .on_entity_collision_fluid(fluid, caller);
+        }
+    }
+
+    /// Vanilla `Entity.updateFluidInteraction`: fluid flags and current push only, without the
+    /// fluid's `entityInside` effects. Returns the fluids the entity is in.
+    fn update_fluid_interaction(&self, caller: &dyn EntityBase) -> Vec<&'static Fluid> {
         let is_pushed = caller.is_pushed_by_fluids();
         let mut fluids = BTreeMap::new();
 
@@ -1788,14 +1800,6 @@ impl Entity {
             }
         }
 
-        // BTreeMap auto-sorts water before lava as in vanilla
-
-        for (_, fluid) in fluids {
-            world
-                .block_registry
-                .on_entity_collision_fluid(fluid, caller);
-        }
-
         let lava_speed = if world.dimension.fast_lava {
             0.007
         } else {
@@ -1840,6 +1844,9 @@ impl Entity {
         self.lava_height.store(lava_height);
 
         self.touching_lava.store(in_lava, Ordering::SeqCst);
+
+        // BTreeMap auto-sorts water before lava as in vanilla
+        fluids.into_values().collect()
     }
 
     fn push_by_fluid(&self, speed: f64, mut push: Vector3<f64>, n: usize) {
@@ -2531,6 +2538,18 @@ impl Entity {
         self.touching_water.load(Ordering::Relaxed)
     }
 
+    pub fn is_in_water_or_rain(&self) -> bool {
+        let world = self.world.load();
+        let pos = self.block_pos.load();
+        self.is_in_water()
+            || world.is_raining_at(&pos)
+            || world.is_raining_at(&BlockPos::new(
+                pos.0.x,
+                self.bounding_box.load().max.y.floor() as i32,
+                pos.0.z,
+            ))
+    }
+
     #[must_use]
     pub fn is_submerged_in_water(&self) -> bool {
         let pos = self.pos.load();
@@ -3032,7 +3051,7 @@ impl Entity {
             }
         }
 
-        let dimension = Self::get_entity_dimensions(pose);
+        let dimension = self.get_dimensions(pose);
         let position = self.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
         self.pose.store(pose);
@@ -3053,26 +3072,38 @@ impl Entity {
         self.send_bedrock_actor_data(&bedrock_meta);
     }
 
-    /// Checks if the entity is invulnerable to the given damage type, considering both general invulnerability and specific immunities.
-    pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
-        // Nothing is immune to void or kill
-        if matches!(
-            *damage_type,
-            DamageType::GENERIC_KILL | DamageType::OUT_OF_WORLD
-        ) {
-            return false;
-        }
+    /// Vanilla `Entity.fireImmune`: the entity type.
+    pub fn is_fire_immune(&self) -> bool {
+        self.entity_type.fire_immune || self.fire_immune.load(Ordering::Relaxed)
+    }
 
-        // General invulnerability
-        if self.invulnerable.load(Ordering::Relaxed) {
-            return true;
-        }
+    /// Vanilla `Entity.isInvulnerableToBase`. Driven by the damage type tags, so datapacks
+    /// decide what bypasses invulnerability or counts as fire and fall damage.
+    /// `cause` is the attacker (vanilla `DamageSource.getEntity`).
+    pub fn is_invulnerable_to(
+        &self,
+        damage_type: &DamageType,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        let bypasses = damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY);
+        let creative_cause = cause
+            .and_then(EntityBase::get_player)
+            .is_some_and(Player::is_creative);
 
-        // Specific type immunities
-        self.damage_immunities
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .contains(damage_type)
+        self.removed.load(Ordering::SeqCst)
+            || (self.invulnerable.load(Ordering::Relaxed) && !bypasses && !creative_cause)
+            || (damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FIRE) && self.is_fire_immune())
+            || (damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FALL)
+                && self
+                    .entity_type
+                    .has_tag(&tag::EntityType::MINECRAFT_FALL_DAMAGE_IMMUNE))
+            // Plugin immunities, which never block damage that bypasses invulnerability.
+            || (!bypasses
+                && self
+                    .damage_immunities
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains(damage_type))
     }
 
     /// Sets if the entity is invulnerable to a specific damage type
@@ -3196,7 +3227,7 @@ impl Entity {
         )
     }
 
-    /// No solid block between the two eye positions.
+    /// No visual-blocking block between the two eye positions (matching vanilla `ClipContext.Block.VISUAL`).
     #[must_use]
     pub fn has_line_of_sight(&self, other: &Self) -> bool {
         let from = self.get_eye_pos();
@@ -3206,10 +3237,13 @@ impl Entity {
         }
         self.world
             .load_full()
-            .raycast(from, to, |block_pos, world| {
-                world.get_block_state(block_pos).is_solid()
-            })
-            .is_none()
+            .clip(&pumpkin_world::clip::ClipContext::new(
+                from,
+                to,
+                pumpkin_world::clip::ClipBlock::Visual,
+                pumpkin_world::clip::ClipFluid::None,
+            ))
+            .is_miss
     }
 
     pub fn get_eye_y(&self) -> f64 {
@@ -3411,6 +3445,18 @@ impl Entity {
                 self.velocity_dirty.store(true, Relaxed);
             }
         }
+    }
+
+    pub fn spawn_at_location(&self, stack: ItemStack) {
+        if stack.is_empty() {
+            return;
+        }
+        let world = self.world.load();
+        let item_entity = ItemEntity::new(
+            Self::new(world.clone(), self.pos.load(), &EntityType::ITEM),
+            stack,
+        );
+        world.spawn_entity(Arc::new(item_entity));
     }
 
     pub fn has_passengers(&self) -> bool {
@@ -3731,7 +3777,7 @@ impl Entity {
                 let mut found = None;
 
                 'search: for (pose, y_offsets) in poses_and_heights {
-                    let dims = Self::get_entity_dimensions(pose);
+                    let dims = passenger_entity.get_dimensions(pose);
 
                     for y_offset in y_offsets {
                         for &(ox, oz) in &offsets {
@@ -3782,7 +3828,7 @@ impl Entity {
                     ];
 
                     for pose in poses {
-                        let dims = Self::get_entity_dimensions(pose);
+                        let dims = passenger_entity.get_dimensions(pose);
                         let bbox = BoundingBox::new_from_pos(
                             self.pos.load().x,
                             vehicle_top,
@@ -4146,7 +4192,7 @@ impl EntityBase for Entity {
         let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
 
         // Check for fire immunity (or if the specific entity is)
-        let is_immune = self.entity_type.fire_immune || self.fire_immune.load(Ordering::Relaxed);
+        let is_immune = self.is_fire_immune();
         if fire_ticks > 0 {
             if is_immune {
                 self.fire_ticks.store(fire_ticks - 4, Ordering::Relaxed);
@@ -4154,7 +4200,8 @@ impl EntityBase for Entity {
                     self.extinguish();
                 }
             } else {
-                if fire_ticks % 20 == 0 {
+                // lava deals its own damage.
+                if fire_ticks % 20 == 0 && !self.touching_lava.load(Ordering::SeqCst) {
                     caller.damage(caller, 1.0, DamageType::ON_FIRE);
                 }
 
