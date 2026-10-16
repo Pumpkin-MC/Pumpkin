@@ -21,18 +21,18 @@
 //!  5. <-- returns the owned event            applied for a blocking handler, ignored otherwise
 //! ```
 //!
-//! The 14 exports are the callbacks the host can start: `init-plugin`, `on-load`, `on-unload`,
-//! events, commands, command suggestions, tasks, IPC messages, five AI goal hooks and chunk
-//! generation; this crate wires each one to a table you fill from `on_load`
+//! The world exports 13 async callbacks (`on-load`, `on-unload`, events, commands, command
+//! suggestions, tasks, IPC messages, five AI goal hooks and chunk generation) plus the synchronous
+//! `init-plugin` and `metadata`; this crate wires each callback to a table you fill from `on_load`
 //!
-//! How the server schedules those calls, which Store they run in and what limits apply is the
-//! host's business; nothing in this crate knows about it, and nothing here should
+//! How the server schedules those calls, which Store they run in and what limits apply is up to
+//! the host, and nothing in this crate depends on it
 //!
 //! # Why a second crate
 //!
 //! A component contains exactly one world, so a plugin is either v0.1 or v0.2 and never both
 //!
-//! A cargo feature looked tempting and was rejected: features are additive across a workspace, so
+//! A cargo feature was considered and rejected: features are additive across a workspace, so
 //! any dependency that turned on `v0_2` would flip the ABI for everything else in the build
 //!
 //! The host reads the ABI from the WIT package the component imports and exports
@@ -44,14 +44,13 @@
 //! The WIT marks a function `async func` only when the host implementation awaits something (an
 //! async lock, I/O or another plugin), so those are exactly the calls you `.await`
 //!
-//! Everything else stays a plain function on purpose: resource constructors, `register_event`,
-//! task registration, the `metadata` snapshot and most `GameTest` callbacks never wait, and
-//! returning futures from them would only add ceremony; the generated bindings follow the WIT
-//! one to one, so the compiler tells you which is which
+//! Everything else stays a plain function: resource constructors, `register_event`, task
+//! registration, the `metadata` snapshot and most `GameTest` callbacks never wait, so wrapping
+//! them in futures would add nothing; the generated bindings follow the WIT one to one, so the
+//! compiler tells you which is which
 //!
-//! A synchronous export can never suspend whatever you write inside it, because an `async fn`
-//! cannot make a synchronous component callback wait; that is why the synchronous `GameTest`
-//! callbacks take plain closures
+//! A synchronous export cannot suspend, whatever you write inside it, which is why the
+//! synchronous `GameTest` callbacks take plain closures
 //!
 //! # Life of a plugin
 //!
@@ -133,11 +132,11 @@
 //! even for the same handler; that is why handlers take `&self` and shared mutable state needs
 //! interior mutability
 //!
-//! The one rule to remember is to never keep a `std::sync` guard or a `RefCell` borrow alive
-//! across an await: the next callback can try to take it, and then neither can make progress
+//! Never keep a `std::sync` guard or a `RefCell` borrow alive across an await: the next callback
+//! can try to take it, and then neither can make progress
 //!
-//! The tables follow that rule themselves; they lock only inside short synchronous methods and
-//! hand the dispatcher an owned `Arc` of the handler, so no guard exists while a handler runs
+//! The handler tables follow the same rule, locking only inside short synchronous methods and
+//! handing the dispatcher an owned `Arc`, so no guard exists while a handler runs
 //!
 //! # Ownership
 //!
@@ -145,11 +144,11 @@
 //! arguments, entity, chunk buffer and server handle all move into the callback and stay valid
 //! across every suspension
 //!
-//! The only borrows left in the ABI are the synchronous `GameTest` entity predicate and imports that
-//! declare `borrow`, and neither can cross an await
+//! Synchronous display casts and the `GameTest` entity predicate borrow their entity handles
+//! A display cast returns an optional typed handle and leaves the original entity usable
 //!
-//! Passing an owned handle to a host import transfers it, and a conversion that can fail hands it
-//! back, as [`display::EntityDisplayExt`] does with the original entity in the error
+//! Passing an owned handle to a host import transfers it, while passing a borrowed handle does
+//! not transfer ownership
 //!
 //! # Cancellation, dropped futures and traps
 //!
@@ -163,8 +162,8 @@
 //!   effect and its result is thrown away
 //! - dropping a future that was created but never polled does nothing; to run work to completion
 //!   whatever its caller does, await it inside the callback
-//! - a trap raised by a host import ends the component instance, so guest code never observes it,
-//!   destructors do not run and later calls into the plugin fail; treat it as fatal for the plugin
+//! - a trap in a host import ends the component instance: the guest cannot catch it, destructors
+//!   do not run, and the host cannot call into the instance again, so treat it as fatal
 //! - a timeout enforced by the host or by a caller waiting on a plugin only stops the wait, and the
 //!   guest callback keeps running until it finishes or the host cancels it as described above
 //!
@@ -183,10 +182,13 @@
 //!
 //! # What is not here yet
 //!
-//! This is the foundation, so it is deliberately small: only a few event markers are defined
-//! (see [`events`]) and [`define_event!`](crate::define_event) makes the rest a one-liner, while the helper surface of
-//! `pumpkin-plugin-api` (permission constants, the logging subscriber, item and block builders)
-//! has not been ported and ergonomics and a migration guide come later
+//! This crate is the foundation and is deliberately small:
+//!
+//! * only a few event markers exist (see [`events`]), and
+//!   [`define_event!`](crate::define_event) defines the rest in one line
+//! * the helper surface of `pumpkin-plugin-api` (permission constants, the logging subscriber,
+//!   item and block builders) is not ported
+//! * ergonomics helpers and a migration guide come later
 
 use std::sync::{Arc, OnceLock};
 
@@ -239,19 +241,19 @@ pub use host::{
 /// The result type used by plugin callbacks
 pub type Result<T, E = String> = core::result::Result<T, E>;
 
-/// Metadata that describes a plugin to the server
+/// Describes a plugin to the server
 pub struct PluginMetadata {
-    /// The human-readable name of the plugin
+    /// The plugin name, which other plugins use as the recipient of an IPC message
     pub name: String,
-    /// The version string of the plugin
+    /// The version of the plugin itself; it does not select the ABI
     pub version: String,
     /// The plugin authors
     pub authors: Vec<String>,
     /// A short description of the plugin
     pub description: String,
-    /// The plugin dependencies
+    /// Names of the plugins this one depends on, which the host loads first
     pub dependencies: Vec<String>,
-    /// The permissions requested by the plugin
+    /// The permissions the plugin requests
     pub permissions: Vec<String>,
 }
 
@@ -269,9 +271,8 @@ pub struct PluginMetadata {
 pub trait Plugin: Send + Sync + 'static {
     /// Creates the plugin
     ///
-    /// The host calls this once, from the async `init-plugin` export, before anything else in the
-    /// plugin runs; it is synchronous, and the [`Context`] only arrives later in
-    /// [`on_load`](Self::on_load)
+    /// The host calls this once from the synchronous `init-plugin` export for bootstrap wiring
+    /// The [`Context`] and awaitable setup belong in [`on_load`](Self::on_load)
     fn new() -> Self
     where
         Self: Sized;
@@ -488,13 +489,12 @@ pub mod runtime {
 ///
 /// # Why this is a macro
 ///
-/// `init-plugin` is an async export now, and an async-lifted export cannot be the hand-written
-/// `extern "C"` function that v0.1 used; the bindings have to generate it, and generated exports
-/// belong to the crate that ends up in the final component, which is yours
+/// `init-plugin` has to construct your plugin type, and the generated `Guest` traits are
+/// implemented in the crate that exports them
 ///
-/// So the macro implements the three `Guest` traits of the world (the callbacks, `metadata` and
-/// the `GameTest` callbacks) on a private type and exports it; each method is a one-line forward
-/// into this crate's tables, so there is no logic hiding in the expansion
+/// The macro implements the three `Guest` traits of the world (the callbacks, `metadata` and the
+/// `GameTest` callbacks) on a private type and exports it, so no symbol has to be resolved at
+/// link time; each method forwards to this crate's tables and holds no logic of its own
 ///
 /// ```rust,ignore
 /// register_plugin!(MyPlugin);
@@ -506,7 +506,7 @@ macro_rules! register_plugin {
             struct PumpkinPluginComponent;
 
             impl $crate::wit::Guest for PumpkinPluginComponent {
-                async fn init_plugin() {
+                fn init_plugin() {
                     $crate::runtime::init_plugin::<$plugin_type>();
                 }
 

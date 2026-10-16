@@ -129,8 +129,8 @@ impl<H: CommandSuggestionHandler> ErasedSuggestionHandler for H {
     }
 }
 
-// A command id with no handler is a bug worth reporting, not a reason to trap the plugin, so the
-// sender gets a failure message instead
+// A command id with no handler is a plugin bug, but trapping would take the whole plugin down, so
+// the sender gets a failure message instead
 pub(crate) async fn dispatch_command(
     command_id: u32,
     sender: CommandSender,
@@ -140,7 +140,7 @@ pub(crate) async fn dispatch_command(
     // The registry lock is released before the handler runs
     let Some(handler) = COMMAND_HANDLERS.get(command_id) else {
         return Err(CommandError::CommandFailed(TextComponent::text(&format!(
-            "no handler registered for command id {command_id}"
+            "this command has no handler (id {command_id}), which is a bug in the plugin"
         ))));
     };
     handler.handle_erased(sender, server, args).await

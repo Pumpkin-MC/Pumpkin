@@ -1,6 +1,6 @@
 //! Test fixture compiled to a component by `tests/component.rs`, not a distributable plugin
 
-// The component exports only link on wasm, so the native build of this example is empty
+// The component exports only link on wasm, so on native targets this example is empty
 #![cfg(target_family = "wasm")]
 
 use pumpkin_plugin_api_v0_2::{
@@ -30,7 +30,7 @@ impl EventHandler<PlayerChatEvent> for ChatGuard {
         _server: Server,
         mut event: EventData<PlayerChatEvent>,
     ) -> EventData<PlayerChatEvent> {
-        // The permission check is an async host import with the node as its only argument
+        // has_permission is an async import, so the handler suspends here
         if !event
             .player
             .has_permission("fixture.chat".to_string())
@@ -61,8 +61,8 @@ struct NotDisplay;
 
 impl AiGoal for NotDisplay {
     async fn can_start(&self, _server: Server, entity: Entity) -> bool {
-        // A failed conversion hands the original entity back
-        entity.into_display_entity().is_err()
+        // A failed cast leaves the original entity available for another cast
+        entity.as_display().is_none() && entity.as_interaction().is_none()
     }
 }
 
@@ -116,7 +116,7 @@ impl Plugin for Fixture {
         sender: ipc::PluginId,
         message: ipc::IpcMessage,
     ) -> Result<ipc::IpcMessage> {
-        // Task cancellation is a synchronous import, the send is awaited
+        // cancel_task is a synchronous import; the send is an async one and has to be awaited
         scheduler::cancel_task(0);
         ipc::send_ipc_message(sender, message)
             .await
