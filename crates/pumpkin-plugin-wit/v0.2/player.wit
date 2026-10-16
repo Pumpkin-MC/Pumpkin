@@ -834,7 +834,6 @@ interface player {
     }
 
     /// Opaque handle to a player on the server.
-    /// Operations may run in the player's owning domain.
     resource player {
         /// Returns the player as an entity.
         as-entity: func () -> entity;

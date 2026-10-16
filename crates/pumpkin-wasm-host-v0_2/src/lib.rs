@@ -140,8 +140,8 @@ impl RequireServer for PluginHostState {
 
 /// Locking for a standard [`Mutex`](std::sync::Mutex) that ignores poisoning.
 ///
-/// Poisoning only records that another thread panicked while holding the lock. The host keeps
-/// going with the data as that thread left it instead of failing every later call on the lock.
+/// Returns the guard even after a panic has poisoned the mutex
+/// The protected data is left as the panicking thread left it, with no validation or repair
 pub(crate) trait LockIgnorePoison<T: ?Sized> {
     /// Locks the mutex, taking the guard out of the poison error if it was poisoned.
     fn lock_ignore_poison(&self) -> std::sync::MutexGuard<'_, T>;

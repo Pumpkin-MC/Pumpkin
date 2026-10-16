@@ -26,11 +26,8 @@ fn map_number_format(
     }
 }
 
-/// Returns the player's Java scoreboard, first replacing a missing or Bedrock one with an empty
-/// Java scoreboard.
-///
-/// The error can't happen after the replacement. It only lets callers use `?` instead of a
-/// `let ... else`.
+/// Returns the player's Java scoreboard, creating an empty one if needed
+/// Replaces an existing Bedrock scoreboard and discards its contents
 fn java_scoreboard(
     custom_scoreboard: &mut Option<CustomScoreboard>,
 ) -> wasmtime::Result<&mut pumpkin_core::world::scoreboard::Scoreboard> {
@@ -45,10 +42,8 @@ fn java_scoreboard(
     }
 }
 
-/// Returns the player's Bedrock scoreboard, first replacing a missing or Java one with an empty
-/// Bedrock scoreboard.
-///
-/// The error can't happen after the replacement, see [`java_scoreboard`].
+/// Returns the player's Bedrock scoreboard, creating an empty one if needed
+/// Replaces an existing Java scoreboard and discards its contents
 fn bedrock_scoreboard(
     custom_scoreboard: &mut Option<CustomScoreboard>,
 ) -> wasmtime::Result<&mut pumpkin_core::world::scoreboard::BedrockScoreboard> {
