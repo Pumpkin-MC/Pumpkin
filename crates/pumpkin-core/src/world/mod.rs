@@ -1625,7 +1625,7 @@ impl World {
                 let _guard = entity_handle.enter();
 
                 for (entity, entity_chunk) in batch {
-                    entity.get_entity().age.fetch_add(1, Relaxed);
+                    entity.get_entity().tick_count.fetch_add(1, Relaxed);
                     entity.tick(entity.as_ref(), server_ref);
 
                     let entity_inner = entity.get_entity();

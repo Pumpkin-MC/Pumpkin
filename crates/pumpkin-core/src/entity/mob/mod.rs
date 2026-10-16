@@ -10,6 +10,7 @@ use crate::entity::ai::goal::{Controls, goal_selector::GoalSelector};
 use crate::entity::ai::sensing::Sensing;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
+use crate::entity::vehicle::boat::BoatEntity;
 use crate::server::Server;
 use crate::world::World;
 use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
@@ -83,6 +84,7 @@ pub struct MobEntity {
     pub living_entity: LivingEntity,
     pub goals_selector: std::sync::Mutex<GoalSelector>,
     pub target_selector: std::sync::Mutex<GoalSelector>,
+    /// Move and look controls lock this while held, so never lock a control while holding it.
     pub navigator: std::sync::Mutex<Navigator>,
     pending_navigation_updates: crossbeam::queue::SegQueue<(BlockPos, Uuid, u64)>,
     pub target: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
@@ -299,7 +301,7 @@ impl MobEntity {
 
     /// Vanilla `Mob.serverAiStep`: sensing, goals, navigation and controls.
     pub fn server_ai_step(&self, mob: &dyn Mob, caller: &dyn EntityBase) {
-        let age = self.living_entity.entity.age.load(Relaxed);
+        let tick_count = self.living_entity.entity.tick_count.load(Relaxed);
         let entity_id = self.living_entity.entity.entity_id;
 
         self.sensing
@@ -307,7 +309,7 @@ impl MobEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .tick();
 
-        if (age + entity_id) % 2 != 0 && age > 1 {
+        if (tick_count + entity_id) % 2 != 0 && tick_count > 1 {
             GoalSelector::tick_goals(&self.target_selector, mob, false);
             GoalSelector::tick_goals(&self.goals_selector, mob, false);
         } else {
@@ -368,12 +370,7 @@ impl MobEntity {
             .living_entity
             .entity
             .get_vehicle()
-            .is_none_or(|vehicle| {
-                !vehicle
-                    .get_entity()
-                    .entity_type
-                    .has_tag(&tag::EntityType::MINECRAFT_BOAT)
-            });
+            .is_none_or(|vehicle| !(vehicle.as_ref() as &dyn std::any::Any).is::<BoatEntity>());
         let mut goals = self
             .goals_selector
             .lock()
@@ -756,7 +753,7 @@ impl MobEntity {
                 .store(target.get_entity().entity_id, Relaxed);
             self.living_entity
                 .last_attack_time
-                .store(self.living_entity.entity.age.load(Relaxed), Relaxed);
+                .store(self.living_entity.entity.tick_count.load(Relaxed), Relaxed);
         }
 
         damaged
@@ -1545,7 +1542,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
         mob_entity.living_entity.tick(caller, server);
         self.post_tick();
-        if mob_entity.living_entity.entity.age.load(Relaxed)
+        if mob_entity.living_entity.entity.tick_count.load(Relaxed)
             % MobEntity::CONTROL_FLAGS_UPDATE_INTERVAL
             == 0
         {
@@ -1924,7 +1921,6 @@ mod lifecycle_tests {
         ai::{goal::Goal, test_support::world},
         mob::slime::SlimeEntity,
         passive::cow::CowEntity,
-        vehicle::boat::BoatEntity,
     };
 
     struct ControlProbe(Controls, Arc<AtomicBool>);
@@ -2012,8 +2008,19 @@ mod lifecycle_tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(boat);
         let boat_controls = run_controlled_goals(&*cow);
+        let chest_boat = Arc::new(BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::OAK_CHEST_BOAT,
+        )));
+        *cow.get_entity()
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(chest_boat);
+        let chest_boat_controls = run_controlled_goals(&*cow);
         world.level.shutdown().await;
         assert_eq!(boat_controls, [true, true, false]);
+        assert_eq!(chest_boat_controls, [true, true, false]);
         Ok(())
     }
 }

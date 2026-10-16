@@ -53,7 +53,7 @@ impl GoalSelector {
             priority,
             registered: AtomicBool::new(true),
             running: AtomicBool::new(false),
-            controls: AtomicCell::new(Controls::empty()),
+            controls: AtomicCell::new(goal.controls()),
             goal: Mutex::new(Some(goal)),
         }));
     }
@@ -248,7 +248,6 @@ impl GoalSelector {
             if !entry.registered.load(Relaxed) || entry.running.load(Relaxed) {
                 continue;
             }
-            Self::call(selector, entry, mob, None, |_| ());
             if !Self::can_replace_all(selector, entry, mob)
                 || Self::call(selector, entry, mob, None, |goal| goal.can_start(mob)) != Some(true)
                 || !Self::can_replace_all(selector, entry, mob)

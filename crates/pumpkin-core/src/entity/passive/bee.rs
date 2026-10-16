@@ -312,10 +312,6 @@ impl Mob for BeeEntity {
         &self.mob_entity
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
-    }
-
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         if self.has_stung() {
             let time = self.time_since_sting.fetch_add(1, Ordering::Relaxed) + 1;

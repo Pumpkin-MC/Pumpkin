@@ -73,7 +73,7 @@ impl Mob for ElderGuardianEntity {
             return;
         }
 
-        if (entity.age.load(Ordering::Relaxed) + entity.entity_id) % EFFECT_INTERVAL == 0 {
+        if (entity.tick_count.load(Ordering::Relaxed) + entity.entity_id) % EFFECT_INTERVAL == 0 {
             let pos = entity.pos.load();
             let world = entity.world.load();
             let players = world.get_nearby_players(pos, 50.0);

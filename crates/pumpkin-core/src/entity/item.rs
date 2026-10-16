@@ -467,7 +467,7 @@ impl ItemEntity {
         !entity.on_ground.load(Ordering::SeqCst)
             || move_velo.horizontal_length_squared() > 1.0e-5
             || entity
-                .age
+                .tick_count
                 .load(Ordering::Relaxed)
                 .wrapping_add(entity.entity_id)
                 % 4
@@ -531,7 +531,7 @@ impl ItemEntity {
         let moved =
             BlockPos::floored_v(entity.last_pos.load()) != BlockPos::floored_v(entity.pos.load());
         let rate = if moved { 2 } else { 40 };
-        if entity.age.load(Ordering::Relaxed) % rate == 0 {
+        if entity.tick_count.load(Ordering::Relaxed) % rate == 0 {
             self.merge_with_neighbours();
         }
 

@@ -346,8 +346,6 @@ impl Mob for ArmadilloEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
-
         self.in_state_ticks.fetch_add(1, Ordering::Relaxed);
     }
 

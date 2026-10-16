@@ -1460,6 +1460,13 @@ impl LivingEntity {
 
         self.push_entities(caller);
 
+        if let Some(ageable) = caller.get_mob().and_then(|mob| mob.as_ageable())
+            && self.entity.is_alive()
+            && !self.is_dead_or_dying()
+        {
+            ageable.ageable_ai_step();
+        }
+
         if let Some(mob) = caller.get_mob() {
             mob.get_mob_entity()
                 .body_rotation_control
@@ -2380,7 +2387,7 @@ impl LivingEntity {
             let Ok(mut effects) = self.active_effects.try_lock() else {
                 return;
             };
-            let entity_age = self.entity.age.load(Relaxed);
+            let entity_age = self.entity.tick_count.load(Relaxed);
             for effect in effects.values_mut() {
                 if effect.duration == 0 {
                     effects_to_remove.push(effect.effect_type);
@@ -3301,7 +3308,7 @@ impl LivingEntity {
                 self.last_attacker_id
                     .store(attacker.get_entity().entity_id, Relaxed);
                 self.last_attacked_time
-                    .store(self.entity.age.load(Relaxed), Relaxed);
+                    .store(self.entity.tick_count.load(Relaxed), Relaxed);
             }
         }
 
@@ -3334,7 +3341,7 @@ impl LivingEntity {
                 let attacker_id = attacker.get_entity().entity_id;
                 self.last_attacker_id.store(attacker_id, Relaxed);
                 self.last_attacked_time
-                    .store(self.entity.age.load(Relaxed), Relaxed);
+                    .store(self.entity.tick_count.load(Relaxed), Relaxed);
 
                 let current_tick = world.level_info.load().day_time;
                 if attacker.get_player().is_some() {
@@ -4756,6 +4763,28 @@ mod ai_step_tests {
         world.level.shutdown().await;
         assert_eq!(age, -18);
         assert_eq!(sting, 101);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn ageable_mobs_grow_once_per_ai_step_without_tick_count() -> TestResult {
+        use crate::entity::{ageable::AgeableMob, passive::cow::CowEntity};
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        cow.set_age(-20);
+        let entity = &cow.mob_entity.living_entity.entity;
+        entity.tick_count.store(7, Ordering::Relaxed);
+        cow.mob_entity.living_entity.tick_movement(&*cow);
+        let age = cow.get_age();
+        let tick_count = entity.tick_count.load(Ordering::Relaxed);
+        world.level.shutdown().await;
+        assert_eq!(age, -19);
+        assert_eq!(tick_count, 7);
         Ok(())
     }
 }

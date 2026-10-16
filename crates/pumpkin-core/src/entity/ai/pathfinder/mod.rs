@@ -770,16 +770,19 @@ impl PathNavigation {
         if self.has_pending_path {
             self.has_pending_path = false;
             if let Some(goal) = self.current_goal {
-                let path = self.create_path(entity, goal.destination, 1);
-                if path
-                    .as_ref()
-                    .is_none_or(|path| !path.same_as(self.path.as_ref()))
-                {
-                    self.ticks_on_current_node = 0;
-                    self.last_node_index = 0;
-                    self.path_start_pos = Some(entity.entity.pos.load());
+                // Vanilla moveTo(Path): an equivalent route keeps the installed path and its progress.
+                match self.create_path(entity, goal.destination, 1) {
+                    Some(path) if path.same_as(self.path.as_ref()) => {}
+                    path => {
+                        self.ticks_on_current_node = 0;
+                        self.last_node_index = 0;
+                        self.path_start_pos = Some(entity.entity.pos.load());
+                        self.path = path;
+                    }
                 }
-                self.path = path;
+                if self.path.as_ref().is_some_and(|path| !path.is_done()) {
+                    self.trim_path(entity);
+                }
             }
         }
     }

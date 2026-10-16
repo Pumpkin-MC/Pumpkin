@@ -1649,7 +1649,7 @@ impl VillagerEntity {
         self.decay_gossips(game_time);
         self.work_at_job_site(game_time, day_time, day);
 
-        let age = self.get_entity().age.load(Ordering::Relaxed);
+        let age = self.get_entity().tick_count.load(Ordering::Relaxed);
         if age % 20 != 0 {
             return;
         }
