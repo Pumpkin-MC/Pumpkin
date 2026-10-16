@@ -111,15 +111,11 @@ pub fn find_nearest_structure_start(
     generator: &WorldGenerator,
 ) -> Option<(BlockPos, pumpkin_data::structures::StructureKeys)> {
     use crate::{
-        biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
+        biome::BiomeSupplier,
         generation::{
-            noise::router::{
-                multi_noise_sampler::MultiNoiseSampler,
-                surface_height_sampler::{
-                    SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
-                },
-            },
+            noise::router::multi_noise_sampler::MultiNoiseSampler,
             structure::{
+                height_sampler::NoiseHeightSampler,
                 lazily_generate_structure,
                 placement::should_generate_structure,
                 structures::{StructureGeneratorContext, create_chunk_random},
@@ -171,21 +167,14 @@ pub fn find_nearest_structure_start(
                     let start =
                         global_cache.get_or_compute_structure_start(key, chunk_x, chunk_z, || {
                             let settings = noise_generator.settings;
-                            let mut height_sampler = SurfaceHeightEstimateSampler::generate(
-                                &noise_generator.base_router.surface_estimator,
-                                &SurfaceHeightSamplerBuilderOptions::new(
-                                    settings.shape.min_y as i32,
-                                    settings.shape.height as i32,
-                                    (settings.shape.height
-                                        / settings.shape.vertical_cell_block_count() as u16)
-                                        as usize,
-                                ),
-                            );
+                            // The start is cached and chunk generation reuses it, so it has to be
+                            // computed the same way: real column heights and this dimension's biomes.
+                            let mut height_sampler = NoiseHeightSampler::new(noise_generator);
                             let mut biome_sampler = MultiNoiseSampler::generate(
                                 &noise_generator.base_router.multi_noise,
                             );
                             let biome_supplier: &dyn BiomeSupplier =
-                                &MultiNoiseBiomeSupplier::OVERWORLD;
+                                &noise_generator.biome_supplier;
                             let context = StructureGeneratorContext {
                                 seed: world_seed,
                                 chunk_x,
