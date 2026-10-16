@@ -4966,11 +4966,14 @@ impl World {
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase) {
+        // Entity::remove passes its base projection; retain the registered living owner.
+        let registered = self.get_entity_by_id(entity.get_entity().entity_id);
+        let entity = registered.as_deref().unwrap_or(entity);
         let base_entity = entity.get_entity();
         if base_entity
             .removal_reason
-            .swap(Some(RemovalReason::Discarded))
-            .is_some()
+            .compare_exchange(None, Some(RemovalReason::Discarded))
+            .is_err()
         {
             return;
         }
@@ -4983,6 +4986,9 @@ impl World {
             new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
             new_entities
         });
+        if let Some(mob) = entity.get_mob() {
+            mob.get_mob_entity().finish_removal(mob);
+        }
     }
 
     pub async fn remove_entities_in_chunks(
@@ -5015,8 +5021,19 @@ impl World {
             .await;
 
         for entity in entities_to_remove {
+            let base = entity.get_entity();
+            if base
+                .removal_reason
+                .compare_exchange(None, Some(RemovalReason::UnloadedToChunk))
+                .is_ok()
+            {
+                base.removed.store(true, Ordering::Release);
+            }
             self.entity_tracker.remove_entity(entity.as_ref(), self);
             self.spawn_state.load().remove_entity(self, entity.as_ref());
+            if let Some(mob) = entity.get_mob() {
+                mob.get_mob_entity().finish_removal(mob);
+            }
         }
 
         for chunk_pos in &chunks_set {
@@ -7758,6 +7775,114 @@ mod tests {
         world.level.shutdown().await;
         assert_eq!(index, Some(0));
         assert!(cow.mob_entity.is_no_ai());
+        Ok(())
+    }
+    #[tokio::test]
+    async fn removal_clears_brain_memories_after_unload_serialization()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{
+            Entity, EntityBase, RemovalReason,
+            ai::{
+                brain::memory::{GlobalPos, types},
+                test_support::world,
+            },
+            passive::cow::CowEntity,
+        };
+        use pumpkin_data::{dimension::Dimension, entity::EntityType};
+        use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+        use std::sync::Arc;
+        for unload in [false, true] {
+            let folder = tempfile::tempdir()?;
+            let world = world(&folder);
+            let cow = CowEntity::new(Entity::new(
+                world.clone(),
+                Vector3::new(0.5, 64.0, 0.5),
+                &EntityType::COW,
+            ));
+            cow.mob_entity
+                .brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .register_memory(types::HOME.id());
+            cow.mob_entity
+                .brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .set(
+                    types::HOME,
+                    GlobalPos::new(&Dimension::OVERWORLD, BlockPos::new(3, 64, 4)),
+                );
+            world.entities.store(Arc::new(vec![cow.clone()]));
+            if unload {
+                world.remove_entities_in_chunks([Vector2::new(0, 0)]).await;
+                let chunk = world.level.get_entity_chunk(Vector2::new(0, 0)).await;
+                let saved_home = {
+                    let records = chunk
+                        .data
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    records
+                        .first()
+                        .and_then(|record| record.get_compound("Brain"))
+                        .and_then(|brain| brain.get_compound("memories"))
+                        .is_some_and(|memories| memories.get(types::HOME.id().name()).is_some())
+                };
+                assert!(saved_home);
+                assert!(
+                    cow.get_entity().removal_reason.load() == Some(RemovalReason::UnloadedToChunk)
+                );
+                cow.get_entity().remove();
+                assert!(
+                    cow.get_entity().removal_reason.load() == Some(RemovalReason::UnloadedToChunk)
+                );
+            } else {
+                cow.get_entity().remove();
+            }
+            let retained_memory = cow
+                .mob_entity
+                .brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .has_memory_value(types::HOME.id());
+            assert!(!retained_memory);
+            assert!(cow.get_entity().is_removed());
+            assert!(world.get_entity_by_id(cow.get_entity().entity_id).is_none());
+            world.level.shutdown().await;
+        }
+        Ok(())
+    }
+    #[tokio::test]
+    async fn removing_a_wither_clears_its_bossbar_registration_without_dropping_loot()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{
+            Entity, EntityBase, ai::test_support::world, boss::wither::WitherEntity,
+        };
+        use pumpkin_data::entity::EntityType;
+        use pumpkin_util::math::vector3::Vector3;
+        use std::sync::Arc;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let wither = WitherEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::WITHER,
+        ));
+        wither
+            .bossbar_players
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(uuid::Uuid::new_v4());
+        world.entities.store(Arc::new(vec![wither.clone()]));
+        wither.get_entity().remove();
+        let empty = wither
+            .bossbar_players
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty();
+        let no_entities = world.entities.load().is_empty();
+        world.level.shutdown().await;
+        assert!(empty);
+        assert!(no_entities);
         Ok(())
     }
 }

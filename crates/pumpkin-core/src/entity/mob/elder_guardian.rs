@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::damage::DamageType;
@@ -16,18 +16,16 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
+const EFFECT_INTERVAL: i32 = 1200;
+
 pub struct ElderGuardianEntity {
     pub mob_entity: MobEntity,
-    tick_count: AtomicI32,
 }
 
 impl ElderGuardianEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let guardian = Self {
-            mob_entity,
-            tick_count: AtomicI32::new(0),
-        };
+        let guardian = Self { mob_entity };
         let mob_arc = Arc::new(guardian);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -69,14 +67,13 @@ impl Mob for ElderGuardianEntity {
         &self.mob_entity
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {
             return;
         }
 
-        let ticks = self.tick_count.fetch_add(1, Ordering::Relaxed) + 1;
-        if ticks % 1200 == 0 {
+        if (entity.age.load(Ordering::Relaxed) + entity.entity_id) % EFFECT_INTERVAL == 0 {
             let pos = entity.pos.load();
             let world = entity.world.load();
             let players = world.get_nearby_players(pos, 50.0);

@@ -349,6 +349,9 @@ impl Mob for ArmadilloEntity {
         self.ageable_ai_step();
 
         self.in_state_ticks.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         let danger_ticks = self.danger_detected_recently_ticks.load(Ordering::Relaxed);
         if danger_ticks > 0 {
             self.danger_detected_recently_ticks

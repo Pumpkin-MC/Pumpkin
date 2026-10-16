@@ -213,6 +213,10 @@ impl Animal for BeeEntity {
 }
 
 impl NeutralMob for BeeEntity {
+    fn updates_anger_in_ai_step(&self) -> bool {
+        true
+    }
+
     fn get_neutral_data(&self) -> &NeutralData {
         &self.neutral_data
     }
@@ -310,13 +314,16 @@ impl Mob for BeeEntity {
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.ageable_ai_step();
+    }
 
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         if self.has_stung() {
             let time = self.time_since_sting.fetch_add(1, Ordering::Relaxed) + 1;
             if time >= 1200 {
                 self.mob_entity.living_entity.set_health(0.0);
             }
         }
+        self.update_persistent_anger();
     }
 
     fn mob_init_data_tracker(&self) {

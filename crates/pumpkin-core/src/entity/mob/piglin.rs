@@ -1168,7 +1168,11 @@ impl Mob for PiglinEntity {
         } else {
             self.time_in_overworld.store(0, Ordering::Relaxed);
         }
+    }
 
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        let world = entity.world.load();
         if self.admiring_disabled_timer.load(Ordering::Relaxed) > 0 {
             self.admiring_disabled_timer.fetch_sub(1, Ordering::Relaxed);
         }
@@ -1198,10 +1202,10 @@ impl Mob for PiglinEntity {
         }
         self.stop_holding_item_if_no_longer_admiring();
         self.start_admiring_if_seen();
+        self.update_activity();
     }
 
     fn post_tick(&self) {
-        self.update_activity();
         self.pick_up_nearby_items();
     }
 

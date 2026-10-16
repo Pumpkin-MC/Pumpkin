@@ -283,7 +283,14 @@ impl Brain {
         self.behaviors.sort_by_key(|entry| entry.priority);
     }
 
+    fn apply_pending_memory_clear(state: &mut BrainState, mob: &dyn Mob) {
+        if mob.get_mob_entity().take_brain_memory_clear_request() {
+            state.clear_memories();
+        }
+    }
+
     pub fn tick(&mut self, world: &Arc<World>, mob: &dyn Mob, time: i64) {
+        Self::apply_pending_memory_clear(&mut self.state, mob);
         self.state.memories.tick();
 
         for sensor in &mut self.sensors {
@@ -293,6 +300,7 @@ impl Brain {
                 mob,
                 time,
             });
+            Self::apply_pending_memory_clear(&mut self.state, mob);
         }
 
         for entry in &mut self.behaviors {
@@ -305,6 +313,7 @@ impl Brain {
                     mob,
                     time,
                 });
+                Self::apply_pending_memory_clear(&mut self.state, mob);
             }
         }
         for entry in &mut self.behaviors {
@@ -315,6 +324,7 @@ impl Brain {
                     mob,
                     time,
                 });
+                Self::apply_pending_memory_clear(&mut self.state, mob);
             }
         }
     }
@@ -328,6 +338,7 @@ impl Brain {
                     mob,
                     time,
                 });
+                Self::apply_pending_memory_clear(&mut self.state, mob);
             }
         }
     }
@@ -443,7 +454,7 @@ mod tests {
     use behavior::{Behavior, BehaviorControl, DoNothing, OneShot, Timed};
     use memory::types;
 
-    use crate::entity::{Entity, mob::MobEntity};
+    use crate::entity::{Entity, EntityBase, mob::MobEntity};
 
     use super::*;
     use crate::entity::ai::test_support::world;
@@ -729,6 +740,52 @@ mod tests {
         assert_eq!(stops.load(Ordering::Relaxed), 1);
         assert_eq!(brain.get(types::PACIFIED), Some(&true));
         assert!(brain.debug_dump().behaviors.is_empty());
+        Ok(())
+    }
+    #[tokio::test]
+    async fn self_removal_clears_memories_before_the_next_brain_callback()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let (world, mob) = probe(&folder);
+        let mob = Arc::new(mob);
+        world.entities.store(Arc::new(vec![mob.clone()]));
+        let observed = Arc::new(AtomicUsize::new(0));
+        let mut brain = Brain::default();
+        let count = observed.clone();
+        brain.add_activity(ActivityData::with_priority_start(
+            Activity::Core,
+            0,
+            vec![
+                Box::new(OneShot::new("Remove", Vec::new(), |tick| {
+                    tick.mob.get_entity().remove();
+                    true
+                })),
+                Box::new(OneShot::new(
+                    "Observe",
+                    vec![(types::PACIFIED.id(), MemoryStatus::ValuePresent)],
+                    move |_| {
+                        count.fetch_add(1, Ordering::Relaxed);
+                        true
+                    },
+                )),
+            ],
+        ));
+        brain.set(types::PACIFIED, true);
+        *mob.0
+            .brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = brain;
+        mob.0.tick_brain(&*mob);
+        let has_memory = mob
+            .0
+            .brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .has_memory_value(types::PACIFIED.id());
+        world.level.shutdown().await;
+        assert!(mob.get_entity().is_removed());
+        assert!(!has_memory);
+        assert_eq!(observed.load(Ordering::Relaxed), 0);
         Ok(())
     }
 }

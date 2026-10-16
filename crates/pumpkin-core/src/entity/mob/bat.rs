@@ -230,12 +230,15 @@ impl Mob for BatEntity {
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
+        self.tick_ambient_sound(&entity.world.load(), &entity.pos.load());
+    }
+
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
         let block_pos = entity.block_pos.load();
         let above_pos = BlockPos::new(block_pos.0.x, block_pos.0.y + 1, block_pos.0.z);
         let world = entity.world.load();
         let pos = entity.pos.load();
-
-        self.tick_ambient_sound(&world, &pos);
 
         if self.is_roosting() {
             self.tick_roosting(&world, &above_pos, &pos);

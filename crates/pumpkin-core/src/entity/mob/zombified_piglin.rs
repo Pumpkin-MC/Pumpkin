@@ -107,7 +107,15 @@ impl ZombifiedPiglinEntity {
     }
 }
 
-crate::impl_neutral_mob!(ZombifiedPiglinEntity, neutral_data);
+impl NeutralMob for ZombifiedPiglinEntity {
+    fn get_neutral_data(&self) -> &NeutralData {
+        &self.neutral_data
+    }
+
+    fn updates_anger_in_ai_step(&self) -> bool {
+        true
+    }
+}
 
 impl Mob for ZombifiedPiglinEntity {
     fn get_mob_entity(&self) -> &MobEntity {
@@ -142,7 +150,8 @@ impl Mob for ZombifiedPiglinEntity {
         equipment.put(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, weapon));
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        self.update_persistent_anger();
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {
             return;

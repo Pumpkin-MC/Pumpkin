@@ -78,7 +78,9 @@ impl Mob for SilverfishEntity {
         let yaw = entity.yaw.load();
         entity.body_yaw.store(yaw);
         entity.head_yaw.store(yaw);
+    }
 
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         let ticks = self.wake_up_friends_ticks.load(Ordering::Relaxed);
         if ticks > 0 {
             self.wake_up_friends_ticks

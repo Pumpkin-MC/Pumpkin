@@ -6,7 +6,7 @@ use crate::entity::ai::control::jump_control::JumpControl;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
 use crate::entity::ai::control::{LookControlTrait, MoveControlTrait};
-use crate::entity::ai::goal::goal_selector::GoalSelector;
+use crate::entity::ai::goal::{Controls, goal_selector::GoalSelector};
 use crate::entity::ai::sensing::Sensing;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
@@ -92,6 +92,8 @@ pub struct MobEntity {
     pub jump_control: std::sync::Mutex<JumpControl>,
     pub body_rotation_control: std::sync::Mutex<BodyRotationControl>,
     pub brain: std::sync::Mutex<Brain>,
+    brain_memory_clear_requested: AtomicBool,
+    removal_cleanup_done: AtomicBool,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
     pub love_ticks: AtomicI32,
@@ -110,6 +112,7 @@ impl MobEntity {
             .store(Vector3::new(input.x, input.y, f64::from(speed)));
     }
 
+    const CONTROL_FLAGS_UPDATE_INTERVAL: i32 = 5;
     const AI_DISABLED_FLAG: u8 = 1;
     const LEFT_HANDED_FLAG: u8 = 2;
     const ATTACKING_FLAG: u8 = 4;
@@ -190,6 +193,8 @@ impl MobEntity {
             jump_control: std::sync::Mutex::new(JumpControl::default()),
             body_rotation_control: std::sync::Mutex::new(BodyRotationControl::default()),
             brain: std::sync::Mutex::new(Brain::default()),
+            brain_memory_clear_requested: AtomicBool::new(false),
+            removal_cleanup_done: AtomicBool::new(false),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
             love_ticks: AtomicI32::new(0),
@@ -355,6 +360,29 @@ impl MobEntity {
             .tick(mob);
     }
 
+    fn update_control_flags(&self, mob: &dyn Mob) {
+        let no_controller = mob
+            .get_controlling_passenger()
+            .is_none_or(|passenger| passenger.get_mob().is_none());
+        let not_in_boat = self
+            .living_entity
+            .entity
+            .get_vehicle()
+            .is_none_or(|vehicle| {
+                !vehicle
+                    .get_entity()
+                    .entity_type
+                    .has_tag(&tag::EntityType::MINECRAFT_BOAT)
+            });
+        let mut goals = self
+            .goals_selector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        goals.set_control_enabled(Controls::MOVE, no_controller);
+        goals.set_control_enabled(Controls::LOOK, no_controller);
+        goals.set_control_enabled(Controls::JUMP, no_controller && not_in_boat);
+    }
+
     pub fn clear_ai_goals(&self, mob: &dyn Mob) {
         let running_goals = self
             .goals_selector
@@ -447,13 +475,50 @@ impl MobEntity {
         }
     }
 
+    pub(crate) fn finish_removal(&self, mob: &dyn Mob) {
+        if !self.removal_cleanup_done.swap(true, Ordering::AcqRel) {
+            self.clear_brain_memories();
+            mob.on_removed();
+        }
+    }
+
+    pub(crate) fn clear_brain_memories(&self) {
+        self.brain_memory_clear_requested
+            .store(true, Ordering::Release);
+        self.process_brain_memory_clear();
+    }
+
+    fn process_brain_memory_clear(&self) {
+        while self.brain_memory_clear_requested.load(Ordering::Acquire) {
+            let mut brain = match self.brain.try_lock() {
+                Ok(brain) => brain,
+                Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+                Err(std::sync::TryLockError::WouldBlock) => return,
+            };
+            if self.take_brain_memory_clear_request() {
+                brain.clear_memories();
+            }
+        }
+    }
+
+    pub(crate) fn take_brain_memory_clear_request(&self) -> bool {
+        self.brain_memory_clear_requested.load(Ordering::Acquire)
+            && self
+                .brain_memory_clear_requested
+                .swap(false, Ordering::AcqRel)
+    }
+
     pub fn tick_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
         let time = world.get_world_age();
-        self.brain
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .tick(&world, mob, time);
+        {
+            let mut brain = self
+                .brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            brain.tick(&world, mob, time);
+        };
+        self.process_brain_memory_clear();
     }
 
     pub fn write_mob_nbt(&self, nbt: &mut NbtCompound) {
@@ -466,6 +531,7 @@ impl MobEntity {
                 .pack()
                 .into_nbt(),
         );
+        self.process_brain_memory_clear();
         if self.is_no_ai() {
             nbt.put_bool("NoAI", true);
         }
@@ -890,6 +956,24 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    fn is_mob_immobile(&self) -> bool {
+        self.get_mob_entity().living_entity.is_dead_or_dying()
+    }
+
+    fn mob_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        if self.get_mob_entity().is_no_ai() {
+            return None;
+        }
+        let first = self
+            .get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .first()
+            .cloned();
+        first.filter(|passenger| passenger.get_mob().is_some() && passenger.can_control_vehicle())
+    }
+
     fn omnidirectional_air_mover(&self) -> bool {
         false
     }
@@ -964,6 +1048,8 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn post_tick(&self) {}
+
+    fn on_removed(&self) {}
 
     fn get_preferred_weapon_type(&self) -> Option<&'static pumpkin_data::tag::Tag> {
         None
@@ -1442,29 +1528,29 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         }
 
         mob_entity.check_despawn(self);
+        if mob_entity.living_entity.entity.is_removed() {
+            return;
+        }
 
-        if let Some(neutral) = self.as_neutral() {
+        if let Some(neutral) = self.as_neutral()
+            && !neutral.updates_anger_in_ai_step()
+        {
             neutral.update_persistent_anger();
         }
 
         self.mob_tick(caller);
+        if mob_entity.living_entity.entity.is_removed() {
+            return;
+        }
 
-        // TODO NoAI: move these vanilla `customServerAiStep` parts of `mob_tick`
-        // into `custom_server_ai_step`:
-        // Bat `tick_flying`/`tick_roosting` (not `tick_ambient_sound`)
-        // Bee sting death (`time_since_sting`)
-        // Armadillo scute drop, state switching, `danger_detected_recently_ticks`
-        // (not `in_state_ticks`, that is vanilla `tick`)
-        // ElderGuardian fatigue
-        // Wither `tick_wither` invulnerable countdown, healing, boss bar, head attacks
-        // (not the movement towards the target, that is vanilla `aiStep`)
-        // ZombifiedPiglin `maybe_alert_others`
-        // Axolotl `play_dead_ticks`
-        // Piglin timers, `tick_sensors`, admiring, dancing (conversion already checks NoAI)
-        // Bee and ZombifiedPiglin `update_persistent_anger` (Enderman, Wolf, IronGolem and
-        // PolarBear run it outside the AI step, so the shared call stays for them).
         mob_entity.living_entity.tick(caller, server);
         self.post_tick();
+        if mob_entity.living_entity.entity.age.load(Relaxed)
+            % MobEntity::CONTROL_FLAGS_UPDATE_INTERVAL
+            == 0
+        {
+            mob_entity.update_control_flags(self);
+        }
     }
 
     fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
@@ -1575,12 +1661,12 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         self.get_mob_entity().read_mob_nbt(nbt);
         if let Some(brain) = nbt.get_compound("Brain") {
-            *self
-                .get_mob_entity()
-                .brain
+            let rebuilt = self.make_brain(&PackedMemories::from_nbt(brain));
+            let mob = self.get_mob_entity();
+            *mob.brain
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                self.make_brain(&PackedMemories::from_nbt(brain));
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = rebuilt;
+            mob.process_brain_memory_clear();
         }
         if let Some(ageable) = self.as_ageable() {
             ageable.read_ageable_nbt(nbt);
@@ -1607,6 +1693,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn is_flutterer(&self) -> bool {
         self.omnidirectional_air_mover()
+    }
+
+    fn is_immobile(&self) -> bool {
+        self.is_mob_immobile()
+    }
+
+    fn get_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        self.mob_controlling_passenger()
     }
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
@@ -1819,6 +1913,107 @@ mod navigation_update_tests {
         first.level.shutdown().await;
         second.level.shutdown().await;
         assert_eq!(index, Some(1));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+    use crate::entity::{
+        ai::{goal::Goal, test_support::world},
+        mob::slime::SlimeEntity,
+        passive::cow::CowEntity,
+        vehicle::boat::BoatEntity,
+    };
+
+    struct ControlProbe(Controls, Arc<AtomicBool>);
+
+    impl Goal for ControlProbe {
+        fn can_start(&mut self, _mob: &dyn Mob) -> bool {
+            true
+        }
+        fn tick(&mut self, _mob: &dyn Mob) {
+            self.1.store(true, Relaxed);
+        }
+        fn controls(&self) -> Controls {
+            self.0
+        }
+    }
+
+    fn run_controlled_goals(mob: &dyn Mob) -> [bool; 3] {
+        let entity = mob.get_mob_entity();
+        entity.clear_ai_goals(mob);
+        let ran: [Arc<AtomicBool>; 3] = std::array::from_fn(|_| Arc::new(AtomicBool::new(false)));
+        {
+            let mut goals = entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (control, observed) in [Controls::MOVE, Controls::LOOK, Controls::JUMP]
+                .into_iter()
+                .zip(&ran)
+            {
+                goals.add_goal(0, Box::new(ControlProbe(control, observed.clone())));
+            }
+        }
+        entity.update_control_flags(mob);
+        GoalSelector::tick(&entity.goals_selector, mob);
+        ran.map(|ran| ran.load(Relaxed))
+    }
+
+    #[tokio::test]
+    async fn control_flags_use_the_controlling_passenger_and_boat_state()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        let rider = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        cow.get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(rider.clone());
+        assert_eq!(run_controlled_goals(&*cow), [false, false, false]);
+        let slime = SlimeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::SLIME,
+        ));
+        {
+            let mut passengers = cow
+                .get_entity()
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            passengers.insert(0, slime);
+        };
+        assert_eq!(run_controlled_goals(&*cow), [true, true, true]);
+        cow.get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+        let boat = Arc::new(BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::OAK_BOAT,
+        )));
+        *cow.get_entity()
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(boat);
+        let boat_controls = run_controlled_goals(&*cow);
+        world.level.shutdown().await;
+        assert_eq!(boat_controls, [true, true, false]);
         Ok(())
     }
 }

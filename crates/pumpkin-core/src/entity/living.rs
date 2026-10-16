@@ -223,6 +223,10 @@ fn is_allowed_by_team_rules(
 }
 
 impl LivingEntity {
+    pub fn is_dead_or_dying(&self) -> bool {
+        self.health.load() <= 0.0 || self.dead.load(Relaxed)
+    }
+
     pub fn get_speed(&self) -> f32 {
         self.speed.load()
     }
@@ -1375,7 +1379,7 @@ impl LivingEntity {
 
         self.movement_input.store(movement_input);
 
-        if self.health.load() <= 0.0 || self.dead.load(Relaxed) {
+        if caller.is_immobile() {
             self.jumping.store(false, Relaxed);
             let input = self.movement_input.load();
             self.movement_input.store(Vector3::new(0.0, input.y, 0.0));
@@ -4147,11 +4151,16 @@ mod ai_step_tests {
 
     struct ProbeMob {
         mob: MobEntity,
+        immobile: bool,
     }
 
     impl Mob for ProbeMob {
         fn get_mob_entity(&self) -> &MobEntity {
             &self.mob
+        }
+
+        fn is_mob_immobile(&self) -> bool {
+            self.immobile || self.mob.living_entity.is_dead_or_dying()
         }
     }
 
@@ -4234,7 +4243,10 @@ mod ai_step_tests {
         *mob.move_control
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(ProbeControl(calls));
-        ProbeMob { mob }
+        ProbeMob {
+            mob,
+            immobile: false,
+        }
     }
 
     #[tokio::test]
@@ -4695,6 +4707,55 @@ mod ai_step_tests {
         };
         world.level.shutdown().await;
         assert_eq!(pitch, 0.0);
+        Ok(())
+    }
+    #[tokio::test]
+    async fn immobile_living_mobs_skip_ai_without_discarding_knockback() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut mob = probe(world.clone(), calls.clone());
+        mob.immobile = true;
+        let living = &mob.mob.living_entity;
+        living.movement_input.store(Vector3::new(0.5, 0.25, 0.5));
+        living.jumping.store(true, Ordering::Relaxed);
+        living.entity.velocity.store(Vector3::new(0.1, 0.0, 0.0));
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+        assert_eq!(calls.load(Ordering::Relaxed), 0);
+        assert!(!living.is_dead_or_dying());
+        assert!(!living.jumping.load(Ordering::Relaxed));
+        assert_eq!(living.movement_input.load(), Vector3::new(0.0, 0.25, 0.0));
+        assert!(living.entity.pos.load().x > 0.05);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn no_ai_pauses_species_decisions_while_age_still_advances() -> TestResult {
+        use crate::entity::{ageable::AgeableMob, passive::bee::BeeEntity};
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bee = BeeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BEE,
+        ));
+        bee.set_age(-20);
+        bee.set_has_stung(true);
+        bee.time_since_sting.store(100, Ordering::Relaxed);
+        bee.mob_entity.set_no_ai(true);
+        bee.mob_tick(&*bee);
+        bee.mob_entity.living_entity.tick_movement(&*bee);
+        assert_eq!(bee.get_age(), -19);
+        assert_eq!(bee.time_since_sting.load(Ordering::Relaxed), 100);
+        bee.mob_entity.set_no_ai(false);
+        bee.mob_tick(&*bee);
+        bee.mob_entity.living_entity.tick_movement(&*bee);
+        let age = bee.get_age();
+        let sting = bee.time_since_sting.load(Ordering::Relaxed);
+        world.level.shutdown().await;
+        assert_eq!(age, -18);
+        assert_eq!(sting, 101);
         Ok(())
     }
 }

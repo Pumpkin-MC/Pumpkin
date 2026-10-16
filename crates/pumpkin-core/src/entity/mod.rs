@@ -349,6 +349,22 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    fn is_immobile(&self) -> bool {
+        self.get_living_entity()
+            .is_some_and(LivingEntity::is_dead_or_dying)
+    }
+
+    fn get_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        None
+    }
+
+    fn can_control_vehicle(&self) -> bool {
+        !self
+            .get_entity()
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_NON_CONTROLLING_RIDER)
+    }
+
     fn is_flutterer(&self) -> bool {
         false
     }
