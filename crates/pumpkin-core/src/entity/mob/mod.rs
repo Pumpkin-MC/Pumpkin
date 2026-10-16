@@ -2,6 +2,7 @@ use super::{Entity, EntityBase, ai::pathfinder::Navigator, living::LivingEntity}
 use crate::entity::ai::brain::Brain;
 use crate::entity::ai::brain::memory::PackedMemories;
 use crate::entity::ai::control::MoveControlTrait;
+use crate::entity::ai::control::jump_control::JumpControl;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
@@ -86,6 +87,7 @@ pub struct MobEntity {
     pub look_control: std::sync::Mutex<LookControl>,
     pub sensing: std::sync::Mutex<Sensing>,
     pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
+    pub jump_control: std::sync::Mutex<JumpControl>,
     pub brain: std::sync::Mutex<Brain>,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
@@ -173,6 +175,7 @@ impl MobEntity {
             look_control: std::sync::Mutex::new(LookControl::default()),
             sensing: std::sync::Mutex::new(Sensing::default()),
             move_control: std::sync::Mutex::new(Box::new(MoveControl::default())),
+            jump_control: std::sync::Mutex::new(JumpControl::default()),
             brain: std::sync::Mutex::new(Brain::default()),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
@@ -291,7 +294,13 @@ impl MobEntity {
             std::mem::take(&mut *guard)
         };
 
-        navigator.tick(&self.living_entity);
+        {
+            let mut jump_control = self
+                .jump_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            navigator.tick(&self.living_entity, &mut jump_control);
+        };
 
         {
             *self
@@ -302,7 +311,14 @@ impl MobEntity {
 
         mob.custom_server_ai_step(caller);
 
-        // Controllers are synchronous, so we can just use normal blocks
+        {
+            let mut move_control = self
+                .move_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            move_control.tick(mob);
+        };
+
         {
             let mut look_control = self
                 .look_control
@@ -311,13 +327,10 @@ impl MobEntity {
             look_control.tick(mob);
         };
 
-        {
-            let mut move_control = self
-                .move_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            move_control.tick(mob);
-        };
+        self.jump_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick(mob);
     }
 
     pub fn clear_ai_goals(&self, mob: &dyn Mob) {

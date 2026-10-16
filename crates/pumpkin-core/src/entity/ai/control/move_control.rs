@@ -84,7 +84,11 @@ impl MoveControlTrait for MoveControl {
             if yd > step_height
                 && xd * xd + zd * zd < 1.0f64.max(entity.entity_dimension.load().width as f64)
             {
-                living_entity.jumping.store(true, Ordering::SeqCst);
+                mob_entity
+                    .jump_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .jump();
                 self.operation = Operation::Jumping;
             }
         } else if self.operation == Operation::Jumping {

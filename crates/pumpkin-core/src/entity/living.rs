@@ -4080,8 +4080,10 @@ mod ai_step_tests {
 
     use crate::block::registry::default_registry;
     use crate::entity::Entity;
+    use crate::entity::ai::control::move_control::MoveControl;
     use crate::entity::ai::control::{Control, MoveControlTrait};
     use crate::entity::ai::goal::Goal;
+    use crate::entity::ai::pathfinder::NavigatorGoal;
     use crate::entity::mob::{Mob, MobEntity};
     use crate::world::World;
     use arc_swap::ArcSwap;
@@ -4128,6 +4130,23 @@ mod ai_step_tests {
     }
 
     struct ProbeControl(Arc<AtomicUsize>);
+
+    struct JumpOnceGoal(bool);
+
+    impl Goal for JumpOnceGoal {
+        fn can_start(&mut self, _mob: &dyn Mob) -> bool {
+            self.0
+        }
+
+        fn start(&mut self, mob: &dyn Mob) {
+            self.0 = false;
+            mob.get_mob_entity()
+                .jump_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .jump();
+        }
+    }
 
     impl Control for ProbeControl {}
 
@@ -4216,6 +4235,65 @@ mod ai_step_tests {
 
         assert_eq!(calls.load(Ordering::Relaxed), 0);
         assert_eq!(living.entity.pos.load(), position);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn goal_jump_survives_navigation_finish_and_expires_next_step() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        mob.mob
+            .goals_selector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .add_goal(0, Box::new(JumpOnceGoal(true)));
+        let living = &mob.mob.living_entity;
+        let position = living.entity.pos.load();
+        mob.mob
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set_progress(NavigatorGoal::new(position, position, 1.0));
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+
+        living.tick_movement(&mob);
+        let first_jumping = living.jumping.load(Ordering::Relaxed);
+        let first_position = living.entity.pos.load();
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert!(first_jumping);
+        assert!(first_position.y > position.y);
+        assert!(!living.jumping.load(Ordering::Relaxed));
+        assert_eq!(living.jumping_cooldown.load(Ordering::Relaxed), 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn move_control_jump_is_applied_in_the_same_step() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        let position = living.entity.pos.load();
+        let mut control = MoveControl::default();
+        control.set_wanted_position(position.x, position.y + 2.0, position.z, 1.0);
+        *mob.mob
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(control);
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+
+        living.tick_movement(&mob);
+        let first_jumping = living.jumping.load(Ordering::Relaxed);
+        let first_position = living.entity.pos.load();
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert!(first_jumping);
+        assert!(first_position.y > position.y);
+        assert!(!living.jumping.load(Ordering::Relaxed));
         Ok(())
     }
 
