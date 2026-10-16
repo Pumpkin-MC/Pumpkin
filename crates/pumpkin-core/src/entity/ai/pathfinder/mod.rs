@@ -403,6 +403,7 @@ pub trait PathNavigationTrait: Send + Sync {
         reach_range: i32,
     ) -> Option<Path>;
     fn recompute_path(&mut self, entity: &LivingEntity);
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool;
     fn set_avoid_sun(&mut self, avoid_sun: bool);
     fn set_can_walk_over_fences(&mut self, can_walk: bool);
     fn set_can_open_doors(&mut self, can_open: bool);
@@ -531,6 +532,16 @@ impl PathNavigation {
         self.path_start_pos = None;
     }
 
+    fn install_path(&mut self, mut path: Path, entity: &LivingEntity) {
+        let world = entity.entity.world.load();
+        path.world_change = Some((
+            world.uuid,
+            world.navigation_change_sequence.load(Ordering::Acquire),
+        ));
+        self.target_pos = Some(path.get_target());
+        self.path = Some(path);
+    }
+
     fn ground_target(&self, entity: &LivingEntity) -> Option<NavigationTarget> {
         let mut target = self.target(entity)?;
         let below = BlockPos::floored_v(target.position).down();
@@ -587,6 +598,10 @@ impl PathNavigation {
         reach_range: i32,
     ) -> Option<Path> {
         let world = entity.entity.world.load_full();
+        let world_change = (
+            world.uuid,
+            world.navigation_change_sequence.load(Ordering::Acquire),
+        );
         let mut mob_data = MobData::from_entity(entity, &world);
         let context = PathfindingContext::new(BlockPos::floored_v(mob_data.position).0, world);
         mob_data.can_swim = self.can_float;
@@ -631,7 +646,7 @@ impl PathNavigation {
             );
             self.update_pathfinder_max_visited_nodes = false;
         }
-        let path = finder.find_path_single(
+        let mut path = finder.find_path_single(
             &mut self.evaluator,
             BlockPos::floored_v(destination),
             max_path_length,
@@ -639,6 +654,9 @@ impl PathNavigation {
             self.max_visited_nodes_multiplier,
         );
         self.evaluator.done();
+        if let Some(path) = &mut path {
+            path.world_change = Some(world_change);
+        }
         path
     }
 
@@ -687,6 +705,21 @@ impl PathNavigation {
             self.reset_stuck_timeout();
         }
         path
+    }
+
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool {
+        if self.has_delayed_recomputation {
+            return false;
+        }
+        let Some(path) = self.path.as_ref().filter(|path| !path.is_done()) else {
+            return false;
+        };
+        let Some(end) = path.get_end_node() else {
+            return false;
+        };
+        let middle = (end.pos.0.to_f64() + entity.entity.pos.load()) * 0.5;
+        let radius = (path.get_node_count() - path.get_next_node_index()) as f64;
+        position.dist_to_center_sqr(middle.x, middle.y, middle.z) < radius * radius
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
@@ -1180,8 +1213,7 @@ impl PathNavigationTrait for GroundPathNavigation {
         self.inner.has_pending_path = false;
         self.inner.current_goal = None;
         if let Some(new_path) = path {
-            self.inner.target_pos = Some(new_path.get_target());
-            self.inner.path = Some(new_path);
+            self.inner.install_path(new_path, entity);
             if self.is_done() {
                 return false;
             }
@@ -1224,6 +1256,10 @@ impl PathNavigationTrait for GroundPathNavigation {
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
         self.inner.recompute_path(entity);
+    }
+
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool {
+        self.inner.should_recompute_path(entity, position)
     }
 
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
@@ -1419,8 +1455,7 @@ impl PathNavigationTrait for FlyingPathNavigation {
         self.inner.has_pending_path = false;
         self.inner.current_goal = None;
         if let Some(new_path) = path {
-            self.inner.target_pos = Some(new_path.get_target());
-            self.inner.path = Some(new_path);
+            self.inner.install_path(new_path, entity);
             if self.is_done() {
                 return false;
             }
@@ -1449,6 +1484,10 @@ impl PathNavigationTrait for FlyingPathNavigation {
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
         self.inner.recompute_path(entity);
+    }
+
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool {
+        self.inner.should_recompute_path(entity, position)
     }
 
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
@@ -1652,8 +1691,7 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         self.inner.has_pending_path = false;
         self.inner.current_goal = None;
         if let Some(new_path) = path {
-            self.inner.target_pos = Some(new_path.get_target());
-            self.inner.path = Some(new_path);
+            self.inner.install_path(new_path, entity);
             if self.is_done() {
                 return false;
             }
@@ -1686,6 +1724,10 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
         self.inner.recompute_path(entity);
+    }
+
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool {
+        self.inner.should_recompute_path(entity, position)
     }
 
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
@@ -1908,6 +1950,10 @@ impl PathNavigationTrait for WallClimberNavigation {
         self.inner.recompute_path(entity);
     }
 
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool {
+        self.inner.should_recompute_path(entity, position)
+    }
+
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
         self.inner.set_avoid_sun(avoid_sun);
     }
@@ -2110,8 +2156,7 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
         self.inner.has_pending_path = false;
         self.inner.current_goal = None;
         if let Some(new_path) = path {
-            self.inner.target_pos = Some(new_path.get_target());
-            self.inner.path = Some(new_path);
+            self.inner.install_path(new_path, entity);
             if self.is_done() {
                 return false;
             }
@@ -2144,6 +2189,10 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
         self.inner.recompute_path(entity);
+    }
+
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool {
+        self.inner.should_recompute_path(entity, position)
     }
 
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
@@ -2604,6 +2653,42 @@ mod tests {
         assert!(updated.is_some_and(|path| path.can_reach() && path.get_node_count() > 1));
         assert!(before_tempt.is_some_and(|path| !path.can_reach()));
         assert!(after_tempt.is_some_and(|path| path.can_reach()));
+        Ok(())
+    }
+    #[tokio::test]
+    async fn invalidation_uses_remaining_nodes_and_the_actual_path_end() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::BAT);
+        living.entity.pos.store(Vector3::new(0.0, 65.0, 1.0));
+        let mut navigation = FlyingPathNavigation::new();
+        navigation.move_to_path(
+            Some(Path::new(
+                vec![
+                    Node::new(BlockPos::new(0, 64, 0)),
+                    Node::new(BlockPos::new(3, 64, 0)),
+                    Node::new(BlockPos::new(7, 64, 0)),
+                ],
+                BlockPos::new(100, 64, 0),
+                false,
+            )),
+            1.0,
+            &living,
+        );
+        navigation
+            .get_path_mut()
+            .ok_or("missing route")?
+            .set_next_node_index(2);
+        assert!(navigation.should_recompute_path(&living, BlockPos::new(3, 64, 0)));
+        assert!(!navigation.should_recompute_path(&living, BlockPos::new(4, 64, 0)));
+        navigation
+            .get_path_mut()
+            .ok_or("missing route")?
+            .set_next_node_index(1);
+        assert!(navigation.should_recompute_path(&living, BlockPos::new(4, 64, 0)));
+        navigation.recompute_path(&living);
+        assert!(!navigation.should_recompute_path(&living, BlockPos::new(3, 64, 0)));
+        world.level.shutdown().await;
         Ok(())
     }
 }

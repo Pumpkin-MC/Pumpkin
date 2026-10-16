@@ -286,7 +286,8 @@ pub struct World {
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<std::sync::Mutex<dragon_fight::DragonFight>>,
     pub spawn_state: ArcSwap<SpawnState>,
-    pub active_chunks: RwLock<FxHashSet<Vector2<i32>>>,
+    pub active_chunks: RwLock<Arc<FxHashSet<Vector2<i32>>>>,
+    pub(crate) navigation_change_sequence: std::sync::atomic::AtomicU64,
     active_chunk_tracker: std::sync::Mutex<ActiveChunkTracker>,
     pub forced_chunks: std::sync::Mutex<FxHashSet<Vector2<i32>>>,
     /// Block entities indexed by chunk, so ticking only visits the currently
@@ -423,7 +424,8 @@ impl World {
             raids: std::sync::Mutex::new(raid::Raids::default()),
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
-            active_chunks: RwLock::new(FxHashSet::default()),
+            active_chunks: RwLock::new(Arc::default()),
+            navigation_change_sequence: std::sync::atomic::AtomicU64::new(0),
             active_chunk_tracker: std::sync::Mutex::new(ActiveChunkTracker::default()),
             forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
             server,
@@ -454,6 +456,7 @@ impl World {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut newly_active = Vec::new();
+        let mut migrations = Vec::new();
         let mut current_players = FxHashSet::default();
 
         let spectators_generate_chunks =
@@ -471,7 +474,7 @@ impl World {
                     center: player.get_entity().chunk_pos.load(),
                     simulation_distance: sim_dist,
                 },
-                &mut active_chunks,
+                Arc::make_mut(&mut active_chunks),
                 &mut newly_active,
             );
         }
@@ -482,13 +485,17 @@ impl World {
             .copied()
             .collect();
         for id in removed_players {
-            tracker.remove_player(id, &mut active_chunks);
+            tracker.remove_player(id, Arc::make_mut(&mut active_chunks));
         }
-        tracker.sync_forced_chunks(&forced_chunks, &mut active_chunks, &mut newly_active);
+        tracker.sync_forced_chunks(
+            &forced_chunks,
+            Arc::make_mut(&mut active_chunks),
+            &mut newly_active,
+        );
 
         for pos in newly_active {
             if self.level.is_chunk_loaded(&pos) && tracker.loaded_active_chunks.insert(pos) {
-                self.migrate_pending_block_entities(pos);
+                migrations.push(pos);
             }
         }
         for change in self.level.loaded_chunk_changes() {
@@ -498,7 +505,7 @@ impl World {
                         && self.level.is_chunk_loaded(&pos)
                         && tracker.loaded_active_chunks.insert(pos)
                     {
-                        self.migrate_pending_block_entities(pos);
+                        migrations.push(pos);
                     }
                 }
                 pumpkin_world::level::LoadedChunkChange::Unloaded(pos) => {
@@ -514,12 +521,15 @@ impl World {
         }
         for pos in pending_migrations {
             if active_chunks.contains(&pos) && self.level.is_chunk_loaded(&pos) {
-                self.migrate_pending_block_entities(pos);
+                migrations.push(pos);
             }
         }
         let spawnable_chunks = tracker.loaded_active_chunks.len() as i32;
         drop(active_chunks);
         drop(tracker);
+        for pos in migrations {
+            self.migrate_pending_block_entities(pos);
+        }
 
         self.spawn_state.store(Arc::new(SpawnState::new(
             spawnable_chunks,
@@ -1584,7 +1594,8 @@ impl World {
         let active_chunks = self
             .active_chunks
             .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         let level_for_entities = self.level.clone();
         let entity_handle = handle.clone();
 
@@ -1692,6 +1703,39 @@ impl World {
                 block_entity_count,
                 block_entity_elapsed,
             );
+        }
+    }
+
+    fn notify_navigation_block_changed(
+        &self,
+        position: &BlockPos,
+        old_state: BlockStateId,
+        new_state: BlockStateId,
+    ) {
+        // Extracted collision lists are canonical VoxelShape.toAabbs() geometry.
+        if old_state.to_state().collision_shapes == new_state.to_state().collision_shapes {
+            return;
+        }
+        let ticking = {
+            let active = self
+                .active_chunks
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            active.contains(&position.chunk_position())
+        };
+        if !ticking {
+            return;
+        }
+        let sequence = self
+            .navigation_change_sequence
+            .fetch_add(1, Ordering::AcqRel)
+            + 1;
+        let entities = self.entities.load_full();
+        for entity in entities.iter() {
+            if let Some(mob) = entity.get_mob() {
+                mob.get_mob_entity()
+                    .on_navigation_block_changed(*position, self.uuid, sequence);
+            }
         }
     }
 
@@ -1964,7 +2008,8 @@ impl World {
         let active_chunks = self
             .active_chunks
             .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         let tick_data = self.level.get_tick_data(&active_chunks, random_tick_speed);
         let handle = server.runtime.clone();
 
@@ -5162,6 +5207,11 @@ impl World {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(*position, block_state_id);
+                self.notify_navigation_block_changed(
+                    position,
+                    replaced_block_state_id,
+                    block_state_id,
+                );
             }
 
             if flags.contains(BlockFlags::NOTIFY_NEIGHBORS) {
@@ -7615,5 +7665,99 @@ mod tests {
             GameRuleValue::Int(v) => assert_eq!(*v, 20),
             GameRuleValue::Bool(_) => panic!("expected int"),
         }
+    }
+
+    #[tokio::test]
+    async fn listener_collision_changes_in_ticking_chunks_invalidate_nearby_routes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{
+            Entity,
+            ai::{
+                pathfinder::{Navigator, node::Node, path::Path},
+                test_support::world,
+            },
+            passive::cow::CowEntity,
+        };
+        use pumpkin_data::entity::EntityType;
+        use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+        use pumpkin_world::{chunk::ChunkData, world::BlockFlags};
+        use std::sync::Arc;
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .world_age = 21;
+        let chunk = Vector2::new(0, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(chunk, ChunkData::empty_sync(0, 0));
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::COW,
+        ));
+        cow.mob_entity.set_no_ai(true);
+        let mut route = Path::new(
+            vec![
+                Node::new(BlockPos::new(0, 64, 0)),
+                Node::new(BlockPos::new(4, 64, 0)),
+                Node::new(BlockPos::new(8, 64, 0)),
+            ],
+            BlockPos::new(8, 64, 0),
+            true,
+        );
+        route.set_next_node_index(1);
+        {
+            let mut nav = cow
+                .mob_entity
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            *nav = Navigator::flying();
+            nav.move_to_path(Some(route), 1.0, &cow.mob_entity.living_entity)
+        };
+        world.entities.store(Arc::new(vec![cow.clone()]));
+        let next_node_index = || {
+            cow.mob_entity
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_path()
+                .map(Path::get_next_node_index)
+        };
+        let near = BlockPos::new(4, 64, 0);
+        let flags = BlockFlags::NOTIFY_LISTENERS
+            | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
+            | BlockFlags::UPDATE_KNOWN_SHAPE;
+        world.set_block_state(&near, Block::STONE.default_state.id, flags);
+        assert_eq!(next_node_index(), Some(1));
+        world
+            .forced_chunks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(chunk);
+        world.update_active_chunks();
+        world.set_block_state(&near, Block::DIRT.default_state.id, flags);
+        world.set_block_state(
+            &near,
+            Block::AIR.default_state.id,
+            flags & !BlockFlags::NOTIFY_LISTENERS,
+        );
+        world.set_block_state(
+            &BlockPos::new(15, 64, 0),
+            Block::STONE.default_state.id,
+            flags,
+        );
+        assert_eq!(next_node_index(), Some(1));
+        world.set_block_state(&near, Block::STONE.default_state.id, flags);
+        let index = next_node_index();
+        world.level.shutdown().await;
+        assert_eq!(index, Some(0));
+        assert!(cow.mob_entity.is_no_ai());
+        Ok(())
     }
 }

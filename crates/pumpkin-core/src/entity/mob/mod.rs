@@ -84,6 +84,7 @@ pub struct MobEntity {
     pub goals_selector: std::sync::Mutex<GoalSelector>,
     pub target_selector: std::sync::Mutex<GoalSelector>,
     pub navigator: std::sync::Mutex<Navigator>,
+    pending_navigation_updates: crossbeam::queue::SegQueue<(BlockPos, Uuid, u64)>,
     pub target: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     pub look_control: std::sync::Mutex<LookControl>,
     pub sensing: std::sync::Mutex<Sensing>,
@@ -173,6 +174,7 @@ impl MobEntity {
             goals_selector: std::sync::Mutex::new(GoalSelector::default()),
             target_selector: std::sync::Mutex::new(GoalSelector::default()),
             navigator: std::sync::Mutex::new(Navigator::default()),
+            pending_navigation_updates: crossbeam::queue::SegQueue::new(),
             target: std::sync::Mutex::new(None),
             look_control: std::sync::Mutex::new(LookControl::default()),
             sensing: std::sync::Mutex::new(Sensing::default()),
@@ -241,6 +243,47 @@ impl MobEntity {
         (self.mob_flags.load(Relaxed) & Self::AI_DISABLED_FLAG) != 0
     }
 
+    pub(crate) fn on_navigation_block_changed(
+        &self,
+        position: BlockPos,
+        world: Uuid,
+        sequence: u64,
+    ) {
+        self.pending_navigation_updates
+            .push((position, world, sequence));
+        self.process_navigation_updates();
+    }
+
+    fn process_navigation_updates(&self) {
+        if self.pending_navigation_updates.is_empty() {
+            return;
+        }
+        let mut navigator = match self.navigator.try_lock() {
+            Ok(navigator) => navigator,
+            Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return,
+        };
+        self.apply_navigation_updates(&mut navigator);
+    }
+
+    fn apply_navigation_updates(&self, navigator: &mut Navigator) {
+        // A search can enqueue more changes; leave those for the next owner boundary.
+        for _ in 0..self.pending_navigation_updates.len() {
+            let Some((position, world, sequence)) = self.pending_navigation_updates.pop() else {
+                break;
+            };
+            if self.living_entity.entity.world.load().uuid == world
+                && navigator.get_path().is_some_and(|path| {
+                    path.world_change
+                        .is_none_or(|(path_world, seen)| path_world == world && seen < sequence)
+                })
+                && navigator.should_recompute_path(&self.living_entity, position)
+            {
+                navigator.recompute_path(&self.living_entity);
+            }
+        }
+    }
+
     /// Vanilla `Mob.serverAiStep`: sensing, goals, navigation and controls.
     pub fn server_ai_step(&self, mob: &dyn Mob, caller: &dyn EntityBase) {
         let age = self.living_entity.entity.age.load(Relaxed);
@@ -259,11 +302,14 @@ impl MobEntity {
             GoalSelector::tick(&self.goals_selector, mob);
         }
 
-        let navigation_target = self
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .tick(&self.living_entity);
+        let navigation_target = {
+            let mut navigator = self
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.apply_navigation_updates(&mut navigator);
+            navigator.tick(&self.living_entity)
+        };
 
         if let Some(target) = navigation_target {
             self.move_control
@@ -1353,6 +1399,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let mob_entity = self.get_mob_entity();
+        mob_entity.process_navigation_updates();
         mob_entity.living_entity.entity.tick_leash();
         sun_burn::tick(self);
 
@@ -1607,4 +1654,149 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
 pub trait RangedAttackMob: Mob + Send + Sync {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, power: f32);
+}
+
+#[cfg(test)]
+mod navigation_update_tests {
+    use super::*;
+    use crate::entity::ai::{
+        pathfinder::{node::Node, path::Path},
+        test_support::world,
+    };
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn route(target: i32) -> Path {
+        let mut path = Path::new(
+            vec![
+                Node::new(BlockPos::new(0, 64, 0)),
+                Node::new(BlockPos::new(4, 64, 0)),
+                Node::new(BlockPos::new(target, 64, 0)),
+            ],
+            BlockPos::new(target, 64, 0),
+            true,
+        );
+        path.set_next_node_index(1);
+        path
+    }
+
+    fn mob(world: Arc<World>) -> MobEntity {
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .world_age = 21;
+        let mob = MobEntity::new(Entity::new(
+            world,
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::BAT,
+        ));
+        let mut navigator = mob
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *navigator = Navigator::flying();
+        navigator.move_to_path(Some(route(8)), 1.0, &mob.living_entity);
+        drop(navigator);
+        mob
+    }
+
+    #[tokio::test]
+    async fn contended_notifications_survive_and_drain_for_no_ai_mobs() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = mob(world.clone());
+        mob.set_no_ai(true);
+        let before = {
+            let navigator = mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let sequence = world
+                .navigation_change_sequence
+                .fetch_add(1, Ordering::AcqRel)
+                + 1;
+            mob.on_navigation_block_changed(BlockPos::new(4, 64, 0), world.uuid, sequence);
+            navigator.get_path().map(Path::get_next_node_index)
+        };
+        assert_eq!(before, Some(1));
+        mob.process_navigation_updates();
+        let index = mob
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_path()
+            .map(Path::get_next_node_index);
+        world.level.shutdown().await;
+        assert_eq!(index, Some(0));
+        assert!(mob.is_no_ai());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn explicit_routes_supersede_older_notifications_including_equal_routes() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = mob(world.clone());
+        for target in [8, 10] {
+            let mut navigator = mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let sequence = world
+                .navigation_change_sequence
+                .fetch_add(1, Ordering::AcqRel)
+                + 1;
+            mob.on_navigation_block_changed(BlockPos::new(4, 64, 0), world.uuid, sequence);
+            navigator.move_to_path(Some(route(target)), 1.0, &mob.living_entity);
+            drop(navigator);
+            mob.process_navigation_updates();
+            let navigator = mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            assert_eq!(navigator.get_path().map(Path::get_next_node_index), Some(1));
+            assert_eq!(
+                navigator.get_path().map(Path::get_target),
+                Some(BlockPos::new(target, 64, 0))
+            );
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn notifications_from_an_old_world_do_not_touch_a_new_world_route() -> TestResult {
+        let first_folder = tempfile::tempdir()?;
+        let second_folder = tempfile::tempdir()?;
+        let first = world(&first_folder);
+        let second = world(&second_folder);
+        let mob = mob(first.clone());
+        second
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .world_age = 21;
+        {
+            let mut navigator = mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            first.navigation_change_sequence.store(1, Ordering::Release);
+            mob.on_navigation_block_changed(BlockPos::new(4, 64, 0), first.uuid, 1);
+            mob.living_entity.entity.set_world(second.clone());
+            navigator.move_to_path(Some(route(8)), 1.0, &mob.living_entity)
+        };
+        mob.process_navigation_updates();
+        let index = mob
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_path()
+            .map(Path::get_next_node_index);
+        first.level.shutdown().await;
+        second.level.shutdown().await;
+        assert_eq!(index, Some(1));
+        Ok(())
+    }
 }
