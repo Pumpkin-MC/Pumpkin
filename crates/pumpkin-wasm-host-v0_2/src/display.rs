@@ -110,13 +110,13 @@ impl HostDisplayEntity for PluginHostState {
 
     fn from_entity(
         &mut self,
-        entity: Resource<Entity>,
-    ) -> wasmtime::Result<Result<Resource<DisplayEntity>, Resource<Entity>>> {
-        let entity = self.take(entity)?;
+        entity: /* borrow */ Resource<Entity>,
+    ) -> wasmtime::Result<Option<Resource<DisplayEntity>>> {
+        let entity = self.get(&entity)?.clone();
         if get_display_entity(entity.as_ref()).is_some() {
-            Ok(Ok(self.add(entity)?))
+            Ok(Some(self.add(entity)?))
         } else {
-            Ok(Err(self.add(entity)?))
+            Ok(None)
         }
     }
 
@@ -457,12 +457,12 @@ impl HostBlockDisplayEntity for PluginHostState {
 
     fn from_entity(
         &mut self,
-        entity: Resource<Entity>,
-    ) -> wasmtime::Result<Result<Resource<BlockDisplayEntity>, Resource<Entity>>> {
-        let entity = self.take(entity)?;
-        match Arc::downcast(entity.clone()) {
-            Ok(display) => Ok(Ok(self.add(display)?)),
-            Err(_) => Ok(Err(self.add(entity)?)),
+        entity: /* borrow */ Resource<Entity>,
+    ) -> wasmtime::Result<Option<Resource<BlockDisplayEntity>>> {
+        if let Ok(entity) = Arc::downcast(self.get(&entity)?.clone()) {
+            Ok(Some(self.add(entity)?))
+        } else {
+            Ok(None)
         }
     }
 
@@ -504,12 +504,12 @@ impl HostItemDisplayEntity for PluginHostState {
 
     fn from_entity(
         &mut self,
-        entity: Resource<Entity>,
-    ) -> wasmtime::Result<Result<Resource<ItemDisplayEntity>, Resource<Entity>>> {
-        let entity = self.take(entity)?;
-        match Arc::downcast(entity.clone()) {
-            Ok(display) => Ok(Ok(self.add(display)?)),
-            Err(_) => Ok(Err(self.add(entity)?)),
+        entity: /* borrow */ Resource<Entity>,
+    ) -> wasmtime::Result<Option<Resource<ItemDisplayEntity>>> {
+        if let Ok(entity) = Arc::downcast(self.get(&entity)?.clone()) {
+            Ok(Some(self.add(entity)?))
+        } else {
+            Ok(None)
         }
     }
 
@@ -585,12 +585,12 @@ impl HostTextDisplayEntity for PluginHostState {
 
     fn from_entity(
         &mut self,
-        entity: Resource<Entity>,
-    ) -> wasmtime::Result<Result<Resource<TextDisplayEntity>, Resource<Entity>>> {
-        let entity = self.take(entity)?;
-        match Arc::downcast(entity.clone()) {
-            Ok(display) => Ok(Ok(self.add(display)?)),
-            Err(_) => Ok(Err(self.add(entity)?)),
+        entity: /* borrow */ Resource<Entity>,
+    ) -> wasmtime::Result<Option<Resource<TextDisplayEntity>>> {
+        if let Ok(entity) = Arc::downcast(self.get(&entity)?.clone()) {
+            Ok(Some(self.add(entity)?))
+        } else {
+            Ok(None)
         }
     }
 
@@ -744,12 +744,12 @@ impl HostInteractionEntity for PluginHostState {
 
     fn from_entity(
         &mut self,
-        entity: Resource<Entity>,
-    ) -> wasmtime::Result<Result<Resource<InteractionEntity>, Resource<Entity>>> {
-        let entity = self.take(entity)?;
-        match Arc::downcast(entity.clone()) {
-            Ok(display) => Ok(Ok(self.add(display)?)),
-            Err(_) => Ok(Err(self.add(entity)?)),
+        entity: /* borrow */ Resource<Entity>,
+    ) -> wasmtime::Result<Option<Resource<InteractionEntity>>> {
+        if let Ok(entity) = Arc::downcast(self.get(&entity)?.clone()) {
+            Ok(Some(self.add(entity)?))
+        } else {
+            Ok(None)
         }
     }
 
