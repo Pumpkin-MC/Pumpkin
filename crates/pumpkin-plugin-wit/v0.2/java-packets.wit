@@ -1882,7 +1882,8 @@ interface java-packets {
   /// `replace = true` means the client replaces its current recipe list.
   record c-recipe-book-add {
     replace: bool,
-    dynamic-recipes: list<string>,
+    /// WARNING: Could not translate type `& 'a [DynamicRecipe]` to WIT
+    dynamic-recipes: inexpressible-host-type,
   }
   record c-recipe-book-remove {
     recipes: list<s32>,

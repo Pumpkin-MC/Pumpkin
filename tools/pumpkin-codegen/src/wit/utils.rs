@@ -30,7 +30,6 @@ pub fn map_type(ty: &Type, defined_types: &HashSet<String>) -> Result<WitType, (
                 "Bytes" | "BoxedU8Slice" | "ChunkData" => Ok(WitType::list(WitType::U8)),
                 "BitSet" | "Bitset" => Ok(WitType::list(WitType::S64)),
                 "NbtCompound" | "Nbt" => Ok(WitType::Named("nbt-tree".into())),
-                "DynamicRecipe" => Ok(WitType::String),
                 "Option" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments
                         && let Some(GenericArgument::Type(inner_ty)) = args.args.first()
