@@ -1,11 +1,11 @@
 use super::{Entity, EntityBase, ai::pathfinder::Navigator, living::LivingEntity};
 use crate::entity::ai::brain::Brain;
 use crate::entity::ai::brain::memory::PackedMemories;
-use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::body_rotation_control::BodyRotationControl;
 use crate::entity::ai::control::jump_control::JumpControl;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
+use crate::entity::ai::control::{LookControlTrait, MoveControlTrait};
 use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::ai::sensing::Sensing;
 use crate::entity::player::Player;
@@ -86,7 +86,7 @@ pub struct MobEntity {
     pub navigator: std::sync::Mutex<Navigator>,
     pending_navigation_updates: crossbeam::queue::SegQueue<(BlockPos, Uuid, u64)>,
     pub target: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
-    pub look_control: std::sync::Mutex<LookControl>,
+    pub look_control: std::sync::Mutex<Box<dyn LookControlTrait>>,
     pub sensing: std::sync::Mutex<Sensing>,
     pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
     pub jump_control: std::sync::Mutex<JumpControl>,
@@ -102,6 +102,14 @@ pub struct MobEntity {
     mob_flags: AtomicU8,
 }
 impl MobEntity {
+    pub fn set_speed(&self, speed: f32) {
+        self.living_entity.set_speed(speed);
+        let input = self.living_entity.movement_input.load();
+        self.living_entity
+            .movement_input
+            .store(Vector3::new(input.x, input.y, f64::from(speed)));
+    }
+
     const AI_DISABLED_FLAG: u8 = 1;
     const LEFT_HANDED_FLAG: u8 = 2;
     const ATTACKING_FLAG: u8 = 4;
@@ -176,7 +184,7 @@ impl MobEntity {
             navigator: std::sync::Mutex::new(Navigator::default()),
             pending_navigation_updates: crossbeam::queue::SegQueue::new(),
             target: std::sync::Mutex::new(None),
-            look_control: std::sync::Mutex::new(LookControl::default()),
+            look_control: std::sync::Mutex::new(Box::new(LookControl::default())),
             sensing: std::sync::Mutex::new(Sensing::default()),
             move_control: std::sync::Mutex::new(Box::new(MoveControl::default())),
             jump_control: std::sync::Mutex::new(JumpControl::default()),
@@ -882,6 +890,10 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    fn omnidirectional_air_mover(&self) -> bool {
+        false
+    }
+
     fn mob_bedrock_identifier(&self) -> Option<&'static str> {
         None
     }
@@ -944,6 +956,12 @@ pub trait Mob: EntityBase + Send + Sync {
 
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick(&self, _caller: &dyn EntityBase) {}
+
+    fn travel_in_water(&self, caller: &dyn EntityBase, gravity: f64, falling: bool) {
+        self.get_mob_entity()
+            .living_entity
+            .travel_in_water(caller, gravity, falling);
+    }
 
     fn post_tick(&self) {}
 
@@ -1585,6 +1603,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_y_velocity_drag(&self) -> Option<f64> {
         self.get_mob_y_velocity_drag()
+    }
+
+    fn is_flutterer(&self) -> bool {
+        self.omnidirectional_air_mover()
     }
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {

@@ -324,6 +324,15 @@ impl EvaluatorKind {
         }
     }
 
+    fn get_path_type(&mut self, context: &mut PathfindingContext, pos: BlockPos) -> PathType {
+        match self {
+            Self::Walk(e) => e.get_path_type(context, pos.0),
+            Self::Fly(e) => e.get_path_type(context, pos.0),
+            Self::Swim(e) => e.get_path_type(context, pos.0),
+            Self::Amphibious(e) => e.get_path_type(context, pos.0),
+        }
+    }
+
     pub fn get_neighbors(&mut self, current: &Node, out: &mut Vec<Node>) {
         match self {
             Self::Walk(e) => e.get_neighbors(current, out),
@@ -382,6 +391,7 @@ pub trait PathNavigationTrait: Send + Sync {
     fn is_stuck(&self) -> bool;
     fn get_path(&self) -> Option<&Path>;
     fn get_path_mut(&mut self) -> Option<&mut Path>;
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType;
     fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32);
     fn get_pathfinding_malus(&self, path_type: PathType) -> f32;
     fn can_reach_within(
@@ -591,12 +601,7 @@ impl PathNavigation {
         follow_range.max(self.required_path_length)
     }
 
-    pub fn compute_path(
-        &mut self,
-        entity: &LivingEntity,
-        destination: Vector3<f64>,
-        reach_range: i32,
-    ) -> Option<Path> {
+    fn prepare_evaluator(&mut self, entity: &LivingEntity) -> (uuid::Uuid, u64) {
         let world = entity.entity.world.load_full();
         let world_change = (
             world.uuid,
@@ -622,6 +627,28 @@ impl PathNavigation {
         self.evaluator
             .set_can_walk_over_fences(self.can_walk_over_fences);
         self.evaluator.prepare(context, mob_data);
+
+        world_change
+    }
+
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType {
+        self.prepare_evaluator(entity);
+        let mut context = PathfindingContext::new(
+            entity.entity.block_pos.load().0,
+            entity.entity.world.load_full(),
+        );
+        let path_type = self.evaluator.get_path_type(&mut context, position);
+        self.evaluator.done();
+        path_type
+    }
+
+    pub fn compute_path(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+    ) -> Option<Path> {
+        let world_change = self.prepare_evaluator(entity);
 
         let attributes = [
             entity.get_attribute_base(&Attributes::FOLLOW_RANGE),
@@ -1157,6 +1184,10 @@ impl PathNavigationTrait for GroundPathNavigation {
         self.inner.path.as_mut()
     }
 
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType {
+        self.inner.get_path_type(entity, position)
+    }
+
     fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
         self.inner.set_pathfinding_malus(path_type, malus);
     }
@@ -1370,6 +1401,10 @@ impl PathNavigationTrait for FlyingPathNavigation {
 
     fn get_path_mut(&mut self) -> Option<&mut Path> {
         self.inner.path.as_mut()
+    }
+
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType {
+        self.inner.get_path_type(entity, position)
     }
 
     fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
@@ -1602,6 +1637,10 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
 
     fn get_path_mut(&mut self) -> Option<&mut Path> {
         self.inner.path.as_mut()
+    }
+
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType {
+        self.inner.get_path_type(entity, position)
     }
 
     fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
@@ -1842,6 +1881,10 @@ impl PathNavigationTrait for WallClimberNavigation {
         self.inner.get_path_mut()
     }
 
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType {
+        self.inner.get_path_type(entity, position)
+    }
+
     fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
         self.inner.set_pathfinding_malus(path_type, malus);
     }
@@ -2063,6 +2106,10 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
 
     fn get_path_mut(&mut self) -> Option<&mut Path> {
         self.inner.path.as_mut()
+    }
+
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType {
+        self.inner.get_path_type(entity, position)
     }
 
     fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {

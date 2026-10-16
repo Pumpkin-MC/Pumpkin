@@ -97,6 +97,7 @@ pub struct LivingEntity {
     pub entity_equipment: Arc<std::sync::Mutex<EntityEquipment>>,
     pub equipment_drop_chances: Arc<std::sync::Mutex<FxHashMap<EquipmentSlot, f32>>>,
     pub movement_input: AtomicCell<Vector3<f64>>,
+    speed: AtomicCell<f32>,
     pub equipment_slots: Arc<FxHashMap<usize, EquipmentSlot>>,
 
     pub jumping: AtomicBool,
@@ -222,6 +223,14 @@ fn is_allowed_by_team_rules(
 }
 
 impl LivingEntity {
+    pub fn get_speed(&self) -> f32 {
+        self.speed.load()
+    }
+
+    pub fn set_speed(&self, speed: f32) {
+        self.speed.store(speed);
+    }
+
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
     const RANDOM_TELEPORT_ATTEMPTS: usize = 16;
@@ -312,6 +321,7 @@ impl LivingEntity {
             last_hurt_by_mob_id: AtomicI32::new(0),
             last_hurt_by_mob_time: AtomicI64::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
+            speed: AtomicCell::new(0.0),
             water_movement_speed_multiplier,
             last_block_pos: AtomicCell::new(None),
             equipment_attribute_modifier_ids: std::sync::Mutex::new(FxHashMap::default()),
@@ -1301,7 +1311,11 @@ impl LivingEntity {
     }
 
     fn get_effective_gravity(&self, caller: &dyn EntityBase) -> f64 {
-        let final_gravity = caller.get_gravity();
+        let final_gravity = if self.entity.has_no_gravity() {
+            0.0
+        } else {
+            caller.get_gravity()
+        };
 
         if self.entity.velocity.load().y <= 0.0 && self.has_effect(&StatusEffect::SLOW_FALLING) {
             final_gravity.min(0.01)
@@ -1495,6 +1509,24 @@ impl LivingEntity {
         }
     }
 
+    fn compute_modified_friction(friction: f32, modifier: f32) -> f64 {
+        f64::from((1.0 - (1.0 - friction) * modifier).clamp(0.0, 1.0))
+    }
+
+    fn get_block_friction(&self) -> f64 {
+        if self.entity.on_ground.load(Relaxed) {
+            Self::compute_modified_friction(
+                self.entity
+                    .get_block_with_y_offset(0.500_001)
+                    .1
+                    .slipperiness,
+                self.get_attribute_value(&Attributes::FRICTION_MODIFIER) as f32,
+            )
+        } else {
+            1.0
+        }
+    }
+
     /// Decays player velocity like vanilla `travelInAir` friction.
     fn apply_travel_friction(&self) {
         let mut velo = self.entity.velocity.load();
@@ -1502,16 +1534,12 @@ impl LivingEntity {
             return;
         }
 
-        let friction = if self.entity.on_ground.load(Relaxed) {
-            f64::from(
-                self.entity
-                    .get_block_with_y_offset(0.500_001)
-                    .1
-                    .slipperiness,
-            ) * 0.91
-        } else {
-            0.91
-        };
+        let block_friction = self.get_block_friction();
+        let friction = block_friction
+            * Self::compute_modified_friction(
+                0.91,
+                self.get_attribute_value(&Attributes::AIR_DRAG_MODIFIER) as f32,
+            );
 
         velo.x *= friction;
 
@@ -1523,29 +1551,27 @@ impl LivingEntity {
     fn travel_in_air(&self, caller: &dyn EntityBase) {
         // applyMovementInput
 
-        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-
-        let (speed, friction) = if self.entity.on_ground.load(Relaxed) {
-            // getVelocityAffectingPos
-
-            let slipperiness = f64::from(
-                self.entity
-                    .get_block_with_y_offset(0.500_001)
-                    .1
-                    .slipperiness,
-            );
-
-            let speed =
-                effective_speed * 0.216_000_02 / (slipperiness * slipperiness * slipperiness);
-
-            (speed, slipperiness * 0.91)
+        let effective_speed = if caller.get_mob().is_some() {
+            f64::from(self.get_speed())
         } else {
-            let speed = caller
-                .get_player()
-                .map_or(0.02, super::player::Player::get_off_ground_speed);
-
-            (speed, 0.91)
+            self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
         };
+
+        let air_drag_modifier = self.get_attribute_value(&Attributes::AIR_DRAG_MODIFIER) as f32;
+        let air_drag = Self::compute_modified_friction(0.91, air_drag_modifier);
+        let block_friction = self.get_block_friction();
+        let speed = if self.entity.on_ground.load(Relaxed) {
+            if block_friction > 0.6 {
+                effective_speed * 0.216_000_02 / block_friction.powi(3)
+            } else {
+                effective_speed
+            }
+        } else {
+            caller
+                .get_player()
+                .map_or(0.02, super::player::Player::get_off_ground_speed)
+        };
+        let friction = block_friction * air_drag;
 
         self.entity
             .update_velocity_from_input(self.movement_input.load(), speed);
@@ -1588,13 +1614,62 @@ impl LivingEntity {
 
         velo.y *= caller.get_y_velocity_drag().unwrap_or_else(|| {
             if caller.is_flutterer() {
-                friction
+                air_drag
             } else {
-                0.98
+                Self::compute_modified_friction(0.98, air_drag_modifier)
             }
         });
 
         self.entity.velocity.store(velo);
+    }
+
+    pub(crate) fn travel_in_water(&self, caller: &dyn EntityBase, gravity: f64, falling: bool) {
+        let movement_input = self.movement_input.load();
+        let effective_speed = if caller.get_mob().is_some() {
+            f64::from(self.get_speed())
+        } else {
+            self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
+        };
+        let mut friction = if self.entity.sprinting.load(Relaxed) {
+            0.9
+        } else {
+            f64::from(self.water_movement_speed_multiplier)
+        };
+
+        let mut speed = 0.02;
+
+        // Apply water movement efficiency attribute
+        let mut water_movement_efficiency =
+            self.get_attribute_value(&Attributes::WATER_MOVEMENT_EFFICIENCY);
+
+        if water_movement_efficiency > 0.0 {
+            if !self.entity.on_ground.load(SeqCst) {
+                water_movement_efficiency *= 0.5;
+            }
+
+            friction += (0.546_000_06 - friction) * water_movement_efficiency;
+            speed += (effective_speed - speed) * water_movement_efficiency;
+        }
+
+        if self.has_effect(&StatusEffect::DOLPHINS_GRACE) {
+            friction = 0.96;
+        }
+
+        self.entity
+            .update_velocity_from_input(movement_input, speed);
+
+        self.make_move(caller);
+
+        let mut velo = self.entity.velocity.load();
+        if self.entity.horizontal_collision.load(SeqCst) && self.climbing.load(Relaxed) {
+            velo.y = 0.2;
+        }
+
+        velo = velo.multiply(friction, 0.8, friction);
+
+        self.apply_fluid_moving_speed(&mut velo.y, gravity, falling);
+        self.entity.velocity.store(velo);
+        self.jump_out_of_fluid();
     }
 
     fn travel_in_fluid(&self, caller: &dyn EntityBase, water: bool) {
@@ -1602,48 +1677,13 @@ impl LivingEntity {
 
         let falling = self.entity.velocity.load().y <= 0.0;
         let gravity = self.get_effective_gravity(caller);
-        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
 
         if water {
-            let mut friction = if self.entity.sprinting.load(Relaxed) {
-                0.9
+            if let Some(mob) = caller.get_mob() {
+                mob.travel_in_water(caller, gravity, falling);
             } else {
-                f64::from(self.water_movement_speed_multiplier)
-            };
-
-            let mut speed = 0.02;
-
-            // Apply water movement efficiency attribute
-            let mut water_movement_efficiency =
-                self.get_attribute_value(&Attributes::WATER_MOVEMENT_EFFICIENCY);
-
-            if water_movement_efficiency > 0.0 {
-                if !self.entity.on_ground.load(SeqCst) {
-                    water_movement_efficiency *= 0.5;
-                }
-
-                friction += (0.546_000_06 - friction) * water_movement_efficiency;
-                speed += (effective_speed - speed) * water_movement_efficiency;
+                self.travel_in_water(caller, gravity, falling);
             }
-
-            if self.has_effect(&StatusEffect::DOLPHINS_GRACE) {
-                friction = 0.96;
-            }
-
-            self.entity
-                .update_velocity_from_input(movement_input, speed);
-
-            self.make_move(caller);
-
-            let mut velo = self.entity.velocity.load();
-            if self.entity.horizontal_collision.load(SeqCst) && self.climbing.load(Relaxed) {
-                velo.y = 0.2;
-            }
-
-            velo = velo.multiply(friction, 0.8, friction);
-
-            self.apply_fluid_moving_speed(&mut velo.y, gravity, falling);
-            self.entity.velocity.store(velo);
         } else {
             self.entity.update_velocity_from_input(movement_input, 0.02);
 
@@ -1666,8 +1706,11 @@ impl LivingEntity {
             }
 
             self.entity.velocity.store(velo);
+            self.jump_out_of_fluid();
         }
+    }
 
+    fn jump_out_of_fluid(&self) {
         let mut velo = self.entity.velocity.load();
 
         if self.entity.horizontal_collision.load(SeqCst)
@@ -1693,7 +1736,7 @@ impl LivingEntity {
         }
     }
 
-    fn make_move(&self, caller: &dyn EntityBase) {
+    pub(crate) fn make_move(&self, caller: &dyn EntityBase) {
         self.entity.move_entity(caller, self.entity.velocity.load());
 
         self.check_climbing();
@@ -4096,7 +4139,7 @@ mod ai_step_tests {
     use crate::entity::ai::test_support::world;
     use crate::entity::mob::{Mob, MobEntity};
     use crate::world::World;
-    use pumpkin_data::entity::EntityType;
+    use pumpkin_data::{attributes::Attributes, entity::EntityType};
     use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector3::Vector3;
 
@@ -4444,6 +4487,214 @@ mod ai_step_tests {
             assert!(!jumping);
             assert!(position_x > 0.05);
         }
+        Ok(())
+    }
+    #[tokio::test]
+    async fn ground_control_speed_reaches_travel_without_losing_its_modifier() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        living.set_attribute_base(&Attributes::MOVEMENT_SPEED, 0.4);
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        living.entity.set_has_no_gravity(true);
+        living.movement_input.store(Vector3::new(0.3, 0.25, 0.0));
+        let mut control = MoveControl::default();
+        control.set_wanted_position(0.0, 64.0, 8.0, 0.5);
+        control.tick(&mob);
+        assert_eq!(living.movement_input.load().x, 0.3);
+        assert_eq!(living.movement_input.load().y, 0.25);
+        living
+            .movement_input
+            .store(Vector3::new(0.0, 0.0, living.movement_input.load().z));
+        living.travel_in_air(&mob);
+        let moved = living.entity.pos.load().z;
+        world.level.shutdown().await;
+        assert!((moved - 0.04).abs() < 1.0e-8);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn strafe_checks_live_collision_before_publishing_original_inputs() -> TestResult {
+        use pumpkin_data::Block;
+        use pumpkin_util::math::vector2::Vector2;
+        use pumpkin_world::{chunk::ChunkData, world::BlockFlags};
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        living.entity.set_pos(Vector3::new(0.5, 64.0, 0.5));
+        living.set_attribute_base(&Attributes::MOVEMENT_SPEED, 1.0);
+        living.movement_input.store(Vector3::new(0.0, 0.25, 0.0));
+        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
+        world.set_block_state(
+            &BlockPos::new(0, 63, 0),
+            Block::STONE.default_state.id,
+            flags,
+        );
+        let mut control = MoveControl::default();
+        control.strafe(0.5, 0.5);
+        control.tick(&mob);
+        assert_eq!(living.movement_input.load(), Vector3::new(0.5, 0.25, 0.5));
+        world.set_block_state(
+            &BlockPos::new(0, 64, 0),
+            Block::STONE.default_state.id,
+            flags,
+        );
+        control.strafe(0.5, 0.5);
+        control.tick(&mob);
+        let input = living.movement_input.load();
+        world.level.shutdown().await;
+        assert_eq!(input, Vector3::new(0.0, 0.25, 1.0));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn flying_control_preserves_strafe_and_clears_only_its_owned_axes() -> TestResult {
+        use crate::entity::ai::control::flying_move_control::FlyingMoveControl;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        living.set_attribute_base(&Attributes::FLYING_SPEED, 0.8);
+        living.movement_input.store(Vector3::new(0.3, 0.25, 0.0));
+        let mut control = FlyingMoveControl::new(20, true);
+        control.set_wanted_position(0.0, 65.0, 8.0, 0.5);
+        control.tick(&mob);
+        let moving = living.movement_input.load();
+        assert_eq!(moving.x, 0.3);
+        assert!((moving.y - 0.4).abs() < 1.0e-7);
+        assert_eq!(moving.y, moving.z);
+        control.tick(&mob);
+        let idle = living.movement_input.load();
+        world.level.shutdown().await;
+        assert_eq!(idle, Vector3::new(0.3, 0.0, 0.0));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dolphin_water_travel_consumes_control_speed_and_unscaled_direction() -> TestResult {
+        use crate::entity::passive::dolphin::DolphinEntity;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let dolphin = DolphinEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::DOLPHIN,
+        ));
+        let living = &dolphin.mob_entity.living_entity;
+        living.set_attribute_base(&Attributes::MOVEMENT_SPEED, 0.4);
+        living.entity.touching_water.store(true, Ordering::Relaxed);
+        {
+            let mut navigator = dolphin
+                .mob_entity
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            navigator.move_to_path(
+                Some(Path::new(
+                    vec![Node::new(BlockPos::new(0, 64, 8))],
+                    BlockPos::new(0, 64, 8),
+                    true,
+                )),
+                0.5,
+                living,
+            )
+        };
+        let input = {
+            let mut control = dolphin
+                .mob_entity
+                .move_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            control.set_wanted_position(0.0, 64.0, 8.0, 0.5);
+            control.tick(&*dolphin);
+            living.movement_input.load()
+        };
+        living.travel_in_fluid(&*dolphin, true);
+        let position = living.entity.pos.load();
+        let velocity = living.entity.velocity.load();
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        world.set_block_state(
+            &BlockPos::new(0, 64, 1),
+            pumpkin_data::Block::STONE.default_state.id,
+            pumpkin_world::world::BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
+                | pumpkin_world::world::BlockFlags::UPDATE_KNOWN_SHAPE,
+        );
+        living.entity.set_pos(Vector3::new(0.5, 64.0, 0.5));
+        living.entity.velocity.store(Vector3::new(0.0, 0.0, 1.0));
+        living.travel_in_fluid(&*dolphin, true);
+        let wall_velocity = living.entity.velocity.load();
+        let wall_collision = living.entity.horizontal_collision.load(Ordering::Relaxed);
+        world.level.shutdown().await;
+        assert!(wall_collision);
+        assert!(wall_velocity.y < 0.0);
+        assert!((input.z - 0.2).abs() < 1.0e-7);
+        assert!((position.z - 0.0008).abs() < 1.0e-9);
+        assert!((velocity.z - 0.00072).abs() < 1.0e-9);
+        assert!((velocity.y + 0.0005).abs() < 1.0e-9);
+        Ok(())
+    }
+    #[tokio::test]
+    async fn zero_air_drag_preserves_controller_velocity_in_travel() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        living.set_attribute_base(&Attributes::AIR_DRAG_MODIFIER, 0.0);
+        living.entity.set_has_no_gravity(true);
+        living.entity.velocity.store(Vector3::new(1.0, 1.0, 1.0));
+        living.travel_in_air(&mob);
+        let velocity = living.entity.velocity.load();
+        world.level.shutdown().await;
+        assert_eq!(velocity, Vector3::new(1.0, 1.0, 1.0));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn installed_bee_look_control_pauses_while_angry() -> TestResult {
+        use crate::entity::passive::bee::BeeEntity;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bee = BeeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BEE,
+        ));
+        let entity = &bee.mob_entity.living_entity.entity;
+        entity.pitch.store(30.0);
+        bee.neutral_data
+            .anger_end_time
+            .store(100, Ordering::Relaxed);
+        let angry_pitch = {
+            let mut look = bee
+                .mob_entity
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            look.tick(&*bee);
+            entity.pitch.load()
+        };
+        assert_eq!(angry_pitch, 30.0);
+        bee.neutral_data.anger_end_time.store(-1, Ordering::Relaxed);
+        let pitch = {
+            let mut look = bee
+                .mob_entity
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            look.tick(&*bee);
+            entity.pitch.load()
+        };
+        world.level.shutdown().await;
+        assert_eq!(pitch, 0.0);
         Ok(())
     }
 }

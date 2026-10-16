@@ -1,8 +1,9 @@
 use crate::entity::ai::control::{Control, MoveControlTrait};
+use crate::entity::ai::pathfinder::node::PathType;
 use crate::entity::mob::Mob;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3, wrap_degrees};
 use std::sync::atomic::Ordering;
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
@@ -46,13 +47,35 @@ impl MoveControlTrait for MoveControl {
         let living_entity = &mob_entity.living_entity;
         let entity = &living_entity.entity;
         if self.operation == Operation::Strafe {
-            // TODO: is_walkable check
-            living_entity.movement_input.store(Vector3::new(
-                self.strafe_right as f64,
-                0.0,
-                self.strafe_forwards as f64,
+            let speed = self.speed_modifier as f32
+                * living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED) as f32;
+            let scale = speed / self.strafe_forwards.hypot(self.strafe_right).max(1.0);
+            let forwards = self.strafe_forwards * scale;
+            let right = self.strafe_right * scale;
+            let (sin, cos) = entity.yaw.load().to_radians().sin_cos();
+            let pos = entity.pos.load();
+            let next = BlockPos::floored_v(Vector3::new(
+                pos.x + f64::from(forwards * cos - right * sin),
+                f64::from(entity.block_pos.load().0.y),
+                pos.z + f64::from(right * cos + forwards * sin),
             ));
-            // Vanilla sets speed here too
+            if mob_entity
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_path_type(living_entity, next)
+                != PathType::Walkable
+            {
+                self.strafe_forwards = 1.0;
+                self.strafe_right = 0.0;
+            }
+            mob_entity.set_speed(speed);
+            let input = living_entity.movement_input.load();
+            living_entity.movement_input.store(Vector3::new(
+                f64::from(self.strafe_right),
+                input.y,
+                f64::from(self.strafe_forwards),
+            ));
             self.operation = Operation::Wait;
         } else if self.operation == Operation::MoveTo {
             self.operation = Operation::Wait;
@@ -73,13 +96,11 @@ impl MoveControlTrait for MoveControl {
             let y_rot_d = (zd.atan2(xd).to_degrees() as f32) - 90.0;
             entity
                 .yaw
-                .store(self.change_angle(entity.yaw.load(), y_rot_d, Self::MAX_TURN));
+                .store(Self::rotlerp(entity.yaw.load(), y_rot_d, Self::MAX_TURN));
 
             let movement_speed = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
             let speed = self.speed_modifier * movement_speed;
-            living_entity
-                .movement_input
-                .store(Vector3::new(0.0, 0.0, speed));
+            mob_entity.set_speed(speed as f32);
 
             let step_height = living_entity.get_attribute_value(&Attributes::STEP_HEIGHT);
             let block_pos = entity.block_pos.load();
@@ -106,9 +127,7 @@ impl MoveControlTrait for MoveControl {
         } else if self.operation == Operation::Jumping {
             let movement_speed = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
             let speed = self.speed_modifier * movement_speed;
-            living_entity
-                .movement_input
-                .store(Vector3::new(0.0, 0.0, speed));
+            mob_entity.set_speed(speed as f32);
 
             if entity.on_ground.load(Ordering::Relaxed)
                 || entity.touching_water.load(Ordering::Relaxed)
@@ -149,6 +168,18 @@ impl MoveControlTrait for MoveControl {
 impl MoveControl {
     pub const MIN_SPEED_SQR: f32 = 2.5000003E-7;
     pub const MAX_TURN: f32 = 90.0;
+
+    #[must_use]
+    pub fn rotlerp(start: f32, end: f32, max_change: f32) -> f32 {
+        let result = start + wrap_degrees(end - start).clamp(-max_change, max_change);
+        if result < 0.0 {
+            result + 360.0
+        } else if result > 360.0 {
+            result - 360.0
+        } else {
+            result
+        }
+    }
 
     #[must_use]
     pub fn has_wanted(&self) -> bool {
