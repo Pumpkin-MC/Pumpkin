@@ -87,6 +87,8 @@ impl Ticker {
             // following iteration catch-up-runs with no park.
             schedule.next_tick_nanos += this_tick_nanos;
 
+            #[cfg(profiler)]
+            let profile_tick = pumpkin_profiler::cpu::tick(this_tick_nanos.max(0) as u64);
             manager.tick();
 
             let tick_number = server.tick_count.load(Ordering::Relaxed);
@@ -129,6 +131,8 @@ impl Ticker {
             }
 
             server.update_tick_times(tick_duration_nanos);
+            #[cfg(profiler)]
+            drop(profile_tick);
 
             if STOP_INTERRUPT.is_cancelled() {
                 break 'ticker;

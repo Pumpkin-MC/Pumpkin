@@ -260,6 +260,8 @@ pub fn run_generation(
     stage: StagedChunkEnum,
     level: &Level,
 ) -> RecvChunk {
+    #[cfg(profiler)]
+    let _profile = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::ChunkGeneration);
     let portal = level.world_portal.load_full();
     let Some(portal_ref) = portal.as_deref() else {
         error!("Chunk generation FAILED at {pos:?} ({stage:?}): World portal is not initialized");

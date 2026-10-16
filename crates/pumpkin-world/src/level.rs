@@ -51,6 +51,19 @@ use tokio_util::task::TaskTracker;
 pub type SyncChunk = Arc<ChunkData>;
 pub type SyncEntityChunk = Arc<ChunkEntityData>;
 
+#[cfg(feature = "memory-profiler")]
+#[derive(serde::Serialize)]
+pub struct LevelMemoryCounters {
+    loaded_chunks: usize,
+    loaded_entity_chunks: usize,
+    watched_chunks: usize,
+    pending_entity_generations: usize,
+    tracked_tasks: usize,
+    chunk_system_tasks: usize,
+    cached_chunk_regions: Option<usize>,
+    cached_entity_regions: Option<usize>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadedChunkChange {
     Loaded(Vector2<i32>),
@@ -426,6 +439,20 @@ impl Level {
 
     pub fn loaded_chunk_count(&self) -> usize {
         self.loaded_chunks.len()
+    }
+
+    #[cfg(feature = "memory-profiler")]
+    pub fn memory_counters(&self) -> LevelMemoryCounters {
+        LevelMemoryCounters {
+            loaded_chunks: self.loaded_chunks.len(),
+            loaded_entity_chunks: self.loaded_entity_chunks.len(),
+            watched_chunks: self.chunk_watchers.len(),
+            pending_entity_generations: self.pending_entity_generations.len(),
+            tracked_tasks: self.tasks.len(),
+            chunk_system_tasks: self.chunk_system_tasks.len(),
+            cached_chunk_regions: self.chunk_saver.cached_region_count(),
+            cached_entity_regions: self.entity_saver.cached_region_count(),
+        }
     }
 
     pub fn list_cached(&self) {

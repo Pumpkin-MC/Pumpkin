@@ -78,6 +78,8 @@ impl DynamicLightEngine {
     }
 
     pub fn perform_block_light_updates(&self, level: &Arc<Level>) -> i32 {
+        #[cfg(profiler)]
+        let _profile = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::Lighting);
         let mut updates = 0;
 
         // Keep processing until both queues are empty
@@ -253,6 +255,8 @@ impl DynamicLightEngine {
     }
 
     pub fn perform_sky_light_updates(&self, level: &Arc<Level>) -> i32 {
+        #[cfg(profiler)]
+        let _profile = pumpkin_profiler::cpu::span(pumpkin_profiler::cpu::Phase::Lighting);
         let mut updates = 0;
         loop {
             let decrease_updates = self.perform_sky_light_decrease_updates(level);

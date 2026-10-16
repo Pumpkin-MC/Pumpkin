@@ -53,6 +53,8 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod posteffect;
+#[cfg(profiler)]
+mod profiler;
 mod pumpkin;
 mod raid;
 mod random;
@@ -113,6 +115,8 @@ pub fn default_dispatcher(
     banlist::register(&mut dispatcher, registry);
     difficulty::register(&mut dispatcher, registry);
     debug::register(&mut dispatcher, registry);
+    #[cfg(profiler)]
+    profiler::register(&mut dispatcher, registry);
     dialog::register(&mut dispatcher, registry);
     execute::register(&mut dispatcher, registry);
     fillbiome::register(&mut dispatcher, registry);

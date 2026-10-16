@@ -119,5 +119,11 @@ xxhash-rust.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 
+[target.'cfg(all(any(target_os = "windows", target_os = "macos", all(target_os = "linux", target_env = "gnu")), any(target_arch = "x86_64", target_arch = "aarch64")))'.dependencies]
+pumpkin-profiler = { workspace = true, optional = true }
+
+[features]
+memory-profiler = ["dep:pumpkin-profiler", "pumpkin-world/memory-profiler"]
+
 [lints]
 workspace = true

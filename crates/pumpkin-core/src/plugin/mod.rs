@@ -1227,6 +1227,11 @@ impl PluginManager {
         // Process blocking handlers first
         for handler in handlers {
             if handler.is_blocking() {
+                #[cfg(profiler)]
+                let _profile = pumpkin_profiler::cpu::plugin_event(
+                    handler.source().unwrap_or("unattributed"),
+                    event_name,
+                );
                 handler.handle_blocking_dyn(server, event).await;
             }
         }
@@ -1234,6 +1239,11 @@ impl PluginManager {
         // Process non-blocking handlers
         for handler in handlers {
             if !handler.is_blocking() {
+                #[cfg(profiler)]
+                let _profile = pumpkin_profiler::cpu::plugin_event(
+                    handler.source().unwrap_or("unattributed"),
+                    event_name,
+                );
                 handler.handle_dyn(server, event).await;
             }
         }

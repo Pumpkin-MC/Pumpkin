@@ -1,6 +1,10 @@
 use std::process::Command;
 
+include!("../pumpkin-profiler/build_cfg.rs");
+
 fn main() {
+    emit_profiler_cfg();
+
     // Get short hash (7 chars) for display
     let short_output = Command::new("git")
         .args(["rev-parse", "--short=7", "HEAD"])

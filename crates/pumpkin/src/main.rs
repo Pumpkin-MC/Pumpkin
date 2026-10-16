@@ -44,12 +44,18 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 
+#[cfg(profiler)]
+#[global_allocator]
+static ALLOCATOR: pumpkin_profiler::TrackingAllocator = pumpkin_profiler::TrackingAllocator;
+
 // WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
 // like `par_iter`. These should be spawned in the the rayon pool and then passed to the tokio
 // runtime with a channel! See `Level::fetch_chunks` as an example!
 #[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() {
+    #[cfg(profiler)]
+    pumpkin_profiler::register_allocator();
     let _ = MAIN_THREAD.set(thread::current().id());
 
     // reqwest is built with `rustls-no-provider`, so pick the ring provider (the one
@@ -75,6 +81,9 @@ async fn main() {
     let vanilla_data = VanillaData::load();
 
     pumpkin_core::init_logger(&config.advanced);
+
+    #[cfg(all(feature = "memory-profiler", not(profiler)))]
+    warn!("Profiling requires x86_64 or aarch64 Windows, macOS or Linux with glibc");
 
     info!(
         "{}",
