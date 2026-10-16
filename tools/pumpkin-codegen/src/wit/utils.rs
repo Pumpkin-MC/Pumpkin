@@ -187,12 +187,15 @@ pub fn collect_fields(
         .map(|field| {
             let field_name = field.ident.as_ref().unwrap().to_string().to_kebab_case();
             let field_type = map_type(&field.ty, defined_types);
-            let docs = field_type.as_ref().err().map(|_| {
-                format!(
-                    "WARNING: Could not translate type `{}` to WIT",
+
+            let mut docs = extract_doc_comments(&field.attrs);
+            if field_type.as_ref().is_err() {
+                docs = Some(format!(
+                    "{}WARNING: Could not translate type `{}` to WIT",
+                    docs.map_or_default(|str| str + &"\n\n"),
                     field.ty.to_token_stream()
-                )
-            });
+                ));
+            }
 
             let mut wit_field = Field::new(
                 field_name,
@@ -216,13 +219,23 @@ pub fn translate_enum_to_wit(
         .collect::<Vec<_>>();
 
     if e.variants.iter().all(|v| matches!(v.fields, Fields::Unit)) {
-        (
-            TypeDef::new(
-                enum_wit_name,
-                TypeDefKind::Enum(Enum::from_iter(case_names.into_iter().map(EnumCase::new))),
-            ),
-            Vec::new(),
-        )
+        let mut main_def = TypeDef::new(
+            enum_wit_name,
+            TypeDefKind::Enum(Enum::from_iter(
+                e.variants
+                    .iter()
+                    .zip(case_names.into_iter())
+                    .map(|(v, name)| {
+                        let mut case = EnumCase::new(name);
+                        case.set_docs(extract_doc_comments(&v.attrs));
+                        case
+                    }),
+            )),
+        );
+
+        main_def.set_docs(extract_doc_comments(&e.attrs));
+
+        (main_def, Vec::new())
     } else {
         let helper_types = e
             .variants
@@ -234,10 +247,12 @@ pub fn translate_enum_to_wit(
             })
             .map(|(fields, name)| {
                 let fields_list = collect_fields(&fields.named, defined_types);
-                TypeDef::new(
-                    format!("{}-{}", &enum_wit_name, name),
+                let mut def = TypeDef::new(
+                    format!("{enum_wit_name}-{name}"),
                     TypeDefKind::Record(Record::new(fields_list)),
-                )
+                );
+                def.set_docs(Some(format!("Generated; extracted from variant arm. See `{enum_wit_name}.{name}` for details.")));
+                def
             })
             .collect::<Vec<_>>();
 
@@ -245,70 +260,87 @@ pub fn translate_enum_to_wit(
             .variants
             .iter()
             .zip(case_names.into_iter())
-            .map(|(v, variant_wit_name)| match &v.fields {
-                Fields::Named(fields) => {
-                    let sub_record_name = format!("{}-{}", enum_wit_name, variant_wit_name);
-                    let fields_list = collect_fields(&fields.named, defined_types);
-                    VariantCase::value(variant_wit_name, WitType::named(sub_record_name))
-                }
-                Fields::Unnamed(fields) => match fields.unnamed.len() {
-                    0 => VariantCase::empty(variant_wit_name),
-                    1 => {
-                        let ty = map_type(&fields.unnamed[0].ty, defined_types);
-                        let docs = ty.as_ref().err().map(|_| {
-                            format!(
-                                "WARNING: Could not translate type `{}` to WIT",
-                                fields.unnamed[0].ty.to_token_stream()
-                            )
-                        });
-                        let mut case = VariantCase::value(
-                            variant_wit_name,
-                            ty.unwrap_or_else(|_| WitType::Named("inexpressible-host-type".into())),
-                        );
-                        case.set_docs(docs);
-                        case
+            .map(|(v, variant_wit_name)| {
+                let (mut case, warning) = match &v.fields {
+                    Fields::Named(fields) => {
+                        let sub_record_name = format!("{}-{}", enum_wit_name, variant_wit_name);
+                        let fields_list = collect_fields(&fields.named, defined_types);
+                        (
+                            VariantCase::value(variant_wit_name, WitType::named(sub_record_name)),
+                            None,
+                        )
                     }
-                    _ => {
-                        let types: Vec<_> = fields
-                            .unnamed
-                            .iter()
-                            .map(|f| map_type(&f.ty, defined_types))
-                            .collect();
-                        let docs = types.iter().any(|t| t.is_err()).then(|| {
-                            format!(
-                                "WARNING: Could not translate some types to WIT: {}",
-                                fields
-                                    .unnamed
-                                    .iter()
-                                    .zip(types.iter())
-                                    .filter(|(rust, wit)| wit.is_err())
-                                    .map(|(rust, wit)| rust.to_token_stream().to_string())
-                                    .fold(String::new(), |accum, str| accum + "\n - " + &str)
-                            )
-                        });
-                        let mut case = VariantCase::value(
-                            variant_wit_name,
-                            WitType::tuple(types.into_iter().map(|t| {
-                                t.unwrap_or_else(|_| {
+                    Fields::Unnamed(fields) => match fields.unnamed.len() {
+                        0 => (VariantCase::empty(variant_wit_name), None),
+                        1 => {
+                            let ty = map_type(&fields.unnamed[0].ty, defined_types);
+                            let warning = ty.as_ref().err().map(|_| {
+                                format!(
+                                    "WARNING: Could not translate type `{}` to WIT",
+                                    fields.unnamed[0].ty.to_token_stream()
+                                )
+                            });
+                            let case = VariantCase::value(
+                                variant_wit_name,
+                                ty.unwrap_or_else(|_| {
                                     WitType::Named("inexpressible-host-type".into())
-                                })
-                            })),
-                        );
-                        case.set_docs(docs);
-                        case
-                    }
-                },
-                Fields::Unit => VariantCase::empty(variant_wit_name),
+                                }),
+                            );
+                            (case, warning)
+                        }
+                        _ => {
+                            let types: Vec<_> = fields
+                                .unnamed
+                                .iter()
+                                .map(|f| map_type(&f.ty, defined_types))
+                                .collect();
+                            let warning = types.iter().any(|t| t.is_err()).then(|| {
+                                format!(
+                                    "WARNING: Could not translate some types to WIT: {}",
+                                    fields
+                                        .unnamed
+                                        .iter()
+                                        .zip(types.iter())
+                                        .filter(|(rust, wit)| wit.is_err())
+                                        .map(|(rust, wit)| rust.to_token_stream().to_string())
+                                        .fold(String::new(), |accum, str| accum + "\n - " + &str)
+                                )
+                            });
+                            let case = VariantCase::value(
+                                variant_wit_name,
+                                WitType::tuple(types.into_iter().map(|t| {
+                                    t.unwrap_or_else(|_| {
+                                        WitType::Named("inexpressible-host-type".into())
+                                    })
+                                })),
+                            );
+                            (case, warning)
+                        }
+                    },
+                    Fields::Unit => (VariantCase::empty(variant_wit_name), None),
+                };
+
+                case.set_docs(
+                    extract_doc_comments(&v.attrs)
+                        .map(|str| {
+                            if let Some(warning) = &warning {
+                                str + &warning
+                            } else {
+                                str
+                            }
+                        })
+                        .or(warning),
+                );
+                case
             })
             .collect::<Vec<_>>();
 
-        (
-            TypeDef::new(
-                enum_wit_name.clone(),
-                TypeDefKind::Variant(Variant::from(case_fields)),
-            ),
-            helper_types,
-        )
+        let mut main_def = TypeDef::new(
+            enum_wit_name.clone(),
+            TypeDefKind::Variant(Variant::from(case_fields)),
+        );
+        main_def.set_docs(extract_doc_comments(&e.attrs));
+        (main_def, helper_types)
     }
 }
 
@@ -342,10 +374,9 @@ pub fn process_helper_struct(
     };
 
     if !fields_list.is_empty() {
-        interface.type_def(TypeDef::new(
-            wit_name,
-            TypeDefKind::Record(Record::new(fields_list)),
-        ));
+        let mut def = TypeDef::new(wit_name, TypeDefKind::Record(Record::new(fields_list)));
+        def.set_docs(extract_doc_comments(&s.attrs));
+        interface.type_def(def);
     }
 }
 

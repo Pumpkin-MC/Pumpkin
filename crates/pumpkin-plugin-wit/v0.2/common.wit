@@ -1,7 +1,9 @@
 /// Provides common types and utilities used across the entire plugin API.
 interface common {
     /// Used as a placeholder when codegen can't map a Rust type to a WIT one
-    record inexpressible-host-type {}
+    enum inexpressible-host-type {
+        setinel
+    }
 
     /// Serialized text component as a postcard byte array.
     /// @deprecated Use the text-component resource from the text interface instead.

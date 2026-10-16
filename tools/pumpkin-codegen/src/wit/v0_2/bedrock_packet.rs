@@ -145,24 +145,28 @@ fn process_struct(
         panic!("Encountered duplicate type: {}", wit_name);
     }
 
-    let docs = extract_doc_comments(&s.attrs);
     let fields_list = match s.fields {
         Fields::Named(fields) => collect_fields(&fields.named, defined_types),
         _ => Vec::new(),
     };
 
-    if !fields_list.is_empty() {
-        interface.type_def(TypeDef::new(
+    let docs = extract_doc_comments(&s.attrs);
+
+    let mut case = if !fields_list.is_empty() {
+        let mut def = TypeDef::new(
             wit_name.clone(),
             TypeDefKind::Record(Record::new(fields_list)),
-        ));
-        variant.case(VariantCase::value(
-            wit_name.clone(),
-            WitType::named(wit_name),
-        ));
+        );
+        def.set_docs(docs.clone());
+        interface.type_def(def);
+
+        VariantCase::value(wit_name.clone(), WitType::named(wit_name))
     } else {
-        variant.case(VariantCase::empty(wit_name));
-    }
+        VariantCase::empty(wit_name)
+    };
+
+    case.set_docs(docs);
+    variant.case(case);
 }
 
 fn process_enum(
@@ -176,10 +180,10 @@ fn process_enum(
     if !processed_types.insert(enum_wit_name.clone()) {
         panic!("Encountered duplicate type: {}", enum_wit_name);
     }
-    variant.case(VariantCase::value(
-        enum_wit_name.clone(),
-        WitType::named(enum_wit_name.clone()),
-    ));
+
+    let mut case = VariantCase::value(enum_wit_name.clone(), WitType::named(enum_wit_name.clone()));
+    case.set_docs(extract_doc_comments(&e.attrs));
+    variant.case(case);
 
     let (main_def, helper_defs) = translate_enum_to_wit(e, enum_wit_name, defined_types);
     for def in helper_defs {
