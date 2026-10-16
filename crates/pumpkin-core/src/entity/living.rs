@@ -114,6 +114,8 @@ pub struct LivingEntity {
     /// The tick at which this entity was last attacked (entity age).
     pub last_attacked_time: AtomicI32,
     last_damage_type: std::sync::Mutex<Option<DamageType>>,
+    /// Entity id of the last damage source's causing entity, 0 when it had none.
+    last_damage_attacker: AtomicI32,
     last_damage_stamp: std::sync::atomic::AtomicI64,
 
     /// The entity ID of the entity this living entity last attacked.
@@ -316,6 +318,7 @@ impl LivingEntity {
             last_attacker_id: AtomicI32::new(0),
             last_attacked_time: AtomicI32::new(0),
             last_damage_type: std::sync::Mutex::new(None),
+            last_damage_attacker: AtomicI32::new(0),
             last_damage_stamp: std::sync::atomic::AtomicI64::new(0),
             last_attacking_id: AtomicI32::new(0),
             last_attack_time: AtomicI32::new(0),
@@ -2638,6 +2641,13 @@ impl LivingEntity {
 
     /// Forgotten after 40 ticks.
     pub fn get_last_damage_type(&self) -> Option<DamageType> {
+        self.get_last_damage_source()
+            .map(|(damage_type, _)| damage_type)
+    }
+
+    /// Vanilla `getLastDamageSource`: the last damage type and the entity id of its causing
+    /// entity (0 when none), forgotten after 40 ticks.
+    pub fn get_last_damage_source(&self) -> Option<(DamageType, i32)> {
         let stamp = self.last_damage_stamp.load(Ordering::Relaxed);
         let mut last = self
             .last_damage_type
@@ -2646,7 +2656,7 @@ impl LivingEntity {
         if self.entity.world.load().get_world_age() - stamp > 40 {
             *last = None;
         }
-        *last
+        last.map(|damage_type| (damage_type, self.last_damage_attacker.load(Relaxed)))
     }
 
     pub fn can_take_damage(&self) -> bool {
@@ -3239,6 +3249,12 @@ impl LivingEntity {
             .last_damage_type
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(damage_type);
+        self.last_damage_attacker.store(
+            cause
+                .or(source)
+                .map_or(0, |attacker| attacker.get_entity().entity_id),
+            Relaxed,
+        );
         self.last_damage_stamp.store(world.get_world_age(), Relaxed);
 
         let Some(server) = world.server.upgrade() else {

@@ -14,6 +14,11 @@ pub trait PositionTracker: Send + Sync + fmt::Debug {
     fn current_position(&self) -> Vector3<f64>;
     fn current_block_position(&self) -> BlockPos;
     fn is_visible_by(&self, ctx: &VisibilityContext<'_>) -> bool;
+
+    /// The entity this tracker follows, if it follows one.
+    fn tracked_entity(&self) -> Option<&Arc<dyn EntityBase>> {
+        None
+    }
 }
 
 pub struct EntityTracker {
@@ -52,6 +57,10 @@ impl EntityTracker {
 }
 
 impl PositionTracker for EntityTracker {
+    fn tracked_entity(&self) -> Option<&Arc<dyn EntityBase>> {
+        Some(&self.entity)
+    }
+
     fn current_position(&self) -> Vector3<f64> {
         if self.track_eye_height {
             self.entity.get_eye_pos()

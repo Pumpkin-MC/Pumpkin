@@ -124,6 +124,7 @@ pub struct MobEntity {
     pub jump_control: std::sync::Mutex<JumpControl>,
     pub body_rotation_control: std::sync::Mutex<BodyRotationControl>,
     pub brain: std::sync::Mutex<Brain>,
+    brain_built: AtomicBool,
     brain_memory_clear_requested: AtomicBool,
     removal_cleanup_done: AtomicBool,
     pub position_target: AtomicCell<BlockPos>,
@@ -250,6 +251,7 @@ impl MobEntity {
             jump_control: std::sync::Mutex::new(JumpControl::default()),
             body_rotation_control: std::sync::Mutex::new(BodyRotationControl::default()),
             brain: std::sync::Mutex::new(Brain::default()),
+            brain_built: AtomicBool::new(false),
             brain_memory_clear_requested: AtomicBool::new(false),
             removal_cleanup_done: AtomicBool::new(false),
             position_target: AtomicCell::new(BlockPos::ZERO),
@@ -558,16 +560,48 @@ impl MobEntity {
                 .swap(false, Ordering::AcqRel)
     }
 
-    pub fn tick_brain(&self, mob: &dyn Mob) {
+    /// Locks this mob's brain, building it from `Mob::make_brain` on first use. Vanilla builds it
+    /// in the entity constructor; nothing reads it earlier, so the result is the same.
+    /// `make_brain` runs under this lock and must not lock the brain itself.
+    pub fn brain(&self, mob: &dyn Mob) -> std::sync::MutexGuard<'_, Brain> {
+        let mut brain = self
+            .brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !self.brain_built.load(Ordering::Acquire) {
+            *brain = mob.make_brain(&PackedMemories::empty());
+            self.brain_built.store(true, Ordering::Release);
+        }
+        brain
+    }
+
+    /// Installs an already built brain, such as one restored from saved memories.
+    pub fn set_brain(&self, brain: Brain) {
+        *self
+            .brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = brain;
+        self.brain_built.store(true, Ordering::Release);
+        self.process_brain_memory_clear();
+    }
+
+    /// Vanilla `refreshBrain`: stops running behaviors, then rebuilds the brain from its memories.
+    pub fn refresh_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
         let time = world.get_world_age();
         {
-            let mut brain = self
-                .brain
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            brain.tick(&world, mob, time);
+            let mut brain = self.brain(mob);
+            brain.stop_all(&world, mob, time);
+            let packed = brain.pack();
+            *brain = mob.make_brain(&packed);
         };
+        self.process_brain_memory_clear();
+    }
+
+    pub fn tick_brain(&self, mob: &dyn Mob) {
+        let world = self.living_entity.entity.world.load_full();
+        let time = world.get_world_age();
+        self.brain(mob).tick(&world, mob, time);
         self.process_brain_memory_clear();
     }
 
@@ -1708,11 +1742,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.get_mob_entity().read_mob_nbt(nbt);
         if let Some(brain) = nbt.get_compound("Brain") {
             let rebuilt = self.make_brain(&PackedMemories::from_nbt(brain));
-            let mob = self.get_mob_entity();
-            *mob.brain
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = rebuilt;
-            mob.process_brain_memory_clear();
+            self.get_mob_entity().set_brain(rebuilt);
         }
         if let Some(ageable) = self.as_ageable() {
             ageable.read_ageable_nbt(nbt);

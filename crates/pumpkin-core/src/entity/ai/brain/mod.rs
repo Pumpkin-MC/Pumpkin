@@ -60,6 +60,8 @@ pub struct Brain {
     state: BrainState,
     sensors: Vec<SensorEntry>,
     behaviors: Vec<BehaviorEntry>,
+    /// Each priority's activities in first-registration order.
+    activity_order: Vec<(i32, Activity)>,
 }
 
 pub struct BrainState {
@@ -274,13 +276,30 @@ impl Brain {
             for id in behavior.required_memories() {
                 self.state.memories.register(*id);
             }
+            if !self.activity_order.contains(&(priority, data.activity)) {
+                self.activity_order.push((priority, data.activity));
+            }
             self.behaviors.push(BehaviorEntry {
                 priority,
                 activity: data.activity,
                 behavior,
             });
         }
-        self.behaviors.sort_by_key(|entry| entry.priority);
+        let order = &self.activity_order;
+        // Stable, so behaviors of one activity keep their registration order.
+        self.behaviors.sort_by_key(|entry| {
+            let activities = order
+                .iter()
+                .filter(|(priority, _)| *priority == entry.priority)
+                .count();
+            (
+                entry.priority,
+                activity_slot(entry.activity, activities),
+                order
+                    .iter()
+                    .position(|key| *key == (entry.priority, entry.activity)),
+            )
+        });
     }
 
     fn apply_pending_memory_clear(state: &mut BrainState, mob: &dyn Mob) {
@@ -403,6 +422,23 @@ impl fmt::Display for BrainDebugDump {
     }
 }
 
+fn activity_slot(activity: Activity, activities: usize) -> usize {
+    let hash = activity
+        .name()
+        .encode_utf16()
+        .fold(0i32, |hash, unit| {
+            hash.wrapping_mul(31).wrapping_add(i32::from(unit))
+        })
+        .cast_unsigned();
+    let mut capacity = JAVA_HASH_MAP_CAPACITY;
+    while activities > capacity / 4 * 3 {
+        capacity *= 2;
+    }
+    (hash ^ (hash >> 16)) as usize & (capacity - 1)
+}
+
+const JAVA_HASH_MAP_CAPACITY: usize = 16;
+
 pub struct BrainProvider {
     pub memory_types: &'static [MemoryModuleId],
     pub sensor_types: &'static [SensorType],
@@ -442,6 +478,7 @@ impl BrainProvider {
             },
             sensors: Vec::new(),
             behaviors: Vec::new(),
+            activity_order: Vec::new(),
         }
     }
 }
@@ -486,7 +523,7 @@ mod tests {
             &[]
         }
 
-        fn can_still_use(&mut self, _tick: &BrainTick<'_>) -> bool {
+        fn can_still_use(&mut self, _tick: &mut BrainTick<'_>) -> bool {
             true
         }
 
@@ -743,6 +780,108 @@ mod tests {
         Ok(())
     }
     #[tokio::test]
+    async fn activities_of_one_priority_run_in_vanilla_hash_map_order()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let (world, mob) = probe(&folder);
+        let started = Arc::new(Mutex::new(Vec::new()));
+        let mut brain = Brain::default();
+        for (activity, name) in [
+            (Activity::Fight, "fight"),
+            (Activity::Core, "core"),
+            (Activity::Idle, "idle"),
+        ] {
+            let started = started.clone();
+            brain.add_activity(ActivityData::with_priority_start(
+                activity,
+                0,
+                vec![Box::new(OneShot::new(name, Vec::new(), move |_| {
+                    started
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .push(name);
+                    true
+                }))],
+            ));
+        }
+        let mut core = ActivitySet::single(Activity::Core);
+        core.insert(Activity::Idle);
+        brain.set_core_activities(core);
+        brain.set_active_activity_if_possible(Activity::Fight);
+        brain.tick(&world, &mob, 1);
+        world.level.shutdown().await;
+        assert_eq!(
+            *started
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            ["core", "idle", "fight"]
+        );
+        Ok(())
+    }
+
+    struct ProviderMob(MobEntity, Arc<AtomicUsize>);
+
+    impl Mob for ProviderMob {
+        fn get_mob_entity(&self) -> &MobEntity {
+            &self.0
+        }
+
+        fn make_brain(&self, packed: &PackedMemories) -> Brain {
+            let mut brain = Brain::default();
+            brain.register_memory(types::HOME.id());
+            brain.register_memory(types::PACIFIED.id());
+            brain.add_activity(ActivityData::with_priority_start(
+                Activity::Idle,
+                0,
+                vec![Box::new(Timed::new(StopProbe(self.1.clone())))],
+            ));
+            brain.load_packed(packed);
+            brain
+        }
+    }
+
+    #[tokio::test]
+    async fn brains_come_from_the_provider_and_refresh_keeps_saved_memories()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_data::dimension::Dimension;
+        use pumpkin_util::math::position::BlockPos;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let stops = Arc::new(AtomicUsize::new(0));
+        let mob = ProviderMob(
+            MobEntity::new(Entity::new(
+                world.clone(),
+                Vector3::new(0.0, 64.0, 0.0),
+                &EntityType::PIGLIN,
+            )),
+            stops.clone(),
+        );
+        let home = memory::GlobalPos::new(&Dimension::OVERWORLD, BlockPos::new(1, 64, 2));
+        let registered = mob
+            .0
+            .brain(&mob)
+            .check(types::HOME.id(), MemoryStatus::Registered);
+        mob.0.brain(&mob).set(types::HOME, home);
+        mob.0.tick_brain(&mob);
+        let running = mob.0.brain(&mob).debug_dump().behaviors;
+        mob.0.refresh_brain(&mob);
+        let (kept_home, running_after) = {
+            let brain = mob.0.brain(&mob);
+            (
+                brain.get(types::HOME) == Some(&home),
+                brain.debug_dump().behaviors,
+            )
+        };
+        world.level.shutdown().await;
+        assert!(registered);
+        assert_eq!(running, ["StopProbe"]);
+        assert_eq!(stops.load(Ordering::Relaxed), 1);
+        assert!(kept_home);
+        assert!(running_after.is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn self_removal_clears_memories_before_the_next_brain_callback()
     -> Result<(), Box<dyn std::error::Error>> {
         let folder = tempfile::tempdir()?;
@@ -771,10 +910,7 @@ mod tests {
             ],
         ));
         brain.set(types::PACIFIED, true);
-        *mob.0
-            .brain
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = brain;
+        mob.0.set_brain(brain);
         mob.0.tick_brain(&*mob);
         let has_memory = mob
             .0
