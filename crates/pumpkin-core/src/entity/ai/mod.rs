@@ -21,7 +21,10 @@ pub(crate) mod test_support {
     use crate::{block::registry::default_registry, world::World};
 
     pub fn world(folder: &tempfile::TempDir) -> Arc<World> {
-        let dimension = Dimension::OVERWORLD.clone();
+        world_in_dimension(folder, Dimension::OVERWORLD.clone())
+    }
+
+    pub fn world_in_dimension(folder: &tempfile::TempDir, dimension: Dimension) -> Arc<World> {
         Arc::new(World::load(
             Level::from_root_folder(
                 &LevelConfig::default(),

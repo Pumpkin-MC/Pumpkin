@@ -87,7 +87,6 @@ impl EndermanEntity {
             .navigator
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        navigator.set_mob_dimensions(0.6, 2.9);
         navigator.set_pathfinding_malus(PathType::Water, -1.0);
         drop(navigator);
 

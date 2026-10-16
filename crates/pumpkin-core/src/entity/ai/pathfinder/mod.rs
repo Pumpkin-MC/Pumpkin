@@ -382,7 +382,6 @@ pub trait PathNavigationTrait: Send + Sync {
     fn get_path_mut(&mut self) -> Option<&mut Path>;
     fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32);
     fn get_pathfinding_malus(&self, path_type: PathType) -> f32;
-    fn set_mob_dimensions(&mut self, width: f32, height: f32);
     fn can_reach_within(
         &mut self,
         entity: &LivingEntity,
@@ -442,8 +441,6 @@ pub struct PathNavigation {
     pub total_ticks: u32,
     pub path_start_pos: Option<Vector3<f64>>,
     pub path_type_overrides: FxHashMap<PathType, f32>,
-    pub mob_width: f32,
-    pub mob_height: f32,
     pub repath_cooldown: u32,
     pub can_float: bool,
     pub can_walk_over_fences: bool,
@@ -490,8 +487,6 @@ impl PathNavigation {
             total_ticks: 0,
             path_start_pos: None,
             path_type_overrides: FxHashMap::default(),
-            mob_width: 0.6,
-            mob_height: 1.95,
             repath_cooldown: 0,
             can_float: false,
             can_walk_over_fences: false,
@@ -548,7 +543,7 @@ impl PathNavigation {
     fn target(&self, entity: &LivingEntity) -> Option<NavigationTarget> {
         let path = self.path.as_ref().filter(|path| !path.is_done())?;
         Some(NavigationTarget {
-            position: path.get_next_entity_pos(entity.entity.entity_dimension.load().width)?,
+            position: path.get_next_entity_pos(entity.entity.width())?,
             speed_modifier: self.speed_modifier,
         })
     }
@@ -563,11 +558,6 @@ impl PathNavigation {
             .get(&path_type)
             .copied()
             .unwrap_or_else(|| path_type.get_malus())
-    }
-
-    pub const fn set_mob_dimensions(&mut self, width: f32, height: f32) {
-        self.mob_width = width;
-        self.mob_height = height;
     }
 
     pub fn can_reach_within(
@@ -592,13 +582,9 @@ impl PathNavigation {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path> {
-        let start_pos_f = entity.entity.pos.load();
-        let start_block_vec = BlockPos::floored_v(start_pos_f).0;
-        let mob_position = Vector3::new(start_block_vec.x, start_block_vec.y, start_block_vec.z);
-
-        let context = PathfindingContext::new(mob_position, entity.entity.world.load_full());
-        let mut mob_data = MobData::new(start_pos_f, self.mob_width, self.mob_height, 1.0);
-        mob_data.on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
+        let world = entity.entity.world.load_full();
+        let mut mob_data = MobData::from_entity(entity, &world);
+        let context = PathfindingContext::new(BlockPos::floored_v(mob_data.position).0, world);
         mob_data.can_swim = self.can_float;
 
         mob_data.set_pathfinding_malus(PathType::DangerFire, 16.0);
@@ -805,15 +791,18 @@ impl PathNavigation {
     pub fn find_surface_position(world: &World, mut pos: BlockPos) -> BlockPos {
         let block_state = world.get_block_state(&pos);
         if block_state.is_air() {
-            let mut column_pos = pos;
-            while column_pos.0.y >= -64 && world.get_block_state(&column_pos).is_air() {
+            let mut column_pos = pos.down();
+            while column_pos.0.y >= world.get_bottom_y()
+                && world.get_block_state(&column_pos).is_air()
+            {
                 column_pos.0.y -= 1;
             }
-            if column_pos.0.y >= -64 {
+            if column_pos.0.y >= world.get_bottom_y() {
                 return BlockPos::new(column_pos.0.x, column_pos.0.y + 1, column_pos.0.z);
             }
             column_pos.0.y = pos.0.y + 1;
-            while column_pos.0.y <= 320 && world.get_block_state(&column_pos).is_air() {
+            while column_pos.0.y <= world.get_top_y() && world.get_block_state(&column_pos).is_air()
+            {
                 column_pos.0.y += 1;
             }
             pos = column_pos;
@@ -821,8 +810,8 @@ impl PathNavigation {
         if !world.get_block_state(&pos).is_solid() {
             return pos;
         }
-        let mut column_pos = pos;
-        while column_pos.0.y <= 320 && world.get_block_state(&column_pos).is_solid() {
+        let mut column_pos = pos.up();
+        while column_pos.0.y <= world.get_top_y() && world.get_block_state(&column_pos).is_solid() {
             column_pos.0.y += 1;
         }
         column_pos
@@ -1111,10 +1100,11 @@ impl PathNavigation {
                 let horizontal_dist_sq = dx * dx + dz * dz;
                 let horizontal_dist = horizontal_dist_sq.sqrt();
 
-                self.max_distance_to_waypoint = if self.mob_width > 0.75 {
-                    self.mob_width * 0.5
+                let width = entity.entity.width();
+                self.max_distance_to_waypoint = if width > 0.75 {
+                    width * 0.5
                 } else {
-                    0.75 - self.mob_width * 0.5
+                    0.75 - width * 0.5
                 };
 
                 if !on_ground
@@ -1213,10 +1203,6 @@ impl PathNavigationTrait for GroundPathNavigation {
 
     fn get_pathfinding_malus(&self, path_type: PathType) -> f32 {
         self.inner.get_pathfinding_malus(path_type)
-    }
-
-    fn set_mob_dimensions(&mut self, width: f32, height: f32) {
-        self.inner.set_mob_dimensions(width, height);
     }
 
     fn can_reach_within(
@@ -1449,10 +1435,6 @@ impl PathNavigationTrait for FlyingPathNavigation {
 
     fn get_pathfinding_malus(&self, path_type: PathType) -> f32 {
         self.inner.get_pathfinding_malus(path_type)
-    }
-
-    fn set_mob_dimensions(&mut self, width: f32, height: f32) {
-        self.inner.set_mob_dimensions(width, height);
     }
 
     fn can_reach_within(
@@ -1710,10 +1692,6 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         self.inner.get_pathfinding_malus(path_type)
     }
 
-    fn set_mob_dimensions(&mut self, width: f32, height: f32) {
-        self.inner.set_mob_dimensions(width, height);
-    }
-
     fn can_reach_within(
         &mut self,
         entity: &LivingEntity,
@@ -1746,7 +1724,7 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
 
         let mob_pos = Vector3::new(
             entity.entity.pos.load().x,
-            entity.entity.pos.load().y + f64::from(self.inner.mob_height) * 0.5,
+            entity.entity.pos.load().y + f64::from(entity.entity.height()) * 0.5,
             entity.entity.pos.load().z,
         );
         self.inner.do_stuck_detection(mob_pos, entity);
@@ -1814,7 +1792,7 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
             self.inner.speed_modifier = speed;
             let mob_pos = Vector3::new(
                 entity.entity.pos.load().x,
-                entity.entity.pos.load().y + f64::from(self.inner.mob_height) * 0.5,
+                entity.entity.pos.load().y + f64::from(entity.entity.height()) * 0.5,
                 entity.entity.pos.load().z,
             );
             self.inner.last_stuck_check = self.inner.tick_count;
@@ -1973,10 +1951,6 @@ impl PathNavigationTrait for WallClimberNavigation {
 
     fn get_pathfinding_malus(&self, path_type: PathType) -> f32 {
         self.inner.get_pathfinding_malus(path_type)
-    }
-
-    fn set_mob_dimensions(&mut self, width: f32, height: f32) {
-        self.inner.set_mob_dimensions(width, height);
     }
 
     fn can_reach_within(
@@ -2195,10 +2169,6 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
         self.inner.get_pathfinding_malus(path_type)
     }
 
-    fn set_mob_dimensions(&mut self, width: f32, height: f32) {
-        self.inner.set_mob_dimensions(width, height);
-    }
-
     fn can_reach_within(
         &mut self,
         entity: &LivingEntity,
@@ -2232,7 +2202,7 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
 
             let mob_pos = Vector3::new(
                 entity.entity.pos.load().x,
-                entity.entity.pos.load().y + f64::from(self.inner.mob_height) * 0.5,
+                entity.entity.pos.load().y + f64::from(entity.entity.height()) * 0.5,
                 entity.entity.pos.load().z,
             );
             self.inner.do_stuck_detection(mob_pos, entity);
@@ -2303,7 +2273,7 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
             self.inner.speed_modifier = speed;
             let mob_pos = Vector3::new(
                 entity.entity.pos.load().x,
-                entity.entity.pos.load().y + f64::from(self.inner.mob_height) * 0.5,
+                entity.entity.pos.load().y + f64::from(entity.entity.height()) * 0.5,
                 entity.entity.pos.load().z,
             );
             self.inner.last_stuck_check = self.inner.tick_count;
@@ -2451,5 +2421,144 @@ impl Deref for Navigator {
 impl DerefMut for Navigator {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut *self.inner
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use pumpkin_data::{dimension::Dimension, entity::EntityType};
+    use pumpkin_util::math::boundingbox::EntityDimensions;
+
+    use super::*;
+    use crate::entity::{
+        Entity,
+        ai::test_support::{world, world_in_dimension},
+    };
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn living(world: Arc<World>, entity_type: &'static EntityType) -> LivingEntity {
+        LivingEntity::new(Entity::new(
+            world,
+            Vector3::new(0.5, 64.0, 0.5),
+            entity_type,
+        ))
+    }
+
+    #[tokio::test]
+    async fn swim_search_starts_at_the_current_mob_footprint() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::IRON_GOLEM);
+        let mut navigation =
+            PathNavigation::new(EvaluatorKind::Swim(SwimNodeEvaluator::new(false)));
+
+        let path = navigation.compute_path(&living, living.entity.pos.load(), 0);
+        world.level.shutdown().await;
+
+        let start = path
+            .as_ref()
+            .and_then(|path| path.get_node(0))
+            .map(|node| node.pos);
+        assert_eq!(start, Some(BlockPos::new(-1, 64, -1)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn floating_search_uses_water_contact_instead_of_falling_to_the_world_floor() -> TestResult
+    {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::COW);
+        living.entity.touching_water.store(true, Ordering::Relaxed);
+        living.entity.on_ground.store(false, Ordering::Relaxed);
+        let mut navigation = GroundPathNavigation::new();
+        navigation.set_can_float(true);
+
+        let floating = navigation
+            .inner
+            .compute_path(&living, living.entity.pos.load(), 0);
+        living.entity.touching_water.store(false, Ordering::Relaxed);
+        let airborne = navigation
+            .inner
+            .compute_path(&living, living.entity.pos.load(), 0);
+        world.level.shutdown().await;
+
+        assert_eq!(
+            floating.and_then(|path| path.get_node(0).map(|node| node.pos.0.y)),
+            Some(64)
+        );
+        assert_eq!(
+            airborne.and_then(|path| path.get_node(0).map(|node| node.pos.0.y)),
+            Some(-63)
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn search_and_surface_scan_use_the_dimension_height_limits() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world_in_dimension(&folder, Dimension::THE_NETHER.clone());
+        let living = living(world.clone(), &EntityType::COW);
+        living.entity.on_ground.store(false, Ordering::Relaxed);
+        let mut navigation = GroundPathNavigation::new();
+
+        let path = navigation
+            .inner
+            .compute_path(&living, living.entity.pos.load(), 0);
+        let surface = PathNavigation::find_surface_position(&world, BlockPos::new(0, 64, 0));
+        world.level.shutdown().await;
+
+        assert_eq!(
+            path.and_then(|path| path.get_node(0).map(|node| node.pos.0.y)),
+            Some(1)
+        );
+        assert_eq!(surface, BlockPos::new(0, 256, 0));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn waypoint_reach_uses_current_dimensions_after_a_size_change() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::IRON_GOLEM);
+        living.entity.pos.store(Vector3::new(-0.1, 64.0, 0.5));
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        let mut navigation = GroundPathNavigation::new();
+        navigation.set_progress(NavigatorGoal::new(
+            living.entity.pos.load(),
+            Vector3::new(6.5, 64.0, 0.5),
+            1.0,
+        ));
+        navigation.move_to_path(
+            Some(Path::new(
+                vec![
+                    Node::new(BlockPos::new(0, 64, 0)),
+                    Node::new(BlockPos::new(3, 64, 0)),
+                    Node::new(BlockPos::new(6, 64, 0)),
+                ],
+                BlockPos::new(6, 64, 0),
+                true,
+            )),
+            1.0,
+            &living,
+        );
+        navigation.inner.repath_cooldown = 2;
+
+        navigation.tick(&living);
+        let first = navigation.get_path().map(Path::get_next_node_index);
+        living
+            .entity
+            .entity_dimension
+            .store(EntityDimensions::new(2.4, 2.7, 2.3));
+        living.entity.pos.store(Vector3::new(2.6, 64.0, 0.5));
+        navigation.tick(&living);
+        let second = navigation.get_path().map(Path::get_next_node_index);
+        world.level.shutdown().await;
+
+        assert_eq!((first, second), (Some(1), Some(2)));
+        Ok(())
     }
 }
