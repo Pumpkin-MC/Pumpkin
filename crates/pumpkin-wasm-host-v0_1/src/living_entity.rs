@@ -275,6 +275,7 @@ impl HostLivingEntity for PluginHostState {
                 id: modifier.id,
                 amount: modifier.amount,
                 operation: from_wit_modifier_op(modifier.operation),
+                permanent: true,
             };
             living.update_attribute(attribute, |inst| inst.add_or_replace_modifier(internal_mod));
             pumpkin_core::entity::attributes::send_attribute_updates_for_living(

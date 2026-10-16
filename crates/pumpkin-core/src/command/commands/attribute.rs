@@ -259,6 +259,8 @@ impl CommandExecutor for ModifierAddExecutor {
                     id: modifier_id.clone(),
                     amount: value,
                     operation: self.operation,
+                    // Vanilla `AttributeCommand` adds command modifiers as permanent.
+                    permanent: true,
                 });
                 inst.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
                 Ok(())
