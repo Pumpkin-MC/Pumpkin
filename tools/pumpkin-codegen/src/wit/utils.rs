@@ -11,32 +11,33 @@ use wit_encoder::{
     VariantCase,
 };
 
-pub fn map_type(ty: &Type, defined_types: &HashSet<String>) -> Result<WitType, ()> {
+pub fn map_type(ty: &Type, defined_types: &HashSet<String>) -> (WitType, bool) {
     match ty {
         Type::Path(TypePath { path, .. }) => {
             let last_segment = path.segments.last().unwrap();
             let ident_str = last_segment.ident.to_string();
             match ident_str.as_str() {
                 "String" | "TextComponent" | "str" | "Identifier" | "ResourceLocation"
-                | "LpVector3d" => Ok(WitType::String),
-                "Uuid" => Ok(WitType::Named("uuid".into())),
-                "i32" | "VarInt" | "u32" | "VarUInt" | "usize" | "u24" => Ok(WitType::S32),
-                "i64" | "u64" | "VarLong" | "VarULong" => Ok(WitType::S64),
-                "bool" => Ok(WitType::Bool),
-                "f32" => Ok(WitType::F32),
-                "f64" => Ok(WitType::F64),
-                "u8" | "i8" => Ok(WitType::U8),
-                "u16" | "i16" => Ok(WitType::S32),
-                "Bytes" | "BoxedU8Slice" | "ChunkData" => Ok(WitType::list(WitType::U8)),
-                "BitSet" | "Bitset" => Ok(WitType::list(WitType::S64)),
-                "NbtCompound" | "Nbt" => Ok(WitType::Named("nbt-tree".into())),
+                | "LpVector3d" => (WitType::String, true),
+                "Uuid" => (WitType::Named("uuid".into()), true),
+                "i32" | "VarInt" | "u32" | "VarUInt" | "usize" | "u24" => (WitType::S32, true),
+                "i64" | "u64" | "VarLong" | "VarULong" => (WitType::S64, true),
+                "bool" => (WitType::Bool, true),
+                "f32" => (WitType::F32, true),
+                "f64" => (WitType::F64, true),
+                "u8" | "i8" => (WitType::U8, true),
+                "u16" | "i16" => (WitType::S32, true),
+                "Bytes" | "BoxedU8Slice" | "ChunkData" => (WitType::list(WitType::U8), true),
+                "BitSet" | "Bitset" => (WitType::list(WitType::S64), true),
+                "NbtCompound" | "Nbt" => (WitType::Named("nbt-tree".into()), true),
                 "Option" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments
                         && let Some(GenericArgument::Type(inner_ty)) = args.args.first()
                     {
-                        return Ok(WitType::option(map_type(inner_ty, defined_types)?));
+                        let (inner, ok) = map_type(inner_ty, defined_types);
+                        return (WitType::option(inner), ok);
                     }
-                    Err(())
+                    (WitType::Named("inexpressible-host-type".into()), false)
                 }
                 "Box" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments
@@ -46,18 +47,19 @@ pub fn map_type(ty: &Type, defined_types: &HashSet<String>) -> Result<WitType, (
                             if let Type::Path(tp) = &*ts.elem
                                 && tp.path.segments.last().unwrap().ident == "u8"
                             {
-                                return Ok(WitType::list(WitType::U8));
+                                return (WitType::list(WitType::U8), true);
                             }
-                            return Ok(WitType::list(map_type(&ts.elem, defined_types)?));
+                            let (inner, ok) = map_type(&ts.elem, defined_types);
+                            return (WitType::list(inner), ok);
                         }
                         if let Type::Path(tp) = inner_ty
                             && tp.path.segments.last().unwrap().ident == "str"
                         {
-                            return Ok(WitType::String);
+                            return (WitType::String, true);
                         }
                         return map_type(inner_ty, defined_types);
                     }
-                    Err(())
+                    (WitType::Named("inexpressible-host-type".into()), false)
                 }
                 "Vec" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments
@@ -66,11 +68,12 @@ pub fn map_type(ty: &Type, defined_types: &HashSet<String>) -> Result<WitType, (
                         if let Type::Path(tp) = inner_ty
                             && tp.path.segments.last().unwrap().ident == "u8"
                         {
-                            return Ok(WitType::list(WitType::U8));
+                            return (WitType::list(WitType::U8), true);
                         }
-                        return Ok(WitType::list(map_type(inner_ty, defined_types)?));
+                        let (inner, ok) = map_type(inner_ty, defined_types);
+                        return (WitType::list(inner), ok);
                     }
-                    Err(())
+                    (WitType::Named("inexpressible-host-type".into()), false)
                 }
                 "Cow" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments {
@@ -79,13 +82,13 @@ pub fn map_type(ty: &Type, defined_types: &HashSet<String>) -> Result<WitType, (
                                 if let Type::Path(tp) = inner_ty
                                     && tp.path.segments.last().unwrap().ident == "str"
                                 {
-                                    return Ok(WitType::String);
+                                    return (WitType::String, true);
                                 }
                                 return map_type(inner_ty, defined_types);
                             }
                         }
                     }
-                    Err(())
+                    (WitType::Named("inexpressible-host-type".into()), false)
                 }
                 "NonZero" | "EnumAsStr" | "IdOr" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments
@@ -93,7 +96,7 @@ pub fn map_type(ty: &Type, defined_types: &HashSet<String>) -> Result<WitType, (
                     {
                         return map_type(inner_ty, defined_types);
                     }
-                    Err(())
+                    (WitType::Named("inexpressible-host-type".into()), false)
                 }
                 "HashMap" => {
                     if let PathArguments::AngleBracketed(args) = &last_segment.arguments {
@@ -106,36 +109,33 @@ pub fn map_type(ty: &Type, defined_types: &HashSet<String>) -> Result<WitType, (
                             })
                             .collect();
                         if type_args.len() == 2 {
-                            return Ok(WitType::list(WitType::tuple(vec![
-                                map_type(type_args[0], defined_types)?,
-                                map_type(type_args[1], defined_types)?,
-                            ])));
+                            let (t0, ok0) = map_type(type_args[0], defined_types);
+                            let (t1, ok1) = map_type(type_args[1], defined_types);
+                            return (WitType::list(WitType::tuple(vec![t0, t1])), ok0 && ok1);
                         }
                     }
-                    Err(())
+                    (WitType::Named("inexpressible-host-type".into()), false)
                 }
                 "Vector3" | "BlockPos" => {
                     if ident_str == "Vector3" {
-                        Ok(WitType::tuple(vec![
-                            WitType::F64,
-                            WitType::F64,
-                            WitType::F64,
-                        ]))
+                        (
+                            WitType::tuple(vec![WitType::F64, WitType::F64, WitType::F64]),
+                            true,
+                        )
                     } else {
-                        Ok(WitType::tuple(vec![
-                            WitType::S32,
-                            WitType::S32,
-                            WitType::S32,
-                        ]))
+                        (
+                            WitType::tuple(vec![WitType::S32, WitType::S32, WitType::S32]),
+                            true,
+                        )
                     }
                 }
-                "Vector2" => Ok(WitType::tuple(vec![WitType::F64, WitType::F64])),
+                "Vector2" => (WitType::tuple(vec![WitType::F64, WitType::F64]), true),
                 _ => {
                     let kebab = ident_str.to_kebab_case();
                     if defined_types.contains(&kebab) {
-                        Ok(WitType::named(kebab))
+                        (WitType::named(kebab), true)
                     } else {
-                        Err(())
+                        (WitType::Named("inexpressible-host-type".into()), false)
                     }
                 }
             }
@@ -145,35 +145,39 @@ pub fn map_type(ty: &Type, defined_types: &HashSet<String>) -> Result<WitType, (
             if let Type::Path(tp) = &*ts.elem
                 && tp.path.segments.last().unwrap().ident == "u8"
             {
-                Ok(WitType::list(WitType::U8))
+                (WitType::list(WitType::U8), true)
             } else {
-                Ok(WitType::list(map_type(&ts.elem, defined_types)?))
+                let (inner, ok) = map_type(&ts.elem, defined_types);
+                (WitType::list(inner), ok)
             }
         }
         Type::Array(ta) => {
             if let Type::Path(tp) = &*ta.elem
                 && tp.path.segments.last().unwrap().ident == "u8"
             {
-                Ok(WitType::list(WitType::U8))
+                (WitType::list(WitType::U8), true)
             } else {
-                Ok(WitType::list(map_type(&ta.elem, defined_types)?))
+                let (inner, ok) = map_type(&ta.elem, defined_types);
+                (WitType::list(inner), ok)
             }
         }
         Type::Tuple(tt) => {
             if tt.elems.is_empty() {
-                Ok(WitType::String)
+                (WitType::String, true)
             } else {
-                Ok(WitType::tuple(
-                    tt.elems
-                        .iter()
-                        .map(|e| map_type(e, defined_types))
-                        .collect::<Result<Vec<_>, _>>()?,
-                ))
+                let mut elems = Vec::with_capacity(tt.elems.len());
+                let mut all_ok = true;
+                for e in &tt.elems {
+                    let (mapped, ok) = map_type(e, defined_types);
+                    elems.push(mapped);
+                    all_ok &= ok;
+                }
+                (WitType::tuple(elems), all_ok)
             }
         }
         Type::Paren(tp) => map_type(&tp.elem, defined_types),
         Type::Group(tg) => map_type(&tg.elem, defined_types),
-        _ => Err(()),
+        _ => (WitType::Named("inexpressible-host-type".into()), false),
     }
 }
 
@@ -185,21 +189,18 @@ pub fn collect_fields(
         .into_iter()
         .map(|field| {
             let field_name = field.ident.as_ref().unwrap().to_string().to_kebab_case();
-            let field_type = map_type(&field.ty, defined_types);
+            let (field_type, is_ok) = map_type(&field.ty, defined_types);
 
             let mut docs = extract_doc_comments(&field.attrs);
-            if field_type.as_ref().is_err() {
+            if !is_ok {
                 docs = Some(format!(
-                    "{}WARNING: Could not translate type `{}` to WIT",
+                    "{}WARNING: Could not fully translate type `{}` to WIT",
                     docs.map_or_default(|str| str + &"\n\n"),
                     field.ty.to_token_stream()
                 ));
             }
 
-            let mut wit_field = Field::new(
-                field_name,
-                field_type.unwrap_or_else(|()| WitType::Named("inexpressible-host-type".into())),
-            );
+            let mut wit_field = Field::new(field_name, field_type);
             wit_field.set_docs(docs);
             wit_field
         })
@@ -250,7 +251,9 @@ pub fn translate_enum_to_wit(
                     format!("{enum_wit_name}-{name}"),
                     TypeDefKind::Record(Record::new(fields_list)),
                 );
-                def.set_docs(Some(format!("Generated; extracted from variant arm. See `{enum_wit_name}.{name}` for details.")));
+                def.set_docs(Some(format!(
+                    "Generated; extracted from variant arm. See `{enum_wit_name}.{name}` for details."
+                )));
                 def
             })
             .collect::<Vec<_>>();
@@ -272,19 +275,14 @@ pub fn translate_enum_to_wit(
                     Fields::Unnamed(fields) => match fields.unnamed.len() {
                         0 => (VariantCase::empty(variant_wit_name), None),
                         1 => {
-                            let ty = map_type(&fields.unnamed[0].ty, defined_types);
-                            let warning = ty.as_ref().err().map(|_| {
+                            let (ty, is_ok) = map_type(&fields.unnamed[0].ty, defined_types);
+                            let warning = (!is_ok).then(|| {
                                 format!(
-                                    "WARNING: Could not translate type `{}` to WIT",
+                                    "WARNING: Could not fully translate type `{}` to WIT",
                                     fields.unnamed[0].ty.to_token_stream()
                                 )
                             });
-                            let case = VariantCase::value(
-                                variant_wit_name,
-                                ty.unwrap_or_else(|_| {
-                                    WitType::Named("inexpressible-host-type".into())
-                                }),
-                            );
+                            let case = VariantCase::value(variant_wit_name, ty);
                             (case, warning)
                         }
                         _ => {
@@ -293,25 +291,21 @@ pub fn translate_enum_to_wit(
                                 .iter()
                                 .map(|f| map_type(&f.ty, defined_types))
                                 .collect();
-                            let warning = types.iter().any(|t| t.is_err()).then(|| {
+                            let warning = types.iter().any(|(_, is_ok)| !is_ok).then(|| {
                                 format!(
-                                    "WARNING: Could not translate some types to WIT: {}",
+                                    "WARNING: Could not fully translate some types to WIT: {}",
                                     fields
                                         .unnamed
                                         .iter()
                                         .zip(types.iter())
-                                        .filter(|(rust, wit)| wit.is_err())
-                                        .map(|(rust, wit)| rust.to_token_stream().to_string())
+                                        .filter(|(_, (_, is_ok))| !is_ok)
+                                        .map(|(rust, _)| rust.to_token_stream().to_string())
                                         .fold(String::new(), |accum, str| accum + "\n - " + &str)
                                 )
                             });
                             let case = VariantCase::value(
                                 variant_wit_name,
-                                WitType::tuple(types.into_iter().map(|t| {
-                                    t.unwrap_or_else(|_| {
-                                        WitType::Named("inexpressible-host-type".into())
-                                    })
-                                })),
+                                WitType::tuple(types.into_iter().map(|(t, _)| t)),
                             );
                             (case, warning)
                         }

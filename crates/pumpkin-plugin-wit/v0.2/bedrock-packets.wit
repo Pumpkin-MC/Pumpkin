@@ -216,9 +216,9 @@ interface bedrock-packets {
     unknown(s32),
   }
   variant transaction-data {
-    /// WARNING: Could not translate type `NormalTransactionData` to WIT
+    /// WARNING: Could not fully translate type `NormalTransactionData` to WIT
     normal(inexpressible-host-type),
-    /// WARNING: Could not translate type `MismatchTransactionData` to WIT
+    /// WARNING: Could not fully translate type `MismatchTransactionData` to WIT
     mismatch(inexpressible-host-type),
     use-item(use-item-transaction-data),
     use-item-on-entity(use-item-on-entity-transaction-data),
@@ -914,7 +914,7 @@ interface bedrock-packets {
     attributes-list: list<synced-attribute>,
     /// Metadata dictionary (flags, name tags, scale).
     /// 
-    /// WARNING: Could not translate type `SyncedActorDataList` to WIT
+    /// WARNING: Could not fully translate type `SyncedActorDataList` to WIT
     actor-data: inexpressible-host-type,
     /// Dynamic Molang property synchronization data.
     synced-properties: property-sync-data,
@@ -946,7 +946,7 @@ interface bedrock-packets {
     velocity: tuple<f64, f64, f64>,
     /// Metadata dictionary for the item entity.
     /// 
-    /// WARNING: Could not translate type `SyncedActorDataList` to WIT
+    /// WARNING: Could not fully translate type `SyncedActorDataList` to WIT
     entity-data: inexpressible-host-type,
     /// Whether the item originated from fishing.
     is-from-fishing: bool,
@@ -975,7 +975,7 @@ interface bedrock-packets {
     player-game-type: game-type,
     /// Entity metadata flags and properties.
     /// 
-    /// WARNING: Could not translate type `SyncedActorDataList` to WIT
+    /// WARNING: Could not fully translate type `SyncedActorDataList` to WIT
     entity-data: inexpressible-host-type,
     /// Dynamic Molang property synchronization.
     synced-properties: property-sync-data,
@@ -1779,7 +1779,7 @@ interface bedrock-packets {
     target-runtime-id: s64,
     /// A map of entity metadata properties (e.g., flags, name tags, scale)
     /// 
-    /// WARNING: Could not translate type `SyncedActorDataList` to WIT
+    /// WARNING: Could not fully translate type `SyncedActorDataList` to WIT
     actor-data: inexpressible-host-type,
     /// Dynamic properties synced between client and server
     synced-properties: property-sync-data,

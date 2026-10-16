@@ -42,8 +42,8 @@ interface java-packets {
     keep-alive-id: s64,
   }
   record config-s-known-packs {
-    /// WARNING: Could not translate type `Vec < KnownPack < 'a > >` to WIT
-    known-packs: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `Vec < KnownPack < 'a > >` to WIT
+    known-packs: list<inexpressible-host-type>,
   }
   /// A packet used for custom communication between the client and server.
   /// 
@@ -110,11 +110,11 @@ interface java-packets {
     selected-item-index: s32,
   }
   record s-change-difficulty {
-    /// WARNING: Could not translate type `Difficulty` to WIT
+    /// WARNING: Could not fully translate type `Difficulty` to WIT
     difficulty: inexpressible-host-type,
   }
   record s-change-game-mode {
-    /// WARNING: Could not translate type `GameMode` to WIT
+    /// WARNING: Could not fully translate type `GameMode` to WIT
     game-mode: inexpressible-host-type,
   }
   record s-chat-ack {
@@ -155,9 +155,9 @@ interface java-packets {
     button: u8,
     mode: slot-action-type,
     length-of-array: s32,
-    /// WARNING: Could not translate type `Vec < (i16 , OptionalItemStackHash) >` to WIT
-    array-of-changed-slots: inexpressible-host-type,
-    /// WARNING: Could not translate type `OptionalItemStackHash` to WIT
+    /// WARNING: Could not fully translate type `Vec < (i16 , OptionalItemStackHash) >` to WIT
+    array-of-changed-slots: list<tuple<s32, inexpressible-host-type>>,
+    /// WARNING: Could not fully translate type `OptionalItemStackHash` to WIT
     carried-item: inexpressible-host-type,
   }
   enum slot-action-type {
@@ -441,7 +441,7 @@ interface java-packets {
   }
   record s-set-creative-slot {
     slot: s32,
-    /// WARNING: Could not translate type `ItemStackSerializer < 'static >` to WIT
+    /// WARNING: Could not fully translate type `ItemStackSerializer < 'static >` to WIT
     clicked-item: inexpressible-host-type,
   }
   record game-rule-entry {
@@ -525,7 +525,7 @@ interface java-packets {
   record test-instance-block-data {
     test: option<string>,
     size: var-int-vector3,
-    /// WARNING: Could not translate type `pumpkin_data :: block_rotation :: Rotation` to WIT
+    /// WARNING: Could not fully translate type `pumpkin_data :: block_rotation :: Rotation` to WIT
     rotation: inexpressible-host-type,
     ignore-entities: bool,
     status: test-instance-block-status,
@@ -591,8 +591,8 @@ interface java-packets {
     features: list<string>,
   }
   record config-c-known-packs {
-    /// WARNING: Could not translate type `& 'a [KnownPack < 'a >]` to WIT
-    known-packs: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `& 'a [KnownPack < 'a >]` to WIT
+    known-packs: list<inexpressible-host-type>,
   }
   record config-c-config-ping {
     id: s32,
@@ -607,18 +607,18 @@ interface java-packets {
   /// Added in 1.20.2
   record config-c-registry-data {
     registry-id: string,
-    /// WARNING: Could not translate type `& 'a [RegistryEntryData]` to WIT
-    entries: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `& 'a [RegistryEntryData]` to WIT
+    entries: list<inexpressible-host-type>,
   }
   record config-c-config-remove-resource-pack {
     uuid: option<uuid>,
   }
   record config-c-config-server-links {
-    /// WARNING: Could not translate type `& 'a [Link < 'a >]` to WIT
-    links: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `& 'a [Link < 'a >]` to WIT
+    links: list<inexpressible-host-type>,
   }
   record config-c-config-show-dialog {
-    /// WARNING: Could not translate type `IdOr < DialogNBT < 'a > >` to WIT
+    /// WARNING: Could not fully translate type `IdOr < DialogNBT < 'a > >` to WIT
     dialog: inexpressible-host-type,
   }
   /// Stores some arbitrary data on the client, which persists between server transfers.
@@ -632,8 +632,8 @@ interface java-packets {
     port: s32,
   }
   record config-c-update-tags {
-    /// WARNING: Could not translate type `& 'a [pumpkin_data :: tag :: RegistryKey]` to WIT
-    tags: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `& 'a [pumpkin_data :: tag :: RegistryKey]` to WIT
+    tags: list<inexpressible-host-type>,
   }
   /// Sent by the server to retrieve a previously stored cookie from the client.
   /// 
@@ -1296,7 +1296,7 @@ interface java-packets {
     /// The sound to play. Can be a hardcoded ID or a custom `SoundEvent`
     /// (Resource Location).
     /// 
-    /// WARNING: Could not translate type `IdOr < SoundEvent >` to WIT
+    /// WARNING: Could not fully translate type `IdOr < SoundEvent >` to WIT
     sound-event: inexpressible-host-type,
     /// The category of the sound (e.g., Master, Music, Weather, Players).
     /// Used by the client to apply volume sliders from settings.
@@ -1354,7 +1354,7 @@ interface java-packets {
     particle: s32,
     /// The sound to play (e.g., `minecraft:entity.generic.explode`).
     /// 
-    /// WARNING: Could not translate type `IdOr < SoundEvent >` to WIT
+    /// WARNING: Could not fully translate type `IdOr < SoundEvent >` to WIT
     sound: inexpressible-host-type,
     /// The size of the block particles pool, used for debris visuals in 1.21.9+.
     block-particles-pool-size: s32,
@@ -1548,12 +1548,12 @@ interface java-packets {
     data: list<u8>,
   }
   record merchant-offer {
-    /// WARNING: Could not translate type `ItemStackSerializer < 'static >` to WIT
+    /// WARNING: Could not fully translate type `ItemStackSerializer < 'static >` to WIT
     base-cost-a: inexpressible-host-type,
-    /// WARNING: Could not translate type `ItemStackSerializer < 'static >` to WIT
+    /// WARNING: Could not fully translate type `ItemStackSerializer < 'static >` to WIT
     output: inexpressible-host-type,
-    /// WARNING: Could not translate type `Option < ItemStackSerializer < 'static > >` to WIT
-    cost-b: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `Option < ItemStackSerializer < 'static > >` to WIT
+    cost-b: option<inexpressible-host-type>,
     reward-exp: bool,
     uses: s32,
     max-uses: s32,
@@ -1600,8 +1600,8 @@ interface java-packets {
     suppress-light-updates: bool,
     /// Array of block updates: (`BlockPos`, `BlockStateId`)
     /// 
-    /// WARNING: Could not translate type `Vec < (BlockPos , BlockStateId) >` to WIT
-    updates: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `Vec < (BlockPos , BlockStateId) >` to WIT
+    updates: list<tuple<tuple<s32, s32, s32>, inexpressible-host-type>>,
   }
   record c-open-book {
     hand: s32,
@@ -1815,8 +1815,8 @@ interface java-packets {
     pitch: f32,
     /// A set of flags determining which of the above fields are relative (~).
     /// 
-    /// WARNING: Could not translate type `Vec < PositionFlag >` to WIT
-    relatives: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `Vec < PositionFlag >` to WIT
+    relatives: list<inexpressible-host-type>,
   }
   /// Sent by the server to remove one or more players from the client's player list (tab list).
   /// 
@@ -1833,7 +1833,7 @@ interface java-packets {
   record player-spawn-data {
     /// The Dimension for the current dimension's properties (lighting, sky color).
     /// 
-    /// WARNING: Could not translate type `Dimension` to WIT
+    /// WARNING: Could not fully translate type `Dimension` to WIT
     dimension: inexpressible-host-type,
     /// Used by the client to seed local biome noise and decoration algorithms.
     hashed-seed: s64,
@@ -1882,8 +1882,8 @@ interface java-packets {
   /// `replace = true` means the client replaces its current recipe list.
   record c-recipe-book-add {
     replace: bool,
-    /// WARNING: Could not translate type `& 'a [DynamicRecipe]` to WIT
-    dynamic-recipes: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `& 'a [DynamicRecipe]` to WIT
+    dynamic-recipes: list<inexpressible-host-type>,
   }
   record c-recipe-book-remove {
     recipes: list<s32>,
@@ -1933,8 +1933,8 @@ interface java-packets {
     icon-base64: option<string>,
   }
   record c-play-server-links {
-    /// WARNING: Could not translate type `& 'a [Link < 'a >]` to WIT
-    links: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `& 'a [Link < 'a >]` to WIT
+    links: list<inexpressible-host-type>,
   }
   record c-set-border-center {
     x: f64,
@@ -1963,9 +1963,9 @@ interface java-packets {
   record c-set-container-content {
     window-id: s32,
     state-id: s32,
-    /// WARNING: Could not translate type `& 'a [ItemStackSerializer < 'a >]` to WIT
-    slot-data: inexpressible-host-type,
-    /// WARNING: Could not translate type `& 'a ItemStackSerializer < 'a >` to WIT
+    /// WARNING: Could not fully translate type `& 'a [ItemStackSerializer < 'a >]` to WIT
+    slot-data: list<inexpressible-host-type>,
+    /// WARNING: Could not fully translate type `& 'a ItemStackSerializer < 'a >` to WIT
     carried-item: inexpressible-host-type,
   }
   record c-set-container-property {
@@ -1977,11 +1977,11 @@ interface java-packets {
     window-id: u8,
     state-id: s32,
     slot: s32,
-    /// WARNING: Could not translate type `& 'a ItemStackSerializer < 'a >` to WIT
+    /// WARNING: Could not fully translate type `& 'a ItemStackSerializer < 'a >` to WIT
     slot-data: inexpressible-host-type,
   }
   record c-set-cursor-item {
-    /// WARNING: Could not translate type `& 'a ItemStackSerializer < 'a >` to WIT
+    /// WARNING: Could not fully translate type `& 'a ItemStackSerializer < 'a >` to WIT
     stack: inexpressible-host-type,
   }
   /// Sent by the server to attach (leash) or detach an entity to another entity (e.g. leash knot, player, mob).
@@ -1992,8 +1992,8 @@ interface java-packets {
   }
   record c-set-equipment {
     entity-id: s32,
-    /// WARNING: Could not translate type `Vec < (i8 , ItemStackSerializer < 'static >) >` to WIT
-    equipment: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `Vec < (i8 , ItemStackSerializer < 'static >) >` to WIT
+    equipment: list<tuple<u8, inexpressible-host-type>>,
   }
   record c-set-experience {
     progress: f32,
@@ -2014,7 +2014,7 @@ interface java-packets {
   }
   record c-set-player-inventory {
     slot: s32,
-    /// WARNING: Could not translate type `& 'a ItemStackSerializer < 'a >` to WIT
+    /// WARNING: Could not fully translate type `& 'a ItemStackSerializer < 'a >` to WIT
     item: inexpressible-host-type,
   }
   enum team-method {
@@ -2056,11 +2056,11 @@ interface java-packets {
     fade-out-ticks: s32,
   }
   record c-play-show-dialog {
-    /// WARNING: Could not translate type `IdOr < DialogNBT < 'a > >` to WIT
+    /// WARNING: Could not fully translate type `IdOr < DialogNBT < 'a > >` to WIT
     dialog: inexpressible-host-type,
   }
   record c-sound-effect {
-    /// WARNING: Could not translate type `IdOr < SoundEvent >` to WIT
+    /// WARNING: Could not fully translate type `IdOr < SoundEvent >` to WIT
     sound-event: inexpressible-host-type,
     sound-category: s32,
     position: tuple<f64, f64, f64>,
@@ -2081,8 +2081,8 @@ interface java-packets {
   }
   record c-stop-sound {
     sound-id: option<string>,
-    /// WARNING: Could not translate type `Option < SoundCategory >` to WIT
-    category: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `Option < SoundCategory >` to WIT
+    category: option<inexpressible-host-type>,
   }
   /// Stores some arbitrary data on the client, which persists between server transfers.
   /// The Notchian client only accepts cookies of up to 5 kiB in size.
@@ -2129,8 +2129,8 @@ interface java-packets {
     delta: tuple<f64, f64, f64>,
     yaw: f32,
     pitch: f32,
-    /// WARNING: Could not translate type `& 'a [PositionFlag]` to WIT
-    relatives: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `& 'a [PositionFlag]` to WIT
+    relatives: list<inexpressible-host-type>,
     on-ground: bool,
   }
   record c-test-instance-block-status {
@@ -2155,11 +2155,11 @@ interface java-packets {
   }
   record c-update-advancements {
     reset: bool,
-    /// WARNING: Could not translate type `Vec < & 'static Advancement >` to WIT
-    added: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `Vec < & 'static Advancement >` to WIT
+    added: list<inexpressible-host-type>,
     removed: list<string>,
-    /// WARNING: Could not translate type `Vec < AdvancementProgressData >` to WIT
-    progress: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `Vec < AdvancementProgressData >` to WIT
+    progress: list<inexpressible-host-type>,
     show-advancements: bool,
   }
   record c-update-attributes {
@@ -2206,8 +2206,8 @@ interface java-packets {
     mode: u8,
     display-name: string,
     render-type: s32,
-    /// WARNING: Could not translate type `Option < NumberFormat >` to WIT
-    number-format: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `Option < NumberFormat >` to WIT
+    number-format: option<inexpressible-host-type>,
   }
   enum mode {
     add,
@@ -2239,12 +2239,12 @@ interface java-packets {
     /// Optional formatting for the number (e.g., blank, fixed text, or styled).
     /// This allows for scores to appear as something other than raw numbers.
     /// 
-    /// WARNING: Could not translate type `Option < NumberFormat >` to WIT
-    number-format: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `Option < NumberFormat >` to WIT
+    number-format: option<inexpressible-host-type>,
   }
   record c-update-tags-play {
-    /// WARNING: Could not translate type `& 'a [pumpkin_data :: tag :: RegistryKey]` to WIT
-    tags: inexpressible-host-type,
+    /// WARNING: Could not fully translate type `& 'a [pumpkin_data :: tag :: RegistryKey]` to WIT
+    tags: list<inexpressible-host-type>,
   }
   enum waypoint-operation {
     track,
