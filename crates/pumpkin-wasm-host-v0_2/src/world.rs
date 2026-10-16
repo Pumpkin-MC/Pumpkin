@@ -589,10 +589,6 @@ impl pumpkin::plugin::particles::Host for PluginHostState {}
 impl pumpkin::plugin::sounds::Host for PluginHostState {}
 
 impl pumpkin::plugin::world::HostWorld for PluginHostState {
-    fn drop(&mut self, rep: Resource<World>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_id(&mut self, world: Resource<World>) -> wasmtime::Result<String> {
         Ok(self.get(&world)?.get_world_name().to_string())
     }
@@ -1161,6 +1157,10 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
     fn get_border(&mut self, world: Resource<World>) -> wasmtime::Result<Resource<WitWorldBorder>> {
         self.get_world_border(world)
     }
+
+    fn drop(&mut self, rep: Resource<World>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<PluginHostState> {
@@ -1299,10 +1299,6 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
 }
 
 impl pumpkin::plugin::world::HostChunk for PluginHostState {
-    fn drop(&mut self, rep: Resource<WitChunk>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_x(&mut self, chunk: Resource<WitChunk>) -> wasmtime::Result<i32> {
         let chunk_data = loaded_chunk_data(self, &chunk)?;
         Ok(chunk_data.x)
@@ -1537,13 +1533,13 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
         let default_state_id = pumpkin_data::Block::from_id(id).default_state.id.as_u16();
         self.set_block_state(chunk, pos, default_state_id)
     }
+
+    fn drop(&mut self, rep: Resource<WitChunk>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
-    fn drop(&mut self, rep: Resource<WitWorldBorder>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_center_x(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<f64> {
         let border_res = self.get(&border)?;
         Ok(border_res.worldborder.lock_ignore_poison().center_x)
@@ -1744,13 +1740,13 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
     ) -> wasmtime::Result<()> {
         self.set_warning_delay(border, time)
     }
+
+    fn drop(&mut self, rep: Resource<WitWorldBorder>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 impl pumpkin::plugin::world::HostChunkBuffer for PluginHostState {
-    fn drop(&mut self, rep: Resource<pumpkin::plugin::world::ChunkBuffer>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_x(
         &mut self,
         this: Resource<pumpkin::plugin::world::ChunkBuffer>,
@@ -1943,6 +1939,10 @@ impl pumpkin::plugin::world::HostChunkBuffer for PluginHostState {
         let mut proto = res.proto_chunk.lock_ignore_poison();
         proto.flat_biome_map.fill(biome_id);
         Ok(())
+    }
+
+    fn drop(&mut self, rep: Resource<pumpkin::plugin::world::ChunkBuffer>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

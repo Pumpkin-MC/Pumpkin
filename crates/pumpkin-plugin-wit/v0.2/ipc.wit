@@ -1,5 +1,3 @@
-package pumpkin:plugin@0.2.0;
-
 interface ipc {
     type plugin-id = string;
     type ipc-message = list<u8>;

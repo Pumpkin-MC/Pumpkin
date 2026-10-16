@@ -80,10 +80,6 @@ pub const fn to_wit_item_operation(op: Operation) -> WitModifierOperation {
 impl ItemStackInterfaceHost for PluginHostState {}
 
 impl HostItemStack for PluginHostState {
-    fn drop(&mut self, rep: Resource<ItemStackHandle>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn new(
         &mut self,
         registry_key: String,
@@ -97,6 +93,10 @@ impl HostItemStack for PluginHostState {
         .unwrap_or(&pumpkin_data::item::Item::AIR);
         let stack = pumpkin_data::item_stack::ItemStack::new(count, item);
         self.add(Arc::new(Mutex::new(stack)))
+    }
+
+    fn drop(&mut self, rep: Resource<ItemStackHandle>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

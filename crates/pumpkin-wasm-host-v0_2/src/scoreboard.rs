@@ -66,10 +66,6 @@ fn bedrock_scoreboard(
 impl scoreboard::Host for PluginHostState {}
 
 impl scoreboard::HostScoreboard for PluginHostState {
-    fn drop(&mut self, rep: Resource<scoreboard::Scoreboard>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn add_objective(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
@@ -586,6 +582,10 @@ impl scoreboard::HostScoreboard for PluginHostState {
         };
         Ok(team_name)
     }
+
+    fn drop(&mut self, rep: Resource<scoreboard::Scoreboard>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 const fn map_display_slot(slot: DisplaySlot) -> pumpkin_data::scoreboard::ScoreboardDisplaySlot {
@@ -800,10 +800,6 @@ const fn map_named_color_rev(
 }
 
 impl HostBedrockScoreboard for PluginHostState {
-    fn drop(&mut self, res: Resource<scoreboard::BedrockScoreboard>) -> wasmtime::Result<()> {
-        self.drop(res)
-    }
-
     fn add_objective(
         &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
@@ -982,5 +978,9 @@ impl HostBedrockScoreboard for PluginHostState {
             sb.reset_scores_for_entity(player.as_ref(), &entity_name);
         }
         Ok(())
+    }
+
+    fn drop(&mut self, res: Resource<scoreboard::BedrockScoreboard>) -> wasmtime::Result<()> {
+        self.drop(res)
     }
 }

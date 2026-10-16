@@ -52,10 +52,6 @@ const fn map_entity_pose(pose: InternalEntityPose) -> EntityPose {
 }
 
 impl HostEntity for PluginHostState {
-    fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_id(&mut self, entity: Resource<Entity>) -> wasmtime::Result<u32> {
         let entity = self.get(&entity)?;
         Ok(entity.get_entity().entity_id as u32)
@@ -728,6 +724,10 @@ impl HostEntity for PluginHostState {
     ) -> wasmtime::Result<Option<Resource<Entity>>> {
         let res = self.ray_trace_entity(entity, max_distance)?;
         Ok(res.map(|r| r.entity))
+    }
+
+    fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

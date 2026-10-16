@@ -124,10 +124,6 @@ pub fn from_wit_damage_type(wit: WitDamageType) -> pumpkin_data::damage::DamageT
 }
 
 impl HostLivingEntity for PluginHostState {
-    fn drop(&mut self, rep: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn as_entity(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<Resource<Entity>> {
         self.add(self.get(&this)?.clone())
     }
@@ -414,6 +410,10 @@ impl HostLivingEntity for PluginHostState {
             player.send_system_message(&text_res);
         }
         Ok(())
+    }
+
+    fn drop(&mut self, rep: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

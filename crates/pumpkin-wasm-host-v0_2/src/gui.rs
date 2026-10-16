@@ -77,10 +77,6 @@ pub const fn from_wit_screen(screen: WitScreen) -> WindowType {
 impl gui::Host for PluginHostState {}
 
 impl gui::HostGui for PluginHostState {
-    fn drop(&mut self, rep: Resource<Gui>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn new(
         &mut self,
         screen: WitScreen,
@@ -110,6 +106,10 @@ impl gui::HostGui for PluginHostState {
         }));
 
         self.add(gui)
+    }
+
+    fn drop(&mut self, rep: Resource<Gui>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

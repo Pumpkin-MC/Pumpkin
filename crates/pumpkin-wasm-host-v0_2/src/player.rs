@@ -1087,10 +1087,6 @@ use pumpkin_protocol::java::client::play::CSetContainerSlot;
 use crate::pumpkin::plugin::item_stack::ItemStack as WitHostItemStack;
 
 impl pumpkin::plugin::player::HostPlayer for PluginHostState {
-    fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_inventory(
         &mut self,
         player: Resource<Player>,
@@ -2642,6 +2638,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<Option<pumpkin::plugin::world::RayTraceBlockResult>> {
         self.ray_trace_block(player, max_distance, include_fluids)
     }
+
+    fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<PluginHostState> {
@@ -3237,10 +3237,6 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
 }
 
 impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
-    fn drop(&mut self, rep: Resource<pumpkin::plugin::player::JavaPlayer>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_version(
         &mut self,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
@@ -3375,6 +3371,10 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         );
         player.try_send_client_packet(&packet);
         Ok(())
+    }
+
+    fn drop(&mut self, rep: Resource<pumpkin::plugin::player::JavaPlayer>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 
@@ -3639,13 +3639,6 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
 }
 
 impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
-    fn drop(
-        &mut self,
-        rep: Resource<pumpkin::plugin::player::BedrockPlayer>,
-    ) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_version(
         &mut self,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
@@ -3807,6 +3800,13 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         let player = self.get(&player)?.clone();
         player.reset_scoreboard();
         Ok(())
+    }
+
+    fn drop(
+        &mut self,
+        rep: Resource<pumpkin::plugin::player::BedrockPlayer>,
+    ) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

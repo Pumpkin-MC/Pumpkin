@@ -33,7 +33,6 @@ interface item-stack {
     use common.{nbt-entry, nbt-tree, nbt-tag};
 
     resource item-stack {
-        /// Creates an item stack from a registry key and item count.
         constructor(registry-key: string, count: u8);
 
         /// Returns the unique registry key of the item (e.g., "minecraft:diamond").

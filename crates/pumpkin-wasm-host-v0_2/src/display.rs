@@ -104,10 +104,6 @@ fn get_display_entity<'a>(
 }
 
 impl HostDisplayEntity for PluginHostState {
-    fn drop(&mut self, rep: Resource<DisplayEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn from_entity(
         &mut self,
         entity: /* borrow */ Resource<Entity>,
@@ -448,13 +444,13 @@ impl HostDisplayEntity for PluginHostState {
         }
         Ok(())
     }
+
+    fn drop(&mut self, rep: Resource<DisplayEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 impl HostBlockDisplayEntity for PluginHostState {
-    fn drop(&mut self, rep: Resource<BlockDisplayEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn from_entity(
         &mut self,
         entity: /* borrow */ Resource<Entity>,
@@ -495,13 +491,13 @@ impl HostBlockDisplayEntity for PluginHostState {
         self.get(&block_display)?.set_block_state(state_id as i32);
         Ok(())
     }
+
+    fn drop(&mut self, rep: Resource<BlockDisplayEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 impl HostItemDisplayEntity for PluginHostState {
-    fn drop(&mut self, rep: Resource<ItemDisplayEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn from_entity(
         &mut self,
         entity: /* borrow */ Resource<Entity>,
@@ -559,6 +555,10 @@ impl HostItemDisplayEntity for PluginHostState {
 
         Ok(())
     }
+
+    fn drop(&mut self, rep: Resource<ItemDisplayEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 impl HostItemDisplayEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
@@ -579,10 +579,6 @@ impl HostItemDisplayEntityWithStore<PluginHostState> for HasSelf<PluginHostState
 }
 
 impl HostTextDisplayEntity for PluginHostState {
-    fn drop(&mut self, rep: Resource<TextDisplayEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn from_entity(
         &mut self,
         entity: /* borrow */ Resource<Entity>,
@@ -735,13 +731,13 @@ impl HostTextDisplayEntity for PluginHostState {
             .set_alignment(map_text_alignment_rev(alignment));
         Ok(())
     }
+
+    fn drop(&mut self, rep: Resource<TextDisplayEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
 }
 
 impl HostInteractionEntity for PluginHostState {
-    fn drop(&mut self, rep: Resource<InteractionEntity>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn from_entity(
         &mut self,
         entity: /* borrow */ Resource<Entity>,
@@ -813,5 +809,9 @@ impl HostInteractionEntity for PluginHostState {
     ) -> wasmtime::Result<Option<Uuid>> {
         let action = self.get(&interaction)?.get_target();
         Ok(action.map(|a| Uuid::to_wit(&a.player)))
+    }
+
+    fn drop(&mut self, rep: Resource<InteractionEntity>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }

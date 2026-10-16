@@ -8,9 +8,9 @@ interface uuid {
     /// Generates a new random v4 UUID.
     generate: func() -> uuid;
 
-    /// Parses a UUID in memory. Returns none if the string is invalid.
+    /// Parses a UUID from a string. Returns none if the string is not a valid UUID.
     parse: func(s: string) -> option<uuid>;
 
-    /// Formats a UUID in its standard string representation in memory.
+    /// Converts a UUID to its standard string representation.
     to-string: func(id: uuid) -> string;
 }

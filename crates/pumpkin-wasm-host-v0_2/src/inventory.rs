@@ -27,10 +27,6 @@ const fn from_wasm_hand(hand: WitHand) -> pumpkin_util::Hand {
 impl InventoryHost for PluginHostState {}
 
 impl HostInventory for PluginHostState {
-    fn drop(&mut self, rep: Resource<WitInventory>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn get_size(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<u32> {
         let provider = self.get(&res)?;
         let size = match provider {
@@ -154,6 +150,10 @@ impl HostInventory for PluginHostState {
     ) -> wasmtime::Result<bool> {
         let count = self.count_item(res, item_id)?;
         Ok(count > 0)
+    }
+
+    fn drop(&mut self, rep: Resource<WitInventory>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 
@@ -291,10 +291,6 @@ impl HostInventoryWithStore<PluginHostState> for HasSelf<PluginHostState> {
 }
 
 impl HostPlayerInventory for PluginHostState {
-    fn drop(&mut self, rep: Resource<WitPlayerInventory>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn as_inventory(
         &mut self,
         res: Resource<WitPlayerInventory>,
@@ -398,6 +394,10 @@ impl HostPlayerInventory for PluginHostState {
         } else {
             Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         }
+    }
+
+    fn drop(&mut self, rep: Resource<WitPlayerInventory>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

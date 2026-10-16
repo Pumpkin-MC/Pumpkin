@@ -112,12 +112,6 @@ async fn remove_all_players(pbb: &Arc<Mutex<PluginBossBar>>) {
 impl boss_bar::Host for PluginHostState {}
 
 impl boss_bar::HostBossBar for PluginHostState {
-    async fn drop(&mut self, res: Resource<BossBar>) -> wasmtime::Result<()> {
-        let pbb_handle = self.get(&res)?.clone();
-        remove_all_players(&pbb_handle).await;
-        self.drop(res)
-    }
-
     fn new(
         &mut self,
         title: Resource<crate::pumpkin::plugin::text::TextComponent>,
@@ -136,6 +130,12 @@ impl boss_bar::HostBossBar for PluginHostState {
             Arc::downgrade(&server),
         )));
         self.add(plugin_bossbar)
+    }
+
+    async fn drop(&mut self, res: Resource<BossBar>) -> wasmtime::Result<()> {
+        let pbb_handle = self.get(&res)?.clone();
+        remove_all_players(&pbb_handle).await;
+        self.drop(res)
     }
 }
 

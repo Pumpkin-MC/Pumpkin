@@ -1426,10 +1426,6 @@ fn register_hanging_event(
 impl pumpkin::plugin::context::Host for PluginHostState {}
 
 impl pumpkin::plugin::context::HostContext for PluginHostState {
-    fn drop(&mut self, rep: Resource<WitContext>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     #[allow(clippy::too_many_lines)]
     fn register_event(
         &mut self,
@@ -1764,5 +1760,9 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
                 license_key: metadata.license_key,
                 issued_at: metadata.issued_at,
             }))
+    }
+
+    fn drop(&mut self, rep: Resource<WitContext>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }

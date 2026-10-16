@@ -289,10 +289,6 @@ impl Goal for CustomWasmGoal {
 }
 
 impl HostMob for PluginHostState {
-    fn drop(&mut self, rep: Resource<WitMob>) -> wasmtime::Result<()> {
-        self.drop(rep)
-    }
-
     fn as_entity(&mut self, this: Resource<WitMob>) -> wasmtime::Result<Resource<Entity>> {
         self.add(self.get(&this)?.clone())
     }
@@ -862,6 +858,10 @@ impl HostMob for PluginHostState {
     fn get_freeze_ticks(&mut self, this: Resource<WitMob>) -> wasmtime::Result<i32> {
         let entity = self.get(&this)?;
         Ok(entity.get_entity().get_frozen_ticks())
+    }
+
+    fn drop(&mut self, rep: Resource<WitMob>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 
