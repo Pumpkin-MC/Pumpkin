@@ -1,3 +1,4 @@
+use pumpkin_data::sound::Sound;
 use std::sync::Arc;
 
 use crate::entity::{
@@ -20,5 +21,9 @@ impl StraySkeletonEntity {
 impl Mob for StraySkeletonEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityStrayAmbient)
     }
 }

@@ -879,6 +879,11 @@ impl World {
         self.level_info.store(Arc::new(new_info));
     }
 
+    #[must_use]
+    pub fn get_difficulty(&self) -> Difficulty {
+        self.level_info.load().difficulty
+    }
+
     pub fn get_game_rule(&self, rule: &GameRule) -> GameRuleValue<i64, bool> {
         let level_info = self.level_info.load();
         match level_info.game_rules.get(rule) {
@@ -4385,6 +4390,23 @@ impl World {
             .filter(|entity| entity.get_entity().bounding_box.load().intersects(aabb))
             .cloned()
             .collect()
+    }
+
+    /// Gets all entities and players whose bounding box intersects `aabb`.
+    pub fn get_entities_and_players_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
+        let mut result: Vec<Arc<dyn EntityBase>> = self
+            .entities
+            .load()
+            .iter()
+            .filter(|e| e.get_entity().bounding_box.load().intersects(aabb))
+            .cloned()
+            .collect();
+        for player in self.players.load().iter() {
+            if player.get_entity().bounding_box.load().intersects(aabb) {
+                result.push(player.clone() as Arc<dyn EntityBase>);
+            }
+        }
+        result
     }
 
     // Gets all Player entities at a Box

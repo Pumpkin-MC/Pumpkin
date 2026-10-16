@@ -7154,23 +7154,14 @@ impl EntityBase for Player {
                 .and_then(|val| GameMode::try_from(val).ok()),
         );
 
-        {
-            let mut abilities = self
-                .abilities
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            abilities.set_for_gamemode(gamemode);
-            abilities.read_nbt(nbt);
-            if gamemode == GameMode::Creative {
-                abilities.allow_flying = true;
-                abilities.creative = true;
-                abilities.invulnerable = true;
-            } else if gamemode == GameMode::Spectator {
-                abilities.allow_flying = true;
-                abilities.creative = false;
-                abilities.invulnerable = true;
-            }
-        }
+        let mut abilities = self
+            .abilities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        abilities.read_nbt(nbt);
+        // Overwrite stale saved flags with the current gamemode
+        abilities.set_for_gamemode(gamemode);
+        drop(abilities);
 
         self.living_entity.entity.invulnerable.store(
             matches!(gamemode, GameMode::Creative | GameMode::Spectator),

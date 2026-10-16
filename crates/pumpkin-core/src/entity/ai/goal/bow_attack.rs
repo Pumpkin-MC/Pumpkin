@@ -64,7 +64,8 @@ impl BowAttackGoal {
             )
     }
 
-    fn is_holding_bow(mob: &dyn Mob) -> bool {
+    #[must_use]
+    pub fn is_holding_bow(mob: &dyn Mob) -> bool {
         Self::main_hand_item(mob).item.id == Item::BOW.id
     }
 
@@ -83,7 +84,11 @@ impl BowAttackGoal {
         let world_full = entity.world.load_full();
 
         let arrow_entity = Entity::new(world.clone(), entity.pos.load(), &EntityType::ARROW);
-        let projectile = ItemStack::new(1, &Item::ARROW);
+
+        let projectile = mob
+            .get_arrow_projectile()
+            .unwrap_or_else(|| ItemStack::new(1, &Item::ARROW));
+
         let bow_item = Self::main_hand_item(mob);
         let arrow = ArrowEntity::new_shot_with_weapon(
             arrow_entity,
@@ -131,7 +136,18 @@ impl BowAttackGoal {
             divergence,
         );
 
-        world.play_sound(Sound::EntityArrowShoot, SoundCategory::Hostile, &mob_pos);
+        let shoot_sound = if entity.entity_type == &EntityType::SKELETON
+            || entity.entity_type == &EntityType::BOGGED
+            || entity.entity_type == &EntityType::STRAY
+            || entity.entity_type == &EntityType::WITHER_SKELETON
+            || entity.entity_type == &EntityType::PARCHED
+        {
+            Sound::EntitySkeletonShoot
+        } else {
+            Sound::EntityArrowShoot
+        };
+        let pitch = 1.0 / rand::random_range(0.8f32..1.2f32);
+        world.play_sound_fine(shoot_sound, SoundCategory::Hostile, &mob_pos, 1.0, pitch);
 
         let arrow: Arc<dyn EntityBase> = Arc::new(arrow);
         let entity_id = entity.entity_id;
@@ -252,7 +268,9 @@ impl Goal for BowAttackGoal {
                 if self.draw_ticks >= Self::DRAW_TIME {
                     self.stop_drawing(mob);
                     Self::shoot(mob, &target);
-                    self.attack_time = self.attack_interval;
+                    self.attack_time = mob
+                        .get_min_attack_interval()
+                        .unwrap_or(self.attack_interval);
                 }
             }
         } else {
