@@ -75,10 +75,11 @@ pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f6
 
     if strength > 0.0 {
         let yaw = attacker.yaw.load();
-        victim.get_entity().knockback(
+        victim.get_entity().apply_knockback(
             strength,
             f64::from((yaw.to_radians()).sin()),
             f64::from(-(yaw.to_radians()).cos()),
+            Some(attacker),
         );
     }
 

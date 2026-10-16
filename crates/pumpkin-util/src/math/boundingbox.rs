@@ -137,6 +137,23 @@ impl BoundingBox {
         }
     }
 
+    /// Returns the smallest box enclosing both boxes
+    #[must_use]
+    pub const fn minmax(&self, other: &Self) -> Self {
+        Self {
+            min: Vector3::new(
+                self.min.x.min(other.min.x),
+                self.min.y.min(other.min.y),
+                self.min.z.min(other.min.z),
+            ),
+            max: Vector3::new(
+                self.max.x.max(other.max.x),
+                self.max.y.max(other.max.y),
+                self.max.z.max(other.max.z),
+            ),
+        }
+    }
+
     /// Expands this box uniformly along all axes.
     ///
     /// # Arguments

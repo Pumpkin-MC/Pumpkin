@@ -148,7 +148,7 @@ use pumpkin_util::{
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
 };
 use pumpkin_util::{
-    math::{get_section_cord, position::chunk_section_from_pos, vector2::Vector2},
+    math::{position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
@@ -173,6 +173,7 @@ pub mod end_podium;
 pub mod entity_tracker;
 pub mod environment;
 pub mod natural_spawner;
+mod player_touch;
 pub mod scoreboard;
 pub mod weather;
 
@@ -180,6 +181,7 @@ pub use environment::EnvironmentAttributes;
 pub use pumpkin_data::environment_attribute::{Activity, MoonPhase};
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
+use crate::world::player_touch::{PlayerTouch, touch_players};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::{self, MotionBlocking};
@@ -1557,19 +1559,6 @@ impl World {
 
         let players = self.players.load();
         let player_count = players.len();
-        let players_cache: Vec<_> = players
-            .par_iter()
-            .map(|player| {
-                let entity = player.get_entity();
-                let pos = entity.pos.load();
-                let bb = entity.bounding_box.load().expand(1.0, 0.5, 1.0);
-                let chunk_pos = Vector2::new(
-                    get_section_cord(pos.x.floor() as i32),
-                    get_section_cord(pos.z.floor() as i32),
-                );
-                (player, pos, bb, chunk_pos)
-            })
-            .collect();
 
         let t_players = std::time::Instant::now();
         let player_handle = handle.clone();
@@ -1578,6 +1567,8 @@ impl World {
             player.tick(server);
         });
         let player_elapsed = t_players.elapsed();
+        // After movement so pickup uses this-tick player boxes
+        let player_touches: Vec<_> = players.par_iter().filter_map(PlayerTouch::new).collect();
 
         let entities_to_tick = self.entities.load();
         let entity_count = entities_to_tick.len();
@@ -1592,11 +1583,7 @@ impl World {
         let tickable: Vec<_> = entities_to_tick
             .par_iter()
             .filter_map(|entity| {
-                let entity_pos = entity.get_entity().pos.load();
-                let entity_chunk = Vector2::new(
-                    get_section_cord(entity_pos.x.floor() as i32),
-                    get_section_cord(entity_pos.z.floor() as i32),
-                );
+                let entity_chunk = entity.get_entity().chunk_pos.load();
                 if !active_chunks.contains(&entity_chunk) {
                     return None;
                 }
@@ -1616,23 +1603,7 @@ impl World {
                 for (entity, entity_chunk) in batch {
                     entity.get_entity().age.fetch_add(1, Relaxed);
                     entity.tick(entity.as_ref(), server_ref);
-
-                    let entity_inner = entity.get_entity();
-                    let entity_pos = entity_inner.pos.load();
-                    let entity_bb = entity_inner.bounding_box.load();
-
-                    for (player, player_pos, player_bb, player_chunk) in &players_cache {
-                        if (player_chunk.x - entity_chunk.x).abs() <= 1
-                            && (player_chunk.y - entity_chunk.y).abs() <= 1
-                            && (player_pos.x - entity_pos.x).abs() < 5.0
-                            && (player_pos.y - entity_pos.y).abs() < 5.0
-                            && (player_pos.z - entity_pos.z).abs() < 5.0
-                            && player_bb.intersects(&entity_bb)
-                        {
-                            entity.on_player_collision(player);
-                            break;
-                        }
-                    }
+                    touch_players(entity, *entity_chunk, &player_touches);
                 }
             });
         let entity_elapsed = t_entities.elapsed();

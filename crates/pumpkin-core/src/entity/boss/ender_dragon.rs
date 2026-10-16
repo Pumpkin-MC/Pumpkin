@@ -600,10 +600,12 @@ impl EnderDragonEntity {
                 let zd = player_pos.z - zm;
                 let dd = (xd * xd + zd * zd).max(0.1);
 
-                player
-                    .living_entity
-                    .entity
-                    .apply_knockback(4.0, xd / dd, zd / dd);
+                player.living_entity.entity.apply_knockback(
+                    4.0,
+                    xd / dd,
+                    zd / dd,
+                    Some(&self.mob_entity.living_entity.entity),
+                );
                 player.get_entity().send_velocity();
 
                 if !self

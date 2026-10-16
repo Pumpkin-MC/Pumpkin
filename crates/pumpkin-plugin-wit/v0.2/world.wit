@@ -545,6 +545,13 @@ interface %world {
         damage: func(amount: f32, damage-type: damage-type);
         is-dead: func() -> bool;
 
+        /// Returns whether this entity pushes and gets pushed by other entities.
+        is-collidable: func() -> bool;
+        /// Sets whether this entity pushes and gets pushed by other entities.
+        /// Java clients still predict their own player pushes, so for player to
+        /// player collision use a team collision rule as well.
+        set-collidable: func(collidable: bool);
+
         get-absorption: func() -> f32;
         set-absorption: func(amount: f32);
 
