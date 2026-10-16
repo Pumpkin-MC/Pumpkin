@@ -111,7 +111,7 @@ pub fn register_ai_goal<G: AiGoal>(goal: G) -> u32 {
     AI_GOALS.register(Arc::new(goal))
 }
 
-// An unknown goal id answers `false` and does nothing, so the goal simply never runs
+// An unknown goal id answers `false`, so that goal never runs
 pub(crate) async fn can_start(goal_id: u32, server: Server, entity: Entity) -> bool {
     // The registry lock is released before the goal runs
     match AI_GOALS.get(goal_id) {

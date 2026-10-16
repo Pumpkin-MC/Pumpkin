@@ -21,8 +21,8 @@ pub type LocalBoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
 /// Maps handler ids chosen by the guest to shared callables
 ///
-/// Holding the lock across an await is impossible by construction: [`register`](Self::register)
-/// and [`get`](Self::get) are synchronous and take it for the length of one call
+/// The table never holds its lock across an await: [`register`](Self::register) and
+/// [`get`](Self::get) are synchronous and take it for the length of one call
 ///
 /// That matters because the host can start a second callback while the first is suspended; if
 /// the first still held the table, the second would wait on it forever

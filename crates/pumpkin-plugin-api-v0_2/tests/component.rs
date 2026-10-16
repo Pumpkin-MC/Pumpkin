@@ -1,6 +1,6 @@
 //! Builds the fixture in `tests/fixture` into a component and runs it on Wasmtime
 //!
-//! The fixture is compiled with the real `wasm32-wasip2` toolchain, so the first run needs
+//! The fixture is compiled for `wasm32-wasip2`, so the first run needs
 //! `rustup target add wasm32-wasip2`
 
 // The Android emulator job has no cargo to build the fixture with
@@ -30,8 +30,7 @@ const GAMETEST_INSTANCE: &str = "pumpkin:plugin/gametest-callbacks@0.2.0";
 const IPC_INSTANCE: &str = "pumpkin:plugin/ipc@0.2.0";
 const SCHEDULER_INSTANCE: &str = "pumpkin:plugin/scheduler@0.2.0";
 
-const ASYNC_CALLBACKS: [&str; 14] = [
-    "init-plugin",
+const ASYNC_CALLBACKS: [&str; 13] = [
     "on-load",
     "on-unload",
     "handle-event",
@@ -47,7 +46,8 @@ const ASYNC_CALLBACKS: [&str; 14] = [
     "handle-generate-phase",
 ];
 
-// Unoptimized codegen for the lifted `event` variant overflows the Wasm locals limit
+// Opt-level 1 because an unoptimized build of the lifted `event` variant exceeds the Wasm locals
+// limit and the component fails validation
 fn fixture_path() -> &'static PathBuf {
     static FIXTURE: OnceLock<PathBuf> = OnceLock::new();
     FIXTURE.get_or_init(|| {
@@ -66,7 +66,7 @@ fn fixture_path() -> &'static PathBuf {
             .arg(&target_dir)
             .env("CARGO_PROFILE_DEV_OPT_LEVEL", "1")
             .status()
-            .expect("cargo should start");
+            .expect("failed to run cargo to build the fixture");
         assert!(status.success(), "building the fixture component failed");
         target_dir.join("wasm32-wasip2/debug/examples/component_fixture.wasm")
     })
@@ -77,11 +77,12 @@ fn engine() -> Engine {
     config.wasm_component_model(true);
     config.wasm_component_model_async(true);
     config.concurrency_support(true);
-    Engine::new(&config).expect("engine")
+    Engine::new(&config).expect("failed to create the Wasmtime engine")
 }
 
 fn load(engine: &Engine) -> Component {
-    Component::from_file(engine, fixture_path()).expect("fixture should be a valid component")
+    Component::from_file(engine, fixture_path())
+        .expect("the built fixture is not a valid component")
 }
 
 fn instance_funcs(
@@ -115,7 +116,7 @@ fn is_async(funcs: &[(String, bool)], name: &str) -> bool {
         .iter()
         .find(|(candidate, _)| candidate == name)
         .map(|(_, is_async)| *is_async)
-        .expect("function should exist")
+        .expect("the function is missing from the component type")
 }
 
 #[test]
@@ -132,11 +133,25 @@ fn component_declares_the_mixed_v0_2_world() {
         );
     }
 
+    let init = ty
+        .get_export(&engine, "init-plugin")
+        .map(|export| export.ty);
+    assert!(
+        matches!(init, Some(ComponentItem::ComponentFunc(func)) if !func.async_()),
+        "bootstrap initialization should stay synchronous"
+    );
+
     // Metadata and the non-async GameTest callbacks keep their synchronous signatures
     let metadata = instance_funcs(&engine, &component, METADATA_INSTANCE, false);
-    assert!(!is_async(&metadata, "get-metadata"));
+    assert!(
+        !is_async(&metadata, "get-metadata"),
+        "get-metadata should stay synchronous"
+    );
     let gametest = instance_funcs(&engine, &component, GAMETEST_INSTANCE, false);
-    assert!(is_async(&gametest, "invoke-async-test"));
+    assert!(
+        is_async(&gametest, "invoke-async-test"),
+        "invoke-async-test should be async"
+    );
     for sync in [
         "invoke-void",
         "invoke-test",
@@ -148,9 +163,15 @@ fn component_declares_the_mixed_v0_2_world() {
 
     // The fixture imports one async host function and one synchronous one
     let ipc = instance_funcs(&engine, &component, IPC_INSTANCE, true);
-    assert!(is_async(&ipc, "send-ipc-message"));
+    assert!(
+        is_async(&ipc, "send-ipc-message"),
+        "send-ipc-message should be an async import"
+    );
     let scheduler = instance_funcs(&engine, &component, SCHEDULER_INSTANCE, true);
-    assert!(!is_async(&scheduler, "cancel-task"));
+    assert!(
+        !is_async(&scheduler, "cancel-task"),
+        "cancel-task should be a synchronous import"
+    );
 }
 
 struct State {
@@ -172,18 +193,18 @@ async fn instantiate(
 
     linker
         .instance(SCHEDULER_INSTANCE)
-        .expect("scheduler instance")
+        .expect("failed to define the scheduler import instance")
         .func_wrap("cancel-task", |store, (_task,): (u32,)| {
             store.data().cancelled_tasks.fetch_add(1, Ordering::SeqCst);
             Ok(())
         })
-        .expect("cancel-task");
+        .expect("failed to define cancel-task");
 
     // The reply is produced only after the test releases the host side, so the guest has to
     // suspend at its await and resume when the host completes the import
     linker
         .instance(IPC_INSTANCE)
-        .expect("ipc instance")
+        .expect("failed to define the ipc import instance")
         .func_wrap_concurrent(
             "send-ipc-message",
             |accessor: &Accessor<Arc<State>>, (recipient, mut message): (String, Vec<u8>)| {
@@ -193,31 +214,35 @@ async fn instantiate(
                         let release = state
                             .release
                             .lock()
-                            .expect("release lock")
+                            .expect("release lock was poisoned")
                             .take()
-                            .expect("slow send should happen once");
+                            .expect("only one send should wait on the release");
                         state.entered.notify_one();
-                        release.await.expect("test should release the host import");
+                        release.await.expect(
+                            "the test dropped the release sender before the host import finished",
+                        );
                     }
                     message.extend_from_slice(b"!");
                     Ok((Ok::<_, ()>(Ok::<_, String>(message)),))
                 })
             },
         )
-        .expect("send-ipc-message");
+        .expect("failed to define send-ipc-message");
 
     linker
         .define_unknown_imports_as_traps(component)
-        .expect("remaining imports");
+        .expect("failed to stub the remaining imports");
     let instance = linker
         .instantiate_async(&mut store, component)
         .await
-        .expect("instantiate");
+        .expect("failed to instantiate the component");
     (store, instance)
 }
 
 fn export_func(store: &mut Store<Arc<State>>, instance: &Instance, name: &str) -> Func {
-    instance.get_func(store, name).expect("export should exist")
+    instance
+        .get_func(store, name)
+        .expect("the export is missing from the component")
 }
 
 fn ipc_params(sender: &str, bytes: &[u8]) -> [Val; 2] {
@@ -264,25 +289,25 @@ async fn async_handler_awaits_a_host_import_while_other_calls_proceed() {
     let handle_ipc = export_func(&mut store, &instance, "handle-ipc-message");
     let metadata_instance = instance
         .get_export_index(&mut store, None, METADATA_INSTANCE)
-        .expect("metadata instance");
+        .expect("the metadata instance export is missing");
     let get_metadata_index = instance
         .get_export_index(&mut store, Some(&metadata_instance), "get-metadata")
-        .expect("get-metadata");
+        .expect("the get-metadata export is missing");
     let get_metadata = instance
         .get_func(&mut store, get_metadata_index)
-        .expect("get-metadata func");
+        .expect("failed to look up get-metadata");
 
     store
         .run_concurrent(async |accessor| {
             init.call_concurrent(accessor, &[], &mut [])
                 .await
-                .expect("init-plugin");
+                .expect("calling init-plugin failed");
 
             let mut metadata = [Val::Bool(false)];
             get_metadata
                 .call_concurrent(accessor, &[], &mut metadata)
                 .await
-                .expect("get-metadata");
+                .expect("calling get-metadata failed");
             let name = ("name".to_string(), Val::String("fixture".into()));
             assert!(
                 matches!(&metadata[0], Val::Record(fields) if fields.first() == Some(&name)),
@@ -301,16 +326,18 @@ async fn async_handler_awaits_a_host_import_while_other_calls_proceed() {
                 handle_ipc
                     .call_concurrent(accessor, &params, &mut result)
                     .await
-                    .expect("fast call");
+                    .expect("the fast handle-ipc-message call failed");
                 assert_eq!(ipc_reply(&result[0]).as_deref(), Some(&b"fast!"[..]));
-                release.send(()).expect("slow import is still waiting");
+                release
+                    .send(())
+                    .expect("the slow import was no longer waiting for the release");
             };
             let (slow, ()) = tokio::join!(slow, fast);
-            slow.expect("slow call");
+            slow.expect("the slow handle-ipc-message call failed");
             assert_eq!(ipc_reply(&slow_result[0]).as_deref(), Some(&b"slow!"[..]));
         })
         .await
-        .expect("run_concurrent");
+        .expect("running the guest calls failed");
 
     // The synchronous import ran once per handled message
     assert_eq!(state.cancelled_tasks.load(Ordering::SeqCst), 2);
