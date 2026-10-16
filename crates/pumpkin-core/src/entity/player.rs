@@ -458,6 +458,8 @@ pub struct Player {
     pub start_mining_time: AtomicI32,
     pub tick_counter: AtomicI32,
     pub mining_pos: Mutex<BlockPos>,
+    /// Vanilla `hasDelayedDestroy`: the mining tick finishes a break reported early.
+    pub delayed_destroy: AtomicBool,
     pub last_input: AtomicI8,
     /// A counter for teleport IDs used to track pending teleports.
     pub teleport_id_count: AtomicI32,
@@ -753,6 +755,7 @@ impl Player {
             teleport_id_count: AtomicI32::new(0),
             mining: AtomicBool::new(false),
             mining_pos: Mutex::new(BlockPos::ZERO),
+            delayed_destroy: AtomicBool::new(false),
             abilities: std::sync::Mutex::new(abilities),
             stats: std::sync::Mutex::new(statistics::Statistics::default()),
             gamemode: AtomicCell::new(gamemode),
@@ -2922,7 +2925,10 @@ impl Player {
                     state,
                     p.start_mining_time.load(Ordering::Relaxed),
                 );
-                if finished && matches!(p.client.as_ref(), ClientPlatform::Bedrock(_)) {
+                if finished
+                    && (p.delayed_destroy.load(Ordering::Relaxed)
+                        || matches!(p.client.as_ref(), ClientPlatform::Bedrock(_)))
+                {
                     p.stop_mining();
 
                     let block = Block::from_state_id(state.id);
@@ -3055,6 +3061,7 @@ impl Player {
 
     pub(crate) fn stop_mining(&self) {
         let was_mining = self.mining.swap(false, Ordering::Relaxed);
+        self.delayed_destroy.store(false, Ordering::Relaxed);
         let stage = self.current_block_destroy_stage.swap(-1, Ordering::Relaxed);
         self.current_block_breaking_speed
             .store(0, Ordering::Relaxed);
