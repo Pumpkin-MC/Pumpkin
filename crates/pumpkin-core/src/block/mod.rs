@@ -17,6 +17,7 @@ pub mod blocks;
 pub mod entities;
 pub mod fluid;
 pub mod registry;
+pub(crate) mod simple_waterlogged;
 pub mod viewer;
 
 use crate::block::registry::BlockActionResult;
@@ -30,64 +31,7 @@ use pumpkin_inventory::screen_handler::ScreenHandlerFactory;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
-
-// Shared default for SimpleWaterloggedBlock.placeLiquid.
-fn place_liquid(args: PlaceLiquidArgs<'_>) -> bool {
-    if args.fluid != &Fluid::WATER {
-        return false;
-    }
-    let Some(state_id) = args.block.set_waterlogged(args.state_id, true) else {
-        return false;
-    };
-    args.world
-        .set_block_state(args.position, state_id, BlockFlags::NOTIFY_ALL);
-    args.world.schedule_fluid_tick(
-        args.fluid,
-        *args.position,
-        args.fluid.flow_speed as u8,
-        TickPriority::Normal,
-    );
-    true
-}
-
-/// Removes contained water, breaks unsupported blocks, and returns a water bucket.
-fn pickup_fluid(args: PickupFluidArgs<'_>) -> Option<&'static Item> {
-    let state_id = args.block.set_waterlogged(args.state_id, false)?;
-    args.world
-        .set_block_state_if(args.position, state_id, BlockFlags::NOTIFY_ALL, |current| {
-            current == args.state_id
-        })?;
-    // SimpleWaterloggedBlock.pickupBlock checks the original state after draining.
-    if !args.world.block_registry.can_place_at(
-        None,
-        Some(args.world),
-        args.world.as_ref(),
-        None,
-        args.block,
-        args.state_id.to_state(),
-        args.position,
-        None,
-        None,
-    ) {
-        args.world
-            .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
-    }
-    Some(&Item::WATER_BUCKET)
-}
-
-// Shared water-tick side effect of waterlogged updateShape implementations.
-fn schedule_water_tick_if_waterlogged(args: &GetStateForNeighborUpdateArgs<'_>) {
-    if args.state_id.is_waterlogged() {
-        args.world.schedule_fluid_tick(
-            &Fluid::WATER,
-            *args.position,
-            Fluid::WATER.flow_speed as u8,
-            TickPriority::Normal,
-        );
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PathComputationType {
@@ -197,18 +141,18 @@ pub trait BlockBehaviour: Send + Sync {
 
     /// Checks whether this container permits the fluid, without changing the world.
     fn can_place_liquid(&self, args: CanPlaceLiquidArgs<'_>) -> bool {
-        args.fluid == &Fluid::WATER
+        simple_waterlogged::can_place_liquid(args)
     }
 
     /// Attempts to fill this container, applying its state changes and effects.
     /// Bucket use may still succeed when this returns false.
     fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
-        place_liquid(args)
+        simple_waterlogged::place_liquid(args)
     }
 
     /// Removes contained water if permitted and returns the bucket item for the caller to give.
     fn pickup_fluid(&self, args: PickupFluidArgs<'_>) -> Option<&'static Item> {
-        pickup_fluid(args)
+        simple_waterlogged::pickup_fluid(args)
     }
 
     fn can_be_replaced_with_fluid(&self, state: &BlockState, _fluid: &Fluid) -> bool {
@@ -244,7 +188,7 @@ pub trait BlockBehaviour: Send + Sync {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        schedule_water_tick_if_waterlogged(&args);
+        simple_waterlogged::schedule_water_tick(&args);
         args.state_id
     }
 

@@ -25,7 +25,7 @@ impl BlockBehaviour for IronBarsBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        crate::block::schedule_water_tick_if_waterlogged(&args);
+        crate::block::simple_waterlogged::schedule_water_tick(&args);
         let bars_props = IronBarsProperties::from_state_id(args.state_id);
         compute_bars_state(bars_props, args.world, args.block, args.position)
     }

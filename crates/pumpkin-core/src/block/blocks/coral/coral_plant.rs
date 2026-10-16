@@ -61,7 +61,7 @@ impl BlockBehaviour for CoralPlantBlock {
     ) -> BlockStateId {
         let is_dead = is_dead_coral(args.block);
         if is_dead {
-            crate::block::schedule_water_tick_if_waterlogged(&args);
+            crate::block::simple_waterlogged::schedule_water_tick(&args);
         }
         if args.direction == BlockDirection::Down {
             let support_block = args.world.get_block_state(&args.position.down());
@@ -70,7 +70,7 @@ impl BlockBehaviour for CoralPlantBlock {
             }
         }
         if !is_dead {
-            crate::block::schedule_water_tick_if_waterlogged(&args);
+            crate::block::simple_waterlogged::schedule_water_tick(&args);
         }
         args.state_id
     }

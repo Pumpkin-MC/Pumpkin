@@ -119,7 +119,7 @@ impl BlockBehaviour for SeaPickleBlock {
             args.state_id,
         );
         if state_id == args.state_id {
-            crate::block::schedule_water_tick_if_waterlogged(&args);
+            crate::block::simple_waterlogged::schedule_water_tick(&args);
         }
         state_id
     }

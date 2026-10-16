@@ -104,7 +104,7 @@ impl BlockBehaviour for BigDripleafBlock {
             args.state_id,
         );
         if args.direction != pumpkin_data::BlockDirection::Down || state_id == args.state_id {
-            crate::block::schedule_water_tick_if_waterlogged(&args);
+            crate::block::simple_waterlogged::schedule_water_tick(&args);
         }
         state_id
     }

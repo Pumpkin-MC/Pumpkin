@@ -20,7 +20,7 @@ impl BlockBehaviour for BarrierBlock {
     fn pickup_fluid(&self, args: PickupFluidArgs<'_>) -> Option<&'static Item> {
         args.player
             .filter(|player| player.gamemode.load() == GameMode::Creative)?;
-        crate::block::pickup_fluid(args)
+        crate::block::simple_waterlogged::pickup_fluid(args)
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {

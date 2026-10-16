@@ -55,7 +55,7 @@ impl BlockBehaviour for AmethystBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        crate::block::schedule_water_tick_if_waterlogged(&args);
+        crate::block::simple_waterlogged::schedule_water_tick(&args);
         WallMountedBlock::get_state_for_neighbor_update(self, args)
     }
 }

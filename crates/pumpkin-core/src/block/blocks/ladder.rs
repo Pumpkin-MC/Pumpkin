@@ -73,7 +73,7 @@ impl BlockBehaviour for LadderBlock {
         {
             return BlockStateId::AIR;
         }
-        crate::block::schedule_water_tick_if_waterlogged(&args);
+        crate::block::simple_waterlogged::schedule_water_tick(&args);
         args.state_id
     }
 

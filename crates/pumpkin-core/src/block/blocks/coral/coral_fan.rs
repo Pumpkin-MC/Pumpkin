@@ -147,7 +147,7 @@ impl BlockBehaviour for CoralFanBlock {
     ) -> BlockStateId {
         let is_dead = is_dead_coral(args.block);
         if is_dead {
-            crate::block::schedule_water_tick_if_waterlogged(&args);
+            crate::block::simple_waterlogged::schedule_water_tick(&args);
         }
         if is_wall_fan(args.block) {
             let props = CoralWallFanLikeProperties::from_state_id(args.state_id);
@@ -164,7 +164,7 @@ impl BlockBehaviour for CoralFanBlock {
         }
 
         if !is_dead {
-            crate::block::schedule_water_tick_if_waterlogged(&args);
+            crate::block::simple_waterlogged::schedule_water_tick(&args);
         }
         args.state_id
     }

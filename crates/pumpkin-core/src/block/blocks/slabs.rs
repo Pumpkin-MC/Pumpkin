@@ -16,7 +16,7 @@ pub struct SlabBlock;
 impl BlockBehaviour for SlabBlock {
     fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
         SlabProperties::from_state_id(args.state_id).r#type != SlabType::Double
-            && crate::block::place_liquid(args)
+            && crate::block::simple_waterlogged::place_liquid(args)
     }
 
     fn can_place_liquid(&self, args: CanPlaceLiquidArgs<'_>) -> bool {
