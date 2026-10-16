@@ -76,6 +76,10 @@ struct PredicateStruct {
     items: Option<serde_json::Value>,
     #[serde(default)]
     predicates: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:flags", default)]
+    flags: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:equipment", default)]
+    equipment: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -116,6 +120,8 @@ struct ConditionStruct {
     chances: Option<Vec<f32>>,
     #[serde(default)]
     predicate: Option<PredicateStruct>,
+    #[serde(default)]
+    entity: Option<String>,
     #[serde(default)]
     term: Option<ConditionValue>,
     #[serde(default)]
@@ -221,9 +227,14 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
                 } else if has_shears {
                     return LootCondition::Shears;
                 }
+                let parsed: Vec<LootCondition> = terms.iter().map(resolve_condition).collect();
+                if !parsed.contains(&LootCondition::None) {
+                    return LootCondition::AnyOf(Box::leak(parsed.into_boxed_slice()));
+                }
             }
             LootCondition::None
         }
+        "minecraft:entity_properties" => parse_entity_properties(cond),
         "minecraft:inverted" => {
             if let Some(term) = &cond.term {
                 match resolve_condition(term) {
@@ -236,6 +247,37 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
                 LootCondition::None
             }
         }
+        _ => LootCondition::None,
+    }
+}
+
+fn parse_entity_properties(cond: &ConditionStruct) -> LootCondition {
+    let Some(predicate) = &cond.predicate else {
+        return LootCondition::None;
+    };
+    match cond.entity.as_deref() {
+        Some("this")
+            if predicate
+                .flags
+                .as_ref()
+                .and_then(|flags| flags.get("is_on_fire"))
+                .and_then(serde_json::Value::as_bool)
+                == Some(true) =>
+        {
+            LootCondition::EntityOnFire
+        }
+        Some("direct_attacker") => predicate
+            .equipment
+            .as_ref()
+            .and_then(|equipment| {
+                equipment
+                    .pointer("/mainhand/predicates/minecraft:enchantments/0/enchantments")?
+                    .as_str()?
+                    .strip_prefix('#')
+            })
+            .map_or(LootCondition::None, |tag| {
+                LootCondition::DirectAttackerWeaponEnchantment(Box::leak(tag.into()))
+            }),
         _ => LootCondition::None,
     }
 }
@@ -298,6 +340,8 @@ struct EntryFunctionStruct {
     #[serde(default)]
     parameters: Option<BonusParameterStruct>,
     count: Option<CountStruct>,
+    #[serde(default)]
+    condition: Option<ConditionValue>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -366,6 +410,7 @@ struct ParsedEntry {
     max_count: i32,
     condition: LootCondition,
     bonus_formula: Option<LootBonusFormula>,
+    furnace_smelt: Option<LootCondition>,
 }
 
 fn extract_entries(
@@ -374,12 +419,13 @@ fn extract_entries(
     out: &mut Vec<ParsedEntry>,
     empty_weight: &mut i32,
 ) {
-    extract_entries_with_depth(entry, inherited_condition, out, empty_weight, 0);
+    extract_entries_with_depth(entry, inherited_condition, None, out, empty_weight, 0);
 }
 
 fn extract_entries_with_depth(
     entry: &PoolEntryStruct,
     inherited_condition: LootCondition,
+    inherited_smelt: Option<LootCondition>,
     out: &mut Vec<ParsedEntry>,
     empty_weight: &mut i32,
     depth: usize,
@@ -393,6 +439,13 @@ fn extract_entries_with_depth(
         (first, second) if first == second => first,
         (first, second) => LootCondition::AllOf(Box::leak(vec![first, second].into_boxed_slice())),
     };
+
+    let furnace_smelt = entry
+        .functions
+        .iter()
+        .find(|f| f.function == "minecraft:furnace_smelt")
+        .map(|f| condition_of(f.condition.as_ref()))
+        .or(inherited_smelt);
 
     match entry.entry_type.as_str() {
         "minecraft:empty" => {
@@ -450,6 +503,7 @@ fn extract_entries_with_depth(
                     max_count,
                     condition: entry_cond,
                     bonus_formula,
+                    furnace_smelt,
                 });
             }
         }
@@ -481,6 +535,7 @@ fn extract_entries_with_depth(
                                 max_count: 1,
                                 condition: entry_cond,
                                 bonus_formula: None,
+                                furnace_smelt,
                             });
                         }
                     }
@@ -504,6 +559,7 @@ fn extract_entries_with_depth(
                                 extract_entries_with_depth(
                                     child_entry,
                                     pool_cond,
+                                    furnace_smelt,
                                     out,
                                     empty_weight,
                                     depth + 1,
@@ -524,6 +580,7 @@ fn extract_entries_with_depth(
                         extract_entries_with_depth(
                             child_entry,
                             pool_cond,
+                            furnace_smelt,
                             out,
                             empty_weight,
                             depth + 1,
@@ -550,6 +607,7 @@ fn extract_entries_with_depth(
                                     extract_entries_with_depth(
                                         child_entry,
                                         pool_cond,
+                                        furnace_smelt,
                                         out,
                                         empty_weight,
                                         depth + 1,
@@ -588,12 +646,26 @@ fn extract_entries_with_depth(
                     entry_cond
                 };
 
-                extract_entries_with_depth(child, effective_cond, out, empty_weight, depth + 1);
+                extract_entries_with_depth(
+                    child,
+                    effective_cond,
+                    furnace_smelt,
+                    out,
+                    empty_weight,
+                    depth + 1,
+                );
             }
         }
         "minecraft:sequence" | "minecraft:group" => {
             for child in &entry.children {
-                extract_entries_with_depth(child, entry_cond, out, empty_weight, depth + 1);
+                extract_entries_with_depth(
+                    child,
+                    entry_cond,
+                    furnace_smelt,
+                    out,
+                    empty_weight,
+                    depth + 1,
+                );
             }
         }
         _ => {}
@@ -633,6 +705,14 @@ fn condition_to_tokens(cond: LootCondition) -> TokenStream {
         LootCondition::AllOf(list) => {
             let tokens: Vec<TokenStream> = list.iter().copied().map(condition_to_tokens).collect();
             quote! { LootCondition::AllOf(&[#(#tokens),*]) }
+        }
+        LootCondition::AnyOf(list) => {
+            let tokens: Vec<TokenStream> = list.iter().copied().map(condition_to_tokens).collect();
+            quote! { LootCondition::AnyOf(&[#(#tokens),*]) }
+        }
+        LootCondition::EntityOnFire => quote! { LootCondition::EntityOnFire },
+        LootCondition::DirectAttackerWeaponEnchantment(tag) => {
+            quote! { LootCondition::DirectAttackerWeaponEnchantment(#tag) }
         }
     }
 }
@@ -688,6 +768,13 @@ fn emit_table(
                 let max_count = e.max_count;
                 let cond_tokens = condition_to_tokens(e.condition);
                 let bonus_tokens = bonus_to_tokens(e.bonus_formula);
+                let smelt_tokens = e.furnace_smelt.map_or_else(
+                    || quote! { None },
+                    |cond| {
+                        let cond = condition_to_tokens(cond);
+                        quote! { Some(#cond) }
+                    },
+                );
 
                 quote! {
                     LootEntry {
@@ -697,6 +784,7 @@ fn emit_table(
                         max_count: #max_count,
                         condition: #cond_tokens,
                         bonus_formula: #bonus_tokens,
+                        furnace_smelt: #smelt_tokens,
                     }
                 }
             })

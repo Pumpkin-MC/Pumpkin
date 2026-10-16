@@ -209,10 +209,13 @@ pub fn find_nearest_structure_start(
                                 &mut biome_sampler,
                             )
                         });
-                    let Some(start) = start else {
+                    let Some(_start) = start else {
                         continue;
                     };
-                    let position = start.start_pos;
+                    // Vanilla getLocatePos: chunkPos.getMinBlockX(), 0, chunkPos.getMinBlockZ()
+                    let locate_x = chunk_x << 4;
+                    let locate_z = chunk_z << 4;
+                    let position = BlockPos::new(locate_x, 0, locate_z);
                     let dx = f64::from(position.0.x - origin.0.x);
                     let dz = f64::from(position.0.z - origin.0.z);
                     let found = FoundStructure {
@@ -252,9 +255,9 @@ fn find_nearest_concentric(
     strongholds
         .iter()
         .map(|(cx, cz)| {
-            // Centre of the chunk in block coords.
-            let bx = (cx << 4) + 8;
-            let bz = (cz << 4) + 8;
+            // Vanilla getLocatePos: chunkPos.getMinBlockX(), 0, chunkPos.getMinBlockZ()
+            let bx = cx << 4;
+            let bz = cz << 4;
             let dx = bx as f64 - ox;
             let dz = bz as f64 - oz;
             FoundStructure {
@@ -292,8 +295,9 @@ fn find_nearest_random_spread_at_radius(
             let (struct_cx, struct_cz) =
                 get_structure_chunk_in_region(placement, world_seed, rx, rz, salt);
 
-            let bx = (struct_cx << 4) + 8;
-            let bz = (struct_cz << 4) + 8;
+            // Vanilla getLocatePos: chunkPos.getMinBlockX(), 0, chunkPos.getMinBlockZ()
+            let bx = struct_cx << 4;
+            let bz = struct_cz << 4;
             let dx = bx as f64 - ox;
             let dz = bz as f64 - oz;
             let dist_sq = dx * dx + dz * dz;

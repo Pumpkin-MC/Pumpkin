@@ -34,6 +34,7 @@ tracing.workspace = true
 crossbeam.workspace = true
 
 sha2.workspace = true
+md5.workspace = true
 bitflags.workspace = true
 arc-swap.workspace = true
 

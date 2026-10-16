@@ -182,6 +182,9 @@ impl ScreenHandlerFactory for MinecartScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
+        if self.inventory.has_loot_table() && player.is_spectator() {
+            return None;
+        }
         let inventory: Arc<dyn Inventory> = self.inventory.clone();
         let handler = if self.hopper {
             create_hopper(sync_id, player_inventory, inventory, player)
@@ -203,9 +206,6 @@ pub(super) fn open(
     title: TextComponent,
     hopper: bool,
 ) -> bool {
-    if player.is_spectator() && inventory.has_loot_table() {
-        return false;
-    }
     if !player.is_spectator() {
         inventory.unpack_loot();
     }

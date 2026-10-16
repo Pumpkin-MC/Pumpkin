@@ -16,9 +16,12 @@ const DEFAULT_SKIN_GEOMETRY: &[u8] = include_bytes!(concat!(
     "/../../assets/bedrock/player_geometry.json"
 ));
 
+/// Sent by the server to add or remove players from the in-game pause screen player list.
 #[packet(63)]
 pub struct CPlayerList {
+    /// Action type (`ACTION_ADD` = 0 to add, `ACTION_REMOVE` = 1 to remove).
     pub action: u8,
+    /// Player entries being added or removed.
     pub entries: Vec<PlayerListEntry>,
 }
 

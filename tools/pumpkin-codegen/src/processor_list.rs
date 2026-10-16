@@ -90,7 +90,7 @@ pub enum RawBlockStateOrName {
 pub struct RawBlockState {
     #[serde(rename = "Name", alias = "id")]
     pub name: String,
-    #[serde(rename = "Properties", default)]
+    #[serde(rename = "Properties", alias = "properties", default)]
     pub properties: BTreeMap<String, String>,
 }
 
@@ -113,7 +113,7 @@ pub enum RawOutputState {
     State {
         #[serde(rename = "Name", alias = "id")]
         name: String,
-        #[serde(rename = "Properties", default)]
+        #[serde(rename = "Properties", alias = "properties", default)]
         properties: BTreeMap<String, String>,
     },
 }

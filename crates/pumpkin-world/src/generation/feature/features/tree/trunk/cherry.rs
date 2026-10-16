@@ -30,15 +30,16 @@ impl CherryTrunkPlacer {
         below_trunk_provider: &BlockStateProvider,
         trunk_state: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
-        TrunkPlacer::set_dirt(
+        let mut logs = Vec::new();
+        if TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &start_pos.down(),
             below_trunk_provider,
-        );
-
-        let mut logs = Vec::new();
+        ) {
+            logs.push(start_pos.down());
+        }
 
         let first_branch_offset =
             (height as i32 - 1 + self.start_offset_from_top.get(random)).max(0);

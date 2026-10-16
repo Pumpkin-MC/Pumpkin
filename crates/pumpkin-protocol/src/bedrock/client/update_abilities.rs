@@ -4,13 +4,16 @@ use pumpkin_macros::packet;
 
 use crate::{bedrock::client::SerializedAbilitiesData, serial::PacketWrite};
 
+/// Updates player movement and interaction abilities such as flight and build permissions.
 #[packet(187)]
 #[derive(PacketWrite)]
 pub struct CUpdateAbilities {
+    /// Serialized ability layers and permission parameters.
     pub data: SerializedAbilitiesData,
 }
 
 // TODO: confirm these
+/// Bit flags and identifiers for individual player abilities and privileges.
 #[repr(u32)]
 pub enum Ability {
     Build = 0,

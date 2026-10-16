@@ -11,7 +11,7 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            nether_fortress::{NetherFortressPiece, NetherFortressPieceType, PieceWeight},
+            nether_fortress::NetherFortressPiece,
         },
     },
     world::WorldPortalExt,
@@ -56,54 +56,6 @@ impl BridgeCrossingPiece {
         piece.piece.set_facing(Some(orientation));
         Some(Box::new(Self { piece }))
     }
-
-    pub fn fill_openings(
-        &self,
-        start: &StructurePiece,
-        random: &mut impl RandomImpl,
-        bridge_pieces: &mut Vec<PieceWeight>,
-        corridor_pieces: &mut Vec<PieceWeight>,
-        collector: &mut StructurePiecesCollector,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        let mut last_piece: Option<NetherFortressPieceType> = None;
-        self.piece.fill_forward_opening(
-            start,
-            collector,
-            random,
-            bridge_pieces,
-            corridor_pieces,
-            &mut last_piece,
-            8,
-            3,
-            false,
-            pieces_to_process,
-        );
-        self.piece.fill_nw_opening(
-            start,
-            collector,
-            random,
-            bridge_pieces,
-            corridor_pieces,
-            &mut last_piece,
-            3,
-            8,
-            false,
-            pieces_to_process,
-        );
-        self.piece.fill_se_opening(
-            start,
-            collector,
-            random,
-            bridge_pieces,
-            corridor_pieces,
-            &mut last_piece,
-            3,
-            8,
-            false,
-            pieces_to_process,
-        );
-    }
 }
 
 impl StructurePieceBase for BridgeCrossingPiece {
@@ -116,25 +68,6 @@ impl StructurePieceBase for BridgeCrossingPiece {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.piece.piece
-    }
-
-    fn fill_openings_nether(
-        &self,
-        start: &StructurePiece,
-        random: &mut RandomGenerator,
-        bridge_pieces: &mut Vec<PieceWeight>,
-        corridor_pieces: &mut Vec<PieceWeight>,
-        collector: &mut StructurePiecesCollector,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        self.fill_openings(
-            start,
-            random,
-            bridge_pieces,
-            corridor_pieces,
-            collector,
-            pieces_to_process,
-        );
     }
 
     fn place(
@@ -182,7 +115,7 @@ impl StructurePieceBase for BridgeCrossingPiece {
         for i in 0..=2i32 {
             for j in 7..=11i32 {
                 p.fill_downwards(chunk, nb, i, -1, j, &bb);
-                p.fill_downwards(chunk, nb, i, -1, 18 - j, &bb); // Note: Java uses `18 - i` but iterates j; faithful copy
+                p.fill_downwards(chunk, nb, 18 - i, -1, j, &bb);
             }
         }
     }

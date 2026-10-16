@@ -1,12 +1,13 @@
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
+    AttackArgs, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
     UseWithItemArgs,
 };
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{Axis, NoteblockInstrument};
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, block_properties::NoteBlockLikeProperties};
+use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::{Block, BlockDirection, block_properties::NoteBlockLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -105,8 +106,26 @@ impl BlockBehaviour for NoteBlock {
         BlockActionResult::Success
     }
 
-    fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
-        // TODO
+    fn attack(&self, args: AttackArgs<'_>) {
+        let note_props = NoteBlockLikeProperties::from_state_id(args.state.id);
+        Self::play_note(&note_props, args.world, args.position);
+        args.player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Custom,
+            pumpkin_data::statistic::CustomStatistic::PlayNoteblock as i32,
+            1,
+        );
+    }
+
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        // NoteBlock.useItemOn: heads clicked onto the top get placed instead of tuning the block
+        if args.hit.face == &BlockDirection::Up
+            && args
+                .item_stack
+                .item
+                .has_tag(&tag::Item::MINECRAFT_NOTEBLOCK_TOP_INSTRUMENTS)
+        {
+            return BlockActionResult::Pass;
+        }
         BlockActionResult::PassToDefaultBlockAction
     }
 

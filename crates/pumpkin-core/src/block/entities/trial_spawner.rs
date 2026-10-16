@@ -1113,15 +1113,14 @@ impl TrialSpawner {
     }
 
     fn in_line_of_sight(world: &Arc<World>, origin: Vector3<f64>, dest: Vector3<f64>) -> bool {
+        let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
+            dest,
+            origin,
+            pumpkin_world::clip::ClipBlock::Visual,
+            pumpkin_world::clip::ClipFluid::None,
+        ));
         let origin_block = BlockPos::floored(origin.x, origin.y, origin.z);
-        let hit = world.raycast(dest, origin, |pos, w| {
-            let state = w.get_block_state(pos);
-            !state.is_air() && !state.sided_transparency()
-        });
-        match hit {
-            None => true,
-            Some((hit_pos, _)) => hit_pos == origin_block,
-        }
+        hit.is_miss || hit.block_pos == origin_block
     }
 
     pub fn eject_reward(

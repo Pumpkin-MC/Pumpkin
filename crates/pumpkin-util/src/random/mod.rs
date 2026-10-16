@@ -113,14 +113,20 @@ pub const fn get_decorator_seed(population_seed: u64, index: u64, step: u64) -> 
 /// A region seed for the given location.
 #[inline]
 #[must_use]
-pub fn get_region_seed(world_seed: u64, region_x: i32, region_z: i32, salt: u32) -> u64 {
-    let x_part = i64::from(region_x).wrapping_mul(341873128712) as u64;
-    let z_part = i64::from(region_z).wrapping_mul(132897987541) as u64;
+pub const fn get_large_feature_with_salt(world_seed: i64, x: i32, z: i32, blend: i32) -> u64 {
+    let x_part = (x as i64).wrapping_mul(341873128712);
+    let z_part = (z as i64).wrapping_mul(132897987541);
 
-    world_seed
+    (world_seed
         .wrapping_add(x_part)
         .wrapping_add(z_part)
-        .wrapping_add(i64::from(salt) as u64)
+        .wrapping_add(blend as i64)) as u64
+}
+
+#[inline]
+#[must_use]
+pub const fn get_region_seed(world_seed: u64, region_x: i32, region_z: i32, salt: u32) -> u64 {
+    get_large_feature_with_salt(world_seed as i64, region_x, region_z, salt as i32)
 }
 
 /// Generates a seed for slime chunk determination.

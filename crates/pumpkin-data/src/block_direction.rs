@@ -36,6 +36,32 @@ impl From<Axis> for MathAxis {
     }
 }
 
+impl From<pumpkin_util::BlockDirection> for BlockDirection {
+    fn from(d: pumpkin_util::BlockDirection) -> Self {
+        match d {
+            pumpkin_util::BlockDirection::Down => Self::Down,
+            pumpkin_util::BlockDirection::Up => Self::Up,
+            pumpkin_util::BlockDirection::North => Self::North,
+            pumpkin_util::BlockDirection::South => Self::South,
+            pumpkin_util::BlockDirection::West => Self::West,
+            pumpkin_util::BlockDirection::East => Self::East,
+        }
+    }
+}
+
+impl From<BlockDirection> for pumpkin_util::BlockDirection {
+    fn from(d: BlockDirection) -> Self {
+        match d {
+            BlockDirection::Down => Self::Down,
+            BlockDirection::Up => Self::Up,
+            BlockDirection::North => Self::North,
+            BlockDirection::South => Self::South,
+            BlockDirection::West => Self::West,
+            BlockDirection::East => Self::East,
+        }
+    }
+}
+
 pub struct InvalidBlockFace;
 
 impl TryFrom<i32> for BlockDirection {
@@ -113,6 +139,22 @@ impl BlockDirection {
             Self::East => (1, 0, 0),
         }
         .into()
+    }
+
+    /// Returns the nearest BlockDirection to the given 3D direction vector, matching vanilla Direction.getApproximateNearest.
+    #[must_use]
+    pub fn get_nearest(x: f64, y: f64, z: f64) -> Self {
+        let mut best_dir = Self::North;
+        let mut max_dot = f64::NEG_INFINITY;
+        for dir in Self::all() {
+            let offset = dir.to_offset();
+            let dot = x * f64::from(offset.x) + y * f64::from(offset.y) + z * f64::from(offset.z);
+            if dot > max_dot {
+                max_dot = dot;
+                best_dir = dir;
+            }
+        }
+        best_dir
     }
 
     #[must_use]

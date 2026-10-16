@@ -198,7 +198,15 @@ impl FallenTreeFeature {
         decorators: &[TreeDecorator],
     ) {
         for decorator in decorators {
-            decorator.generate(chunk, block_registry, random, &[], logs, &[]);
+            decorator.generate(
+                chunk,
+                block_registry,
+                random,
+                &[],
+                logs,
+                &[],
+                &mut Vec::new(),
+            );
         }
     }
 }

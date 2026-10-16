@@ -97,7 +97,10 @@ impl Goal for BlazeShootFireballGoal {
 
             if self.attack_time <= 0 {
                 self.attack_time = 20;
-                blaze.entity.try_attack(&*blaze, target.as_ref());
+                let damaged = blaze.entity.try_attack(&*blaze, target.as_ref());
+                if damaged {
+                    blaze.on_attack(target.as_ref());
+                }
             }
 
             blaze

@@ -75,6 +75,12 @@ pub struct PendingConnection {
     pub packet_limiter: PacketRateLimiter,
     pub verify_token: Option<[u8; 4]>,
     pub vine_challenge: Option<[u8; 16]>,
+    /// Whether a login was started. Used to reject a second `SLoginStart`, which
+    /// would otherwise replace an already authenticated profile.
+    pub login_started: bool,
+    /// Whether `CLoginSuccess` has been sent, mirroring vanilla's
+    /// `State::PROTOCOL_SWITCHING`. Login acknowledgement is only valid after it.
+    pub login_success_sent: bool,
     /// For the connection packet events.
     server: Weak<Server>,
 }
@@ -102,6 +108,8 @@ impl PendingConnection {
             config: None,
             brand: None,
             packet_limiter,
+            login_started: false,
+            login_success_sent: false,
             verify_token: None,
             vine_challenge: None,
             server,

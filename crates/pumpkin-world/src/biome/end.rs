@@ -25,11 +25,12 @@ impl BiomeSupplier for TheEndBiomeSupplier {
         let z = biome_coords::to_block(z);
         let section_x = section_coords::block_to_section(x);
         let section_z = section_coords::block_to_section(z);
-        if section_x * section_x + section_z * section_z <= 4096 {
+        if (section_x as i64) * (section_x as i64) + (section_z as i64) * (section_z as i64) <= 4096
+        {
             return &Self::CENTER_BIOME;
         }
-        let x = (section_x * 2 + 1) * 8;
-        let z = (section_z * 2 + 1) * 8;
+        let x = section_x.wrapping_mul(2).wrapping_add(1).wrapping_mul(8);
+        let z = section_z.wrapping_mul(2).wrapping_add(1).wrapping_mul(8);
         let noise = noise.sample_erosion(x, y, z);
         if noise > 0.25 {
             return &Self::HIGHLANDS_BIOME;

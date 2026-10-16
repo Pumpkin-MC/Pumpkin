@@ -6,39 +6,55 @@ use crate::{
     serial::PacketWrite,
 };
 use pumpkin_macros::packet;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use uuid::Uuid;
 
+/// Sent by the server to initialize the client's world, spawn coordinates, gamerules, and entity runtime ID.
 #[derive(PacketWrite)]
 #[packet(11)]
 pub struct CStartGame {
-    // The unique ID is a value that remains consistent across
-    // different sessions of the same world, but most servers simply fill the runtime ID of the entity out for
-    // this field.
+    /// Persistent unique ID of the player entity across sessions.
     pub entity_id: VarLong,
-    // The runtime ID is unique for each world session, and
-    // entities are generally identified in packets using this runtime ID.
+    /// Runtime entity ID uniquely identifying the player during the current session.
     pub runtime_entity_id: VarULong,
+    /// Initial game mode assigned to the player.
     pub player_gamemode: GameType,
+    /// World coordinates where the player spawns.
     pub position: Vector3<f32>,
+    /// Initial pitch rotation angle.
     pub pitch: f32,
+    /// Initial yaw rotation angle.
     pub yaw: f32,
+    /// World and dimension settings (generator, seed, difficulty, gamerules).
     pub level_settings: LevelSettings,
 
+    /// Unique level identifier string.
     pub level_id: String,
+    /// Display name of the world shown in menus.
     pub level_name: String,
+    /// Template ID for marketplace worlds.
     pub premium_world_template_id: String,
+    /// True if the world is running in trial mode.
     pub is_trial: bool,
 
+    /// Number of movement ticks kept in rewind history for server authoritative movement.
     pub rewind_history_size: VarInt,
+    /// True if block breaking progress is checked and controlled by the server.
     pub server_authoritative_block_breaking: bool,
 
+    /// Current in-game world time in ticks.
     pub current_level_time: u64,
+    /// Player's enchanting seed for deterministic enchanting tables.
     pub enchantment_seed: VarInt,
-    pub block_properties_size: VarUInt,
+    /// Custom block property definitions registered on the server.
+    pub block_properties: Vec<BlockProperty>,
 
+    /// Correlation ID string used for telemetry and matchmaking.
     pub multiplayer_correlation_id: String,
+    /// Whether the modern item stack network manager is enabled.
     pub enable_itemstack_net_manager: bool,
+    /// Version string of the server software.
     pub server_version: String,
 
     //pub player_property_data: NbtCompound
@@ -46,15 +62,22 @@ pub struct CStartGame {
     pub compound_len: VarUInt,
     pub compound_end: i8,
 
+    /// CRC64 checksum of the block state registry.
     pub block_registry_checksum: u64,
+    /// UUID of the world template if created from a template.
     pub world_template_id: Uuid,
 
+    /// Whether client-side chunk generation is enabled.
     pub enable_clientside_generation: bool,
+    /// Whether block runtime IDs are cryptographic hashes instead of sequential IDs.
     pub blocknetwork_ids_are_hashed: bool,
+    /// Whether entity and environment sounds are validated by the server.
     pub server_auth_sounds: bool,
 
     // 2 Optionals is what we need Mojang :cap:
+    /// Server connection information.
     pub server_join_information: Option<ServerJoinInformation>,
+    /// Telemetry and session tracking identifiers.
     pub telemetry: ServerTelemetryData,
 }
 
@@ -199,10 +222,46 @@ pub enum GamePublishSetting {
     Public = 4,
 }
 
-#[derive(PacketWrite)]
-pub struct GG {
+/// An entry for a custom block registered on the server.
+///
+/// The runtime ID of these custom block entries is based on their alphabetic index
+/// within the registered block palette.
+#[derive(Clone, Debug, PartialEq, PacketWrite)]
+pub struct BlockProperty {
+    /// Name or identifier of the custom block (e.g. `namespace:block`).
     pub name: String,
-    pub id: i8,
-    pub len: VarUInt,
-    pub end: i8,
+    /// NBT compound containing properties defining the unique block state.
+    pub properties: NbtCompound,
+}
+
+/// Alias for [`BlockProperty`] matching the vanilla Bedrock protocol name.
+pub type BlockEntry = BlockProperty;
+
+impl BlockProperty {
+    /// Constructs a new custom block property entry.
+    #[must_use]
+    pub fn new(name: impl Into<String>, properties: NbtCompound) -> Self {
+        Self {
+            name: name.into(),
+            properties,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn block_property_serializes_with_bedrock_nbt() {
+        let prop = BlockProperty::new("custom:block", NbtCompound::new());
+        let mut encoded = Vec::new();
+        prop.write(&mut encoded).expect("serialize block property");
+
+        // Length of "custom:block" is 12 (VarUInt: 12)
+        assert_eq!(encoded[0], 12);
+        assert_eq!(&encoded[1..13], b"custom:block");
+        // Root compound tag ID (10) followed by empty string length and END tag (0)
+        assert_eq!(&encoded[13..], &[10, 0, 0]);
+    }
 }

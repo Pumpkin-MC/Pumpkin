@@ -470,11 +470,13 @@ impl Explosion {
                     let vec3d = Vector3::new(n + offset_x, o, p + offset_z);
 
                     if world
-                        .raycast(vec3d, *explosion_pos, |pos, world_ref| {
-                            let state = world_ref.get_block_state(pos);
-                            !state.is_air() && !state.collision_shapes.is_empty()
-                        })
-                        .is_none()
+                        .clip(&pumpkin_world::clip::ClipContext::new(
+                            vec3d,
+                            *explosion_pos,
+                            pumpkin_world::clip::ClipBlock::Collider,
+                            pumpkin_world::clip::ClipFluid::None,
+                        ))
+                        .is_miss
                     {
                         visible_points += 1;
                     }

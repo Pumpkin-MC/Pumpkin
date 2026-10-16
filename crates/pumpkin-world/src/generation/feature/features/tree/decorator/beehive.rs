@@ -20,6 +20,7 @@ impl BeehiveTreeDecorator {
         random: &mut RandomGenerator,
         log_positions: &[BlockPos],
         foliage_positions: &[BlockPos],
+        decorations: &mut Vec<BlockPos>,
     ) {
         if log_positions.is_empty() || random.next_f32() >= self.probability {
             return;
@@ -28,8 +29,8 @@ impl BeehiveTreeDecorator {
         let worldgen_facing = BlockDirection::South;
         let spawn_directions = [
             BlockDirection::East,
-            BlockDirection::West,
             BlockDirection::South,
+            BlockDirection::West,
         ];
 
         let hive_y = foliage_positions.first().map_or_else(
@@ -63,6 +64,7 @@ impl BeehiveTreeDecorator {
                 props.facing = HorizontalFacing::South;
                 let state_id = props.to_state_id(&Block::BEE_NEST);
                 chunk.set_block_state(&pos.0, BlockState::from_id(state_id));
+                decorations.push(pos);
                 break;
             }
         }

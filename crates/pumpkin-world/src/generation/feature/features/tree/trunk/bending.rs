@@ -35,16 +35,17 @@ impl BendingTrunkPlacer {
         let log_height = height as i32 - 1;
         let mut pos = start_pos;
 
-        TrunkPlacer::set_dirt(
+        let mut trunk_poses = Vec::new();
+        let mut nodes = Vec::new();
+        if TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &pos.down(),
             below_trunk_provider,
-        );
-
-        let mut trunk_poses = Vec::new();
-        let mut nodes = Vec::new();
+        ) {
+            trunk_poses.push(pos.down());
+        }
 
         for i in 0..=log_height {
             if i + 1 >= log_height + random.next_bounded_i32(2) {

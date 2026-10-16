@@ -710,6 +710,10 @@ impl ToFromWasmEvent for BlockDamageAbortEvent {
         })
     }
 
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
+    }
+
     fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
         match event {
             Event::BlockDamageAbortEvent(_) => {

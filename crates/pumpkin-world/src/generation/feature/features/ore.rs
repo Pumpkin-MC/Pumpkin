@@ -176,9 +176,6 @@ impl OreFeature {
 
                         // let ad = t_val;
                         // let ae = v_val;
-                        // let af = aa_val;
-                        // TODO: using a section would be faster
-
                         let pos_vec = Vector3::new(t_val, v_val, aa_val);
                         let block_state = GenerationCache::get_block_state(chunk, &pos_vec);
 

@@ -1,6 +1,7 @@
 use crate::serial::{PacketRead, PacketWrite};
 use std::str::FromStr;
 
+/// Wrapper type that serializes and deserializes an enum or value as its string representation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EnumAsStr<T>(T);
 

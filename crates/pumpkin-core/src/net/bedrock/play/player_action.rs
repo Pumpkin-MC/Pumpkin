@@ -54,6 +54,17 @@ impl BedrockClient {
                             .broken(&world, block, player, &location, server, state);
                     }
                 } else if !state.is_air() {
+                    let starts_breaking = !player.mining.load(Ordering::Relaxed)
+                        || *player
+                            .mining_pos
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            != location;
+                    if starts_breaking {
+                        server
+                            .block_registry
+                            .attack(&world, block, state, &location, player);
+                    }
                     let speed = crate::block::calc_block_breaking(player, state, block);
                     if speed >= 1.0 {
                         player.stop_mining();
@@ -95,8 +106,6 @@ impl BedrockClient {
                             .mining_pos
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        let starts_breaking =
-                            !player.mining.load(Ordering::Relaxed) || *mining_pos != location;
                         let progress = if starts_breaking {
                             player.start_mining_time.store(
                                 player.tick_counter.load(Ordering::Relaxed),
@@ -113,20 +122,6 @@ impl BedrockClient {
                             .current_block_breaking_speed
                             .swap(speed.to_bits(), Ordering::Relaxed);
                         if starts_breaking {
-                            if block == &pumpkin_data::Block::NOTE_BLOCK {
-                                let props =
-                                    pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
-                                        state.id,
-                                    );
-                                crate::block::blocks::note::NoteBlock::play_note(
-                                    &props, &world, &location,
-                                );
-                                player.increment_stat(
-                                    pumpkin_data::statistic::StatisticCategory::Custom,
-                                    pumpkin_data::statistic::CustomStatistic::PlayNoteblock as i32,
-                                    1,
-                                );
-                            }
                             world.set_block_breaking(
                                 entity,
                                 location,

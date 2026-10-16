@@ -3,6 +3,7 @@ use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::tag::{self};
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::y_offset::YOffset;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::BlockAccessor;
@@ -17,6 +18,7 @@ pub enum BlockPredicate {
     Replaceable(ReplaceableBlockPredicate),
     WouldSurvive(WouldSurviveBlockPredicate),
     InsideWorldBounds(InsideWorldBoundsBlockPredicate),
+    HeightRange(HeightRangeBlockPredicate),
     AnyOf(AnyOfBlockPredicate),
     AllOf(AllOfBlockPredicate),
     Not(NotBlockPredicate),
@@ -40,6 +42,7 @@ impl BlockPredicate {
             Self::Replaceable(predicate) => predicate.test(chunk, pos),
             Self::WouldSurvive(predicate) => predicate.test(block_registry, chunk, pos),
             Self::InsideWorldBounds(predicate) => predicate.test(chunk, pos),
+            Self::HeightRange(predicate) => predicate.test(chunk, pos),
             Self::AnyOf(predicate) => predicate.test(block_registry, chunk, pos),
             Self::AllOf(predicate) => predicate.test(block_registry, chunk, pos),
             Self::Not(predicate) => predicate.test(block_registry, chunk, pos),
@@ -63,6 +66,7 @@ impl BlockPredicate {
             Self::Replaceable(predicate) => predicate.test_world(world, pos),
             Self::WouldSurvive(predicate) => predicate.test_world(block_registry, world, pos),
             Self::InsideWorldBounds(predicate) => predicate.test_world(world, pos),
+            Self::HeightRange(predicate) => predicate.test_world(world, pos),
             Self::AnyOf(predicate) => predicate.test_world(block_registry, world, pos),
             Self::AllOf(predicate) => predicate.test_world(block_registry, world, pos),
             Self::Not(predicate) => predicate.test_world(block_registry, world, pos),
@@ -124,6 +128,33 @@ impl InsideWorldBoundsBlockPredicate {
     pub fn test_world(&self, _world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let pos = pos.offset(self.offset);
         pos.0.y >= -64 && pos.0.y < 320
+    }
+}
+
+pub struct HeightRangeBlockPredicate {
+    pub min_inclusive: YOffset,
+    pub max_inclusive: YOffset,
+}
+
+impl HeightRangeBlockPredicate {
+    pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
+        let min = self.min_inclusive.resolve_y(
+            chunk.bottom_y() as i16,
+            chunk.height(),
+            chunk.get_sea_level(),
+        );
+        let max = self.max_inclusive.resolve_y(
+            chunk.bottom_y() as i16,
+            chunk.height(),
+            chunk.get_sea_level(),
+        );
+        pos.0.y >= min && pos.0.y <= max
+    }
+
+    pub fn test_world(&self, _world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let min = self.min_inclusive.resolve_y(-64, 384, 63);
+        let max = self.max_inclusive.resolve_y(-64, 384, 63);
+        pos.0.y >= min && pos.0.y <= max
     }
 }
 

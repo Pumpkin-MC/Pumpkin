@@ -6,8 +6,8 @@ use pumpkin_data::structures::{
 use pumpkin_util::{
     math::floor_div,
     random::{
-        RandomGenerator, RandomImpl, get_large_feature_seed, get_region_seed,
-        legacy_rand::LegacyRand,
+        RandomGenerator, RandomImpl, get_large_feature_seed, get_large_feature_with_salt,
+        get_region_seed, legacy_rand::LegacyRand,
     },
 };
 use rayon::prelude::*;
@@ -231,7 +231,12 @@ impl GlobalStructureCache {
     ) -> &[(i32, i32)] {
         self.stronghold_chunks.get_or_init(|| {
             multi_noise.map_or_else(
-                || Self::calculate_strongholds_without_biomes(seed, placement),
+                || {
+                    let random_config = crate::GlobalRandomConfig::new(seed as u64, false);
+                    let base = pumpkin_data::noise_router::BaseNoiseRouters::from_dimension(&pumpkin_data::dimension::Dimension::OVERWORLD);
+                    let base_router = crate::generation::noise::router::proto_noise_router::ProtoNoiseRouters::generate(base, &random_config);
+                    Self::calculate_strongholds(seed, placement, &base_router.multi_noise)
+                },
                 |multi_noise| Self::calculate_strongholds(seed, placement, multi_noise),
             )
         })
@@ -307,7 +312,7 @@ fn should_generate_frequency(
 ) -> bool {
     match method {
         FrequencyReductionMethod::Default => {
-            let region_seed = get_region_seed(seed as u64, salt as i32, chunk_x, chunk_z as u32);
+            let region_seed = get_large_feature_with_salt(seed, salt as i32, chunk_x, chunk_z);
             let mut random = LegacyRand::from_seed(region_seed);
             random.next_f32() < frequency
         }
@@ -319,7 +324,7 @@ fn should_generate_frequency(
             random.next_bounded_i32((1.0 / frequency) as i32) == 0
         }
         FrequencyReductionMethod::LegacyType2 => {
-            let region_seed = get_region_seed(seed as u64, chunk_x, chunk_z, 10387320);
+            let region_seed = get_large_feature_with_salt(seed, chunk_x, chunk_z, 10387320);
             let mut random = LegacyRand::from_seed(region_seed);
             random.next_f32() < frequency
         }

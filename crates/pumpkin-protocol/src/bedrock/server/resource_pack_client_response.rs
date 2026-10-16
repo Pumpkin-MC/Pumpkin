@@ -3,10 +3,14 @@ use std::io::{Error, ErrorKind, Read};
 use crate::{codec::var_uint::VarUInt, serial::PacketRead};
 use pumpkin_macros::packet;
 
+/// Sent by the client during resource pack negotiation to acknowledge packs or request downloads.
 #[packet(8)]
 pub struct SResourcePackClientResponse {
+    /// Pack response status (e.g. refused, send packs, have all packs, or completed).
     pub response: u8,
+    /// Number of packs requested for download.
     pub download_size: u16,
+    /// Array of pack identifiers (`UUID_Version`) the client needs to download.
     pub pack_ids: Vec<String>,
 }
 

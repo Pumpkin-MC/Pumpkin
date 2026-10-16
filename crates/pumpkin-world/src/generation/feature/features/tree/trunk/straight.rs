@@ -22,14 +22,16 @@ impl StraightTrunkPlacer {
         below_trunk_provider: &BlockStateProvider,
         trunk_state: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
-        TrunkPlacer::set_dirt(
+        let mut logs = Vec::new();
+        if TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &start_pos.down(),
             below_trunk_provider,
-        );
-        let mut logs = Vec::new();
+        ) {
+            logs.push(start_pos.down());
+        }
         for i in 0..height {
             let pos = start_pos.up_height(i as i32);
             if TrunkPlacer::place(chunk, &pos, trunk_state) {

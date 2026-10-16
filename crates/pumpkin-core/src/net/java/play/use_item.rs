@@ -39,27 +39,26 @@ impl JavaClient {
         let (item_id, _item) = (item_in_hand.item.id, item_in_hand.item);
         player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
 
-        let hit_result = player.world().raycast(
+        let hit = player.world().clip(&pumpkin_world::clip::ClipContext::new(
             player.eye_position(),
             player.eye_position().add(
                 &(Vector3::rotation_vector(f64::from(use_item.pitch), f64::from(use_item.yaw))
                     * 4.5),
             ),
-            |pos, world| {
-                let block = world.get_block(pos);
-                block != &Block::AIR && block != &Block::WATER && block != &Block::LAVA
-            },
-        );
+            pumpkin_world::clip::ClipBlock::Outline,
+            pumpkin_world::clip::ClipFluid::None,
+        ));
 
-        let event = if let Some((hit_pos, _hit_dir)) = hit_result {
+        let event = if hit.is_miss {
+            PlayerInteractEvent::new(player, InteractAction::RightClickAir, &Block::AIR, None)
+        } else {
+            let hit_pos = hit.block_pos;
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickBlock,
                 player.world().get_block(&hit_pos),
                 Some(hit_pos),
             )
-        } else {
-            PlayerInteractEvent::new(player, InteractAction::RightClickAir, &Block::AIR, None)
         };
         let (item_for_use, stack_for_use) = (item_in_hand.item, item_in_hand.clone());
         let (use_yaw, use_pitch) = if self.version.load() >= JavaMinecraftVersion::V_1_21 {

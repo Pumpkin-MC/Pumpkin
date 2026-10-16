@@ -10,6 +10,7 @@ use pumpkin_macros::packet;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use std::io::Error;
 
+/// Sent by the server to update metadata and Molang properties of an entity (e.g. name tags, fire, scale).
 #[derive(PacketWrite)]
 #[packet(39)]
 pub struct CSetActorData {
@@ -23,6 +24,7 @@ pub struct CSetActorData {
     pub tick: VarULong,
 }
 
+/// A map of metadata property keys to their typed values.
 pub struct SyncedActorDataList(pub HashMap<u32, MetadataValue>);
 
 impl Default for SyncedActorDataList {

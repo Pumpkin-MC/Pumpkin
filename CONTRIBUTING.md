@@ -31,6 +31,31 @@ There are several ways you can contribute to Pumpkin:
   Ensure your code adheres to our project structure and style guidelines.
   Write clear and concise commit messages that describe your changes.
 
+### AI-Generated Contributions
+
+You can use AI tools, but you are the author of everything you submit. Before you open a PR, you should have read every line, run the change yourself, and be able to answer questions about it without asking a model.
+
+- **Maintainers may close any PR they believe is AI-generated, without reviewing it and without giving a reason.** This includes PRs that only look AI-generated. Review time is limited, and we won't spend it on code the author hasn't checked.
+- Say in the PR description if AI wrote a meaningful part of the code or the description. We find undisclosed AI use anyway, and hiding it gets the PR closed faster.
+- Don't reopen a closed PR or open the same change again. If you think it was closed by mistake, ask on Discord.
+- Accounts that keep sending low-effort AI PRs may be blocked from the organization.
+
+### When a PR May Be Closed
+
+Maintainers may close a PR without a full review if any of these apply:
+
+- It changes something a player can see or feel in-game and has no screenshot or screen recording attached.
+- It changes gameplay and the author hasn't joined with a real client to test it.
+- The description is empty, only repeats the title, or doesn't say how the change was tested.
+- It looks AI-generated, hides AI use, or removes the disclosure line from an agent-drafted description (see [AI-Generated Contributions](#ai-generated-contributions)).
+- It was opened by an AI agent instead of a person.
+- The author can't explain their own change or answer review questions about it.
+- It duplicates an open PR without saying how it differs.
+- It doesn't behave like vanilla.
+- It hardcodes vanilla values that should come from `pumpkin-data` (see [No Hardcoded Vanilla Values](#coding-guidelines)).
+- It mixes unrelated changes, such as reformatting untouched code or committing unrelated lockfile or generated-file changes.
+- CI fails and the author doesn't fix it, or the author stops responding to review.
+
 ### Docs
 
 The Documentation of Pumpkin can be found at <https://pumpkinmc.org/>
@@ -51,6 +76,8 @@ Note: Pumpkin's clippy settings are relatively strict, this can be frustrating b
 - What is the impact of this change?
 - Are there any known issues or limitations?
 - Include any relevant context, such as related issues or discussions.
+- **No Hardcoded Vanilla Values:** Block and item properties, entity dimensions, tags, recipes, loot tables, sounds and other game data come from `pumpkin-data`, which is generated from the extracted vanilla data in `assets/`. Don't copy these values into the code. They change between Minecraft versions, and a hardcoded copy silently goes stale on the next update. If a value isn't generated yet, extend `tools/pumpkin-codegen`. If it isn't in `assets/` at all, it has to be added to the [Extractor](https://github.com/Pumpkin-MC/Extractor) first. The only exception is a value vanilla itself hardcodes as a `static final` constant in Java code and that stays the same across versions. Keep those as named Rust constants with the Java name, never as bare numbers.
+- **Screenshot or Recording:** Any change a player can see or feel in-game (blocks, items, mobs, combat, movement, particles, sounds, GUIs, world generation) needs a screenshot or screen recording attached to the PR. Use a recording for anything that moves or happens over time. Capture it from a real client, not a bot. If the change has no in-game effect (tooling, codecs, config, refactors), say so in the description.
 - **No Clippy Warnings:** Address all warnings reported by the Clippy linter. You can check for warnings using `cargo clippy --all-targets`.
 - **Passing Unit Tests:** All existing unit tests must pass successfully. You can run the tests with `cargo test`.
 

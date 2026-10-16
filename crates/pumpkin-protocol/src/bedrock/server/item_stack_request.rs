@@ -272,11 +272,16 @@ fn skip_autocraft_ingredient<R: Read>(reader: &mut R) -> Result<(), Error> {
     Ok(())
 }
 
+/// An individual inventory request containing slot manipulation actions.
 #[derive(Debug)]
 pub struct ItemStackRequest {
+    /// Client-assigned sequence ID identifying this request for response correlation.
     pub request_id: VarInt,
+    /// Ordered actions that modify inventory slots (take, place, swap, craft, etc.).
     pub actions: Vec<ItemStackRequestAction>,
+    /// Filter strings for text filtering when renaming items.
     pub filter_strings: Vec<String>,
+    /// Reason code for profanity or server filtering checks.
     pub filter_cause: i32,
 }
 
@@ -303,9 +308,11 @@ impl PacketRead for ItemStackRequest {
     }
 }
 
+/// A batch of item stack requests sent by the client to manipulate inventory slots.
 #[derive(Debug)]
 #[packet(147)]
 pub struct SItemStackRequest {
+    /// List of item stack requests to execute sequentially.
     pub requests: Vec<ItemStackRequest>,
 }
 
