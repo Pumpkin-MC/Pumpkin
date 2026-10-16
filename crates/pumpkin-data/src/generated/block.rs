@@ -2,7 +2,7 @@
 use crate::block_state::PistonBehavior;
 use crate::{
     Block, BlockId, BlockState, BlockStateId,
-    blocks::{Flammable, ShapeOffset, ShapeOffsetType, SpawnFloorPredicate},
+    blocks::{Flammable, ShapeOffset, ShapeOffsetType, SpawnFloorPredicate, SuffocationPredicate},
 };
 #[allow(
     clippy::wildcard_imports,
@@ -595223,6 +595223,57 @@ impl Block {
             BlockId::WAXED_WEATHERED_COPPER_GRATE => SpawnFloorPredicate::Never,
             BlockId::WAXED_OXIDIZED_COPPER_GRATE => SpawnFloorPredicate::Never,
             _ => SpawnFloorPredicate::Default,
+        }
+    }
+    #[must_use]
+    pub const fn suffocation_predicate(&self) -> SuffocationPredicate {
+        match self.id {
+            BlockId::MANGROVE_ROOTS => SuffocationPredicate::Never,
+            BlockId::OAK_LEAVES => SuffocationPredicate::Never,
+            BlockId::SPRUCE_LEAVES => SuffocationPredicate::Never,
+            BlockId::BIRCH_LEAVES => SuffocationPredicate::Never,
+            BlockId::JUNGLE_LEAVES => SuffocationPredicate::Never,
+            BlockId::ACACIA_LEAVES => SuffocationPredicate::Never,
+            BlockId::CHERRY_LEAVES => SuffocationPredicate::Never,
+            BlockId::DARK_OAK_LEAVES => SuffocationPredicate::Never,
+            BlockId::PALE_OAK_LEAVES => SuffocationPredicate::Never,
+            BlockId::MANGROVE_LEAVES => SuffocationPredicate::Never,
+            BlockId::RED_POPLAR_LEAVES => SuffocationPredicate::Never,
+            BlockId::ORANGE_POPLAR_LEAVES => SuffocationPredicate::Never,
+            BlockId::YELLOW_POPLAR_LEAVES => SuffocationPredicate::Never,
+            BlockId::AZALEA_LEAVES => SuffocationPredicate::Never,
+            BlockId::FLOWERING_AZALEA_LEAVES => SuffocationPredicate::Never,
+            BlockId::GLASS => SuffocationPredicate::Never,
+            BlockId::FARMLAND => SuffocationPredicate::Always,
+            BlockId::SOUL_SAND => SuffocationPredicate::Always,
+            BlockId::WHITE_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::ORANGE_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::MAGENTA_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::LIGHT_BLUE_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::YELLOW_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::LIME_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::PINK_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::GRAY_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::LIGHT_GRAY_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::CYAN_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::PURPLE_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::BLUE_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::BROWN_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::GREEN_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::RED_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::BLACK_STAINED_GLASS => SuffocationPredicate::Never,
+            BlockId::DIRT_PATH => SuffocationPredicate::Always,
+            BlockId::TINTED_GLASS => SuffocationPredicate::Never,
+            BlockId::COPPER_GRATE => SuffocationPredicate::Never,
+            BlockId::EXPOSED_COPPER_GRATE => SuffocationPredicate::Never,
+            BlockId::WEATHERED_COPPER_GRATE => SuffocationPredicate::Never,
+            BlockId::OXIDIZED_COPPER_GRATE => SuffocationPredicate::Never,
+            BlockId::WAXED_COPPER_GRATE => SuffocationPredicate::Never,
+            BlockId::WAXED_EXPOSED_COPPER_GRATE => SuffocationPredicate::Never,
+            BlockId::WAXED_WEATHERED_COPPER_GRATE => SuffocationPredicate::Never,
+            BlockId::WAXED_OXIDIZED_COPPER_GRATE => SuffocationPredicate::Never,
+            BlockId::MUD => SuffocationPredicate::Always,
+            _ => SuffocationPredicate::Default,
         }
     }
     pub(crate) const fn shape_offset(&self) -> Option<ShapeOffset> {
