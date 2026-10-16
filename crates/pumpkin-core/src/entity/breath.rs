@@ -28,6 +28,12 @@ impl Default for BreathManager {
 
 impl BreathManager {
     pub fn tick(&self, player: &Player) {
+        // Vanilla only runs the air supply while alive. A player waiting to respawn under water
+        // would otherwise lose the air the death reset gave back and respawn with none.
+        if player.living_entity.health.load() <= 0.0 {
+            return;
+        }
+
         let mode = player.gamemode.load();
 
         if matches!(mode, GameMode::Creative | GameMode::Spectator) {
