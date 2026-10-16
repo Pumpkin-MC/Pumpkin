@@ -1,11 +1,7 @@
-//! Ownership-preserving conversions from an entity to a display or interaction entity
+//! Borrowed views of an entity as a display or interaction entity
 //!
-//! A conversion in the WIT consumes the entity handle and returns `result<converted, entity>`: on
-//! success the entity belongs to the converted resource, and on failure the original handle comes
-//! back in the error
-//!
-//! v0.1 returned an `Option` from a borrow here, which could not give the handle back, so this is
-//! the difference to watch for when you migrate
+//! A successful cast returns an owned typed handle to the same host entity
+//! The original entity handle remains usable whether the cast succeeds or fails
 
 use crate::host::{
     display::{
@@ -14,75 +10,42 @@ use crate::host::{
     world::Entity,
 };
 
-/// Converts an owned [`Entity`] into a display or interaction entity
-///
-/// The methods take `self` because borrowing would let two handles to one entity exist at once,
-/// and the error path gives the handle back instead of dropping it
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// match entity.into_text_display_entity() {
-///     Ok(text) => text.set_text(message),
-///     // not a text display, so the entity is still ours to use
-///     Err(entity) => other_handling(entity),
-/// }
-/// ```
-pub trait EntityDisplayExt: Sized {
-    /// Converts into a [`DisplayEntity`]
-    ///
-    /// # Errors
-    ///
-    /// Returns the original entity when it is not a display entity
-    fn into_display_entity(self) -> Result<DisplayEntity, Entity>;
+/// Gets a typed display or interaction handle from a borrowed [`Entity`]
+pub trait EntityDisplayExt {
+    /// Returns a [`DisplayEntity`] handle for this entity, or `None` if it is not one
+    fn as_display(&self) -> Option<DisplayEntity>;
 
-    /// Converts into a [`BlockDisplayEntity`]
-    ///
-    /// # Errors
-    ///
-    /// Returns the original entity when it is not a block display
-    fn into_block_display_entity(self) -> Result<BlockDisplayEntity, Entity>;
+    /// Returns a [`BlockDisplayEntity`] handle for this entity, or `None` if it is not one
+    fn as_block_display(&self) -> Option<BlockDisplayEntity>;
 
-    /// Converts into an [`ItemDisplayEntity`]
-    ///
-    /// # Errors
-    ///
-    /// Returns the original entity when it is not an item display
-    fn into_item_display_entity(self) -> Result<ItemDisplayEntity, Entity>;
+    /// Returns a [`ItemDisplayEntity`] handle for this entity, or `None` if it is not one
+    fn as_item_display(&self) -> Option<ItemDisplayEntity>;
 
-    /// Converts into a [`TextDisplayEntity`]
-    ///
-    /// # Errors
-    ///
-    /// Returns the original entity when it is not a text display
-    fn into_text_display_entity(self) -> Result<TextDisplayEntity, Entity>;
+    /// Returns a [`TextDisplayEntity`] handle for this entity, or `None` if it is not one
+    fn as_text_display(&self) -> Option<TextDisplayEntity>;
 
-    /// Converts into an [`InteractionEntity`]
-    ///
-    /// # Errors
-    ///
-    /// Returns the original entity when it is not an interaction entity
-    fn into_interaction_entity(self) -> Result<InteractionEntity, Entity>;
+    /// Returns a [`InteractionEntity`] handle for this entity, or `None` if it is not one
+    fn as_interaction(&self) -> Option<InteractionEntity>;
 }
 
 impl EntityDisplayExt for Entity {
-    fn into_display_entity(self) -> Result<DisplayEntity, Entity> {
+    fn as_display(&self) -> Option<DisplayEntity> {
         DisplayEntity::from_entity(self)
     }
 
-    fn into_block_display_entity(self) -> Result<BlockDisplayEntity, Entity> {
+    fn as_block_display(&self) -> Option<BlockDisplayEntity> {
         BlockDisplayEntity::from_entity(self)
     }
 
-    fn into_item_display_entity(self) -> Result<ItemDisplayEntity, Entity> {
+    fn as_item_display(&self) -> Option<ItemDisplayEntity> {
         ItemDisplayEntity::from_entity(self)
     }
 
-    fn into_text_display_entity(self) -> Result<TextDisplayEntity, Entity> {
+    fn as_text_display(&self) -> Option<TextDisplayEntity> {
         TextDisplayEntity::from_entity(self)
     }
 
-    fn into_interaction_entity(self) -> Result<InteractionEntity, Entity> {
+    fn as_interaction(&self) -> Option<InteractionEntity> {
         InteractionEntity::from_entity(self)
     }
 }
