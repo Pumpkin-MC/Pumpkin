@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::Weak;
 
 use super::{Goal, to_goal_ticks};
 use crate::entity::mob::Mob;
@@ -11,18 +11,22 @@ use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 
 pub struct PlaceBlockGoal {
-    enderman: Arc<EndermanEntity>,
+    enderman: Weak<EndermanEntity>,
 }
 
 impl PlaceBlockGoal {
-    pub const fn new(enderman: Arc<EndermanEntity>) -> Self {
+    #[must_use]
+    pub const fn new(enderman: Weak<EndermanEntity>) -> Self {
         Self { enderman }
     }
 }
 
 impl Goal for PlaceBlockGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        if self.enderman.get_carried_block().is_none() {
+        let Some(enderman) = self.enderman.upgrade() else {
+            return false;
+        };
+        if enderman.get_carried_block().is_none() {
             return false;
         }
 
@@ -40,7 +44,10 @@ impl Goal for PlaceBlockGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(block_state_id) = self.enderman.get_carried_block() else {
+        let Some(enderman) = self.enderman.upgrade() else {
+            return;
+        };
+        let Some(block_state_id) = enderman.get_carried_block() else {
             return;
         };
 
@@ -82,6 +89,6 @@ impl Goal for PlaceBlockGoal {
 
         // TODO: also check the carried block can survive there.
         world_clone.set_block_state(&target_pos, block_state_id, BlockFlags::NOTIFY_ALL);
-        self.enderman.set_carried_block(None);
+        enderman.set_carried_block(None);
     }
 }

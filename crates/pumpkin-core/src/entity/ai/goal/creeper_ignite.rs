@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Weak};
 
 use super::{Controls, Goal};
 
@@ -9,13 +9,13 @@ use crate::entity::mob::creeper::CreeperEntity;
 
 pub struct CreeperIgniteGoal {
     goal_control: Controls,
-    creeper: Arc<CreeperEntity>,
+    creeper: Weak<CreeperEntity>,
     target: Option<Arc<dyn EntityBase>>,
 }
 
 impl CreeperIgniteGoal {
     #[must_use]
-    pub const fn new(creeper: Arc<CreeperEntity>) -> Self {
+    pub const fn new(creeper: Weak<CreeperEntity>) -> Self {
         Self {
             goal_control: Controls::MOVE,
             creeper,
@@ -26,7 +26,10 @@ impl CreeperIgniteGoal {
 
 impl Goal for CreeperIgniteGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        if self.creeper.fuse_speed.load(Ordering::Relaxed) > 0 {
+        let Some(creeper) = self.creeper.upgrade() else {
+            return false;
+        };
+        if creeper.fuse_speed.load(Ordering::Relaxed) > 0 {
             return true;
         }
 
@@ -56,8 +59,11 @@ impl Goal for CreeperIgniteGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
+        let Some(creeper) = self.creeper.upgrade() else {
+            return;
+        };
         let Some(target) = self.target.as_ref().filter(|t| t.get_entity().is_alive()) else {
-            self.creeper.set_fuse_speed(-1);
+            creeper.set_fuse_speed(-1);
             return;
         };
 
@@ -68,9 +74,9 @@ impl Goal for CreeperIgniteGoal {
             .squared_distance_to_vec(&target.get_entity().pos.load());
 
         if dist_sq > 49.0 || !mob.has_line_of_sight(target.get_entity()) {
-            self.creeper.set_fuse_speed(-1);
+            creeper.set_fuse_speed(-1);
         } else {
-            self.creeper.set_fuse_speed(1);
+            creeper.set_fuse_speed(1);
         }
     }
 

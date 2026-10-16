@@ -130,7 +130,10 @@ impl PiglinEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(OpenDoorGoal::new(true)));
-            goal_selector.add_goal(2, Box::new(GoToWantedItemGoal::new(mob_arc.clone(), 1.0)));
+            goal_selector.add_goal(
+                2,
+                Box::new(GoToWantedItemGoal::new(Arc::downgrade(&mob_arc), 1.0)),
+            );
             goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(4, Box::new(RangedCrossbowAttackGoal::new(1.0, 8.0)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
@@ -175,7 +178,7 @@ impl PiglinEntity {
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WITHER, true),
             );
 
-            let piglin_clone = mob_arc.clone();
+            let piglin_weak = Arc::downgrade(&mob_arc);
             target_selector.add_goal(
                 4,
                 Box::new(ActiveTargetGoal::new(
@@ -185,7 +188,9 @@ impl PiglinEntity {
                     true,
                     false,
                     Some(move |_target: &LivingEntity, _world: &World| {
-                        piglin_clone.is_adult() && piglin_clone.can_hunt()
+                        piglin_weak
+                            .upgrade()
+                            .is_some_and(|piglin| piglin.is_adult() && piglin.can_hunt())
                     }),
                 )),
             );

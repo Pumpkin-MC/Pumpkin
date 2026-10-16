@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use super::{Controls, Goal};
 use crate::entity::EntityBase;
@@ -6,12 +6,13 @@ use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::{EndermanEntity, PLAYER_EYE_HEIGHT};
 
 pub struct ChasePlayerGoal {
-    enderman: Arc<EndermanEntity>,
+    enderman: Weak<EndermanEntity>,
     target: Option<Arc<dyn EntityBase>>,
 }
 
 impl ChasePlayerGoal {
-    pub const fn new(enderman: Arc<EndermanEntity>) -> Self {
+    #[must_use]
+    pub const fn new(enderman: Weak<EndermanEntity>) -> Self {
         Self {
             enderman,
             target: None,
@@ -21,6 +22,9 @@ impl ChasePlayerGoal {
 
 impl Goal for ChasePlayerGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(enderman) = self.enderman.upgrade() else {
+            return false;
+        };
         let mob_entity = mob.get_mob_entity();
         let target = mob_entity.get_target();
 
@@ -42,7 +46,7 @@ impl Goal for ChasePlayerGoal {
             return false;
         }
 
-        if !self.enderman.is_player_staring(player) {
+        if !enderman.is_player_staring(player) {
             self.target = None;
             return false;
         }

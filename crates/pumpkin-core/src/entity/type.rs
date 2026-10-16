@@ -702,3 +702,62 @@ pub fn check_spawn_rules(
 
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Weak};
+
+    use arc_swap::ArcSwap;
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::vector3::Vector3;
+    use pumpkin_util::world_seed::Seed;
+    use pumpkin_world::level::Level;
+    use pumpkin_world::world_info::LevelData;
+    use uuid::Uuid;
+
+    use super::from_type;
+    use crate::block::registry::BlockRegistry;
+    use crate::world::World;
+
+    /// A goal holding a strong `Arc` to its own mob is a cycle that keeps the mob alive forever.
+    #[tokio::test]
+    async fn mobs_are_freed_when_dropped() {
+        let dir = tempfile::tempdir().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            dir.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let world = Arc::new(World::load(
+            level,
+            Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
+            Dimension::OVERWORLD,
+            Arc::new(BlockRegistry::default()),
+            Weak::new(),
+        ));
+
+        for entity_type in [
+            &EntityType::CREEPER,
+            &EntityType::ENDERMAN,
+            &EntityType::PIGLIN,
+            &EntityType::SHULKER,
+            &EntityType::SLIME,
+            &EntityType::MAGMA_CUBE,
+        ] {
+            let mob = Arc::downgrade(&from_type(
+                entity_type,
+                Vector3::new(0.0, 0.0, 0.0),
+                &world,
+                Uuid::new_v4(),
+            ));
+            assert!(
+                mob.upgrade().is_none(),
+                "{} is still alive after being dropped",
+                entity_type.resource_name
+            );
+        }
+    }
+}
