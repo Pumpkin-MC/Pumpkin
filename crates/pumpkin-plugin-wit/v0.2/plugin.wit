@@ -85,7 +85,9 @@ world plugin {
 
     /// Called by the host once to initialize the plugin.
     /// Internal use only; plugins should use the `register_plugin!` macro.
-    export init-plugin: async func();
+    /// This callback is synchronous and only wires up the plugin
+    /// Perform setup that needs to await host calls in `on-load`
+    export init-plugin: func();
 
     /// Called when the plugin is being loaded.
     /// Use this to register commands, events, and perform initial setup.
