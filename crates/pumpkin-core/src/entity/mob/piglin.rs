@@ -471,11 +471,7 @@ impl PiglinEntity {
     }
 
     fn stop_walking(&self) {
-        self.mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        self.mob_entity.steered().navigator().stop();
     }
 
     pub fn start_admiring(&self, item: ItemStack) {

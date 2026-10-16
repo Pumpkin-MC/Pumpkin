@@ -51,11 +51,7 @@ impl LookControlTrait for SmoothSwimmingLookControl {
                 ));
             }
         } else {
-            let is_idle = mob_entity
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_done();
+            let is_idle = mob_entity.steered().navigator().is_done();
             if is_idle {
                 entity.set_pitch(self.change_angle(entity.pitch.load(), 0.0, 5.0));
             }

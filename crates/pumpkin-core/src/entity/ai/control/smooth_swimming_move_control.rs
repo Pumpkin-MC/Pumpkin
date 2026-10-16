@@ -65,11 +65,7 @@ impl MoveControlTrait for SmoothSwimmingMoveControl {
             entity.set_velocity(Vector3::new(vel.x, vel.y + 0.005, vel.z));
         }
 
-        let is_done = mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_done();
+        let is_done = mob_entity.steered().navigator().is_done();
 
         if self.operation == Operation::MoveTo && !is_done {
             let pos = entity.pos.load();

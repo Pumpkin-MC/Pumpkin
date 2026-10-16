@@ -238,11 +238,7 @@ impl EndermanEntity {
 
         entity.teleport(new_pos, None, None, &world);
 
-        self.mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        self.mob_entity.steered().navigator().stop();
 
         true
     }

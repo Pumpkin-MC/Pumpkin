@@ -158,10 +158,8 @@ impl Goal for TemptGoal {
             );
 
         let mob_pos = mob_entity.living_entity.entity.pos.load();
-        let mut navigator = mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob_entity.steered();
+        let mut navigator = steered.navigator();
         if mob_pos.squared_distance_to_vec(&player_pos) < self.stop_distance * self.stop_distance {
             navigator.stop();
         } else {
@@ -171,11 +169,7 @@ impl Goal for TemptGoal {
 
     fn stop(&mut self, mob: &dyn Mob) {
         self.target_player = None;
-        mob.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        mob.get_mob_entity().steered().navigator().stop();
         self.cooldown = to_goal_ticks(100);
         self.running = false;
     }

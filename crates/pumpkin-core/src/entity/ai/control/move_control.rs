@@ -60,9 +60,8 @@ impl MoveControlTrait for MoveControl {
                 pos.z + f64::from(right * cos + forwards * sin),
             ));
             if mob_entity
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .steered()
+                .navigator()
                 .get_path_type(living_entity, next)
                 != PathType::Walkable
             {

@@ -101,11 +101,8 @@ impl Goal for FollowParentGoal {
         if let Some(parent) = &self.parent {
             let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
             let parent_pos = parent.get_entity().pos.load();
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let steered = mob.get_mob_entity().steered();
+            let mut navigator = steered.navigator();
             navigator.set_progress(NavigatorGoal::new(mob_pos, parent_pos, self.speed));
         }
     }

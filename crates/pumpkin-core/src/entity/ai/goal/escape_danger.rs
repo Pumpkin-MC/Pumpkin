@@ -111,9 +111,8 @@ impl Goal for EscapeDangerGoal {
         if let Some(target) = self.target {
             let pos = mob.get_mob_entity().living_entity.entity.pos.load();
             mob.get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .steered()
+                .navigator()
                 .set_progress(NavigatorGoal::new(pos, target, self.speed));
         }
         self.running = true;

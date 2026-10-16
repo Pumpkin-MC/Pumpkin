@@ -80,6 +80,36 @@ pub mod zoglin;
 pub mod zombie;
 pub mod zombified_piglin;
 
+/// The mob whose navigation and movement control a mob drives: its own, or the mob it steers.
+pub struct SteeredMob<'a> {
+    rider: &'a MobEntity,
+    vehicle: Option<Arc<dyn EntityBase>>,
+}
+
+impl SteeredMob<'_> {
+    #[must_use]
+    pub fn mob_entity(&self) -> &MobEntity {
+        self.vehicle
+            .as_deref()
+            .and_then(EntityBase::get_mob)
+            .map_or(self.rider, |mob| mob.get_mob_entity())
+    }
+
+    pub fn navigator(&self) -> std::sync::MutexGuard<'_, Navigator> {
+        self.mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    pub fn move_control(&self) -> std::sync::MutexGuard<'_, Box<dyn MoveControlTrait>> {
+        self.mob_entity()
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
 pub struct MobEntity {
     pub living_entity: LivingEntity,
     pub goals_selector: std::sync::Mutex<GoalSelector>,
@@ -106,6 +136,22 @@ pub struct MobEntity {
     mob_flags: AtomicU8,
 }
 impl MobEntity {
+    /// Vanilla `Mob.getNavigation`/`getMoveControl`: a rider steering a mob drives that mob.
+    /// Only the mob's own AI step ticks its own navigator and move control directly.
+    pub fn steered(&self) -> SteeredMob<'_> {
+        let entity = &self.living_entity.entity;
+        let vehicle = entity.get_vehicle().filter(|vehicle| {
+            vehicle.get_mob().is_some()
+                && vehicle
+                    .get_controlling_passenger()
+                    .is_some_and(|rider| rider.get_entity().entity_id == entity.entity_id)
+        });
+        SteeredMob {
+            rider: self,
+            vehicle,
+        }
+    }
+
     pub fn set_speed(&self, speed: f32) {
         self.living_entity.set_speed(speed);
         let input = self.living_entity.movement_input.load();
@@ -326,16 +372,14 @@ impl MobEntity {
             navigator.tick(&self.living_entity)
         };
 
+        // Vanilla PathNavigation.tick hands its waypoint to `mob.getMoveControl()`.
         if let Some(target) = navigation_target {
-            self.move_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .set_wanted_position(
-                    target.position.x,
-                    target.position.y,
-                    target.position.z,
-                    target.speed_modifier,
-                );
+            self.steered().move_control().set_wanted_position(
+                target.position.x,
+                target.position.y,
+                target.position.z,
+                target.speed_modifier,
+            );
         }
 
         mob.custom_server_ai_step(caller);
@@ -903,11 +947,7 @@ pub trait Mob: EntityBase + Send + Sync {
 
     /// Takes the navigation lock, so callers must not already hold it.
     fn is_navigator_idle(&self) -> bool {
-        self.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_idle()
+        self.get_mob_entity().steered().navigator().is_idle()
     }
 
     fn has_line_of_sight(&self, target: &crate::entity::Entity) -> bool {
@@ -1735,12 +1775,7 @@ pub trait PathAwareEntity: Mob + Send + Sync {
     }
 
     fn is_navigation(&self) -> bool {
-        let navigator = self
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        !navigator.is_idle()
+        !self.get_mob_entity().steered().navigator().is_idle()
     }
 
     // TODO: implement
@@ -2021,6 +2056,61 @@ mod lifecycle_tests {
         world.level.shutdown().await;
         assert_eq!(boat_controls, [true, true, false]);
         assert_eq!(chest_boat_controls, [true, true, false]);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn riders_steer_the_mob_they_control() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        let rider = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        cow.get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(rider.clone());
+        *rider
+            .get_entity()
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(cow.clone());
+        rider.get_mob_entity().steered().navigator().set_progress(
+            crate::entity::ai::pathfinder::NavigatorGoal::new(
+                Vector3::new(0.0, 64.0, 0.0),
+                Vector3::new(8.0, 64.0, 0.0),
+                1.0,
+            ),
+        );
+        let cow_navigating = !cow
+            .get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_idle();
+        let rider_navigating = !rider
+            .get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_idle();
+        cow.get_mob_entity().set_no_ai(true);
+        let steers_itself = std::ptr::eq(
+            rider.get_mob_entity().steered().mob_entity(),
+            rider.get_mob_entity(),
+        );
+        world.level.shutdown().await;
+        assert!(cow_navigating);
+        assert!(!rider_navigating);
+        assert!(steers_itself);
         Ok(())
     }
 }

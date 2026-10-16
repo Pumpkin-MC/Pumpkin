@@ -141,11 +141,8 @@ impl Goal for BreedGoal {
     fn stop(&mut self, mob: &dyn Mob) {
         self.mate = None;
         self.timer = 0;
-        let mut navigator = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob.get_mob_entity().steered();
+        let mut navigator = steered.navigator();
         navigator.stop();
     }
 
@@ -169,10 +166,8 @@ impl Goal for BreedGoal {
         let dist_sq = my_pos.squared_distance_to_vec(&mate_pos);
 
         {
-            let mut navigator = mob_entity
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let steered = mob_entity.steered();
+            let mut navigator = steered.navigator();
             navigator.set_progress(NavigatorGoal::new(my_pos, mate_pos, self.speed));
         };
 

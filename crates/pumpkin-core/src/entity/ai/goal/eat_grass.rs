@@ -68,11 +68,8 @@ impl Goal for EatGrassGoal {
             .world
             .load()
             .send_entity_status(entity, EntityStatus::EatGrass, None);
-        let mut navigator = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob.get_mob_entity().steered();
+        let mut navigator = steered.navigator();
         navigator.stop();
     }
 
