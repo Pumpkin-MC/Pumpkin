@@ -1,91 +1,85 @@
 use super::{AccessorExt, in_active_context, run_blocking};
 use crate::LockIgnorePoison;
-use crate::pumpkin::{
-    self,
-    plugin::{
-        common::Position as WitPosition,
-        game_rules::{GameRule as WitGameRule, GameRuleValue as WitGameRuleValue},
-        world::{
-            Block as WitBlock, BlockDirection as WitBlockDirection, BlockEntityType,
-            BlockFlags as WitBlockFlags, BlockPos as WitBlockPos, BlockState as WitBlockState,
-            BlockStateInfo as WitBlockStateInfo, BoundingBox as WitBoundingBox, Chunk as WitChunk,
-            Flammable as WitFlammable, NoteblockInstrument as WitNoteblockInstrument,
-            PistonBehavior as WitPistonBehavior, RayTraceBlockResult as WitRayTraceBlockResult,
-            RayTraceEntityResult as WitRayTraceEntityResult, World, WorldBorder as WitWorldBorder,
-            WorldSpawnLocation as WitWorldSpawnLocation,
-        },
-    },
-};
-use pumpkin_core::{
-    block::entities::{
-        banner::BannerBlockEntity as InternalBannerBlockEntity,
-        barrel::BarrelBlockEntity as InternalBarrelBlockEntity,
-        beacon::BeaconBlockEntity as InternalBeaconBlockEntity,
-        bed::BedBlockEntity as InternalBedBlockEntity,
-        beehive::BeehiveBlockEntity as InternalBeehiveBlockEntity,
-        bell::BellBlockEntity as InternalBellBlockEntity,
-        blasting_furnace::BlastingFurnaceBlockEntity as InternalBlastingFurnaceBlockEntity,
-        brewing_stand::BrewingStandBlockEntity as InternalBrewingStandBlockEntity,
-        brushable_block::BrushableBlockBlockEntity as InternalBrushableBlockBlockEntity,
-        calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity as InternalCalibratedSculkSensorBlockEntity,
-        campfire::CampfireBlockEntity as InternalCampfireBlockEntity,
-        chest::ChestBlockEntity as InternalChestBlockEntity,
-        chiseled_bookshelf::ChiseledBookshelfBlockEntity as InternalChiseledBookshelfBlockEntity,
-        command_block::CommandBlockEntity as InternalCommandBlockEntity,
-        comparator::ComparatorBlockEntity as InternalComparatorBlockEntity,
-        conduit::ConduitBlockEntity as InternalConduitBlockEntity,
-        copper_golem_statue::CopperGolemStatueBlockEntity as InternalCopperGolemStatueBlockEntity,
-        crafter::CrafterBlockEntity as InternalCrafterBlockEntity,
-        creaking_heart::CreakingHeartBlockEntity as InternalCreakingHeartBlockEntity,
-        daylight_detector::DaylightDetectorBlockEntity as InternalDaylightDetectorBlockEntity,
-        decorated_pot::DecoratedPotBlockEntity as InternalDecoratedPotBlockEntity,
-        dispenser::DispenserBlockEntity as InternalDispenserBlockEntity,
-        dropper::DropperBlockEntity as InternalDropperBlockEntity,
-        enchanting_table::EnchantingTableBlockEntity as InternalEnchantingTableBlockEntity,
-        end_gateway::EndGatewayBlockEntity as InternalEndGatewayBlockEntity,
-        end_portal::EndPortalBlockEntity as InternalEndPortalBlockEntity,
-        ender_chest::EnderChestBlockEntity as InternalEnderChestBlockEntity,
-        furnace::FurnaceBlockEntity as InternalFurnaceBlockEntity,
-        hanging_sign::HangingSignBlockEntity as InternalHangingSignBlockEntity,
-        hopper::HopperBlockEntity as InternalHopperBlockEntity,
-        jigsaw_block::JigsawBlockEntity as InternalJigsawBlockEntity,
-        jukebox::JukeboxBlockEntity as InternalJukeboxBlockEntity,
-        lectern::LecternBlockEntity as InternalLecternBlockEntity,
-        map::MapBlockEntity as InternalMapBlockEntity,
-        mob_spawner::MobSpawnerBlockEntity as InternalMobSpawnerBlockEntity,
-        piston::PistonBlockEntity as InternalPistonBlockEntity,
-        potent_sulfur::PotentSulfurBlockEntity as InternalPotentSulfurBlockEntity,
-        sculk_catalyst::SculkCatalystBlockEntity as InternalSculkCatalystBlockEntity,
-        sculk_sensor::SculkSensorBlockEntity as InternalSculkSensorBlockEntity,
-        sculk_shrieker::SculkShriekerBlockEntity as InternalSculkShriekerBlockEntity,
-        shelf::ShelfBlockEntity as InternalShelfBlockEntity,
-        shulker_box::ShulkerBoxBlockEntity as InternalShulkerBoxBlockEntity,
-        sign::SignBlockEntity as InternalSignBlockEntity,
-        skull::SkullBlockEntity as InternalSkullBlockEntity,
-        smoker::SmokerBlockEntity as InternalSmokerBlockEntity,
-        structure_block::StructureBlockBlockEntity as InternalStructureBlockBlockEntity,
-        test_block::TestBlockBlockEntity as InternalTestBlockBlockEntity,
-        test_instance_block::TestInstanceBlockBlockEntity as InternalTestInstanceBlockBlockEntity,
-        trapped_chest::TrappedChestBlockEntity as InternalTrappedChestBlockEntity,
-        trial_spawner::TrialSpawnerBlockEntity as InternalTrialSpawnerBlockEntity,
-        vault::VaultBlockEntity as InternalVaultBlockEntity,
-    },
-    world::explosion::ExplosionInteraction,
-};
-use pumpkin_data::{
-    BlockDirection as InternalBlockDirection, BlockId, BlockStateId,
-    block_properties::NoteblockInstrument as InternalNoteblockInstrument,
-    block_state::PistonBehavior,
-    game_rules::{GameRule, GameRuleValue},
-};
+
+use pumpkin_data::block_properties::NoteblockInstrument as InternalNoteblockInstrument;
+use pumpkin_data::block_state::PistonBehavior;
+use pumpkin_data::{BlockDirection as InternalBlockDirection, BlockId, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_wasm_host_common::state::{ChunkBuffer, PluginHostState};
-use pumpkin_world::{
-    chunk::{ChunkHeightmapType, io::Dirtiable},
-    world::BlockFlags,
-};
+use pumpkin_world::chunk::ChunkHeightmapType;
+use pumpkin_world::chunk::io::Dirtiable;
+use pumpkin_world::world::BlockFlags;
 use std::sync::{Arc, Mutex as StdMutex};
 use wasmtime::component::{Accessor, HasSelf, Resource};
+
+use crate::pumpkin::plugin::common::Position as WitPosition;
+use crate::pumpkin::plugin::game_rules::{
+    GameRule as WitGameRule, GameRuleValue as WitGameRuleValue,
+};
+use crate::pumpkin::plugin::world::{
+    Block as WitBlock, BlockDirection as WitBlockDirection, BlockEntityType,
+    BlockFlags as WitBlockFlags, BlockPos as WitBlockPos, BlockState as WitBlockState,
+    BlockStateInfo as WitBlockStateInfo, BoundingBox as WitBoundingBox, Chunk as WitChunk,
+    Flammable as WitFlammable, NoteblockInstrument as WitNoteblockInstrument,
+    PistonBehavior as WitPistonBehavior, RayTraceBlockResult as WitRayTraceBlockResult,
+    RayTraceEntityResult as WitRayTraceEntityResult, WorldBorder as WitWorldBorder,
+    WorldSpawnLocation as WitWorldSpawnLocation,
+};
+use crate::pumpkin::{self, plugin::world::World};
+use pumpkin_core::block::entities::banner::BannerBlockEntity as InternalBannerBlockEntity;
+use pumpkin_core::block::entities::barrel::BarrelBlockEntity as InternalBarrelBlockEntity;
+use pumpkin_core::block::entities::beacon::BeaconBlockEntity as InternalBeaconBlockEntity;
+use pumpkin_core::block::entities::bed::BedBlockEntity as InternalBedBlockEntity;
+use pumpkin_core::block::entities::beehive::BeehiveBlockEntity as InternalBeehiveBlockEntity;
+use pumpkin_core::block::entities::bell::BellBlockEntity as InternalBellBlockEntity;
+use pumpkin_core::block::entities::blasting_furnace::BlastingFurnaceBlockEntity as InternalBlastingFurnaceBlockEntity;
+use pumpkin_core::block::entities::brewing_stand::BrewingStandBlockEntity as InternalBrewingStandBlockEntity;
+use pumpkin_core::block::entities::brushable_block::BrushableBlockBlockEntity as InternalBrushableBlockBlockEntity;
+use pumpkin_core::block::entities::calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity as InternalCalibratedSculkSensorBlockEntity;
+use pumpkin_core::block::entities::campfire::CampfireBlockEntity as InternalCampfireBlockEntity;
+use pumpkin_core::block::entities::chest::ChestBlockEntity as InternalChestBlockEntity;
+use pumpkin_core::block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity as InternalChiseledBookshelfBlockEntity;
+use pumpkin_core::block::entities::command_block::CommandBlockEntity as InternalCommandBlockEntity;
+use pumpkin_core::block::entities::comparator::ComparatorBlockEntity as InternalComparatorBlockEntity;
+use pumpkin_core::block::entities::conduit::ConduitBlockEntity as InternalConduitBlockEntity;
+use pumpkin_core::block::entities::copper_golem_statue::CopperGolemStatueBlockEntity as InternalCopperGolemStatueBlockEntity;
+use pumpkin_core::block::entities::crafter::CrafterBlockEntity as InternalCrafterBlockEntity;
+use pumpkin_core::block::entities::creaking_heart::CreakingHeartBlockEntity as InternalCreakingHeartBlockEntity;
+use pumpkin_core::block::entities::daylight_detector::DaylightDetectorBlockEntity as InternalDaylightDetectorBlockEntity;
+use pumpkin_core::block::entities::decorated_pot::DecoratedPotBlockEntity as InternalDecoratedPotBlockEntity;
+use pumpkin_core::block::entities::dispenser::DispenserBlockEntity as InternalDispenserBlockEntity;
+use pumpkin_core::block::entities::dropper::DropperBlockEntity as InternalDropperBlockEntity;
+use pumpkin_core::block::entities::enchanting_table::EnchantingTableBlockEntity as InternalEnchantingTableBlockEntity;
+use pumpkin_core::block::entities::end_gateway::EndGatewayBlockEntity as InternalEndGatewayBlockEntity;
+use pumpkin_core::block::entities::end_portal::EndPortalBlockEntity as InternalEndPortalBlockEntity;
+use pumpkin_core::block::entities::ender_chest::EnderChestBlockEntity as InternalEnderChestBlockEntity;
+use pumpkin_core::block::entities::furnace::FurnaceBlockEntity as InternalFurnaceBlockEntity;
+use pumpkin_core::block::entities::hanging_sign::HangingSignBlockEntity as InternalHangingSignBlockEntity;
+use pumpkin_core::block::entities::hopper::HopperBlockEntity as InternalHopperBlockEntity;
+use pumpkin_core::block::entities::jigsaw_block::JigsawBlockEntity as InternalJigsawBlockEntity;
+use pumpkin_core::block::entities::jukebox::JukeboxBlockEntity as InternalJukeboxBlockEntity;
+use pumpkin_core::block::entities::lectern::LecternBlockEntity as InternalLecternBlockEntity;
+use pumpkin_core::block::entities::map::MapBlockEntity as InternalMapBlockEntity;
+use pumpkin_core::block::entities::mob_spawner::MobSpawnerBlockEntity as InternalMobSpawnerBlockEntity;
+use pumpkin_core::block::entities::piston::PistonBlockEntity as InternalPistonBlockEntity;
+use pumpkin_core::block::entities::potent_sulfur::PotentSulfurBlockEntity as InternalPotentSulfurBlockEntity;
+use pumpkin_core::block::entities::sculk_catalyst::SculkCatalystBlockEntity as InternalSculkCatalystBlockEntity;
+use pumpkin_core::block::entities::sculk_sensor::SculkSensorBlockEntity as InternalSculkSensorBlockEntity;
+use pumpkin_core::block::entities::sculk_shrieker::SculkShriekerBlockEntity as InternalSculkShriekerBlockEntity;
+use pumpkin_core::block::entities::shelf::ShelfBlockEntity as InternalShelfBlockEntity;
+use pumpkin_core::block::entities::shulker_box::ShulkerBoxBlockEntity as InternalShulkerBoxBlockEntity;
+use pumpkin_core::block::entities::sign::SignBlockEntity as InternalSignBlockEntity;
+use pumpkin_core::block::entities::skull::SkullBlockEntity as InternalSkullBlockEntity;
+use pumpkin_core::block::entities::smoker::SmokerBlockEntity as InternalSmokerBlockEntity;
+use pumpkin_core::block::entities::structure_block::StructureBlockBlockEntity as InternalStructureBlockBlockEntity;
+use pumpkin_core::block::entities::test_block::TestBlockBlockEntity as InternalTestBlockBlockEntity;
+use pumpkin_core::block::entities::test_instance_block::TestInstanceBlockBlockEntity as InternalTestInstanceBlockBlockEntity;
+use pumpkin_core::block::entities::trapped_chest::TrappedChestBlockEntity as InternalTrappedChestBlockEntity;
+use pumpkin_core::block::entities::trial_spawner::TrialSpawnerBlockEntity as InternalTrialSpawnerBlockEntity;
+use pumpkin_core::block::entities::vault::VaultBlockEntity as InternalVaultBlockEntity;
+use pumpkin_core::world::explosion::ExplosionInteraction;
+use pumpkin_data::game_rules::{GameRule, GameRuleValue};
+use pumpkin_wasm_host_common::state::ChunkBuffer;
+use pumpkin_wasm_host_common::state::PluginHostState;
 
 pub(crate) fn from_wit_game_rule(rule: WitGameRule) -> GameRule {
     // SAFETY: WIT GameRule and pumpkin_data::game_rules::GameRule have identical variant order
@@ -584,13 +578,16 @@ impl pumpkin::plugin::world::Host for PluginHostState {
         }))
     }
 }
-
 impl pumpkin::plugin::particles::Host for PluginHostState {}
 impl pumpkin::plugin::sounds::Host for PluginHostState {}
 
 impl pumpkin::plugin::world::HostWorld for PluginHostState {
     fn get_id(&mut self, world: Resource<World>) -> wasmtime::Result<String> {
         Ok(self.get(&world)?.get_world_name().to_string())
+    }
+
+    fn get_border(&mut self, world: Resource<World>) -> wasmtime::Result<Resource<WitWorldBorder>> {
+        self.get_world_border(world)
     }
 
     fn get_world_border(
@@ -1154,10 +1151,6 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Ok(())
     }
 
-    fn get_border(&mut self, world: Resource<World>) -> wasmtime::Result<Resource<WitWorldBorder>> {
-        self.get_world_border(world)
-    }
-
     fn drop(&mut self, rep: Resource<World>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
@@ -1351,6 +1344,33 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
         Ok(to_wit_block(block))
     }
 
+    fn set_block(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        pos: WitBlockPos,
+        block: WitBlock,
+    ) -> wasmtime::Result<()> {
+        let block_id = BlockId::new_or_air(block.id);
+        let default_state_id = pumpkin_data::Block::from_id(block_id)
+            .default_state
+            .id
+            .as_u16();
+        self.set_block_state(chunk, pos, default_state_id)
+    }
+
+    fn set_block_by_id(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        pos: WitBlockPos,
+        block_id: u16,
+    ) -> wasmtime::Result<()> {
+        let Some(id) = BlockId::new(block_id) else {
+            return Err(wasmtime::Error::msg("Invalid BlockId"));
+        };
+        let default_state_id = pumpkin_data::Block::from_id(id).default_state.id.as_u16();
+        self.set_block_state(chunk, pos, default_state_id)
+    }
+
     fn set_block_state(
         &mut self,
         chunk: Resource<WitChunk>,
@@ -1507,33 +1527,6 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
         Ok(chunk_data.has_custom_data(&namespace, &key))
     }
 
-    fn set_block(
-        &mut self,
-        chunk: Resource<WitChunk>,
-        pos: WitBlockPos,
-        block: WitBlock,
-    ) -> wasmtime::Result<()> {
-        let block_id = BlockId::new_or_air(block.id);
-        let default_state_id = pumpkin_data::Block::from_id(block_id)
-            .default_state
-            .id
-            .as_u16();
-        self.set_block_state(chunk, pos, default_state_id)
-    }
-
-    fn set_block_by_id(
-        &mut self,
-        chunk: Resource<WitChunk>,
-        pos: WitBlockPos,
-        block_id: u16,
-    ) -> wasmtime::Result<()> {
-        let Some(id) = BlockId::new(block_id) else {
-            return Err(wasmtime::Error::msg("Invalid BlockId"));
-        };
-        let default_state_id = pumpkin_data::Block::from_id(id).default_state.id.as_u16();
-        self.set_block_state(chunk, pos, default_state_id)
-    }
-
     fn drop(&mut self, rep: Resource<WitChunk>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
@@ -1578,6 +1571,10 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
         Ok(border_res.worldborder.lock_ignore_poison().new_diameter)
     }
 
+    fn get_size(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<f64> {
+        self.get_diameter(border)
+    }
+
     fn set_diameter(
         &mut self,
         border: Resource<WitWorldBorder>,
@@ -1592,6 +1589,20 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
             speed.map(|s| s as i64),
         );
         Ok(())
+    }
+
+    fn set_size(&mut self, border: Resource<WitWorldBorder>, size: f64) -> wasmtime::Result<()> {
+        self.set_diameter(border, size, None)
+    }
+
+    fn set_size_transition(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        new_size: f64,
+        time_seconds: u64,
+    ) -> wasmtime::Result<()> {
+        let speed_millis = time_seconds.saturating_mul(1000);
+        self.set_diameter(border, new_size, Some(speed_millis))
     }
 
     fn get_target_diameter(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<f64> {
@@ -1640,6 +1651,18 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
             .lock_ignore_poison()
             .set_warning_delay(&world, delay);
         Ok(())
+    }
+
+    fn get_warning_time(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<i32> {
+        self.get_warning_delay(border)
+    }
+
+    fn set_warning_time(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        time: i32,
+    ) -> wasmtime::Result<()> {
+        self.set_warning_delay(border, time)
     }
 
     fn get_damage_buffer(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<f64> {
@@ -1709,36 +1732,6 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
         let world = border_res.clone();
         world.worldborder.lock_ignore_poison().reset(&world);
         Ok(())
-    }
-
-    fn get_size(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<f64> {
-        self.get_diameter(border)
-    }
-
-    fn set_size(&mut self, border: Resource<WitWorldBorder>, size: f64) -> wasmtime::Result<()> {
-        self.set_diameter(border, size, None)
-    }
-
-    fn set_size_transition(
-        &mut self,
-        border: Resource<WitWorldBorder>,
-        new_size: f64,
-        time_seconds: u64,
-    ) -> wasmtime::Result<()> {
-        let speed_millis = time_seconds.saturating_mul(1000);
-        self.set_diameter(border, new_size, Some(speed_millis))
-    }
-
-    fn get_warning_time(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<i32> {
-        self.get_warning_delay(border)
-    }
-
-    fn set_warning_time(
-        &mut self,
-        border: Resource<WitWorldBorder>,
-        time: i32,
-    ) -> wasmtime::Result<()> {
-        self.set_warning_delay(border, time)
     }
 
     fn drop(&mut self, rep: Resource<WitWorldBorder>) -> wasmtime::Result<()> {

@@ -402,7 +402,6 @@ interface %world {
         id: u16,
     }
 
-    /// Opaque handle to an entity
     resource entity {
         get-id: func() -> u32;
         get-uuid: func() -> uuid;
@@ -787,7 +786,7 @@ interface %world {
         east,
     }
 
-    /// Opaque handle to a Minecraft world (dimension).
+    /// Represents a Minecraft world (dimension).
     resource %world {
         /// Returns the unique identifier of this world.
         get-id: func() -> string;

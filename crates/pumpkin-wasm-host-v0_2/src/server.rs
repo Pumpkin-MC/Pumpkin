@@ -1,21 +1,24 @@
-use super::{
-    AccessorExt, in_active_context,
-    player::{from_wit_permission_level, parse_ban_expiry, to_wit_permission_level},
-    run_blocking,
-};
+use super::{AccessorExt, in_active_context, run_blocking};
 use crate::RequireServer;
 use crate::RwLockIgnorePoison;
+
+use pumpkin_util::text::TextComponent;
+use wasmtime::component::{Accessor, HasSelf, Resource};
+
+use crate::pumpkin::plugin::enchantments::{
+    CustomEnchantment as WitCustomEnchantment, EnchantmentManager as WitEnchantmentManager,
+};
+use crate::pumpkin::plugin::recipe::RecipeManager as WitRecipeManager;
+use pumpkin::plugin::server::CommandSender as WasmCommandSender;
+use pumpkin_core::command::CommandSender;
+
+use super::player::{from_wit_permission_level, parse_ban_expiry, to_wit_permission_level};
 use crate::{
     pumpkin::{
         self,
         plugin::{
             datapack::DatapackManager as WitDatapackManager,
-            enchantments::{
-                CustomEnchantment as WitCustomEnchantment,
-                EnchantmentManager as WitEnchantmentManager,
-            },
             player::{BanIpOptions, BanPlayerOptions, Player},
-            recipe::RecipeManager as WitRecipeManager,
             server::{
                 BanManager as WitBanManager, BannedIpEntry, BannedPlayerEntry, Difficulty,
                 Dimension, OpEntry, OpManager as WitOpManager, Server, SysInfo,
@@ -26,11 +29,9 @@ use crate::{
     },
     uuid::UuidExt,
 };
-use pumpkin::plugin::server::CommandSender as WasmCommandSender;
-use pumpkin_core::{command::CommandSender, data::SaveJSONConfiguration, plugin::permissions};
-use pumpkin_util::text::TextComponent;
+use pumpkin_core::data::SaveJSONConfiguration;
+use pumpkin_core::plugin::permissions;
 use pumpkin_wasm_host_common::state::PluginHostState;
-use wasmtime::component::{Accessor, HasSelf, Resource};
 
 impl pumpkin::plugin::server::Host for PluginHostState {}
 

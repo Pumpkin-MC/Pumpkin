@@ -1,13 +1,12 @@
 use super::AccessorExt;
 use crate::RequireServer;
+
 use crate::pumpkin::plugin::boss_bar::{
     self, BossBar, BossBarColor as WitColor, BossBarDivision as WitDivision,
     BossBarMetadata as WitMetadata,
 };
-use pumpkin_core::{
-    server::Server,
-    world::bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags},
-};
+use pumpkin_core::server::Server;
+use pumpkin_core::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags};
 use pumpkin_wasm_host_common::state::PluginHostState;
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;

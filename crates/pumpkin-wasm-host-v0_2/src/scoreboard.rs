@@ -1,4 +1,8 @@
 use crate::LockIgnorePoison;
+use pumpkin_core::entity::player::CustomScoreboard;
+
+use wasmtime::component::Resource;
+
 use crate::pumpkin::{
     self,
     plugin::scoreboard::{
@@ -6,11 +10,10 @@ use crate::pumpkin::{
         TeamSettings,
     },
 };
-use pumpkin_core::entity::player::CustomScoreboard;
 use pumpkin_core::world::scoreboard::{ScoreboardObjective, ScoreboardScore, Team};
-use pumpkin_protocol::{NumberFormat, codec::var_int::VarInt};
+use pumpkin_protocol::NumberFormat;
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_wasm_host_common::state::{PluginHostState, ScoreboardProvider};
-use wasmtime::component::Resource;
 
 fn map_number_format(
     nf: Option<scoreboard::NumberFormat>,

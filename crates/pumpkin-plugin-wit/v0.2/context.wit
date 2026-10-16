@@ -60,3 +60,4 @@ interface context {
         get-marketplace-metadata: func() -> option<marketplace-metadata>;
     }
 }
+

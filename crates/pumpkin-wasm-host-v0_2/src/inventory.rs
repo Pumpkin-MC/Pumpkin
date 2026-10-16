@@ -1,21 +1,23 @@
 use super::AccessorExt;
+use crate::pumpkin::plugin::inventory::{HostInventoryWithStore, HostPlayerInventoryWithStore};
+
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use wasmtime::component::{Accessor, HasSelf, Resource};
+
 use crate::pumpkin::plugin::{
     common::Hand as WitHand,
     inventory::{
-        Host as InventoryHost, HostInventory, HostInventoryWithStore, HostPlayerInventory,
-        HostPlayerInventoryWithStore, Inventory as WitInventory,
+        Host as InventoryHost, HostInventory, HostPlayerInventory, Inventory as WitInventory,
         PlayerInventory as WitPlayerInventory,
     },
     item_stack::ItemStack as WitHostItemStack,
 };
-use pumpkin_inventory::{Clearable, Inventory, player::player_inventory::PlayerInventory};
-use pumpkin_protocol::{
-    codec::item_stack_seralizer::ItemStackSerializer, java::client::play::CSetContainerSlot,
-};
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::{Clearable, Inventory};
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_protocol::java::client::play::CSetContainerSlot;
 use pumpkin_wasm_host_common::state::{InventoryProvider, PluginHostState};
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use wasmtime::component::{Accessor, HasSelf, Resource};
 
 const fn from_wasm_hand(hand: WitHand) -> pumpkin_util::Hand {
     match hand {
@@ -89,6 +91,20 @@ impl HostInventory for PluginHostState {
         }
     }
 
+    // Fixme: this method causes an unnecessary amount of resource table lookups
+    fn get_all_items(
+        &mut self,
+        res: Resource<WitInventory>,
+    ) -> wasmtime::Result<Vec<Option<Resource<WitHostItemStack>>>> {
+        let size = self.get_size(Resource::new_borrow(res.rep()))?;
+        let mut items = Vec::with_capacity(size as usize);
+        for slot in 0..size {
+            let item = self.get_item(Resource::new_borrow(res.rep()), slot)?;
+            items.push(item);
+        }
+        Ok(items)
+    }
+
     fn count_item(
         &mut self,
         res: Resource<WitInventory>,
@@ -127,20 +143,6 @@ impl HostInventory for PluginHostState {
             }
         }
         Ok(total)
-    }
-
-    // Fixme: this method causes an unnecessary amount of resource table lookups
-    fn get_all_items(
-        &mut self,
-        res: Resource<WitInventory>,
-    ) -> wasmtime::Result<Vec<Option<Resource<WitHostItemStack>>>> {
-        let size = self.get_size(Resource::new_borrow(res.rep()))?;
-        let mut items = Vec::with_capacity(size as usize);
-        for slot in 0..size {
-            let item = self.get_item(Resource::new_borrow(res.rep()), slot)?;
-            items.push(item);
-        }
-        Ok(items)
     }
 
     fn contains_item(

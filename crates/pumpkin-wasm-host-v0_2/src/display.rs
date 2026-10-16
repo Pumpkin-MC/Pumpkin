@@ -1,12 +1,18 @@
 use super::AccessorExt;
+use crate::pumpkin::plugin::display::HostItemDisplayEntityWithStore;
+
+use std::sync::Arc;
+use wasmtime::component::{Accessor, HasSelf, Resource};
+
+use pumpkin_util::math::vector3::Vector3;
+
 use crate::{
     pumpkin::plugin::{
         display::{
             BillboardMode, BlockDisplayEntity, DisplayEntity, DisplayTransformation, Host,
             HostBlockDisplayEntity, HostDisplayEntity, HostInteractionEntity,
-            HostItemDisplayEntity, HostItemDisplayEntityWithStore, HostTextDisplayEntity,
-            InteractionEntity, ItemDisplayEntity, ItemDisplayMode, Quaternionf, TextAlignment,
-            TextDisplayEntity, Vector3f,
+            HostItemDisplayEntity, HostTextDisplayEntity, InteractionEntity, ItemDisplayEntity,
+            ItemDisplayMode, Quaternionf, TextAlignment, TextDisplayEntity, Vector3f,
         },
         item_stack::ItemStack as WitHostItemStack,
         text::TextComponent,
@@ -19,10 +25,7 @@ use pumpkin_core::entity::decoration::display::{
     BlockDisplayEntity as InternalBlockDisplayEntity, DisplayEntity as InternalDisplayEntity,
     ItemDisplayEntity as InternalItemDisplayEntity, TextDisplayEntity as InternalTextDisplayEntity,
 };
-use pumpkin_util::math::vector3::Vector3;
 use pumpkin_wasm_host_common::state::PluginHostState;
-use std::sync::Arc;
-use wasmtime::component::{Accessor, HasSelf, Resource};
 
 impl Host for PluginHostState {}
 
@@ -110,7 +113,7 @@ impl HostDisplayEntity for PluginHostState {
     ) -> wasmtime::Result<Option<Resource<DisplayEntity>>> {
         let entity = self.get(&entity)?.clone();
         if get_display_entity(entity.as_ref()).is_some() {
-            Ok(Some(self.add(entity)?))
+            Ok(Some(self.add(entity.clone())?))
         } else {
             Ok(None)
         }
@@ -252,9 +255,9 @@ impl HostDisplayEntity for PluginHostState {
     ) -> wasmtime::Result<i32> {
         let display_res = self.get(&display)?;
         Ok(get_display_entity(display_res.as_ref()).map_or(
-                0,
-                pumpkin_core::entity::decoration::display::DisplayEntity::get_interpolation_start_delta_ticks,
-            ))
+            0,
+            pumpkin_core::entity::decoration::display::DisplayEntity::get_interpolation_start_delta_ticks,
+        ))
     }
 
     fn set_interpolation_start(

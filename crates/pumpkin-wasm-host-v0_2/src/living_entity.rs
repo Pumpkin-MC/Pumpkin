@@ -1,4 +1,10 @@
 use super::{AccessorExt, run_blocking};
+use crate::pumpkin::plugin::world::HostLivingEntityWithStore;
+use crate::{LockIgnorePoison, RwLockIgnorePoison};
+
+use std::sync::Arc;
+use wasmtime::component::{Accessor, HasSelf, Resource};
+
 use crate::pumpkin::plugin::{
     attributes::{
         Attribute, AttributeModifier as WitAttributeModifier,
@@ -8,14 +14,11 @@ use crate::pumpkin::plugin::{
     item_stack::ItemStack as WitHostItemStack,
     text::TextComponent,
     world::{
-        Entity, EquipmentSlot as WitEquipmentSlot, HostLivingEntity, HostLivingEntityWithStore,
+        Entity, EquipmentSlot as WitEquipmentSlot, HostLivingEntity,
         LivingEntity as WitLivingEntity, Mob as WitMob,
     },
 };
-use crate::{LockIgnorePoison, RwLockIgnorePoison};
 use pumpkin_wasm_host_common::state::PluginHostState;
-use std::sync::Arc;
-use wasmtime::component::{Accessor, HasSelf, Resource};
 
 #[must_use]
 pub const fn from_wit_attribute(attr: Attribute) -> &'static pumpkin_data::attributes::Attributes {

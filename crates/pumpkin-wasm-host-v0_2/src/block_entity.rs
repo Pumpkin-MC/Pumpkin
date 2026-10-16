@@ -1,5 +1,11 @@
 use super::AccessorExt;
 use crate::LockIgnorePoison;
+use crate::pumpkin::plugin::block_entity::HostContainerBlockEntityWithStore;
+
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use wasmtime::component::{Accessor, HasSelf, Resource};
+
 use crate::pumpkin::{
     self,
     plugin::{
@@ -19,39 +25,35 @@ use crate::pumpkin::{
             HostBlockEntity, HostBrewingStandBlockEntity, HostBrushableBlockBlockEntity,
             HostCalibratedSculkSensorBlockEntity, HostCampfireBlockEntity, HostChestBlockEntity,
             HostChiseledBookshelfBlockEntity, HostCommandBlockEntity, HostComparatorBlockEntity,
-            HostConduitBlockEntity, HostContainerBlockEntity, HostContainerBlockEntityWithStore,
-            HostCopperGolemStatueBlockEntity, HostCrafterBlockEntity, HostCreakingHeartBlockEntity,
-            HostDaylightDetectorBlockEntity, HostDecoratedPotBlockEntity, HostDispenserBlockEntity,
-            HostDropperBlockEntity, HostEnchantingTableBlockEntity, HostEndGatewayBlockEntity,
-            HostEndPortalBlockEntity, HostEnderChestBlockEntity, HostFurnaceBlockEntity,
-            HostHangingSignBlockEntity, HostHopperBlockEntity, HostJigsawBlockEntity,
-            HostJukeboxBlockEntity, HostLecternBlockEntity, HostMapBlockEntity,
-            HostMobSpawnerBlockEntity, HostPistonBlockEntity, HostPotentSulfurBlockEntity,
-            HostSculkCatalystBlockEntity, HostSculkSensorBlockEntity, HostSculkShriekerBlockEntity,
-            HostShelfBlockEntity, HostShulkerBoxBlockEntity, HostSignBlockEntity,
-            HostSkullBlockEntity, HostSmokerBlockEntity, HostStructureBlockBlockEntity,
-            HostTestBlockBlockEntity, HostTestInstanceBlockBlockEntity,
-            HostTrappedChestBlockEntity, HostTrialSpawnerBlockEntity, HostVaultBlockEntity,
-            JigsawBlockEntity, JukeboxBlockEntity, LecternBlockEntity, MapBlockEntity,
-            MobSpawnerBlockEntity, PistonBlockEntity, PotentSulfurBlockEntity,
-            SculkCatalystBlockEntity, SculkSensorBlockEntity, SculkShriekerBlockEntity,
-            ShelfBlockEntity, ShulkerBoxBlockEntity, SignBlockEntity, SignText, SkullBlockEntity,
-            SmokerBlockEntity, StructureBlockBlockEntity, TestBlockBlockEntity,
-            TestInstanceBlockBlockEntity, TrappedChestBlockEntity, TrialSpawnerBlockEntity,
-            VaultBlockEntity,
+            HostConduitBlockEntity, HostContainerBlockEntity, HostCopperGolemStatueBlockEntity,
+            HostCrafterBlockEntity, HostCreakingHeartBlockEntity, HostDaylightDetectorBlockEntity,
+            HostDecoratedPotBlockEntity, HostDispenserBlockEntity, HostDropperBlockEntity,
+            HostEnchantingTableBlockEntity, HostEndGatewayBlockEntity, HostEndPortalBlockEntity,
+            HostEnderChestBlockEntity, HostFurnaceBlockEntity, HostHangingSignBlockEntity,
+            HostHopperBlockEntity, HostJigsawBlockEntity, HostJukeboxBlockEntity,
+            HostLecternBlockEntity, HostMapBlockEntity, HostMobSpawnerBlockEntity,
+            HostPistonBlockEntity, HostPotentSulfurBlockEntity, HostSculkCatalystBlockEntity,
+            HostSculkSensorBlockEntity, HostSculkShriekerBlockEntity, HostShelfBlockEntity,
+            HostShulkerBoxBlockEntity, HostSignBlockEntity, HostSkullBlockEntity,
+            HostSmokerBlockEntity, HostStructureBlockBlockEntity, HostTestBlockBlockEntity,
+            HostTestInstanceBlockBlockEntity, HostTrappedChestBlockEntity,
+            HostTrialSpawnerBlockEntity, HostVaultBlockEntity, JigsawBlockEntity,
+            JukeboxBlockEntity, LecternBlockEntity, MapBlockEntity, MobSpawnerBlockEntity,
+            PistonBlockEntity, PotentSulfurBlockEntity, SculkCatalystBlockEntity,
+            SculkSensorBlockEntity, SculkShriekerBlockEntity, ShelfBlockEntity,
+            ShulkerBoxBlockEntity, SignBlockEntity, SignText, SkullBlockEntity, SmokerBlockEntity,
+            StructureBlockBlockEntity, TestBlockBlockEntity, TestInstanceBlockBlockEntity,
+            TrappedChestBlockEntity, TrialSpawnerBlockEntity, VaultBlockEntity,
         },
         common::BlockPos as WitBlockPos,
         item_stack::ItemStack as WitHostItemStack,
     },
 };
-use pumpkin_core::block::entities::{
-    BlockEntity as InternalBlockEntity,
-    furnace_like_block_entity::CookingBlockEntityBase,
-    sign::{DyeColor as InternalDyeColor, Text as InternalText},
-};
-use pumpkin_wasm_host_common::state::{self, FromResource, PluginHostState};
-use std::sync::{Arc, atomic::Ordering};
-use wasmtime::component::{Accessor, HasSelf, Resource};
+use pumpkin_core::block::entities::BlockEntity as InternalBlockEntity;
+use pumpkin_core::block::entities::furnace_like_block_entity::CookingBlockEntityBase;
+use pumpkin_core::block::entities::sign::{DyeColor as InternalDyeColor, Text as InternalText};
+use pumpkin_wasm_host_common::state::PluginHostState;
+use pumpkin_wasm_host_common::state::{self, FromResource};
 
 impl pumpkin::plugin::block_entity::Host for PluginHostState {}
 
@@ -709,15 +711,15 @@ impl HostTrappedChestBlockEntity for PluginHostState {
 macro_rules! impl_basic_block_entity {
     ($trait_name:ident, $resource_name:ident, $name_str:expr) => {
         impl $trait_name for PluginHostState {
-            fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
-                self.drop(rep)
-            }
-
             fn get_block_entity(
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<Resource<BlockEntity>> {
                 self.add(self.get(&res)?.clone() as _)
+            }
+
+            fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
+                self.drop(rep)
             }
         }
     };
@@ -726,10 +728,6 @@ macro_rules! impl_basic_block_entity {
 macro_rules! impl_container_basic_block_entity {
     ($trait_name:ident, $resource_name:ident, $name_str:expr) => {
         impl $trait_name for PluginHostState {
-            fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
-                self.drop(rep)
-            }
-
             fn get_block_entity(
                 &mut self,
                 res: Resource<$resource_name>,
@@ -741,7 +739,11 @@ macro_rules! impl_container_basic_block_entity {
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<Resource<ContainerBlockEntity>> {
-                get_container_from_be(&mut *self, &res)
+                get_container_from_be(self, &res)
+            }
+
+            fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
+                self.drop(rep)
             }
         }
     };
@@ -750,10 +752,6 @@ macro_rules! impl_container_basic_block_entity {
 macro_rules! impl_cooking_host_block_entity {
     ($trait_name:ident, $resource_name:ident, $internal_type:ty, $name_str:expr) => {
         impl $trait_name for PluginHostState {
-            fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
-                self.drop(rep)
-            }
-
             fn get_block_entity(
                 &mut self,
                 res: Resource<$resource_name>,
@@ -765,7 +763,7 @@ macro_rules! impl_cooking_host_block_entity {
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<Resource<ContainerBlockEntity>> {
-                get_container_from_be(&mut *self, &res)
+                get_container_from_be(self, &res)
             }
 
             fn get_cooking_time_spent(
@@ -798,6 +796,10 @@ macro_rules! impl_cooking_host_block_entity {
 
             fn is_burning(&mut self, res: Resource<$resource_name>) -> wasmtime::Result<bool> {
                 Ok(self.get(&res)?.is_burning())
+            }
+
+            fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
+                self.drop(rep)
             }
         }
     };

@@ -1,3 +1,5 @@
+use wasmtime::component::{Accessor, HasSelf, Resource};
+
 use super::{AccessorExt, run_blocking};
 use crate::{
     commands::executor::{WasmCommandExecutor, WasmCommandSuggestionProvider},
@@ -40,7 +42,6 @@ use pumpkin_core::command::{
     },
 };
 use pumpkin_wasm_host_common::state::{PluginHostState, WasmCommand, WasmCommandNode};
-use wasmtime::component::{Accessor, HasSelf, Resource};
 
 pub mod executor;
 
@@ -72,8 +73,7 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
             OwnedArg::BlockPredicate(s) => Arg::BlockPredicate(s),
             OwnedArg::Time(t) => Arg::Time(t),
             OwnedArg::Num(n) => {
-                use pumpkin_wasm_host_common::args::NotInBounds;
-                use pumpkin_wasm_host_common::args::Number;
+                use pumpkin_wasm_host_common::args::{NotInBounds, Number};
                 let convert_num = |n: Number| match n {
                     Number::F64(v) => pumpkin::plugin::command::Number::Float64(v),
                     Number::F32(v) => pumpkin::plugin::command::Number::Float32(v),

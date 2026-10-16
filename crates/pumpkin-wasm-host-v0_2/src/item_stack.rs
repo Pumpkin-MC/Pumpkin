@@ -1,37 +1,35 @@
-use super::{
-    AccessorExt,
-    common::{WitNbtTree, from_wit_nbt_tree, to_wit_nbt_tree},
+use super::AccessorExt;
+use crate::pumpkin::plugin::item_stack::HostItemStackWithStore;
+
+use crate::pumpkin::plugin::attributes::{
+    Attribute as WitAttribute, AttributeModifier as WitAttributeModifier,
+    ModifierOperation as WitModifierOperation,
 };
-use crate::pumpkin::plugin::{
-    attributes::{
-        Attribute as WitAttribute, AttributeModifier as WitAttributeModifier,
-        ModifierOperation as WitModifierOperation,
-    },
-    data_components::DataComponent as WitDataComponent,
-    enchantments::Enchantment as WitEnchantment,
-    item_stack::{
-        CustomEnchantmentValue as WitCustomEnchantmentValue,
-        DataComponentValue as WitDataComponentValue, EnchantmentValue as WitEnchantmentValue,
-        Host as ItemStackInterfaceHost, HostItemStack, HostItemStackWithStore,
-        ItemAttributeModifier as WitItemAttributeModifier, ItemStack as ItemStackHandle,
-    },
-    text::TextComponent as WitTextComponent,
+use crate::pumpkin::plugin::data_components::DataComponent as WitDataComponent;
+use crate::pumpkin::plugin::enchantments::Enchantment as WitEnchantment;
+use crate::pumpkin::plugin::item_stack::{
+    CustomEnchantmentValue as WitCustomEnchantmentValue,
+    DataComponentValue as WitDataComponentValue, EnchantmentValue as WitEnchantmentValue,
+    Host as ItemStackInterfaceHost, HostItemStack,
+    ItemAttributeModifier as WitItemAttributeModifier, ItemStack as ItemStackHandle,
 };
-use pumpkin_data::{
-    Enchantment,
-    attributes::Attributes,
-    data_component::DataComponent,
-    data_component_impl::{
-        AttributeModifiersImpl, CustomNameImpl, EnchantmentsImpl, LoreImpl,
-        combat::{Modifier, Operation},
-    },
+use crate::pumpkin::plugin::text::TextComponent as WitTextComponent;
+use pumpkin_wasm_host_common::state::PluginHostState;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use wasmtime::component::{Accessor, HasSelf, Resource};
+
+use super::common::{WitNbtTree, from_wit_nbt_tree, to_wit_nbt_tree};
+use pumpkin_data::Enchantment;
+use pumpkin_data::attributes::Attributes;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::combat::{Modifier, Operation};
+use pumpkin_data::data_component_impl::{
+    AttributeModifiersImpl, CustomNameImpl, EnchantmentsImpl, LoreImpl,
 };
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::data_component::{deserialize, serialize};
-use pumpkin_wasm_host_common::state::PluginHostState;
-use std::{borrow::Cow, sync::Arc};
-use tokio::sync::Mutex;
-use wasmtime::component::{Accessor, HasSelf, Resource};
+use std::borrow::Cow;
 
 pub(crate) fn to_wit_data_component(id: DataComponent) -> WitDataComponent {
     // SAFETY: WIT enum is generated in the same order as the internal enum

@@ -3,12 +3,12 @@
 // Not warn event sending macros
 #![allow(unused_labels, deprecated)]
 
+use pumpkin_wasm_host_common::state::FromResource;
+
 use crate::bindings::PluginPre;
 use pumpkin_core::plugin::PluginMetadata;
 use pumpkin_wasm_host_common::{
-    concurrent_store::LegacySyncReentry,
-    plugin::PluginInitError,
-    state::{FromResource, PluginHostState},
+    concurrent_store::LegacySyncReentry, plugin::PluginInitError, state::PluginHostState,
 };
 use wasmtime::component::{Accessor, HasSelf, InstancePre, Linker, Resource};
 use wasmtime::{Engine, Store};
