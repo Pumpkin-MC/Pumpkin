@@ -1,6 +1,7 @@
 use crate::entity::ai::control::{Control, MoveControlTrait};
 use crate::entity::mob::Mob;
 use pumpkin_data::attributes::Attributes;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::atomic::Ordering;
 
@@ -61,17 +62,18 @@ impl MoveControlTrait for MoveControl {
             let yd = self.wanted_y - pos.y;
             let dd = xd * xd + yd * yd + zd * zd;
 
-            if dd < 2.5000003E-7 {
+            if dd < f64::from(Self::MIN_SPEED_SQR) {
+                let input = living_entity.movement_input.load();
                 living_entity
                     .movement_input
-                    .store(Vector3::new(0.0, 0.0, 0.0));
+                    .store(Vector3::new(input.x, input.y, 0.0));
                 return;
             }
 
             let y_rot_d = (zd.atan2(xd).to_degrees() as f32) - 90.0;
             entity
                 .yaw
-                .store(self.change_angle(entity.yaw.load(), y_rot_d, 90.0));
+                .store(self.change_angle(entity.yaw.load(), y_rot_d, Self::MAX_TURN));
 
             let movement_speed = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
             let speed = self.speed_modifier * movement_speed;
@@ -79,10 +81,20 @@ impl MoveControlTrait for MoveControl {
                 .movement_input
                 .store(Vector3::new(0.0, 0.0, speed));
 
-            // TODO: Jump if needed (based on collision and height difference)
             let step_height = living_entity.get_attribute_value(&Attributes::STEP_HEIGHT);
+            let block_pos = entity.block_pos.load();
+            let world = entity.world.load();
+            let (block, state) = world.get_block_and_state(&block_pos);
+            let inside_collision = state
+                .get_block_collision_shapes_at(&block_pos)
+                .map(|shape| shape.max.y)
+                .reduce(f64::max)
+                .is_some_and(|height| pos.y < f64::from(block_pos.0.y) + height)
+                && !block.has_tag(&tag::Block::MINECRAFT_DOORS)
+                && !block.has_tag(&tag::Block::MINECRAFT_FENCES);
             if yd > step_height
                 && xd * xd + zd * zd < 1.0f64.max(entity.entity_dimension.load().width as f64)
+                || inside_collision
             {
                 mob_entity
                     .jump_control
@@ -98,12 +110,18 @@ impl MoveControlTrait for MoveControl {
                 .movement_input
                 .store(Vector3::new(0.0, 0.0, speed));
 
-            if entity.on_ground.load(Ordering::Relaxed) {
+            if entity.on_ground.load(Ordering::Relaxed)
+                || entity.touching_water.load(Ordering::Relaxed)
+                || entity.touching_lava.load(Ordering::Relaxed)
+            {
                 self.operation = Operation::Wait;
             }
+        } else {
+            let input = living_entity.movement_input.load();
+            living_entity
+                .movement_input
+                .store(Vector3::new(input.x, input.y, 0.0));
         }
-
-        // Navigator owns movement input while this controller waits.
     }
 
     fn set_wanted_position(&mut self, x: f64, y: f64, z: f64, speed_modifier: f64) {
@@ -129,6 +147,9 @@ impl MoveControlTrait for MoveControl {
 }
 
 impl MoveControl {
+    pub const MIN_SPEED_SQR: f32 = 2.5000003E-7;
+    pub const MAX_TURN: f32 = 90.0;
+
     #[must_use]
     pub fn has_wanted(&self) -> bool {
         self.operation == Operation::MoveTo

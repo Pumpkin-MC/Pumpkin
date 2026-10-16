@@ -1441,6 +1441,14 @@ impl LivingEntity {
         }
 
         self.push_entities(caller);
+
+        if let Some(mob) = caller.get_mob() {
+            mob.get_mob_entity()
+                .body_rotation_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .client_tick(mob);
+        }
     }
 
     fn push_entities(&self, dyn_self: &dyn EntityBase) {
@@ -4083,13 +4091,16 @@ mod ai_step_tests {
     use crate::entity::ai::control::move_control::MoveControl;
     use crate::entity::ai::control::{Control, MoveControlTrait};
     use crate::entity::ai::goal::Goal;
-    use crate::entity::ai::pathfinder::NavigatorGoal;
+    use crate::entity::ai::pathfinder::node::Node;
+    use crate::entity::ai::pathfinder::path::Path;
+    use crate::entity::ai::pathfinder::{NavigationTarget, NavigatorGoal};
     use crate::entity::mob::{Mob, MobEntity};
     use crate::world::World;
     use arc_swap::ArcSwap;
     use pumpkin_config::world::LevelConfig;
     use pumpkin_data::dimension::Dimension;
     use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector3::Vector3;
     use pumpkin_util::world_seed::Seed;
     use pumpkin_world::level::Level;
@@ -4130,6 +4141,24 @@ mod ai_step_tests {
     }
 
     struct ProbeControl(Arc<AtomicUsize>);
+
+    struct TargetControl(Arc<Mutex<Option<NavigationTarget>>>);
+
+    impl Control for TargetControl {}
+
+    impl MoveControlTrait for TargetControl {
+        fn tick(&mut self, _mob: &dyn Mob) {}
+
+        fn set_wanted_position(&mut self, x: f64, y: f64, z: f64, speed_modifier: f64) {
+            *self
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(NavigationTarget {
+                position: Vector3::new(x, y, z),
+                speed_modifier,
+            });
+        }
+    }
 
     struct JumpOnceGoal(bool);
 
@@ -4294,6 +4323,113 @@ mod ai_step_tests {
         assert!(first_jumping);
         assert!(first_position.y > position.y);
         assert!(!living.jumping.load(Ordering::Relaxed));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn navigation_hands_the_next_waypoint_to_the_installed_control() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let target = Arc::new(Mutex::new(None));
+        *mob.mob
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Box::new(TargetControl(target.clone()));
+        let living = &mob.mob.living_entity;
+        living.entity.pos.store(Vector3::new(0.5, 64.0, 0.5));
+        living.entity.last_pos.store(living.entity.pos.load());
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        let destination = Vector3::new(2.5, 64.0, 0.5);
+        {
+            let mut navigator = mob
+                .mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            navigator.set_progress(NavigatorGoal::new(
+                living.entity.pos.load(),
+                destination,
+                1.5,
+            ));
+            navigator.move_to_path(
+                Some(Path::new(
+                    vec![
+                        Node::new(BlockPos::new(0, 64, 0)),
+                        Node::new(BlockPos::new(2, 64, 0)),
+                    ],
+                    BlockPos::new(2, 64, 0),
+                    true,
+                )),
+                1.5,
+                living,
+            );
+        };
+
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert_eq!(
+            target
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_ref()
+                .map(|target| (target.position, target.speed_modifier)),
+            Some((destination, 1.5))
+        );
+        assert_eq!(living.entity.yaw.load(), 0.0);
+        assert_eq!(living.movement_input.load().z, 0.0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn finishing_navigation_stops_the_default_controller() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        *mob.mob
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(MoveControl::default());
+        let living = &mob.mob.living_entity;
+        living.entity.pos.store(Vector3::new(0.5, 64.0, 0.5));
+        living.entity.last_pos.store(living.entity.pos.load());
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        {
+            let mut navigator = mob
+                .mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            navigator.set_progress(NavigatorGoal::new(
+                living.entity.pos.load(),
+                Vector3::new(2.5, 64.0, 0.5),
+                1.0,
+            ));
+            navigator.move_to_path(
+                Some(Path::new(
+                    vec![Node::new(BlockPos::new(2, 64, 0))],
+                    BlockPos::new(2, 64, 0),
+                    true,
+                )),
+                1.0,
+                living,
+            );
+        };
+
+        living.tick_movement(&mob);
+        let moving_input = living.movement_input.load().z;
+        mob.mob
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .stop();
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert!(moving_input > 0.0);
+        assert_eq!(living.movement_input.load().z, 0.0);
         Ok(())
     }
 

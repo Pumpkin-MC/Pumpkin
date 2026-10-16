@@ -1,8 +1,6 @@
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::math::wrap_degrees;
 
-use crate::entity::ai::control::jump_control::JumpControl;
 use crate::entity::living::LivingEntity;
 use crate::world::World;
 
@@ -35,7 +33,6 @@ pub mod walk_node_evaluator;
 const MAX_ITERS: usize = 560;
 const TARGET_DISTANCE_MULTIPLIER: f32 = 1.5;
 const NODE_REACH_Y: f64 = 1.0;
-const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
 
 pub struct PathFinder {
     max_visited_nodes: usize,
@@ -276,6 +273,11 @@ impl NavigatorGoal {
     }
 }
 
+pub struct NavigationTarget {
+    pub position: Vector3<f64>,
+    pub speed_modifier: f64,
+}
+
 pub enum EvaluatorKind {
     Walk(WalkNodeEvaluator),
     Fly(FlyNodeEvaluator),
@@ -385,9 +387,7 @@ pub trait PathNavigationTrait: Send + Sync {
         destination: Vector3<f64>,
         distance: f32,
     ) -> bool;
-    /// Advances navigation using the borrowed jump control for requests.
-    /// Implementations must not lock the mob's jump control again during this call.
-    fn tick(&mut self, entity: &LivingEntity, jump_control: &mut JumpControl);
+    fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget>;
     fn move_to_coords(&mut self, x: f64, y: f64, z: f64, speed: f64, entity: &LivingEntity)
     -> bool;
     fn move_to_pos(&mut self, pos: BlockPos, speed: f64, entity: &LivingEntity) -> bool;
@@ -529,9 +529,26 @@ impl PathNavigation {
         self.path_start_pos = None;
     }
 
-    pub fn finish_navigation(&mut self, entity: &LivingEntity) {
-        self.stop();
-        entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+    fn ground_target(&self, entity: &LivingEntity) -> Option<NavigationTarget> {
+        let mut target = self.target(entity)?;
+        let below = BlockPos::floored_v(target.position).down();
+        let state = entity.entity.world.load().get_block_state(&below);
+        if !state.is_air() {
+            target.position.y = f64::from(below.0.y)
+                + state
+                    .get_block_collision_shapes_at(&below)
+                    .map(|shape| shape.max.y)
+                    .fold(0.0, f64::max);
+        }
+        Some(target)
+    }
+
+    fn target(&self, entity: &LivingEntity) -> Option<NavigationTarget> {
+        let path = self.path.as_ref().filter(|path| !path.is_done())?;
+        Some(NavigationTarget {
+            position: path.get_next_entity_pos(entity.entity.entity_dimension.load().width)?,
+            speed_modifier: self.speed_modifier,
+        })
     }
 
     pub fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
@@ -975,7 +992,7 @@ impl PathNavigation {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub fn tick_ground(&mut self, entity: &LivingEntity, jump_control: &mut JumpControl) {
+    pub fn tick_ground(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         self.tick_count += 1;
         let world_age = entity.entity.world.load().get_world_age() as u64;
 
@@ -995,13 +1012,12 @@ impl PathNavigation {
 
         let Some(goal) = self.current_goal.take() else {
             self.is_idle.store(true, Ordering::Relaxed);
-            entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-            return;
+            return None;
         };
 
         if goal.current_progress == goal.destination {
-            self.finish_navigation(entity);
-            return;
+            self.stop();
+            return None;
         }
 
         self.total_ticks += 1;
@@ -1029,8 +1045,8 @@ impl PathNavigation {
         }
 
         if self.path.is_none() {
-            self.finish_navigation(entity);
-            return;
+            self.stop();
+            return None;
         }
 
         let surface_y = self.get_surface_y(entity);
@@ -1044,8 +1060,8 @@ impl PathNavigation {
 
         if let Some(path) = &mut self.path {
             if path.is_done() {
-                self.finish_navigation(entity);
-                return;
+                self.stop();
+                return None;
             }
 
             let current_node_index = path.get_next_node_index();
@@ -1057,8 +1073,8 @@ impl PathNavigation {
             }
 
             if self.ticks_on_current_node > 100 {
-                self.finish_navigation(entity);
-                return;
+                self.stop();
+                return None;
             }
 
             if self.total_ticks.is_multiple_of(100) {
@@ -1069,8 +1085,8 @@ impl PathNavigation {
                     let dz = current_pos.z - start_pos.z;
                     let dist_sq = dx * dx + dy * dy + dz * dz;
                     if dist_sq < 4.0 {
-                        self.finish_navigation(entity);
-                        return;
+                        self.stop();
+                        return None;
                     }
                 }
                 self.path_start_pos = Some(entity.entity.pos.load());
@@ -1105,7 +1121,7 @@ impl PathNavigation {
                 {
                     path.advance();
                     self.current_goal = Some(goal);
-                    return;
+                    return self.ground_target(entity);
                 }
 
                 let close_enough = horizontal_dist < f64::from(self.max_distance_to_waypoint)
@@ -1120,40 +1136,16 @@ impl PathNavigation {
                 if close_enough || corner_cut {
                     path.advance();
                     self.current_goal = Some(goal);
-                    return;
-                }
-
-                let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
-                let current_yaw = entity.entity.yaw.load();
-                let yaw_diff = wrap_degrees(desired_yaw - current_yaw);
-                let target_yaw =
-                    current_yaw + yaw_diff.clamp(-MAX_YAW_TURN_PER_TICK, MAX_YAW_TURN_PER_TICK);
-                entity.entity.yaw.store(target_yaw);
-                entity.entity.head_yaw.store(target_yaw);
-                entity.entity.body_yaw.store(target_yaw);
-
-                let mob_speed =
-                    goal.speed * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-
-                entity
-                    .movement_input
-                    .store(Vector3::new(0.0, 0.0, mob_speed));
-
-                let step_height = entity.get_attribute_value(&Attributes::STEP_HEIGHT);
-                let jump_distance = 1.0f64.max(f64::from(self.mob_width));
-
-                if (dy > step_height || f64::from(next_block.0.y) > current_pos.y)
-                    && horizontal_dist_sq < jump_distance * jump_distance
-                {
-                    jump_control.jump();
+                    return self.ground_target(entity);
                 }
             } else {
-                self.finish_navigation(entity);
-                return;
+                self.stop();
+                return None;
             }
         }
 
         self.current_goal = Some(goal);
+        self.ground_target(entity)
     }
 }
 
@@ -1234,8 +1226,8 @@ impl PathNavigationTrait for GroundPathNavigation {
         self.inner.can_reach_within(entity, destination, distance)
     }
 
-    fn tick(&mut self, entity: &LivingEntity, jump_control: &mut JumpControl) {
-        self.inner.tick_ground(entity, jump_control);
+    fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
+        self.inner.tick_ground(entity)
     }
 
     fn move_to_coords(
@@ -1471,7 +1463,7 @@ impl PathNavigationTrait for FlyingPathNavigation {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn tick(&mut self, entity: &LivingEntity, _jump_control: &mut JumpControl) {
+    fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         self.inner.tick_count += 1;
         let world_age = entity.entity.world.load().get_world_age() as u64;
 
@@ -1495,68 +1487,26 @@ impl PathNavigationTrait for FlyingPathNavigation {
         self.inner.do_stuck_detection(mob_pos, entity);
 
         if self.is_done() {
-            self.inner.finish_navigation(entity);
-        } else {
-            if let Some(path) = &mut self.inner.path
-                && let Some(pos) = path.get_next_node_pos()
-            {
-                let target_pos = Vector3::new(
-                    f64::from(pos.0.x) + 0.5,
-                    f64::from(pos.0.y) + 0.5,
-                    f64::from(pos.0.z) + 0.5,
-                );
-                let current_pos = entity.entity.pos.load();
-                let dx = target_pos.x - current_pos.x;
-                let dy = target_pos.y - current_pos.y;
-                let dz = target_pos.z - current_pos.z;
-                let dist_sq = dx * dx + dy * dy + dz * dz;
+            self.inner.stop();
+        } else if let Some(path) = &mut self.inner.path
+            && let Some(pos) = path.get_next_node_pos()
+        {
+            let target_pos = Vector3::new(
+                f64::from(pos.0.x) + 0.5,
+                f64::from(pos.0.y) + 0.5,
+                f64::from(pos.0.z) + 0.5,
+            );
+            let current_pos = entity.entity.pos.load();
+            let dx = target_pos.x - current_pos.x;
+            let dy = target_pos.y - current_pos.y;
+            let dz = target_pos.z - current_pos.z;
+            let dist_sq = dx * dx + dy * dy + dz * dz;
 
-                if dist_sq < 0.5 * 0.5 {
-                    path.advance();
-                }
-            }
-
-            if !self.is_done()
-                && let Some(path) = &self.inner.path
-                && let Some(next_block) = path.get_next_node_pos()
-            {
-                let target_pos = Vector3::new(
-                    f64::from(next_block.0.x) + 0.5,
-                    f64::from(next_block.0.y) + 0.5,
-                    f64::from(next_block.0.z) + 0.5,
-                );
-                let current_pos = entity.entity.pos.load();
-                let dx = target_pos.x - current_pos.x;
-                let dy = target_pos.y - current_pos.y;
-                let dz = target_pos.z - current_pos.z;
-                let sd = dx.hypot(dz);
-
-                let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
-                let desired_pitch = wrap_degrees(-(dy.atan2(sd) as f32).to_degrees());
-
-                entity.entity.yaw.store(desired_yaw);
-                entity.entity.head_yaw.store(desired_yaw);
-                entity.entity.body_yaw.store(desired_yaw);
-                entity.entity.pitch.store(desired_pitch);
-
-                let flying_speed = entity.get_attribute_value(&Attributes::FLYING_SPEED);
-                let base_speed = if flying_speed > 0.0 {
-                    flying_speed
-                } else {
-                    entity.get_attribute_value(&Attributes::MOVEMENT_SPEED)
-                };
-                let speed = self.inner.speed_modifier * base_speed;
-                let y_input = if dy.abs() > 0.1 {
-                    if dy > 0.0 { speed } else { -speed }
-                } else {
-                    0.0
-                };
-                entity
-                    .movement_input
-                    .store(Vector3::new(0.0, y_input, speed));
-                entity.entity.set_has_no_gravity(true);
+            if dist_sq < 0.5 * 0.5 {
+                path.advance();
             }
         }
+        self.inner.target(entity)
     }
 
     fn move_to_coords(
@@ -1772,7 +1722,7 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn tick(&mut self, entity: &LivingEntity, _jump_control: &mut JumpControl) {
+    fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         self.inner.tick_count += 1;
         let world_age = entity.entity.world.load().get_world_age() as u64;
 
@@ -1800,62 +1750,26 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         self.inner.do_stuck_detection(mob_pos, entity);
 
         if self.is_done() {
-            self.inner.finish_navigation(entity);
-        } else {
-            if let Some(path) = &mut self.inner.path
-                && let Some(pos) = path.get_next_node_pos()
-            {
-                let target_pos = Vector3::new(
-                    f64::from(pos.0.x) + 0.5,
-                    f64::from(pos.0.y) + 0.5,
-                    f64::from(pos.0.z) + 0.5,
-                );
-                let current_pos = entity.entity.pos.load();
-                let dx = target_pos.x - current_pos.x;
-                let dy = target_pos.y - current_pos.y;
-                let dz = target_pos.z - current_pos.z;
-                let dist_sq = dx * dx + dy * dy + dz * dz;
+            self.inner.stop();
+        } else if let Some(path) = &mut self.inner.path
+            && let Some(pos) = path.get_next_node_pos()
+        {
+            let target_pos = Vector3::new(
+                f64::from(pos.0.x) + 0.5,
+                f64::from(pos.0.y) + 0.5,
+                f64::from(pos.0.z) + 0.5,
+            );
+            let current_pos = entity.entity.pos.load();
+            let dx = target_pos.x - current_pos.x;
+            let dy = target_pos.y - current_pos.y;
+            let dz = target_pos.z - current_pos.z;
+            let dist_sq = dx * dx + dy * dy + dz * dz;
 
-                if dist_sq < 0.5 * 0.5 {
-                    path.advance();
-                }
-            }
-
-            if !self.is_done()
-                && let Some(path) = &self.inner.path
-                && let Some(next_block) = path.get_next_node_pos()
-            {
-                let target_pos = Vector3::new(
-                    f64::from(next_block.0.x) + 0.5,
-                    f64::from(next_block.0.y) + 0.5,
-                    f64::from(next_block.0.z) + 0.5,
-                );
-                let current_pos = entity.entity.pos.load();
-                let dx = target_pos.x - current_pos.x;
-                let dy = target_pos.y - current_pos.y;
-                let dz = target_pos.z - current_pos.z;
-                let sd = dx.hypot(dz);
-
-                let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
-                let desired_pitch = wrap_degrees(-(dy.atan2(sd) as f32).to_degrees());
-
-                entity.entity.yaw.store(desired_yaw);
-                entity.entity.head_yaw.store(desired_yaw);
-                entity.entity.body_yaw.store(desired_yaw);
-                entity.entity.pitch.store(desired_pitch);
-
-                let speed = self.inner.speed_modifier
-                    * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-                let y_input = if dy.abs() > 0.1 {
-                    if dy > 0.0 { speed } else { -speed }
-                } else {
-                    0.0
-                };
-                entity
-                    .movement_input
-                    .store(Vector3::new(0.0, y_input, speed));
+            if dist_sq < 0.5 * 0.5 {
+                path.advance();
             }
         }
+        self.inner.target(entity)
     }
 
     fn move_to_coords(
@@ -2073,9 +1987,9 @@ impl PathNavigationTrait for WallClimberNavigation {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn tick(&mut self, entity: &LivingEntity, jump_control: &mut JumpControl) {
+    fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         if !self.inner.is_done() {
-            self.inner.tick(entity, jump_control);
+            return self.inner.tick(entity);
         } else if let Some(target_pos) = self.path_to_position {
             let current_pos = entity.entity.pos.load();
             let bb = entity.entity.bounding_box.load();
@@ -2086,7 +2000,6 @@ impl PathNavigationTrait for WallClimberNavigation {
                 f64::from(target_pos.0.z) + 0.5,
             );
             let dx = target_center.x - current_pos.x;
-            let dy = target_center.y - current_pos.y;
             let dz = target_center.z - current_pos.z;
             let dist_sq = dx * dx + dz * dz;
 
@@ -2096,21 +2009,19 @@ impl PathNavigationTrait for WallClimberNavigation {
 
             if close_enough {
                 self.path_to_position = None;
-                self.inner.inner.finish_navigation(entity);
+                self.inner.inner.stop();
             } else {
-                let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
-                entity.entity.yaw.store(desired_yaw);
-                entity.entity.head_yaw.store(desired_yaw);
-                entity.entity.body_yaw.store(desired_yaw);
-
-                let speed = self.inner.inner.speed_modifier
-                    * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-                entity.movement_input.store(Vector3::new(0.0, 0.0, speed));
-                if dy > 0.0 {
-                    jump_control.jump();
-                }
+                return Some(NavigationTarget {
+                    position: Vector3::new(
+                        f64::from(target_pos.0.x),
+                        f64::from(target_pos.0.y),
+                        f64::from(target_pos.0.z),
+                    ),
+                    speed_modifier: self.inner.inner.speed_modifier,
+                });
             }
         }
+        None
     }
 
     fn move_to_coords(
@@ -2296,7 +2207,7 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn tick(&mut self, entity: &LivingEntity, jump_control: &mut JumpControl) {
+    fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         if entity.entity.touching_water.load(Ordering::Relaxed) {
             self.inner.tick_count += 1;
             let world_age = entity.entity.world.load().get_world_age() as u64;
@@ -2325,65 +2236,29 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
             self.inner.do_stuck_detection(mob_pos, entity);
 
             if self.is_done() {
-                self.inner.finish_navigation(entity);
-            } else {
-                if let Some(path) = &mut self.inner.path
-                    && let Some(pos) = path.get_next_node_pos()
-                {
-                    let target_pos = Vector3::new(
-                        f64::from(pos.0.x) + 0.5,
-                        f64::from(pos.0.y) + 0.5,
-                        f64::from(pos.0.z) + 0.5,
-                    );
-                    let current_pos = entity.entity.pos.load();
-                    let dx = target_pos.x - current_pos.x;
-                    let dy = target_pos.y - current_pos.y;
-                    let dz = target_pos.z - current_pos.z;
-                    let dist_sq = dx * dx + dy * dy + dz * dz;
+                self.inner.stop();
+            } else if let Some(path) = &mut self.inner.path
+                && let Some(pos) = path.get_next_node_pos()
+            {
+                let target_pos = Vector3::new(
+                    f64::from(pos.0.x) + 0.5,
+                    f64::from(pos.0.y) + 0.5,
+                    f64::from(pos.0.z) + 0.5,
+                );
+                let current_pos = entity.entity.pos.load();
+                let dx = target_pos.x - current_pos.x;
+                let dy = target_pos.y - current_pos.y;
+                let dz = target_pos.z - current_pos.z;
+                let dist_sq = dx * dx + dy * dy + dz * dz;
 
-                    if dist_sq < 0.5 * 0.5 {
-                        path.advance();
-                    }
-                }
-
-                if !self.is_done()
-                    && let Some(path) = &self.inner.path
-                    && let Some(next_block) = path.get_next_node_pos()
-                {
-                    let target_pos = Vector3::new(
-                        f64::from(next_block.0.x) + 0.5,
-                        f64::from(next_block.0.y) + 0.5,
-                        f64::from(next_block.0.z) + 0.5,
-                    );
-                    let current_pos = entity.entity.pos.load();
-                    let dx = target_pos.x - current_pos.x;
-                    let dy = target_pos.y - current_pos.y;
-                    let dz = target_pos.z - current_pos.z;
-                    let sd = dx.hypot(dz);
-
-                    let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
-                    let desired_pitch = wrap_degrees(-(dy.atan2(sd) as f32).to_degrees());
-
-                    entity.entity.yaw.store(desired_yaw);
-                    entity.entity.head_yaw.store(desired_yaw);
-                    entity.entity.body_yaw.store(desired_yaw);
-                    entity.entity.pitch.store(desired_pitch);
-
-                    let speed = self.inner.speed_modifier
-                        * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-                    let y_input = if dy.abs() > 0.1 {
-                        if dy > 0.0 { speed } else { -speed }
-                    } else {
-                        0.0
-                    };
-                    entity
-                        .movement_input
-                        .store(Vector3::new(0.0, y_input, speed));
+                if dist_sq < 0.5 * 0.5 {
+                    path.advance();
                 }
             }
         } else {
-            self.inner.tick_ground(entity, jump_control);
+            self.inner.tick_ground(entity)?;
         }
+        self.inner.target(entity)
     }
 
     fn move_to_coords(
