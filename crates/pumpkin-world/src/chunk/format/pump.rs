@@ -158,9 +158,17 @@ where
                                 StreamingDecoder::new(&chunk_bytes[..]).map_err(|e| {
                                     ChunkReadingError::IoError(std::io::Error::other(e.to_string()))
                                 })?;
+                            // Read through a limit; compressed data can expand without bound.
+                            let max = super::MAX_DECOMPRESSED_CHUNK_SIZE;
                             let mut decompressed = Vec::new();
-                            std::io::Read::read_to_end(&mut decoder, &mut decompressed)
+                            let mut limited = std::io::Read::take(&mut decoder, max as u64 + 1);
+                            let read = std::io::Read::read_to_end(&mut limited, &mut decompressed)
                                 .map_err(ChunkReadingError::IoError)?;
+                            if read > max {
+                                return Err(ChunkReadingError::IoError(std::io::Error::other(
+                                    "chunk exceeds the maximum decompressed size",
+                                )));
+                            }
                             let bytes = Bytes::from(decompressed);
                             D::from_bytes(&bytes, pos)
                         })();
