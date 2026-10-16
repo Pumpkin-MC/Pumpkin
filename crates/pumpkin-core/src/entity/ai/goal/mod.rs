@@ -189,10 +189,6 @@ impl PrioritizedGoal {
             type_id,
         }
     }
-
-    fn can_be_replaced_by(&self, goal: &Self) -> bool {
-        self.can_stop() && goal.priority < self.priority
-    }
 }
 
 impl Goal for PrioritizedGoal {

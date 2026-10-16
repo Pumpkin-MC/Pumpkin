@@ -251,44 +251,14 @@ impl MobEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .tick();
 
-        // 1. "Take" selectors out of the mutexes
-        let mut target_selector = {
-            let mut guard = self
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            std::mem::take(&mut *guard)
-        };
-        let mut goals_selector = {
-            let mut guard = self
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            std::mem::take(&mut *guard)
-        };
-
-        // 2. Perform AI logic
         if (age + entity_id) % 2 != 0 && age > 1 {
-            target_selector.tick_goals(mob, false);
-            goals_selector.tick_goals(mob, false);
+            GoalSelector::tick_goals(&self.target_selector, mob, false);
+            GoalSelector::tick_goals(&self.goals_selector, mob, false);
         } else {
-            target_selector.tick(mob);
-            goals_selector.tick(mob);
+            GoalSelector::tick(&self.target_selector, mob);
+            GoalSelector::tick(&self.goals_selector, mob);
         }
 
-        // 3. "Put back" selectors
-        {
-            *self
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = target_selector;
-            *self
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = goals_selector;
-        };
-
-        // 4. Repeat for Navigator
         let mut navigator = {
             let mut guard = self
                 .navigator
