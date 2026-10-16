@@ -179,6 +179,7 @@ pub mod weather;
 pub use environment::EnvironmentAttributes;
 pub use pumpkin_data::environment_attribute::{Activity, MoonPhase};
 
+use crate::plugin::api::events::{Cancellable, Payload};
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
@@ -4335,6 +4336,27 @@ impl World {
         None
     }
 
+    /// Fires the event built by `event` and returns it, or `None` without building it when no
+    /// plugin listens, so hot paths pay nothing then.
+    pub fn plugin_event<E: Payload + 'static>(&self, event: impl FnOnce() -> E) -> Option<E> {
+        let server = self.server.upgrade()?;
+        if !server.plugin_manager.has_handlers::<E>() {
+            return None;
+        }
+        let mut event = event();
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        Some(event)
+    }
+
+    /// Whether a plugin cancelled the event, see [`Self::plugin_event`].
+    pub fn cancelled_by_plugin<E: Payload + Cancellable + 'static>(
+        &self,
+        event: impl FnOnce() -> E,
+    ) -> bool {
+        self.plugin_event(event)
+            .is_some_and(|event| event.cancelled())
+    }
+
     /// Gets an entity by an entity id
     pub fn get_entity_by_id(&self, id: i32) -> Option<Arc<dyn EntityBase>> {
         for entity in self.entities.load().iter() {
@@ -5570,6 +5592,7 @@ impl World {
         }
 
         let half_height = f64::from(EntityType::ITEM.dimension[1]) / 2.0;
+        // TODO: vanilla `popResource` rolls from `level.random`; not seed-reproducible.
         let spawn_pos = {
             let mut r = rand::rng();
             Vector3::new(
