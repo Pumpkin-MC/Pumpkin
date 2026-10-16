@@ -1,6 +1,7 @@
 #![allow(clippy::wildcard_imports)]
 
 use std::borrow::Cow;
+use std::cell::Cell;
 
 use crate::codec::var_int::VarInt;
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
@@ -1261,10 +1262,42 @@ impl DataComponentCodec<Self> for UseCooldownImpl {
     }
 }
 
+/// Components holding an item stack recurse back into `deserialize`, whose signature every
+/// component shares, so the nesting depth is counted here instead of being passed through it.
+const MAX_TEMPLATE_DEPTH: usize = 16;
+
+thread_local! {
+    static TEMPLATE_DEPTH: Cell<usize> = const { Cell::new(0) };
+}
+
+struct TemplateDepth;
+
+impl TemplateDepth {
+    fn enter() -> Result<Self, ReadingError> {
+        TEMPLATE_DEPTH.with(|depth| {
+            if depth.get() >= MAX_TEMPLATE_DEPTH {
+                return Err(ReadingError::TooLarge(
+                    "Item stack template nesting depth exceeded".into(),
+                ));
+            }
+            depth.set(depth.get() + 1);
+            Ok(Self)
+        })
+    }
+}
+
+impl Drop for TemplateDepth {
+    fn drop(&mut self) {
+        TEMPLATE_DEPTH.with(|depth| depth.set(depth.get().saturating_sub(1)));
+    }
+}
+
 fn deserialize_item_stack_template(
     seq: &mut impl NetworkReadExt,
 ) -> Result<pumpkin_data::item_stack::ItemStack, ReadingError> {
     const MAX_COMPONENTS: i32 = 256;
+
+    let _depth = TemplateDepth::enter()?;
 
     let item_id = seq.get_var_int()?.0 as u16;
 
