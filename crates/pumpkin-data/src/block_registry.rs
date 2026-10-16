@@ -320,8 +320,6 @@ pub struct BlockRegistration {
     pub luminance: u8,
     /// Vanilla `canOcclude`, false for `noOcclusion()`.
     pub can_occlude: bool,
-    /// Vanilla `isSuffocating`.
-    pub suffocating: bool,
     pub replaceable: bool,
     pub map_color: u8,
     pub collision_shape: ShapeDefinition,
@@ -1194,9 +1192,6 @@ fn derive_state_data(reg: &BlockRegistration) -> (u16, u8, u8) {
     if reg.can_occlude && has_collision {
         state_flags |= flags::CAN_OCCLUDE;
     }
-    if !reg.suffocating {
-        state_flags |= flags::NEVER_SUFFOCATES;
-    }
 
     let opacity = if solid_render { OPAQUE_LIGHT_BLOCK } else { 0 };
     (state_flags, side_flags(&collision), opacity)
@@ -1768,7 +1763,6 @@ mod tests {
             sound_type: "stone".to_string(),
             luminance: 0,
             can_occlude: true,
-            suffocating: true,
             replaceable: false,
             map_color: 0,
             collision_shape: ShapeDefinition::FullCube,
@@ -1801,7 +1795,6 @@ mod tests {
             sound_type: "amethyst".to_string(),
             luminance: 7,
             can_occlude: false,
-            suffocating: false,
             connect_rules: sides
                 .iter()
                 .map(|(name, direction)| ConnectRule {
@@ -2086,7 +2079,6 @@ mod tests {
         assert!(!state.is_air());
         assert!(!state.is_liquid());
         assert!(!state.replaceable());
-        assert!(state.never_suffocates());
         assert_eq!(state.opacity, 0);
         assert_eq!(state.collision_shapes, &[0]);
         assert_eq!(state.outline_shapes, &[0]);
@@ -2098,7 +2090,6 @@ mod tests {
         let stone_like = registry.register(registration("test_flags:stone")).unwrap();
         let state = stone_like.default_state;
         assert!(state.can_occlude() && state.is_solid_render() && state.is_solid_block());
-        assert!(!state.never_suffocates());
         assert_eq!(state.opacity, 15);
         assert_eq!(
             state.state_flags,

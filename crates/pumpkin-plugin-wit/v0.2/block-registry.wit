@@ -123,8 +123,6 @@ interface block-registry {
         luminance: u8,
         /// Vanilla `canOcclude`, false for `noOcclusion()`.
         can-occlude: bool,
-        /// Vanilla `isSuffocating`: a full suffocating block hurts an entity whose head is inside.
-        suffocating: bool,
         /// Whether a block placed against it replaces it, like grass does.
         replaceable: bool,
         /// Map colour id, 0 for none.

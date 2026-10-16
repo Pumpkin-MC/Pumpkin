@@ -84,7 +84,6 @@ fn from_wit_definition(definition: WitBlockDefinition) -> BlockRegistration {
         sound_type: definition.sound_type,
         luminance: definition.luminance,
         can_occlude: definition.can_occlude,
-        suffocating: definition.suffocating,
         replaceable: definition.replaceable,
         map_color: definition.map_color,
         collision_shape: from_wit_shape(definition.collision_shape),

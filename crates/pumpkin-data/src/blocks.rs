@@ -54,6 +54,13 @@ pub enum SpawnFloorPredicate {
     FireImmune,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SuffocationPredicate {
+    Default,
+    Never,
+    Always,
+}
+
 /// Helper struct to ensure the validity of BlockIds parsed from external sources.
 /// Every [`BlockId`] is guaranteed to correspond to a valid [`Block`].
 ///

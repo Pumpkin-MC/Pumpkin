@@ -2,6 +2,8 @@ use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::
 
 use crate::block_properties::NoteblockInstrument;
 use crate::block_registry::collision_shape;
+use crate::blocks::SuffocationPredicate;
+use crate::tag::{self, Taggable};
 use crate::{Block, BlockDirection, BlockId};
 
 /// Represents a specific state of a block, including its properties and physical behaviors.
@@ -145,13 +147,6 @@ impl BlockState {
         self.state_flags & HAS_ANALOG_OUTPUT_SIGNAL != 0
     }
 
-    /// Whether an entity whose head is inside this block is spared from suffocating. Only
-    /// plugin-registered blocks can opt out.
-    #[must_use]
-    pub const fn never_suffocates(&self) -> bool {
-        self.state_flags & NEVER_SUFFOCATES != 0
-    }
-
     ///`isFaceSturdy()` in Java!
     #[must_use]
     pub const fn is_side_solid(&self, side: BlockDirection) -> bool {
@@ -177,6 +172,20 @@ impl BlockState {
             BlockDirection::Down => self.side_flags & DOWN_CENTER_SOLID != 0,
             BlockDirection::Up => self.side_flags & UP_CENTER_SOLID != 0,
             _ => false,
+        }
+    }
+
+    /// `isSuffocating()` in Java. Shulker boxes don't check whether their lid is open.
+    #[must_use]
+    pub fn is_suffocating(&self) -> bool {
+        let block = self.id.to_block();
+        match block.suffocation_predicate() {
+            // Flag first: the tag check scans about 1000 IDs.
+            SuffocationPredicate::Default => {
+                self.is_full_cube() && block.has_tag(&tag::Block::MINECRAFT_CAUSES_SUFFOCATION)
+            }
+            SuffocationPredicate::Never => false,
+            SuffocationPredicate::Always => true,
         }
     }
 
@@ -413,8 +422,6 @@ pub(crate) const HAS_RANDOM_TICKS: u16 = 1 << 9;
 pub(crate) const IS_SOLID_RENDER: u16 = 1 << 10;
 pub(crate) const CAN_OCCLUDE: u16 = 1 << 11;
 pub(crate) const HAS_ANALOG_OUTPUT_SIGNAL: u16 = 1 << 12;
-/// Only set on blocks that plugins register, see `BlockState::never_suffocates`.
-pub(crate) const NEVER_SUFFOCATES: u16 = 1 << 13;
 
 // side_flags
 pub(crate) const DOWN_SIDE_SOLID: u8 = 1 << 0;
