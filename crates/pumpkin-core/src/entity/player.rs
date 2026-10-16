@@ -2259,7 +2259,7 @@ impl Player {
 
     fn can_fit_pose(&self, pose: EntityPose) -> bool {
         let entity = self.get_entity();
-        let dimensions = Entity::get_entity_dimensions(pose);
+        let dimensions = entity.get_dimensions(pose);
         let position = entity.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimensions);
         entity
