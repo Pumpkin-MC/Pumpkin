@@ -673,26 +673,52 @@ where
             .await
     }
 
-    /// Awaits `future` under the reentry context of the guest call that is active in this Store, so
-    /// guest calls made while it runs inherit that call's root admission.
+    /// Awaits host work in the active guest call's chain with the reentry depth incremented
     ///
     /// Host imports are polled by Wasmtime's own event loop, outside the guest call's task-local
-    /// scope, so the context has to come from the Store's active-context registry.
-    pub async fn in_active_context<R>(&self, future: impl Future<Output = R>) -> R {
-        match self.shared.reentry.current_context() {
+    /// scope, so the context has to come from the Store's active-context registry
+    /// Without an active guest call, the future runs without adding a reentry context
+    ///
+    /// # Errors
+    ///
+    /// Returns an error before polling the future if the reentry depth limit is reached
+    pub async fn in_active_context<R>(
+        &self,
+        future: impl Future<Output = R>,
+    ) -> wasmtime::Result<R> {
+        let context = self
+            .shared
+            .reentry
+            .current_context()
+            .map(ReentryContext::child)
+            .transpose()?;
+        Ok(match context {
             Some(context) => scope(context, future).await,
             None => future.await,
-        }
+        })
     }
 
-    /// Runs synchronous host work on Tokio's blocking pool under the active guest call's reentry
-    /// context, without pumping the Store.
+    /// Runs synchronous host work on Tokio's blocking pool in the active guest call's chain
+    ///
+    /// Increments the reentry depth before spawning so callbacks inherit the same chain and
+    /// root admission on the blocking thread
+    /// Without an active guest call, the operation runs without adding a reentry context
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the reentry depth limit is reached or the blocking task fails
+    /// The operation is not spawned when the depth check fails
     pub async fn spawn_blocking_in_active_context<R, F>(&self, operation: F) -> wasmtime::Result<R>
     where
         R: Send + 'static,
         F: FnOnce() -> R + Send + 'static,
     {
-        let context = self.shared.reentry.current_context();
+        let context = self
+            .shared
+            .reentry
+            .current_context()
+            .map(ReentryContext::child)
+            .transpose()?;
         tokio::task::spawn_blocking(move || match context {
             Some(context) => sync_scope(context, operation),
             None => operation(),

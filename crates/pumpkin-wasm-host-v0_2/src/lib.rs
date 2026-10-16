@@ -63,9 +63,10 @@ fn active_plugin(
     })
 }
 
-/// Runs synchronous server work on Tokio's blocking pool while the store keeps servicing the guest,
-/// keeping the active guest call's reentry context so guest calls made from `operation` stay in
-/// the same chain.
+/// Runs synchronous server work on Tokio's blocking pool without holding a store borrow
+///
+/// Callbacks from `operation` inherit the active guest call's chain and root admission
+/// The reentry depth is checked before the operation is spawned
 pub(crate) async fn run_blocking<R: Send + 'static>(
     accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
     operation: impl FnOnce() -> R + Send + 'static,
@@ -76,16 +77,18 @@ pub(crate) async fn run_blocking<R: Send + 'static>(
         .await
 }
 
-/// Awaits a host operation that can fire plugin events under the active guest call's reentry
-/// context.
+/// Awaits host work with the active guest call's chain and root admission
+///
+/// Use this when the operation can call back into plugins so callbacks stay in the same chain
+/// The reentry depth is checked before the future is polled
 pub(crate) async fn in_active_context<R>(
     accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
     future: impl std::future::Future<Output = R>,
 ) -> wasmtime::Result<R> {
-    Ok(active_plugin(accessor)?
+    active_plugin(accessor)?
         .store
         .in_active_context(future)
-        .await)
+        .await
 }
 
 /// Resource-table access from an [`Accessor`] without holding the store borrow across an
