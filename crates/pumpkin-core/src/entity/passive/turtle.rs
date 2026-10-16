@@ -18,10 +18,12 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
         try_find_water::TryFindWaterGoal, wander_around::WanderAroundGoal,
     },
+    living::LivingEntity,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
 };
+use crate::world::World;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::SEAGRASS];
 
@@ -90,6 +92,12 @@ impl TurtleEntity {
         self.laying_egg.store(laying_egg, Ordering::Relaxed);
         let entity = self.get_entity();
         entity.set_synced_data(pumpkin_data::tracked_data::turtle::LAYING_EGG, laying_egg);
+    }
+
+    /// Vanilla `Turtle.BABY_ON_LAND_SELECTOR`: a hatchling out of the water.
+    #[must_use]
+    pub fn baby_on_land_selector(target: &LivingEntity, _world: &World) -> bool {
+        target.entity.age.load(Ordering::Relaxed) < 0 && !target.entity.is_in_water()
     }
 }
 
