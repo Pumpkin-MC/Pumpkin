@@ -829,7 +829,7 @@ impl BlockRegistry {
 
         player.trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::PlacedBlock {
-                block_id: placed_block.resource_location().into_owned(),
+                block_id: format!("minecraft:{}", placed_block.name),
             },
         );
 
