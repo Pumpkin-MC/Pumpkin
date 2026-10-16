@@ -75,7 +75,7 @@ impl PositionTracker for EntityTracker {
         if !self.entity.get_entity().is_alive() {
             return false;
         }
-        ctx.brain
+        ctx.state
             .get(types::NEAREST_VISIBLE_LIVING_ENTITIES)
             .is_some_and(|visible| visible.contains(self.entity.as_ref(), ctx))
     }

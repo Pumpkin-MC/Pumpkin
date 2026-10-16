@@ -86,7 +86,7 @@ impl SensorEntry {
 }
 
 fn is_current_attack_target(ctx: &VisibilityContext<'_>, target: &dyn EntityBase) -> bool {
-    ctx.brain
+    ctx.state
         .get(types::ATTACK_TARGET)
         .is_some_and(|current| current.get_entity().entity_id == target.get_entity().entity_id)
 }

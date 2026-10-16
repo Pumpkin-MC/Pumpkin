@@ -84,7 +84,7 @@ impl<B: Behavior> BehaviorControl for Timed<B> {
     }
 
     fn try_start(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        if !tick.brain.check_all(self.inner.entry_conditions())
+        if !tick.state.check_all(self.inner.entry_conditions())
             || !self.inner.check_extra_start_conditions(tick)
         {
             return false;

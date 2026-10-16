@@ -4084,9 +4084,8 @@ mod tests {
 mod ai_step_tests {
     use std::error::Error;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, Mutex, Weak};
+    use std::sync::{Arc, Mutex};
 
-    use crate::block::registry::default_registry;
     use crate::entity::Entity;
     use crate::entity::ai::control::move_control::MoveControl;
     use crate::entity::ai::control::{Control, MoveControlTrait};
@@ -4094,17 +4093,12 @@ mod ai_step_tests {
     use crate::entity::ai::pathfinder::node::Node;
     use crate::entity::ai::pathfinder::path::Path;
     use crate::entity::ai::pathfinder::{NavigationTarget, NavigatorGoal};
+    use crate::entity::ai::test_support::world;
     use crate::entity::mob::{Mob, MobEntity};
     use crate::world::World;
-    use arc_swap::ArcSwap;
-    use pumpkin_config::world::LevelConfig;
-    use pumpkin_data::dimension::Dimension;
     use pumpkin_data::entity::EntityType;
     use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector3::Vector3;
-    use pumpkin_util::world_seed::Seed;
-    use pumpkin_world::level::Level;
-    use pumpkin_world::world_info::LevelData;
 
     type TestResult = Result<(), Box<dyn Error>>;
 
@@ -4186,23 +4180,6 @@ mod ai_step_tests {
             living.entity.velocity.store(Vector3::new(0.002, 0.0, 0.0));
             living.movement_input.store(Vector3::new(0.0, 0.0, 0.5));
         }
-    }
-
-    fn world(folder: &tempfile::TempDir) -> Arc<World> {
-        let dimension = Dimension::OVERWORLD.clone();
-        let level = Level::from_root_folder(
-            &LevelConfig::default(),
-            folder.path().to_path_buf(),
-            0,
-            dimension.clone(),
-        );
-        Arc::new(World::load(
-            level,
-            Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
-            dimension,
-            default_registry(),
-            Weak::new(),
-        ))
     }
 
     fn probe(world: Arc<World>, calls: Arc<AtomicUsize>) -> ProbeMob {
