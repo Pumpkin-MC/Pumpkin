@@ -31,8 +31,6 @@ impl Default for ChunkConfig {
 pub struct AnvilChunkConfig {
     /// Compression settings for chunk data.
     pub compression: ChunkCompression,
-    /// Whether chunks should be written in place.
-    pub write_in_place: bool,
 }
 
 /// Compression settings for chunk data.
