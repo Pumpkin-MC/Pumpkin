@@ -7,7 +7,7 @@ use pumpkin_util::math::int_provider::{
     BiasedToBottomIntProvider, ConstantIntProvider, IntProvider, NormalIntProvider,
     UniformIntProvider, VeryBiasedToBottomIntProvider,
 };
-use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
+use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, RelativeToSeaLevel, YOffset};
 #[derive(Clone, Debug)]
 pub enum HeightProvider {
     Uniform(UniformHeightProvider),

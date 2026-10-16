@@ -1,14 +1,11 @@
 use std::any::Any;
-use std::sync::Arc;
 
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
-use crate::world::{BlockFlags, World};
+use crate::world::BlockFlags;
 use pumpkin_data::Block;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
-use pumpkin_util::math::position::BlockPos;
 
 pub struct PlaceOnWaterBlockItem;
 
@@ -22,17 +19,17 @@ impl ItemBehaviour for PlaceOnWaterBlockItem {
     fn normal_use(&self, item: &Item, player: &Player) {
         let world = player.world();
         let (start_pos, end_pos) = self.get_start_and_end_pos(player);
-        let checker = |pos: &BlockPos, world_inner: &Arc<World>| {
-            let state_id = world_inner.get_block_state_id(pos);
-            if state_id == Block::AIR.default_state.id {
-                return false;
-            }
-            Fluid::from_state_id(state_id).is_some()
-        };
-
-        let Some((hit_pos, _)) = world.raycast(start_pos, end_pos, checker) else {
+        let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
+            start_pos,
+            end_pos,
+            pumpkin_world::clip::ClipBlock::Outline,
+            pumpkin_world::clip::ClipFluid::SourceOnly,
+        ));
+        if hit.is_miss {
             return;
-        };
+        }
+
+        let hit_pos = hit.block_pos;
 
         let above_pos = hit_pos.up();
         let above_state = world.get_block_state(&above_pos);
