@@ -197,6 +197,11 @@ impl BaseNodeEvaluator {
         }
     }
 
+    pub fn update_node(&mut self, node: Node) -> Node {
+        self.nodes.insert(node.pos.0, node);
+        node
+    }
+
     pub fn reset(&mut self) {
         self.nodes.clear();
         self.context = None;

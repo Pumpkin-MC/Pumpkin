@@ -9,7 +9,7 @@ use crate::entity::ai::pathfinder::binary_heap::BinaryHeap;
 use crate::entity::ai::pathfinder::fly_node_evaluator::FlyNodeEvaluator;
 use crate::entity::ai::pathfinder::node::Node;
 use crate::entity::ai::pathfinder::node::PathType;
-use crate::entity::ai::pathfinder::node_evaluator::{MobData, NodeEvaluator};
+use crate::entity::ai::pathfinder::node_evaluator::{BaseNodeEvaluator, MobData, NodeEvaluator};
 use crate::entity::ai::pathfinder::path::Path;
 use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::ai::pathfinder::swim_node_evaluator::SwimNodeEvaluator;
@@ -30,15 +30,15 @@ pub mod pathfinding_context;
 pub mod swim_node_evaluator;
 pub mod walk_node_evaluator;
 
-const MAX_ITERS: usize = 560;
 const TARGET_DISTANCE_MULTIPLIER: f32 = 1.5;
 const NODE_REACH_Y: f64 = 1.0;
+const MAX_TIME_RECOMPUTE: u64 = 20;
+const MAX_VISITED_NODES_MULTIPLIER: f32 = 16.0;
 
 pub struct PathFinder {
     max_visited_nodes: usize,
     open_set: BinaryHeap,
     neighbors_buf: Vec<Node>,
-    all_nodes: FxHashMap<Vector3<i32>, Node>,
 }
 
 impl PathFinder {
@@ -48,7 +48,6 @@ impl PathFinder {
             max_visited_nodes,
             open_set: BinaryHeap::new(),
             neighbors_buf: Vec::with_capacity(32),
-            all_nodes: FxHashMap::default(),
         }
     }
 
@@ -78,7 +77,6 @@ impl PathFinder {
         )
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn find_path(
         &mut self,
         evaluator: &mut EvaluatorKind,
@@ -87,6 +85,8 @@ impl PathFinder {
         reach_range: i32,
         max_visited_nodes_multiplier: f32,
     ) -> Option<Path> {
+        self.open_set.clear();
+        self.neighbors_buf.clear();
         if targets.is_empty() {
             return None;
         }
@@ -99,9 +99,6 @@ impl PathFinder {
                 .map(|&pos| (evaluator.get_target(pos), pos))
                 .collect();
 
-        self.all_nodes.clear();
-        self.open_set.clear();
-
         from.g = 0.0;
         from.h = Self::get_best_h(&from, &mut target_entries);
         from.f = from.h;
@@ -109,7 +106,7 @@ impl PathFinder {
         from.came_from = None;
         from.closed = false;
 
-        self.all_nodes.insert(from.pos.0, from);
+        evaluator.base_mut().update_node(from);
         self.open_set.insert(from);
 
         let mut count = 0usize;
@@ -127,13 +124,13 @@ impl PathFinder {
                 break;
             };
 
+            current = evaluator.base_mut().get_node(current.pos);
             current.closed = true;
-            self.all_nodes.insert(current.pos.0, current);
+            evaluator.base_mut().update_node(current);
 
             for (idx, (target, _)) in target_entries.iter_mut().enumerate() {
                 if current.distance_manhattan_node(&target.node) <= reach_range as f32 {
                     target.set_reached();
-                    target.update_best(0.0, &current);
                     if !reached_targets.contains(&idx) {
                         reached_targets.push(idx);
                     }
@@ -148,24 +145,20 @@ impl PathFinder {
                 self.neighbors_buf.clear();
                 evaluator.get_neighbors(&current, &mut self.neighbors_buf);
 
-                for mut neighbor in self.neighbors_buf.drain(..) {
+                for neighbor in self.neighbors_buf.drain(..) {
+                    let mut neighbor = evaluator.base_mut().get_node(neighbor.pos);
                     let distance = current.distance_to_node(&neighbor);
                     neighbor.walked_dist = current.walked_dist + distance;
                     let tentative_g = current.g + distance + neighbor.cost_malus;
 
                     let in_open = self.open_set.contains(&neighbor);
-                    let is_better = if in_open {
-                        self.open_set
-                            .get_node(&neighbor)
-                            .is_some_and(|existing| tentative_g < existing.g)
-                    } else {
-                        true
-                    };
+                    let is_better = !in_open || tentative_g < neighbor.g;
 
                     if neighbor.walked_dist < max_path_length && is_better {
                         neighbor.came_from = Some(current.pos.0);
                         neighbor.g = tentative_g;
-                        neighbor.h = Self::get_best_h(&neighbor, &mut target_entries) * 1.5;
+                        neighbor.h = Self::get_best_h(&neighbor, &mut target_entries)
+                            * TARGET_DISTANCE_MULTIPLIER;
                         neighbor.f = neighbor.g + neighbor.h;
 
                         if in_open {
@@ -173,23 +166,22 @@ impl PathFinder {
                         } else {
                             self.open_set.insert(neighbor);
                         }
-                        self.all_nodes.insert(neighbor.pos.0, neighbor);
                     }
+                    evaluator.base_mut().update_node(neighbor);
                 }
             }
         }
 
-        for node in self.open_set.drain() {
-            self.all_nodes.entry(node.pos.0).or_insert(node);
-        }
+        let all_nodes = &evaluator.base_mut().nodes;
 
         if reached_targets.is_empty() {
             target_entries
                 .into_iter()
                 .filter_map(|(target, target_pos)| {
-                    target.get_best_node().map(|best| {
-                        Self::reconstruct_path(&best, target_pos, false, &self.all_nodes)
-                    })
+                    target
+                        .get_best_node()
+                        .and_then(|pos| all_nodes.get(&pos.0))
+                        .map(|best| Self::reconstruct_path(best, target_pos, false, all_nodes))
                 })
                 .min_by(|a, b| {
                     a.get_dist_to_target()
@@ -201,9 +193,10 @@ impl PathFinder {
                 .into_iter()
                 .filter_map(|idx| {
                     let (target, target_pos) = &target_entries[idx];
-                    target.get_best_node().map(|best| {
-                        Self::reconstruct_path(&best, *target_pos, true, &self.all_nodes)
-                    })
+                    target
+                        .get_best_node()
+                        .and_then(|pos| all_nodes.get(&pos.0))
+                        .map(|best| Self::reconstruct_path(best, *target_pos, true, all_nodes))
                 })
                 .min_by_key(Path::get_node_count)
         }
@@ -286,6 +279,15 @@ pub enum EvaluatorKind {
 }
 
 impl EvaluatorKind {
+    const fn base_mut(&mut self) -> &mut BaseNodeEvaluator {
+        match self {
+            Self::Walk(e) => &mut e.base,
+            Self::Fly(e) => &mut e.walk.base,
+            Self::Swim(e) => &mut e.base,
+            Self::Amphibious(e) => &mut e.walk.base,
+        }
+    }
+
     pub fn prepare(&mut self, context: PathfindingContext, mob_data: MobData) {
         match self {
             Self::Walk(e) => e.prepare(context, mob_data),
@@ -441,15 +443,16 @@ pub struct PathNavigation {
     pub total_ticks: u32,
     pub path_start_pos: Option<Vector3<f64>>,
     pub path_type_overrides: FxHashMap<PathType, f32>,
-    pub repath_cooldown: u32,
+    has_pending_path: bool,
     pub can_float: bool,
     pub can_walk_over_fences: bool,
     pub can_open_doors: bool,
     pub can_pass_doors: bool,
     pub avoid_sun: bool,
     pub can_path_to_targets_below_surface: bool,
-    pub open_set: BinaryHeap,
-    pub neighbors_buf: Vec<Node>,
+    path_finder: Option<PathFinder>,
+    update_pathfinder_max_visited_nodes: bool,
+    last_pathfinding_attributes: Option<[u64; 4]>,
     pub is_idle: AtomicBool,
 }
 
@@ -487,15 +490,16 @@ impl PathNavigation {
             total_ticks: 0,
             path_start_pos: None,
             path_type_overrides: FxHashMap::default(),
-            repath_cooldown: 0,
+            has_pending_path: false,
             can_float: false,
             can_walk_over_fences: false,
             can_open_doors: false,
             can_pass_doors: true,
             avoid_sun: false,
             can_path_to_targets_below_surface: false,
-            open_set: BinaryHeap::new(),
-            neighbors_buf: Vec::new(),
+            path_finder: None,
+            update_pathfinder_max_visited_nodes: false,
+            last_pathfinding_attributes: None,
             is_idle: AtomicBool::new(true),
         }
     }
@@ -505,8 +509,8 @@ impl PathNavigation {
         self.speed_modifier = goal.speed;
         self.last_stuck_check = self.tick_count;
         self.last_stuck_check_pos = goal.current_progress;
+        self.has_pending_path = true;
         self.current_goal = Some(goal);
-        self.path = None;
         self.reset_stuck_timeout();
     }
 
@@ -520,6 +524,7 @@ impl PathNavigation {
     pub fn stop(&mut self) {
         self.is_idle.store(true, Ordering::Relaxed);
         self.current_goal = None;
+        self.has_pending_path = false;
         self.path = None;
         self.ticks_on_current_node = 0;
         self.total_ticks = 0;
@@ -575,7 +580,6 @@ impl PathNavigation {
         follow_range.max(self.required_path_length)
     }
 
-    #[allow(clippy::too_many_lines)]
     pub fn compute_path(
         &mut self,
         entity: &LivingEntity,
@@ -604,148 +608,120 @@ impl PathNavigation {
             .set_can_walk_over_fences(self.can_walk_over_fences);
         self.evaluator.prepare(context, mob_data);
 
-        let mut start_node = self.evaluator.get_start()?;
-        let mut target = self.evaluator.get_target(BlockPos::floored_v(destination));
-
-        start_node.g = 0.0;
-        let start_dist = start_node.distance(&target);
-        target.update_best(start_dist, &start_node);
-        start_node.h = start_dist;
-        start_node.f = start_node.h;
-        start_node.walked_dist = 0.0;
-        start_node.came_from = None;
-
-        let start_pos = start_node.pos.0;
-        let mut closed_set: FxHashMap<Vector3<i32>, Node> = FxHashMap::default();
-
-        self.open_set.clear();
-        self.open_set.insert(start_node);
-
-        let mut iterations = 0usize;
-        let mut reached = false;
-        let max_iters = ((self.mob_max_follow_range(entity)
-            * 16.0
-            * self.max_visited_nodes_multiplier) as usize)
-            .clamp(100, 2048)
-            .max(MAX_ITERS);
-
-        while !self.open_set.is_empty() {
-            iterations += 1;
-            if iterations >= max_iters {
-                break;
-            }
-
-            let Some(current) = self.open_set.pop() else {
-                break;
-            };
-
-            if current.distance_manhattan(&target) <= reach_range as f32 {
-                target.reached = true;
-                reached = true;
-                target.update_best(0.0, &current);
-                closed_set.insert(current.pos.0, current);
-                break;
-            }
-
-            let dx = (current.pos.0.x - start_pos.x) as f32;
-            let dy = (current.pos.0.y - start_pos.y) as f32;
-            let dz = (current.pos.0.z - start_pos.z) as f32;
-            let euclidean = (dx * dx + dy * dy + dz * dz).sqrt();
-            let follow_range = self.mob_max_follow_range(entity);
-            if euclidean >= follow_range {
-                closed_set.insert(current.pos.0, current);
-                continue;
-            }
-
-            self.neighbors_buf.clear();
-            self.evaluator
-                .get_neighbors(&current, &mut self.neighbors_buf);
-
-            for mut neighbor in self.neighbors_buf.drain(..) {
-                let step_cost = current.distance(&neighbor);
-                neighbor.walked_dist = current.walked_dist + step_cost;
-                let tentative_g = current.g + step_cost + neighbor.cost_malus;
-
-                let in_heap = self.open_set.contains(&neighbor);
-                if neighbor.walked_dist < follow_range
-                    && (!in_heap
-                        || self
-                            .open_set
-                            .get_node(&neighbor)
-                            .is_some_and(|existing| tentative_g < existing.g))
-                {
-                    neighbor.came_from = Some(current.pos.0);
-                    neighbor.g = tentative_g;
-                    let dist_to_target = neighbor.distance(&target);
-                    target.update_best(dist_to_target, &neighbor);
-                    neighbor.h = dist_to_target * TARGET_DISTANCE_MULTIPLIER;
-                    neighbor.f = neighbor.g + neighbor.h;
-
-                    if in_heap {
-                        self.open_set.update_node(&neighbor, neighbor);
-                    } else {
-                        self.open_set.insert(neighbor);
-                    }
-                }
-            }
-
-            closed_set.insert(current.pos.0, current);
+        let attributes = [
+            entity.get_attribute_base(&Attributes::FOLLOW_RANGE),
+            entity.get_attribute_value(&Attributes::FOLLOW_RANGE),
+            entity.get_attribute_base(&Attributes::TEMPT_RANGE),
+            entity.get_attribute_value(&Attributes::TEMPT_RANGE),
+        ];
+        let attribute_bits = attributes.map(f64::to_bits);
+        let attributes_changed = self
+            .last_pathfinding_attributes
+            .replace(attribute_bits)
+            .is_some_and(|previous| previous != attribute_bits);
+        let max_path_length = self.mob_max_follow_range(entity);
+        let finder = self.path_finder.get_or_insert_with(|| {
+            PathFinder::new(
+                (attributes[0] * f64::from(MAX_VISITED_NODES_MULTIPLIER)).floor() as usize,
+            )
+        });
+        if self.update_pathfinder_max_visited_nodes || attributes_changed {
+            finder.set_max_visited_nodes(
+                (max_path_length * MAX_VISITED_NODES_MULTIPLIER).floor() as usize
+            );
+            self.update_pathfinder_max_visited_nodes = false;
         }
-
+        let path = finder.find_path_single(
+            &mut self.evaluator,
+            BlockPos::floored_v(destination),
+            max_path_length,
+            reach_range,
+            self.max_visited_nodes_multiplier,
+        );
         self.evaluator.done();
-
-        for node in self.open_set.drain() {
-            closed_set.entry(node.pos.0).or_insert(node);
-        }
-
-        if let Some(best_node) = target.best_node {
-            let mut path_nodes: Vec<Node> = Vec::new();
-            let mut current_pos = best_node.pos.0;
-            path_nodes.push(best_node);
-            let mut visited: FxHashSet<Vector3<i32>> = FxHashSet::default();
-            visited.insert(current_pos);
-            while let Some(node) = closed_set.get(&current_pos) {
-                if let Some(prev_pos) = node.came_from {
-                    if prev_pos == current_pos || !visited.insert(prev_pos) {
-                        break;
-                    }
-                    if let Some(&prev_node) = closed_set.get(&prev_pos) {
-                        path_nodes.push(prev_node);
-                        current_pos = prev_pos;
-                    } else {
-                        break;
-                    }
-                } else {
-                    break;
-                }
-            }
-            path_nodes.reverse();
-
-            let path_target = target.node.pos;
-            return Some(Path::new(path_nodes, path_target, reached));
-        }
-
-        None
+        path
     }
 
-    pub fn needs_new_path(&self, goal: &NavigatorGoal) -> bool {
-        if self.path.is_none() {
-            return true;
+    fn can_update_path(&self, entity: &LivingEntity) -> bool {
+        let in_liquid = entity.is_in_water() || entity.entity.touching_lava.load(Ordering::Relaxed);
+        match &self.evaluator {
+            EvaluatorKind::Walk(_) => {
+                entity.entity.on_ground.load(Ordering::Relaxed)
+                    || in_liquid
+                    || entity.entity.has_vehicle()
+            }
+            EvaluatorKind::Fly(_) => (self.can_float && in_liquid) || !entity.entity.has_vehicle(),
+            EvaluatorKind::Swim(e) => e.allow_breaching() || in_liquid,
+            EvaluatorKind::Amphibious(_) => true,
         }
-        if self.repath_cooldown > 0 {
-            return false;
+    }
+
+    fn create_path(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+    ) -> Option<Path> {
+        let world = entity.entity.world.load_full();
+        if entity.entity.pos.load().y < f64::from(world.get_bottom_y())
+            || !self.can_update_path(entity)
+        {
+            return None;
         }
-        self.path.as_ref().is_some_and(|p| {
-            let path_target = p.get_target();
-            let goal_target = BlockPos::floored_v(goal.destination).0;
-            let dx = f64::from(path_target.0.x - goal_target.x);
-            let dy = f64::from(path_target.0.y - goal_target.y);
-            let dz = f64::from(path_target.0.z - goal_target.z);
-            let distance_sq = dx * dx + dy * dy + dz * dz;
-            let remaining = p.get_remaining_distance().clamp(4.0, 16.0);
-            let threshold = remaining * 0.5;
-            distance_sq > f64::from(threshold * threshold)
-        })
+        let mut target = BlockPos::floored_v(destination);
+        if matches!(self.evaluator, EvaluatorKind::Walk(_))
+            && !self.can_path_to_targets_below_surface
+        {
+            target = Self::find_surface_position(&world, target);
+        }
+        if self.target_pos == Some(target)
+            && let Some(path) = &self.path
+            && !path.is_done()
+        {
+            return Some(path.clone());
+        }
+        let path = self.compute_path(entity, target.0.to_f64(), reach_range);
+        if let Some(path) = &path {
+            self.target_pos = Some(path.get_target());
+            self.reach_range = reach_range;
+            self.reset_stuck_timeout();
+        }
+        path
+    }
+
+    fn recompute_path(&mut self, entity: &LivingEntity) {
+        let world_age = entity.entity.world.load().get_world_age() as u64;
+        if world_age.saturating_sub(self.time_last_recompute) <= MAX_TIME_RECOMPUTE
+            || !self.can_update_path(entity)
+        {
+            self.has_delayed_recomputation = true;
+        } else if let Some(target) = self.target_pos {
+            self.path = None;
+            self.path = self.create_path(entity, target.0.to_f64(), self.reach_range);
+            self.time_last_recompute = world_age;
+            self.has_delayed_recomputation = false;
+        }
+    }
+
+    fn update_path(&mut self, entity: &LivingEntity) {
+        if self.has_delayed_recomputation {
+            self.recompute_path(entity);
+        }
+        if self.has_pending_path {
+            self.has_pending_path = false;
+            if let Some(goal) = self.current_goal {
+                let path = self.create_path(entity, goal.destination, 1);
+                if path
+                    .as_ref()
+                    .is_none_or(|path| !path.same_as(self.path.as_ref()))
+                {
+                    self.ticks_on_current_node = 0;
+                    self.last_node_index = 0;
+                    self.path_start_pos = Some(entity.entity.pos.load());
+                }
+                self.path = path;
+            }
+        }
     }
 
     pub fn can_move_directly(
@@ -985,55 +961,9 @@ impl PathNavigation {
     #[allow(clippy::too_many_lines)]
     pub fn tick_ground(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         self.tick_count += 1;
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-
-        if self.has_delayed_recomputation
-            && world_age.saturating_sub(self.time_last_recompute) > 20
-            && let Some(target_pos) = self.target_pos
-        {
-            let target_v = Vector3::new(
-                f64::from(target_pos.0.x) + 0.5,
-                f64::from(target_pos.0.y),
-                f64::from(target_pos.0.z) + 0.5,
-            );
-            self.path = self.compute_path(entity, target_v, self.reach_range);
-            self.time_last_recompute = world_age;
-            self.has_delayed_recomputation = false;
-        }
-
-        let Some(goal) = self.current_goal.take() else {
-            self.is_idle.store(true, Ordering::Relaxed);
-            return None;
-        };
-
-        if goal.current_progress == goal.destination {
-            self.stop();
-            return None;
-        }
+        self.update_path(entity);
 
         self.total_ticks += 1;
-        if self.repath_cooldown > 0 {
-            self.repath_cooldown -= 1;
-        }
-
-        if self.needs_new_path(&goal) {
-            let mut dest_pos = BlockPos::floored_v(goal.destination);
-            if !self.can_path_to_targets_below_surface {
-                let world = entity.entity.world.load();
-                dest_pos = Self::find_surface_position(&world, dest_pos);
-            }
-            let dest_v = Vector3::new(
-                f64::from(dest_pos.0.x) + 0.5,
-                f64::from(dest_pos.0.y),
-                f64::from(dest_pos.0.z) + 0.5,
-            );
-            self.path = self.compute_path(entity, dest_v, self.reach_range);
-            self.ticks_on_current_node = 0;
-            self.last_node_index = 0;
-            self.path_start_pos = Some(entity.entity.pos.load());
-            self.repath_cooldown = 15;
-            self.time_last_recompute = world_age;
-        }
 
         if self.path.is_none() {
             self.stop();
@@ -1112,7 +1042,6 @@ impl PathNavigation {
                     && dy < -0.5
                 {
                     path.advance();
-                    self.current_goal = Some(goal);
                     return self.ground_target(entity);
                 }
 
@@ -1127,7 +1056,6 @@ impl PathNavigation {
 
                 if close_enough || corner_cut {
                     path.advance();
-                    self.current_goal = Some(goal);
                     return self.ground_target(entity);
                 }
             } else {
@@ -1136,7 +1064,6 @@ impl PathNavigation {
             }
         }
 
-        self.current_goal = Some(goal);
         self.ground_target(entity)
     }
 }
@@ -1250,7 +1177,10 @@ impl PathNavigationTrait for GroundPathNavigation {
     }
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
+        self.inner.has_pending_path = false;
+        self.inner.current_goal = None;
         if let Some(new_path) = path {
+            self.inner.target_pos = Some(new_path.get_target());
             self.inner.path = Some(new_path);
             if self.is_done() {
                 return false;
@@ -1289,35 +1219,11 @@ impl PathNavigationTrait for GroundPathNavigation {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path> {
-        let mut dest_pos = BlockPos::floored_v(destination);
-        if !self.inner.can_path_to_targets_below_surface {
-            let world = entity.entity.world.load();
-            dest_pos = PathNavigation::find_surface_position(&world, dest_pos);
-        }
-        let dest_v = Vector3::new(
-            f64::from(dest_pos.0.x) + 0.5,
-            f64::from(dest_pos.0.y),
-            f64::from(dest_pos.0.z) + 0.5,
-        );
-        self.inner.compute_path(entity, dest_v, reach_range)
+        self.inner.create_path(entity, destination, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-        if world_age.saturating_sub(self.inner.time_last_recompute) <= 20 {
-            self.inner.has_delayed_recomputation = true;
-        } else if let Some(target_pos) = self.inner.target_pos {
-            let target_v = Vector3::new(
-                f64::from(target_pos.0.x) + 0.5,
-                f64::from(target_pos.0.y),
-                f64::from(target_pos.0.z) + 0.5,
-            );
-            self.inner.path = self
-                .inner
-                .compute_path(entity, target_v, self.inner.reach_range);
-            self.inner.time_last_recompute = world_age;
-            self.inner.has_delayed_recomputation = false;
-        }
+        self.inner.recompute_path(entity);
     }
 
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
@@ -1350,6 +1256,7 @@ impl PathNavigationTrait for GroundPathNavigation {
 
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.required_path_length = length;
+        self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32) {
@@ -1449,23 +1356,7 @@ impl PathNavigationTrait for FlyingPathNavigation {
     #[allow(clippy::too_many_lines)]
     fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         self.inner.tick_count += 1;
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-
-        if self.inner.has_delayed_recomputation {
-            self.recompute_path(entity);
-        }
-
-        if let Some(goal) = self.inner.current_goal.take() {
-            if self.inner.needs_new_path(&goal) {
-                self.inner.path = self.inner.compute_path(entity, goal.destination, 1);
-                self.inner.ticks_on_current_node = 0;
-                self.inner.last_node_index = 0;
-                self.inner.path_start_pos = Some(entity.entity.pos.load());
-                self.inner.repath_cooldown = 15;
-                self.inner.time_last_recompute = world_age;
-            }
-            self.inner.current_goal = Some(goal);
-        }
+        self.inner.update_path(entity);
 
         let mob_pos = entity.entity.pos.load();
         self.inner.do_stuck_detection(mob_pos, entity);
@@ -1525,7 +1416,10 @@ impl PathNavigationTrait for FlyingPathNavigation {
     }
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
+        self.inner.has_pending_path = false;
+        self.inner.current_goal = None;
         if let Some(new_path) = path {
+            self.inner.target_pos = Some(new_path.get_target());
             self.inner.path = Some(new_path);
             if self.is_done() {
                 return false;
@@ -1550,25 +1444,11 @@ impl PathNavigationTrait for FlyingPathNavigation {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path> {
-        self.inner.compute_path(entity, destination, reach_range)
+        self.inner.create_path(entity, destination, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-        if world_age.saturating_sub(self.inner.time_last_recompute) <= 20 {
-            self.inner.has_delayed_recomputation = true;
-        } else if let Some(target_pos) = self.inner.target_pos {
-            let target_v = Vector3::new(
-                f64::from(target_pos.0.x) + 0.5,
-                f64::from(target_pos.0.y) + 0.5,
-                f64::from(target_pos.0.z) + 0.5,
-            );
-            self.inner.path = self
-                .inner
-                .compute_path(entity, target_v, self.inner.reach_range);
-            self.inner.time_last_recompute = world_age;
-            self.inner.has_delayed_recomputation = false;
-        }
+        self.inner.recompute_path(entity);
     }
 
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
@@ -1601,6 +1481,7 @@ impl PathNavigationTrait for FlyingPathNavigation {
 
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.required_path_length = length;
+        self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32) {
@@ -1704,23 +1585,7 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
     #[allow(clippy::too_many_lines)]
     fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         self.inner.tick_count += 1;
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-
-        if self.inner.has_delayed_recomputation {
-            self.recompute_path(entity);
-        }
-
-        if let Some(goal) = self.inner.current_goal.take() {
-            if self.inner.needs_new_path(&goal) {
-                self.inner.path = self.inner.compute_path(entity, goal.destination, 1);
-                self.inner.ticks_on_current_node = 0;
-                self.inner.last_node_index = 0;
-                self.inner.path_start_pos = Some(entity.entity.pos.load());
-                self.inner.repath_cooldown = 15;
-                self.inner.time_last_recompute = world_age;
-            }
-            self.inner.current_goal = Some(goal);
-        }
+        self.inner.update_path(entity);
 
         let mob_pos = Vector3::new(
             entity.entity.pos.load().x,
@@ -1784,7 +1649,10 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
     }
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
+        self.inner.has_pending_path = false;
+        self.inner.current_goal = None;
         if let Some(new_path) = path {
+            self.inner.target_pos = Some(new_path.get_target());
             self.inner.path = Some(new_path);
             if self.is_done() {
                 return false;
@@ -1813,25 +1681,11 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path> {
-        self.inner.compute_path(entity, destination, reach_range)
+        self.inner.create_path(entity, destination, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-        if world_age.saturating_sub(self.inner.time_last_recompute) <= 20 {
-            self.inner.has_delayed_recomputation = true;
-        } else if let Some(target_pos) = self.inner.target_pos {
-            let target_v = Vector3::new(
-                f64::from(target_pos.0.x) + 0.5,
-                f64::from(target_pos.0.y) + 0.5,
-                f64::from(target_pos.0.z) + 0.5,
-            );
-            self.inner.path = self
-                .inner
-                .compute_path(entity, target_v, self.inner.reach_range);
-            self.inner.time_last_recompute = world_age;
-            self.inner.has_delayed_recomputation = false;
-        }
+        self.inner.recompute_path(entity);
     }
 
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
@@ -1862,6 +1716,7 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
 
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.required_path_length = length;
+        self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32) {
@@ -1964,6 +1819,9 @@ impl PathNavigationTrait for WallClimberNavigation {
 
     #[allow(clippy::too_many_lines)]
     fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
+        if self.inner.inner.has_pending_path {
+            self.inner.inner.update_path(entity);
+        }
         if !self.inner.is_done() {
             return self.inner.tick(entity);
         } else if let Some(target_pos) = self.path_to_position {
@@ -2182,23 +2040,7 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
     fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         if entity.entity.touching_water.load(Ordering::Relaxed) {
             self.inner.tick_count += 1;
-            let world_age = entity.entity.world.load().get_world_age() as u64;
-
-            if self.inner.has_delayed_recomputation {
-                self.recompute_path(entity);
-            }
-
-            if let Some(goal) = self.inner.current_goal.take() {
-                if self.inner.needs_new_path(&goal) {
-                    self.inner.path = self.inner.compute_path(entity, goal.destination, 1);
-                    self.inner.ticks_on_current_node = 0;
-                    self.inner.last_node_index = 0;
-                    self.inner.path_start_pos = Some(entity.entity.pos.load());
-                    self.inner.repath_cooldown = 15;
-                    self.inner.time_last_recompute = world_age;
-                }
-                self.inner.current_goal = Some(goal);
-            }
+            self.inner.update_path(entity);
 
             let mob_pos = Vector3::new(
                 entity.entity.pos.load().x,
@@ -2265,7 +2107,10 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
     }
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
+        self.inner.has_pending_path = false;
+        self.inner.current_goal = None;
         if let Some(new_path) = path {
+            self.inner.target_pos = Some(new_path.get_target());
             self.inner.path = Some(new_path);
             if self.is_done() {
                 return false;
@@ -2294,25 +2139,11 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path> {
-        self.inner.compute_path(entity, destination, reach_range)
+        self.inner.create_path(entity, destination, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-        if world_age.saturating_sub(self.inner.time_last_recompute) <= 20 {
-            self.inner.has_delayed_recomputation = true;
-        } else if let Some(target_pos) = self.inner.target_pos {
-            let target_v = Vector3::new(
-                f64::from(target_pos.0.x) + 0.5,
-                f64::from(target_pos.0.y) + 0.5,
-                f64::from(target_pos.0.z) + 0.5,
-            );
-            self.inner.path = self
-                .inner
-                .compute_path(entity, target_v, self.inner.reach_range);
-            self.inner.time_last_recompute = world_age;
-            self.inner.has_delayed_recomputation = false;
-        }
+        self.inner.recompute_path(entity);
     }
 
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
@@ -2343,6 +2174,7 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
 
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.required_path_length = length;
+        self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32) {
@@ -2545,7 +2377,6 @@ mod tests {
             1.0,
             &living,
         );
-        navigation.inner.repath_cooldown = 2;
 
         navigation.tick(&living);
         let first = navigation.get_path().map(Path::get_next_node_index);
@@ -2559,6 +2390,220 @@ mod tests {
         world.level.shutdown().await;
 
         assert_eq!((first, second), (Some(1), Some(2)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn search_closes_nodes_before_evaluating_neighbors_and_resets_between_searches()
+    -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::BAT);
+        let data = MobData::from_entity(&living, &world);
+        let mut evaluator = EvaluatorKind::Fly(FlyNodeEvaluator::new());
+        let mut finder = PathFinder::new(40);
+        let target = BlockPos::new(100, 64, 100);
+        let mut paths = Vec::new();
+        for _ in 0..2 {
+            evaluator.prepare(
+                PathfindingContext::new(BlockPos::floored_v(data.position).0, world.clone()),
+                data,
+            );
+            paths.push(finder.find_path_single(&mut evaluator, target, 5.0, 0, 1.0));
+            let start = evaluator.base_mut().get_node(BlockPos::new(0, 64, 0));
+            assert!(start.closed);
+            assert_eq!(start.came_from, None);
+            let mut neighbors = Vec::new();
+            evaluator.get_neighbors(&Node::new(BlockPos::new(1, 64, 0)), &mut neighbors);
+            assert!(!neighbors.iter().any(|node| node.pos == start.pos));
+            evaluator.done();
+        }
+        world.level.shutdown().await;
+        assert!(
+            paths[0]
+                .as_ref()
+                .is_some_and(|first| first.same_as(paths[1].as_ref()))
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn navigation_respects_a_zero_search_budget() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::BAT);
+        let mut navigation = FlyingPathNavigation::new();
+        navigation.set_max_visited_nodes_multiplier(0.0);
+        let path = navigation.create_path(&living, Vector3::new(8.0, 64.0, 0.0), 0);
+        world.level.shutdown().await;
+        assert_eq!(path.as_ref().map(Path::get_node_count), Some(1));
+        assert!(path.is_some_and(|path| !path.can_reach()));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn repeated_target_preserves_progress_but_new_target_replaces_the_route() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::BAT);
+        let mut navigation = FlyingPathNavigation::new();
+        navigation.move_to_coords(8.0, 64.0, 0.0, 1.0, &living);
+        navigation.tick(&living);
+        let before = navigation.get_path_mut().ok_or("missing initial route")?;
+        before.set_next_node_index(3);
+        navigation.move_to_coords(8.0, 64.0, 0.0, 2.0, &living);
+        navigation.tick(&living);
+        let reused_index = navigation.get_path().map(Path::get_next_node_index);
+        navigation.move_to_coords(0.0, 64.0, 8.0, 1.0, &living);
+        navigation.tick(&living);
+        let target = navigation.get_path().map(Path::get_target);
+        world.level.shutdown().await;
+        assert_eq!(reused_index, Some(3));
+        assert_eq!(target, Some(BlockPos::new(0, 64, 8)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn reachability_query_does_not_retarget_the_installed_route() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::BAT);
+        let mut navigation = FlyingPathNavigation::new();
+        let path = navigation.create_path(&living, Vector3::new(8.0, 64.0, 0.0), 0);
+        navigation.move_to_path(path, 1.0, &living);
+        navigation.can_reach_within(&living, Vector3::new(0.0, 64.0, 8.0), 1.0);
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .world_age = 21;
+        navigation.recompute_path(&living);
+        let target = navigation.get_path().map(Path::get_target);
+        world.level.shutdown().await;
+        assert_eq!(target, Some(BlockPos::new(8, 64, 0)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn explicit_path_and_cancellation_supersede_pending_requests() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::COW);
+        let mut navigation = GroundPathNavigation::new();
+        let destination = BlockPos::new(8, 64, 0);
+        navigation.move_to_coords(0.0, 64.0, 8.0, 1.0, &living);
+        navigation.move_to_path(
+            Some(Path::new(vec![Node::new(destination)], destination, true)),
+            1.0,
+            &living,
+        );
+        navigation.tick(&living);
+        let installed = navigation.get_path().map(Path::get_target);
+        navigation.move_to_coords(0.0, 64.0, 8.0, 1.0, &living);
+        navigation.move_to_path(None, 1.0, &living);
+        navigation.tick(&living);
+        let cancelled = navigation.get_path().is_none();
+        world.level.shutdown().await;
+        assert_eq!(installed, Some(destination));
+        assert!(cancelled);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn recomputation_waits_past_twenty_ticks_and_until_ground_navigation_is_eligible()
+    -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::COW);
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        let mut navigation = GroundPathNavigation::new();
+        navigation.set_can_path_to_targets_below_surface(true);
+        navigation.move_to_path(
+            Some(Path::new(
+                vec![
+                    Node::new(BlockPos::new(0, 64, 0)),
+                    Node::new(BlockPos::new(4, 64, 0)),
+                    Node::new(BlockPos::new(8, 64, 0)),
+                ],
+                BlockPos::new(8, 64, 0),
+                true,
+            )),
+            1.0,
+            &living,
+        );
+        navigation
+            .get_path_mut()
+            .ok_or("missing initial route")?
+            .set_next_node_index(2);
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .world_age = 20;
+        navigation.recompute_path(&living);
+        assert_eq!(
+            navigation.get_path().map(Path::get_next_node_index),
+            Some(2)
+        );
+        living.entity.on_ground.store(false, Ordering::Relaxed);
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .world_age = 21;
+        navigation.recompute_path(&living);
+        assert_eq!(
+            navigation.get_path().map(Path::get_next_node_index),
+            Some(2)
+        );
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        navigation.tick(&living);
+        let recomputed = navigation.get_path().map(Path::get_next_node_index);
+        world.level.shutdown().await;
+        assert_eq!(recomputed, Some(1));
+        assert!(!navigation.inner.has_delayed_recomputation);
+        Ok(())
+    }
+    #[tokio::test]
+    async fn wall_climber_resolves_pending_search_before_using_its_fallback() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::SPIDER);
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        let mut navigation = WallClimberNavigation::new();
+        navigation.set_can_path_to_targets_below_surface(true);
+        navigation.move_to_coords(8.0, 64.0, 0.0, 1.0, &living);
+        navigation.tick(&living);
+        let target = navigation.get_path().map(Path::get_target);
+        world.level.shutdown().await;
+        assert_eq!(target, Some(BlockPos::new(8, 64, 0)));
+        Ok(())
+    }
+    #[tokio::test]
+    async fn attribute_changes_refresh_the_search_budget() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::BAT);
+        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 0.0);
+        let mut navigation = FlyingPathNavigation::new();
+        let target = Vector3::new(8.0, 64.0, 0.0);
+        let initial = navigation.create_path(&living, target, 0);
+        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 16.0);
+        let updated = navigation.create_path(&living, target, 0);
+        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 0.0);
+        let mut tempted = FlyingPathNavigation::new();
+        let before_tempt = tempted.create_path(&living, target, 0);
+        living.set_attribute_base(
+            &Attributes::TEMPT_RANGE,
+            living.get_attribute_base(&Attributes::TEMPT_RANGE) + 1.0,
+        );
+        let after_tempt = tempted.create_path(&living, target, 0);
+        world.level.shutdown().await;
+        assert_eq!(initial.as_ref().map(Path::get_node_count), Some(1));
+        assert!(initial.is_some_and(|path| !path.can_reach()));
+        assert!(updated.is_some_and(|path| path.can_reach() && path.get_node_count() > 1));
+        assert!(before_tempt.is_some_and(|path| !path.can_reach()));
+        assert!(after_tempt.is_some_and(|path| path.can_reach()));
         Ok(())
     }
 }
