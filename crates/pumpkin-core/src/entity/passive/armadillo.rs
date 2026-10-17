@@ -146,7 +146,7 @@ impl ArmadilloEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
+            goal_selector.add_goal(1, EscapeDangerGoal::new_environmental(2.0));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, ARMADILLO_FOOD, false)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
