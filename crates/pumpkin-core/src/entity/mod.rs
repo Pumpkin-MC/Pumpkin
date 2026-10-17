@@ -310,6 +310,17 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         other.get_team_name().is_some_and(|other| other == team)
     }
 
+    fn do_teams_allow_damage(&self, other: &dyn EntityBase) -> bool {
+        let Some(team_name) = self.get_team_name() else {
+            return true;
+        };
+        if other.get_team_name().as_deref() != Some(team_name.as_str()) {
+            return true;
+        }
+        self.get_team()
+            .is_none_or(|team| team.allow_friendly_fire())
+    }
+
     fn tick_in_void(&self, _dyn_self: &dyn EntityBase) {
         self.get_entity().remove();
     }

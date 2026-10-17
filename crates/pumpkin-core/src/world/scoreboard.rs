@@ -826,6 +826,21 @@ pub struct Team {
     pub players: Vec<String>,
 }
 
+impl Team {
+    const BIT_FRIENDLY_FIRE: i8 = 1;
+    const BIT_SEE_INVISIBLES: i8 = 2;
+
+    #[must_use]
+    pub const fn allow_friendly_fire(&self) -> bool {
+        self.options & Self::BIT_FRIENDLY_FIRE != 0
+    }
+
+    #[must_use]
+    pub const fn see_friendly_invisibles(&self) -> bool {
+        self.options & Self::BIT_SEE_INVISIBLES != 0
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BedrockSortOrder {
     Ascending,

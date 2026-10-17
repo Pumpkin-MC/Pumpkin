@@ -74,6 +74,9 @@ impl Mob for MagmaCubeEntity {
     }
 
     fn mob_player_collision(&self, player: &Arc<crate::entity::player::Player>) {
+        if !self.slime.do_teams_allow_damage(&**player) {
+            return;
+        }
         let damaged = self
             .slime
             .get_mob_entity()

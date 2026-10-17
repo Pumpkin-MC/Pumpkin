@@ -4371,6 +4371,14 @@ impl Player {
         self.damage_with_context(caller, amount, damage_type, None, None, None)
     }
 
+    #[must_use]
+    pub fn can_harm_player(&self, target: &Self) -> bool {
+        if !self.world().level_info.load().game_rules.pvp {
+            return false;
+        }
+        self.do_teams_allow_damage(target)
+    }
+
     pub fn damage_with_context(
         &self,
         caller: &dyn crate::entity::EntityBase,
@@ -4387,6 +4395,13 @@ impl Player {
             .invulnerable
             && damage_type != pumpkin_data::damage::DamageType::GENERIC_KILL
             && damage_type != pumpkin_data::damage::DamageType::OUT_OF_WORLD
+        {
+            return false;
+        }
+
+        if source
+            .and_then(|source| source.get_player())
+            .is_some_and(|attacker| !self.can_harm_player(attacker))
         {
             return false;
         }

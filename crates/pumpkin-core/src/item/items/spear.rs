@@ -622,6 +622,7 @@ impl SpearItem {
             let config = &server.advanced_config.pvp;
             if !config.enabled
                 || (config.protect_creative && other.gamemode.load() == GameMode::Creative)
+                || !player.can_harm_player(other)
             {
                 return false;
             }
