@@ -332,10 +332,6 @@ impl WitherEntity {
 
         if !entity.is_alive() || self.mob_entity.living_entity.health.load() <= 0.0 {
             self.remove_all_bossbar(&world);
-            if !self.dropped_loot.swap(true, Ordering::SeqCst) {
-                let pos = entity.block_pos.load();
-                world.drop_stack(&pos, ItemStack::new(1, &Item::NETHER_STAR));
-            }
             return;
         }
 
@@ -635,6 +631,19 @@ impl Mob for WitherEntity {
     }
 
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {
+        let living = &self.mob_entity.living_entity;
+        // Vanilla `dropCustomDeathLoot` runs from `LivingEntity.die` inside the lethal hit,
+        // only with `mob_drops` on. Dropping here instead of on a later tick means a save
+        // between the hit and that tick can't lose the star; `dead` is never persisted.
+        // Two lethal hits from parallel entity ticks can both get here, so drop once.
+        if living.dead.load(Ordering::Relaxed) && !self.dropped_loot.swap(true, Ordering::SeqCst) {
+            let world = living.entity.world.load_full();
+            if world.level_info.load().game_rules.mob_drops {
+                let pos = living.entity.block_pos.load();
+                world.drop_stack(&pos, ItemStack::new(1, &Item::NETHER_STAR));
+            }
+        }
+
         if self.destroy_blocks_tick.load(Ordering::Relaxed) <= 0 {
             self.destroy_blocks_tick.store(20, Ordering::Relaxed);
         }
@@ -647,12 +656,7 @@ impl Mob for WitherEntity {
     fn post_tick(&self) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() || self.mob_entity.living_entity.health.load() <= 0.0 {
-            let world = entity.world.load_full();
-            self.remove_all_bossbar(&world);
-            if !self.dropped_loot.swap(true, Ordering::SeqCst) {
-                let pos = entity.get_entity().block_pos.load();
-                world.drop_stack(&pos, ItemStack::new(1, &Item::NETHER_STAR));
-            }
+            self.remove_all_bossbar(&entity.world.load_full());
         }
     }
 
