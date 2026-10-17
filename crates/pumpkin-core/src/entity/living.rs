@@ -97,6 +97,7 @@ pub struct LivingEntity {
     pub entity_equipment: Arc<std::sync::Mutex<EntityEquipment>>,
     pub equipment_drop_chances: Arc<std::sync::Mutex<FxHashMap<EquipmentSlot, f32>>>,
     pub movement_input: AtomicCell<Vector3<f64>>,
+    pub speed: AtomicCell<f64>,
     pub equipment_slots: Arc<FxHashMap<usize, EquipmentSlot>>,
 
     pub jumping: AtomicBool,
@@ -312,6 +313,7 @@ impl LivingEntity {
             last_hurt_by_mob_id: AtomicI32::new(0),
             last_hurt_by_mob_time: AtomicI64::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
+            speed: AtomicCell::new(0.0),
             water_movement_speed_multiplier,
             last_block_pos: AtomicCell::new(None),
             equipment_attribute_modifier_ids: std::sync::Mutex::new(FxHashMap::default()),
@@ -356,6 +358,15 @@ impl LivingEntity {
         }
 
         None
+    }
+
+    #[must_use]
+    pub fn get_speed(&self) -> f64 {
+        self.speed.load()
+    }
+
+    pub fn set_speed(&self, speed: f64) {
+        self.speed.store(speed);
     }
 
     /// Triggers location-based enchantment effects (e.g. Frost Walker) when the entity's block position changes.
@@ -1411,9 +1422,7 @@ impl LivingEntity {
                 velo.y += 0.04;
 
                 self.entity.velocity.store(velo);
-            } else if (on_ground || in_water && fluid_height <= swim_height)
-                && self.jumping_cooldown.load(SeqCst) == 0
-            {
+            } else if on_ground && self.jumping_cooldown.load(SeqCst) == 0 {
                 self.jump();
 
                 self.jumping_cooldown.store(10, SeqCst);
@@ -1531,7 +1540,16 @@ impl LivingEntity {
     fn travel_in_air(&self, caller: &dyn EntityBase) {
         // applyMovementInput
 
-        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+        let effective_speed = if caller.get_player().is_some() {
+            self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
+        } else {
+            let current_speed = self.get_speed();
+            if current_speed > 0.0 {
+                current_speed
+            } else {
+                self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
+            }
+        };
 
         let (speed, friction) = if self.entity.on_ground.load(Relaxed) {
             // getVelocityAffectingPos
@@ -1610,7 +1628,16 @@ impl LivingEntity {
 
         let falling = self.entity.velocity.load().y <= 0.0;
         let gravity = self.get_effective_gravity(caller);
-        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+        let effective_speed = if caller.get_player().is_some() {
+            self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
+        } else {
+            let current_speed = self.get_speed();
+            if current_speed > 0.0 {
+                current_speed
+            } else {
+                self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
+            }
+        };
 
         if water {
             let mut friction = if self.entity.sprinting.load(Relaxed) {
@@ -1638,8 +1665,14 @@ impl LivingEntity {
                 friction = 0.96;
             }
 
-            self.entity
-                .update_velocity_from_input(movement_input, speed);
+            let fluid_input =
+                if caller.get_player().is_none() && movement_input.length_squared() > 1.0e-7 {
+                    movement_input.normalize()
+                } else {
+                    movement_input
+                };
+
+            self.entity.update_velocity_from_input(fluid_input, speed);
 
             self.make_move(caller);
 
@@ -1653,7 +1686,14 @@ impl LivingEntity {
             self.apply_fluid_moving_speed(&mut velo.y, gravity, falling);
             self.entity.velocity.store(velo);
         } else {
-            self.entity.update_velocity_from_input(movement_input, 0.02);
+            let fluid_input =
+                if caller.get_player().is_none() && movement_input.length_squared() > 1.0e-7 {
+                    movement_input.normalize()
+                } else {
+                    movement_input
+                };
+
+            self.entity.update_velocity_from_input(fluid_input, 0.02);
 
             self.make_move(caller);
 
@@ -2586,12 +2626,17 @@ impl LivingEntity {
         *last
     }
 
+    #[must_use]
+    pub fn is_alive(&self) -> bool {
+        !self.entity.is_removed() && !self.dead.load(Relaxed) && self.health.load() > 0.0
+    }
+
     pub fn can_take_damage(&self) -> bool {
         !self.entity.invulnerable.load(Ordering::Relaxed) && self.is_part_of_game()
     }
 
     pub fn is_part_of_game(&self) -> bool {
-        !self.is_spectator() && self.entity.is_alive()
+        !self.is_spectator() && self.is_alive()
     }
 
     pub fn can_attack(&self, target: &dyn EntityBase) -> bool {
@@ -3413,6 +3458,15 @@ impl EntityBase for LivingEntity {
             self.entity.send_velocity();
         }
 
+        // Vanilla LivingEntity.java:495-497: clear last hurt by mob after 100 ticks (5 seconds)
+        if self.last_attacker_id.load(Relaxed) != 0 {
+            let age = self.entity.age.load(Relaxed);
+            let attacked_time = self.last_attacked_time.load(Relaxed);
+            if age - attacked_time > 100 {
+                self.last_attacker_id.store(0, Relaxed);
+            }
+        }
+
         // Fetch supporting blocks for players or other entities
         let supporting_pos = caller.get_player().map_or_else(
             || self.entity.get_supporting_block_pos(),
@@ -3684,7 +3738,7 @@ impl LivingEntity {
 
     /// Applies data-driven `apply_effects` consume effects after an item completes use.
     /// Vanilla: `Consumable.onConsume` invokes every configured effect server-side.
-    fn apply_consumable_effects(&self, caller: &dyn EntityBase, item: &ItemStack) {
+    pub fn apply_consumable_effects(&self, caller: &dyn EntityBase, item: &ItemStack) {
         let Some(consumable) = item.get_data_component::<ConsumableImpl>() else {
             return;
         };

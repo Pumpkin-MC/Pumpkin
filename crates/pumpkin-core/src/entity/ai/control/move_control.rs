@@ -62,6 +62,7 @@ impl MoveControlTrait for MoveControl {
             let dd = xd * xd + yd * yd + zd * zd;
 
             if dd < 2.5000003E-7 {
+                living_entity.set_speed(0.0);
                 living_entity
                     .movement_input
                     .store(Vector3::new(0.0, 0.0, 0.0));
@@ -75,6 +76,7 @@ impl MoveControlTrait for MoveControl {
 
             let movement_speed = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
             let speed = self.speed_modifier * movement_speed;
+            living_entity.set_speed(speed);
             living_entity
                 .movement_input
                 .store(Vector3::new(0.0, 0.0, speed));
@@ -90,6 +92,7 @@ impl MoveControlTrait for MoveControl {
         } else if self.operation == Operation::Jumping {
             let movement_speed = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
             let speed = self.speed_modifier * movement_speed;
+            living_entity.set_speed(speed);
             living_entity
                 .movement_input
                 .store(Vector3::new(0.0, 0.0, speed));

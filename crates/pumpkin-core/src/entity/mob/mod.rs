@@ -1,4 +1,8 @@
-use super::{Entity, EntityBase, ai::pathfinder::Navigator, living::LivingEntity};
+use super::{
+    Entity, EntityBase,
+    ai::pathfinder::{Navigator, NavigatorGoal},
+    living::LivingEntity,
+};
 use crate::entity::ai::brain::Brain;
 use crate::entity::ai::brain::memory::PackedMemories;
 use crate::entity::ai::control::MoveControlTrait;
@@ -234,6 +238,30 @@ impl MobEntity {
 
     pub fn is_no_ai(&self) -> bool {
         (self.mob_flags.load(Relaxed) & Self::AI_DISABLED_FLAG) != 0
+    }
+
+    pub fn navigate_to(&self, from: Vector3<f64>, to: Vector3<f64>, speed: f64) {
+        let mut nav = self
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        nav.set_progress(NavigatorGoal::new(from, to, speed));
+    }
+
+    pub fn stop_navigation(&self) {
+        let mut nav = self
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        nav.stop();
+    }
+
+    pub fn set_navigation_speed(&self, speed: f64) {
+        let mut nav = self
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        nav.set_speed(speed);
     }
 
     /// Vanilla `Mob.serverAiStep`: sensing, goals, navigation and controls.
@@ -480,19 +508,50 @@ impl MobEntity {
             .add_goal(priority, Box::new(goal));
     }
 
+    pub fn can_attack(&self, target: &dyn EntityBase) -> bool {
+        if !target.is_alive() {
+            return false;
+        }
+        if target.get_entity().entity_type == &EntityType::GHAST {
+            return false;
+        }
+        self.living_entity.can_attack(target)
+    }
+
+    pub fn as_valid_target(
+        &self,
+        target: Option<Arc<dyn EntityBase>>,
+    ) -> Option<Arc<dyn EntityBase>> {
+        let target = target?;
+        if !target.is_alive() {
+            return None;
+        }
+        if !EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity()) {
+            return None;
+        }
+        self.can_attack(target.as_ref()).then_some(target)
+    }
+
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let mut t = self
             .target
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *t = target;
+        *t = self.as_valid_target(target);
     }
 
     pub fn get_target(&self) -> Option<Arc<dyn EntityBase>> {
-        self.target
+        let mut guard = self
+            .target
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(target) = guard.as_ref()
+            && self.as_valid_target(Some(target.clone())).is_none()
+        {
+            *guard = None;
+            return None;
+        }
+        guard.clone()
     }
 
     fn set_mob_flag(&self, flag: u8, value: bool) {
@@ -792,6 +851,9 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn can_attack(&self, target: &dyn EntityBase) -> bool {
+        if !target.is_alive() {
+            return false;
+        }
         let target_entity = target.get_entity();
         if target_entity.entity_type == &EntityType::GHAST {
             return false;
@@ -811,6 +873,18 @@ pub trait Mob: EntityBase + Send + Sync {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .is_idle()
+    }
+
+    fn navigate_to(&self, from: Vector3<f64>, to: Vector3<f64>, speed: f64) {
+        self.get_mob_entity().navigate_to(from, to, speed);
+    }
+
+    fn stop_navigation(&self) {
+        self.get_mob_entity().stop_navigation();
+    }
+
+    fn set_navigation_speed(&self, speed: f64) {
+        self.get_mob_entity().set_navigation_speed(speed);
     }
 
     fn has_line_of_sight(&self, target: &crate::entity::Entity) -> bool {
@@ -1036,6 +1110,10 @@ pub trait Mob: EntityBase + Send + Sync {
         group_data
     }
 
+    /// Vanilla `Mob.onOffspringSpawnedFromEgg`: hook called on an offspring mob when spawned
+    /// by right-clicking an adult mob with a spawn egg.
+    fn on_offspring_spawned_from_egg(&self, _player: &crate::entity::player::Player) {}
+
     fn populate_default_equipment_slots(
         &self,
         _world: &Arc<World>,
@@ -1146,6 +1224,9 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Drops a target the mob is not allowed to attack, such as a creative player.
     fn as_valid_target(&self, target: Option<Arc<dyn EntityBase>>) -> Option<Arc<dyn EntityBase>> {
         let target = target?;
+        if !target.is_alive() {
+            return None;
+        }
         if !EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity()) {
             return None;
         }

@@ -84,6 +84,10 @@ impl TrackTargetGoal {
             return false;
         };
 
+        if !target.is_alive() {
+            return false;
+        }
+
         let mob_entity = mob.get_mob_entity();
         let world = mob_entity.living_entity.entity.world.load();
 
@@ -127,7 +131,7 @@ impl Goal for TrackTargetGoal {
             return false;
         };
 
-        if !mob.can_attack(target_base.as_ref()) {
+        if !target_base.is_alive() || !mob.can_attack(target_base.as_ref()) {
             return false;
         }
 

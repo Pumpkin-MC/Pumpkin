@@ -3,13 +3,15 @@ use std::sync::Arc;
 use super::{Controls, Goal};
 use crate::entity::ai::util::default_random_pos;
 use crate::entity::predicate::EntityPredicate;
-use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob};
+use crate::entity::{EntityBase, mob::Mob};
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 
 const FAST_DISTANCE_SQ: f64 = 49.0;
 const HORIZONTAL_RANGE: i32 = 16;
 const VERTICAL_RANGE: i32 = 7;
+
+pub type AvoidPredicate = Box<dyn Fn(&dyn EntityBase, &dyn Mob) -> bool + Send + Sync>;
 
 pub struct AvoidEntityGoal {
     goal_control: Controls,
@@ -19,6 +21,7 @@ pub struct AvoidEntityGoal {
     fast_speed: f64,
     target: Option<Arc<dyn EntityBase>>,
     flee_pos: Option<Vector3<f64>>,
+    predicate: Option<AvoidPredicate>,
 }
 
 impl AvoidEntityGoal {
@@ -37,6 +40,27 @@ impl AvoidEntityGoal {
             fast_speed,
             target: None,
             flee_pos: None,
+            predicate: None,
+        }
+    }
+
+    #[must_use]
+    pub fn predicated(
+        flee_type: &'static EntityType,
+        flee_distance: f64,
+        slow_speed: f64,
+        fast_speed: f64,
+        predicate: impl Fn(&dyn EntityBase, &dyn Mob) -> bool + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            goal_control: Controls::MOVE,
+            flee_type,
+            flee_distance,
+            slow_speed,
+            fast_speed,
+            target: None,
+            flee_pos: None,
+            predicate: Some(Box::new(predicate)),
         }
     }
 
@@ -49,11 +73,19 @@ impl AvoidEntityGoal {
             world
                 .get_nearest_player(pos, self.flee_distance, |player| {
                     EntityPredicate::ExceptCreativeOrSpectator.test(player.get_entity())
+                        && self
+                            .predicate
+                            .as_ref()
+                            .is_none_or(|p| p(player.as_ref() as &dyn EntityBase, mob))
                 })
                 .map(|p| p as Arc<dyn EntityBase>)
         } else {
             world.get_nearest_entity(pos, self.flee_distance, Some(&[self.flee_type]), |entity| {
                 EntityPredicate::ExceptCreativeOrSpectator.test(entity.get_entity())
+                    && self
+                        .predicate
+                        .as_ref()
+                        .is_none_or(|p| p(entity.as_ref() as &dyn EntityBase, mob))
             })
         }
     }
@@ -92,12 +124,7 @@ impl Goal for AvoidEntityGoal {
     fn start(&mut self, mob: &dyn Mob) {
         if let Some(flee_pos) = self.flee_pos {
             let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            navigator.set_progress(NavigatorGoal::new(mob_pos, flee_pos, self.slow_speed));
+            mob.navigate_to(mob_pos, flee_pos, self.slow_speed);
         }
     }
 
@@ -111,12 +138,7 @@ impl Goal for AvoidEntityGoal {
             } else {
                 self.slow_speed
             };
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            navigator.set_speed(speed);
+            mob.set_navigation_speed(speed);
         }
     }
 

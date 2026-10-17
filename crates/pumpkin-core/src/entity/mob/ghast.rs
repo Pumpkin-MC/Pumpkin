@@ -244,7 +244,7 @@ impl Goal for GhastShootFireballGoal {
             return false;
         };
         let target = ghast.mob_entity.get_target();
-        target.is_some_and(|t| t.get_entity().is_alive())
+        target.is_some_and(|t| t.is_alive())
     }
 
     fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
@@ -252,7 +252,7 @@ impl Goal for GhastShootFireballGoal {
             return false;
         };
         let target = ghast.mob_entity.get_target();
-        target.is_some_and(|t| t.get_entity().is_alive())
+        target.is_some_and(|t| t.is_alive())
     }
 
     fn start(&mut self, _mob: &dyn Mob) {
