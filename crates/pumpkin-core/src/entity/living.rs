@@ -47,6 +47,7 @@ use pumpkin_data::data_component_impl::{
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::sound::SoundCategory;
@@ -383,6 +384,30 @@ impl LivingEntity {
                     pos_f64,
                 );
             }
+        }
+    }
+
+    /// Emits vanilla equipment side effects for an equipment slot change.
+    pub fn on_equip_item(&self, slot: &EquipmentSlot, previous: &ItemStack, current: &ItemStack) {
+        if previous.are_items_and_components_equal(current) {
+            return;
+        }
+
+        let world = self.entity.world.load();
+        let position = self.entity.pos.load();
+
+        if let Some(equippable) = current.get_data_component::<EquippableImpl>()
+            && *equippable.slot == *slot
+        {
+            world.play_sound_event(&equippable.equip_sound, SoundCategory::Neutral, &position);
+        }
+
+        if current.is_empty() {
+            if !previous.is_empty() {
+                world.emit_game_event(GameEvent::Unequip.name(), position);
+            }
+        } else {
+            world.emit_game_event(GameEvent::Equip.name(), position);
         }
     }
 
