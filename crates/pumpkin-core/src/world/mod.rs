@@ -28,9 +28,12 @@ pub mod generation_cache;
 pub mod loot;
 pub mod map;
 mod neighbor_updater;
+mod player_spawn_finder;
 pub mod portal;
 pub mod raid;
 pub mod random_sequences;
+#[cfg(test)]
+mod spawn_tests;
 pub mod stopwatches;
 pub mod time;
 pub mod villager_poi;
@@ -2683,21 +2686,13 @@ impl World {
 
             (position, yaw, pitch)
         } else {
-            let spawn_position = Vector2::new(level_info.spawn_x, level_info.spawn_z);
-            let chunk_pos = Vector2::new(level_info.spawn_x >> 4, level_info.spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let top = self.get_top_block(spawn_position);
-            let pos_y = if top > self.dimension.min_y {
-                top + 1
-            } else {
-                level_info.spawn_y
-            };
-
-            let position = Vector3::new(
-                f64::from(level_info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(level_info.spawn_z) + 0.5,
-            );
+            let position = self
+                .get_safe_player_spawn_position(
+                    level_info.spawn_x,
+                    level_info.spawn_z,
+                    level_info.spawn_y,
+                )
+                .await;
             (position, level_info.spawn_yaw, level_info.spawn_pitch)
         };
 
@@ -3260,21 +3255,9 @@ impl World {
             (position, yaw, pitch)
         } else {
             let info = &self.level_info.load();
-            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
-            let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let top = self.get_top_block(spawn_position);
-            let pos_y = if top > self.dimension.min_y {
-                top + 1
-            } else {
-                info.spawn_y
-            };
-
-            let position = Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(info.spawn_z) + 0.5,
-            );
+            let position = self
+                .get_safe_player_spawn_position(info.spawn_x, info.spawn_z, info.spawn_y)
+                .await;
             (position, info.spawn_yaw, info.spawn_pitch)
         };
 
@@ -3954,27 +3937,13 @@ impl World {
                 }
             }
 
-            // FIXME: This spawn position calculation is incorrect. Should use vanilla's
-            // proper spawn position calculation (see #1381). The y-level calculation
-            // needs to account for spawn radius and find a safe spawn position.
-            let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
-            default_world
-                .level
-                .get_or_fetch_chunk(chunk_pos, |_| ())
+            // Search around the world spawn for a safe position.
+            let position = default_world
+                .get_safe_player_spawn_position(spawn_x, spawn_z, spawn_y)
                 .await;
-            let top = default_world.get_top_block(Vector2::new(spawn_x, spawn_z));
-            let pos_y = if top > default_world.dimension.min_y {
-                top + 1
-            } else {
-                spawn_y
-            };
 
             (
-                Vector3::new(
-                    f64::from(spawn_x) + 0.5,
-                    f64::from(pos_y),
-                    f64::from(spawn_z) + 0.5,
-                ),
+                position,
                 spawn_yaw,
                 spawn_pitch,
                 default_world.dimension.clone(),
