@@ -113,6 +113,44 @@ impl BlockBehaviour for PistonBlock {
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        let state_id = args.world.get_block_state_id(args.position);
+        let props = PistonProps::from_state_id(state_id);
+
+        let head_pos = args
+            .position
+            .offset(props.facing.to_block_direction().to_offset());
+        let head_block = args.world.get_block(&head_pos);
+        let moving_head = head_block == &Block::MOVING_PISTON
+            && args
+                .world
+                .get_block_entity(&head_pos)
+                .is_some_and(|entity| {
+                    entity
+                        .as_any()
+                        .downcast_ref::<PistonBlockEntity>()
+                        .is_some_and(|piston| {
+                            piston.source
+                                && piston.facing == props.facing.to_block_direction()
+                                && piston.position.offset(piston.facing.opposite().to_offset())
+                                    == *args.position
+                        })
+                });
+        if props.extended
+            && head_block != &Block::PISTON_HEAD
+            && !moving_head
+            && args
+                .world
+                .break_block(args.position, None, BlockFlags::empty())
+                .is_some()
+        {
+            args.world.set_block_state(
+                args.position,
+                Block::AIR.default_state.id,
+                BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
+            );
+            return;
+        }
+
         try_move(args.world, args.block, args.position);
     }
 
