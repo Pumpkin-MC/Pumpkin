@@ -9,7 +9,10 @@ use std::{
     time::Duration,
 };
 
-use futures::task::{ArcWake, waker};
+use futures::{
+    FutureExt,
+    task::{ArcWake, noop_waker_ref, waker},
+};
 use pumpkin_scheduler::{
     ExecutionDomain, ExecutorFuture, GlobalScheduler, SchedulerConfig, SchedulerError,
     SchedulerService, SchedulerState, TaskExecutor, TaskRequest,
@@ -116,7 +119,7 @@ async fn pending_roots_and_nested_chains_make_progress_on_one_worker() -> TestRe
     .await?
 }
 
-/// Holds the real driver so each executor turn is deterministic.
+/// Retains the scheduler driver for deterministic polling
 #[derive(Default)]
 struct ControlledExecutor(Mutex<Option<ExecutorFuture>>);
 
@@ -306,4 +309,281 @@ async fn failures_and_invalid_contexts_do_not_poison_the_scheduler() -> TestResu
         Ok::<_, Box<dyn std::error::Error>>(())
     })
     .await?
+}
+
+fn drive(driver: &mut ExecutorFuture) {
+    assert!(
+        driver
+            .as_mut()
+            .poll(&mut Context::from_waker(noop_waker_ref()))
+            .is_pending()
+    );
+}
+
+/// Checks scheduler access and panic containment during task cleanup
+struct CleanupProbe {
+    scheduler: GlobalScheduler,
+    drops: Arc<AtomicUsize>,
+    panic: bool,
+}
+
+impl Drop for CleanupProbe {
+    fn drop(&mut self) {
+        let _ = self.scheduler.snapshot();
+        self.drops.fetch_add(1, Ordering::SeqCst);
+        if self.panic {
+            std::panic::resume_unwind(Box::new("intentional cleanup panic"));
+        }
+    }
+}
+
+fn cancel_during_final_poll(
+    scheduler: &GlobalScheduler,
+    mut driver: ExecutorFuture,
+) -> Result<ExecutorFuture, Box<dyn std::error::Error>> {
+    // Hold the poll in progress until cancellation is accepted, then return its result
+    let (entered, observed) = std::sync::mpsc::channel();
+    let (release, resumed) = std::sync::mpsc::channel();
+    let racing = scheduler.submit(TaskRequest::new(
+        ExecutionDomain::Global,
+        move |_| async move {
+            let _ = entered.send(());
+            resumed
+                .recv_timeout(Duration::from_secs(5))
+                .map(|()| 42)
+                .map_err(|error| SchedulerError::Backend(error.to_string()))
+        },
+    ))?;
+    let running = std::thread::spawn(move || {
+        drive(&mut driver);
+        driver
+    });
+    let arrived = observed.recv_timeout(Duration::from_secs(5));
+    let accepted = racing.cancellation_handle().cancel();
+    let _ = release.send(());
+    let driver = running.join().map_err(|_| "driver panicked")?;
+    arrived?;
+    assert!(accepted);
+    assert!(matches!(
+        racing.now_or_never().ok_or("racing task did not settle")?,
+        Err(SchedulerError::Cancelled { .. })
+    ));
+    Ok(driver)
+}
+
+#[test]
+fn cancellation_settles_once_and_releases_admission() -> TestResult {
+    let executor = ControlledExecutor::default();
+    let scheduler = GlobalScheduler::start(config(1, 1), &executor)?;
+    let mut driver = executor.take()?;
+    let starts = Arc::new(AtomicUsize::new(0));
+    let started = Arc::clone(&starts);
+    let queued = scheduler.submit(TaskRequest::new(ExecutionDomain::Global, move |_| {
+        started.fetch_add(1, Ordering::SeqCst);
+        async { Ok(()) }
+    }))?;
+    let cancel = queued.cancellation_handle();
+    assert!(cancel.cancel());
+    assert!(!cancel.cancel());
+    assert!(matches!(
+        scheduler.submit(TaskRequest::new(ExecutionDomain::Global, |_| async {
+            Ok(())
+        })),
+        Err(SchedulerError::QueueFull { .. })
+    ));
+    drive(&mut driver);
+    assert!(matches!(
+        queued.now_or_never().ok_or("queued task did not settle")?,
+        Err(SchedulerError::Cancelled { .. })
+    ));
+    assert_eq!(starts.load(Ordering::SeqCst), 0);
+    assert!(cancel.is_requested());
+    assert!(!cancel.cancel());
+
+    let drops = Arc::new(AtomicUsize::new(0));
+    let probe = CleanupProbe {
+        scheduler: scheduler.clone(),
+        drops: Arc::clone(&drops),
+        panic: false,
+    };
+    let (saved, mut wake_receiver) = mpsc::unbounded_channel();
+    let pending = scheduler.submit(TaskRequest::new(ExecutionDomain::Global, move |_| {
+        poll_fn(move |cx| {
+            let _keep_alive = &probe;
+            let _ = saved.send(cx.waker().clone());
+            Poll::<Result<(), SchedulerError>>::Pending
+        })
+    }))?;
+    let wakes = Arc::new(WakeCount::default());
+    let driver_wake = waker(Arc::clone(&wakes));
+    assert!(
+        driver
+            .as_mut()
+            .poll(&mut Context::from_waker(&driver_wake))
+            .is_pending()
+    );
+    let stale = wake_receiver.try_recv()?;
+    let before = wakes.0.load(Ordering::SeqCst);
+    assert!(pending.cancellation_handle().cancel());
+    assert!(wakes.0.load(Ordering::SeqCst) > before);
+    drive(&mut driver);
+    assert!(matches!(
+        pending
+            .now_or_never()
+            .ok_or("pending task did not settle")?,
+        Err(SchedulerError::Cancelled { .. })
+    ));
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+    assert!(wake_receiver.try_recv().is_err());
+    stale.wake();
+    assert_eq!(scheduler.snapshot().ready(), 0);
+
+    driver = cancel_during_final_poll(&scheduler, driver)?;
+    let success = scheduler.submit(TaskRequest::new(ExecutionDomain::Global, |_| async {
+        Ok(7)
+    }))?;
+    let late = success.cancellation_handle();
+    drive(&mut driver);
+    assert!(!late.cancel());
+    assert_eq!(success.now_or_never().ok_or("success did not settle")??, 7);
+    let snapshot = scheduler.snapshot();
+    assert_eq!(
+        (
+            snapshot.completed(),
+            snapshot.cancelled(),
+            snapshot.failed()
+        ),
+        (1, 3, 0)
+    );
+    assert_eq!(
+        snapshot.ready() + snapshot.running() + snapshot.pending(),
+        0
+    );
+    Ok(())
+}
+
+#[test]
+fn cancellation_follows_active_descendants_without_touching_other_chains() -> TestResult {
+    let executor = ControlledExecutor::default();
+    let scheduler = GlobalScheduler::start(config(8, 16), &executor)?;
+    let mut driver = executor.take()?;
+    let pending = |_| std::future::pending::<Result<(), SchedulerError>>();
+    let root = scheduler.submit(TaskRequest::new(ExecutionDomain::Global, pending))?;
+    let branch = scheduler.submit(TaskRequest::child(root.context(), pending))?;
+    let leaf = scheduler.submit(TaskRequest::child(branch.context(), pending))?;
+    let sibling = scheduler.submit(TaskRequest::child(root.context(), pending))?;
+    let unrelated = scheduler.submit(TaskRequest::new(ExecutionDomain::Global, pending))?;
+    let middle = scheduler.submit(TaskRequest::child(root.context(), |_| async { Ok(()) }))?;
+    let orphan = scheduler.submit(TaskRequest::child(middle.context(), pending))?;
+    let original_parent = orphan.context().parent();
+    let original_chain = orphan.context().chain();
+    drive(&mut driver);
+    middle
+        .now_or_never()
+        .ok_or("middle task did not settle")??;
+    assert_eq!(scheduler.snapshot().pending(), 6);
+
+    assert!(branch.cancellation_handle().cancel());
+    assert!(matches!(
+        scheduler.submit(TaskRequest::child(branch.context(), pending)),
+        Err(SchedulerError::Cancelled { .. })
+    ));
+    assert!(leaf.cancellation_handle().is_requested());
+    assert!(!sibling.cancellation_handle().is_requested());
+    assert!(!root.cancellation_handle().is_requested());
+    drive(&mut driver);
+    for handle in [branch, leaf] {
+        let id = handle.id();
+        assert!(
+            matches!(handle.now_or_never().ok_or("descendant did not settle")?, Err(SchedulerError::Cancelled { task }) if task == id)
+        );
+    }
+    assert_eq!(scheduler.snapshot().pending(), 4);
+
+    // A completed intermediate task must not disconnect its active descendants
+    assert!(root.cancellation_handle().cancel());
+    assert!(orphan.cancellation_handle().is_requested());
+    assert_eq!(orphan.context().parent(), original_parent);
+    assert_eq!(orphan.context().chain(), original_chain);
+    assert!(!unrelated.cancellation_handle().is_requested());
+    drive(&mut driver);
+    for handle in [root, sibling, orphan] {
+        assert!(matches!(
+            handle.now_or_never().ok_or("root subtree did not settle")?,
+            Err(SchedulerError::Cancelled { .. })
+        ));
+    }
+    assert_eq!(scheduler.snapshot().pending(), 1);
+    drop(driver);
+    assert!(matches!(
+        unrelated
+            .now_or_never()
+            .ok_or("driver loss did not settle")?,
+        Err(SchedulerError::Stopped)
+    ));
+    let snapshot = scheduler.snapshot();
+    assert_eq!(
+        (
+            snapshot.completed(),
+            snapshot.cancelled(),
+            snapshot.failed()
+        ),
+        (1, 5, 1)
+    );
+    Ok(())
+}
+
+#[test]
+fn driver_loss_settles_all_tasks_even_when_cleanup_panics() -> TestResult {
+    let executor = ControlledExecutor::default();
+    let scheduler = GlobalScheduler::start(config(3, 4), &executor)?;
+    let mut driver = executor.take()?;
+    let drops = Arc::new(AtomicUsize::new(0));
+    let mut handles = Vec::new();
+    for panic in [false, true, false] {
+        let probe = CleanupProbe {
+            scheduler: scheduler.clone(),
+            drops: Arc::clone(&drops),
+            panic,
+        };
+        handles.push(scheduler.submit(TaskRequest::new(
+            ExecutionDomain::Global,
+            move |_| async move {
+                let _probe = probe;
+                std::future::pending::<Result<(), SchedulerError>>().await
+            },
+        ))?);
+    }
+    drive(&mut driver);
+    assert!(handles[0].cancellation_handle().cancel());
+    assert!(handles[1].cancellation_handle().cancel());
+    let stopped = handles[2].cancellation_handle();
+    drop(driver);
+    assert_eq!(drops.load(Ordering::SeqCst), 3);
+    assert!(!stopped.cancel());
+    for (index, handle) in handles.into_iter().enumerate() {
+        let result = handle
+            .now_or_never()
+            .ok_or("driver loss left a task unresolved")?;
+        match index {
+            0 => assert!(matches!(result, Err(SchedulerError::Cancelled { .. }))),
+            1 => assert!(matches!(result, Err(SchedulerError::TaskPanicked { .. }))),
+            _ => assert!(matches!(result, Err(SchedulerError::Stopped))),
+        }
+    }
+    let snapshot = scheduler.snapshot();
+    assert_eq!(
+        (
+            snapshot.completed(),
+            snapshot.cancelled(),
+            snapshot.failed()
+        ),
+        (0, 1, 2)
+    );
+    assert_eq!(
+        snapshot.ready() + snapshot.running() + snapshot.pending(),
+        0
+    );
+    assert_eq!(scheduler.state(), SchedulerState::Stopped);
+    Ok(())
 }
