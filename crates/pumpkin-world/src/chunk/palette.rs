@@ -690,18 +690,24 @@ impl BlockPalette {
                     return None;
                 }
 
-                let key_to_index = data
-                    .palette
-                    .iter()
-                    .enumerate()
-                    .map(|(index, &id)| (id, index))
-                    .collect::<HashMap<_, _>>();
+                let key_to_index = if matches!(&data.storage, PaletteStorage::Dense(_)) {
+                    data.palette
+                        .iter()
+                        .enumerate()
+                        .map(|(index, &id)| (id, index))
+                        .collect::<HashMap<_, _>>()
+                } else {
+                    HashMap::new()
+                };
                 let mut packed_data = vec![0u32; Self::VOLUME / u32::BITS as usize];
                 let mut output_index = 0;
                 for x in 0..Self::SIZE {
                     for y in 0..Self::SIZE {
                         for z in 0..Self::SIZE {
-                            let palette_index = key_to_index[&data.get(x, z, y)];
+                            let palette_index = match &data.storage {
+                                PaletteStorage::Indexed(indices) => usize::from(indices[z][y][x]),
+                                PaletteStorage::Dense(cube) => key_to_index[&cube[z][y][x]],
+                            };
                             if water_states[palette_index] {
                                 packed_data[output_index / u32::BITS as usize] |=
                                     1 << (output_index % u32::BITS as usize);
@@ -787,12 +793,15 @@ impl BlockPalette {
             Self::Heterogeneous(data) => {
                 let bits_per_entry = bedrock_palette_bits(data.palette.len());
 
-                let key_to_index_map: HashMap<_, usize> = data
-                    .palette
-                    .iter()
-                    .enumerate()
-                    .map(|(index, key)| (*key, index))
-                    .collect();
+                let key_to_index_map = if matches!(&data.storage, PaletteStorage::Dense(_)) {
+                    data.palette
+                        .iter()
+                        .enumerate()
+                        .map(|(index, key)| (*key, index))
+                        .collect::<HashMap<_, _>>()
+                } else {
+                    HashMap::new()
+                };
 
                 let blocks_per_word = 32 / bits_per_entry;
                 let expected_word_count = Self::VOLUME.div_ceil(blocks_per_word as usize);
@@ -806,11 +815,15 @@ impl BlockPalette {
                         for z in 0..16 {
                             // Java has it in y, z, x order, so we need to convert it back to x, y, z
                             // Please test your code on bedrock before merging
-                            let key = data.get(x, z, y);
-                            let key_index = key_to_index_map.get(&key).unwrap_or(&0);
-                            debug_assert!((1 << bits_per_entry) > *key_index);
+                            let key_index = match &data.storage {
+                                PaletteStorage::Indexed(indices) => usize::from(indices[z][y][x]),
+                                PaletteStorage::Dense(cube) => {
+                                    key_to_index_map.get(&cube[z][y][x]).copied().unwrap_or(0)
+                                }
+                            };
+                            debug_assert!((1 << bits_per_entry) > key_index);
 
-                            current_word |= (*key_index as u32)
+                            current_word |= (key_index as u32)
                                 << (bits_per_entry as u32 * current_index_in_word);
                             current_index_in_word += 1;
 
