@@ -3456,6 +3456,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "wasm-encoder 0.262.0",
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
