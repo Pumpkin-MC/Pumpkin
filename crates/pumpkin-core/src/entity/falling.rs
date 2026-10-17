@@ -77,6 +77,14 @@ impl FallingEntity {
         }
     }
 
+    /// Sets the block state encoded in this entity's spawn packet before spawning.
+    pub fn set_block_state(&self, block_state_id: BlockStateId) {
+        self.block_state_id.store(block_state_id);
+        self.entity
+            .data
+            .store(i32::from(block_state_id.as_u16()), Ordering::Relaxed);
+    }
+
     /// Vanilla `FallingBlockEntity.disableDrop`: land as nothing, neither block nor item.
     pub fn disable_drop(&self) {
         self.cancel_drop.store(true, Ordering::Relaxed);
