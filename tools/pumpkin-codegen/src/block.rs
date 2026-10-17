@@ -652,6 +652,22 @@ impl ToTokens for SpawnFloorPredicate {
     }
 }
 
+#[derive(Deserialize, Copy, Clone)]
+#[serde(rename_all = "snake_case")]
+enum SuffocationPredicate {
+    Never,
+    Always,
+}
+
+impl ToTokens for SuffocationPredicate {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match self {
+            Self::Never => quote! { SuffocationPredicate::Never },
+            Self::Always => quote! { SuffocationPredicate::Always },
+        });
+    }
+}
+
 impl BlockState {
     /// Bit flag indicating this state is an air block.
     const IS_AIR: u16 = 1 << 0;
@@ -784,10 +800,14 @@ pub struct Block {
     pub states: Vec<BlockState>,
     /// Experience points dropped when the block is mined, if any.
     pub experience: Option<Experience>,
+    /// Loot table identifier
+    pub loot_table: Option<String>,
     /// Position-derived shape offset applied by vanilla, if any.
     shape_offset: Option<BlockShapeOffset>,
     /// Spawn floor predicate for this block, if any.
     spawn_floor_predicate: Option<SpawnFloorPredicate>,
+    /// Suffocation predicate for this block, if it differs from the default.
+    suffocation_predicate: Option<SuffocationPredicate>,
 }
 
 impl ToTokens for Block {
@@ -806,6 +826,12 @@ impl ToTokens for Block {
         let experience = if let Some(exp) = &self.experience {
             let exp_tokens = exp.to_token_stream();
             quote! { Some(#exp_tokens) }
+        } else {
+            quote! { None }
+        };
+        let loot_table = if let Some(loot) = &self.loot_table {
+            let loot_lit = LitStr::new(loot, Span::call_site());
+            quote! { Some(#loot_lit) }
         } else {
             quote! { None }
         };
@@ -841,6 +867,7 @@ impl ToTokens for Block {
                 states: &[#(#states),*],
                 flammable: #flammable,
                 experience: #experience,
+                loot_table: #loot_table,
             }
         });
     }
@@ -1017,6 +1044,7 @@ pub fn build() -> TokenStream {
         .map(|(id, _)| id)
         .expect("block_states.nbt is missing minecraft:air");
     let mut spawn_floor_predicate_arms = Vec::new();
+    let mut suffocation_predicate_arms = Vec::new();
 
     let mut raw_id_from_state_id_array = Vec::new();
     let mut type_from_raw_id_array = Vec::new();
@@ -1093,6 +1121,12 @@ pub fn build() -> TokenStream {
 
         if let Some(predicate) = block.spawn_floor_predicate {
             spawn_floor_predicate_arms.push(quote! {
+                BlockId::#const_ident => #predicate,
+            });
+        }
+
+        if let Some(predicate) = block.suffocation_predicate {
+            suffocation_predicate_arms.push(quote! {
                 BlockId::#const_ident => #predicate,
             });
         }
@@ -1279,7 +1313,7 @@ pub fn build() -> TokenStream {
 
         use crate::{
             BlockState, BlockStateId, Block, BlockId,
-            blocks::{Flammable, ShapeOffset, ShapeOffsetType, SpawnFloorPredicate},
+            blocks::{Flammable, ShapeOffset, ShapeOffsetType, SpawnFloorPredicate, SuffocationPredicate},
         };
         use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
@@ -1427,6 +1461,14 @@ pub fn build() -> TokenStream {
                 match self.id {
                     #(#spawn_floor_predicate_arms)*
                     _ => SpawnFloorPredicate::Default,
+                }
+            }
+
+            #[must_use]
+            pub const fn suffocation_predicate(&self) -> SuffocationPredicate {
+                match self.id {
+                    #(#suffocation_predicate_arms)*
+                    _ => SuffocationPredicate::Default,
                 }
             }
 

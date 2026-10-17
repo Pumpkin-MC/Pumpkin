@@ -42,6 +42,8 @@ pub struct Block {
     pub flammable: Option<Flammable>,
     /// Defines the amount of XP dropped when the block is mined (e.g., Coal or Diamond).
     pub experience: Option<Experience>,
+    /// Loot table identifier, `None` when the block has no loot table.
+    pub loot_table: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,6 +54,13 @@ pub enum SpawnFloorPredicate {
     OcelotOrParrot,
     PolarBear,
     FireImmune,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SuffocationPredicate {
+    Default,
+    Never,
+    Always,
 }
 
 /// Helper struct to ensure the validity of BlockIds parsed from external sources.

@@ -1020,7 +1020,7 @@ mod tests {
 
     fn test_chunk(sections: Vec<NbtCompound>) -> pumpkin_nbt::Nbt {
         let mut root = NbtCompound::new();
-        root.put_int("DataVersion", 4903);
+        root.put_int("DataVersion", 5023);
         root.put_int("xPos", 0);
         root.put_int("zPos", 0);
         root.put_string("Status", "minecraft:full".to_string());

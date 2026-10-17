@@ -76,7 +76,7 @@ impl BlockBehaviour for FarmlandBlock {
             args.world.set_block_state(
                 args.position,
                 props.to_state_id(args.block),
-                BlockFlags::NOTIFY_NEIGHBORS,
+                BlockFlags::NOTIFY_LISTENERS,
             );
         } else {
             let state_id = args.world.get_block_state_id(args.position);
@@ -91,7 +91,7 @@ impl BlockBehaviour for FarmlandBlock {
                     args.world.set_block_state(
                         args.position,
                         Block::DIRT.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
+                        BlockFlags::NOTIFY_ALL,
                     );
                 }
             } else {
@@ -112,7 +112,7 @@ impl BlockBehaviour for FarmlandBlock {
                 args.world.set_block_state(
                     args.position,
                     props.to_state_id(args.block),
-                    BlockFlags::NOTIFY_NEIGHBORS,
+                    BlockFlags::NOTIFY_LISTENERS,
                 );
             }
         }
