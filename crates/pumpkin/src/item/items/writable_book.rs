@@ -31,4 +31,3 @@ impl ItemBehaviour for WritableBookItem {
         self
     }
 }
-
