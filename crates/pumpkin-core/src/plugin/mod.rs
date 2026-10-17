@@ -222,8 +222,6 @@ pub enum ManagerError {
     LoaderError(#[from] LoaderError),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("Dependency error: {0}")]
-    DependencyError(String),
 }
 
 impl Default for PluginManager {
@@ -416,8 +414,13 @@ impl PluginManager {
         self.loaders.read().await.clone()
     }
 
-    /// Helper for topological sort of plugins based on dependencies
-    fn topological_sort(plugins: &[(String, Vec<String>)]) -> Result<Vec<String>, String> {
+    /// Order plugins so that dependencies load before their dependents.
+    ///
+    /// Returns the load order together with the plugins that cannot be
+    /// loaded, each with the reason. A plugin whose dependencies can never
+    /// be satisfied (one is not installed, or they form a cycle) is left out
+    /// on its own, so it cannot stop the healthy plugins from loading.
+    fn topological_sort(plugins: &[(String, Vec<String>)]) -> (Vec<String>, Vec<(String, String)>) {
         fn visit(
             name: &str,
             deps_map: &HashMap<String, &Vec<String>>,
@@ -448,24 +451,30 @@ impl PluginManager {
             Ok(())
         }
         let mut sorted = Vec::new();
+        let mut skipped = Vec::new();
         let mut visited = HashSet::new();
-        let mut current_path = HashSet::new();
         let plugin_names: HashSet<String> = plugins.iter().map(|(n, _)| n.clone()).collect();
         let deps_map: HashMap<String, &Vec<String>> =
             plugins.iter().map(|(n, d)| (n.clone(), d)).collect();
 
         for (name, _) in plugins {
-            visit(
+            // One path per root: a failed traversal must not leave entries
+            // that would look like a cycle to the next root. Dependencies
+            // the failed run already loaded stay loaded.
+            let mut current_path = HashSet::new();
+            if let Err(reason) = visit(
                 name,
                 &deps_map,
                 &plugin_names,
                 &mut visited,
                 &mut current_path,
                 &mut sorted,
-            )?;
+            ) {
+                skipped.push((name.clone(), reason));
+            }
         }
 
-        Ok(sorted)
+        (sorted, skipped)
     }
 
     /// Ask the server owner if they allow the permissions requested by a plugin
@@ -769,8 +778,10 @@ impl PluginManager {
             .map(|(_, m, _, _, _)| (m.name.clone(), m.dependencies.clone()))
             .collect();
 
-        let sorted_names =
-            Self::topological_sort(&metadata_list).map_err(ManagerError::DependencyError)?;
+        let (sorted_names, skipped) = Self::topological_sort(&metadata_list);
+        for (name, reason) in skipped {
+            error!("Skipping plugin {name}: {reason}");
+        }
 
         // Map names back to prepared plugins
         #[expect(clippy::type_complexity)]
@@ -1322,8 +1333,9 @@ mod tests {
             ("B".to_string(), vec!["C".to_string()]),
             ("C".to_string(), vec![]),
         ];
-        let sorted = PluginManager::topological_sort(&plugins).unwrap();
+        let (sorted, skipped) = PluginManager::topological_sort(&plugins);
         assert_eq!(sorted, vec!["C", "B", "A"]);
+        assert!(skipped.is_empty());
 
         let plugins_complex = vec![
             ("A".to_string(), vec!["B".to_string(), "C".to_string()]),
@@ -1331,20 +1343,62 @@ mod tests {
             ("C".to_string(), vec!["D".to_string()]),
             ("D".to_string(), vec![]),
         ];
-        let sorted = PluginManager::topological_sort(&plugins_complex).unwrap();
+        let (sorted, skipped) = PluginManager::topological_sort(&plugins_complex);
         // Multiple valid sorts possible, but D must be before B and C, and B, C must be before A.
         assert_eq!(sorted[0], "D");
         assert!(sorted[1] == "B" || sorted[1] == "C");
         assert!(sorted[2] == "B" || sorted[2] == "C");
         assert_eq!(sorted[3], "A");
+        assert!(skipped.is_empty());
 
         let plugins_circular = vec![
             ("A".to_string(), vec!["B".to_string()]),
             ("B".to_string(), vec!["A".to_string()]),
         ];
-        assert!(PluginManager::topological_sort(&plugins_circular).is_err());
+        let (sorted, skipped) = PluginManager::topological_sort(&plugins_circular);
+        assert!(sorted.is_empty());
+        assert_eq!(
+            skipped,
+            vec![
+                (
+                    "A".to_string(),
+                    "Circular dependency detected involving plugin: A".to_string()
+                ),
+                (
+                    "B".to_string(),
+                    "Circular dependency detected involving plugin: B".to_string()
+                ),
+            ]
+        );
 
         let plugins_missing = vec![("A".to_string(), vec!["B".to_string()])];
-        assert!(PluginManager::topological_sort(&plugins_missing).is_err());
+        let (sorted, skipped) = PluginManager::topological_sort(&plugins_missing);
+        assert!(sorted.is_empty());
+        assert_eq!(
+            skipped,
+            vec![(
+                "A".to_string(),
+                "Plugin A depends on missing plugin: B".to_string()
+            )]
+        );
+    }
+
+    /// One plugin that can never load must not stop the rest.
+    #[tokio::test]
+    async fn topological_sort_skips_only_the_broken_plugin() {
+        let plugins = vec![
+            ("Healthy".to_string(), vec![]),
+            ("Broken".to_string(), vec!["NotInstalled".to_string()]),
+            ("NeedsHealthy".to_string(), vec!["Healthy".to_string()]),
+        ];
+        let (sorted, skipped) = PluginManager::topological_sort(&plugins);
+        assert_eq!(sorted, vec!["Healthy", "NeedsHealthy"]);
+        assert_eq!(
+            skipped,
+            vec![(
+                "Broken".to_string(),
+                "Plugin Broken depends on missing plugin: NotInstalled".to_string()
+            )]
+        );
     }
 }
