@@ -3341,6 +3341,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-plugin-api-v0_2"
+version = "0.2.0+26.3-26.51"
+dependencies = [
+ "tokio",
+ "wasmtime",
+ "wit-bindgen 0.62.0",
+]
+
+[[package]]
 name = "pumpkin-plugin-runtime"
 version = "0.2.0+26.3-26.51"
 dependencies = [
