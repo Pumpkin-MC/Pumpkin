@@ -18,6 +18,8 @@ pub struct LoggingConfig {
     pub target: bool,
     /// Whether to enable coloured log output.
     pub color: bool,
+    /// Whether to show the coloured startup banner when stdout is a terminal.
+    pub show_banner: bool,
     /// Whether to include timestamps in log entries.
     pub timestamp: bool,
     /// Format description for timestamps (using `time` format description syntax).
@@ -35,6 +37,7 @@ impl Default for LoggingConfig {
             thread_ids: false,
             target: false,
             color: true,
+            show_banner: true,
             timestamp: true,
             timestamp_format: "[hour]:[minute]:[second]".to_string(),
             file: "latest.log".to_string(),
