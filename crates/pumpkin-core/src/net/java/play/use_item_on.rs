@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use crate::item::items::bucket::get_empty_success_item;
 use crate::item::registry::should_try_block_placement;
 
 impl JavaClient {
@@ -161,9 +162,12 @@ impl JavaClient {
         }
 
         if should_try_decrement {
-            // TODO: Config
-            // Decrease block count
-            if player.gamemode.load() != GameMode::Creative {
+            // SolidBucketItem.useOn swaps in the empty bucket after placing the block.
+            if item.item.id == Item::POWDER_SNOW_BUCKET.id {
+                item = get_empty_success_item(item, player);
+            } else if player.gamemode.load() != GameMode::Creative {
+                // TODO: Config
+                // Decrease block count
                 item.decrement(1);
             }
         }

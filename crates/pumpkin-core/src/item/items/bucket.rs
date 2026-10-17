@@ -109,6 +109,15 @@ const fn get_fill_sound(item: &Item) -> Sound {
     }
 }
 
+/// Mirrors vanilla's `BucketItem.getEmptySuccessItem`.
+pub(crate) fn get_empty_success_item(item: ItemStack, player: &Player) -> ItemStack {
+    if player.gamemode.load() == GameMode::Creative {
+        item
+    } else {
+        ItemStack::new(1, &Item::BUCKET)
+    }
+}
+
 fn give_player_bucket_item(player: &Player, item: &'static Item) {
     if player.gamemode.load() == GameMode::Creative {
         let has_item = {
