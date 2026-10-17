@@ -468,7 +468,10 @@ pub struct BlockEvent {
 /// The items a block drops: its loot table, or what the registration of a custom block says.
 fn block_loot(world: &Arc<World>, block: &Block, params: &LootContextParameters) -> Vec<ItemStack> {
     let Some(info) = block.dynamic_info() else {
-        return loot_table_items(world, &format!("minecraft:blocks/{}", block.name), params);
+        return block
+            .loot_table
+            .map(|key| loot_table_items(world, key, params))
+            .unwrap_or_default();
     };
     match &info.registration.drops {
         BlockDrops::Nothing => Vec::new(),

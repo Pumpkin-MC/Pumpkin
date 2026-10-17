@@ -1346,6 +1346,7 @@ impl DynamicBlockRegistry {
             states,
             flammable: None,
             experience: None,
+            loot_table: None,
         }));
         let info: &'static DynamicBlockInfo = Box::leak(Box::new(info));
 

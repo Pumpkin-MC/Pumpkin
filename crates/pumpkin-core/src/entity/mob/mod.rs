@@ -8,6 +8,7 @@ use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::ai::sensing::Sensing;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
+use crate::entity::projectile::arrow::ArrowEntity;
 use crate::server::Server;
 use crate::world::World;
 use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
@@ -948,6 +949,11 @@ pub trait Mob: EntityBase + Send + Sync {
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {}
 
     fn on_attack(&self, _target: &dyn EntityBase) {}
+
+    // getArrow in vanilla, lets skeletons change the arrow before it's shot
+    fn get_arrow(&self, arrow: ArrowEntity) -> ArrowEntity {
+        arrow
+    }
 
     fn on_eating_grass(&self) {}
 
