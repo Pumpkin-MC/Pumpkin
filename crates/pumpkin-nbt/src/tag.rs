@@ -484,6 +484,23 @@ impl NbtTag {
         }
     }
 
+    /// Converts any numeric tag to an int the way `Codec.INT` reads NBT (`Number.intValue`).
+    ///
+    /// Floating-point values truncate toward zero, unlike `NumericTag.intValue`, which floors.
+    #[must_use]
+    #[expect(clippy::cast_possible_truncation)]
+    pub fn as_numeric_int(&self) -> Option<i32> {
+        match *self {
+            Self::Byte(byte) => Some(byte.into()),
+            Self::Short(short) => Some(short.into()),
+            Self::Int(int) => Some(int),
+            Self::Long(long) => Some(long as i32),
+            Self::Float(float) => Some(float as i32),
+            Self::Double(double) => Some(double as i32),
+            _ => None,
+        }
+    }
+
     /// Converts any numeric tag to a float, `NumericTag.floatValue`.
     #[must_use]
     #[expect(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
