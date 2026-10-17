@@ -15,6 +15,7 @@ use crate::pumpkin::plugin::common::Position as WitPosition;
 use crate::pumpkin::plugin::game_rules::{
     GameRule as WitGameRule, GameRuleValue as WitGameRuleValue,
 };
+use crate::pumpkin::plugin::item_stack::ItemStack as WitHostItemStack;
 use crate::pumpkin::plugin::world::{
     Block as WitBlock, BlockDirection as WitBlockDirection, BlockEntityType,
     BlockFlags as WitBlockFlags, BlockPos as WitBlockPos, BlockState as WitBlockState,
@@ -1214,6 +1215,21 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
         let spawned_entity = Arc::clone(&entity);
         run_blocking(accessor, move || world.spawn_entity(spawned_entity)).await?;
         accessor.add_res(entity)
+    }
+
+    async fn drop_item(
+        mut host: Access<'_, PluginHostState, Self>,
+        world: Resource<World>,
+        pos: pumpkin::plugin::common::Position,
+        item: Resource<WitHostItemStack>,
+    ) -> wasmtime::Result<()> {
+        let (world, plugin) = world_and_plugin(host.get(), &world)?;
+        let stack = host.get().take(item)?.lock().await.clone();
+        let pos = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
+        plugin
+            .store
+            .pump_blocking(&mut host, move || world.drop_stack_at(pos, stack))
+            .await
     }
 
     async fn strike_lightning(
