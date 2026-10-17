@@ -150,8 +150,8 @@ pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &Block
                 if nearby_block == current_block {
                     let dist_sqr = (dx * dx + dy * dy + dz * dz) as f64;
                     let distance = dist_sqr.sqrt();
-                    let min_delay = (distance * 5.0) as u8;
-                    let max_delay = (distance * 10.0) as u8;
+                    let min_delay = (distance * 5.0) as u32;
+                    let max_delay = (distance * 10.0) as u32;
                     let delay = if min_delay >= max_delay {
                         min_delay
                     } else {

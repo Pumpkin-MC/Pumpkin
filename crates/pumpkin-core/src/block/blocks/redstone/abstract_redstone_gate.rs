@@ -201,7 +201,7 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         }
     }
 
-    fn get_update_delay_internal(&self, state_id: BlockStateId, block: &Block) -> u8;
+    fn get_update_delay_internal(&self, state_id: BlockStateId, block: &Block) -> u32;
 }
 
 pub fn get_power<T: BlockProperties + RedstoneGateBlockProperties + Send>(

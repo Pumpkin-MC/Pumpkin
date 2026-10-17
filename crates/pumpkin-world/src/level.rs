@@ -645,6 +645,9 @@ impl Level {
             self.loaded_chunk_changes
                 .push(LoadedChunkChange::Loaded(pos));
         }
+        if chunk.has_scheduled_ticks() {
+            self.chunks_with_scheduled_ticks.insert(pos);
+        }
         f(&chunk)
     }
 
@@ -941,7 +944,7 @@ impl Level {
         &self,
         block: &Block,
         block_pos: BlockPos,
-        delay: u8,
+        delay: u32,
         priority: TickPriority,
     ) {
         let tick_order = self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed);
@@ -968,7 +971,7 @@ impl Level {
         &self,
         fluid: &Fluid,
         block_pos: BlockPos,
-        delay: u8,
+        delay: u32,
         priority: TickPriority,
     ) {
         let tick_order = self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed);

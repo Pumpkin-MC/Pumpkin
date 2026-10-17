@@ -272,7 +272,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
         result_signal
     }
 
-    fn get_update_delay_internal(&self, _state_id: BlockStateId, _block: &Block) -> u8 {
+    fn get_update_delay_internal(&self, _state_id: BlockStateId, _block: &Block) -> u32 {
         2 // Vanilla Delay
     }
 }

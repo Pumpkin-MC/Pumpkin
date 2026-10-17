@@ -96,7 +96,7 @@ impl BlockBehaviour for MultifaceBlock {
             args.world.schedule_fluid_tick(
                 &Fluid::WATER,
                 *args.position,
-                Fluid::WATER.flow_speed as u8,
+                Fluid::WATER.flow_speed,
                 TickPriority::Normal,
             );
         }

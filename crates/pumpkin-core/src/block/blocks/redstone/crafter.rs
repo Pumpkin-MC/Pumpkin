@@ -104,7 +104,7 @@ const fn to_data3d(direction: BlockDirection) -> i32 {
 pub struct CrafterBlock;
 
 impl CrafterBlock {
-    pub const CRAFTING_TICK_DELAY: u8 = 4;
+    pub const CRAFTING_TICK_DELAY: u32 = 4;
     pub const MAX_CRAFTING_TICKS: i32 = 6;
 
     fn dispense_from(world: &Arc<World>, pos: &BlockPos, block: &Block) {
