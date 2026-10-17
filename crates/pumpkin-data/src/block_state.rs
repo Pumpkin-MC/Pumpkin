@@ -1,6 +1,8 @@
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
 use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument};
+use crate::blocks::SuffocationPredicate;
+use crate::tag::{self, Taggable};
 use crate::{Block, BlockDirection, BlockId};
 
 /// Represents a specific state of a block, including its properties and physical behaviors.
@@ -169,6 +171,20 @@ impl BlockState {
             BlockDirection::Down => self.side_flags & DOWN_CENTER_SOLID != 0,
             BlockDirection::Up => self.side_flags & UP_CENTER_SOLID != 0,
             _ => false,
+        }
+    }
+
+    /// `isSuffocating()` in Java. Shulker boxes don't check whether their lid is open.
+    #[must_use]
+    pub fn is_suffocating(&self) -> bool {
+        let block = self.id.to_block();
+        match block.suffocation_predicate() {
+            // Flag first: the tag check scans about 1000 IDs.
+            SuffocationPredicate::Default => {
+                self.is_full_cube() && block.has_tag(&tag::Block::MINECRAFT_CAUSES_SUFFOCATION)
+            }
+            SuffocationPredicate::Never => false,
+            SuffocationPredicate::Always => true,
         }
     }
 

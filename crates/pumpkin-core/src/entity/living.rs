@@ -951,8 +951,33 @@ impl LivingEntity {
         self.entity.entity_id
     }
 
+    // canBeAffected, with the mob overrides folded in
+    fn can_be_affected(&self, effect: &Effect) -> bool {
+        let entity_type = self.entity.entity_type;
+        if (entity_type == &EntityType::WITHER_SKELETON || entity_type == &EntityType::WITHER)
+            && effect.effect_type == &StatusEffect::WITHER
+        {
+            return false;
+        }
+
+        if entity_type.has_tag(&tag::EntityType::MINECRAFT_IMMUNE_TO_INFESTED) {
+            effect.effect_type != &StatusEffect::INFESTED
+        } else if entity_type.has_tag(&tag::EntityType::MINECRAFT_IMMUNE_TO_OOZING) {
+            effect.effect_type != &StatusEffect::OOZING
+        } else if entity_type.has_tag(&tag::EntityType::MINECRAFT_IGNORES_POISON_AND_REGEN) {
+            effect.effect_type != &StatusEffect::REGENERATION
+                && effect.effect_type != &StatusEffect::POISON
+        } else {
+            true
+        }
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn add_effect(&self, effect: Effect) {
+        if !self.can_be_affected(&effect) {
+            return;
+        }
+
         let mut effect_event =
             crate::plugin::api::events::entity::entity_potion_effect::EntityPotionEffectEvent::new(
                 self.entity.entity_id,
@@ -2075,6 +2100,11 @@ impl LivingEntity {
                         .load(std::sync::atomic::Ordering::Relaxed)
                         > 0,
                 ),
+                direct_attacker_weapon: source.and_then(|direct| {
+                    direct
+                        .get_living_entity()
+                        .map(|living| living.held_item(direct))
+                }),
                 ..Default::default()
             };
 
