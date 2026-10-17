@@ -5,6 +5,8 @@ use crate::data_component_impl::{
     get_idset_hash, get_str_hash, put_idor,
 };
 use crate::effect::StatusEffect;
+use crate::item::Item;
+use crate::item_stack::ItemStack;
 use crate::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
@@ -399,6 +401,28 @@ pub struct UseRemainderImpl {
 impl UseRemainderImpl {
     pub const fn read_data(_data: &NbtTag) -> Option<Self> {
         Some(Self { remainder: None })
+    }
+
+    /// Mirrors vanilla's `UseRemainder.convertIntoRemainder`.
+    pub fn convert_into_remainder(
+        &self,
+        used_stack: ItemStack,
+        stack_count_before_using: u8,
+        has_infinite_materials: bool,
+        on_extra_created_remainder: impl FnOnce(ItemStack),
+    ) -> ItemStack {
+        if has_infinite_materials || used_stack.item_count >= stack_count_before_using {
+            return used_stack;
+        }
+        let Some(item) = self.remainder.as_deref().and_then(Item::from_registry_key) else {
+            return used_stack;
+        };
+        let remainder_stack = ItemStack::new(1, item);
+        if used_stack.is_empty() {
+            return remainder_stack;
+        }
+        on_extra_created_remainder(remainder_stack);
+        used_stack
     }
 }
 impl DataComponentImpl for UseRemainderImpl {
