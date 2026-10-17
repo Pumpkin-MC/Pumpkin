@@ -90,6 +90,7 @@ impl ToFromWasmEvent for ChunkLoad {
                     dirty: std::sync::atomic::AtomicBool::new(false),
                     inhabited_time: std::sync::atomic::AtomicU64::new(0),
                     custom_data: std::sync::Mutex::new(pumpkin_nbt::compound::NbtCompound::new()),
+                    sky_light_height_cache: std::sync::atomic::AtomicU32::new(0),
                 };
                 Self {
                     world,
@@ -143,6 +144,7 @@ impl ToFromWasmEvent for ChunkSave {
                     dirty: std::sync::atomic::AtomicBool::new(false),
                     inhabited_time: std::sync::atomic::AtomicU64::new(0),
                     custom_data: std::sync::Mutex::new(pumpkin_nbt::compound::NbtCompound::new()),
+                    sky_light_height_cache: std::sync::atomic::AtomicU32::new(0),
                 };
                 Self {
                     world,
@@ -192,6 +194,7 @@ impl ToFromWasmEvent for ChunkSend {
                     dirty: std::sync::atomic::AtomicBool::new(false),
                     inhabited_time: std::sync::atomic::AtomicU64::new(0),
                     custom_data: std::sync::Mutex::new(pumpkin_nbt::compound::NbtCompound::new()),
+                    sky_light_height_cache: std::sync::atomic::AtomicU32::new(0),
                 };
                 Self {
                     world,
