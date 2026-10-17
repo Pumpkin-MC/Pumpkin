@@ -103,6 +103,13 @@ impl BlockEntity for CommandBlockEntity {
         self.write_sync_nbt(nbt);
     }
 
+    fn collect_implicit_components(&self, stack: &mut pumpkin_data::item_stack::ItemStack) {
+        let mut nbt = NbtCompound::new();
+        self.write_sync_nbt(&mut nbt);
+        nbt.put_string("id", Self::ID.to_string());
+        stack.set_data_component(pumpkin_data::data_component_impl::BlockEntityDataImpl { nbt });
+    }
+
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
         self.write_sync_nbt(&mut nbt);

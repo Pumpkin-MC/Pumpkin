@@ -1,8 +1,11 @@
 use std::{any::Any, sync::Arc};
 
+use crate::entity::player::Player;
+use pumpkin_data::data_component_impl::BlockEntityDataImpl;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::world::World;
@@ -128,6 +131,48 @@ pub trait BlockEntity: Any + Send + Sync {
 
     /// Copies the block entity's state on the item stack dropped for it.
     fn collect_item_components(&self, _stack: &mut ItemStack) {}
+
+    /// Copies current implicit components when picking the block with its data.
+    fn collect_implicit_components(&self, _stack: &mut ItemStack) {}
+
+    /// Loads matching item NBT through the existing entity factory before item components.
+    fn load_item_data(
+        &self,
+        player: &Player,
+        stack: &ItemStack,
+        state_id: BlockStateId,
+    ) -> Option<Arc<dyn BlockEntity>> {
+        let data = stack.get_data_component::<BlockEntityDataImpl>()?;
+        let id = Identifier::parse(data.nbt.get_string("id")?).ok()?;
+        if id != Identifier::parse_static(self.resource_location()) {
+            return None;
+        }
+        // Vanilla's BlockEntityTypes.OP_ONLY_CUSTOM_DATA.
+        let only_op = matches!(
+            self.resource_location(),
+            command_block::CommandBlockEntity::ID
+                | lectern::LecternBlockEntity::ID
+                | sign::SignBlockEntity::ID
+                | hanging_sign::HangingSignBlockEntity::ID
+                | mob_spawner::MobSpawnerBlockEntity::ID
+                | trial_spawner::TrialSpawnerBlockEntity::ID
+        );
+        if only_op && !player.can_use_game_master_blocks() {
+            return None;
+        }
+        let mut nbt = NbtCompound::new();
+        self.write_internal(&mut nbt);
+        nbt.merge(&data.nbt);
+        // Item data cannot replace the placed entity's identity or position.
+        let pos = self.get_position();
+        nbt.put_string("id", self.resource_location().to_string());
+        nbt.put_int("x", pos.0.x);
+        nbt.put_int("y", pos.0.y);
+        nbt.put_int("z", pos.0.z);
+        let mut restored = block_entity_from_nbt(&nbt)?;
+        Arc::get_mut(&mut restored)?.set_block_state(state_id);
+        Some(restored)
+    }
 
     /// Restores the state from the item stack the block was placed from.
     fn apply_item_components(&self, _stack: &ItemStack) {}
