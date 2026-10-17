@@ -8,7 +8,8 @@ use pumpkin_data::recipes::{CookingRecipeKind, get_cooking_recipe_with_ingredien
 use pumpkin_data::tag::Taggable;
 pub use pumpkin_util::loot_table::{
     DynamicLootCondition, DynamicLootEntry, DynamicLootPool, DynamicLootTable, LootBonusFormula,
-    LootCondition, LootEntry, LootPool, LootTable,
+    LootCondition, LootEntityPredicate, LootEntityProperties, LootEntityProperty,
+    LootEntityPropertyValue, LootEntityTarget, LootEntry, LootPool, LootTable,
 };
 use pumpkin_util::random::{RandomImpl, xoroshiro128::Xoroshiro};
 
@@ -31,6 +32,90 @@ pub struct LootContextParameters {
     /// Computed from `Entity.fire_ticks > 0`.
     pub is_on_fire: Option<bool>,
     pub direct_attacker_weapon: Option<ItemStack>,
+    /// Property snapshots published per entity target, matched by entity-property conditions.
+    /// A target with no snapshot is treated as matching, so entities opt in incrementally.
+    /// `minecraft:entity_type` is the exception: it is always evaluated from the entity-type
+    /// fields above, which the context knows for every target.
+    pub entity_properties: Vec<(LootEntityTarget, LootEntityProperties)>,
+}
+
+impl LootContextParameters {
+    /// Adds or replaces a property for an entity target in this loot context.
+    pub fn add_entity_property(
+        &mut self,
+        target: LootEntityTarget,
+        key: &'static str,
+        value: LootEntityPropertyValue,
+    ) {
+        let index = self
+            .entity_properties
+            .iter()
+            .position(|(candidate, _)| *candidate == target)
+            .unwrap_or_else(|| {
+                let index = self.entity_properties.len();
+                self.entity_properties
+                    .push((target, LootEntityProperties::default()));
+                index
+            });
+        let properties = &mut self.entity_properties[index].1;
+
+        if let Some(property) = properties.values.iter_mut().find(|entry| entry.key == key) {
+            property.value = value;
+        } else {
+            properties.values.push(LootEntityProperty { key, value });
+        }
+    }
+}
+
+/// Predicate key holding an entity's type. Unlike the properties an entity publishes itself,
+/// the loot context always knows the type of every target, so this key is never permissive.
+const ENTITY_TYPE_PROPERTY: &str = "minecraft:entity_type";
+
+/// Returns whether `entity_type` satisfies a `minecraft:entity_type` predicate value, which is
+/// either a registry key such as `minecraft:skeleton` or a `#`-prefixed entity tag.
+///
+/// An empty context slot never matches: a table that requires an attacker of some type must not
+/// drop its loot when nothing attacked.
+fn matches_entity_type(
+    entity_type: Option<&'static EntityType>,
+    expected: LootEntityPropertyValue,
+) -> bool {
+    let (Some(entity_type), LootEntityPropertyValue::String(expected)) = (entity_type, expected)
+    else {
+        return false;
+    };
+
+    if expected.starts_with('#') {
+        return entity_type.is_tagged_with(expected).unwrap_or(false);
+    }
+    entity_type.resource_name == expected.strip_prefix("minecraft:").unwrap_or(expected)
+}
+
+/// Evaluate an entity-properties predicate for `target` against the loot context.
+fn check_entity_properties(
+    target: LootEntityTarget,
+    predicate: LootEntityPredicate,
+    params: &LootContextParameters,
+) -> bool {
+    let entity_type = match target {
+        LootEntityTarget::This => params.this_entity,
+        LootEntityTarget::Attacker => params.killer_entity,
+        LootEntityTarget::DirectAttacker => params.direct_killer_entity,
+    };
+    let snapshot = params
+        .entity_properties
+        .iter()
+        .find(|(candidate, _)| *candidate == target)
+        .map(|(_, properties)| properties);
+
+    predicate.properties.iter().all(|expected| {
+        if expected.key == ENTITY_TYPE_PROPERTY {
+            matches_entity_type(entity_type, expected.value)
+        } else {
+            // Entities opt into the remaining predicates by publishing a snapshot.
+            snapshot.is_none_or(|properties| properties.matches_property(*expected))
+        }
+    })
 }
 
 fn direct_attacker_weapon_has_enchantment(params: &LootContextParameters, tag: &str) -> bool {
@@ -70,6 +155,10 @@ fn smelt(stack: ItemStack) -> ItemStack {
     result
 }
 
+/// Evaluate one dynamic loot condition against the current loot context.
+///
+/// Mirrors [`check_condition`] for owned, runtime-built conditions, so `rng` is consumed in the
+/// same order and both paths stay in sync with vanilla sequences.
 fn check_dynamic_condition(
     cond: &DynamicLootCondition,
     has_silk_touch: bool,
@@ -118,6 +207,9 @@ fn check_dynamic_condition(
         DynamicLootCondition::Inverted(cond) => {
             !check_dynamic_condition(cond, has_silk_touch, has_shears, fortune_level, params, rng)
         }
+        DynamicLootCondition::EntityProperties { target, predicate } => {
+            check_entity_properties(*target, *predicate, params)
+        }
         DynamicLootCondition::EntityOnFire => params.is_on_fire.unwrap_or(false),
         DynamicLootCondition::DirectAttackerWeaponEnchantment(tag) => {
             direct_attacker_weapon_has_enchantment(params, tag)
@@ -141,6 +233,10 @@ fn check_dynamic_condition(
     }
 }
 
+/// Evaluate one loot condition against the current loot context.
+///
+/// `rng` is only consumed by the random conditions, so callers must pass the same generator
+/// used for the surrounding roll to stay in sync with vanilla sequences.
 fn check_condition(
     cond: LootCondition,
     has_silk_touch: bool,
@@ -186,6 +282,9 @@ fn check_condition(
         LootCondition::AnyOf(conditions) => conditions
             .iter()
             .any(|c| check_condition(*c, has_silk_touch, has_shears, fortune_level, params, rng)),
+        LootCondition::EntityProperties { target, predicate } => {
+            check_entity_properties(target, predicate, params)
+        }
         LootCondition::EntityOnFire => params.is_on_fire.unwrap_or(false),
         LootCondition::DirectAttackerWeaponEnchantment(tag) => {
             direct_attacker_weapon_has_enchantment(params, tag)
@@ -657,5 +756,69 @@ fn shuffle_and_split_items(
     for i in (1..n).rev() {
         let j = rng.next_bounded_i32((i + 1) as i32) as usize;
         result.swap(i, j);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::loot_table::{LootEntityPropertyValue, LootEntityTarget};
+
+    use super::{LootContextParameters, generate_loot_with_context};
+
+    /// Builds a death context for a creeper killed by `killer`.
+    fn creeper_killed_by(killer: Option<&'static EntityType>) -> LootContextParameters {
+        LootContextParameters {
+            this_entity: Some(&EntityType::CREEPER),
+            killer_entity: killer,
+            direct_killer_entity: killer,
+            ..Default::default()
+        }
+    }
+
+    /// Returns whether rolling the creeper table for this context yields a music disc.
+    fn drops_music_disc(params: &LootContextParameters, seed: i64) -> bool {
+        generate_loot_with_context(&pumpkin_data::loot_table::ENTITIES_CREEPER, seed, params)
+            .iter()
+            .any(|stack| stack.item.registry_key.contains("music_disc"))
+    }
+
+    /// The creeper table gates its music discs on an attacker in the `#minecraft:skeletons`
+    /// tag. A missing or wrong attacker must not satisfy that predicate.
+    #[test]
+    fn creeper_drops_music_discs_only_for_a_skeleton_attacker() {
+        for seed in 0..16 {
+            assert!(
+                drops_music_disc(&creeper_killed_by(Some(&EntityType::SKELETON)), seed),
+                "a skeleton kill must drop a music disc"
+            );
+            assert!(
+                drops_music_disc(&creeper_killed_by(Some(&EntityType::WITHER_SKELETON)), seed),
+                "every entity in the tag must drop a music disc"
+            );
+            assert!(
+                !drops_music_disc(&creeper_killed_by(Some(&EntityType::ZOMBIE)), seed),
+                "an attacker outside the tag must not drop a music disc"
+            );
+            assert!(
+                !drops_music_disc(&creeper_killed_by(None), seed),
+                "a creeper that died without an attacker must not drop a music disc"
+            );
+        }
+    }
+
+    /// Targets an entity never publishes a snapshot for stay permissive, so entities can adopt
+    /// property predicates one at a time without silently losing unrelated drops.
+    #[test]
+    fn unpublished_properties_stay_permissive() {
+        let mut params = creeper_killed_by(Some(&EntityType::SKELETON));
+        params.add_entity_property(
+            LootEntityTarget::This,
+            "minecraft:flags/is_baby",
+            LootEntityPropertyValue::Bool(false),
+        );
+
+        // The attacker snapshot is still absent, yet its entity-type predicate is evaluated.
+        assert!(drops_music_disc(&params, 0));
     }
 }

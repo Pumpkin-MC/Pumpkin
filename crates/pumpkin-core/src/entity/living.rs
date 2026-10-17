@@ -2083,7 +2083,7 @@ impl LivingEntity {
                     tracker.has_player_attacker()
                 };
 
-            let params = LootContextParameters {
+            let mut params = LootContextParameters {
                 killed_by_player: Some(has_player_kill),
                 this_entity: Some(self.entity.entity_type),
                 killer_entity: killer.map(|c| c.get_entity().entity_type),
@@ -2107,6 +2107,9 @@ impl LivingEntity {
                 }),
                 ..Default::default()
             };
+            if let Some(mob) = dyn_self.get_mob() {
+                mob.populate_loot_context(&mut params);
+            }
 
             // Drop loot
             self.drop_loot(&params);

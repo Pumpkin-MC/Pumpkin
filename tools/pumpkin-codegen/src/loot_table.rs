@@ -1,8 +1,11 @@
-use std::{fs, path::Path};
+use std::{collections::BTreeMap, fs, path::Path};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Ident, Span, TokenStream};
-use pumpkin_util::loot_table::{LootBonusFormula, LootCondition};
+use pumpkin_util::loot_table::{
+    LootBonusFormula, LootCondition, LootEntityPredicate, LootEntityProperty,
+    LootEntityPropertyValue, LootEntityTarget,
+};
 use quote::{format_ident, quote};
 use serde::Deserialize;
 use syn::LitStr;
@@ -76,10 +79,8 @@ struct PredicateStruct {
     items: Option<serde_json::Value>,
     #[serde(default)]
     predicates: Option<serde_json::Value>,
-    #[serde(rename = "minecraft:flags", default)]
-    flags: Option<serde_json::Value>,
-    #[serde(rename = "minecraft:equipment", default)]
-    equipment: Option<serde_json::Value>,
+    #[serde(flatten)]
+    entity_properties: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -143,6 +144,10 @@ fn resolve_condition(value: &ConditionValue) -> LootCondition {
     }
 }
 
+/// Translate one vanilla loot condition into its generated [`LootCondition`].
+///
+/// Conditions the runtime cannot evaluate are mapped to [`LootCondition::None`], which keeps
+/// the owning entry unconditional rather than dropping it.
 fn parse_condition(cond: &ConditionStruct) -> LootCondition {
     match cond.condition.as_str() {
         "minecraft:survives_explosion" => LootCondition::SurvivesExplosion,
@@ -170,6 +175,58 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
                 unenchanted_chance,
                 enchanted_chance_base,
                 enchanted_chance_per_level_above_first,
+            }
+        }
+        "minecraft:entity_properties" => {
+            let Some(target_name) = cond.entity.as_deref() else {
+                return LootCondition::None;
+            };
+            let target = match target_name {
+                "this" => LootEntityTarget::This,
+                "attacker" => LootEntityTarget::Attacker,
+                "direct_attacker" => LootEntityTarget::DirectAttacker,
+                _ => return LootCondition::None,
+            };
+
+            let Some(predicate) = &cond.predicate else {
+                return LootCondition::None;
+            };
+
+            if let Some(dedicated) =
+                dedicated_entity_condition(target, &predicate.entity_properties)
+            {
+                return dedicated;
+            }
+
+            let mut properties = Vec::new();
+            let mut skipped = Vec::new();
+            for (key, value) in &predicate.entity_properties {
+                flatten_entity_properties(key, value, &mut properties, &mut skipped);
+            }
+
+            if properties.is_empty() {
+                if !skipped.is_empty() {
+                    eprintln!(
+                        "loot_table: no value of the `{target_name}` entity predicate can be \
+                         expressed ({}), leaving the entry unconditional",
+                        skipped.join(", ")
+                    );
+                }
+                return LootCondition::None;
+            }
+            if !skipped.is_empty() {
+                eprintln!(
+                    "loot_table: the `{target_name}` entity predicate is only partly expressed, \
+                     ignoring {}",
+                    skipped.join(", ")
+                );
+            }
+
+            LootCondition::EntityProperties {
+                target,
+                predicate: LootEntityPredicate {
+                    properties: Box::leak(properties.into_boxed_slice()),
+                },
             }
         }
         "minecraft:table_bonus" => {
@@ -234,7 +291,6 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
             }
             LootCondition::None
         }
-        "minecraft:entity_properties" => parse_entity_properties(cond),
         "minecraft:inverted" => {
             if let Some(term) = &cond.term {
                 match resolve_condition(term) {
@@ -251,41 +307,107 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
     }
 }
 
-fn parse_entity_properties(cond: &ConditionStruct) -> LootCondition {
-    let Some(predicate) = &cond.predicate else {
-        return LootCondition::None;
-    };
-    match cond.entity.as_deref() {
-        Some("this")
-            if predicate
-                .flags
-                .as_ref()
-                .and_then(|flags| flags.get("is_on_fire"))
-                .and_then(serde_json::Value::as_bool)
-                == Some(true) =>
-        {
-            LootCondition::EntityOnFire
+/// Map the predicates the runtime evaluates through a dedicated [`LootCondition`] instead of a
+/// property snapshot: the victim being on fire, and the direct attacker's main-hand weapon
+/// carrying an enchantment of a tag.
+///
+/// Only a predicate made up of nothing but that one constraint qualifies; anything wider goes
+/// through the generic [`LootCondition::EntityProperties`] path so no constraint is dropped.
+fn dedicated_entity_condition(
+    target: LootEntityTarget,
+    properties: &BTreeMap<String, serde_json::Value>,
+) -> Option<LootCondition> {
+    if properties.len() != 1 {
+        return None;
+    }
+    match target {
+        LootEntityTarget::This => {
+            let flags = properties.get("minecraft:flags")?.as_object()?;
+            (flags.len() == 1 && flags.get("is_on_fire")?.as_bool()?)
+                .then_some(LootCondition::EntityOnFire)
         }
-        Some("direct_attacker") => predicate
-            .equipment
-            .as_ref()
-            .and_then(|equipment| {
-                equipment
-                    .pointer("/mainhand/predicates/minecraft:enchantments/0/enchantments")?
-                    .as_str()?
-                    .strip_prefix('#')
-            })
-            .map_or(LootCondition::None, |tag| {
-                LootCondition::DirectAttackerWeaponEnchantment(Box::leak(tag.into()))
-            }),
-        _ => LootCondition::None,
+        LootEntityTarget::DirectAttacker => {
+            let enchantments = sole_entry(properties.get("minecraft:equipment")?, "mainhand")?;
+            let enchantments = sole_entry(enchantments, "predicates")?;
+            let enchantments = sole_entry(enchantments, "minecraft:enchantments")?;
+            let [enchantment] = enchantments.as_array()?.as_slice() else {
+                return None;
+            };
+            let tag = sole_entry(enchantment, "enchantments")?
+                .as_str()?
+                .strip_prefix('#')?;
+            Some(LootCondition::DirectAttackerWeaponEnchantment(Box::leak(
+                tag.into(),
+            )))
+        }
+        LootEntityTarget::Attacker => None,
     }
 }
 
+/// Return the value under `key` when `value` is an object holding that key and nothing else.
+fn sole_entry<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+    let object = value.as_object()?;
+    if object.len() == 1 {
+        object.get(key)
+    } else {
+        None
+    }
+}
+
+/// Flatten a nested entity predicate into `path/to/key` and primitive value pairs.
+///
+/// `path` is the prefix accumulated so far; nested objects recurse with their key appended.
+/// Values the runtime has no representation for (arrays, floats, `null`) are collected in
+/// `skipped` instead of being matched on. The condition then only checks what is left, which
+/// stays closer to vanilla than dropping the whole condition would; a predicate made up of
+/// nothing but those ends up empty and its condition becomes [`LootCondition::None`], the same
+/// permissive fallback every condition the runtime cannot evaluate gets. Both cases are
+/// reported by [`parse_condition`] so an unrepresentable predicate is visible when the data is
+/// regenerated.
+fn flatten_entity_properties(
+    path: &str,
+    value: &serde_json::Value,
+    properties: &mut Vec<LootEntityProperty>,
+    skipped: &mut Vec<String>,
+) {
+    match value {
+        serde_json::Value::Object(values) => {
+            for (key, value) in values {
+                flatten_entity_properties(&format!("{path}/{key}"), value, properties, skipped);
+            }
+        }
+        serde_json::Value::Bool(value) => properties.push(LootEntityProperty {
+            key: Box::leak(path.to_owned().into_boxed_str()),
+            value: LootEntityPropertyValue::Bool(*value),
+        }),
+        serde_json::Value::Number(value) => {
+            if let Some(value) = value.as_i64() {
+                properties.push(LootEntityProperty {
+                    key: Box::leak(path.to_owned().into_boxed_str()),
+                    value: LootEntityPropertyValue::Integer(value),
+                });
+            } else {
+                skipped.push(format!("{path} (non-integer number)"));
+            }
+        }
+        serde_json::Value::String(value) => properties.push(LootEntityProperty {
+            key: Box::leak(path.to_owned().into_boxed_str()),
+            value: LootEntityPropertyValue::String(Box::leak(value.clone().into_boxed_str())),
+        }),
+        serde_json::Value::Array(_) => skipped.push(format!("{path} (array)")),
+        serde_json::Value::Null => skipped.push(format!("{path} (null)")),
+    }
+}
+
+/// Resolve an optional condition, treating a missing one as [`LootCondition::None`].
 fn condition_of(value: Option<&ConditionValue>) -> LootCondition {
     value.map_or(LootCondition::None, resolve_condition)
 }
 
+/// Combine every condition on a pool or entry into a single [`LootCondition`].
+///
+/// Unrepresentable conditions drop out, a single condition is returned as-is, and two or more
+/// are wrapped in [`LootCondition::AllOf`].
 fn combine_conditions(conditions: &[ConditionValue]) -> LootCondition {
     let mut parsed_list: Vec<LootCondition> = Vec::new();
     for c in conditions {
@@ -413,6 +535,21 @@ struct ParsedEntry {
     furnace_smelt: Option<LootCondition>,
 }
 
+/// Require both conditions, dropping only a [`LootCondition::None`], which adds nothing.
+///
+/// Two structurally equal conditions are kept as a pair on purpose: the runtime evaluates every
+/// element of a [`LootCondition::AllOf`] on its own, and a stateful one such as
+/// [`LootCondition::RandomChance`] rolls once per evaluation, exactly as vanilla rolls the pool
+/// condition and the entry condition separately. Collapsing them would turn a `p * p` chance
+/// into `p`.
+fn combine_pair(first: LootCondition, second: LootCondition) -> LootCondition {
+    match (first, second) {
+        (LootCondition::None, cond) | (cond, LootCondition::None) => cond,
+        (first, second) => LootCondition::AllOf(Box::leak(vec![first, second].into_boxed_slice())),
+    }
+}
+
+/// Flatten one pool entry into the concrete item entries it can produce.
 fn extract_entries(
     entry: &PoolEntryStruct,
     inherited_condition: LootCondition,
@@ -422,6 +559,11 @@ fn extract_entries(
     extract_entries_with_depth(entry, inherited_condition, None, out, empty_weight, 0);
 }
 
+/// Recursive worker behind [`extract_entries`], bounded to five levels of nesting.
+///
+/// `inherited_condition` carries the conditions of every enclosing pool and entry; it is
+/// combined with the entry's own conditions so a child can never drop loot while one of its
+/// parents' conditions is false.
 fn extract_entries_with_depth(
     entry: &PoolEntryStruct,
     inherited_condition: LootCondition,
@@ -434,11 +576,7 @@ fn extract_entries_with_depth(
         return;
     }
 
-    let entry_cond = match (inherited_condition, condition_of(entry.condition.as_ref())) {
-        (LootCondition::None, cond) | (cond, LootCondition::None) => cond,
-        (first, second) if first == second => first,
-        (first, second) => LootCondition::AllOf(Box::leak(vec![first, second].into_boxed_slice())),
-    };
+    let entry_cond = combine_pair(inherited_condition, condition_of(entry.condition.as_ref()));
 
     let furnace_smelt = entry
         .functions
@@ -626,16 +764,20 @@ fn extract_entries_with_depth(
             for child in &entry.children {
                 let child_cond = condition_of(child.condition.as_ref());
 
-                let effective_cond = if child_cond == LootCondition::SilkTouch {
+                // A child gated on a tool re-derives that condition from its own conditions in
+                // the recursive call, so only the implicit gate for later children is added
+                // here. `entry_cond` always rides along: a child of the alternatives entry can
+                // never drop loot while one of its parents' conditions is false.
+                let tool_gate = if child_cond == LootCondition::SilkTouch {
                     saw_silk = true;
-                    LootCondition::SilkTouch
+                    LootCondition::None
                 } else if child_cond == LootCondition::Shears {
                     saw_shears = true;
-                    LootCondition::Shears
+                    LootCondition::None
                 } else if child_cond == LootCondition::SilkTouchOrShears {
                     saw_silk = true;
                     saw_shears = true;
-                    LootCondition::SilkTouchOrShears
+                    LootCondition::None
                 } else if saw_silk && saw_shears {
                     LootCondition::NoSilkTouchOrShears
                 } else if saw_silk {
@@ -643,12 +785,12 @@ fn extract_entries_with_depth(
                 } else if saw_shears {
                     LootCondition::NoSilkTouchOrShears
                 } else {
-                    entry_cond
+                    LootCondition::None
                 };
 
                 extract_entries_with_depth(
                     child,
-                    effective_cond,
+                    combine_pair(entry_cond, tool_gate),
                     furnace_smelt,
                     out,
                     empty_weight,
@@ -672,6 +814,7 @@ fn extract_entries_with_depth(
     }
 }
 
+/// Emit the `const`-compatible token stream that rebuilds `cond` in the generated data.
 fn condition_to_tokens(cond: LootCondition) -> TokenStream {
     match cond {
         LootCondition::None => quote! { LootCondition::None },
@@ -695,6 +838,37 @@ fn condition_to_tokens(cond: LootCondition) -> TokenStream {
                     unenchanted_chance: #unenchanted_chance,
                     enchanted_chance_base: #enchanted_chance_base,
                     enchanted_chance_per_level_above_first: #enchanted_chance_per_level_above_first,
+                }
+            }
+        }
+        LootCondition::EntityProperties { target, predicate } => {
+            let target_tokens = match target {
+                LootEntityTarget::This => quote! { LootEntityTarget::This },
+                LootEntityTarget::Attacker => quote! { LootEntityTarget::Attacker },
+                LootEntityTarget::DirectAttacker => quote! { LootEntityTarget::DirectAttacker },
+            };
+            let property_tokens = predicate.properties.iter().map(|property| {
+                let key = LitStr::new(property.key, Span::call_site());
+                let value = match property.value {
+                    LootEntityPropertyValue::Bool(value) => {
+                        quote! { LootEntityPropertyValue::Bool(#value) }
+                    }
+                    LootEntityPropertyValue::Integer(value) => {
+                        quote! { LootEntityPropertyValue::Integer(#value) }
+                    }
+                    LootEntityPropertyValue::String(value) => {
+                        let value = LitStr::new(value, Span::call_site());
+                        quote! { LootEntityPropertyValue::String(#value) }
+                    }
+                };
+                quote! { LootEntityProperty { key: #key, value: #value } }
+            });
+            quote! {
+                LootCondition::EntityProperties {
+                    target: #target_tokens,
+                    predicate: LootEntityPredicate {
+                        properties: &[#(#property_tokens),*],
+                    },
                 }
             }
         }
@@ -910,5 +1084,304 @@ pub fn build() -> TokenStream {
     quote! {
         pub use pumpkin_util::loot_table::*;
         #all_tokens
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::loot_table::{
+        LootEntityPredicate, LootEntityProperty, LootEntityPropertyValue, LootEntityTarget,
+    };
+
+    use super::{
+        ConditionStruct, LootCondition, PoolEntryStruct, extract_entries, parse_condition,
+    };
+
+    /// The condition the `entity_properties` child in these fixtures parses into.
+    const SHEEP_IS_WHITE: LootCondition = LootCondition::EntityProperties {
+        target: LootEntityTarget::This,
+        predicate: LootEntityPredicate {
+            properties: &[LootEntityProperty {
+                key: "minecraft:components/minecraft:sheep/color",
+                value: LootEntityPropertyValue::String("white"),
+            }],
+        },
+    };
+
+    /// The implicit "no silk touch" gate a tool-gated sibling creates must not replace the
+    /// inherited condition either: a later entity-properties child still has to satisfy its
+    /// parent.
+    #[test]
+    fn alternatives_child_after_a_tool_gate_keeps_inherited_condition() {
+        let entry: PoolEntryStruct = serde_json::from_str(
+            r#"{
+                "type": "minecraft:alternatives",
+                "condition": { "type": "minecraft:killed_by_player" },
+                "children": [
+                    {
+                        "type": "minecraft:item",
+                        "name": "minecraft:white_wool",
+                        "condition": {
+                            "type": "minecraft:match_tool",
+                            "predicate": {
+                                "predicates": {
+                                    "minecraft:enchantments": [
+                                        { "enchantments": "minecraft:silk_touch" }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "type": "minecraft:item",
+                        "name": "minecraft:white_carpet",
+                        "condition": {
+                            "type": "minecraft:entity_properties",
+                            "entity": "this",
+                            "predicate": {
+                                "minecraft:components": { "minecraft:sheep/color": "white" }
+                            }
+                        }
+                    }
+                ]
+            }"#,
+        )
+        .expect("alternatives entry should deserialize");
+
+        let mut entries = Vec::new();
+        let mut empty_weight = 0;
+        extract_entries(&entry, LootCondition::None, &mut entries, &mut empty_weight);
+
+        assert_eq!(entries.len(), 2);
+
+        // The silk-touch child keeps both its own gate and the parent condition.
+        assert_eq!(entries[0].item, "minecraft:white_wool");
+        assert_eq!(
+            entries[0].condition,
+            LootCondition::AllOf(&[LootCondition::KilledByPlayer, LootCondition::SilkTouch])
+        );
+
+        // The child after it gets the implicit "no silk touch" gate on top of both.
+        assert_eq!(entries[1].item, "minecraft:white_carpet");
+        assert_eq!(
+            entries[1].condition,
+            LootCondition::AllOf(&[
+                LootCondition::AllOf(&[LootCondition::KilledByPlayer, LootCondition::NoSilkTouch,]),
+                SHEEP_IS_WHITE,
+            ])
+        );
+    }
+
+    /// Children of `minecraft:alternatives` must keep the condition inherited from the
+    /// alternatives entry itself. Dropping it would let an entity-property child drop loot
+    /// while its parent condition is false.
+    #[test]
+    fn alternatives_child_keeps_inherited_condition() {
+        let entry: PoolEntryStruct = serde_json::from_str(
+            r#"{
+                "type": "minecraft:alternatives",
+                "condition": { "type": "minecraft:killed_by_player" },
+                "children": [
+                    {
+                        "type": "minecraft:item",
+                        "name": "minecraft:white_wool",
+                        "condition": {
+                            "type": "minecraft:entity_properties",
+                            "entity": "this",
+                            "predicate": {
+                                "minecraft:components": { "minecraft:sheep/color": "white" }
+                            }
+                        }
+                    }
+                ]
+            }"#,
+        )
+        .expect("alternatives entry should deserialize");
+
+        let mut entries = Vec::new();
+        let mut empty_weight = 0;
+        extract_entries(&entry, LootCondition::None, &mut entries, &mut empty_weight);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].item, "minecraft:white_wool");
+        assert_eq!(
+            entries[0].condition,
+            LootCondition::AllOf(&[LootCondition::KilledByPlayer, SHEEP_IS_WHITE])
+        );
+    }
+
+    /// A predicate the runtime cannot express in full still constrains the entry with the
+    /// values it does understand; dropping those too would let the entry roll whenever the
+    /// unsupported half is all there is to check.
+    #[test]
+    fn entity_properties_keep_the_values_that_can_be_expressed() {
+        let cond: ConditionStruct = serde_json::from_str(
+            r#"{
+                "type": "minecraft:entity_properties",
+                "entity": "this",
+                "predicate": {
+                    "minecraft:components": { "minecraft:sheep/color": "white" },
+                    "minecraft:equipment": {
+                        "mainhand": {
+                            "predicates": {
+                                "minecraft:enchantments": [
+                                    { "enchantments": "minecraft:silk_touch" }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }"#,
+        )
+        .expect("condition should deserialize");
+
+        assert_eq!(parse_condition(&cond), SHEEP_IS_WHITE);
+    }
+
+    /// With nothing left to check the condition falls back to [`LootCondition::None`], the
+    /// same permissive fallback every unrepresentable condition gets: the entry keeps dropping
+    /// as it did before the predicate was understood at all, rather than never dropping.
+    ///
+    /// The attacker has no dedicated condition, so an enchantment list (an array) is all that
+    /// is left to express, and nothing can be.
+    #[test]
+    fn entity_properties_without_expressible_values_stay_unconditional() {
+        let cond: ConditionStruct = serde_json::from_str(
+            r##"{
+                "type": "minecraft:entity_properties",
+                "entity": "attacker",
+                "predicate": {
+                    "minecraft:equipment": {
+                        "mainhand": {
+                            "predicates": {
+                                "minecraft:enchantments": [
+                                    { "enchantments": "#minecraft:smelts_loot" }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }"##,
+        )
+        .expect("condition should deserialize");
+
+        assert_eq!(parse_condition(&cond), LootCondition::None);
+    }
+
+    /// A direct attacker whose main-hand weapon carries an enchantment of a tag is the one
+    /// equipment predicate the runtime evaluates, through its dedicated condition.
+    #[test]
+    fn direct_attacker_weapon_enchantment_uses_the_dedicated_condition() {
+        let cond: ConditionStruct = serde_json::from_str(
+            r##"{
+                "type": "minecraft:entity_properties",
+                "entity": "direct_attacker",
+                "predicate": {
+                    "minecraft:equipment": {
+                        "mainhand": {
+                            "predicates": {
+                                "minecraft:enchantments": [
+                                    { "enchantments": "#minecraft:smelts_loot" }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }"##,
+        )
+        .expect("condition should deserialize");
+
+        assert_eq!(
+            parse_condition(&cond),
+            LootCondition::DirectAttackerWeaponEnchantment("minecraft:smelts_loot")
+        );
+    }
+
+    /// Any constraint beside the tagged main-hand enchantment must keep the predicate on the
+    /// generic path instead of being dropped by the dedicated condition.
+    #[test]
+    fn direct_attacker_equipment_with_extra_constraints_is_not_dedicated() {
+        for equipment in [
+            r##"{ "mainhand": { "items": "minecraft:bow", "predicates": { "minecraft:enchantments": [ { "enchantments": "#minecraft:smelts_loot" } ] } } }"##,
+            r##"{ "mainhand": { "predicates": { "minecraft:enchantments": [ { "enchantments": "#minecraft:smelts_loot", "levels": { "min": 2 } } ] } } }"##,
+            r##"{ "mainhand": { "predicates": { "minecraft:enchantments": [ { "enchantments": "#minecraft:smelts_loot" }, { "enchantments": "#minecraft:other" } ] } } }"##,
+            r##"{ "offhand": {}, "mainhand": { "predicates": { "minecraft:enchantments": [ { "enchantments": "#minecraft:smelts_loot" } ] } } }"##,
+        ] {
+            let cond: ConditionStruct = serde_json::from_str(&format!(
+                r#"{{ "type": "minecraft:entity_properties", "entity": "direct_attacker",
+                    "predicate": {{ "minecraft:equipment": {equipment} }} }}"#
+            ))
+            .expect("condition should deserialize");
+
+            assert!(
+                !matches!(
+                    parse_condition(&cond),
+                    LootCondition::DirectAttackerWeaponEnchantment(_)
+                ),
+                "{equipment} must not map to the dedicated condition"
+            );
+        }
+    }
+
+    /// A victim that has to be on fire maps to the dedicated condition, but only when that is
+    /// the whole predicate; any further constraint must not be dropped alongside it.
+    #[test]
+    fn on_fire_uses_the_dedicated_condition_only_when_it_is_the_whole_predicate() {
+        let on_fire: ConditionStruct = serde_json::from_str(
+            r#"{
+                "type": "minecraft:entity_properties",
+                "entity": "this",
+                "predicate": { "minecraft:flags": { "is_on_fire": true } }
+            }"#,
+        )
+        .expect("condition should deserialize");
+        assert_eq!(parse_condition(&on_fire), LootCondition::EntityOnFire);
+
+        let wider: ConditionStruct = serde_json::from_str(
+            r#"{
+                "type": "minecraft:entity_properties",
+                "entity": "this",
+                "predicate": { "minecraft:flags": { "is_on_fire": true, "is_baby": false } }
+            }"#,
+        )
+        .expect("condition should deserialize");
+        assert!(matches!(
+            parse_condition(&wider),
+            LootCondition::EntityProperties { .. }
+        ));
+    }
+
+    /// A pool chance and an entry chance that happen to be equal must both survive: the runtime
+    /// rolls every element of an [`LootCondition::AllOf`] on its own, the way vanilla rolls the
+    /// pool condition and the entry condition separately, so collapsing them would turn a
+    /// `p * p` chance into `p`.
+    #[test]
+    fn equal_stateful_conditions_are_both_kept() {
+        let entry: PoolEntryStruct = serde_json::from_str(
+            r#"{
+                "type": "minecraft:item",
+                "name": "minecraft:feather",
+                "condition": { "type": "minecraft:random_chance", "chance": 0.5 }
+            }"#,
+        )
+        .expect("entry should deserialize");
+
+        let mut entries = Vec::new();
+        let mut empty_weight = 0;
+        extract_entries(
+            &entry,
+            LootCondition::RandomChance { chance: 0.5 },
+            &mut entries,
+            &mut empty_weight,
+        );
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(
+            entries[0].condition,
+            LootCondition::AllOf(&[
+                LootCondition::RandomChance { chance: 0.5 },
+                LootCondition::RandomChance { chance: 0.5 },
+            ])
+        );
     }
 }
