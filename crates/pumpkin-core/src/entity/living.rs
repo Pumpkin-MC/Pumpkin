@@ -42,7 +42,7 @@ use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
-    EquipmentSlot, EquippableImpl, FoodImpl,
+    EquipmentSlot, EquippableImpl, FoodImpl, GliderImpl,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -615,8 +615,11 @@ impl LivingEntity {
         }
     }
 
-    /// Picks up an Item entity or XP Orb
-    pub fn pickup(&self, item: &Entity, stack_amount: u32) -> bool {
+    /// Fires the cancellable pickup event for picking up an Item entity or XP Orb. Callers
+    /// must check this - and do so before mutating any inventory, item stack or stat, not
+    /// just before the pickup animation - or a cancelled pickup still happens in every way
+    /// that matters.
+    pub fn can_pickup(&self, item: &Entity, stack_amount: u32) -> bool {
         let mut pickup_event =
             crate::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent::new(
                 self.entity.entity_id,
@@ -631,7 +634,13 @@ impl LivingEntity {
                 return false;
             }
         }
+        true
+    }
 
+    /// Broadcasts the "item flies to the player" pickup animation. Call only once the pickup
+    /// has actually happened: the event already allowed it (see [`Self::can_pickup`]) and the
+    /// amount here is what was actually taken, not just offered.
+    pub fn broadcast_pickup(&self, item: &Entity, stack_amount: u32) {
         let chunk_pos = self.entity.chunk_pos.load();
         self.entity.world.load().broadcast_to_chunk_editioned(
             chunk_pos,
@@ -645,6 +654,19 @@ impl LivingEntity {
                 actor_runtime_id: VarULong(self.entity.entity_id as u64),
             },
         );
+    }
+
+    /// Picks up an Item entity or XP Orb: fires the cancellable pickup event and, if it's
+    /// allowed, broadcasts the pickup animation. Returns whether the pickup was allowed.
+    /// Only correct for callers with nothing to mutate between the event check and the
+    /// animation (e.g. an XP orb); a caller that inserts into an inventory first needs the
+    /// amount actually taken, so it must call [`Self::can_pickup`] before mutating anything
+    /// and [`Self::broadcast_pickup`] after, instead of this.
+    pub fn pickup(&self, item: &Entity, stack_amount: u32) -> bool {
+        if !self.can_pickup(item, stack_amount) {
+            return false;
+        }
+        self.broadcast_pickup(item, stack_amount);
         true
     }
 
@@ -1246,6 +1268,43 @@ impl LivingEntity {
     // Check if the entity is in water
     pub fn is_in_water(&self) -> bool {
         self.entity.touching_water.load(Ordering::Relaxed)
+    }
+
+    /// Mirrors vanilla's elytra-eligibility gate (`LivingEntity.tryToStartFallFlying`, minus the
+    /// actual state transition): flight requires a non-broken item with the `glider` data
+    /// component in the chest slot (not just an elytra by item id - a datapack can grant any
+    /// item that component), and is blocked while underwater or under Levitation (which
+    /// already provides its own upward motion). The caller is still responsible for checking
+    /// that the entity is airborne.
+    pub fn can_glide(&self) -> bool {
+        if self.is_in_water() || self.has_effect(&StatusEffect::LEVITATION) {
+            return false;
+        }
+        let equipment = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        equipment
+            .equipment
+            .get(&EquipmentSlot::CHEST)
+            .is_some_and(|stack| {
+                stack.get_data_component::<GliderImpl>().is_some()
+                    && stack
+                        .get_max_damage()
+                        .is_none_or(|max| max.saturating_sub(stack.get_damage()) > 1)
+            })
+    }
+
+    /// Whether a glider item (of any durability) is in the chest slot. An already-active glide
+    /// continues until it's removed, even at 1 durability; `can_glide` additionally requires a
+    /// non-broken one to *start* one.
+    pub fn has_elytra_equipped(&self) -> bool {
+        self.entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .get(&EquipmentSlot::CHEST)
+            .is_some_and(|stack| stack.get_data_component::<GliderImpl>().is_some())
     }
 
     // Check if the entity is in powder snow
