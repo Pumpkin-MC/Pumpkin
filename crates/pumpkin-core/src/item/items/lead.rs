@@ -58,7 +58,7 @@ impl ItemBehaviour for LeadItem {
         let entities = world.get_entities_at_box(&search_box);
 
         let mut any_leashed = false;
-        let mut knot: Option<Arc<LeashKnotEntity>> = None;
+        let mut knot: Option<Arc<dyn EntityBase>> = None;
 
         for entity_base in entities {
             let ent = entity_base.get_entity();
@@ -78,7 +78,7 @@ impl ItemBehaviour for LeadItem {
                     knot = Some(LeashKnotEntity::get_or_create(&world, location));
                 }
                 if let Some(k) = &knot {
-                    ent.leash_to(k.clone() as Arc<dyn EntityBase>);
+                    ent.leash_to(k.clone());
                     any_leashed = true;
                 }
             }
