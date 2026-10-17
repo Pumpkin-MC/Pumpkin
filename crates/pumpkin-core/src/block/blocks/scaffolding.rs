@@ -1,12 +1,47 @@
 use pumpkin_data::block_properties::ScaffoldingLikeProperties;
 use pumpkin_data::fluid::Fluid;
-use pumpkin_data::{Block, BlockDirection, BlockStateId};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
-use pumpkin_world::world::BlockAccessor;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
-use crate::block::{BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs};
+use crate::block::{
+    BlockBehaviour, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PlacedArgs,
+};
+use crate::entity::EntityBase;
+use crate::entity::falling::FallingEntity;
+
+const TICK_DELAY: u8 = 1;
+pub const STABILITY_MAX_DISTANCE: u8 = 7;
+const SHAPE_UNSTABLE_BOTTOM: BoundingBox =
+    BoundingBox::new_array([0.0, 0.0, 0.0], [1.0, 0.125, 1.0]);
+/// `EntityCollisionContext.isAbove` tolerance, a Java float.
+const ABOVE_EPSILON: f64 = 1.0E-5f32 as f64;
+
+/// Vanilla `ScaffoldingBlock.getCollisionShape` for an entity: solid from above unless it is
+/// descending, otherwise only the bottom plate of a hanging bottom block. The extracted
+/// collision shape is `SHAPE_STABLE`.
+pub(crate) fn collision_shapes_for_entity<'a>(
+    entity: &dyn EntityBase,
+    state: &'a BlockState,
+    position: &'a BlockPos,
+) -> impl Iterator<Item = BoundingBox> + 'a {
+    let entity = entity.get_entity();
+    let entity_bottom = entity.pos.load().y;
+    let y = f64::from(position.0.y);
+    // `EntityCollisionContext.isAbove`, with the top of `Shapes.block()` and `SHAPE_BELOW_BLOCK`.
+    let is_above = |shape_max_y: f64| entity_bottom > y + shape_max_y - ABOVE_EPSILON;
+    let stable = is_above(1.0) && !entity.is_sneaking();
+    let props = ScaffoldingLikeProperties::from_state_id(state.id);
+    let unstable_bottom = !stable && props.distance != 0 && props.bottom && is_above(0.0);
+    state
+        .get_block_collision_shapes_at(position)
+        .filter(move |_| stable)
+        .chain(unstable_bottom.then_some(SHAPE_UNSTABLE_BOTTOM))
+}
 
 #[pumpkin_block("minecraft:scaffolding")]
 pub struct ScaffoldingBlock;
@@ -16,13 +51,13 @@ impl ScaffoldingBlock {
     pub fn get_distance(world: &dyn BlockAccessor, pos: &BlockPos) -> u8 {
         let below_pos = pos.down();
         let (below_block, below_state) = world.get_block_and_state(&below_pos);
+        let mut min_dist = 7u8;
         if below_block == &Block::SCAFFOLDING {
-            return ScaffoldingLikeProperties::from_state_id(below_state.id).distance;
-        } else if below_state.is_side_solid(BlockDirection::Up) && below_block.is_solid() {
+            min_dist = ScaffoldingLikeProperties::from_state_id(below_state.id).distance;
+        } else if below_state.is_side_solid(BlockDirection::Up) {
             return 0;
         }
 
-        let mut min_dist = 7u8;
         for dir in BlockDirection::horizontal() {
             let neighbor_pos = pos.offset(dir.to_offset());
             let (neighbor_block, neighbor_state) = world.get_block_and_state(&neighbor_pos);
@@ -48,13 +83,27 @@ impl BlockBehaviour for ScaffoldingBlock {
         Self::get_distance(args.block_accessor, args.position) < 7
     }
 
+    // `canBeReplaced`: true while holding scaffolding, the only time this is called.
+    fn can_update_at(&self, _args: CanUpdateAtArgs<'_>) -> bool {
+        true
+    }
+
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let distance = Self::get_distance(args.world, args.position);
         let mut props = ScaffoldingLikeProperties::default(args.block);
         props.distance = distance;
         props.bottom = Self::is_bottom(args.world, args.position, distance);
-        props.waterlogged = args.replacing.water_source();
+        props.waterlogged = args.world.is_water_source(args.position);
         props.to_state_id(args.block)
+    }
+
+    fn placed(&self, args: PlacedArgs<'_>) {
+        args.world.schedule_block_tick(
+            args.block,
+            *args.position,
+            TICK_DELAY,
+            TickPriority::Normal,
+        );
     }
 
     fn get_state_for_neighbor_update(
@@ -70,13 +119,90 @@ impl BlockBehaviour for ScaffoldingBlock {
                 TickPriority::Normal,
             );
         }
-        let distance = Self::get_distance(args.world, args.position);
-        if distance == 7 {
-            return Block::AIR.default_state.id;
-        }
+        args.world.schedule_block_tick(
+            args.block,
+            *args.position,
+            TICK_DELAY,
+            TickPriority::Normal,
+        );
+        args.state_id
+    }
+
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let state_id = args.world.get_block_state_id(args.position);
+        let props = ScaffoldingLikeProperties::from_state_id(state_id);
+        let distance = Self::get_distance(args.world.as_ref(), args.position);
         let mut new_props = props;
         new_props.distance = distance;
-        new_props.bottom = Self::is_bottom(args.world, args.position, distance);
-        new_props.to_state_id(args.block)
+        new_props.bottom = Self::is_bottom(args.world.as_ref(), args.position, distance);
+        let new_state_id = new_props.to_state_id(args.block);
+
+        if distance == STABILITY_MAX_DISTANCE {
+            if props.distance == STABILITY_MAX_DISTANCE {
+                FallingEntity::replace_spawn(args.world, *args.position, new_state_id);
+            } else {
+                args.world
+                    .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
+            }
+        } else if new_state_id != state_id {
+            args.world
+                .set_block_state(args.position, new_state_id, BlockFlags::NOTIFY_ALL);
+        }
+    }
+
+    // `getCollisionShape` is empty for a placement context, so entities never block placing it.
+    fn has_placement_collision(&self) -> bool {
+        false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    struct TestWorld(HashMap<BlockPos, BlockStateId>);
+
+    impl BlockAccessor for TestWorld {
+        fn get_block(&self, position: &BlockPos) -> &'static Block {
+            Block::from_state_id(self.get_block_state_id(position))
+        }
+
+        fn get_block_state(&self, position: &BlockPos) -> &'static BlockState {
+            BlockState::from_id(self.get_block_state_id(position))
+        }
+
+        fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
+            self.0
+                .get(position)
+                .copied()
+                .unwrap_or(Block::AIR.default_state.id)
+        }
+
+        fn get_block_and_state(
+            &self,
+            position: &BlockPos,
+        ) -> (&'static Block, &'static BlockState) {
+            (self.get_block(position), self.get_block_state(position))
+        }
+    }
+
+    fn scaffolding(distance: u8) -> BlockStateId {
+        let mut props = ScaffoldingLikeProperties::default(&Block::SCAFFOLDING);
+        props.distance = distance;
+        props.to_state_id(&Block::SCAFFOLDING)
+    }
+
+    #[test]
+    fn distance_prefers_closer_horizontal_support_over_scaffolding_below() {
+        let world = TestWorld(HashMap::from([
+            (BlockPos::new(0, 0, 0), scaffolding(5)),
+            (BlockPos::new(1, 1, 0), scaffolding(0)),
+        ]));
+        assert_eq!(
+            ScaffoldingBlock::get_distance(&world, &BlockPos::new(0, 1, 0)),
+            1
+        );
     }
 }
