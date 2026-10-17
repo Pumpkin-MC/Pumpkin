@@ -2,14 +2,6 @@
 use super::*;
 
 impl JavaClient {
-    const fn clamp_horizontal(pos: f64) -> f64 {
-        pos.clamp(-3.0E7, 3.0E7)
-    }
-
-    const fn clamp_vertical(pos: f64) -> f64 {
-        pos.clamp(-2.0E7, 2.0E7)
-    }
-
     /// Returns whether syncing the position was needed
     fn sync_position(
         player: &Arc<Player>,
@@ -78,7 +70,8 @@ impl JavaClient {
         }
         // y = feet Y
         let position = packet.position;
-        if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
+        // Vanilla kicks for infinite values too, like `handle_position_rotation`.
+        if !position.x.is_finite() || !position.y.is_finite() || !position.z.is_finite() {
             self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
@@ -87,9 +80,9 @@ impl JavaClient {
             return;
         }
         let position = Vector3::new(
-            Self::clamp_horizontal(position.x),
-            Self::clamp_vertical(position.y),
-            Self::clamp_horizontal(position.z),
+            crate::net::clamp_horizontal_position(position.x),
+            crate::net::clamp_vertical_position(position.y),
+            crate::net::clamp_horizontal_position(position.z),
         );
 
         send_cancellable_blocking! {{
@@ -229,9 +222,9 @@ impl JavaClient {
         }
 
         let position = Vector3::new(
-            Self::clamp_horizontal(position.x),
-            Self::clamp_vertical(position.y),
-            Self::clamp_horizontal(position.z),
+            crate::net::clamp_horizontal_position(position.x),
+            crate::net::clamp_vertical_position(position.y),
+            crate::net::clamp_horizontal_position(position.z),
         );
 
         send_cancellable_blocking! {{
