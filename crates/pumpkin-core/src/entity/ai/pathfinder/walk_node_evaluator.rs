@@ -26,9 +26,8 @@ impl WalkNodeEvaluator {
         }
     }
 
-    #[must_use]
-    pub fn get_floor_level(&self, pos: &BlockPos) -> f64 {
-        self.base.context.as_ref().map_or_else(
+    pub fn get_floor_level(&mut self, pos: &BlockPos) -> f64 {
+        self.base.context.as_mut().map_or_else(
             || f64::from(pos.0.y),
             |ctx| {
                 if (self.base.can_float || self.is_amphibious) && ctx.is_water(pos) {
@@ -332,7 +331,6 @@ impl WalkNodeEvaluator {
         if let Some(&cached) = self.path_types_cache.get(&pos) {
             return cached;
         }
-
         let path_type = if let Some(mut ctx) = self.base.context.take()
             && let Some(mob_data) = self.base.mob_data
         {
