@@ -4,7 +4,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
-use pumpkin_data::block_properties::{JigsawLikeProperties, Orientation};
+use pumpkin_data::block_properties::{BlockProperties, JigsawLikeProperties, Orientation};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
     math::position::BlockPos,
@@ -86,7 +86,10 @@ impl JigsawBlockEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
 
-        let block_state = world.get_block_state(&self.position);
+        let (block, block_state) = world.get_block_and_state(&self.position);
+        if !JigsawLikeProperties::handles_block_id(block.id) {
+            return;
+        }
         let props = JigsawLikeProperties::from_state_id(block_state.id);
         let front = JigsawBlock::get_front_facing(props.r#orientation);
 
