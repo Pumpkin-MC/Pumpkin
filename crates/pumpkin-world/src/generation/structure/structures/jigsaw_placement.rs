@@ -321,7 +321,7 @@ impl Placer {
                 continue;
             };
 
-            if target_pool.elements.is_empty() && target_pool.id != "minecraft:empty" {
+            if target_pool.elements().is_empty() && target_pool.id != "minecraft:empty" {
                 tracing::warn!("Empty or non-existent pool: {}", pool_name);
                 continue;
             }
@@ -652,7 +652,7 @@ impl JigsawPlacement {
             junctions: Vec::new(),
             ground_level_delta,
             liquid_settings,
-            projection: pool.elements[0].projection,
+            projection: pool.elements()[0].projection,
         });
 
         let mut collector = super::StructurePiecesCollector::new();
