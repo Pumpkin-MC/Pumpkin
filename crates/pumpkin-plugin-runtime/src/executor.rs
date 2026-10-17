@@ -97,9 +97,9 @@ where
                     Ok(())
                 }
                 Err(error) => {
-                    let message = error.to_string();
-                    let _ = result.send(Err(error));
-                    Err(wasmtime::Error::msg(message))
+                    let error = SharedGuestCallError(Arc::new(error));
+                    let _ = result.send(Err(wasmtime::Error::new(error.clone())));
+                    Err(wasmtime::Error::new(error))
                 }
             }
         })
@@ -1031,21 +1031,23 @@ where
 
         let result = receiver.await;
         let mut join = self.driver_join();
-        let terminal = join.wait().await;
+        let terminal = join.wait().await.map_err(|error| {
+            self.handle.shared.guest_call_failure.failure().map_or_else(
+                || wasmtime::Error::msg(format!("Wasm plugin store driver failed: {error}")),
+                wasmtime::Error::new,
+            )
+        });
         reconcile_shutdown_result(result, terminal)
     }
 }
 
 pub fn reconcile_shutdown_result<R>(
     result: Result<wasmtime::Result<R>, oneshot::error::RecvError>,
-    terminal: Result<(), Arc<DriverError>>,
+    terminal: wasmtime::Result<()>,
 ) -> wasmtime::Result<R> {
     match (result, terminal) {
-        (Ok(Err(error)), _) => Err(error),
+        (Ok(Err(error)), _) | (Ok(Ok(_)) | Err(_), Err(error)) => Err(error),
         (Ok(Ok(value)), Ok(())) => Ok(value),
-        (Ok(Ok(_)) | Err(_), Err(error)) => Err(wasmtime::Error::msg(format!(
-            "Wasm plugin store driver failed: {error}"
-        ))),
         (Err(_), Ok(())) => Err(wasmtime::Error::msg(
             "Wasm plugin store shutdown did not complete",
         )),

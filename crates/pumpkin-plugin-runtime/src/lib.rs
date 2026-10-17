@@ -42,8 +42,8 @@ mod tests {
     };
 
     use super::{
-        DriverError, DriverState, LegacyStore, LegacySyncReentry, MAX_SYNC_REENTRY_DEPTH,
-        RuntimeSpawner, SpawnError, SpawnFuture,
+        DriverState, LegacyStore, LegacySyncReentry, MAX_SYNC_REENTRY_DEPTH, RuntimeSpawner,
+        SpawnError, SpawnFuture,
     };
 
     struct TestHostState;
@@ -1785,14 +1785,121 @@ mod tests {
         );
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn shutdown_preserves_wasm_trap_and_backtrace() {
+        let mut module = Module::new();
+        let mut types = TypeSection::new();
+        types.ty().function([], []);
+        module.section(&types);
+        let mut functions = FunctionSection::new();
+        functions.function(0);
+        module.section(&functions);
+        let mut exports = ExportSection::new();
+        exports.export("trap", ExportKind::Func, 0);
+        module.section(&exports);
+        let mut body = Function::new([]);
+        body.instruction(&Instruction::Unreachable);
+        body.instruction(&Instruction::End);
+        let mut code = CodeSection::new();
+        code.function(&body);
+        module.section(&code);
+
+        let mut component = ComponentBuilder::default();
+        let (ty, mut signature) = component.type_function(None);
+        signature
+            .params([] as [(&str, PrimitiveValType); 0])
+            .result(None);
+        let module = component.core_module(None, &module);
+        let instance = component.core_instantiate(None, module, [] as [(&str, ModuleArg); 0]);
+        let trap = component.core_alias_export(None, instance, "trap", ExportKind::Func);
+        let trap = component.lift_func(None, trap, ty, []);
+        component.export("trap", ComponentExportKind::Func, trap, None);
+
+        let mut store = test_store();
+        let component = Component::new(store.engine(), component.finish()).expect("test component");
+        let instance = Linker::new(store.engine())
+            .instantiate_async(&mut store, &component)
+            .await
+            .expect("instantiate test component");
+        let trap = instance
+            .get_typed_func::<(), ()>(&mut store, "trap")
+            .expect("trap export");
+        let store = ConcurrentStore::new(store).await;
+        let handle = store.handle();
+        let error = timeout(
+            Duration::from_secs(10),
+            store.shutdown(move |accessor| {
+                Box::pin(async move { trap.call_concurrent(accessor, ()).await })
+            }),
+        )
+        .await
+        .expect("shutdown trap timed out")
+        .expect_err("guest trap should fail shutdown");
+        let later_error = handle
+            .call(|_| Box::pin(async { Ok(()) }))
+            .await
+            .expect_err("calls after shutdown should retain the trap");
+        for error in [&error, &later_error] {
+            let error = super::guest_call_error(error);
+            assert_eq!(
+                error.downcast_ref::<wasmtime::Trap>(),
+                Some(&wasmtime::Trap::UnreachableCodeReached)
+            );
+            let backtrace = error
+                .downcast_ref::<wasmtime::WasmBacktrace>()
+                .expect("shutdown should retain the Wasm backtrace");
+            assert!(!backtrace.frames().is_empty());
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn shutdown_retains_the_finalizer_error_for_later_calls() {
+        let store = ConcurrentStore::new(test_store()).await;
+        let handle = store.handle();
+        let error = store
+            .shutdown(|_| {
+                Box::pin(async {
+                    Err::<(), _>(
+                        wasmtime::Error::new(wasmtime::Trap::MemoryOutOfBounds)
+                            .context("finalizer failure"),
+                    )
+                })
+            })
+            .await
+            .expect_err("finalizer should fail shutdown");
+        let later_error = handle
+            .call(|_| Box::pin(async { Ok(()) }))
+            .await
+            .expect_err("calls after shutdown should retain the finalizer failure");
+        for error in [&error, &later_error] {
+            let error = super::guest_call_error(error);
+            assert_eq!(
+                error.downcast_ref::<wasmtime::Trap>(),
+                Some(&wasmtime::Trap::MemoryOutOfBounds)
+            );
+            assert_eq!(error.to_string(), "finalizer failure");
+        }
+    }
+
     fn shutdown_does_not_hide_terminal_failure() {
         let error = super::executor::reconcile_shutdown_result(
             Ok(Ok("finalized")),
-            Err(Arc::new(DriverError::new("late driver failure"))),
+            Err(wasmtime::Error::new(wasmtime::Trap::UnreachableCodeReached)
+                .context("late driver failure")),
         )
         .expect_err("terminal driver failure should override finalizer success");
-        assert!(error.to_string().contains("driver failed"), "{error}");
-        assert!(error.to_string().contains("late driver failure"), "{error}");
+        assert_eq!(error.to_string(), "late driver failure");
+        assert_eq!(
+            error.downcast_ref::<wasmtime::Trap>(),
+            Some(&wasmtime::Trap::UnreachableCodeReached)
+        );
+
+        let error = super::executor::reconcile_shutdown_result::<()>(
+            Ok(Err(wasmtime::Error::msg("finalizer failure"))),
+            Err(wasmtime::Error::msg("later driver failure")),
+        )
+        .expect_err("finalizer failure should take precedence over the driver failure");
+        assert_eq!(error.to_string(), "finalizer failure");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
