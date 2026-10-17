@@ -11,6 +11,8 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 reqwest = { workspace = true, features = ["blocking", "json"] }
 rustls.workspace = true
 webpki-root-certs = { workspace = true }
