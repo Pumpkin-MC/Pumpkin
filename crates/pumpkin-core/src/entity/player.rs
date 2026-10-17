@@ -4085,7 +4085,7 @@ impl Player {
                                 self.gamemode.load() as u8,
                                 self.previous_gamemode.load().unwrap_or(self.gamemode.load()) as i8,
                                 false,
-                                false,
+                                new_world.is_flat(),
                                 Some((death_dimension, death_location)),
                                 VarInt(self.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                                 new_world.sea_level.into(),
