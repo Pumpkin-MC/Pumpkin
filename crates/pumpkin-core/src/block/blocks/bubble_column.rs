@@ -195,12 +195,13 @@ impl BlockBehaviour for BubbleColumnBlock {
             let state = args.world.get_block_state_id(args.position);
             if args.block == &Block::BUBBLE_COLUMN {
                 schedule_reconcile(args.world, *args.position, REMOVE_DELAY_TICKS);
-            } else if args.block == &Block::WATER
-                && is_source_water_state(state)
-                && (args.source_block == &Block::BUBBLE_COLUMN
-                    || kind_from_support(args.source_block).is_some())
-            {
-                schedule_reconcile(args.world, *args.position, CREATE_DELAY_TICKS);
+            } else if args.block == &Block::WATER && is_source_water_state(state) {
+                let below_pos = args.position.down();
+                let below_state = args.world.get_block_state_id(&below_pos);
+                let below_block = Block::from_state_id(below_state);
+                if kind_from_below(below_block, below_state).is_some() {
+                    schedule_reconcile(args.world, *args.position, CREATE_DELAY_TICKS);
+                }
             }
         }
     }
