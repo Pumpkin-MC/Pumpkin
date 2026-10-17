@@ -687,6 +687,21 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
+        // Only Bedrock viewers see this skin, and the join must not wait for the download.
+        if self.advanced_config.networking.bedrock.enabled {
+            let weak_player = Arc::downgrade(&player);
+            let properties = player.gameprofile.properties.load_full();
+            let auth_config = self.advanced_config.networking.java.authentication.clone();
+            self.spawn_task(async move {
+                if let Some(skin) = Player::fetch_skin(&properties, &auth_config).await
+                    && let Some(player) = weak_player.upgrade()
+                {
+                    player.bedrock_skin.store(Arc::new(skin));
+                    // Bedrock players already online were sent this player with the fallback skin.
+                    player.world().update_java_player_skin_for_bedrock(&player);
+                }
+            });
+        }
         {
             let mut advancements = player
                 .advancements
