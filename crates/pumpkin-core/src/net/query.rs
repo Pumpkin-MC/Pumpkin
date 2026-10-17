@@ -1,41 +1,63 @@
 use std::{
-    collections::HashMap,
     ffi::{CString, NulError},
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     sync::{Arc, atomic::Ordering},
-    time::Duration,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
+use hmac::{Hmac, KeyInit, Mac};
 use pumpkin_protocol::query::{
     CBasicStatus, CFullStatus, CHandshake, PacketType, RawQueryPacket, SHandshake, SStatusRequest,
 };
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::CURRENT_MC_VERSION;
-use rand::RngExt;
-use tokio::{net::UdpSocket, sync::RwLock, time};
+use rand::Rng;
+use sha2::Sha256;
+use tokio::net::UdpSocket;
 use tracing::{error, info};
 
 use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
+
+/// Token lifetime. One is accepted for the window it was minted in and the previous one.
+const TOKEN_WINDOW: u64 = 30;
+
+/// Derives the challenge token for a source address. Query is UDP and the source is
+/// forgeable, so deriving leaves no table a flood of spoofed handshakes could fill.
+fn challenge_token(key: &Hmac<Sha256>, addr: SocketAddr, window: u64) -> i32 {
+    let mut mac = key.clone();
+    match addr.ip() {
+        IpAddr::V4(ip) => mac.update(&ip.octets()),
+        IpAddr::V6(ip) => mac.update(&ip.octets()),
+    }
+    mac.update(&addr.port().to_be_bytes());
+    mac.update(&window.to_be_bytes());
+
+    let bytes = mac.finalize().into_bytes();
+    let value = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    // The wire format is a signed int, and vanilla never sends 0.
+    let token = (value & 0x7FFF_FFFF) as i32;
+    if token == 0 { 1 } else { token }
+}
+
+fn current_window() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs() / TOKEN_WINDOW)
+}
 
 pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     let Ok(socket) = UdpSocket::bind(query_addr).await else {
         error!("Unable to bind query UDP socket");
         return;
     };
-    let socket = Arc::new(socket);
 
-    // Challenge tokens are bound to the IP address and port
-    let valid_challenge_tokens = Arc::new(RwLock::new(HashMap::new()));
-    let valid_challenge_tokens_clone = valid_challenge_tokens.clone();
-    // All challenge tokens ever created are expired every 30 seconds
-    tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_secs(30));
-
-        loop {
-            interval.tick().await;
-            valid_challenge_tokens_clone.write().await.clear();
-        }
-    });
+    // Per process, so a token cannot be reused on another server or across a restart.
+    let mut secret = [0u8; 32];
+    rand::rng().fill_bytes(&mut secret);
+    let Ok(token_key) = <Hmac<Sha256> as KeyInit>::new_from_slice(&secret) else {
+        error!("Unable to derive query challenge token key");
+        return;
+    };
 
     if let Ok(local_addr) = socket.local_addr() {
         info!(
@@ -46,12 +68,10 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
         );
     }
 
-    while !SHOULD_STOP.load(Ordering::Relaxed) {
-        let socket = socket.clone();
-        let valid_challenge_tokens = valid_challenge_tokens.clone();
-        let server = server.clone();
-        let mut buf = vec![0; 1024];
+    // Reused across packets; handling inline keeps a datagram flood from piling up tasks.
+    let mut buf = vec![0; 1024];
 
+    while !SHOULD_STOP.load(Ordering::Relaxed) {
         let recv_result = tokio::select! {
             result = socket.recv_from(&mut buf) => Some(result),
             () = STOP_INTERRUPT.cancelled() => None,
@@ -61,22 +81,18 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
             break;
         };
 
-        buf.truncate(length);
-
-        tokio::spawn(async move {
-            if let Err(err) = handle_packet(
-                buf,
-                valid_challenge_tokens,
-                server,
-                socket,
-                addr,
-                query_addr,
-            )
-            .await
-            {
-                error!("Interior 0 bytes found! Cannot encode query response! {err}");
-            }
-        });
+        if let Err(err) = handle_packet(
+            buf[..length].to_vec(),
+            &token_key,
+            &server,
+            &socket,
+            addr,
+            query_addr,
+        )
+        .await
+        {
+            error!("Interior 0 bytes found! Cannot encode query response! {err}");
+        }
     }
 }
 
@@ -87,9 +103,9 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
 #[inline]
 async fn handle_packet(
     buf: Vec<u8>,
-    clients: Arc<RwLock<HashMap<i32, SocketAddr>>>,
-    server: Arc<Server>,
-    socket: Arc<UdpSocket>,
+    token_key: &Hmac<Sha256>,
+    server: &Server,
+    socket: &UdpSocket,
     addr: SocketAddr,
     bound_addr: SocketAddr,
 ) -> Result<(), NulError> {
@@ -97,7 +113,7 @@ async fn handle_packet(
         match raw_packet.packet_type {
             PacketType::Handshake => {
                 if let Ok(packet) = SHandshake::decode(&mut raw_packet).await {
-                    let challenge_token = rand::rng().random_range(1..=i32::MAX);
+                    let challenge_token = challenge_token(token_key, addr, current_window());
                     let response = CHandshake {
                         session_id: packet.session_id,
                         challenge_token,
@@ -105,20 +121,23 @@ async fn handle_packet(
 
                     // Ignore all errors since we don't want the query handler to crash
                     // Protocol also ignores all errors and just doesn't respond
+                    // Dropped rather than awaited: an unwritable socket would hold the
+                    // receive loop, and with it the shutdown check, for an answer a client
+                    // will retry anyway.
                     if let Some(encoded) = response.encode() {
-                        let _ = socket.send_to(encoded.as_slice(), addr).await;
+                        let _ = socket.try_send_to(encoded.as_slice(), addr);
                     }
-
-                    clients.write().await.insert(challenge_token, addr);
                 }
             }
             PacketType::Status => {
                 if let Ok(packet) = SStatusRequest::decode(&mut raw_packet).await
-                    && clients
-                        .read()
-                        .await
-                        .get(&packet.challenge_token)
-                        .is_some_and(|token_bound_ip: &SocketAddr| token_bound_ip == &addr)
+                    // The minting window may have rolled over, so the previous is accepted too.
+                    && {
+                        let window = current_window();
+                        packet.challenge_token == challenge_token(token_key, addr, window)
+                            || packet.challenge_token
+                                == challenge_token(token_key, addr, window.saturating_sub(1))
+                    }
                 {
                     if packet.is_full_request {
                         // Get 4 players
@@ -173,7 +192,7 @@ async fn handle_packet(
                         };
 
                         if let Some(encoded) = response.encode() {
-                            let _ = socket.send_to(encoded.as_slice(), addr).await;
+                            let _ = socket.try_send_to(encoded.as_slice(), addr);
                         }
                     } else {
                         let response = CBasicStatus {
@@ -196,7 +215,7 @@ async fn handle_packet(
                         };
 
                         if let Some(encoded) = response.encode() {
-                            let _ = socket.send_to(encoded.as_slice(), addr).await;
+                            let _ = socket.try_send_to(encoded.as_slice(), addr);
                         }
                     }
                 }
