@@ -2215,7 +2215,8 @@ impl Player {
         self.living_entity.get_block_speed_factor()
     }
 
-    fn is_sleeping(&self) -> bool {
+    #[must_use]
+    pub fn is_sleeping(&self) -> bool {
         // TODO: Track sleeping position state explicitly (vanilla checks sleepingPosition.isPresent()).
         self.sleeping_since.load().is_some()
     }
