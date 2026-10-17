@@ -6,7 +6,7 @@ use crate::entity::ai::control::jump_control::JumpControl;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
 use crate::entity::ai::control::{LookControlTrait, MoveControlTrait};
-use crate::entity::ai::goal::{Controls, goal_selector::GoalSelector};
+use crate::entity::ai::goal::{Controls, GoalReach, goal_selector::GoalSelector};
 use crate::entity::ai::sensing::Sensing;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
@@ -15,6 +15,7 @@ use crate::entity::vehicle::boat::BoatEntity;
 use crate::server::Server;
 use crate::world::World;
 use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
+use crate::world::entity_islands::{self, AuditedReach};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
@@ -971,9 +972,96 @@ impl MobEntity {
     }
 }
 
+/// Largest factor of `getFrictionInfluencedSpeed`, on the least slippery blocks.
+const MAX_GROUND_SPEED_FACTOR: f64 = 0.216_000_02 / (0.6 * 0.91 * 0.6 * 0.91 * 0.6 * 0.91);
+
+/// Water (0.014) plus lava (0.007) current per tick.
+const FLUID_PUSH_MOTION: f64 = 0.021;
+
+/// Vertical speed gravity, fluids and bubble columns can add in one tick.
+const VERTICAL_MOTION: f64 = 0.5;
+
+impl MobEntity {
+    /// What this mob can touch next tick, if its species and goals are audited.
+    pub fn audited_reach(&self, mob: &dyn Mob) -> Option<AuditedReach> {
+        let living = &self.living_entity;
+        let entity = &living.entity;
+        // Riders, vehicles and leashes move it from outside its tick.
+        if !mob.has_audited_tick()
+            || entity.has_vehicle()
+            || entity.has_passengers()
+            || entity
+                .leashed_to
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some()
+        {
+            return None;
+        }
+
+        let mut goals = GoalReach::default();
+        GoalSelector::tick_reach(&self.goals_selector, mob, &mut goals)?;
+        GoalSelector::tick_reach(&self.target_selector, mob, &mut goals)?;
+
+        // `Mob.setSpeed` also sets the forward input to the speed.
+        let speed = living.get_attribute_value(&Attributes::MOVEMENT_SPEED) * goals.speed.max(1.0);
+        let acceleration = MAX_GROUND_SPEED_FACTOR * speed * speed.min(1.0);
+        let velocity = entity.velocity.load();
+        let spawns = mob.audited_spawn_distance();
+        let horizontal = velocity.x.hypot(velocity.z) + acceleration + FLUID_PUSH_MOTION + spawns;
+        let vertical = velocity.y.abs() + living.get_jump_velocity(1.0) + VERTICAL_MOTION + spawns;
+
+        let route = {
+            let navigator = self
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            navigator
+                .get_path()
+                .filter(|path| !path.is_done())
+                .and_then(|path| {
+                    // Area checked by `shouldRecomputePath`.
+                    let end = path.get_end_node()?.pos.0.to_f64();
+                    let middle = (end + entity.pos.load()) * 0.5;
+                    let radius = (path.get_node_count() - path.get_next_node_index()) as f64 + 1.0;
+                    Some(BoundingBox::new(middle, middle).expand(radius, radius, radius))
+                })
+        };
+
+        let mut links = entity_islands::links_of(mob);
+        links.extend(goals.links);
+        let mut reach = AuditedReach {
+            bounding_box: entity.bounding_box.load(),
+            motion: (horizontal, vertical),
+            entities: goals.entities,
+            players: goals.players,
+            block_reads: living
+                .get_attribute_value(&Attributes::FOLLOW_RANGE)
+                .max(0.0)
+                + entity_islands::CONSERVATIVE_MARGIN,
+            route,
+            changes_blocks: goals.changes_blocks,
+            global: false,
+            links,
+        };
+        reach.scan_contact_blocks(&entity.world.load());
+        Some(reach)
+    }
+}
+
 pub trait Mob: EntityBase + Send + Sync {
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
+    }
+
+    /// Whether the species' own tick code stays within the reach `MobEntity` computes.
+    fn has_audited_tick(&self) -> bool {
+        false
+    }
+
+    /// How far outside its box the species' tick code spawns entities this tick.
+    fn audited_spawn_distance(&self) -> f64 {
+        0.0
     }
 
     fn can_attack(&self, target: &dyn EntityBase) -> bool {

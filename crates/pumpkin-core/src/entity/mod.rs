@@ -249,6 +249,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .add_raw(0.0, self.bedrock_y_offset(), 0.0)
     }
 
+    /// What this entity can touch next tick; `None` means a conservative reach.
+    fn audited_reach(&self) -> Option<crate::world::entity_islands::AuditedReach> {
+        self.get_mob()
+            .and_then(|mob| mob.get_mob_entity().audited_reach(mob))
+    }
+
     fn get_mob(&self) -> Option<&dyn mob::Mob> {
         None
     }

@@ -131,6 +131,10 @@ impl Animal for CowEntity {
 }
 
 impl Mob for CowEntity {
+    fn has_audited_tick(&self) -> bool {
+        true
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

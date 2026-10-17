@@ -23,6 +23,7 @@ use tracing::{debug, error, info, trace, warn};
 mod active_chunks;
 pub mod brightness;
 pub mod chunker;
+pub mod entity_islands;
 pub mod explosion;
 pub mod generation_cache;
 pub mod loot;
@@ -157,7 +158,10 @@ use pumpkin_world::{
     chunk::{io::Dirtiable, palette::bedrock_water_state},
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
-use pumpkin_world::{level::Level, tick::TickPriority};
+use pumpkin_world::{
+    level::Level,
+    tick::{TickPriority, order},
+};
 pub use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
 use rand::{RngExt, rng};
@@ -288,6 +292,8 @@ pub struct World {
     pub spawn_state: ArcSwap<SpawnState>,
     pub active_chunks: RwLock<Arc<FxHashSet<Vector2<i32>>>>,
     pub(crate) navigation_change_sequence: std::sync::atomic::AtomicU64,
+    /// Entities spawned by ticking entities, with their sequential order.
+    tick_spawns: std::sync::Mutex<Vec<(u64, i32)>>,
     active_chunk_tracker: std::sync::Mutex<ActiveChunkTracker>,
     pub forced_chunks: std::sync::Mutex<FxHashSet<Vector2<i32>>>,
     /// Block entities indexed by chunk, so ticking only visits the currently
@@ -426,6 +432,7 @@ impl World {
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
             active_chunks: RwLock::new(Arc::default()),
             navigation_change_sequence: std::sync::atomic::AtomicU64::new(0),
+            tick_spawns: std::sync::Mutex::new(Vec::new()),
             active_chunk_tracker: std::sync::Mutex::new(ActiveChunkTracker::default()),
             forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
             server,
@@ -1531,8 +1538,6 @@ impl World {
 
     #[expect(clippy::too_many_lines)]
     pub fn tick(self: &Arc<Self>, server: &Arc<Server>) {
-        const ENTITY_TICK_BATCH_SIZE: usize = 16;
-
         let start = std::time::Instant::now();
 
         self.flush_block_updates();
@@ -1618,13 +1623,54 @@ impl World {
             })
             .collect();
 
+        // Entities that can affect each other tick in list order; separate islands run in
+        // parallel.
+        let reports: Vec<_> = tickable
+            .par_iter()
+            .map(|(entity, _)| entity_islands::EntityReach::of(entity.as_ref()))
+            .collect();
+        let nodes: Vec<_> = tickable
+            .iter()
+            .map(|(entity, _)| entity.get_entity().entity_id)
+            .zip(entity_islands::resolve(reports))
+            .collect();
+        let ticking: FxHashSet<i32> = nodes.iter().map(|(id, _)| *id).collect();
+        let idle_entities: Vec<_> = entities_to_tick
+            .iter()
+            .map(|entity| entity.get_entity())
+            .filter(|entity| !ticking.contains(&entity.entity_id))
+            .map(|entity| (entity.entity_id, entity.bounding_box.load()))
+            .collect();
+        let player_bodies: Vec<_> = players
+            .iter()
+            .map(|player| {
+                let entity = player.get_entity();
+                (entity.entity_id, entity.bounding_box.load())
+            })
+            .collect();
+        let mut islands = entity_islands::partition(&nodes, &idle_entities, &player_bodies);
+        // Start the largest islands first.
+        islands
+            .islands
+            .sort_by_key(|island| std::cmp::Reverse(island.len()));
+        let first_order = self.level.reserve_entity_tick_orders(tickable.len());
+
         let server_ref = server.as_ref();
-        tickable
-            .par_chunks(ENTITY_TICK_BATCH_SIZE)
-            .for_each(|batch| {
+        islands
+            .islands
+            .par_iter()
+            .with_max_len(1)
+            .for_each(|island| {
                 let _guard = entity_handle.enter();
 
-                for (entity, entity_chunk) in batch {
+                for &index in island {
+                    let (entity, entity_chunk) = &tickable[index];
+                    order::set_entity_order(Some(
+                        first_order + index as u64 * order::ORDERS_PER_ENTITY,
+                    ));
+                    #[cfg(debug_assertions)]
+                    entity_islands::enter(&islands, entity.get_entity().entity_id);
+
                     entity.get_entity().tick_count.fetch_add(1, Relaxed);
                     entity.tick(entity.as_ref(), server_ref);
 
@@ -1645,7 +1691,11 @@ impl World {
                         }
                     }
                 }
+                order::set_entity_order(None);
+                #[cfg(debug_assertions)]
+                entity_islands::leave();
             });
+        self.order_tick_spawns();
         let entity_elapsed = t_entities.elapsed();
 
         self.entity_tracker.update_all(self);
@@ -4374,6 +4424,7 @@ impl World {
     pub fn get_player_by_id(&self, id: i32) -> Option<Arc<Player>> {
         for player in self.players.load().iter() {
             if player.entity_id() == id {
+                entity_islands::check_reached(id);
                 return Some(player.clone());
             }
         }
@@ -4384,11 +4435,13 @@ impl World {
     pub fn get_entity_by_id(&self, id: i32) -> Option<Arc<dyn EntityBase>> {
         for entity in self.entities.load().iter() {
             if entity.get_entity().entity_id == id {
+                entity_islands::check_reached(id);
                 return Some(entity.clone());
             }
         }
         for player in self.players.load().iter() {
             if player.get_entity().entity_id == id {
+                entity_islands::check_reached(id);
                 return Some(player.clone() as Arc<dyn EntityBase>);
             }
         }
@@ -4419,6 +4472,7 @@ impl World {
                     .map(|p| p.clone() as Arc<dyn EntityBase>),
             )
             .filter(|entity| entity.get_entity().bounding_box.load().intersects(aabb))
+            .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
             .collect()
     }
 
@@ -4428,6 +4482,7 @@ impl World {
             .load()
             .iter()
             .filter(|entity| entity.get_entity().bounding_box.load().intersects(aabb))
+            .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
             .cloned()
             .collect()
     }
@@ -4438,6 +4493,7 @@ impl World {
         players_guard
             .iter()
             .filter(|player| player.get_entity().bounding_box.load().intersects(aabb))
+            .inspect(|player| entity_islands::check_reached(player.entity_id()))
             .cloned()
             .collect()
     }
@@ -4459,6 +4515,7 @@ impl World {
             .load()
             .iter()
             .find(|p| p.gameprofile.id == id)
+            .inspect(|player| entity_islands::check_reached(player.entity_id()))
             .cloned()
     }
 
@@ -4479,6 +4536,7 @@ impl World {
             .load()
             .iter()
             .find(|p| p.get_entity().entity_uuid == id)
+            .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
             .cloned()
     }
 
@@ -4521,7 +4579,10 @@ impl World {
             .iter()
             .filter_map(|player| {
                 let player_pos = player.get_entity().pos.load();
-                (player_pos.squared_distance_to_vec(&pos) <= radius_squared).then(|| player.clone())
+                (player_pos.squared_distance_to_vec(&pos) <= radius_squared).then(|| {
+                    entity_islands::check_reached(player.entity_id());
+                    player.clone()
+                })
             })
             .collect()
     }
@@ -4538,8 +4599,10 @@ impl World {
             .iter()
             .filter_map(|entity| {
                 let entity_pos = entity.get_entity().pos.load();
-                (entity_pos.squared_distance_to_vec(&pos) <= radius_squared)
-                    .then(|| (entity.get_entity().entity_uuid, entity.clone()))
+                (entity_pos.squared_distance_to_vec(&pos) <= radius_squared).then(|| {
+                    entity_islands::check_reached(entity.get_entity().entity_id);
+                    (entity.get_entity().entity_uuid, entity.clone())
+                })
             })
             .collect()
     }
@@ -4656,6 +4719,7 @@ impl World {
             if !predicate(player.as_ref()) {
                 continue;
             }
+            entity_islands::check_reached(player.entity_id());
             // We add the player to the list.
             list.push(player.clone());
             // Check if the list is too big.
@@ -4668,6 +4732,7 @@ impl World {
             if !predicate(entity.as_ref()) {
                 continue;
             }
+            entity_islands::check_reached(entity.get_entity().entity_id);
             list.push(entity.clone());
             if list.len() > max_list_capacity {
                 return;
@@ -4871,7 +4936,46 @@ impl World {
             new_entities.push(entity.clone());
             new_entities
         });
+        self.record_tick_spawn(entity.get_entity().entity_id);
         self.add_pending_riders(&entity);
+    }
+
+    /// Records the sequential order of an entity spawned while an entity ticks.
+    fn record_tick_spawn(&self, entity_id: i32) {
+        if let Some(order) = order::next_entity_order() {
+            self.tick_spawns
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push((order, entity_id));
+        }
+    }
+
+    /// Moves entities spawned by islands into sequential order, which is their next tick order.
+    fn order_tick_spawns(&self) {
+        let mut spawns = std::mem::take(
+            &mut *self
+                .tick_spawns
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        if spawns.len() < 2 {
+            return;
+        }
+        spawns.sort_unstable();
+        let rank: FxHashMap<i32, usize> = spawns
+            .iter()
+            .enumerate()
+            .map(|(rank, (_, entity_id))| (*entity_id, rank))
+            .collect();
+        self.entities.rcu(|current_entities| {
+            let (mut spawned, mut kept): (Vec<_>, Vec<_>) = current_entities
+                .iter()
+                .cloned()
+                .partition(|entity| rank.contains_key(&entity.get_entity().entity_id));
+            spawned.sort_by_key(|entity| rank[&entity.get_entity().entity_id]);
+            kept.append(&mut spawned);
+            kept
+        });
     }
 
     /// Adds the riders a mob queued while being finalized (vanilla `addFreshEntityWithPassengers`).
@@ -4962,6 +5066,7 @@ impl World {
             new_entities.push(entity.clone());
             new_entities
         });
+        self.record_tick_spawn(entity.get_entity().entity_id);
         self.add_pending_riders(&entity);
     }
 

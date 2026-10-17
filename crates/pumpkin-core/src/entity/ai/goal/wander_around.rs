@@ -1,4 +1,4 @@
-use super::{Controls, Goal, to_goal_ticks};
+use super::{Controls, Goal, GoalReach, to_goal_ticks};
 use crate::entity::ai::util::default_random_pos;
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 use pumpkin_util::math::vector3::Vector3;
@@ -46,6 +46,13 @@ impl WanderAroundGoal {
 }
 
 impl Goal for WanderAroundGoal {
+    fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
+        Some(GoalReach {
+            speed: self.speed,
+            ..GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         // Every mob that carries a passenger is controlled by it.
         if mob.get_entity().has_passengers() {

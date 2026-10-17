@@ -1938,7 +1938,7 @@ impl LivingEntity {
         self.entity.velocity_dirty.store(true, SeqCst);
     }
 
-    fn get_jump_velocity(&self, mut strength: f64) -> f64 {
+    pub(crate) fn get_jump_velocity(&self, mut strength: f64) -> f64 {
         strength *= self.get_attribute_value(&Attributes::JUMP_STRENGTH);
         strength *= f64::from(self.entity.get_jump_velocity_multiplier());
         if let Some(effect) = self.get_effect(&StatusEffect::JUMP_BOOST) {

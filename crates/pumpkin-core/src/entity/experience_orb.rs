@@ -7,9 +7,18 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::{server::Server, world::World};
+use crate::{
+    server::Server,
+    world::{
+        World,
+        entity_islands::{self, AuditedReach},
+    },
+};
 
 use super::{Entity, EntityBase, living::LivingEntity, player::Player};
+
+/// Speed fluid currents can add in one tick.
+const FLUID_MOTION: f64 = 0.1;
 
 pub struct ExperienceOrbEntity {
     entity: Entity,
@@ -66,6 +75,27 @@ impl ExperienceOrbEntity {
 }
 
 impl EntityBase for ExperienceOrbEntity {
+    fn audited_reach(&self) -> Option<AuditedReach> {
+        let entity = &self.entity;
+        let velocity = entity.velocity.load();
+        let mut reach = AuditedReach {
+            bounding_box: entity.bounding_box.load(),
+            motion: (
+                velocity.x.hypot(velocity.z) + FLUID_MOTION,
+                velocity.y.abs() + self.get_gravity() + FLUID_MOTION,
+            ),
+            entities: 0.0,
+            players: 0.0,
+            block_reads: 1.0,
+            route: None,
+            changes_blocks: false,
+            global: false,
+            links: entity_islands::links_of(self),
+        };
+        reach.scan_contact_blocks(&entity.world.load());
+        Some(reach)
+    }
+
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = &self.entity;
         entity.tick(caller, server);

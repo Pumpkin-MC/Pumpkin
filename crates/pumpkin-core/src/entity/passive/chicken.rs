@@ -144,6 +144,19 @@ impl Animal for ChickenEntity {
 }
 
 impl Mob for ChickenEntity {
+    fn has_audited_tick(&self) -> bool {
+        true
+    }
+
+    fn audited_spawn_distance(&self) -> f64 {
+        // The egg drops anywhere in its block.
+        if self.egg_lay_time.load(Ordering::Relaxed) <= 1 {
+            1.0
+        } else {
+            0.0
+        }
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

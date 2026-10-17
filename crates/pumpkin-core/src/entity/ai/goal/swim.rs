@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering;
 
-use super::{Controls, Goal};
+use super::{Controls, Goal, GoalReach};
 use crate::entity::mob::Mob;
 use rand::RngExt;
 
@@ -27,6 +27,10 @@ impl SwimGoal {
 }
 
 impl Goal for SwimGoal {
+    fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
+        Some(GoalReach::default())
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         mob.get_mob_entity()
             .navigator

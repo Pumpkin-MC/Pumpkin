@@ -1,4 +1,4 @@
-use crate::entity::ai::goal::{Controls, Goal, PrioritizedGoal};
+use crate::entity::ai::goal::{Controls, Goal, GoalReach, PrioritizedGoal};
 use crate::entity::mob::Mob;
 use crossbeam::atomic::AtomicCell;
 use std::any::TypeId;
@@ -121,6 +121,23 @@ impl GoalSelector {
     )]
     fn snapshot(selector: &Mutex<Self>) -> Arc<Vec<Arc<RegisteredGoal>>> {
         Self::lock(selector).goals.clone()
+    }
+
+    /// Adds the reach of every registered goal; `None` if one is unaudited or busy.
+    pub fn tick_reach(selector: &Mutex<Self>, mob: &dyn Mob, reach: &mut GoalReach) -> Option<()> {
+        for entry in Self::snapshot(selector).iter() {
+            if !entry.registered.load(Relaxed) {
+                continue;
+            }
+            let slot = match entry.goal.try_lock() {
+                Ok(slot) => slot,
+                Err(TryLockError::Poisoned(error)) => error.into_inner(),
+                Err(TryLockError::WouldBlock) => return None,
+            };
+            let goal = slot.as_ref()?;
+            reach.add(goal.tick_reach(mob, goal.running)?);
+        }
+        Some(())
     }
 
     fn candidate(entry: &RegisteredGoal, disabled: Controls) -> bool {
