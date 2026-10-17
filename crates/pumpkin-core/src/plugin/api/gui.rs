@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use pumpkin_data::{item_stack::ItemStack, screen::WindowType};
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
 use pumpkin_inventory::slot::NormalSlot;
 use pumpkin_inventory::{Clearable, Inventory};
@@ -119,6 +120,7 @@ impl PluginScreenHandler {
     pub fn new(
         sync_id: u8,
         window_type: WindowType,
+        player_inventory: &Arc<PlayerInventory>,
         inventory: &Arc<PluginInventory>,
         allow_grab_items: bool,
         allow_put_items: bool,
@@ -136,6 +138,8 @@ impl PluginScreenHandler {
         for i in 0..inventory.size() {
             handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), i)));
         }
+        let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
+        handler.add_player_slots(&player_inventory);
 
         handler
     }
@@ -163,7 +167,43 @@ impl ScreenHandler for PluginScreenHandler {
         &mut self.behaviour
     }
 
-    fn quick_move(&mut self, _player: &dyn InventoryPlayer, _slot_index: i32) -> ItemStack {
-        ItemStack::EMPTY.clone()
+    fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+        let mut stack_left = ItemStack::EMPTY.clone();
+        let slot = self.get_behaviour().slots[slot_index as usize].clone();
+
+        if slot.has_stack() {
+            let mut slot_stack = slot.get_stack();
+            stack_left = slot_stack.clone();
+            let container_slots = self.get_behaviour().container_slots as i32;
+
+            if slot_index < container_slots {
+                if !self.get_behaviour().allow_grab_items {
+                    return ItemStack::EMPTY.clone();
+                }
+                if !self.insert_item(
+                    &mut slot_stack,
+                    container_slots,
+                    self.get_behaviour().slots.len() as i32,
+                    true,
+                ) {
+                    return ItemStack::EMPTY.clone();
+                }
+            } else {
+                if !self.get_behaviour().allow_put_items {
+                    return ItemStack::EMPTY.clone();
+                }
+                if !self.insert_item(&mut slot_stack, 0, container_slots, false) {
+                    return ItemStack::EMPTY.clone();
+                }
+            }
+
+            if slot_stack.is_empty() {
+                slot.set_stack(ItemStack::EMPTY.clone());
+            } else {
+                slot.set_stack(slot_stack);
+            }
+        }
+
+        stack_left
     }
 }

@@ -3012,6 +3012,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             > = Arc::new(std::sync::Mutex::new(PluginScreenHandler::new(
                 sync_id,
                 window_type,
+                player.inventory(),
                 &inventory,
                 allow_grab_items,
                 allow_put_items,
