@@ -168,3 +168,27 @@ impl TryFrom<i32> for ActionType {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SInteract;
+    use crate::{ClientPacket, ServerPacket, VarInt};
+    use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+
+    #[test]
+    fn zero_location_interaction_26_3() -> Result<(), Box<dyn std::error::Error>> {
+        let bytes = [0xAC, 0x02, 0x00, 0x00, 0x01];
+        let mut input = bytes.as_slice();
+        let packet = SInteract::read(&mut input, &JavaMinecraftVersion::V_26_3)?;
+        assert_eq!(packet.entity_id, VarInt(300));
+        assert_eq!(packet.hand, Some(VarInt(0)));
+        assert_eq!(packet.target_position, Some(Vector3::new(0.0, 0.0, 0.0)));
+        assert!(packet.sneaking);
+        assert!(input.is_empty());
+
+        let mut encoded = Vec::new();
+        packet.write_packet_data(&mut encoded, &JavaMinecraftVersion::V_26_3)?;
+        assert_eq!(encoded, bytes);
+        Ok(())
+    }
+}

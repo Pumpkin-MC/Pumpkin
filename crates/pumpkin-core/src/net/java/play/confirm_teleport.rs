@@ -9,6 +9,11 @@ impl JavaClient {
             NotTeleporting,
         }
 
+        // A newer teleport can replace one whose confirmation is still in flight.
+        if confirm_teleport.teleport_id.0 != player.teleport_id_count.load(Ordering::Relaxed) {
+            return;
+        }
+
         let result = {
             let mut awaiting_teleport = player
                 .awaiting_teleport
@@ -30,10 +35,7 @@ impl JavaClient {
         };
 
         match result {
-            TeleportResult::Success => {}
-            TeleportResult::WrongId => {
-                self.try_kick(&TextComponent::text("Wrong teleport id"));
-            }
+            TeleportResult::Success | TeleportResult::WrongId => {}
             TeleportResult::NotTeleporting => {
                 self.try_kick(&TextComponent::text(
                     "Send Teleport confirm, but we did not teleport",

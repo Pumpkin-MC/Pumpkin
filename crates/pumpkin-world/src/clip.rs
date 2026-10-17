@@ -3,7 +3,7 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
-use crate::world::BlockAccessor;
+use crate::world::{BlockAccessor, fluid_from_block_state, fluid_state_from_block_state};
 
 /// Block shape selection mode for [`ClipContext`], matching vanilla `ClipContext.Block`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -243,36 +243,37 @@ fn clip_block_shapes(
 }
 
 fn clip_fluid(
+    accessor: &(impl BlockAccessor + ?Sized),
     state: &BlockState,
     block_pos: &BlockPos,
     from: Vector3<f64>,
     to: Vector3<f64>,
     fluid_mode: ClipFluid,
 ) -> Option<(f64, BlockDirection, Vector3<f64>, bool)> {
+    if fluid_mode == ClipFluid::None {
+        return None;
+    }
+
+    let (fluid, fluid_state) = fluid_state_from_block_state(state.id);
     let should_clip = match fluid_mode {
         ClipFluid::None => false,
-        ClipFluid::SourceOnly => {
-            state.is_waterlogged()
-                || Fluid::from_state_id(state.id)
-                    .is_some_and(|f| f.id == Fluid::WATER.id || f.id == Fluid::LAVA.id)
-        }
-        ClipFluid::Any => {
-            state.is_waterlogged()
-                || Fluid::from_state_id(state.id).is_some_and(|f| f != &Fluid::EMPTY)
-        }
-        ClipFluid::Water => {
-            state.is_waterlogged()
-                || Fluid::from_state_id(state.id)
-                    .is_some_and(|f| f.id == Fluid::WATER.id || f.id == Fluid::FLOWING_WATER.id)
-        }
+        ClipFluid::SourceOnly => fluid_state.is_source,
+        ClipFluid::Any => !fluid_state.is_empty,
+        ClipFluid::Water => fluid.matches_type(&Fluid::WATER),
     };
 
     if !should_clip {
         return None;
     }
 
+    let above = fluid_from_block_state(accessor.get_block_state_id(&block_pos.up()));
+    let height = if fluid.matches_type(above) {
+        1.0
+    } else {
+        fluid_state.height
+    };
     let world_min = block_pos.0.to_f64();
-    let world_max = world_min.add_raw(1.0, 1.0, 1.0);
+    let world_max = world_min.add_raw(1.0, f64::from(height), 1.0);
     intersects_aabb_with_hit(from, to, world_min, world_max)
 }
 
@@ -313,7 +314,7 @@ fn check_block(
         }
     };
 
-    let fluid_hit = clip_fluid(state, block_pos, from, to, context.fluid);
+    let fluid_hit = clip_fluid(accessor, state, block_pos, from, to, context.fluid);
 
     match (block_hit, fluid_hit) {
         (Some((bt, bdir, bpos, binside)), Some((ft, fdir, fpos, finside))) => {
@@ -429,6 +430,7 @@ pub fn clip(accessor: &(impl BlockAccessor + ?Sized), context: &ClipContext) -> 
 mod tests {
     use super::*;
     use pumpkin_data::BlockStateId;
+    use pumpkin_data::block_properties::{WaterLikeProperties, WhiteWoolSlabLikeProperties};
     use rustc_hash::FxHashMap;
 
     struct TestWorld {
@@ -544,6 +546,76 @@ mod tests {
         ));
         assert!(hit_any.is_hit());
         assert_eq!(hit_any.block_pos, BlockPos::new(3, 0, 0));
+    }
+
+    #[test]
+    fn ray_hits_the_fluid_surface_height() {
+        for (level, expected_y) in [
+            (0, 0.888_888_895_511_627_2),
+            (1, 0.777_777_791_023_254_4),
+            (7, 0.111_111_111_938_953_4),
+            (8, 0.888_888_895_511_627_2),
+            (13, 0.888_888_895_511_627_2),
+        ] {
+            let mut world = TestWorld::new();
+            world.blocks.insert(
+                BlockPos::new(0, 0, 0),
+                WaterLikeProperties { level }.to_state_id(&Block::WATER),
+            );
+            let hit = world.clip(&ClipContext::new(
+                Vector3::new(0.5, 2.0, 0.5),
+                Vector3::new(0.5, 0.0, 0.5),
+                ClipBlock::Collider,
+                ClipFluid::Any,
+            ));
+            assert!(hit.is_hit(), "water level {level}");
+            assert_eq!(hit.direction, BlockDirection::Up);
+            assert!((hit.location.y - expected_y).abs() < 1.0e-10);
+        }
+    }
+
+    #[test]
+    fn ray_fluid_surface_reaches_the_block_above() {
+        let mut world = TestWorld::new();
+        world.set_block(BlockPos::new(0, 0, 0), &Block::WATER);
+        let context = ClipContext::new(
+            Vector3::new(-0.5, 0.95, 0.5),
+            Vector3::new(1.5, 0.95, 0.5),
+            ClipBlock::Collider,
+            ClipFluid::Water,
+        );
+        assert!(world.clip(&context).is_miss());
+
+        world.blocks.insert(
+            BlockPos::new(0, 1, 0),
+            WaterLikeProperties { level: 5 }.to_state_id(&Block::WATER),
+        );
+        let hit = world.clip(&context);
+        assert!(hit.is_hit());
+        assert_eq!(hit.block_pos, BlockPos::new(0, 0, 0));
+        assert_eq!(hit.direction, BlockDirection::West);
+    }
+
+    #[test]
+    fn ray_hits_waterlogged_and_aquatic_block_water_surfaces() {
+        let mut slab = WhiteWoolSlabLikeProperties::default(&Block::OAK_SLAB);
+        slab.waterlogged = true;
+        for state_id in [
+            slab.to_state_id(&Block::OAK_SLAB),
+            Block::SEAGRASS.default_state.id,
+            Block::BUBBLE_COLUMN.default_state.id,
+        ] {
+            let mut world = TestWorld::new();
+            world.blocks.insert(BlockPos::new(0, 0, 0), state_id);
+            let hit = world.clip(&ClipContext::new(
+                Vector3::new(0.5, 2.0, 0.5),
+                Vector3::new(0.5, 0.0, 0.5),
+                ClipBlock::Collider,
+                ClipFluid::SourceOnly,
+            ));
+            assert!(hit.is_hit());
+            assert!((hit.location.y - 0.888_888_895_511_627_2).abs() < 1.0e-10);
+        }
     }
 
     #[test]
