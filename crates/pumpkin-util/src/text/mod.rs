@@ -898,10 +898,19 @@ impl TextComponentBase {
     }
 }
 
+/// Converts text-component NBT to JSON, interpreting decoration bytes as booleans.
+/// Numeric fields outside those decorations retain their numeric values.
 fn nbt_compound_to_json(compound: &pumpkin_nbt::NbtCompound) -> serde_json::Value {
     let mut map = serde_json::Map::new();
     for (k, v) in &compound.child_tags {
-        map.insert(k.to_string(), nbt_tag_to_json(v));
+        let value = match (k.as_ref(), v) {
+            (
+                "bold" | "italic" | "underlined" | "strikethrough" | "obfuscated",
+                pumpkin_nbt::tag::NbtTag::Byte(value),
+            ) => serde_json::Value::Bool(*value != 0),
+            _ => nbt_tag_to_json(v),
+        };
+        map.insert(k.to_string(), value);
     }
     serde_json::Value::Object(map)
 }
@@ -2181,13 +2190,24 @@ mod test {
         assert!(click.get_string("value").is_none());
     }
 
+    /// Checks that true and false NBT decoration bytes preserve the component's text and colour.
     #[test]
     fn styled_components_parse_from_nbt() {
         let mut styled = pumpkin_nbt::compound::NbtCompound::new();
         styled.put_string("text", "hi".to_string());
         styled.put_string("color", "red".to_string());
+        styled.put_byte("bold", 1);
+        styled.put_byte("italic", 0);
+        styled.put_byte("underlined", 1);
+        styled.put_byte("strikethrough", 0);
+        styled.put_byte("obfuscated", 1);
         let component = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(styled));
         assert_eq!(component.0.style.color, Some(Color::Named(NamedColor::Red)));
+        assert_eq!(component.0.style.bold, Some(true));
+        assert_eq!(component.0.style.italic, Some(false));
+        assert_eq!(component.0.style.underlined, Some(true));
+        assert_eq!(component.0.style.strikethrough, Some(false));
+        assert_eq!(component.0.style.obfuscated, Some(true));
         assert_eq!(component.get_text(), "hi");
     }
 }
