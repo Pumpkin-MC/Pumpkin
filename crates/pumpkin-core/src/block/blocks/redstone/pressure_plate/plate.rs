@@ -3,13 +3,12 @@ use pumpkin_data::{
     tag::{self},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{
         BlockBehaviour, BlockMetadata, CanPlaceAtArgs, EmitsRedstonePowerArgs,
-        GetRedstonePowerArgs, OnEntityCollisionArgs, OnNeighborUpdateArgs, OnScheduledTickArgs,
-        OnStateReplacedArgs,
+        GetRedstonePowerArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
+        OnScheduledTickArgs, OnStateReplacedArgs,
     },
     world::World,
 };
@@ -63,11 +62,11 @@ impl BlockBehaviour for PressurePlateBlock {
         true
     }
 
-    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        if !Self::can_pressure_plate_place_at(args.world, args.position) {
-            args.world
-                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
-        }
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        self.get_state_for_neighbor_update_pp(args)
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
