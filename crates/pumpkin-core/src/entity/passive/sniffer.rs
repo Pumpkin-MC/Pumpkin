@@ -351,7 +351,6 @@ impl Mob for SnifferEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
         let state = self.get_state();
         match state {
             SnifferState::Searching => {

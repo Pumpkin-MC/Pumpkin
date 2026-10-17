@@ -31,6 +31,7 @@ use std::sync::{
 };
 
 use super::{Entity, EntityBase, living::LivingEntity, player::Player};
+use crate::world::entity_islands::{self, AuditedReach};
 
 pub struct ItemEntity {
     entity: Entity,
@@ -88,6 +89,12 @@ impl Drop for ItemMergeReservation<'_> {
 const LIFETIME: u32 = 6000; // 5 minutes in ticks
 /// Vanilla `ItemEntity.merge(to, from, 64)`: cap on top of `getMaxStackSize`.
 const MERGE_MAX_COUNT: u8 = 64;
+
+/// Horizontal search distance of `mergeWithNeighbours`.
+const MERGE_DISTANCE: f64 = 0.5;
+
+/// Most `moveTowardsClosestSpace` can add, plus fluid currents.
+const PUSH_OUT_MOTION: f64 = 0.35;
 
 impl ItemEntity {
     pub const DEFAULT_PICKUP_DELAY: u8 = 10;
@@ -211,7 +218,11 @@ impl ItemEntity {
             return;
         }
 
-        let bounding_box = self.entity.bounding_box.load().expand(0.5, 0.0, 0.5);
+        let bounding_box =
+            self.entity
+                .bounding_box
+                .load()
+                .expand(MERGE_DISTANCE, 0.0, MERGE_DISTANCE);
         let world = self.entity.world.load();
         for other in world.get_entities_at_box(&bounding_box) {
             let Some(item) = other.get_item_entity() else {
@@ -467,7 +478,7 @@ impl ItemEntity {
         !entity.on_ground.load(Ordering::SeqCst)
             || move_velo.horizontal_length_squared() > 1.0e-5
             || entity
-                .age
+                .tick_count
                 .load(Ordering::Relaxed)
                 .wrapping_add(entity.entity_id)
                 % 4
@@ -531,7 +542,7 @@ impl ItemEntity {
         let moved =
             BlockPos::floored_v(entity.last_pos.load()) != BlockPos::floored_v(entity.pos.load());
         let rate = if moved { 2 } else { 40 };
-        if entity.age.load(Ordering::Relaxed) % rate == 0 {
+        if entity.tick_count.load(Ordering::Relaxed) % rate == 0 {
             self.merge_with_neighbours();
         }
 
@@ -553,6 +564,27 @@ impl ItemEntity {
 }
 
 impl EntityBase for ItemEntity {
+    fn audited_reach(&self) -> Option<AuditedReach> {
+        let entity = &self.entity;
+        let velocity = entity.velocity.load();
+        let mut reach = AuditedReach {
+            bounding_box: entity.bounding_box.load(),
+            motion: (
+                velocity.x.hypot(velocity.z) + PUSH_OUT_MOTION,
+                velocity.y.abs() + PUSH_OUT_MOTION + self.get_gravity(),
+            ),
+            entities: MERGE_DISTANCE,
+            players: 0.0,
+            block_reads: 1.0,
+            route: None,
+            changes_blocks: false,
+            global: false,
+            links: entity_islands::links_of(self),
+        };
+        reach.scan_contact_blocks(&entity.world.load());
+        Some(reach)
+    }
+
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = &self.entity;
         if self

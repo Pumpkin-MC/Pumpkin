@@ -1,6 +1,6 @@
 use std::f64::consts::TAU;
 
-use crate::entity::ai::goal::{Controls, Goal};
+use crate::entity::ai::goal::{Controls, Goal, GoalReach};
 use crate::entity::mob::Mob;
 use rand::RngExt;
 
@@ -23,6 +23,10 @@ impl Default for RandomLookAroundGoal {
 }
 
 impl Goal for RandomLookAroundGoal {
+    fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
+        Some(GoalReach::default())
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         mob.get_random().random::<f32>() < 0.02
     }

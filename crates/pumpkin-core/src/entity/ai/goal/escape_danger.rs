@@ -1,9 +1,10 @@
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::atomic::Ordering::Relaxed;
 
-use super::{Controls, Goal};
+use super::{Controls, Goal, GoalReach};
 use crate::entity::ai::goal::try_find_water::TryFindWaterGoal;
 use crate::entity::ai::util::default_random_pos;
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
@@ -87,6 +88,24 @@ impl EscapeDangerGoal {
 }
 
 impl Goal for EscapeDangerGoal {
+    fn tick_reach(&self, mob: &dyn Mob, running: bool) -> Option<GoalReach> {
+        // Fleeing is the only fast part. Self-inflicted panic before the goals run comes from
+        // fire, lava, freezing or effects; hits from others already widen the reach.
+        let living = &mob.get_mob_entity().living_entity;
+        let entity = &living.entity;
+        let may_flee = running
+            || Self::should_panic(mob)
+            || entity.fire_ticks.load(Relaxed) > 0
+            || entity.frozen_ticks.load(Relaxed) > 0
+            || entity.touching_lava.load(Relaxed)
+            || living.has_effect(&StatusEffect::POISON)
+            || living.has_effect(&StatusEffect::WITHER);
+        Some(GoalReach {
+            speed: if may_flee { self.speed } else { 0.0 },
+            ..GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         if !Self::should_panic(mob) {
             return false;
@@ -111,9 +130,8 @@ impl Goal for EscapeDangerGoal {
         if let Some(target) = self.target {
             let pos = mob.get_mob_entity().living_entity.entity.pos.load();
             mob.get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .steered()
+                .navigator()
                 .set_progress(NavigatorGoal::new(pos, target, self.speed));
         }
         self.running = true;

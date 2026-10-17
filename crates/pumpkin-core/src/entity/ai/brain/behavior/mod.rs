@@ -3,6 +3,8 @@ use super::memory::MemoryModuleId;
 
 pub mod do_nothing;
 pub mod gate;
+pub mod look_at_target_sink;
+pub mod move_to_target_sink;
 pub mod one_shot;
 pub mod shuffling_list;
 pub mod timed;
@@ -10,6 +12,8 @@ pub mod utils;
 
 pub use do_nothing::DoNothing;
 pub use gate::{GateBehavior, OrderPolicy, RunningPolicy, run_one, run_one_with_conditions};
+pub use look_at_target_sink::LookAtTargetSink;
+pub use move_to_target_sink::MoveToTargetSink;
 pub use one_shot::{OneShot, Trigger};
 pub use shuffling_list::ShufflingList;
 pub use timed::{Behavior, DEFAULT_DURATION, Timed};

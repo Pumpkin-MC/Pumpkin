@@ -1,4 +1,5 @@
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use uuid::Uuid;
 
 use crate::entity::ai::pathfinder::node::Node;
 
@@ -9,6 +10,7 @@ pub struct Path {
     target: BlockPos,
     dist_to_target: f32,
     reached: bool,
+    pub(crate) world_change: Option<(Uuid, u64)>,
 }
 
 impl Path {
@@ -27,6 +29,7 @@ impl Path {
             target,
             dist_to_target,
             reached,
+            world_change: None,
         }
     }
 
@@ -163,6 +166,7 @@ impl Path {
             target: self.target,
             dist_to_target: self.dist_to_target,
             reached: self.reached,
+            world_change: self.world_change,
         }
     }
 
