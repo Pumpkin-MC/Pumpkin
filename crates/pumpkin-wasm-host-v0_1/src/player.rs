@@ -1079,7 +1079,7 @@ use pumpkin_inventory::generic_container_screen_handler::GenericContainerScreenH
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
-use pumpkin_protocol::java::client::play::CSetContainerSlot;
+use pumpkin_protocol::java::client::play::{CSetContainerSlot, CSetPlayerInventory};
 
 use crate::pumpkin::plugin::item_stack::ItemStack as WitHostItemStack;
 
@@ -1104,11 +1104,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         };
 
         player.inventory().set_stack(slot, stack.clone());
-
-        // Sync to client
-        let stack_serializer = ItemStackSerializer::from(stack);
-        let packet = CSetContainerSlot::new(0, 0, slot as i16, &stack_serializer);
-        player.send_client_packet(&packet).await;
+        player.sync_hand_slot(slot, stack);
 
         Ok(())
     }
@@ -1129,9 +1125,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         player.inventory().set_stack(slot as usize, stack.clone());
 
         // Sync to client
-        let stack_serializer = ItemStackSerializer::from(stack);
-        let packet = CSetContainerSlot::new(0, 0, slot as i16, &stack_serializer);
-        player.send_client_packet(&packet).await;
+        player.try_send_slot_set_packet(&CSetPlayerInventory::new(
+            (slot as i32).into(),
+            &ItemStackSerializer::from(stack),
+        ));
 
         Ok(())
     }
