@@ -1,4 +1,4 @@
-use crate::entity::ai::util::RandomExt;
+use crate::entity::util::RandomExt;
 use pumpkin_protocol::java::client::play::CWorldEvent;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;

@@ -293,7 +293,7 @@ impl ThrownItemEntity {
 }
 
 /// Ray intersection algorithm for AABBs, returning a t value
-fn calculate_ray_intersection(
+pub(crate) fn calculate_ray_intersection(
     start: &Vector3<f64>,
     dir: &Vector3<f64>,
     bb: &BoundingBox,
