@@ -36,6 +36,7 @@
 pub mod anvil;
 pub mod beacon_screen_handler;
 pub mod brewing;
+pub mod bundle;
 pub mod cartography_table_screen_handler;
 pub mod container_click;
 pub mod crafting;
