@@ -3398,7 +3398,12 @@ impl EntityBase for LivingEntity {
             self.apply_travel_friction();
 
             let suffocating = self.entity.tick_block_collisions(caller);
-            if suffocating {
+            // Vanilla `LivingEntity.isInWall`: sleeping entities are never in a wall.
+            if suffocating
+                && !caller
+                    .get_player()
+                    .is_some_and(super::player::Player::is_sleeping)
+            {
                 caller.damage(caller, 1.0, DamageType::IN_WALL);
             }
 
