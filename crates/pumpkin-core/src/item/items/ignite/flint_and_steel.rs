@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 use crate::item::items::ignite::ignition::Ignition;
 
+use crate::plugin::api::events::block::block_ignite::BlockIgniteEvent;
 use crate::plugin::api::events::world::portal_create::{PortalCreateEvent, PortalType};
 
 pub struct FlintAndSteelItem;
@@ -38,12 +39,15 @@ impl ItemBehaviour for FlintAndSteelItem {
     ) -> BlockActionResult {
         let world = player.world();
         let server_ref = world.server.upgrade();
+        let fire_pos = location.offset(face.to_offset());
         if let Some(server_ref) = server_ref {
             let player_arc = world.get_player_by_uuid(player.gameprofile.id);
-            let mut event = crate::plugin::api::events::block::block_ignite::BlockIgniteEvent::new(
-                location,
+            let block_pos = Ignition::ignite_position(&world, location, fire_pos, block);
+            let mut event = BlockIgniteEvent::new(
+                block_pos,
                 &pumpkin_data::Block::FIRE,
                 player_arc,
+                BlockIgniteEvent::CAUSE_FLINT_AND_STEEL.to_string(),
             );
             server_ref
                 .plugin_manager
@@ -63,7 +67,7 @@ impl ItemBehaviour for FlintAndSteelItem {
             },
             &world,
             location,
-            location.offset(face.to_offset()),
+            fire_pos,
             block,
         );
 
