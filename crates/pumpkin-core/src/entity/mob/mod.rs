@@ -842,6 +842,10 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    fn get_owned_entities(&self) -> Vec<Arc<dyn EntityBase>> {
+        Vec::new()
+    }
+
     fn get_max_look_yaw_change(&self) -> f32 {
         10.0
     }
@@ -1346,6 +1350,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
         Mob::get_item_steerable(self)
+    }
+
+    fn get_owned_entities(&self) -> Vec<Arc<dyn EntityBase>> {
+        Mob::get_owned_entities(self)
     }
 
     fn init_data_tracker(&self) {
