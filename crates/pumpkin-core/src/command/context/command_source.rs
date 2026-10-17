@@ -472,8 +472,8 @@ impl pumpkin_command::source::CommandSource for CommandSource {
         self.send_error(error);
     }
 
-    fn call_result(&self, result: ReturnValue) {
-        self.command_result_taker.call(result);
+    fn call_result(&self, result: ReturnValue) -> Result<(), CommandSyntaxError> {
+        self.command_result_taker.call(result)
     }
 
     fn has_permission(&self, permission: &str) -> bool {
