@@ -26,6 +26,9 @@ pub use loot_table as chest_loot_table;
 pub mod item;
 
 #[cfg(feature = "item")]
+pub mod item_registry;
+
+#[cfg(feature = "item")]
 pub mod item_stack;
 
 #[cfg(feature = "packet")]
@@ -269,6 +272,9 @@ pub mod bedrock_biome;
 #[path = "generated/tag.rs"]
 pub mod tag;
 
+#[cfg(feature = "tag")]
+pub mod dynamic_tag;
+
 #[cfg(feature = "noise_router")]
 #[rustfmt::skip]
 #[path = "generated/noise_router.rs"]
@@ -438,6 +444,8 @@ pub mod potion_brewing;
 
 #[cfg(feature = "block")]
 mod block_direction;
+#[cfg(feature = "block")]
+pub mod block_registry;
 #[cfg(feature = "block")]
 pub mod block_rotation;
 #[cfg(feature = "block")]

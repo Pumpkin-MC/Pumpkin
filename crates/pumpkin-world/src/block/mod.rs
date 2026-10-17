@@ -65,15 +65,29 @@ impl BlockStateCodec {
 mod test {
     use pumpkin_data::BlockStateId;
 
-    use crate::chunk::palette::BLOCK_NETWORK_MAX_BITS;
+    use crate::chunk::palette::{block_network_max_bits, global_palette_bits};
 
     #[test]
     fn proper_network_bits_per_entry() {
-        let addressable = 1u32 << BLOCK_NETWORK_MAX_BITS;
+        let addressable = 1u32 << block_network_max_bits();
         assert!(
-            u32::from(BlockStateId::COUNT) <= addressable,
-            "We need to update our constants! {} states do not fit in {BLOCK_NETWORK_MAX_BITS} bits",
-            BlockStateId::COUNT
+            BlockStateId::total_count() <= addressable,
+            "We need to update our constants! {} states do not fit in {} bits",
+            BlockStateId::total_count(),
+            block_network_max_bits()
         );
+        // State ids are a u16.
+        assert!(block_network_max_bits() <= 16);
+    }
+
+    #[test]
+    fn global_palette_bits_follow_the_state_count() {
+        assert_eq!(global_palette_bits(u32::from(BlockStateId::COUNT)), 16);
+        assert_eq!(global_palette_bits(u32::from(BlockStateId::COUNT) + 64), 16);
+        assert_eq!(global_palette_bits(1 << 16), 16);
+        assert_eq!(global_palette_bits(1 << 15), 15);
+        assert_eq!(global_palette_bits((1 << 15) + 1), 16);
+        assert_eq!(global_palette_bits(300), 9);
+        assert_eq!(global_palette_bits(100), 9);
     }
 }
