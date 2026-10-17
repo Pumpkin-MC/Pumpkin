@@ -277,7 +277,7 @@ wit-bindgen = { version = "0.62", default-features = false, features = ["macros"
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
-wasmparser = { version = "0.261", default-features = false }
+wasmparser = { version = "0.261", default-features = false, features = ["component-model", "std"] }
 wasm-encoder = { version = "0.261", default-features = false, features = ["component-model", "std"] }
 webpki-root-certs = { version = "1.0.9", default-features = false }
 # ring-only: must match the provider the rest of the tree (wasmtime-wasi-http, rtc) uses
