@@ -20,8 +20,7 @@ impl PluginLoader for NativePluginLoader {
             let path = path.to_owned();
 
             // SAFETY: Loading dynamic library from path configured by server administrator.
-            let library = unsafe { Library::new(&path) }
-                .map_err(|e| LoaderError::LibraryLoad(e.to_string()))?;
+            let library = unsafe { Library::new(&path) }.map_err(LoaderError::LibraryLoad)?;
 
             // Ensure this plugin was built against a compatible Pumpkin plugin API version
             // SAFETY: `PUMPKIN_API_VERSION` is an exported `u32` constant symbol created by `#[plugin_impl]`.

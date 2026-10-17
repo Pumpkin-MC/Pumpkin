@@ -8,7 +8,7 @@ use pumpkin_core::plugin::{Context, PluginMetadata, cache::calculate_hash_for_by
 use pumpkin_plugin_runtime::RuntimeSpawner;
 use pumpkin_wasm_host_common::{
     concurrent_store::{self, LegacySyncReentry},
-    plugin::{PluginApiVersion, PluginInitError, WasmPlugin},
+    plugin::{PluginApiVersion, PluginInitError, SUPPORTED_PLUGIN_APIS, WasmPlugin},
     scheduler::TaskScheduler,
     signature,
     state::PluginHostState,
@@ -96,6 +96,7 @@ impl PluginRuntime {
         store_spawner: Arc<dyn RuntimeSpawner>,
     ) -> Result<Self, PluginInitError> {
         let mut config = wasmtime::Config::new();
+        config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
         config.wasm_component_model(true);
         config.wasm_component_model_async(true);
         config.concurrency_support(true);
@@ -157,53 +158,50 @@ impl PluginRuntime {
         let component = load_component(&self.engine, &wasm_bytes, &self.cache_dir)?;
 
         let api_version = plugin_api_version(&self.engine, &component)?;
+        let api_mismatch = |error| PluginInitError::ApiMismatch(api_version, error);
 
         let (plugin_instance, store, metadata) = match api_version {
             PluginApiVersion::V0_1 => {
                 let instance_pre = self
                     .linker_v0_1
                     .instantiate_pre(&component)
-                    .map_err(PluginInitError::ApiMismatch)?;
+                    .map_err(api_mismatch)?;
 
-                let plugin_pre = pumpkin_wasm_host_v0_1::prepare_plugin(&instance_pre)
-                    .map_err(PluginInitError::ApiMismatch)?;
+                let plugin_pre =
+                    pumpkin_wasm_host_v0_1::prepare_plugin(&instance_pre).map_err(api_mismatch)?;
 
                 let (plugin, store, metadata) = pumpkin_wasm_host_v0_1::init_plugin(
                     &self.engine,
+                    path.as_ref(),
                     plugin_pre,
                     &self.legacy_sync_reentry,
                 )
                 .await?;
-                (
-                    Arc::new(plugin) as Arc<dyn Any + Send + Sync>,
-                    store,
-                    metadata,
-                )
+                let plugin_instance: Arc<dyn Any + Send + Sync> = Arc::new(plugin);
+                (plugin_instance, store, metadata)
             }
             #[cfg(feature = "v0_2")]
             PluginApiVersion::V0_2 => {
                 let instance_pre = self
                     .linker_v0_2
                     .instantiate_pre(&component)
-                    .map_err(PluginInitError::ApiMismatch)?;
+                    .map_err(api_mismatch)?;
 
-                let plugin_pre = pumpkin_wasm_host_v0_2::prepare_plugin(&instance_pre)
-                    .map_err(PluginInitError::ApiMismatch)?;
+                let plugin_pre =
+                    pumpkin_wasm_host_v0_2::prepare_plugin(&instance_pre).map_err(api_mismatch)?;
 
                 let (plugin, store, metadata) = pumpkin_wasm_host_v0_2::init_plugin(
                     &self.engine,
+                    path.as_ref(),
                     plugin_pre,
                     &self.legacy_sync_reentry,
                 )
                 .await?;
-                (
-                    Arc::new(plugin) as Arc<dyn Any + Send + Sync>,
-                    store,
-                    metadata,
-                )
+                let plugin_instance: Arc<dyn Any + Send + Sync> = Arc::new(plugin);
+                (plugin_instance, store, metadata)
             }
             #[cfg(not(feature = "v0_2"))]
-            PluginApiVersion::V0_2 => return Err(PluginInitError::ApiMismatch(v0_2_disabled())),
+            PluginApiVersion::V0_2 => return Err(api_mismatch(v0_2_disabled())),
         };
 
         let store = concurrent_store::start_legacy_store(
@@ -214,6 +212,8 @@ impl PluginRuntime {
         .await
         .map_err(PluginInitError::InstantiationFailed)?;
         let wasm_plugin = Arc::new(WasmPlugin {
+            name: metadata.name.clone(),
+            version: metadata.version.clone(),
             plugin_instance,
             api_version,
             store,
@@ -271,13 +271,19 @@ fn plugin_api_version(
             // WIT enforces semver. Will always be major.minor.patch
             // For early/unstable release: 0.major.minor
 
-            if version.starts_with("0.1.") {
-                return Ok(PluginApiVersion::V0_1);
-            } else if version.starts_with("0.2.") {
-                return v0_2_api_version(version);
+            for (supported, api) in SUPPORTED_PLUGIN_APIS {
+                if version.starts_with(&format!("{supported}.")) {
+                    return match api {
+                        PluginApiVersion::V0_1 => Ok(api),
+                        PluginApiVersion::V0_2 => v0_2_api_version(version),
+                    };
+                }
             }
 
-            return Err(PluginInitError::UnsupportedApiVersion(version.to_string()));
+            return Err(PluginInitError::UnsupportedApiVersion(
+                version.to_string(),
+                supported_api_versions(),
+            ));
         }
     }
 
@@ -294,6 +300,14 @@ fn setup_linker_v0_1(engine: &Engine) -> wasmtime::Result<Linker<PluginHostState
     Ok(linker)
 }
 
+const fn supported_api_versions() -> &'static str {
+    if cfg!(feature = "v0_2") {
+        "0.1 and 0.2"
+    } else {
+        "0.1"
+    }
+}
+
 #[cfg(feature = "v0_2")]
 #[allow(clippy::unnecessary_wraps)] // same signature as the build without the feature
 const fn v0_2_api_version(_version: &str) -> Result<PluginApiVersion, PluginInitError> {
@@ -302,9 +316,10 @@ const fn v0_2_api_version(_version: &str) -> Result<PluginApiVersion, PluginInit
 
 #[cfg(not(feature = "v0_2"))]
 fn v0_2_api_version(version: &str) -> Result<PluginApiVersion, PluginInitError> {
-    Err(PluginInitError::UnsupportedApiVersion(format!(
-        "{version} (this server was built without the `plugin-v0_2` feature)"
-    )))
+    Err(PluginInitError::UnsupportedApiVersion(
+        format!("{version} (this server was built without the `plugin-v0_2` feature)"),
+        supported_api_versions(),
+    ))
 }
 
 /// The error for the `V0_2` arms when the `v0_2` feature is off. `plugin_api_version` already
@@ -779,7 +794,8 @@ mod tests {
     fn v0_2_plugins_are_rejected_without_the_feature() {
         assert!(matches!(
             super::v0_2_api_version("0.2.0"),
-            Err(super::PluginInitError::UnsupportedApiVersion(version)) if version.contains("plugin-v0_2")
+            Err(super::PluginInitError::UnsupportedApiVersion(version, supported))
+                if version.contains("plugin-v0_2") && supported == "0.1"
         ));
     }
 }
