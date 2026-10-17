@@ -2166,9 +2166,10 @@ impl Player {
         // TODO: Stop riding
 
         self.get_entity().set_pose(EntityPose::Sleeping);
+        // Vanilla `setPosToBed`; `to_f64` already centers X and Z.
         self.living_entity
             .entity
-            .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
+            .set_pos(bed_head_pos.to_f64().add_raw(0.0, 0.6875, 0.0));
         self.get_entity().set_synced_data(
             pumpkin_data::tracked_data::player::SLEEPING_POS_ID,
             Some(bed_head_pos),
@@ -2214,7 +2215,8 @@ impl Player {
         self.living_entity.get_block_speed_factor()
     }
 
-    fn is_sleeping(&self) -> bool {
+    #[must_use]
+    pub fn is_sleeping(&self) -> bool {
         // TODO: Track sleeping position state explicitly (vanilla checks sleepingPosition.isPresent()).
         self.sleeping_since.load().is_some()
     }
