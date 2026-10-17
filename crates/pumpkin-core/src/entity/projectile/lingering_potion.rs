@@ -1,7 +1,9 @@
 use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
 
-use crate::entity::projectile::splash_potion::extinguish_fire_if_water_potion;
+use crate::entity::projectile::splash_potion::{
+    extinguish_fire_if_water_potion, hurt_water_sensitive_entities, is_water_potion,
+};
 use crate::{
     entity::{Entity, EntityBase, projectile::ThrownItemEntity},
     server::Server,
@@ -97,6 +99,7 @@ impl EntityBase for LingeringPotionEntity {
         self
     }
 
+    #[allow(clippy::too_many_lines)]
     fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) {
         let world = self.get_entity().world.load();
         let hit_pos = hit.hit_pos();
@@ -117,9 +120,11 @@ impl EntityBase for LingeringPotionEntity {
 
         let effects = crate::item::potion::PotionContents::read_potion_effects(&stack);
 
+        // A water bottle hurts water-sensitive mobs even though it has no effects.
+        let hurts_water_sensitive = is_water_potion(&stack);
+
         // If no effects, just splash (like water bottles)
-        if effects.is_empty() {
-            extinguish_fire_if_water_potion(&world, hit_pos, &stack);
+        if effects.is_empty() && !hurts_water_sensitive {
             return;
         }
 
@@ -192,6 +197,16 @@ impl EntityBase for LingeringPotionEntity {
             if event.cancelled {
                 return;
             }
+        }
+
+        // Vanilla affects entities before spawning the cloud.
+        if hurts_water_sensitive {
+            hurt_water_sensitive_entities(&world, self, hit_pos, None);
+        }
+
+        // A water bottle has no effects, so it spawns no cloud.
+        if effects.is_empty() {
+            return;
         }
 
         let cloud_entity = crate::entity::Entity::from_uuid(

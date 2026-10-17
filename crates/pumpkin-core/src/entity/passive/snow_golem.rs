@@ -133,6 +133,10 @@ impl Mob for SnowGolemEntity {
         &self.mob_entity
     }
 
+    fn is_sensitive_to_water(&self) -> bool {
+        true
+    }
+
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let flags = if self.has_pumpkin() { 16u8 } else { 0u8 };
