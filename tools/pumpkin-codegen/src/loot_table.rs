@@ -323,13 +323,17 @@ fn dedicated_entity_condition(
     match target {
         LootEntityTarget::This => {
             let flags = properties.get("minecraft:flags")?.as_object()?;
-            (flags.len() == 1 && flags.get("is_on_fire")?.as_bool()? == true)
+            (flags.len() == 1 && flags.get("is_on_fire")?.as_bool()?)
                 .then_some(LootCondition::EntityOnFire)
         }
         LootEntityTarget::DirectAttacker => {
-            let tag = properties
-                .get("minecraft:equipment")?
-                .pointer("/mainhand/predicates/minecraft:enchantments/0/enchantments")?
+            let enchantments = sole_entry(properties.get("minecraft:equipment")?, "mainhand")?;
+            let enchantments = sole_entry(enchantments, "predicates")?;
+            let enchantments = sole_entry(enchantments, "minecraft:enchantments")?;
+            let [enchantment] = enchantments.as_array()?.as_slice() else {
+                return None;
+            };
+            let tag = sole_entry(enchantment, "enchantments")?
                 .as_str()?
                 .strip_prefix('#')?;
             Some(LootCondition::DirectAttackerWeaponEnchantment(Box::leak(
@@ -337,6 +341,16 @@ fn dedicated_entity_condition(
             )))
         }
         LootEntityTarget::Attacker => None,
+    }
+}
+
+/// Return the value under `key` when `value` is an object holding that key and nothing else.
+fn sole_entry<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+    let object = value.as_object()?;
+    if object.len() == 1 {
+        object.get(key)
+    } else {
+        None
     }
 }
 
@@ -1281,6 +1295,32 @@ mod tests {
             parse_condition(&cond),
             LootCondition::DirectAttackerWeaponEnchantment("minecraft:smelts_loot")
         );
+    }
+
+    /// Any constraint beside the tagged main-hand enchantment must keep the predicate on the
+    /// generic path instead of being dropped by the dedicated condition.
+    #[test]
+    fn direct_attacker_equipment_with_extra_constraints_is_not_dedicated() {
+        for equipment in [
+            r##"{ "mainhand": { "items": "minecraft:bow", "predicates": { "minecraft:enchantments": [ { "enchantments": "#minecraft:smelts_loot" } ] } } }"##,
+            r##"{ "mainhand": { "predicates": { "minecraft:enchantments": [ { "enchantments": "#minecraft:smelts_loot", "levels": { "min": 2 } } ] } } }"##,
+            r##"{ "mainhand": { "predicates": { "minecraft:enchantments": [ { "enchantments": "#minecraft:smelts_loot" }, { "enchantments": "#minecraft:other" } ] } } }"##,
+            r##"{ "offhand": {}, "mainhand": { "predicates": { "minecraft:enchantments": [ { "enchantments": "#minecraft:smelts_loot" } ] } } }"##,
+        ] {
+            let cond: ConditionStruct = serde_json::from_str(&format!(
+                r#"{{ "type": "minecraft:entity_properties", "entity": "direct_attacker",
+                    "predicate": {{ "minecraft:equipment": {equipment} }} }}"#
+            ))
+            .expect("condition should deserialize");
+
+            assert!(
+                !matches!(
+                    parse_condition(&cond),
+                    LootCondition::DirectAttackerWeaponEnchantment(_)
+                ),
+                "{equipment} must not map to the dedicated condition"
+            );
+        }
     }
 
     /// A victim that has to be on fire maps to the dedicated condition, but only when that is

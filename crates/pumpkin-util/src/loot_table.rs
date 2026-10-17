@@ -178,6 +178,7 @@ pub enum DynamicLootCondition {
 }
 
 impl From<LootCondition> for DynamicLootCondition {
+    /// Converts a generated static condition into its owned dynamic counterpart.
     fn from(cond: LootCondition) -> Self {
         match cond {
             LootCondition::None => Self::None,

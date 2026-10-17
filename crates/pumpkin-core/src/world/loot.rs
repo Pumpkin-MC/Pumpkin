@@ -155,6 +155,10 @@ fn smelt(stack: ItemStack) -> ItemStack {
     result
 }
 
+/// Evaluate one dynamic loot condition against the current loot context.
+///
+/// Mirrors [`check_condition`] for owned, runtime-built conditions, so `rng` is consumed in the
+/// same order and both paths stay in sync with vanilla sequences.
 fn check_dynamic_condition(
     cond: &DynamicLootCondition,
     has_silk_touch: bool,

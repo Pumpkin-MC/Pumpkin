@@ -854,6 +854,7 @@ pub trait Mob: EntityBase + Send + Sync {
         75.0
     }
 
+    /// Returns the shared mob state of this entity.
     fn get_mob_entity(&self) -> &MobEntity;
 
     /// Publishes entity-specific state used by generic loot predicates.
