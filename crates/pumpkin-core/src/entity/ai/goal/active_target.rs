@@ -15,7 +15,9 @@ use rand::RngExt;
 use std::sync::Arc;
 use uuid::Uuid;
 
-const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
+/// Vanilla `NearestAttackableTargetGoal`'s `DEFAULT_RANDOM_INTERVAL`: one target check every
+/// 10 ticks.
+pub(crate) const DEFAULT_RANDOM_INTERVAL: i32 = 10;
 
 /// Extra gate on top of the target predicate, for mobs that pick targets conditionally.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
@@ -139,7 +141,7 @@ impl ActiveTargetGoal {
         Box::new(Self {
             track_target_goal,
             target: None,
-            reciprocal_chance: to_goal_ticks(DEFAULT_RECIPROCAL_CHANCE),
+            reciprocal_chance: to_goal_ticks(DEFAULT_RANDOM_INTERVAL),
             target_type: Some(target_type),
             target_predicate,
             condition: TargetCondition::Always,

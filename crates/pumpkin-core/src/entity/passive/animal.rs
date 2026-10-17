@@ -65,21 +65,15 @@ pub trait Animal: Mob {
                 mob_entity.set_love_ticks(600, Some(player.gameprofile.id));
                 let entity = &mob_entity.living_entity.entity;
                 let world = entity.world.load();
-                let pos = entity.pos.load();
 
+                // Vanilla `Animal.setInLove` broadcasts entity event 18 only; clients render
+                // the heart burst themselves (`Animal.handleEntityEvent`).
                 world.send_entity_status(
                     entity,
                     pumpkin_data::entity::EntityStatus::InLoveHearts,
                     Some(ActorEventID::InLoveHearts),
                 );
 
-                world.spawn_particle(
-                    pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
-                    Vector3::new(0.5, 0.5, 0.5),
-                    1.0,
-                    7,
-                    Particle::Heart,
-                );
                 world.play_sound(ambient_sound, SoundCategory::Neutral, &entity.pos.load());
                 return true;
             }
