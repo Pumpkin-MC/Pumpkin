@@ -20,6 +20,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     player::Player,
 };
+use crate::item::items::bucket::create_filled_result;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::SLIME_BALL];
 
@@ -141,7 +142,7 @@ impl Mob for TadpoleEntity {
                     return false;
                 }
             }
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            create_filled_result(item_stack, player, &Item::TADPOLE_BUCKET, false);
             let pos = entity.pos.load();
             world.play_sound(Sound::ItemBucketFillTadpole, SoundCategory::Neutral, &pos);
             entity.remove();

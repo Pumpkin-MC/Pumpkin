@@ -26,6 +26,7 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
+use crate::item::items::bucket::create_filled_result;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::TROPICAL_FISH_BUCKET];
 
@@ -310,7 +311,7 @@ impl Mob for AxolotlEntity {
                     return false;
                 }
             }
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            create_filled_result(item_stack, player, &Item::AXOLOTL_BUCKET, false);
             let pos = entity.pos.load();
             world.play_sound(Sound::ItemBucketFillAxolotl, SoundCategory::Neutral, &pos);
             entity.remove();
