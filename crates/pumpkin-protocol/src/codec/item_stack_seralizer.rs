@@ -262,6 +262,10 @@ impl ItemStackSerializer<'_> {
         if item_count.0 == 0 {
             return Ok(ItemStackSerializer(Cow::Borrowed(ItemStack::EMPTY)));
         }
+        let item_count_u8 = item_count
+            .0
+            .try_into()
+            .map_err(|_| ReadingError::Message("Invalid item count!".into()))?;
 
         let item_id = read.get_var_int()?;
         let num_to_add = read.get_var_int()?.0;
@@ -310,7 +314,7 @@ impl ItemStackSerializer<'_> {
 
         Ok(ItemStackSerializer(Cow::Owned(
             ItemStack::new_with_component(
-                item_count.0 as u8,
+                item_count_u8,
                 Item::from_id(item_id_u16).unwrap_or(&Item::AIR),
                 patch,
             ),
@@ -815,6 +819,25 @@ impl ItemStackTemplateSerializer<'_> {
     pub fn write(&self, write: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         self.write_with_version(write, &JavaMinecraftVersion::V_26_3)
     }
+
+    pub fn read_with_version(
+        read: &mut impl NetworkReadExt,
+        version: &JavaMinecraftVersion,
+    ) -> Result<ItemStackTemplateSerializer<'static>, ReadingError> {
+        let serializer = ItemStackSerializer::read_template_with_version(read, version)?;
+        Ok(ItemStackTemplateSerializer(serializer.0))
+    }
+
+    pub fn read(
+        read: &mut impl NetworkReadExt,
+    ) -> Result<ItemStackTemplateSerializer<'static>, ReadingError> {
+        Self::read_with_version(read, &JavaMinecraftVersion::V_26_3)
+    }
+
+    #[must_use]
+    pub fn to_stack(self) -> ItemStack {
+        self.0.into_owned()
+    }
 }
 
 impl From<ItemStack> for ItemStackTemplateSerializer<'_> {
@@ -852,5 +875,17 @@ impl From<Option<ItemStack>> for ItemStackOptionalTemplateSerializer<'_> {
             || ItemStackOptionalTemplateSerializer(Cow::Borrowed(ItemStack::EMPTY)),
             ItemStackOptionalTemplateSerializer::from,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn item_counts_outside_a_byte_are_rejected() {
+        // Item count 256 as a VarInt, then the arrow's item id and an empty patch.
+        let encoded = [0x80, 0x02, 0xF1, 0x07, 0, 0];
+        assert!(ItemStackSerializer::read(&mut encoded.as_slice()).is_err());
     }
 }
