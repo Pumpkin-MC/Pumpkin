@@ -157,12 +157,8 @@ pub fn update_position(player: &Arc<Player>) {
 
         if let Some(server) = world.server.upgrade() {
             server.spawn_task(async move {
-                level
-                    .mark_chunks_as_newly_watched(&loading_chunks_clone)
-                    .await;
-                let chunks_to_clean = level
-                    .mark_chunks_as_not_watched(&unloading_chunks_clone)
-                    .await;
+                level.mark_chunks_as_newly_watched(&loading_chunks_clone);
+                let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks_clone);
 
                 if !chunks_to_clean.is_empty() {
                     world_clone
