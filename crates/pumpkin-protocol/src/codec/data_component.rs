@@ -11,6 +11,8 @@ use pumpkin_data::data_component_impl::*;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::trim_material::TrimMaterial;
+use pumpkin_data::trim_pattern::TrimPattern;
 use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -2314,19 +2316,39 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
     }
 }
 
+fn read_holder_reference<T: Copy>(
+    seq: &mut impl NetworkReadExt,
+    entries: &[T],
+    kind: &str,
+) -> Result<T, ReadingError> {
+    match crate::IdOr::read(seq, |_| Ok(()))? {
+        crate::IdOr::Id(id) => entries
+            .get(usize::from(id))
+            .copied()
+            .ok_or_else(|| ReadingError::Message(format!("Unknown {kind} id {id}"))),
+        crate::IdOr::Value(()) => Err(ReadingError::Message(format!(
+            "Inline {kind} is not supported"
+        ))),
+    }
+}
+
 impl DataComponentCodec<Self> for TrimImpl {
+    // ArmorTrim.STREAM_CODEC: two ByteBufCodecs.holder values, written as registry id + 1.
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))?;
-        seq.write_var_int(&VarInt(0))
+        let material = self.material_enum().ok_or_else(|| {
+            WritingError::Message(format!("Unknown trim material {:?}", self.material))
+        })?;
+        let pattern = self.pattern_enum().ok_or_else(|| {
+            WritingError::Message(format!("Unknown trim pattern {:?}", self.pattern))
+        })?;
+        seq.write_var_int(&VarInt(material.id() as i32 + 1))?;
+        seq.write_var_int(&VarInt(pattern.id() as i32 + 1))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _material = seq.get_var_int()?;
-        let _pattern = seq.get_var_int()?;
-        Ok(Self {
-            material: NbtTag::String("minecraft:quartz".into()),
-            pattern: NbtTag::String("minecraft:coast".into()),
-        })
+        let material = read_holder_reference(seq, TrimMaterial::all(), "trim material")?;
+        let pattern = read_holder_reference(seq, TrimPattern::all(), "trim pattern")?;
+        Ok(Self::new(material, pattern))
     }
 }
 
