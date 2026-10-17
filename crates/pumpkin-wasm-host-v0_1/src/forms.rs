@@ -1,0 +1,100 @@
+use crate::pumpkin::plugin::forms::{
+    CustomForm, CustomFormElement, Host, ImageType, ModalForm, SimpleForm,
+};
+use pumpkin_util::translation::Locale;
+use pumpkin_wasm_host_common::state::PluginHostState;
+use serde_json::{Value, json};
+use wasmtime::component::Resource;
+
+impl Host for PluginHostState {}
+
+pub trait FormsHostStateExt {
+    fn translate_res(
+        &mut self,
+        res: Resource<crate::pumpkin::plugin::text::TextComponent>,
+        locale: Locale,
+    ) -> String;
+    fn serialize_simple_form(&mut self, form: SimpleForm, locale: Locale) -> Value;
+    fn serialize_modal_form(&mut self, form: ModalForm, locale: Locale) -> Value;
+    fn serialize_custom_form(&mut self, form: CustomForm, locale: Locale) -> Value;
+}
+
+impl FormsHostStateExt for PluginHostState {
+    fn translate_res(
+        &mut self,
+        res: Resource<crate::pumpkin::plugin::text::TextComponent>,
+        locale: Locale,
+    ) -> String {
+        let component = self.take(res).expect("Couldn't get text component");
+        component.0.get_text(locale)
+    }
+
+    fn serialize_simple_form(&mut self, form: SimpleForm, locale: Locale) -> Value {
+        let buttons: Vec<Value> = form
+            .buttons
+            .into_iter()
+            .map(|b| {
+                let mut obj = json!({ "text": self.translate_res(b.text, locale) });
+                if let Some(image) = b.image
+                    && let Some(obj) = obj.as_object_mut()
+                {
+                    obj.insert(
+                        "image".to_string(),
+                        json!({
+                            "type": match image.type_ {
+                                ImageType::Url => "url",
+                                ImageType::Path => "path",
+                            },
+                            "data": image.data
+                        }),
+                    );
+                }
+                obj
+            })
+            .collect();
+
+        json!({
+            "type": "form",
+            "title": self.translate_res(form.title, locale),
+            "content": self.translate_res(form.content, locale),
+            "buttons": buttons
+        })
+    }
+
+    fn serialize_modal_form(&mut self, form: ModalForm, locale: Locale) -> Value {
+        json!({
+            "type": "modal",
+            "title": self.translate_res(form.title, locale),
+            "content": self.translate_res(form.content, locale),
+            "button1": self.translate_res(form.button1, locale),
+            "button2": self.translate_res(form.button2, locale)
+        })
+    }
+
+    fn serialize_custom_form(&mut self, form: CustomForm, locale: Locale) -> Value {
+        let elements: Vec<Value> = form.elements.into_iter().map(|e| {
+            match e {
+                CustomFormElement::Label(text) => json!({ "type": "label", "text": self.translate_res(text, locale) }),
+                CustomFormElement::Toggle((text, default)) => json!({ "type": "toggle", "text": self.translate_res(text, locale), "default": default }),
+                CustomFormElement::Slider((text, min, max, step, default)) => json!({
+                    "type": "slider", "text": self.translate_res(text, locale), "min": min, "max": max, "step": step, "default": default
+                }),
+                CustomFormElement::StepSlider((text, steps, default)) => json!({
+                    "type": "step_slider", "text": self.translate_res(text, locale), "steps": steps, "default": default
+                }),
+                CustomFormElement::Dropdown((text, options, default)) => json!({
+                    "type": "dropdown", "text": self.translate_res(text, locale), "options": options, "default": default
+                }),
+                CustomFormElement::Input((text, placeholder, default)) => json!({
+                    "type": "input", "text": self.translate_res(text, locale), "placeholder": placeholder, "default": default
+                }),
+            }
+        }).collect();
+
+        json!({
+            "type": "custom_form",
+            "title": self.translate_res(form.title, locale),
+            "content": elements
+        })
+    }
+}

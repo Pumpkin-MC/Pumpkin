@@ -20,6 +20,57 @@ pub enum JigsawProjection {
     TerrainMatching,
 }
 
+static DYNAMIC_POOLS: std::sync::LazyLock<dashmap::DashMap<String, Arc<TemplatePool>>> =
+    std::sync::LazyLock::new(dashmap::DashMap::new);
+
+/// Registers a dynamically-loaded template pool from a runtime datapack.
+pub fn register_dynamic_template_pool(id: &str, pool: Arc<TemplatePool>) {
+    let key = if id.contains(':') {
+        id.to_string()
+    } else {
+        format!("minecraft:{id}")
+    };
+    DYNAMIC_POOLS.insert(key, pool);
+}
+
+/// Registers a dynamically-loaded template pool from raw JSON string (e.g. from an on-disk datapack).
+pub fn register_dynamic_template_pool_json(
+    id: &str,
+    json: &str,
+) -> Result<Arc<TemplatePool>, serde_json::Error> {
+    let raw: RawTemplatePool = serde_json::from_str(json)?;
+    let elements = raw
+        .elements
+        .into_iter()
+        .filter_map(|weighted| {
+            weighted.element.into_element().map(|(kind, projection)| {
+                Arc::new(PoolElement {
+                    weight: weighted.weight,
+                    projection,
+                    kind,
+                })
+            })
+        })
+        .collect();
+    let key = if id.contains(':') {
+        id.to_string()
+    } else {
+        format!("minecraft:{id}")
+    };
+    let pool = Arc::new(TemplatePool {
+        id: key.clone(),
+        fallback: raw.fallback,
+        elements,
+    });
+    DYNAMIC_POOLS.insert(key, Arc::clone(&pool));
+    Ok(pool)
+}
+
+/// Clears all dynamically registered template pools (e.g. during datapack reload).
+pub fn clear_dynamic_template_pools() {
+    DYNAMIC_POOLS.clear();
+}
+
 pub struct TemplatePool {
     pub id: String,
     pub fallback: String,
@@ -189,8 +240,12 @@ impl PoolElement {
         fn find(kind: &PoolElementKind) -> Option<Arc<StructureTemplate>> {
             match kind {
                 PoolElementKind::Single {
-                    resolved_template, ..
-                } => resolved_template.clone(),
+                    template,
+                    resolved_template,
+                    ..
+                } => resolved_template
+                    .clone()
+                    .or_else(|| crate::generation::structure::template::get_template(template)),
                 PoolElementKind::List(elements) => elements.iter().find_map(find),
                 PoolElementKind::Empty | PoolElementKind::Feature(_) => None,
             }
@@ -214,13 +269,12 @@ impl PoolElement {
                     processors,
                     legacy,
                 } => {
-                    if let Some(structure_template) = resolved_template {
-                        consumer(
-                            template,
-                            processors,
-                            *legacy,
-                            Arc::clone(structure_template),
-                        );
+                    let st = resolved_template.as_ref().map_or_else(
+                        || crate::generation::structure::template::get_template(template),
+                        |structure_template| Some(Arc::clone(structure_template)),
+                    );
+                    if let Some(structure_template) = st {
+                        consumer(template, processors, *legacy, structure_template);
                     }
                 }
                 PoolElementKind::List(elements) => {
@@ -255,8 +309,22 @@ impl PoolElementKind {
     pub fn get_y_size(&self) -> Option<i32> {
         match self {
             Self::Single {
-                resolved_template, ..
-            } => resolved_template.as_ref().map(|t| t.size.y),
+                template,
+                resolved_template,
+                ..
+            } => resolved_template.as_ref().map_or_else(
+                || {
+                    pumpkin_data::structure_metadata::StaticStructureMetadataList::get(template)
+                        .map_or_else(
+                            || {
+                                crate::generation::structure::template::get_template(template)
+                                    .map(|t| t.size.y)
+                            },
+                            |meta| Some(meta.size[1]),
+                        )
+                },
+                |t| Some(t.size.y),
+            ),
             Self::List(elements) => elements.iter().filter_map(Self::get_y_size).max(),
             Self::Feature(_) => Some(1),
             Self::Empty => None,
@@ -267,15 +335,33 @@ impl PoolElementKind {
     pub fn get_bounding_box(&self, offset: BlockPos, rotation: pumpkin_data::Rotation) -> BlockBox {
         match self {
             Self::Single {
-                resolved_template, ..
-            } => resolved_template.as_ref().map_or_else(
-                || {
-                    BlockBox::new(
-                        offset.0.x, offset.0.y, offset.0.z, offset.0.x, offset.0.y, offset.0.z,
-                    )
-                },
-                |t| super::jigsaw_placement::rotated_box(offset, t.size, rotation),
-            ),
+                template,
+                resolved_template,
+                ..
+            } => {
+                let size = resolved_template.as_ref().map_or_else(
+                    || {
+                        pumpkin_data::structure_metadata::StaticStructureMetadataList::get(template)
+                            .map_or_else(
+                                || {
+                                    crate::generation::structure::template::get_template(template)
+                                        .map(|t| t.size)
+                                },
+                                |meta| Some(Vector3::new(meta.size[0], meta.size[1], meta.size[2])),
+                            )
+                    },
+                    |t| Some(t.size),
+                );
+
+                size.map_or_else(
+                    || {
+                        BlockBox::new(
+                            offset.0.x, offset.0.y, offset.0.z, offset.0.x, offset.0.y, offset.0.z,
+                        )
+                    },
+                    |s| super::jigsaw_placement::rotated_box(offset, s, rotation),
+                )
+            }
             Self::List(elements) => {
                 let mut bbox: Option<BlockBox> = None;
                 for element in elements {
@@ -310,12 +396,24 @@ impl PoolElementKind {
     ) -> Vec<JigsawBlock> {
         match self {
             Self::Single {
-                resolved_template, ..
+                template,
+                resolved_template,
+                ..
             } => {
-                let Some(template) = resolved_template else {
+                let mut jigsaws: Vec<JigsawBlock> = if let Some(meta) =
+                    pumpkin_data::structure_metadata::StaticStructureMetadataList::get(template)
+                {
+                    meta.jigsaws.iter().map(JigsawBlock::from).collect()
+                } else if let Some(template) = resolved_template {
+                    template.jigsaw_blocks().to_vec()
+                } else if let Some(template) =
+                    crate::generation::structure::template::get_template(template)
+                {
+                    template.jigsaw_blocks().to_vec()
+                } else {
                     return Vec::new();
                 };
-                let mut jigsaws = template.jigsaw_blocks().to_vec();
+
                 for i in (1..jigsaws.len()).rev() {
                     let j = random.next_bounded_i32(i as i32 + 1) as usize;
                     jigsaws.swap(i, j);
@@ -413,82 +511,113 @@ impl TemplatePool {
         Arc::clone(&self.elements[0])
     }
 
-    /// Discovers a pool from the filesystem/embedded assets.
+    #[must_use]
+    pub fn from_static(
+        static_pool: &'static pumpkin_data::template_pool::StaticTemplatePool,
+    ) -> Self {
+        let elements = static_pool
+            .elements
+            .iter()
+            .map(|e| {
+                let projection = match e.projection {
+                    pumpkin_data::template_pool::TemplatePoolProjection::Rigid => {
+                        JigsawProjection::Rigid
+                    }
+                    pumpkin_data::template_pool::TemplatePoolProjection::TerrainMatching => {
+                        JigsawProjection::TerrainMatching
+                    }
+                };
+                let kind = Self::convert_static_kind(&e.kind);
+                Arc::new(PoolElement {
+                    weight: e.weight,
+                    projection,
+                    kind,
+                })
+            })
+            .collect();
+
+        Self {
+            id: static_pool.id.to_string(),
+            fallback: static_pool.fallback.to_string(),
+            elements,
+        }
+    }
+
+    fn convert_static_kind(
+        kind: &pumpkin_data::template_pool::StaticPoolElementKind,
+    ) -> PoolElementKind {
+        match kind {
+            pumpkin_data::template_pool::StaticPoolElementKind::Empty => PoolElementKind::Empty,
+            pumpkin_data::template_pool::StaticPoolElementKind::Single {
+                location,
+                processors,
+                legacy,
+            } => {
+                let proc_ref = if processors.is_empty() {
+                    ProcessorListRef::Empty
+                } else {
+                    ProcessorListRef::Named((*processors).to_string())
+                };
+                PoolElementKind::Single {
+                    template: (*location).to_string(),
+                    resolved_template: None,
+                    processors: proc_ref,
+                    legacy: *legacy,
+                }
+            }
+            pumpkin_data::template_pool::StaticPoolElementKind::List(elements) => {
+                let list = elements.iter().map(Self::convert_static_kind).collect();
+                PoolElementKind::List(list)
+            }
+            pumpkin_data::template_pool::StaticPoolElementKind::Feature(feature) => {
+                let feat_name = feature.strip_prefix("minecraft:").unwrap_or(feature);
+                pumpkin_data::placed_feature::PlacedFeature::from_name(feat_name)
+                    .map_or(PoolElementKind::Empty, PoolElementKind::Feature)
+            }
+        }
+    }
+
+    /// Discovers a pool from dynamic datapacks, static codegen data, or fallback embedded assets.
     #[must_use]
     pub fn discover(id: &str) -> Option<Arc<Self>> {
         static CACHE: std::sync::LazyLock<dashmap::DashMap<String, Arc<TemplatePool>>> =
             std::sync::LazyLock::new(dashmap::DashMap::new);
 
-        if let Some(pool) = CACHE.get(id) {
+        let canonical_id = if id.contains(':') {
+            id.to_string()
+        } else {
+            format!("minecraft:{id}")
+        };
+
+        // 1. Dynamic datapack pools take precedence (allows overriding vanilla pools)
+        if let Some(pool) = DYNAMIC_POOLS.get(&canonical_id) {
             return Some(Arc::clone(&pool));
         }
 
-        let pool = if id == "minecraft:empty" || id == "empty" {
-            Self {
+        // 2. Previously cached pools
+        if let Some(pool) = CACHE.get(&canonical_id) {
+            return Some(Arc::clone(&pool));
+        }
+
+        // 3. Special empty pool
+        if canonical_id == "minecraft:empty" || id == "empty" {
+            let pool = Arc::new(Self {
                 id: "minecraft:empty".to_string(),
                 fallback: "minecraft:empty".to_string(),
                 elements: Vec::new(),
-            }
-        } else if let Some(json) =
-            crate::generation::structure::template::get_template_pool_json(id)
-        {
-            let raw: RawTemplatePool = match serde_json::from_str(json) {
-                Ok(pool) => pool,
-                Err(error) => {
-                    tracing::error!("Failed to parse template pool {id}: {error}");
-                    return None;
-                }
-            };
-            let elements = raw
-                .elements
-                .into_iter()
-                .filter_map(|weighted| {
-                    weighted.element.into_element().map(|(kind, projection)| {
-                        Arc::new(PoolElement {
-                            weight: weighted.weight,
-                            projection,
-                            kind,
-                        })
-                    })
-                })
-                .collect();
-            Self {
-                id: id.to_string(),
-                fallback: raw.fallback,
-                elements,
-            }
-        } else {
-            let elements = crate::generation::structure::template::get_pool_elements(id)?;
-            let projection = if id.contains("streets") {
-                JigsawProjection::TerrainMatching
-            } else {
-                JigsawProjection::Rigid
-            };
+            });
+            CACHE.insert(canonical_id, Arc::clone(&pool));
+            return Some(pool);
+        }
 
-            Self {
-                id: id.to_string(),
-                fallback: "minecraft:empty".to_string(),
-                elements: elements
-                    .iter()
-                    .map(|e| {
-                        Arc::new(PoolElement {
-                            weight: 1,
-                            projection,
-                            kind: PoolElementKind::Single {
-                                template: (*e).to_string(),
-                                resolved_template:
-                                    crate::generation::structure::template::get_template(e),
-                                processors: ProcessorListRef::Empty,
-                                legacy: false,
-                            },
-                        })
-                    })
-                    .collect(),
-            }
-        };
-        let pool = Arc::new(pool);
-        CACHE.insert(id.to_owned(), Arc::clone(&pool));
-        Some(pool)
+        // 4. Static codegen template pools from pumpkin-data
+        if let Some(static_pool) = pumpkin_data::template_pool::get_template_pool(&canonical_id) {
+            let pool = Arc::new(Self::from_static(static_pool));
+            CACHE.insert(canonical_id, Arc::clone(&pool));
+            return Some(pool);
+        }
+
+        None
     }
 
     #[must_use]
@@ -613,6 +742,34 @@ impl JigsawBlock {
         target_name: &str,
     ) -> bool {
         source.facing.opposite() == target_facing && source.target == target_name
+    }
+}
+
+impl From<&pumpkin_data::structure_metadata::StaticJigsawBlock> for JigsawBlock {
+    fn from(static_jigsaw: &pumpkin_data::structure_metadata::StaticJigsawBlock) -> Self {
+        Self {
+            pos: BlockPos(pumpkin_util::math::vector3::Vector3::new(
+                static_jigsaw.pos[0],
+                static_jigsaw.pos[1],
+                static_jigsaw.pos[2],
+            )),
+            name: static_jigsaw.name.to_string(),
+            target: static_jigsaw.target.to_string(),
+            pool: static_jigsaw.pool.to_string(),
+            final_state: static_jigsaw.final_state.to_string(),
+            joint: match static_jigsaw.joint {
+                pumpkin_data::structure_metadata::StaticJigsawJointType::Aligned => {
+                    JigsawJointType::Aligned
+                }
+                pumpkin_data::structure_metadata::StaticJigsawJointType::Rollable => {
+                    JigsawJointType::Rollable
+                }
+            },
+            facing: static_jigsaw.facing,
+            up: static_jigsaw.up,
+            selection_priority: static_jigsaw.selection_priority,
+            placement_priority: static_jigsaw.placement_priority,
+        }
     }
 }
 

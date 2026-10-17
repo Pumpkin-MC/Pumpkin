@@ -232,7 +232,6 @@ mod tests {
             SuspiciousStewEffectsImpl,
         },
         item::Item,
-        item_id_remap::remap_item_id_for_version,
         item_stack::ItemStack,
     };
     use pumpkin_util::version::JavaMinecraftVersion;
@@ -269,7 +268,7 @@ mod tests {
         assert_eq!(cursor.get_var_int().unwrap(), VarInt(1));
         assert_eq!(
             cursor.get_var_int().unwrap(),
-            VarInt::from(remap_item_id_for_version(Item::EMERALD.id, version))
+            VarInt::from(Item::EMERALD.id)
         );
         assert_eq!(cursor.get_var_int().unwrap(), VarInt(12));
         assert_eq!(cursor.get_var_int().unwrap(), VarInt(0));

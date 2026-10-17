@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
 use heck::ToShoutySnakeCase;
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use pumpkin_util::loot_table::{
     LootBonusFormula, LootCondition, LootEntityPredicate, LootEntityProperty,
     LootEntityPropertyValue, LootEntityTarget,
@@ -134,7 +134,7 @@ fn resolve_condition(value: &ConditionValue) -> LootCondition {
         ConditionValue::Inline(cond) => parse_condition(cond),
         ConditionValue::Reference(name) => {
             let relative = name.strip_prefix("minecraft:").unwrap_or(name);
-            let path = Path::new("../../assets/datapacks/26_3/data/minecraft/predicate")
+            let path = Path::new("../../assets/datapack/data/minecraft/predicate")
                 .join(format!("{relative}.json"));
             fs::read_to_string(&path)
                 .ok()
@@ -191,6 +191,12 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
             let Some(predicate) = &cond.predicate else {
                 return LootCondition::None;
             };
+
+            if let Some(dedicated) =
+                dedicated_entity_condition(target, &predicate.entity_properties)
+            {
+                return dedicated;
+            }
 
             let mut properties = Vec::new();
             let mut skipped = Vec::new();
@@ -278,6 +284,10 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
                 } else if has_shears {
                     return LootCondition::Shears;
                 }
+                let parsed: Vec<LootCondition> = terms.iter().map(resolve_condition).collect();
+                if !parsed.contains(&LootCondition::None) {
+                    return LootCondition::AnyOf(Box::leak(parsed.into_boxed_slice()));
+                }
             }
             LootCondition::None
         }
@@ -294,6 +304,39 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
             }
         }
         _ => LootCondition::None,
+    }
+}
+
+/// Map the predicates the runtime evaluates through a dedicated [`LootCondition`] instead of a
+/// property snapshot: the victim being on fire, and the direct attacker's main-hand weapon
+/// carrying an enchantment of a tag.
+///
+/// Only a predicate made up of nothing but that one constraint qualifies; anything wider goes
+/// through the generic [`LootCondition::EntityProperties`] path so no constraint is dropped.
+fn dedicated_entity_condition(
+    target: LootEntityTarget,
+    properties: &BTreeMap<String, serde_json::Value>,
+) -> Option<LootCondition> {
+    if properties.len() != 1 {
+        return None;
+    }
+    match target {
+        LootEntityTarget::This => {
+            let flags = properties.get("minecraft:flags")?.as_object()?;
+            (flags.len() == 1 && flags.get("is_on_fire")?.as_bool()? == true)
+                .then_some(LootCondition::EntityOnFire)
+        }
+        LootEntityTarget::DirectAttacker => {
+            let tag = properties
+                .get("minecraft:equipment")?
+                .pointer("/mainhand/predicates/minecraft:enchantments/0/enchantments")?
+                .as_str()?
+                .strip_prefix('#')?;
+            Some(LootCondition::DirectAttackerWeaponEnchantment(Box::leak(
+                tag.into(),
+            )))
+        }
+        LootEntityTarget::Attacker => None,
     }
 }
 
@@ -405,6 +448,8 @@ struct EntryFunctionStruct {
     #[serde(default)]
     parameters: Option<BonusParameterStruct>,
     count: Option<CountStruct>,
+    #[serde(default)]
+    condition: Option<ConditionValue>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -473,6 +518,7 @@ struct ParsedEntry {
     max_count: i32,
     condition: LootCondition,
     bonus_formula: Option<LootBonusFormula>,
+    furnace_smelt: Option<LootCondition>,
 }
 
 /// Require both conditions, dropping only a [`LootCondition::None`], which adds nothing.
@@ -496,7 +542,7 @@ fn extract_entries(
     out: &mut Vec<ParsedEntry>,
     empty_weight: &mut i32,
 ) {
-    extract_entries_with_depth(entry, inherited_condition, out, empty_weight, 0);
+    extract_entries_with_depth(entry, inherited_condition, None, out, empty_weight, 0);
 }
 
 /// Recursive worker behind [`extract_entries`], bounded to five levels of nesting.
@@ -507,6 +553,7 @@ fn extract_entries(
 fn extract_entries_with_depth(
     entry: &PoolEntryStruct,
     inherited_condition: LootCondition,
+    inherited_smelt: Option<LootCondition>,
     out: &mut Vec<ParsedEntry>,
     empty_weight: &mut i32,
     depth: usize,
@@ -516,6 +563,13 @@ fn extract_entries_with_depth(
     }
 
     let entry_cond = combine_pair(inherited_condition, condition_of(entry.condition.as_ref()));
+
+    let furnace_smelt = entry
+        .functions
+        .iter()
+        .find(|f| f.function == "minecraft:furnace_smelt")
+        .map(|f| condition_of(f.condition.as_ref()))
+        .or(inherited_smelt);
 
     match entry.entry_type.as_str() {
         "minecraft:empty" => {
@@ -573,6 +627,7 @@ fn extract_entries_with_depth(
                     max_count,
                     condition: entry_cond,
                     bonus_formula,
+                    furnace_smelt,
                 });
             }
         }
@@ -588,7 +643,7 @@ fn extract_entries_with_depth(
             if let Some(tag_name) = tag_name_opt {
                 let tag_name = tag_name.strip_prefix('#').unwrap_or(tag_name);
                 let tag_rel = tag_name.strip_prefix("minecraft:").unwrap_or(tag_name);
-                let tag_path = Path::new("../../assets/datapacks/26_3/data/minecraft/tags/item")
+                let tag_path = Path::new("../../assets/datapack/data/minecraft/tags/item")
                     .join(format!("{tag_rel}.json"));
                 if let Ok(content) = fs::read_to_string(&tag_path) {
                     #[derive(Deserialize)]
@@ -604,6 +659,7 @@ fn extract_entries_with_depth(
                                 max_count: 1,
                                 condition: entry_cond,
                                 bonus_formula: None,
+                                furnace_smelt,
                             });
                         }
                     }
@@ -613,7 +669,7 @@ fn extract_entries_with_depth(
         "minecraft:loot_table" => match &entry.value {
             Some(LootTableValue::Reference(table_name)) => {
                 let table_rel = table_name.strip_prefix("minecraft:").unwrap_or(table_name);
-                let table_path = Path::new("../../assets/datapacks/26_3/data/minecraft/loot_table")
+                let table_path = Path::new("../../assets/datapack/data/minecraft/loot_table")
                     .join(format!("{table_rel}.json"));
                 if let Ok(content) = fs::read_to_string(&table_path) {
                     if let Ok(nested_table) = serde_json::from_str::<ChestLootTableJson>(&content) {
@@ -627,6 +683,7 @@ fn extract_entries_with_depth(
                                 extract_entries_with_depth(
                                     child_entry,
                                     pool_cond,
+                                    furnace_smelt,
                                     out,
                                     empty_weight,
                                     depth + 1,
@@ -647,6 +704,7 @@ fn extract_entries_with_depth(
                         extract_entries_with_depth(
                             child_entry,
                             pool_cond,
+                            furnace_smelt,
                             out,
                             empty_weight,
                             depth + 1,
@@ -657,9 +715,8 @@ fn extract_entries_with_depth(
             None => {
                 if let Some(name) = &entry.name {
                     let table_rel = name.strip_prefix("minecraft:").unwrap_or(name);
-                    let table_path =
-                        Path::new("../../assets/datapacks/26_3/data/minecraft/loot_table")
-                            .join(format!("{table_rel}.json"));
+                    let table_path = Path::new("../../assets/datapack/data/minecraft/loot_table")
+                        .join(format!("{table_rel}.json"));
                     if let Ok(content) = fs::read_to_string(&table_path) {
                         if let Ok(nested_table) =
                             serde_json::from_str::<ChestLootTableJson>(&content)
@@ -674,6 +731,7 @@ fn extract_entries_with_depth(
                                     extract_entries_with_depth(
                                         child_entry,
                                         pool_cond,
+                                        furnace_smelt,
                                         out,
                                         empty_weight,
                                         depth + 1,
@@ -719,6 +777,7 @@ fn extract_entries_with_depth(
                 extract_entries_with_depth(
                     child,
                     combine_pair(entry_cond, tool_gate),
+                    furnace_smelt,
                     out,
                     empty_weight,
                     depth + 1,
@@ -727,7 +786,14 @@ fn extract_entries_with_depth(
         }
         "minecraft:sequence" | "minecraft:group" => {
             for child in &entry.children {
-                extract_entries_with_depth(child, entry_cond, out, empty_weight, depth + 1);
+                extract_entries_with_depth(
+                    child,
+                    entry_cond,
+                    furnace_smelt,
+                    out,
+                    empty_weight,
+                    depth + 1,
+                );
             }
         }
         _ => {}
@@ -800,6 +866,14 @@ fn condition_to_tokens(cond: LootCondition) -> TokenStream {
             let tokens: Vec<TokenStream> = list.iter().copied().map(condition_to_tokens).collect();
             quote! { LootCondition::AllOf(&[#(#tokens),*]) }
         }
+        LootCondition::AnyOf(list) => {
+            let tokens: Vec<TokenStream> = list.iter().copied().map(condition_to_tokens).collect();
+            quote! { LootCondition::AnyOf(&[#(#tokens),*]) }
+        }
+        LootCondition::EntityOnFire => quote! { LootCondition::EntityOnFire },
+        LootCondition::DirectAttackerWeaponEnchantment(tag) => {
+            quote! { LootCondition::DirectAttackerWeaponEnchantment(#tag) }
+        }
     }
 }
 
@@ -854,6 +928,13 @@ fn emit_table(
                 let max_count = e.max_count;
                 let cond_tokens = condition_to_tokens(e.condition);
                 let bonus_tokens = bonus_to_tokens(e.bonus_formula);
+                let smelt_tokens = e.furnace_smelt.map_or_else(
+                    || quote! { None },
+                    |cond| {
+                        let cond = condition_to_tokens(cond);
+                        quote! { Some(#cond) }
+                    },
+                );
 
                 quote! {
                     LootEntry {
@@ -863,6 +944,7 @@ fn emit_table(
                         max_count: #max_count,
                         condition: #cond_tokens,
                         bonus_formula: #bonus_tokens,
+                        furnace_smelt: #smelt_tokens,
                     }
                 }
             })
@@ -930,11 +1012,11 @@ fn collect_json_files(base: &Path, dir: &Path) -> Vec<(String, ChestLootTableJso
     result
 }
 
-/// Read every loot JSON from `../../assets/datapacks/26_3/data/minecraft/loot_table/` (recursively)
+/// Read every loot JSON from `../../assets/datapack/data/minecraft/loot_table/` (recursively)
 /// and emit a `pumpkin-data/src/generated/chest_loot.rs` with static constants
 /// and a `get_chest_loot_table(key) -> Option<&'static ChestLootTable>` function.
 pub fn build() -> TokenStream {
-    let base = Path::new("../../assets/datapacks/26_3/data/minecraft/loot_table");
+    let base = Path::new("../../assets/datapack/data/minecraft/loot_table");
 
     // Collect all JSON files recursively, sorted for deterministic output.
     let mut files: Vec<(String, ChestLootTableJson)> = collect_json_files(base, base);
@@ -943,9 +1025,7 @@ pub fn build() -> TokenStream {
     let mut all_tokens = TokenStream::new();
 
     // Emit one set of statics per file
-    let mut table_idents = Vec::new();
-    let mut table_keys = Vec::new();
-    let mut short_table_keys = Vec::new();
+    let mut lookup_rows: Vec<(String, Ident)> = Vec::with_capacity(files.len() * 2);
 
     for (relative_path, table) in &files {
         let prefix = path_to_ident(relative_path);
@@ -960,19 +1040,25 @@ pub fn build() -> TokenStream {
             pub static #table_ident: LootTable = LootTable { pools: #pools_ident };
         });
 
-        table_idents.push(table_ident.clone());
-        table_keys.push(LitStr::new(&key, Span::call_site()));
-        short_table_keys.push(LitStr::new(relative_path, Span::call_site()));
+        lookup_rows.push((key, table_ident.clone()));
+        lookup_rows.push((relative_path.clone(), table_ident));
     }
+    lookup_rows.sort_by(|a, b| a.0.cmp(&b.0));
+    let lookup_len = lookup_rows.len();
+    let lookup_rows = lookup_rows
+        .iter()
+        .map(|(key, ident)| quote! { (#key, &#ident) });
 
     // Emit get_loot_table and get_chest_loot_table
     all_tokens.extend(quote! {
+        static LOOT_TABLES_BY_KEY: [(&str, &LootTable); #lookup_len] = [#(#lookup_rows),*];
+
         #[must_use]
         pub fn get_loot_table(key: &str) -> Option<&'static LootTable> {
-            match key {
-                #(#table_keys | #short_table_keys => Some(&#table_idents),)*
-                _ => None,
-            }
+            LOOT_TABLES_BY_KEY
+                .binary_search_by_key(&key, |&(k, _)| k)
+                .ok()
+                .map(|i| LOOT_TABLES_BY_KEY[i].1)
         }
 
         #[must_use]
@@ -1141,8 +1227,37 @@ mod tests {
     /// With nothing left to check the condition falls back to [`LootCondition::None`], the
     /// same permissive fallback every unrepresentable condition gets: the entry keeps dropping
     /// as it did before the predicate was understood at all, rather than never dropping.
+    ///
+    /// The attacker has no dedicated condition, so an enchantment list (an array) is all that
+    /// is left to express, and nothing can be.
     #[test]
     fn entity_properties_without_expressible_values_stay_unconditional() {
+        let cond: ConditionStruct = serde_json::from_str(
+            r##"{
+                "type": "minecraft:entity_properties",
+                "entity": "attacker",
+                "predicate": {
+                    "minecraft:equipment": {
+                        "mainhand": {
+                            "predicates": {
+                                "minecraft:enchantments": [
+                                    { "enchantments": "#minecraft:smelts_loot" }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }"##,
+        )
+        .expect("condition should deserialize");
+
+        assert_eq!(parse_condition(&cond), LootCondition::None);
+    }
+
+    /// A direct attacker whose main-hand weapon carries an enchantment of a tag is the one
+    /// equipment predicate the runtime evaluates, through its dedicated condition.
+    #[test]
+    fn direct_attacker_weapon_enchantment_uses_the_dedicated_condition() {
         let cond: ConditionStruct = serde_json::from_str(
             r##"{
                 "type": "minecraft:entity_properties",
@@ -1162,7 +1277,38 @@ mod tests {
         )
         .expect("condition should deserialize");
 
-        assert_eq!(parse_condition(&cond), LootCondition::None);
+        assert_eq!(
+            parse_condition(&cond),
+            LootCondition::DirectAttackerWeaponEnchantment("minecraft:smelts_loot")
+        );
+    }
+
+    /// A victim that has to be on fire maps to the dedicated condition, but only when that is
+    /// the whole predicate; any further constraint must not be dropped alongside it.
+    #[test]
+    fn on_fire_uses_the_dedicated_condition_only_when_it_is_the_whole_predicate() {
+        let on_fire: ConditionStruct = serde_json::from_str(
+            r#"{
+                "type": "minecraft:entity_properties",
+                "entity": "this",
+                "predicate": { "minecraft:flags": { "is_on_fire": true } }
+            }"#,
+        )
+        .expect("condition should deserialize");
+        assert_eq!(parse_condition(&on_fire), LootCondition::EntityOnFire);
+
+        let wider: ConditionStruct = serde_json::from_str(
+            r#"{
+                "type": "minecraft:entity_properties",
+                "entity": "this",
+                "predicate": { "minecraft:flags": { "is_on_fire": true, "is_baby": false } }
+            }"#,
+        )
+        .expect("condition should deserialize");
+        assert!(matches!(
+            parse_condition(&wider),
+            LootCondition::EntityProperties { .. }
+        ));
     }
 
     /// A pool chance and an entry chance that happen to be equal must both survive: the runtime

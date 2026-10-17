@@ -560,6 +560,9 @@ fn value_to_y_offset(v: &serde_json::Value) -> TokenStream {
     } else if let Some(bt) = v.get("below_top") {
         let val = bt.as_i64().unwrap_or(0) as i8;
         quote!(YOffset::BelowTop(BelowTop { below_top: #val }))
+    } else if let Some(sl) = v.get("relative_to_sea_level") {
+        let val = sl.as_i64().unwrap_or(0) as i16;
+        quote!(YOffset::RelativeToSeaLevel(RelativeToSeaLevel { relative_to_sea_level: #val }))
     } else if let Some(val) = v.as_i64() {
         let val = val as i16;
         quote!(YOffset::Absolute(Absolute { absolute: #val }))
@@ -706,7 +709,7 @@ fn generation_step_to_token(step: &str) -> TokenStream {
 /// Reads structure and structure_set files from 26.3 datapack and emits the complete structures `TokenStream`.
 pub fn build() -> TokenStream {
     let structures_dir =
-        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/structure");
+        std::path::Path::new("../../assets/datapack/data/minecraft/worldgen/structure");
     let mut structures_json: BTreeMap<String, StructureStruct> = BTreeMap::new();
     let mut s_entries: Vec<_> = fs::read_dir(structures_dir)
         .expect("Missing worldgen/structure directory")
@@ -724,7 +727,7 @@ pub fn build() -> TokenStream {
     }
 
     let structure_sets_dir =
-        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/structure_set");
+        std::path::Path::new("../../assets/datapack/data/minecraft/worldgen/structure_set");
     let mut structure_sets_json: BTreeMap<String, StructureSetStruct> = BTreeMap::new();
     let mut ss_entries: Vec<_> = fs::read_dir(structure_sets_dir)
         .expect("Missing worldgen/structure_set directory")
@@ -807,7 +810,7 @@ pub fn build() -> TokenStream {
             RandomGenerator, RandomImpl, get_carver_seed, get_region_seed,
             legacy_rand::LegacyRand, xoroshiro128::Xoroshiro,
         };
-        use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
+        use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, RelativeToSeaLevel, YOffset};
 
         #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
         pub enum StructureKeys {

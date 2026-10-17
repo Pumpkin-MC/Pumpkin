@@ -6,7 +6,6 @@ use pumpkin_data::data_component_impl::{
     CustomDataImpl, CustomNameImpl, DataComponentImpl, ItemNameImpl,
 };
 use pumpkin_data::item::Item;
-use pumpkin_data::item_id_remap::{remap_item_id_for_version, remap_item_id_from_version};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
@@ -17,21 +16,11 @@ use std::io::Cursor;
 #[derive(Clone)]
 pub struct ItemStackSerializer<'a>(pub Cow<'a, ItemStack>);
 
-/// Whether this component exists in `version`. The remap tables use `0` to mean
-/// "not present"; only the component that really is `0` maps there legitimately.
-fn component_exists_in_version(id: DataComponent, version: JavaMinecraftVersion) -> bool {
-    let native = u32::from(id.to_id());
-    native == 0 || remap_data_component_type_id_for_version(native, version) != 0
-}
-
-fn item_component_counts(stack: &ItemStack, version: JavaMinecraftVersion) -> (u8, u8) {
+fn item_component_counts(stack: &ItemStack) -> (u8, u8) {
     let mut to_add = 0u8;
     let mut to_remove = 0u8;
 
-    for (id, data) in &stack.patch {
-        if !component_exists_in_version(*id, version) {
-            continue;
-        }
+    for (_, data) in &stack.patch {
         if data.is_none() {
             to_remove += 1;
         } else {
@@ -41,10 +30,6 @@ fn item_component_counts(stack: &ItemStack, version: JavaMinecraftVersion) -> (u
 
     (to_add, to_remove)
 }
-
-use pumpkin_data::data_component_type_id_remap::{
-    remap_data_component_type_id_for_version, remap_data_component_type_id_from_version,
-};
 
 fn serialize_item_stack_with_id(
     stack: &ItemStack,
@@ -56,7 +41,7 @@ fn serialize_item_stack_with_id(
         if stack.is_empty() {
             write.put_var_int(&VarInt(0))
         } else {
-            let (to_add, to_remove) = item_component_counts(stack, version);
+            let (to_add, to_remove) = item_component_counts(stack);
             write.put_var_int(&VarInt::from(stack.item_count))?;
             write.put_var_int(&VarInt::from(item_id))?;
             write.put_var_int(&VarInt::from(to_add))?;
@@ -64,24 +49,14 @@ fn serialize_item_stack_with_id(
 
             for (id, data) in &stack.patch {
                 if let Some(data) = data {
-                    if !component_exists_in_version(*id, version) {
-                        continue;
-                    }
-                    let remapped_comp_id =
-                        remap_data_component_type_id_for_version(u32::from(id.to_id()), version);
-                    write.put_var_int(&VarInt(remapped_comp_id as i32))?;
+                    write.put_var_int(&VarInt(i32::from(id.to_id())))?;
                     serialize(*id, data.as_ref(), write)?;
                 }
             }
 
             for (id, data) in &stack.patch {
                 if data.is_none() {
-                    if !component_exists_in_version(*id, version) {
-                        continue;
-                    }
-                    let remapped_comp_id =
-                        remap_data_component_type_id_for_version(u32::from(id.to_id()), version);
-                    write.put_var_int(&VarInt(remapped_comp_id as i32))?;
+                    write.put_var_int(&VarInt(i32::from(id.to_id())))?;
                 }
             }
 
@@ -131,7 +106,7 @@ fn serialize_length_prefixed_item_stack_with_id(
         if stack.is_empty() {
             write.put_var_int(&VarInt(0))
         } else {
-            let (to_add, to_remove) = item_component_counts(stack, version);
+            let (to_add, to_remove) = item_component_counts(stack);
             write.put_var_int(&VarInt::from(stack.item_count))?;
             write.put_var_int(&VarInt::from(item_id))?;
             write.put_var_int(&VarInt::from(to_add))?;
@@ -139,12 +114,7 @@ fn serialize_length_prefixed_item_stack_with_id(
 
             for (id, data) in &stack.patch {
                 if let Some(data) = data {
-                    if !component_exists_in_version(*id, version) {
-                        continue;
-                    }
-                    let remapped_comp_id =
-                        remap_data_component_type_id_for_version(u32::from(id.to_id()), version);
-                    write.put_var_int(&VarInt(remapped_comp_id as i32))?;
+                    write.put_var_int(&VarInt(i32::from(id.to_id())))?;
                     let mut comp_buf = Vec::new();
                     serialize(*id, data.as_ref(), &mut comp_buf)?;
                     write.put_var_int(&VarInt::from(comp_buf.len() as i32))?;
@@ -154,12 +124,7 @@ fn serialize_length_prefixed_item_stack_with_id(
 
             for (id, data) in &stack.patch {
                 if data.is_none() {
-                    if !component_exists_in_version(*id, version) {
-                        continue;
-                    }
-                    let remapped_comp_id =
-                        remap_data_component_type_id_for_version(u32::from(id.to_id()), version);
-                    write.put_var_int(&VarInt(remapped_comp_id as i32))?;
+                    write.put_var_int(&VarInt(i32::from(id.to_id())))?;
                 }
             }
 
@@ -173,13 +138,13 @@ fn serialize_length_prefixed_item_stack_with_id(
 fn serialize_item_cost_with_id(
     stack: &ItemStack,
     item_id: u16,
-    version: JavaMinecraftVersion,
+    _version: JavaMinecraftVersion,
     write: &mut impl NetworkWriteExt,
 ) -> Result<(), WritingError> {
     let component_count = stack
         .patch
         .iter()
-        .filter(|(id, data)| data.is_some() && component_exists_in_version(*id, version))
+        .filter(|(_, data)| data.is_some())
         .count();
     let component_count = i32::try_from(component_count)
         .map_err(|_| WritingError::Message("Too many item cost components".into()))?;
@@ -189,12 +154,7 @@ fn serialize_item_cost_with_id(
     write.put_var_int(&VarInt(component_count))?;
     for (id, data) in &stack.patch {
         if let Some(data) = data {
-            if !component_exists_in_version(*id, version) {
-                continue;
-            }
-            let remapped_comp_id =
-                remap_data_component_type_id_for_version(u32::from(id.to_id()), version);
-            write.put_var_int(&VarInt(remapped_comp_id as i32))?;
+            write.put_var_int(&VarInt(i32::from(id.to_id())))?;
             serialize(*id, data.as_ref(), write)?;
         }
     }
@@ -381,8 +341,7 @@ impl ItemStackSerializer<'_> {
             if nbt_type != 0 {
                 // TAG_End is 0 when no NBT is present
             }
-            let item_id = remap_item_id_from_version(raw_item_id, *version);
-            let item = Item::from_id(item_id).unwrap_or(&Item::AIR);
+            let item = Item::from_id(raw_item_id).unwrap_or(&Item::AIR);
             Ok(ItemStackSerializer(Cow::Owned(ItemStack::new(count, item))))
         } else if *version >= JavaMinecraftVersion::V_1_13 {
             let raw_item_id = read.get_i16_be()?;
@@ -394,8 +353,7 @@ impl ItemStackSerializer<'_> {
             if nbt_type != 0 {
                 // TAG_End is 0 when no NBT is present
             }
-            let item_id = remap_item_id_from_version(raw_item_id as u16, *version);
-            let item = Item::from_id(item_id).unwrap_or(&Item::AIR);
+            let item = Item::from_id(raw_item_id as u16).unwrap_or(&Item::AIR);
             Ok(ItemStackSerializer(Cow::Owned(ItemStack::new(count, item))))
         } else {
             let raw_item_id = read.get_i16_be()?;
@@ -408,8 +366,7 @@ impl ItemStackSerializer<'_> {
             if nbt_type != 0 {
                 // TAG_End is 0 when no NBT is present
             }
-            let item_id = remap_item_id_from_version(raw_item_id as u16, *version);
-            let item = Item::from_id(item_id).unwrap_or(&Item::AIR);
+            let item = Item::from_id(raw_item_id as u16).unwrap_or(&Item::AIR);
             Ok(ItemStackSerializer(Cow::Owned(ItemStack::new(count, item))))
         }
     }
@@ -419,14 +376,7 @@ impl ItemStackSerializer<'_> {
         version: &JavaMinecraftVersion,
     ) -> Result<ItemStackSerializer<'static>, ReadingError> {
         if *version >= JavaMinecraftVersion::V_1_21_5 {
-            let serializer = Self::read_length_prefixed_optional(read)?;
-            if *version < JavaMinecraftVersion::V_26_3 {
-                Ok(ItemStackSerializer(Cow::Owned(
-                    serializer.to_stack_for_version(version),
-                )))
-            } else {
-                Ok(serializer)
-            }
+            Self::read_length_prefixed_optional(read)
         } else {
             Self::read_with_version(read, version)
         }
@@ -458,7 +408,7 @@ impl ItemStackSerializer<'_> {
 
     pub fn read_template0(
         read: &mut impl NetworkReadExt,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<ItemStackSerializer<'static>, ReadingError> {
         const MAX_COMPONENTS: i32 = 256;
 
@@ -469,8 +419,7 @@ impl ItemStackSerializer<'_> {
             .0
             .try_into()
             .map_err(|_| ReadingError::Message("Invalid item id!".into()))?;
-        let item_id = remap_item_id_from_version(item_id_u16, *version);
-        let item = Item::from_id(item_id).unwrap_or(&Item::AIR);
+        let item = Item::from_id(item_id_u16).unwrap_or(&Item::AIR);
 
         let num_to_add = read.get_var_int()?.0;
         let num_to_remove = read.get_var_int()?.0;
@@ -493,9 +442,7 @@ impl ItemStackSerializer<'_> {
 
         for _ in 0..num_to_add {
             let id_val = read.get_var_int()?.0;
-            let remapped_comp_id =
-                remap_data_component_type_id_from_version(id_val as u32, *version);
-            let id = DataComponent::try_from_id(remapped_comp_id as u8)
+            let id = DataComponent::try_from_id(id_val as u8)
                 .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))?;
 
             let component_impl = if id == DataComponent::CustomData {
@@ -508,9 +455,7 @@ impl ItemStackSerializer<'_> {
 
         for _ in 0..num_to_remove {
             let id_val = read.get_var_int()?.0;
-            let remapped_comp_id =
-                remap_data_component_type_id_from_version(id_val as u32, *version);
-            let id = DataComponent::try_from_id(remapped_comp_id as u8)
+            let id = DataComponent::try_from_id(id_val as u8)
                 .ok_or_else(|| ReadingError::Message("Unknown component ID".into()))?;
             patch.push((id, None));
         }
@@ -596,8 +541,7 @@ impl ItemStackSerializer<'_> {
         write: &mut impl NetworkWriteExt,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        let remapped_item_id = remap_item_id_for_version(self.0.item.id, *version);
-        serialize_item_stack_with_id(self.0.as_ref(), remapped_item_id, *version, write)
+        serialize_item_stack_with_id(self.0.as_ref(), self.0.item.id, *version, write)
     }
 
     pub fn write_length_prefixed_with_version(
@@ -605,10 +549,9 @@ impl ItemStackSerializer<'_> {
         write: &mut impl NetworkWriteExt,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        let remapped_item_id = remap_item_id_for_version(self.0.item.id, *version);
         serialize_length_prefixed_item_stack_with_id(
             self.0.as_ref(),
-            remapped_item_id,
+            self.0.item.id,
             *version,
             write,
         )
@@ -619,8 +562,7 @@ impl ItemStackSerializer<'_> {
         write: &mut impl NetworkWriteExt,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        let remapped_item_id = remap_item_id_for_version(self.0.item.id, *version);
-        serialize_item_cost_with_id(self.0.as_ref(), remapped_item_id, *version, write)
+        serialize_item_cost_with_id(self.0.as_ref(), self.0.item.id, *version, write)
     }
 
     pub fn write_untrusted_with_version(
@@ -665,34 +607,29 @@ impl ItemStackSerializer<'_> {
     pub fn write_template0(
         &self,
         write: &mut impl NetworkWriteExt,
-        version: &JavaMinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         if self.0.is_empty() {
             return Err(WritingError::Message(
                 "Can't write empty item stack template".into(),
             ));
         }
-        let remapped_item_id = remap_item_id_for_version(self.0.item.id, *version);
-        let (to_add, to_remove) = item_component_counts(self.0.as_ref(), *version);
-        write.put_var_int(&VarInt::from(remapped_item_id))?;
+        let (to_add, to_remove) = item_component_counts(self.0.as_ref());
+        write.put_var_int(&VarInt::from(self.0.item.id))?;
         write.put_var_int(&VarInt::from(self.0.item_count))?;
         write.put_var_int(&VarInt::from(to_add))?;
         write.put_var_int(&VarInt::from(to_remove))?;
 
         for (id, data) in &self.0.patch {
             if let Some(data) = data {
-                let remapped_comp_id =
-                    remap_data_component_type_id_for_version(u32::from(id.to_id()), *version);
-                write.put_var_int(&VarInt(remapped_comp_id as i32))?;
+                write.put_var_int(&VarInt(i32::from(id.to_id())))?;
                 serialize(*id, data.as_ref(), write)?;
             }
         }
 
         for (id, data) in &self.0.patch {
             if data.is_none() {
-                let remapped_comp_id =
-                    remap_data_component_type_id_for_version(u32::from(id.to_id()), *version);
-                write.put_var_int(&VarInt(remapped_comp_id as i32))?;
+                write.put_var_int(&VarInt(i32::from(id.to_id())))?;
             }
         }
 
@@ -705,26 +642,8 @@ impl ItemStackSerializer<'_> {
     }
 
     #[must_use]
-    pub fn to_stack_for_version(self, version: &JavaMinecraftVersion) -> ItemStack {
-        let mut stack = self.0.into_owned();
-        if stack.is_empty() {
-            return stack;
-        }
-
-        let remapped_item_id = remap_item_id_from_version(stack.item.id, *version);
-        stack.item = Item::from_id(remapped_item_id).unwrap_or(&Item::AIR);
-
-        let mut patch = Vec::with_capacity(stack.patch.len());
-        for (comp_id, comp_data) in stack.patch {
-            let remapped_comp_id =
-                remap_data_component_type_id_from_version(u32::from(comp_id.to_id()), *version);
-            if let Some(target_comp) = DataComponent::try_from_id(remapped_comp_id as u8) {
-                patch.push((target_comp, comp_data));
-            }
-        }
-        stack.patch = patch;
-
-        stack
+    pub fn to_stack_for_version(self, _version: &JavaMinecraftVersion) -> ItemStack {
+        self.0.into_owned()
     }
 }
 

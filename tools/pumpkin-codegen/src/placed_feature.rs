@@ -6,8 +6,7 @@ use std::collections::BTreeMap;
 use std::fs;
 
 fn load_placed_features() -> BTreeMap<String, Value> {
-    let dir =
-        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/placed_feature");
+    let dir = std::path::Path::new("../../assets/datapack/data/minecraft/worldgen/placed_feature");
     let mut map = BTreeMap::new();
     let mut entries: Vec<_> = fs::read_dir(dir)
         .expect("Missing worldgen/placed_feature directory")
@@ -108,12 +107,13 @@ pub fn build() -> TokenStream {
                 MatchingBlockTagPredicate, MatchingBlocksBlockPredicate, MatchingBlocksWrapper,
                 MatchingFluidsBlockPredicate, NotBlockPredicate, OffsetBlocksBlockPredicate,
                 ReplaceableBlockPredicate, SolidBlockPredicate, WouldSurviveBlockPredicate,
+                HeightRangeBlockPredicate,
             };
             use crate::generation::height_provider::{
                 HeightProvider, TrapezoidHeightProvider, UniformHeightProvider,
                 VeryBiasedToBottomHeightProvider,
             };
-            use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
+            use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, RelativeToSeaLevel, YOffset};
             use pumpkin_util::math::int_provider::{
                 BiasedToBottomIntProvider, ClampedIntProvider, TrapezoidIntProvider, ClampedNormalIntProvider,
                 ConstantIntProvider, IntProvider, NormalIntProvider, UniformIntProvider,
@@ -325,19 +325,22 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
             let xz = value_to_int_provider(&v["xz_spread"]);
             let y = value_to_int_provider(&v["y_spread"]);
             quote! {
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: #xz,
-                    y_spread: #y,
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: #xz,
+                    y: #y,
+                    z: #xz,
                 })
             }
         }
         "minecraft:offset" => {
-            let xz = value_to_int_provider(&v["x"]);
+            let x = value_to_int_provider(&v["x"]);
             let y = value_to_int_provider(&v["y"]);
+            let z = value_to_int_provider(&v["z"]);
             quote! {
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: #xz,
-                    y_spread: #y,
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: #x,
+                    y: #y,
+                    z: #z,
                 })
             }
         }
@@ -483,6 +486,16 @@ pub fn value_to_block_predicate(v: &Value) -> TokenStream {
                 })
             }
         }
+        "minecraft:height_range" => {
+            let min = value_to_y_offset(&v["min_inclusive"]);
+            let max = value_to_y_offset(&v["max_inclusive"]);
+            quote! {
+                BlockPredicate::HeightRange(HeightRangeBlockPredicate {
+                    min_inclusive: #min,
+                    max_inclusive: #max,
+                })
+            }
+        }
         other => {
             let msg = format!("unknown block predicate: {other}");
             quote! { compile_error!(#msg) }
@@ -574,6 +587,9 @@ pub fn value_to_y_offset(v: &Value) -> TokenStream {
     } else if let Some(bt) = v.get("below_top") {
         let val = bt.as_i64().unwrap_or(0) as i8;
         quote! { YOffset::BelowTop(BelowTop { below_top: #val }) }
+    } else if let Some(sl) = v.get("relative_to_sea_level") {
+        let val = sl.as_i64().unwrap_or(0) as i16;
+        quote! { YOffset::RelativeToSeaLevel(RelativeToSeaLevel { relative_to_sea_level: #val }) }
     } else {
         quote! { YOffset::Absolute(Absolute { absolute: 0 }) }
     }

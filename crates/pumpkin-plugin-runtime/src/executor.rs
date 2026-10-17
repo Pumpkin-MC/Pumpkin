@@ -305,6 +305,17 @@ where
     }
 }
 
+struct ConcurrentGuestTask<T>(Box<dyn GuestStoreJob<T>>);
+
+impl<T> AccessorTask<T> for ConcurrentGuestTask<T>
+where
+    T: Send + 'static,
+{
+    fn run(self, accessor: &Accessor<T>) -> impl Future<Output = wasmtime::Result<()>> + Send {
+        self.0.run_concurrent(accessor)
+    }
+}
+
 enum StoreMessage<T> {
     Call(Box<dyn StoreJob<T>>),
     GuestCall(Box<dyn GuestStoreJob<T>>),
@@ -662,6 +673,64 @@ where
             .await
     }
 
+    /// Awaits host work in the active guest call's chain with the reentry depth incremented
+    ///
+    /// Host imports are polled by Wasmtime's own event loop, outside the guest call's task-local
+    /// scope, so the context has to come from the Store's active-context registry
+    /// Without an active guest call, the future runs without adding a reentry context
+    ///
+    /// # Errors
+    ///
+    /// Returns an error before polling the future if the reentry depth limit is reached
+    pub async fn in_active_context<R>(
+        &self,
+        future: impl Future<Output = R>,
+    ) -> wasmtime::Result<R> {
+        let context = self
+            .shared
+            .reentry
+            .current_context()
+            .map(ReentryContext::child)
+            .transpose()?;
+        Ok(match context {
+            Some(context) => scope(context, future).await,
+            None => future.await,
+        })
+    }
+
+    /// Runs synchronous host work on Tokio's blocking pool in the active guest call's chain
+    ///
+    /// Increments the reentry depth before spawning so callbacks inherit the same chain and
+    /// root admission on the blocking thread
+    /// Without an active guest call, the operation runs without adding a reentry context
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the reentry depth limit is reached or the blocking task fails
+    /// The operation is not spawned when the depth check fails
+    pub async fn spawn_blocking_in_active_context<R, F>(&self, operation: F) -> wasmtime::Result<R>
+    where
+        R: Send + 'static,
+        F: FnOnce() -> R + Send + 'static,
+    {
+        let context = self
+            .shared
+            .reentry
+            .current_context()
+            .map(ReentryContext::child)
+            .transpose()?;
+        tokio::task::spawn_blocking(move || match context {
+            Some(context) => sync_scope(context, operation),
+            None => operation(),
+        })
+        .await
+        .map_err(|error| {
+            wasmtime::Error::msg(format!(
+                "Synchronous Wasm plugin host operation failed: {error}"
+            ))
+        })
+    }
+
     /// Waits for an outbound host operation while servicing callbacks routed
     /// back into this Store from the active synchronous chain.
     pub async fn pump_reentry<R, S, F>(&self, store: &mut S, future: F) -> wasmtime::Result<R>
@@ -979,6 +1048,18 @@ where
 
 pub type LegacyStore<T> = StoreExecutor<T, LegacySyncReentry>;
 
+fn control_result(message: Option<&ControlMessage>) -> wasmtime::Result<()> {
+    match message {
+        Some(ControlMessage::Dropped) => Err(wasmtime::Error::msg(
+            "Wasm plugin store lifecycle control was dropped before shutdown",
+        )),
+        Some(ControlMessage::Discarded) => Ok(()),
+        None => Err(wasmtime::Error::msg(
+            "Wasm plugin store submission channel closed before shutdown",
+        )),
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 async fn run_driver<T>(
     mut store: Store<T>,
@@ -1021,7 +1102,7 @@ async fn run_driver<T>(
                                     active_calls.push(accessor.spawn(ConcurrentTask(job))?);
                                 }
                                 StoreMessage::GuestCall(job) => {
-                                    job.run_concurrent(accessor).await?;
+                                    active_calls.push(accessor.spawn(ConcurrentGuestTask(job))?);
                                 }
                                 StoreMessage::Shutdown {
                                     job,
@@ -1039,22 +1120,18 @@ async fn run_driver<T>(
                         while active_calls.next().await.is_some() {}
                         loop_lifecycle.transition(DriverState::Stopping);
                         poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
-                        return match control_message {
-                            ControlMessage::Dropped => Err(wasmtime::Error::msg(
-                                "Wasm plugin store lifecycle control was dropped before shutdown",
-                            )),
-                            ControlMessage::Discarded => Ok(()),
-                        };
+                        return control_result(Some(&control_message));
                     }
                     message = receiver.recv() => message,
                 };
                 let Some(message) = message else {
+                    loop_lifecycle.transition(DriverState::Draining);
                     while active_calls.next().await.is_some() {}
+                    // The owner may have closed the submission channel while its control signal is still pending
+                    let control_message = control.recv().await;
                     loop_lifecycle.transition(DriverState::Stopping);
                     poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
-                    return Err(wasmtime::Error::msg(
-                        "Wasm plugin store submission channel closed before shutdown",
-                    ));
+                    return control_result(control_message.as_ref());
                 };
 
                 match message {
@@ -1063,7 +1140,7 @@ async fn run_driver<T>(
                         tokio::task::yield_now().await;
                     }
                     StoreMessage::GuestCall(job) => {
-                        job.run_concurrent(accessor).await?;
+                        active_calls.push(accessor.spawn(ConcurrentGuestTask(job))?);
                     }
                     StoreMessage::Shutdown {
                         job,
@@ -1141,4 +1218,59 @@ fn panic_message(payload: &(dyn Any + Send)) -> String {
         },
         |message| (*message).to_owned(),
     )
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use std::sync::Arc;
+
+    use tokio::{
+        sync::{mpsc, oneshot},
+        time::{Duration, timeout},
+    };
+    use wasmtime::{Config, Engine, Store};
+
+    use super::{ControlMessage, DriverState, Lifecycle, run_driver};
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn submission_close_waits_for_owner_control() {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        config.wasm_component_model_async(true);
+        config.concurrency_support(true);
+        let engine = Engine::new(&config).expect("test engine");
+        let store = Store::new(&engine, ());
+        let (sender, receiver) = mpsc::channel(1);
+        let (control_sender, control_receiver) = mpsc::unbounded_channel();
+        let lifecycle = Lifecycle::new();
+        let (ready_sender, ready) = oneshot::channel();
+        let driver = tokio::spawn(run_driver(
+            store,
+            receiver,
+            control_receiver,
+            Arc::clone(&lifecycle),
+            ready_sender,
+            "test",
+        ));
+
+        timeout(Duration::from_secs(10), async {
+            ready.await.expect("driver should become ready");
+            drop(sender);
+            while lifecycle.state() != DriverState::Draining {
+                tokio::task::yield_now().await;
+            }
+            assert!(control_sender.send(ControlMessage::Dropped).is_ok());
+            driver.await.expect("driver task should finish");
+        })
+        .await
+        .expect("owner control should stop the driver");
+
+        let mut join = lifecycle.subscribe();
+        let error = join
+            .wait()
+            .await
+            .expect_err("owner drop should fail the driver");
+        assert!(error.to_string().contains("control was dropped"));
+    }
 }

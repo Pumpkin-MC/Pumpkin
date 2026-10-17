@@ -1,6 +1,5 @@
+use super::Digest;
 use crate::data_component_impl::DataComponentImpl;
-use crc_fast::CrcAlgorithm::Crc32Iscsi;
-use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 
@@ -24,14 +23,26 @@ impl DataComponentImpl for BlockEntityDataImpl {
     default_impl!(BlockEntityData);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct EntityDataImpl;
+/// Entity NBT carried by an item, e.g. a spawn egg. `None` for the item's default component.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EntityDataImpl {
+    pub nbt: Option<NbtCompound>,
+}
 impl EntityDataImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        if let NbtTag::Compound(c) = tag {
+            Some(Self {
+                nbt: Some(c.clone()),
+            })
+        } else {
+            None
+        }
     }
 }
 impl DataComponentImpl for EntityDataImpl {
+    fn write_data(&self) -> NbtTag {
+        self.nbt.clone().map_or(NbtTag::End, NbtTag::Compound)
+    }
     default_impl!(EntityData);
 }
 
@@ -144,7 +155,7 @@ impl DataComponentImpl for BlockStateImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         let mut props = self.properties.to_vec();
         props.sort_by(|a, b| a.0.cmp(&b.0));
         for (k, v) in props {

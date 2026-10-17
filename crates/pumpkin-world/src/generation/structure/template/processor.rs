@@ -1,4 +1,11 @@
-use pumpkin_data::{Block, BlockId, BlockState, tag::Taggable};
+use pumpkin_data::{
+    Block, BlockId, BlockState,
+    processor_list::{
+        StaticAxis, StaticBlockEntityModifier, StaticHeightmapType, StaticPosRuleTest,
+        StaticProcessor, StaticProcessorList, StaticRottableBlocks, StaticRuleTest,
+    },
+    tag::Taggable,
+};
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::{
     math::{int_provider::IntProvider, vector3::Vector3},
@@ -1122,6 +1129,197 @@ fn convert_raw_processor(raw: RawProcessor) -> Option<StructureProcessor> {
     }
 }
 
+static DYNAMIC_PROCESSORS: LazyLock<dashmap::DashMap<String, Arc<[StructureProcessor]>>> =
+    LazyLock::new(dashmap::DashMap::new);
+
+/// Registers a dynamically-loaded processor list from a runtime datapack.
+pub fn register_dynamic_processor_list(
+    name: &str,
+    json: &str,
+) -> Result<Arc<[StructureProcessor]>, serde_json::Error> {
+    let raw_list: Vec<RawProcessor> = match serde_json::from_str::<RawProcessorListWrapper>(json)? {
+        RawProcessorListWrapper::Object { processors }
+        | RawProcessorListWrapper::Array(processors) => processors,
+    };
+    let processors = raw_list
+        .into_iter()
+        .filter_map(convert_raw_processor)
+        .collect::<Arc<[_]>>();
+    let name_key = name.strip_prefix("minecraft:").unwrap_or(name);
+    DYNAMIC_PROCESSORS.insert(name_key.to_string(), Arc::clone(&processors));
+    DYNAMIC_PROCESSORS.insert(format!("minecraft:{name_key}"), Arc::clone(&processors));
+    Ok(processors)
+}
+
+/// Clears all dynamically registered processor lists.
+pub fn clear_dynamic_processors() {
+    DYNAMIC_PROCESSORS.clear();
+}
+
+fn convert_static_rule_test(rule: &StaticRuleTest) -> RuleTest {
+    match rule {
+        StaticRuleTest::AlwaysTrue => RuleTest::AlwaysTrue,
+        StaticRuleTest::BlockMatch(id) => RuleTest::BlockMatch(*id),
+        StaticRuleTest::BlockStateMatch {
+            block_id,
+            properties,
+        } => RuleTest::BlockStateMatch(BlockStateMatch {
+            block_id: *block_id,
+            properties: properties
+                .iter()
+                .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+                .collect(),
+        }),
+        StaticRuleTest::RandomBlockMatch { block, probability } => RuleTest::RandomBlockMatch {
+            block: *block,
+            probability: *probability,
+        },
+        StaticRuleTest::RandomBlockStateMatch {
+            block_id,
+            properties,
+            probability,
+        } => RuleTest::RandomBlockStateMatch {
+            match_state: BlockStateMatch {
+                block_id: *block_id,
+                properties: properties
+                    .iter()
+                    .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+                    .collect(),
+            },
+            probability: *probability,
+        },
+        StaticRuleTest::TagMatch(tag) => RuleTest::TagMatch((*tag).to_string()),
+    }
+}
+
+const fn convert_static_pos_rule_test(pos: &StaticPosRuleTest) -> PosRuleTest {
+    match pos {
+        StaticPosRuleTest::AlwaysTrue => PosRuleTest::AlwaysTrue,
+        StaticPosRuleTest::LinearPos {
+            min_dist,
+            max_dist,
+            min_chance,
+            max_chance,
+        } => PosRuleTest::LinearPos {
+            min_dist: *min_dist,
+            max_dist: *max_dist,
+            min_chance: *min_chance,
+            max_chance: *max_chance,
+        },
+        StaticPosRuleTest::AxisAlignedLinearPos {
+            axis,
+            min_dist,
+            max_dist,
+            min_chance,
+            max_chance,
+        } => PosRuleTest::AxisAlignedLinearPos {
+            axis: match axis {
+                StaticAxis::X => Axis::X,
+                StaticAxis::Y => Axis::Y,
+                StaticAxis::Z => Axis::Z,
+            },
+            min_dist: *min_dist,
+            max_dist: *max_dist,
+            min_chance: *min_chance,
+            max_chance: *max_chance,
+        },
+    }
+}
+
+impl StructureProcessor {
+    #[must_use]
+    pub fn from_static(proc: &StaticProcessor) -> Self {
+        match proc {
+            StaticProcessor::Rule(rules) => {
+                let converted_rules = rules
+                    .iter()
+                    .map(|r| {
+                        let output_state = if r.output_state.properties.is_empty() {
+                            r.output_state.default_state
+                        } else {
+                            let block =
+                                Block::from_id(r.output_state.default_state.id.to_block_id());
+                            let state_id = block
+                                .from_properties(r.output_state.properties)
+                                .to_state_id(block);
+                            BlockState::from_id(state_id)
+                        };
+                        let block_entity_modifier =
+                            r.block_entity_modifier.as_ref().map(|m| match m {
+                                StaticBlockEntityModifier::AppendLoot { loot_table } => {
+                                    BlockEntityModifier::AppendLoot {
+                                        loot_table: (*loot_table).to_string(),
+                                    }
+                                }
+                                StaticBlockEntityModifier::Clear => BlockEntityModifier::Clear,
+                                StaticBlockEntityModifier::Passthrough => {
+                                    BlockEntityModifier::Passthrough
+                                }
+                            });
+                        ProcessorRule {
+                            position_predicate: convert_static_pos_rule_test(&r.position_predicate),
+                            input_predicate: convert_static_rule_test(&r.input_predicate),
+                            location_predicate: convert_static_rule_test(&r.location_predicate),
+                            output_state,
+                            block_entity_modifier,
+                        }
+                    })
+                    .collect();
+                Self::Rule(converted_rules)
+            }
+            StaticProcessor::BlockRot {
+                integrity,
+                rottable_blocks,
+            } => Self::BlockRot {
+                integrity: *integrity,
+                rottable_blocks: rottable_blocks.as_ref().map(|r| match r {
+                    StaticRottableBlocks::Tag(t) => RottableBlocks::Tag((*t).to_string()),
+                    StaticRottableBlocks::Block(b) => RottableBlocks::Block(*b),
+                    StaticRottableBlocks::List(l) => RottableBlocks::List(l.to_vec()),
+                }),
+            },
+            StaticProcessor::BlockAge { mossiness } => Self::BlockAge {
+                mossiness: *mossiness,
+            },
+            StaticProcessor::BlockIgnore(blocks) => Self::BlockIgnore(
+                blocks
+                    .iter()
+                    .map(|b| IgnoredBlock {
+                        block_id: b.block_id,
+                        properties: b.properties.map(|p| {
+                            p.iter()
+                                .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+                                .collect()
+                        }),
+                    })
+                    .collect(),
+            ),
+            StaticProcessor::Gravity { heightmap, offset } => Self::Gravity {
+                heightmap: match heightmap {
+                    StaticHeightmapType::WorldSurface => HeightmapType::WorldSurface,
+                    StaticHeightmapType::OceanFloorWg => HeightmapType::OceanFloorWg,
+                    StaticHeightmapType::OceanFloor => HeightmapType::OceanFloor,
+                    StaticHeightmapType::MotionBlocking => HeightmapType::MotionBlocking,
+                    StaticHeightmapType::MotionBlockingNoLeaves => {
+                        HeightmapType::MotionBlockingNoLeaves
+                    }
+                    StaticHeightmapType::WorldSurfaceWg => HeightmapType::WorldSurfaceWg,
+                },
+                offset: *offset,
+            },
+            StaticProcessor::ProtectedBlocks(tag) => Self::ProtectedBlocks((*tag).to_string()),
+            StaticProcessor::BlackstoneReplace => Self::BlackstoneReplace,
+            StaticProcessor::JigsawReplacement => Self::JigsawReplacement,
+            StaticProcessor::LavaSubmergedBlock => Self::LavaSubmergedBlock,
+            StaticProcessor::Capped { limit, delegate } => Self::Capped {
+                limit: IntProvider::Constant(*limit),
+                delegate: Box::new(Self::from_static(delegate)),
+            },
+            StaticProcessor::Nop => Self::Nop,
+        }
+    }
+}
+
 #[must_use]
 pub fn load_processor_list(name: &str) -> Arc<[StructureProcessor]> {
     static CACHE: LazyLock<dashmap::DashMap<String, Arc<[StructureProcessor]>>> =
@@ -1129,31 +1327,26 @@ pub fn load_processor_list(name: &str) -> Arc<[StructureProcessor]> {
 
     let name_key = name.strip_prefix("minecraft:").unwrap_or(name);
 
+    if let Some(processors) = DYNAMIC_PROCESSORS.get(name_key) {
+        return Arc::clone(&processors);
+    }
+
     if let Some(processors) = CACHE.get(name_key) {
         return Arc::clone(&processors);
     }
 
-    let Some(json) = super::cache::get_processor_list_json(name) else {
-        tracing::warn!("Unknown structure processor list: {name}");
-        return Arc::from([]);
-    };
-    let raw_list: Vec<RawProcessor> = match serde_json::from_str::<RawProcessorListWrapper>(json) {
-        Ok(
-            RawProcessorListWrapper::Object { processors }
-            | RawProcessorListWrapper::Array(processors),
-        ) => processors,
-        Err(error) => {
-            tracing::error!("Failed to parse structure processor list {name}: {error}");
-            return Arc::from([]);
-        }
-    };
+    if let Some(static_list) = StaticProcessorList::get(name_key) {
+        let processors: Arc<[StructureProcessor]> = static_list
+            .iter()
+            .map(StructureProcessor::from_static)
+            .collect();
+        CACHE.insert(name_key.to_string(), Arc::clone(&processors));
+        CACHE.insert(format!("minecraft:{name_key}"), Arc::clone(&processors));
+        return processors;
+    }
 
-    let processors = raw_list
-        .into_iter()
-        .filter_map(convert_raw_processor)
-        .collect::<Arc<[_]>>();
-    CACHE.insert(name_key.to_owned(), Arc::clone(&processors));
-    processors
+    tracing::warn!("Unknown structure processor list: {name}");
+    Arc::from([])
 }
 
 #[cfg(test)]

@@ -469,6 +469,36 @@ impl NbtTag {
         }
     }
 
+    /// Converts any numeric tag to a short, `NumericTag.shortValue`.
+    #[must_use]
+    #[expect(clippy::cast_possible_truncation)]
+    pub fn as_numeric_short(&self) -> Option<i16> {
+        match *self {
+            Self::Byte(byte) => Some(byte.into()),
+            Self::Short(short) => Some(short),
+            Self::Int(int) => Some(int as i16),
+            Self::Long(long) => Some(long as i16),
+            Self::Float(float) => Some(float.floor() as i32 as i16),
+            Self::Double(double) => Some(double.floor() as i32 as i16),
+            _ => None,
+        }
+    }
+
+    /// Converts any numeric tag to a float, `NumericTag.floatValue`.
+    #[must_use]
+    #[expect(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    pub fn as_numeric_float(&self) -> Option<f32> {
+        match *self {
+            Self::Byte(byte) => Some(byte.into()),
+            Self::Short(short) => Some(short.into()),
+            Self::Int(int) => Some(int as f32),
+            Self::Long(long) => Some(long as f32),
+            Self::Float(float) => Some(float),
+            Self::Double(double) => Some(double as f32),
+            _ => None,
+        }
+    }
+
     /// Returns the contained byte as a boolean, where zero is `false`.
     #[must_use]
     pub fn extract_bool(&self) -> Option<bool> {

@@ -1765,7 +1765,7 @@ impl DataComponentCodec<Self> for UseRemainderImpl {
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let _ = deserialize_item_stack_template(seq)?;
-        Ok(Self)
+        Ok(Self { remainder: None })
     }
 }
 
@@ -2279,8 +2279,7 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
         seq.write_var_int(&VarInt(0))?;
         seq.write_var_int(&VarInt::from(self.pages.len() as i32))?;
         for page in &self.pages {
-            let comp = pumpkin_util::text::TextComponent::text(page.clone());
-            seq.write_slice(&comp.encode_for_version(&JavaMinecraftVersion::V_26_2))?;
+            seq.write_slice(&page.encode_for_version(&JavaMinecraftVersion::V_26_2))?;
             seq.write_bool(false)?;
         }
         seq.write_bool(true)
@@ -2304,7 +2303,7 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
             if seq.get_bool()? {
                 let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
             }
-            pages.push(comp.get_text());
+            pages.push(comp);
         }
         let _resolved = seq.get_bool()?;
         Ok(Self {
@@ -2343,14 +2342,34 @@ impl DataComponentCodec<Self> for DebugStickStateImpl {
 
 impl DataComponentCodec<Self> for EntityDataImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))?;
-        seq.write_nbt(NbtTag::Compound(pumpkin_nbt::compound::NbtCompound::new()))
+        let mut nbt = self.nbt.clone().unwrap_or_default();
+        // Vanilla TypedEntityData always carries its type, there is no fallback.
+        let id = nbt
+            .get_string("id")
+            .ok_or_else(|| WritingError::Message("entity_data has no 'id'".into()))?;
+        let type_id = EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
+            .map(|entity_type| i32::from(entity_type.id))
+            .ok_or_else(|| WritingError::Message(format!("Unknown entity type {id}")))?;
+        nbt.child_tags.remove("id");
+        seq.write_var_int(&VarInt(type_id))?;
+        seq.write_nbt(NbtTag::Compound(nbt))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _type_id = seq.get_var_int()?;
-        let _nbt = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
-        Ok(Self)
+        let type_id = seq.get_var_int()?.0;
+        let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+        // Vanilla's TypedEntityData keeps the type apart from the tag.
+        //Pumpkin keeps it as "id" in the NBT.
+        let entity_type = u16::try_from(type_id)
+            .ok()
+            .and_then(EntityType::from_raw)
+            .ok_or_else(|| ReadingError::Message(format!("Unknown entity type id {type_id}")))?;
+        let mut nbt = match tag {
+            Some(NbtTag::Compound(c)) => c,
+            _ => pumpkin_nbt::compound::NbtCompound::new(),
+        };
+        nbt.put_string("id", format!("minecraft:{}", entity_type.resource_name));
+        Ok(Self { nbt: Some(nbt) })
     }
 }
 
@@ -2489,7 +2508,7 @@ impl DataComponentCodec<Self> for LodestoneTrackerImpl {
 
 impl DataComponentCodec<Self> for ProfileImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(1))?;
+        seq.write_bool(false)?;
         if let Some(name) = &self.name {
             seq.write_bool(true)?;
             seq.write_string(name)?;
@@ -2547,11 +2566,11 @@ impl DataComponentCodec<Self> for ProfileImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let either = seq.get_var_int()?.0;
+        let full_profile = seq.get_bool()?;
         let mut name = None;
         let mut id = None;
         let mut properties = Vec::new();
-        if either == 0 {
+        if full_profile {
             let uuid = seq.get_uuid()?;
             let u = uuid.as_u128();
             id = Some([
@@ -2802,5 +2821,67 @@ impl DataComponentCodec<Self> for BreakSoundImpl {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let _ = seq.get_var_int()?;
         Ok(Self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn textured_profile() -> ProfileImpl {
+        ProfileImpl {
+            name: Some("Notch".to_string()),
+            properties: vec![ProfileProperty {
+                name: "textures".to_string(),
+                value: "eyJ0ZXh0dXJlcyI6e319".to_string(),
+                signature: None,
+            }],
+            ..Default::default()
+        }
+    }
+
+    /// The wire form vanilla expects for `textured_profile`.
+    fn textured_profile_bytes() -> Vec<u8> {
+        let mut bytes = vec![
+            0, // partial profile tag
+            1, 5, // name present, 5 bytes
+        ];
+        bytes.extend_from_slice(b"Notch");
+        bytes.push(0); // no id
+        bytes.push(1); // one property
+        bytes.push(8); // property name, 8 bytes
+        bytes.extend_from_slice(b"textures");
+        bytes.push(20); // property value, 20 bytes
+        bytes.extend_from_slice(b"eyJ0ZXh0dXJlcyI6e319");
+        bytes.push(0); // no signature
+        bytes.extend_from_slice(&[0, 0, 0, 0]); // no texture, cape, elytra, model
+        bytes
+    }
+
+    #[test]
+    fn partial_profile_is_written_with_a_false_tag() {
+        let mut encoded = Vec::new();
+        textured_profile().serialize(&mut encoded).unwrap();
+        assert_eq!(encoded, textured_profile_bytes());
+    }
+
+    #[test]
+    fn partial_profile_is_read_as_name_then_id() {
+        let decoded = ProfileImpl::deserialize(&mut textured_profile_bytes().as_slice()).unwrap();
+        assert_eq!(decoded, textured_profile());
+    }
+
+    #[test]
+    fn full_profile_is_read_as_id_then_name() {
+        let id = uuid::Uuid::from_u128(0x0000_0001_0000_0002_0000_0003_0000_0004);
+        let mut encoded = vec![1];
+        encoded.extend_from_slice(id.as_bytes());
+        encoded.push(5);
+        encoded.extend_from_slice(b"Notch");
+        encoded.extend_from_slice(&[0, 0, 0, 0, 0]);
+
+        let decoded = ProfileImpl::deserialize(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded.name.as_deref(), Some("Notch"));
+        assert_eq!(decoded.id, Some([1, 2, 3, 4]));
     }
 }

@@ -1,8 +1,0 @@
-{
-  "sound_event": "minecraft:music_disc.creator",
-  "description": {
-    "translate": "jukebox_song.minecraft.creator"
-  },
-  "length_in_seconds": 176.0,
-  "comparator_output": 12
-}

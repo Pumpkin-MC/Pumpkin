@@ -1,13 +1,9 @@
-use pumpkin_data::{
-    packet::clientbound::play::EXPLODE, sound_id_remap::remap_sound_id_for_version,
-};
+use pumpkin_data::packet::clientbound::play::EXPLODE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
 use crate::ser::NetworkWriteExt;
 use crate::{ClientPacket, IdOr, SoundEvent, codec::var_int::VarInt};
-
-use super::particle::particle_id_for_version;
 
 /// Notifies the client that an explosion has occurred.
 ///
@@ -86,14 +82,9 @@ impl ClientPacket for CExplosion {
                 Ok(())
             })?;
 
-            let particle = particle_id_for_version(self.particle, *version);
-            write.write_var_int(&particle)?;
+            write.write_var_int(&self.particle)?;
 
-            let sound_event = match &self.sound {
-                IdOr::Id(id) => IdOr::Id(remap_sound_id_for_version(*id, *version)),
-                IdOr::Value(value) => IdOr::Value(value.clone()),
-            };
-            crate::IdOr::<crate::SoundEvent>::write(&sound_event, &mut write, |w, e| {
+            crate::IdOr::<crate::SoundEvent>::write(&self.sound, &mut write, |w, e| {
                 w.write_string(&e.sound_name)?;
                 w.write_option(&e.range, |w2, r| w2.write_f32_be(*r))
             })?;
@@ -129,30 +120,21 @@ impl ClientPacket for CExplosion {
                 // Block interaction: 1 = DESTROY_BLOCKS
                 write.write_var_int(&VarInt(1))?;
 
-                let small_particle = particle_id_for_version(
-                    VarInt(pumpkin_data::particle::Particle::Explosion as i32),
-                    *version,
-                );
+                let small_particle = VarInt(pumpkin_data::particle::Particle::Explosion as i32);
                 write.write_var_int(&small_particle)?;
 
-                let particle = particle_id_for_version(self.particle, *version);
-                write.write_var_int(&particle)?;
+                write.write_var_int(&self.particle)?;
 
                 if *version >= JavaMinecraftVersion::V_1_20_5 {
-                    let sound_event = match &self.sound {
-                        IdOr::Id(id) => IdOr::Id(remap_sound_id_for_version(*id, *version)),
-                        IdOr::Value(value) => IdOr::Value(value.clone()),
-                    };
-                    crate::IdOr::<crate::SoundEvent>::write(&sound_event, &mut write, |w, e| {
+                    crate::IdOr::<crate::SoundEvent>::write(&self.sound, &mut write, |w, e| {
                         w.write_string(&e.sound_name)?;
                         w.write_option(&e.range, |w2, r| w2.write_f32_be(*r))
                     })?;
                 } else {
                     let (sound_name, range) = match &self.sound {
                         IdOr::Id(id) => {
-                            let remapped = remap_sound_id_for_version(*id, *version);
                             let name = pumpkin_data::sound::Sound::NAMES
-                                .get(remapped as usize)
+                                .get(*id as usize)
                                 .copied()
                                 .unwrap_or("minecraft:entity.generic.explode");
                             (name, None)
@@ -163,6 +145,9 @@ impl ClientPacket for CExplosion {
                     write.write_option(&range, |w, r| w.write_f32_be(*r))?;
                 }
             }
+
+            // Block count: 0
+            write.write_var_int(&VarInt(0))?;
         }
 
         Ok(())
@@ -198,17 +183,9 @@ mod tests {
     }
 
     #[test]
-    fn explosion_particle_id_remaps_for_1_21_11() {
+    fn explosion_particle_id_stays_latest_for_26_3() {
         assert_eq!(
-            encoded_particle_id(JavaMinecraftVersion::V_1_21_11),
-            VarInt(22)
-        );
-    }
-
-    #[test]
-    fn explosion_particle_id_stays_latest_for_26_2() {
-        assert_eq!(
-            encoded_particle_id(JavaMinecraftVersion::V_26_2),
+            encoded_particle_id(JavaMinecraftVersion::V_26_3),
             VarInt(29)
         );
     }
