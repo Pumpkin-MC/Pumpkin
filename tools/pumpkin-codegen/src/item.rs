@@ -72,6 +72,8 @@ pub struct ItemComponents {
     pub damage_resistant: Option<DamageResistantComponent>,
     #[serde(rename = "minecraft:weapon")]
     pub weapon: Option<WeaponComponent>,
+    #[serde(rename = "minecraft:mob_visibility")]
+    pub mob_visibility: Option<MobVisibilityComponent>,
     #[serde(rename = "minecraft:enchantable")]
     pub enchantable: Option<EnchantableComponent>,
     #[serde(rename = "minecraft:attack_range")]
@@ -515,6 +517,21 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (DeathProtection, &DeathProtectionImpl), });
         }
 
+        if let Some(mob_visibility) = &self.mob_visibility {
+            let targeting_entity_types =
+                entity_idset_tokens(&mob_visibility.targeting_entity_types);
+            let visibility = mob_visibility.visibility;
+            tokens.extend(quote! {
+                (
+                    MobVisibility,
+                    &MobVisibilityImpl {
+                        targeting_entity_types: #targeting_entity_types,
+                        visibility: #visibility,
+                    },
+                ),
+            });
+        }
+
         if let Some(weapon) = &self.weapon {
             let damage = LitInt::new(
                 &weapon.item_damage_per_attack.to_string(),
@@ -661,46 +678,13 @@ impl ToTokens for ItemComponents {
                     quote! { Some(Cow::Borrowed(#camera_overlay)) }
                 })
                 .unwrap_or(quote! { None });
-            let mut entities_option = TokenStream::new();
-            if let Some(entities) = equippable.allowed_entities.clone() {
-                let mut allowed_entities = TokenStream::new();
-                match entities {
-                    StringOrList::String(str) => {
-                        if str.starts_with("#") {
-                            let formatted = str.strip_prefix("#minecraft:").unwrap();
-                            allowed_entities.extend(quote! {
-                                IDSet::Tag(Cow::Borrowed(#formatted))
-                            });
-                        } else {
-                            let ident = format_ident!(
-                                "{}",
-                                str.strip_prefix("minecraft:").unwrap().to_uppercase()
-                            );
-                            allowed_entities.extend(quote! {
-                                IDSet::IDs(Cow::Borrowed(&[&crate::entity_type::EntityType::#ident]))
-                            });
-                        }
-                    }
-                    StringOrList::List(items) => {
-                        let mut ids = TokenStream::new();
-                        for x in items {
-                            let entity = format_ident!(
-                                "{}",
-                                x.strip_prefix("minecraft:").unwrap().to_uppercase()
-                            );
-                            ids.extend(quote! { &crate::entity_type::EntityType::#entity, });
-                        }
-
-                        allowed_entities.extend(quote! {
-                            IDSet::IDs(Cow::Borrowed(&[#ids]))
-                        });
-                    }
-                }
-
-                entities_option.extend(quote! { Some(#allowed_entities) });
-            } else {
-                entities_option.extend(quote! { None });
-            }
+            let entities_option = equippable.allowed_entities.as_ref().map_or_else(
+                || quote! { None },
+                |entities| {
+                    let allowed_entities = entity_idset_tokens(entities);
+                    quote! { Some(#allowed_entities) }
+                },
+            );
             let dispensable = LitBool::new(equippable.dispensable, Span::call_site());
             let swappable = LitBool::new(equippable.swappable, Span::call_site());
             let damage_on_hurt = LitBool::new(equippable.damage_on_hurt, Span::call_site());
@@ -1356,6 +1340,44 @@ pub struct DamageResistantComponent {
 pub enum StringOrList {
     String(String),
     List(Vec<String>),
+}
+
+/// An entity type `IDSet`: one type, a list, or a `#tag`.
+fn entity_idset_tokens(entities: &StringOrList) -> TokenStream {
+    match entities {
+        StringOrList::String(str) => {
+            if str.starts_with("#") {
+                let formatted = str.strip_prefix("#minecraft:").unwrap();
+                quote! {
+                    IDSet::Tag(Cow::Borrowed(#formatted))
+                }
+            } else {
+                let ident =
+                    format_ident!("{}", str.strip_prefix("minecraft:").unwrap().to_uppercase());
+                quote! {
+                    IDSet::IDs(Cow::Borrowed(&[&crate::entity_type::EntityType::#ident]))
+                }
+            }
+        }
+        StringOrList::List(items) => {
+            let mut ids = TokenStream::new();
+            for x in items {
+                let entity =
+                    format_ident!("{}", x.strip_prefix("minecraft:").unwrap().to_uppercase());
+                ids.extend(quote! { &crate::entity_type::EntityType::#entity, });
+            }
+            quote! {
+                IDSet::IDs(Cow::Borrowed(&[#ids]))
+            }
+        }
+    }
+}
+
+/// Deserialized `minecraft:mob_visibility` component (mob heads).
+#[derive(Deserialize, Clone)]
+pub struct MobVisibilityComponent {
+    pub targeting_entity_types: StringOrList,
+    pub visibility: f32,
 }
 
 #[derive(Deserialize, Clone)]

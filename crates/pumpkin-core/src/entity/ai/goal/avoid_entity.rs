@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::{Controls, Goal};
 use crate::entity::ai::goal::revenge::MobFilter;
-use crate::entity::ai::target_match::TargetMatch;
+use crate::entity::ai::target_match::{SearchArea, TargetMatch};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::ai::util::default_random_pos;
 use crate::entity::predicate::EntityPredicate;
@@ -142,11 +142,7 @@ impl AvoidEntityGoal {
         } else {
             THREAT_SEARCH_HEIGHT
         };
-        let search_box =
-            entity
-                .bounding_box
-                .load()
-                .expand(self.flee_distance, height, self.flee_distance);
+        let area = SearchArea::from_feet(entity, self.flee_distance, height);
         // Sensors see as far as the follow range; the per-type distance cuts it down after.
         let sensor_predicate;
         let predicate = if self.per_type.is_some() {
@@ -159,19 +155,16 @@ impl AvoidEntityGoal {
             &self.threat_predicate
         };
 
-        self.flee_from
-            .find_nearest(&world, pos, self.flee_distance, |candidate| {
-                let candidate_entity = candidate.get_entity();
-                self.per_type.is_none_or(|threats| {
-                    threats.iter().any(|&(threat, dist)| {
-                        threat == candidate_entity.entity_type
-                            && candidate_entity.pos.load().squared_distance_to_vec(&pos)
-                                <= dist * dist
-                    })
-                }) && candidate_entity.bounding_box.load().intersects(&search_box)
-                    && (self.selector)(mob, candidate)
-                    && predicate.test(&world, Some(mob), candidate)
-            })
+        self.flee_from.find_nearest(&world, &area, |candidate| {
+            let candidate_entity = candidate.get_entity();
+            self.per_type.is_none_or(|threats| {
+                threats.iter().any(|&(threat, dist)| {
+                    threat == candidate_entity.entity_type
+                        && candidate_entity.pos.load().squared_distance_to_vec(&pos) <= dist * dist
+                })
+            }) && (self.selector)(mob, candidate)
+                && predicate.test(&world, Some(mob), candidate)
+        })
     }
 }
 

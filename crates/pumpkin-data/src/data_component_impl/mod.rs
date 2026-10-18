@@ -307,6 +307,17 @@ impl<T: IDSetContent + 'static> IDSet<T> {
     }
 }
 
+impl IDSet<EntityType> {
+    /// Membership by id or entity type tag.
+    #[must_use]
+    pub fn contains(&self, entity_type: &EntityType) -> bool {
+        match self {
+            Self::Tag(tag) => entity_type.is_tagged_with(tag).unwrap_or(false),
+            Self::IDs(types) => types.iter().any(|t| t.id == entity_type.id),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum EquipmentType {
     Hand,
@@ -581,6 +592,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         DataComponent::Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         DataComponent::Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
+        DataComponent::MobVisibility => Some(MobVisibilityImpl::read_data(data)?.to_dyn()),
         DataComponent::AttackRange => Some(AttackRangeImpl::read_data(data)?.to_dyn()),
         DataComponent::KineticWeapon => Some(KineticWeaponImpl::read_data(data)?.to_dyn()),
         DataComponent::PiercingWeapon => Some(PiercingWeaponImpl::read_data(data)?.to_dyn()),

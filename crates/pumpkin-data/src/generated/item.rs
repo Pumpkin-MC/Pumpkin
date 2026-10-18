@@ -19921,6 +19921,15 @@ impl Item {
                 },
             ),
             (
+                MobVisibility,
+                &MobVisibilityImpl {
+                    targeting_entity_types: IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::CREEPER,
+                    ])),
+                    visibility: 0.5f32,
+                },
+            ),
+            (
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
@@ -59490,6 +59499,16 @@ impl Item {
                 },
             ),
             (
+                MobVisibility,
+                &MobVisibilityImpl {
+                    targeting_entity_types: IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::PIGLIN,
+                        &crate::entity_type::EntityType::PIGLIN_BRUTE,
+                    ])),
+                    visibility: 0.5f32,
+                },
+            ),
+            (
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
@@ -72580,6 +72599,15 @@ impl Item {
                         operation: Operation::AddMultipliedTotal,
                         slot: AttributeModifierSlot::Head,
                     }]),
+                },
+            ),
+            (
+                MobVisibility,
+                &MobVisibilityImpl {
+                    targeting_entity_types: IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::SKELETON,
+                    ])),
+                    visibility: 0.5f32,
                 },
             ),
             (
@@ -91505,6 +91533,15 @@ impl Item {
                         operation: Operation::AddMultipliedTotal,
                         slot: AttributeModifierSlot::Head,
                     }]),
+                },
+            ),
+            (
+                MobVisibility,
+                &MobVisibilityImpl {
+                    targeting_entity_types: IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::ZOMBIE,
+                    ])),
+                    visibility: 0.5f32,
                 },
             ),
             (

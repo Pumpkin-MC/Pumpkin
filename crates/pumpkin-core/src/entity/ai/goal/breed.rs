@@ -5,10 +5,14 @@ use uuid::Uuid;
 use pumpkin_data::entity::EntityStatus;
 use rand::RngExt;
 
+use crate::entity::ai::target_match::{SearchArea, TargetMatch};
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob, r#type::from_type};
 
 use super::{Controls, Goal};
+
+const PARTNER_RANGE: f64 = 8.0;
 
 pub struct BreedGoal {
     speed: f64,
@@ -33,35 +37,19 @@ impl BreedGoal {
         }
 
         let entity = mob.get_entity();
-        let pos = entity.pos.load();
         let world = entity.world.load();
-        let my_type = entity.entity_type;
-        let my_uuid = entity.entity_uuid;
+        // Vanilla `PARTNER_TARGETING`: 8 blocks, seen or not, an invisible partner counts less.
+        let conditions = TargetPredicate::create_non_attackable()
+            .ignore_visibility()
+            .set_base_max_distance(PARTNER_RANGE);
+        let area = SearchArea::from_feet(entity, PARTNER_RANGE, PARTNER_RANGE);
 
-        let nearby = world.get_nearby_entities(pos, 8.0);
-        let mut closest: Option<(f64, Arc<dyn EntityBase>)> = None;
-
-        for candidate in nearby.values() {
-            let c_entity = candidate.get_entity();
-            if c_entity.entity_uuid == my_uuid {
-                continue;
-            }
-            if c_entity.entity_type != my_type {
-                continue;
-            }
-            if !candidate.is_in_love() || !candidate.is_breeding_ready() || candidate.is_panicking()
-            {
-                continue;
-            }
-
-            let dist = pos.squared_distance_to_vec(&c_entity.pos.load());
-            match &closest {
-                Some((best_dist, _)) if dist >= *best_dist => {}
-                _ => closest = Some((dist, candidate.clone())),
-            }
-        }
-
-        closest.map(|(_, e)| e)
+        TargetMatch::Type(entity.entity_type).find_nearest(&world, &area, |candidate| {
+            candidate.is_in_love()
+                && candidate.is_breeding_ready()
+                && !candidate.is_panicking()
+                && conditions.test(&world, Some(mob), candidate)
+        })
     }
 
     fn breed(mob: &dyn Mob, mate: &dyn EntityBase) {

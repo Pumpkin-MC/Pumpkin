@@ -1,9 +1,10 @@
 use super::{Controls, Goal};
 
+use crate::entity::EntityBase;
+use crate::entity::ai::target_match::{SearchArea, TargetMatch};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
-use crate::entity::{EntityBase, player::Player};
 use pumpkin_data::entity::EntityType;
 use rand::RngExt;
 use std::sync::{Arc, Weak};
@@ -56,7 +57,7 @@ impl LookAtEntityGoal {
         range: f32,
     ) -> TargetPredicate {
         let mut target_predicate = TargetPredicate::create_non_attackable();
-        target_predicate.base_max_distance = range as f64; // TODO
+        target_predicate.base_max_distance = f64::from(range);
         if target_type == &EntityType::PLAYER {
             target_predicate.set_predicate(move |living_entity, _world| {
                 mob_weak.upgrade().is_some_and(|mob_arc| {
@@ -87,25 +88,17 @@ impl Goal for LookAtEntityGoal {
             }
         }
 
-        let world = mob_entity.living_entity.entity.world.load();
-        let mob_pos = mob_entity.living_entity.entity.pos.load();
+        let entity = &mob_entity.living_entity.entity;
+        let world = entity.world.load();
+        // Players anywhere, other mobs within 3 blocks of height; the conditions carry the range.
+        let area = SearchArea::from_eyes(entity, self.range.into(), 3.0).players_anywhere();
 
         // The conditions filter the candidates instead of being applied to the nearest one.
         let predicate = &self.target_predicate;
-        self.target = if *self.target_type == EntityType::PLAYER {
-            world
-                .get_nearest_player(mob_pos, self.range.into(), |player| {
-                    predicate.test(&world, Some(mob), player.as_ref())
-                })
-                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>)
-        } else {
-            world.get_nearest_entity(
-                mob_pos,
-                self.range.into(),
-                Some(&[self.target_type]),
-                |entity| predicate.test(&world, Some(mob), entity.as_ref()),
-            )
-        };
+        self.target =
+            TargetMatch::Type(self.target_type).find_nearest(&world, &area, |candidate| {
+                predicate.test(&world, Some(mob), candidate)
+            });
 
         self.target.is_some()
     }

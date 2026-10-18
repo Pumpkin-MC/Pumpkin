@@ -141,8 +141,13 @@ impl Goal for TrackTargetGoal {
             return false;
         }
 
+        // Only a shared scoreboard team here, not the wider ally rules of the targeting test.
         let mob_base: &dyn EntityBase = mob;
-        if mob_base.is_allied_to(target_base.as_ref()) {
+        if mob_base.get_team_name().is_some_and(|team| {
+            target_base
+                .get_team_name()
+                .is_some_and(|other| other == team)
+        }) {
             return false;
         }
 

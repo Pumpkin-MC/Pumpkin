@@ -1,6 +1,7 @@
 use super::{Controls, Goal, to_goal_ticks};
 use crate::entity::EntityBase;
 use crate::entity::ai::pathfinder::NavigatorGoal;
+use crate::entity::ai::target_match::{SearchArea, TargetMatch};
 use crate::entity::mob::Mob;
 use std::sync::Arc;
 
@@ -29,27 +30,16 @@ impl FollowMobGoal {
 
 impl Goal for FollowMobGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        let my_type = mob.get_entity().entity_type;
-        let my_uuid = mob.get_entity().entity_uuid;
-        let pos = mob.get_entity().pos.load();
-        let world = mob.get_entity().world.load();
+        let entity = mob.get_entity();
+        let world = entity.world.load();
+        let area = SearchArea::from_feet(entity, self.area_size, self.area_size);
 
-        let nearby = world.get_nearby_entities(pos, self.area_size);
-        for candidate in nearby.values() {
-            let c_entity = candidate.get_entity();
-            if c_entity.entity_uuid == my_uuid {
-                continue;
-            }
-            if c_entity.entity_type == my_type {
-                continue;
-            }
-            if candidate.get_living_entity().is_some() {
-                self.following_mob = Some(candidate.clone());
-                return true;
-            }
-        }
-
-        false
+        // Any mob of another type; vanilla takes the first listed, this the nearest.
+        self.following_mob = TargetMatch::Any.find_nearest(&world, &area, |candidate| {
+            candidate.get_entity().entity_type != entity.entity_type
+                && candidate.get_mob().is_some()
+        });
+        self.following_mob.is_some()
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {

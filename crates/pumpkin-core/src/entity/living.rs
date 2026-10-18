@@ -42,7 +42,7 @@ use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
-    EquipmentSlot, EquippableImpl, FoodImpl,
+    EquipmentSlot, EquippableImpl, FoodImpl, MobVisibilityImpl,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -77,16 +77,15 @@ const ARMOR_SLOTS: [EquipmentSlot; 4] = [
     EquipmentSlot::FEET,
 ];
 
-/// Heads with vanilla's default `mob_visibility` (0.5 against these types).
-// TODO: read the `mob_visibility` component once items carry it.
-const LOWERED_MOB_VISIBILITY: &[(&Item, &[&EntityType])] = &[
-    (&Item::SKELETON_SKULL, &[&EntityType::SKELETON]),
-    (&Item::ZOMBIE_HEAD, &[&EntityType::ZOMBIE]),
-    (&Item::CREEPER_HEAD, &[&EntityType::CREEPER]),
-    (
-        &Item::PIGLIN_HEAD,
-        &[&EntityType::PIGLIN, &EntityType::PIGLIN_BRUTE],
-    ),
+const ALL_SLOTS: [EquipmentSlot; 8] = [
+    EquipmentSlot::MAIN_HAND,
+    EquipmentSlot::OFF_HAND,
+    EquipmentSlot::FEET,
+    EquipmentSlot::LEGS,
+    EquipmentSlot::CHEST,
+    EquipmentSlot::HEAD,
+    EquipmentSlot::BODY,
+    EquipmentSlot::SADDLE,
 ];
 
 /// Represents a living entity within the game world.
@@ -2674,13 +2673,18 @@ impl LivingEntity {
                 .count();
             percent *= 0.7 * (worn as f64 / ARMOR_SLOTS.len() as f64).max(0.1);
         }
+        // `mob_visibility` counts only in the slot the item is equippable in. Mob heads.
         if let Some(targeting) = targeting {
-            let head = equipment.get(&EquipmentSlot::HEAD);
-            if LOWERED_MOB_VISIBILITY
-                .iter()
-                .any(|(item, types)| head.item == *item && types.contains(&targeting))
-            {
-                percent *= 0.5;
+            for slot in &ALL_SLOTS {
+                let stack = equipment.get(slot);
+                if let Some(visibility) = stack.get_data_component::<MobVisibilityImpl>()
+                    && stack
+                        .get_data_component::<EquippableImpl>()
+                        .is_some_and(|equippable| equippable.slot == slot)
+                    && visibility.targeting_entity_types.contains(targeting)
+                {
+                    percent *= f64::from(visibility.visibility);
+                }
             }
         }
         percent.clamp(0.0, 10.0)

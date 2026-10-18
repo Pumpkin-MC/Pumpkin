@@ -686,6 +686,44 @@ impl DataComponentImpl for EquippableImpl {
     default_impl!(Equippable);
 }
 
+/// Scales how far the listed mobs notice the wearer, vanilla `MobVisibility`. Mob heads.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MobVisibilityImpl {
+    pub targeting_entity_types: IDSet<EntityType>,
+    pub visibility: f32,
+}
+impl MobVisibilityImpl {
+    pub const MAX_VISIBILITY: f32 = 10.0;
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let targeting_entity_types = IDSet::read(compound.get("targeting_entity_types")?)?;
+        let visibility = compound.get_float("visibility")?;
+        (0.0..=Self::MAX_VISIBILITY)
+            .contains(&visibility)
+            .then_some(Self {
+                targeting_entity_types,
+                visibility,
+            })
+    }
+}
+impl DataComponentImpl for MobVisibilityImpl {
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new();
+        digest.update(&get_idset_hash(&self.targeting_entity_types).to_le_bytes());
+        digest.update(&get_f32_hash(self.visibility).to_le_bytes());
+        digest.finalize() as i32
+    }
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        self.targeting_entity_types
+            .write(&mut compound, "targeting_entity_types");
+        compound.put_float("visibility", self.visibility);
+        NbtTag::Compound(compound)
+    }
+    default_impl!(MobVisibility);
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct RepairableImpl {
     pub items: IDSet<Item>,

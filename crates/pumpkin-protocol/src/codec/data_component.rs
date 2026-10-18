@@ -899,6 +899,20 @@ impl DataComponentCodec<Self> for RepairableImpl {
     }
 }
 
+impl DataComponentCodec<Self> for MobVisibilityImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        serialize_idset(&self.targeting_entity_types, seq)?;
+        seq.write_f32(self.visibility)
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        Ok(Self {
+            targeting_entity_types: deserialize_idset(seq)?,
+            visibility: seq.get_f32()?,
+        })
+    }
+}
+
 impl DataComponentCodec<Self> for SwingAnimationImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         seq.write_var_int(&VarInt::from(self.animation_type.to_id()))?;
@@ -976,6 +990,7 @@ pub fn deserialize(
         DataComponent::AttackRange => Ok(AttackRangeImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Enchantable => Ok(EnchantableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Equippable => Ok(EquippableImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::MobVisibility => Ok(MobVisibilityImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Repairable => Ok(RepairableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Glider => Ok(GliderImpl::deserialize(seq)?.to_dyn()),
         DataComponent::TooltipStyle => Ok(TooltipStyleImpl::deserialize(seq)?.to_dyn()),
@@ -1128,6 +1143,7 @@ pub fn serialize(
         DataComponent::AttackRange => get::<AttackRangeImpl>(value).serialize(seq),
         DataComponent::Enchantable => get::<EnchantableImpl>(value).serialize(seq),
         DataComponent::Equippable => get::<EquippableImpl>(value).serialize(seq),
+        DataComponent::MobVisibility => get::<MobVisibilityImpl>(value).serialize(seq),
         DataComponent::Repairable => get::<RepairableImpl>(value).serialize(seq),
         DataComponent::Glider => get::<GliderImpl>(value).serialize(seq),
         DataComponent::TooltipStyle => get::<TooltipStyleImpl>(value).serialize(seq),

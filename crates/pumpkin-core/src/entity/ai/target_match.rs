@@ -2,9 +2,10 @@ use std::sync::Arc;
 
 use pumpkin_data::entity::{EntityType, MobCategory};
 use pumpkin_data::tag::{self, Tag, Taggable};
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::entity::EntityBase;
+use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 
 /// Which entity types a target or threat search accepts.
@@ -67,32 +68,53 @@ impl TargetMatch {
         matches!(self, Self::Type(t) if t == &EntityType::PLAYER)
     }
 
-    /// Nearest matching entity within `radius` that passes `accept`.
+    /// Nearest matching entity in `area` that passes `accept`.
     /// Players live in their own list, so it is searched whenever they can match.
     pub fn find_nearest(
         self,
         world: &World,
-        pos: Vector3<f64>,
-        radius: f64,
+        area: &SearchArea,
         accept: impl Fn(&dyn EntityBase) -> bool,
     ) -> Option<Arc<dyn EntityBase>> {
+        let dist = |entity: &dyn EntityBase| {
+            entity
+                .get_entity()
+                .pos
+                .load()
+                .squared_distance_to_vec(&area.origin)
+        };
         let player = self
             .matches(&EntityType::PLAYER)
-            .then(|| world.get_nearest_player(pos, radius, |player| accept(player.as_ref())))
-            .flatten()
-            .map(|player| player as Arc<dyn EntityBase>);
+            .then(|| {
+                world
+                    .players
+                    .load()
+                    .iter()
+                    .filter(|player| {
+                        let player: &dyn EntityBase = player.as_ref();
+                        area.holds_player(player) && accept(player)
+                    })
+                    .min_by(|a, b| dist(a.as_ref()).total_cmp(&dist(b.as_ref())))
+                    .map(|player| player.clone() as Arc<dyn EntityBase>)
+            })
+            .flatten();
         if self.is_player() {
             return player;
         }
-        let entity = world.get_nearest_entity(pos, radius, None, |entity| {
-            self.matches(entity.get_entity().entity_type) && accept(entity.as_ref())
-        });
+        let entity = world
+            .entities
+            .load()
+            .iter()
+            .filter(|entity| {
+                self.matches(entity.get_entity().entity_type)
+                    && area.holds(entity.as_ref())
+                    && accept(entity.as_ref())
+            })
+            .min_by(|a, b| dist(a.as_ref()).total_cmp(&dist(b.as_ref())))
+            .cloned();
         match (player, entity) {
             (Some(player), Some(entity)) => {
-                let dist = |e: &Arc<dyn EntityBase>| {
-                    e.get_entity().pos.load().squared_distance_to_vec(&pos)
-                };
-                Some(if dist(&player) <= dist(&entity) {
+                Some(if dist(player.as_ref()) <= dist(entity.as_ref()) {
                     player
                 } else {
                     entity
@@ -100,6 +122,59 @@ impl TargetMatch {
             }
             (player, entity) => player.or(entity),
         }
+    }
+}
+
+/// Vanilla's candidate box before the targeting test.
+#[derive(Clone, Copy)]
+pub struct SearchArea {
+    /// The nearest candidate to this point wins.
+    pub origin: Vector3<f64>,
+    pub area: BoundingBox,
+    /// Vanilla `getNearestPlayer` has no box: only the targeting test limits players.
+    pub players_anywhere: bool,
+}
+
+impl SearchArea {
+    /// The mob's box grown by `horizontal` and `vertical`, ranked from its eyes.
+    #[must_use]
+    pub fn from_eyes(entity: &Entity, horizontal: f64, vertical: f64) -> Self {
+        let mut area = Self::from_feet(entity, horizontal, vertical);
+        area.origin.y += f64::from(entity.entity_dimension.load().eye_height);
+        area
+    }
+
+    /// The mob's box grown by `horizontal` and `vertical`, ranked from its feet.
+    #[must_use]
+    pub fn from_feet(entity: &Entity, horizontal: f64, vertical: f64) -> Self {
+        Self {
+            origin: entity.pos.load(),
+            area: entity
+                .bounding_box
+                .load()
+                .expand(horizontal, vertical, horizontal),
+            players_anywhere: false,
+        }
+    }
+
+    /// Players are not limited by the box, vanilla `getNearestPlayer`.
+    #[must_use]
+    pub const fn players_anywhere(mut self) -> Self {
+        self.players_anywhere = true;
+        self
+    }
+
+    #[must_use]
+    pub fn holds(&self, candidate: &dyn EntityBase) -> bool {
+        candidate
+            .get_entity()
+            .bounding_box
+            .load()
+            .intersects(&self.area)
+    }
+
+    fn holds_player(&self, player: &dyn EntityBase) -> bool {
+        self.players_anywhere || self.holds(player)
     }
 }
 

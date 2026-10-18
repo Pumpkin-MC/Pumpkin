@@ -4,7 +4,7 @@ use crate::entity::ageable::AgeableMob;
 use crate::entity::ai::behavior::hunting::TargetPredicateFn;
 use crate::entity::ai::goal::revenge::MobFilter;
 use crate::entity::ai::goal::track_target::TrackTargetGoal;
-use crate::entity::ai::target_match::TargetMatch;
+use crate::entity::ai::target_match::{SearchArea, TargetMatch};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
@@ -204,16 +204,16 @@ impl ActiveTargetGoal {
         self.target = target;
     }
 
-    /// Vanilla's targeting conditions plus the per-mob filters.
+    /// Vanilla's targeting conditions plus the per-mob filters, cheap ones before the sight test.
     fn accepts(&self, mob: &dyn Mob, world: &World, candidate: &dyn EntityBase) -> bool {
         self.passes_filter(candidate)
-            && self.target_predicate.test(world, Some(mob), candidate)
             && self.selector.is_none_or(|selector| {
                 candidate
                     .get_living_entity()
                     .is_some_and(|living| selector(mob, living, world))
             })
             && self.condition.allows_target(mob, candidate, world)
+            && self.target_predicate.test(world, Some(mob), candidate)
     }
 
     fn find_closest_target(&mut self, mob: &dyn Mob) {
@@ -223,32 +223,23 @@ impl ActiveTargetGoal {
         // Vanilla updates the target conditions with the current follow distance on every search
         self.target_predicate.base_max_distance = follow_range;
 
-        let world = mob_entity.living_entity.entity.world.load();
-
-        // Vanilla searches using getEyeY(), so we offset the position by the eye height
-        let mut search_pos = mob_entity.living_entity.entity.pos.load();
-        search_pos.y += mob_entity
-            .living_entity
-            .entity
-            .entity_dimension
-            .load()
-            .eye_height as f64;
+        let entity = &mob_entity.living_entity.entity;
+        let world = entity.world.load();
+        let area = SearchArea::from_eyes(entity, follow_range, follow_range).players_anywhere();
 
         // Pick the nearest candidate that passes the conditions, not the nearest overall.
         let target_type = self.target_type;
         let found = self.condition.grudge_target(mob).map_or_else(
             || {
-                target_type.find_nearest(&world, search_pos, follow_range, |candidate| {
+                target_type.find_nearest(&world, &area, |candidate| {
                     self.accepts(mob, &world, candidate)
                 })
             },
-            // Same range rule as the area search: follow range from the eye.
+            // Same area rule as the search: players anywhere, others in the box.
             |uuid| {
                 find_by_uuid(&world, uuid).filter(|candidate| {
-                    let entity = candidate.get_entity();
-                    target_type.matches(entity.entity_type)
-                        && entity.pos.load().squared_distance_to_vec(&search_pos)
-                            <= follow_range * follow_range
+                    target_type.matches(candidate.get_entity().entity_type)
+                        && (candidate.get_player().is_some() || area.holds(candidate.as_ref()))
                         && self.accepts(mob, &world, candidate.as_ref())
                 })
             },
