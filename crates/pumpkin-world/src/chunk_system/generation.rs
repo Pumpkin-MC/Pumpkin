@@ -183,6 +183,64 @@ mod tests {
         }
     }
 
+    /// Vanilla `VoidStartPlatformFeature`: stone within 16 blocks of (8, 8), cobblestone at
+    /// (8, 8), three blocks above the bottom of the world, only in the chunks around (0, 0).
+    #[test]
+    fn the_void_preset_generates_the_vanilla_start_platform() {
+        let settings = crate::world_info::FlatLevelGeneratorPreset::from_name("the_void")
+            .unwrap()
+            .settings;
+        let world_gen = crate::generation::get_world_gen_with_all_settings(
+            Seed(0),
+            Dimension::OVERWORLD,
+            true,
+            settings.to_flat_layers(),
+            settings.biome.clone(),
+            None,
+            None,
+            None,
+            crate::generation::generator::FlatDecoration {
+                features: settings.features,
+                lakes: settings.lakes,
+            },
+        );
+        let platform_y = Dimension::OVERWORLD.min_y + 3;
+
+        for (chunk_x, chunk_z) in [(0, 0), (1, 1), (-1, 0), (2, 0)] {
+            let Chunk::Level(chunk) = generate_single_chunk(
+                &world_gen,
+                &BlockRegistry,
+                chunk_x,
+                chunk_z,
+                StagedChunkEnum::Full,
+            ) else {
+                panic!("full generation must return a level chunk");
+            };
+            for rx in 0..16 {
+                for rz in 0..16 {
+                    let (x, z) = (chunk_x * 16 + rx as i32, chunk_z * 16 + rz as i32);
+                    let near_origin = chunk_x.abs().max(chunk_z.abs()) <= 1;
+                    let expected = if !near_origin || (x - 8).abs().max((z - 8).abs()) > 16 {
+                        BlockStateId::AIR
+                    } else if (x, z) == (8, 8) {
+                        pumpkin_data::Block::COBBLESTONE.default_state.id
+                    } else {
+                        pumpkin_data::Block::STONE.default_state.id
+                    };
+                    for y in Dimension::OVERWORLD.min_y..platform_y + 2 {
+                        let block = chunk.section.get_block_absolute_y(rx, y, rz);
+                        let expected = if y == platform_y {
+                            expected
+                        } else {
+                            BlockStateId::AIR
+                        };
+                        assert_eq!(block, Some(expected), "block at ({x}, {y}, {z})");
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn generate_chunk_should_return() {
         let dimension = Dimension::OVERWORLD;

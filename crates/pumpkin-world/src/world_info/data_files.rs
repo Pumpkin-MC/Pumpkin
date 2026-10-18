@@ -54,12 +54,6 @@ pub struct WorldGenSettingsData {
     pub data_version: i32,
     #[serde(rename = "bonus_chest", default)]
     pub bonus_chest: bool,
-    #[serde(rename = "generate_structures", default = "default_true")]
-    pub generate_structures: bool,
-}
-
-const fn default_true() -> bool {
-    true
 }
 
 impl WorldGenSettingsData {
@@ -69,7 +63,6 @@ impl WorldGenSettingsData {
             settings,
             data_version,
             bonus_chest: false,
-            generate_structures: true,
         }
     }
 }
@@ -323,7 +316,11 @@ fn read_world_gen_settings_file(path: &Path) -> Option<WorldGenSettings> {
                         }
                     }
                 }
-                Some(WorldGenSettings { seed, dimensions })
+                Some(WorldGenSettings {
+                    seed,
+                    generate_structures: c.get_bool("generate_structures").unwrap_or(true),
+                    dimensions,
+                })
             }
             Err(e) => {
                 warn!("Failed to deserialize {}: {e}", path.display());
@@ -360,7 +357,7 @@ pub fn write_world_gen_settings(
     let mut inner = NbtCompound::new();
     inner.put_int("DataVersion", data_version);
     inner.put_long("seed", settings.seed);
-    inner.put_bool("generate_structures", true);
+    inner.put_bool("generate_structures", settings.generate_structures);
     inner.put_bool("bonus_chest", false);
 
     let mut dims_comp = NbtCompound::new();
