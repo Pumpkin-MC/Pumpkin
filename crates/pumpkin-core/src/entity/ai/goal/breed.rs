@@ -8,6 +8,7 @@ use rand::RngExt;
 use crate::entity::ai::target_match::{SearchArea, TargetMatch};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::experience_orb::ExperienceOrbEntity;
+use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob, r#type::from_type};
 
 use super::{Controls, Goal};
@@ -76,38 +77,30 @@ impl BreedGoal {
             return;
         };
 
+        // Both parents' online breeders, vanilla's love causes.
+        let online = |uuid: &Uuid| world.get_player_by_uuid(*uuid).is_some();
+        let first = mob_entity.breeder.load().filter(online);
+        let second = mate
+            .get_mob()
+            .and_then(|mate| mate.get_mob_entity().breeder.load())
+            .filter(|uuid| online(uuid) && first != Some(*uuid));
         if let Some(baby_mob) = baby.get_mob() {
-            let online = |uuid: &Uuid| world.get_player_by_uuid(*uuid).is_some();
-            let first = mob_entity.breeder.load().filter(online);
-            let second = mate
-                .get_mob()
-                .and_then(|mate| mate.get_mob_entity().breeder.load())
-                .filter(|uuid| online(uuid) && first != Some(*uuid));
             for breeder in first.into_iter().chain(second) {
                 baby_mob.on_bred_by(breeder);
             }
         }
 
-        let player_opt = mob_entity
-            .breeder
-            .load()
-            .and_then(|uuid| world.get_player_by_uuid(uuid));
-        if let Some(player) = player_opt {
-            let entity_type_name = entity.entity_type.resource_name;
+        // Vanilla `getLoveCause`: this parent's breeder, else the mate's.
+        let love_cause = first.or(second);
+        if let Some(player) = love_cause.and_then(|uuid| world.get_player_by_uuid(uuid)) {
             player.increment_stat(
                 pumpkin_data::statistic::StatisticCategory::Custom,
                 pumpkin_data::statistic::CustomStatistic::AnimalsBred as i32,
                 1,
             );
-
-            player.trigger_advancement_criterion(
-                pumpkin_data::advancement::Advancement::HUSBANDRY_BREED_AN_ANIMAL,
-                "bred",
-            );
-            player.trigger_advancement_criterion(
-                pumpkin_data::advancement::Advancement::HUSBANDRY_BRED_ALL_ANIMALS,
-                &format!("minecraft:{entity_type_name}"),
-            );
+            player.trigger_advancement(AdvancementTrigger::BredAnimal {
+                parent_type: format!("minecraft:{}", entity.entity_type.resource_name),
+            });
         }
 
         mob_entity.reset_love_ticks();
@@ -122,8 +115,8 @@ impl BreedGoal {
         world_full.spawn_entity(baby);
 
         world_full.send_entity_status(entity, EntityStatus::InLoveHearts, None);
-        // TODO: gate on the `animalBreedingDropsXp` game rule once it exists.
-        if let Ok(experience) = u32::try_from(experience)
+        if world.level_info.load().game_rules.mob_drops
+            && let Ok(experience) = u32::try_from(experience)
             && experience > 0
         {
             ExperienceOrbEntity::spawn(&world_full, parent_pos, experience);
@@ -158,15 +151,9 @@ impl Goal for BreedGoal {
         self.timer = 0;
     }
 
-    fn stop(&mut self, mob: &dyn Mob) {
+    fn stop(&mut self, _mob: &dyn Mob) {
         self.mate = None;
         self.timer = 0;
-        let mut navigator = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        navigator.stop();
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
