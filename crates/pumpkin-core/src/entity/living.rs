@@ -345,9 +345,9 @@ impl LivingEntity {
 
     /// Vanilla `getLastHurtByMob() != null`: hit by any living attacker in the last 100 ticks.
     pub fn was_recently_hurt_by_living(&self) -> bool {
-        let current_tick = self.entity.world.load().level_info.load().day_time;
+        let current_tick = self.entity.world.load().get_world_age();
         let recent = |id: &AtomicI32, time: &AtomicI64| {
-            id.load(Relaxed) != 0 && (current_tick - time.load(Relaxed)).abs() <= 100
+            id.load(Relaxed) != 0 && current_tick - time.load(Relaxed) <= 100
         };
         recent(&self.last_hurt_by_player_id, &self.last_hurt_by_player_time)
             || recent(&self.last_hurt_by_mob_id, &self.last_hurt_by_mob_time)
@@ -360,12 +360,12 @@ impl LivingEntity {
     /// 3. Fall back to combat tracker's killer entry if available.
     pub fn get_kill_credit(&self) -> Option<Arc<dyn EntityBase>> {
         let world = self.entity.world.load();
-        let current_tick = world.level_info.load().day_time;
+        let current_tick = world.get_world_age();
 
         let player_id = self.last_hurt_by_player_id.load(Relaxed);
         let player_time = self.last_hurt_by_player_time.load(Relaxed);
         if player_id != 0
-            && (current_tick - player_time).abs() <= 100
+            && current_tick - player_time <= 100
             && let Some(player) = world.get_entity_by_id(player_id)
         {
             return Some(player);
@@ -374,7 +374,7 @@ impl LivingEntity {
         let mob_id = self.last_hurt_by_mob_id.load(Relaxed);
         let mob_time = self.last_hurt_by_mob_time.load(Relaxed);
         if mob_id != 0
-            && (current_tick - mob_time).abs() <= 100
+            && current_tick - mob_time <= 100
             && let Some(mob) = world.get_entity_by_id(mob_id)
         {
             return Some(mob);
@@ -3397,7 +3397,7 @@ impl LivingEntity {
                 self.last_attacked_time
                     .store(self.entity.age.load(Relaxed), Relaxed);
 
-                let current_tick = world.level_info.load().day_time;
+                let current_tick = world.get_world_age();
                 if attacker.get_player().is_some() {
                     self.last_hurt_by_player_id.store(attacker_id, Relaxed);
                     self.last_hurt_by_player_time.store(current_tick, Relaxed);
@@ -3409,7 +3409,7 @@ impl LivingEntity {
         }
 
         if dmg_to_health > 0.0 || absorbed_damage > 0.0 {
-            let current_tick = world.level_info.load().day_time;
+            let current_tick = world.get_world_age();
             let fall_location = FallLocation::get_current_fall_location(self, &world);
             let fall_distance = self.fall_distance.load();
 
