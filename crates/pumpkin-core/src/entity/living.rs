@@ -905,11 +905,10 @@ impl LivingEntity {
     fn refresh_dirty_attributes(&self, caller: &dyn EntityBase) {
         let updated: Vec<u8> = self
             .attributes
-            .read()
+            .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .iter()
-            .filter(|(_, instance)| instance.updated.swap(false, Relaxed))
-            .map(|(id, _)| *id)
+            .iter_mut()
+            .filter_map(|(id, instance)| std::mem::take(instance.updated.get_mut()).then_some(*id))
             .collect();
         if let Some(mob) = caller.get_mob() {
             for attribute in updated {
