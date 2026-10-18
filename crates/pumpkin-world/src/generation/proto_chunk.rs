@@ -309,11 +309,14 @@ impl ProtoChunk {
         proto_chunk
             .blending_data
             .clone_from(&chunk_data.blending_data);
-        proto_chunk.custom_data = chunk_data
+        let mut custom_data = chunk_data
             .custom_data
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // Same lock as the copy, so a quadrant flag cached but not yet persisted isn't lost.
+        crate::lighting::SkyLightHeightMigration::persist_locked(chunk_data, &mut custom_data);
+        proto_chunk.custom_data = custom_data.clone();
+        drop(custom_data);
 
         // Chunks loaded from disk carry their block entities in the chunk data.
         // Keep them so the world can create the block entities when the chunk
