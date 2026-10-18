@@ -1219,6 +1219,9 @@ pub trait Mob: EntityBase + Send + Sync {
         !event.cancelled
     }
 
+    /// Called on a newborn for each online player who fed its parents. Foxes trust them.
+    fn on_bred_by(&self, _player: Uuid) {}
+
     /// Fires `EntityBreedEvent` before the child spawns. `None`: a plugin cancelled,
     /// else the experience to drop.
     fn approve_breeding(&self, father_id: i32, child_id: i32, experience: i32) -> Option<i32> {

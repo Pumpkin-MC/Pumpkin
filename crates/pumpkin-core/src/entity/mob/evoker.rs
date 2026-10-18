@@ -8,6 +8,7 @@ use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
 use crate::entity::ai::behavior::hunting::{self, Hunt};
 use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
@@ -53,6 +54,11 @@ impl IllagerSpell {
     }
 }
 
+const EVOKER_FLEES: &[Flee] = &[
+    Flee::new(2, TargetMatch::Type(&EntityType::PLAYER), 8.0, 0.6, 1.0),
+    raider::flee_creaking(3, 0.6, 1.0),
+];
+
 const EVOKER_HUNTS: &[Hunt] = &[
     Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true).forget_unseen_after(300),
     Hunt::new(3, TargetMatch::VILLAGER_LIKE, false).forget_unseen_after(300),
@@ -94,6 +100,7 @@ impl EvokerEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(EvokerCastingSpellGoal::new(mob_weak.clone())));
             goal_selector.add_goal(2, Box::new(ObtainRaidLeaderBannerGoal));
+            fleeing::apply(&mut goal_selector, EVOKER_FLEES);
             goal_selector.add_goal(3, Box::new(RaiderMoveThroughVillageGoal::new(1.05)));
             goal_selector.add_goal(3, Box::new(PathfindToRaidGoal::default()));
             goal_selector.add_goal(4, Box::new(EvokerSummonSpellGoal::new(mob_weak.clone())));

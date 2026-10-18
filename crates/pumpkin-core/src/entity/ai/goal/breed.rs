@@ -81,6 +81,18 @@ impl BreedGoal {
             return;
         };
 
+        if let Some(baby_mob) = baby.get_mob() {
+            let online = |uuid: &Uuid| world.get_player_by_uuid(*uuid).is_some();
+            let first = mob_entity.breeder.load().filter(online);
+            let second = mate
+                .get_mob()
+                .and_then(|mate| mate.get_mob_entity().breeder.load())
+                .filter(|uuid| online(uuid) && first != Some(*uuid));
+            for breeder in first.into_iter().chain(second) {
+                baby_mob.on_bred_by(breeder);
+            }
+        }
+
         let player_opt = mob_entity
             .breeder
             .load()

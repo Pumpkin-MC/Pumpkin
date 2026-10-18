@@ -2,6 +2,7 @@ use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
 
+use crate::entity::ai::behavior::fleeing::{self, FISH_FLEES};
 use crate::entity::{
     Entity,
     ai::goal::{
@@ -36,6 +37,7 @@ impl CodEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            fleeing::apply(&mut goal_selector, FISH_FLEES);
             goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 2,

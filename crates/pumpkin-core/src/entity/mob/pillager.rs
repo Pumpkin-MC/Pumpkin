@@ -10,6 +10,7 @@ use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
 use crate::entity::ai::behavior::hunting::{self, Hunt};
 use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
@@ -29,6 +30,8 @@ use crate::entity::{
         },
     },
 };
+
+const PILLAGER_FLEES: &[Flee] = &[raider::flee_creaking(1, 1.0, 1.2)];
 
 const PILLAGER_HUNTS: &[Hunt] = &[
     Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true),
@@ -69,6 +72,7 @@ impl PillagerEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(ObtainRaidLeaderBannerGoal));
+            fleeing::apply(&mut goal_selector, PILLAGER_FLEES);
             goal_selector.add_goal(2, Box::new(HoldGroundAttackGoal::new(10.0)));
             goal_selector.add_goal(3, Box::new(RangedCrossbowAttackGoal::new(1.0, 8.0)));
             goal_selector.add_goal(4, Box::new(LongDistancePatrolGoal::new(0.7, 0.595)));

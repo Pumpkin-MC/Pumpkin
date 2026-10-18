@@ -4,6 +4,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
 use crate::entity::ai::behavior::hunting::{self, Hunt};
 use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
@@ -22,6 +23,8 @@ use crate::entity::{
         },
     },
 };
+
+const VINDICATOR_FLEES: &[Flee] = &[raider::flee_creaking(1, 1.0, 1.2)];
 
 const VINDICATOR_HUNTS: &[Hunt] = &[
     Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true),
@@ -58,6 +61,7 @@ impl VindicatorEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(OpenDoorGoal::new(false)));
             goal_selector.add_goal(1, Box::new(ObtainRaidLeaderBannerGoal));
+            fleeing::apply(&mut goal_selector, VINDICATOR_FLEES);
             goal_selector.add_goal(2, Box::new(HoldGroundAttackGoal::new(10.0)));
             goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(4, Box::new(LongDistancePatrolGoal::new(0.7, 0.595)));

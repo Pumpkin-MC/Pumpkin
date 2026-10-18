@@ -11,6 +11,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -25,6 +26,8 @@ use crate::entity::{
 };
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON, &Item::TROPICAL_FISH];
+
+const DOLPHIN_FLEES: &[Flee] = &[Flee::new(9, TargetMatch::GUARDIAN_LIKE, 8.0, 1.0, 1.0)];
 
 pub struct DolphinEntity {
     pub mob_entity: MobEntity,
@@ -64,6 +67,7 @@ impl DolphinEntity {
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
             goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
+            fleeing::apply(&mut goal_selector, DOLPHIN_FLEES);
         };
 
         {

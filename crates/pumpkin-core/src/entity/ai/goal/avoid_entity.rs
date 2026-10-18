@@ -21,6 +21,19 @@ const THREAT_SEARCH_HEIGHT: f64 = 3.0;
 /// A check on the threat that was found.
 pub type ThreatFilter = fn(&dyn EntityBase) -> bool;
 
+/// Vanilla's `predicateOnAvoidEntity`, checked on every candidate: fleeing mob, candidate.
+pub type ThreatSelector = fn(&dyn Mob, &dyn EntityBase) -> bool;
+
+/// The default selector: no creative or spectator players.
+pub fn not_creative_or_spectator(_mob: &dyn Mob, candidate: &dyn EntityBase) -> bool {
+    EntityPredicate::ExceptCreativeOrSpectator.test(candidate.get_entity())
+}
+
+/// Fish and pandas: creative players count too.
+pub fn not_spectator(_mob: &dyn Mob, candidate: &dyn EntityBase) -> bool {
+    !candidate.get_entity().is_spectator()
+}
+
 /// Threat types, each with the distance it starts the flee at.
 pub type ThreatDistances = &'static [(&'static EntityType, f64)];
 
@@ -31,6 +44,7 @@ pub struct AvoidEntityGoal {
     threat_predicate: TargetPredicate,
     slow_speed: f64,
     fast_speed: f64,
+    selector: ThreatSelector,
     target: Option<Arc<dyn EntityBase>>,
     flee_pos: Option<Vector3<f64>>,
     when: Option<MobFilter>,
@@ -57,6 +71,7 @@ impl AvoidEntityGoal {
                 .set_base_max_distance(flee_distance),
             slow_speed,
             fast_speed,
+            selector: not_creative_or_spectator,
             target: None,
             flee_pos: None,
             when: None,
@@ -93,6 +108,13 @@ impl AvoidEntityGoal {
     pub const fn as_long_as(mut self, filter: MobFilter) -> Self {
         self.when = Some(filter);
         self.keep_when = true;
+        self
+    }
+
+    /// Replaces the default creative and spectator check on every candidate.
+    #[must_use]
+    pub const fn matching(mut self, selector: ThreatSelector) -> Self {
+        self.selector = selector;
         self
     }
 
@@ -147,7 +169,7 @@ impl AvoidEntityGoal {
                                 <= dist * dist
                     })
                 }) && candidate_entity.bounding_box.load().intersects(&search_box)
-                    && EntityPredicate::ExceptCreativeOrSpectator.test(candidate_entity)
+                    && (self.selector)(mob, candidate)
                     && predicate.test(&world, Some(mob), candidate)
             })
     }

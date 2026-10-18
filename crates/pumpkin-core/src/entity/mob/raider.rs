@@ -12,9 +12,11 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
+use crate::entity::ai::behavior::fleeing::Flee;
 use crate::entity::ai::goal::revenge::RevengeGoal;
 use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::mob::Mob;
 use crate::entity::mob::patrol::{PatrolData, PatrollingMonster};
 
@@ -27,6 +29,18 @@ pub fn is_raider(entity_type: &'static EntityType) -> bool {
 #[must_use]
 pub fn revenge_goal() -> Box<RevengeGoal> {
     Box::new(RevengeGoal::new(true).ignoring(is_raider).alerting_others())
+}
+
+/// Illagers keep 8 blocks from a creaking.
+#[must_use]
+pub const fn flee_creaking(priority: u8, walk_speed: f64, sprint_speed: f64) -> Flee {
+    Flee::new(
+        priority,
+        TargetMatch::Type(&EntityType::CREAKING),
+        8.0,
+        walk_speed,
+        sprint_speed,
+    )
 }
 
 #[must_use]

@@ -3,14 +3,21 @@ use std::sync::{
     atomic::{AtomicI32, AtomicU8, Ordering},
 };
 
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
+use uuid::Uuid;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
+use crate::entity::ai::goal::avoid_entity::not_creative_or_spectator;
+use crate::entity::ai::target_match::TargetMatch;
+use crate::entity::passive::tamable::is_untamed;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
@@ -25,6 +32,36 @@ use crate::entity::{
 };
 
 pub const FOX_FOOD: &[&Item] = &[&Item::SWEET_BERRIES, &Item::GLOW_BERRIES];
+
+const FOX_FLEES: &[Flee] = &[
+    Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 16.0, 1.6, 1.4)
+        .when(is_not_defending)
+        .matching(is_untrusted_player),
+    Flee::new(4, TargetMatch::Type(&EntityType::WOLF), 8.0, 1.6, 1.4)
+        .when(is_not_defending)
+        .matching(is_untamed_wolf),
+    Flee::new(4, TargetMatch::Type(&EntityType::POLAR_BEAR), 8.0, 1.6, 1.4).when(is_not_defending),
+];
+
+fn as_fox(mob: &dyn Mob) -> Option<&FoxEntity> {
+    mob.cast_any().downcast_ref::<FoxEntity>()
+}
+
+fn is_not_defending(mob: &dyn Mob) -> bool {
+    as_fox(mob).is_some_and(|fox| !fox.is_defending())
+}
+
+/// Sneaking players and the ones the fox trusts are left alone.
+fn is_untrusted_player(mob: &dyn Mob, candidate: &dyn EntityBase) -> bool {
+    let entity = candidate.get_entity();
+    not_creative_or_spectator(mob, candidate)
+        && !entity.is_sneaking()
+        && as_fox(mob).is_some_and(|fox| !fox.trusts(entity.entity_uuid))
+}
+
+fn is_untamed_wolf(_mob: &dyn Mob, candidate: &dyn EntityBase) -> bool {
+    candidate.get_mob().is_some_and(is_untamed)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(i32)]
@@ -73,6 +110,8 @@ pub struct FoxEntity {
     pub ageable_data: AgeableData,
     pub variant: AtomicI32,
     pub flags: AtomicU8,
+    /// Vanilla's two trust slots.
+    pub trusted: AtomicCell<[Option<Uuid>; 2]>,
 }
 
 impl FoxEntity {
@@ -83,6 +122,7 @@ impl FoxEntity {
             ageable_data: AgeableData::default(),
             variant: AtomicI32::new(FoxVariant::Red.id()),
             flags: AtomicU8::new(0),
+            trusted: AtomicCell::new([None; 2]),
         };
         let mob_arc = Arc::new(fox);
         let mob_weak: Weak<dyn Mob> = {
@@ -101,6 +141,7 @@ impl FoxEntity {
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.2, FOX_FOOD, false)));
+            fleeing::apply(&mut goal_selector, FOX_FLEES);
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -206,6 +247,20 @@ impl FoxEntity {
         self.set_flag(128, val);
     }
 
+    /// With both slots taken the second is replaced.
+    pub fn add_trusted(&self, uuid: Uuid) {
+        let trusted = match self.trusted.load() {
+            [Some(first), _] => [Some(first), Some(uuid)],
+            [None, _] => [Some(uuid), None],
+        };
+        self.trusted.store(trusted);
+    }
+
+    #[must_use]
+    pub fn trusts(&self, uuid: Uuid) -> bool {
+        self.trusted.load().contains(&Some(uuid))
+    }
+
     pub fn clear_states(&self) {
         self.set_interested(false);
         self.set_crouching(false);
@@ -243,6 +298,8 @@ impl Mob for FoxEntity {
         nbt.put_bool("Sleeping", self.is_sleeping());
         nbt.put_bool("Sitting", self.is_sitting());
         nbt.put_bool("Crouching", self.is_crouching());
+        let trusted = self.trusted.load().into_iter().flatten().map(NbtTag::uuid);
+        nbt.put_list("Trusted", trusted.collect());
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
@@ -258,6 +315,15 @@ impl Mob for FoxEntity {
         if let Some(crouching) = nbt.get_bool("Crouching") {
             self.set_crouching(crouching);
         }
+        self.trusted.store([None; 2]);
+        for uuid in nbt
+            .get_list("Trusted")
+            .unwrap_or_default()
+            .iter()
+            .filter_map(NbtTag::extract_uuid)
+        {
+            self.add_trusted(uuid);
+        }
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
@@ -266,6 +332,10 @@ impl Mob for FoxEntity {
 
     fn mob_set_variant_name(&self, name: &str) {
         self.set_variant(FoxVariant::from_name(name));
+    }
+
+    fn on_bred_by(&self, player: Uuid) {
+        self.add_trusted(player);
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {

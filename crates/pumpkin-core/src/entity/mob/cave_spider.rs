@@ -4,8 +4,8 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
 
-use crate::entity::ai::behavior::hunting;
-use crate::entity::mob::spider::SPIDER_HUNTS;
+use crate::entity::ai::behavior::{fleeing, hunting};
+use crate::entity::mob::spider::{SPIDER_FLEES, SPIDER_HUNTS};
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -42,6 +42,7 @@ impl CaveSpiderEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
+            fleeing::apply(&mut goal_selector, SPIDER_FLEES);
             goal_selector.add_goal(3, SpiderAttackGoal::new(1.0, false));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(

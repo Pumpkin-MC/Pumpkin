@@ -4,6 +4,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
 use crate::entity::ai::behavior::hunting::{self, Hunt};
 use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
@@ -21,6 +22,8 @@ use crate::entity::{
         },
     },
 };
+
+const ILLUSIONER_FLEES: &[Flee] = &[raider::flee_creaking(3, 1.0, 1.2)];
 
 const ILLUSIONER_HUNTS: &[Hunt] = &[
     Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true).forget_unseen_after(300),
@@ -57,6 +60,7 @@ impl IllusionerEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(ObtainRaidLeaderBannerGoal));
             goal_selector.add_goal(2, Box::new(HoldGroundAttackGoal::new(10.0)));
+            fleeing::apply(&mut goal_selector, ILLUSIONER_FLEES);
             goal_selector.add_goal(4, Box::new(LongDistancePatrolGoal::new(0.7, 0.595)));
             goal_selector.add_goal(4, Box::new(RaiderMoveThroughVillageGoal::new(1.05)));
             goal_selector.add_goal(4, Box::new(PathfindToRaidGoal::default()));

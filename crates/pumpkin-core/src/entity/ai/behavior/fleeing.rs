@@ -1,4 +1,8 @@
-use crate::entity::ai::goal::avoid_entity::{AvoidEntityGoal, ThreatDistances, ThreatFilter};
+use pumpkin_data::entity::EntityType;
+
+use crate::entity::ai::goal::avoid_entity::{
+    AvoidEntityGoal, ThreatDistances, ThreatFilter, ThreatSelector, not_spectator,
+};
 use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::ai::goal::revenge::MobFilter;
 use crate::entity::ai::target_match::TargetMatch;
@@ -15,6 +19,7 @@ pub struct Flee {
     when: Option<MobFilter>,
     keep_when: bool,
     confirm: Option<ThreatFilter>,
+    selector: Option<ThreatSelector>,
     drop_target: bool,
     per_type: Option<ThreatDistances>,
 }
@@ -37,6 +42,7 @@ impl Flee {
             when: None,
             keep_when: false,
             confirm: None,
+            selector: None,
             drop_target: false,
             per_type: None,
         }
@@ -70,6 +76,13 @@ impl Flee {
         self
     }
 
+    /// See [`AvoidEntityGoal::matching`].
+    #[must_use]
+    pub const fn matching(mut self, selector: ThreatSelector) -> Self {
+        self.selector = Some(selector);
+        self
+    }
+
     /// See [`AvoidEntityGoal::confirmed_by`].
     #[must_use]
     pub const fn confirmed_by(mut self, filter: ThreatFilter) -> Self {
@@ -96,6 +109,9 @@ impl Flee {
                 goal.when(when)
             };
         }
+        if let Some(selector) = self.selector {
+            goal = goal.matching(selector);
+        }
         if let Some(confirm) = self.confirm {
             goal = goal.confirmed_by(confirm);
         }
@@ -105,6 +121,10 @@ impl Flee {
         goal
     }
 }
+
+/// Every fish keeps 8 blocks from players, creative ones included.
+pub const FISH_FLEES: &[Flee] =
+    &[Flee::new(2, TargetMatch::Type(&EntityType::PLAYER), 8.0, 1.6, 1.4).matching(not_spectator)];
 
 /// Registers every entry in order.
 pub fn apply(goals: &mut GoalSelector, flees: &[Flee]) {

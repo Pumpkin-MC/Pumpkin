@@ -8,6 +8,7 @@ use pumpkin_util::difficulty::Difficulty;
 use rand::RngExt;
 use uuid::Uuid;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
 use crate::entity::ai::behavior::hunting::{self, Hunt};
 use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
@@ -22,9 +23,24 @@ use crate::entity::{
         equipment::RegionalDifficulty,
         spawn::{SpawnGroupData, finalize_spawn},
     },
+    passive::armadillo::ArmadilloEntity,
     r#type::from_type,
 };
 use crate::world::World;
+
+pub const SPIDER_FLEES: &[Flee] =
+    &[
+        Flee::new(2, TargetMatch::Type(&EntityType::ARMADILLO), 6.0, 1.0, 1.2)
+            .matching(is_calm_armadillo),
+    ];
+
+/// An armadillo out of its shell.
+fn is_calm_armadillo(_mob: &dyn Mob, candidate: &dyn EntityBase) -> bool {
+    candidate
+        .cast_any()
+        .downcast_ref::<ArmadilloEntity>()
+        .is_some_and(|armadillo| !armadillo.is_scared())
+}
 
 pub const SPIDER_HUNTS: &[Hunt] = &[
     Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true).when(TargetCondition::NoDaylight),
@@ -63,6 +79,7 @@ impl SpiderEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
+            fleeing::apply(&mut goal_selector, SPIDER_FLEES);
             goal_selector.add_goal(3, SpiderAttackGoal::new(1.0, false));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(
