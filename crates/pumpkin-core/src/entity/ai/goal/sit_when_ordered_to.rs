@@ -59,8 +59,9 @@ impl Goal for SitWhenOrderedToGoal {
         ordered
     }
 
+    // Owner, water and ground only gate the start.
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        self.can_start(mob)
+        mob.ordered_to_sit()
     }
 
     fn start(&mut self, mob: &dyn Mob) {
