@@ -973,6 +973,15 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn mob_travel_in_water(&self, _caller: &dyn EntityBase) -> bool {
+        false
+    }
+
+    /// Vanilla `isPushedByFluid`: whether water currents carry the mob along.
+    fn mob_is_pushed_by_fluids(&self) -> bool {
+        true
+    }
+
     fn as_ageable(&self) -> Option<&dyn crate::entity::ageable::AgeableMob> {
         None
     }
@@ -1425,6 +1434,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         // Piglin timers, `tick_sensors`, admiring, dancing (conversion already checks NoAI)
         // Bee and ZombifiedPiglin `update_persistent_anger` (Enderman, Wolf, IronGolem and
         // PolarBear run it outside the AI step, so the shared call stays for them).
+        // Vanilla `aiStep` drops tiny motion before `serverAiStep`, so the controls' small pushes
+        // carry into `travel`.
+        mob_entity.living_entity.entity.check_zero_velo();
         if !mob_entity.is_no_ai() {
             mob_entity.server_ai_step(self, caller);
         }
@@ -1569,6 +1581,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_y_velocity_drag(&self) -> Option<f64> {
         self.get_mob_y_velocity_drag()
+    }
+
+    fn travel_in_water(&self) -> bool {
+        self.mob_travel_in_water(self)
+    }
+
+    fn is_pushed_by_fluids(&self) -> bool {
+        self.mob_is_pushed_by_fluids()
     }
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {

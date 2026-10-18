@@ -138,6 +138,11 @@ impl TridentEntity {
             return true;
         }
 
+        // Spectators can't be hit
+        if other.get_player().is_some_and(Player::is_spectator) {
+            return true;
+        }
+
         // Skip owner for initial frames (5 ticks)
         if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
             return true;
@@ -260,8 +265,8 @@ impl EntityBase for TridentEntity {
             }
         }
 
-        // Entity collisions
-        let candidates = world.get_entities_at_box(&search_box);
+        // Entity collisions, players included
+        let candidates = world.get_all_at_box(&search_box);
         for cand in candidates {
             if self.should_skip_collision(entity, &cand) {
                 continue;
@@ -362,8 +367,15 @@ impl EntityBase for TridentEntity {
                     }
                 }
 
-                let damage_val = damage as f32;
-                target.damage(&*target, damage_val, DamageType::TRIDENT);
+                let owner = self.owner_id.and_then(|id| world.get_entity_by_id(id));
+                target.damage_with_context(
+                    target.as_ref(),
+                    damage as f32,
+                    DamageType::TRIDENT,
+                    Some(hit_pos),
+                    owner.as_deref(),
+                    None,
+                );
 
                 // Play hit sound
                 let sound_packet = CSoundEffect::new(
