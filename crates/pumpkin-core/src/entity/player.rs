@@ -4390,6 +4390,7 @@ impl Player {
         {
             return false;
         }
+        // TODO: Vanilla `Player.hurtServer` difficulty scaling when `scalesWithDifficulty`
         self.living_entity
             .damage_with_context(caller, amount, damage_type, position, source, cause)
     }
