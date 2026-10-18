@@ -31,6 +31,7 @@ use std::sync::{
 };
 
 use super::{Entity, EntityBase, living::LivingEntity, player::Player};
+use crate::block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION;
 use crate::world::entity_islands::{self, AuditedReach};
 
 pub struct ItemEntity {
@@ -92,9 +93,6 @@ const MERGE_MAX_COUNT: u8 = 64;
 
 /// Horizontal search distance of `mergeWithNeighbours`.
 const MERGE_DISTANCE: f64 = 0.5;
-
-/// Most `moveTowardsClosestSpace` can add, plus fluid currents.
-const PUSH_OUT_MOTION: f64 = 0.35;
 
 impl ItemEntity {
     pub const DEFAULT_PICKUP_DELAY: u8 = 10;
@@ -566,12 +564,15 @@ impl ItemEntity {
 impl EntityBase for ItemEntity {
     fn audited_reach(&self) -> Option<AuditedReach> {
         let entity = &self.entity;
+        let world = entity.world.load();
+        let pushes =
+            super::MAX_PUSH_OUT_SPEED + super::max_fluid_push_speed(world.dimension.fast_lava);
         let velocity = entity.velocity.load();
         let mut reach = AuditedReach {
             bounding_box: entity.bounding_box.load(),
             motion: (
-                velocity.x.hypot(velocity.z) + PUSH_OUT_MOTION,
-                velocity.y.abs() + PUSH_OUT_MOTION + self.get_gravity(),
+                velocity.x.hypot(velocity.z) + pushes,
+                velocity.y.abs() + pushes + self.get_gravity() + SURFACE_UPWARD_ACCELERATION,
             ),
             entities: MERGE_DISTANCE,
             players: 0.0,
@@ -581,7 +582,7 @@ impl EntityBase for ItemEntity {
             global: false,
             links: entity_islands::links_of(self),
         };
-        reach.scan_contact_blocks(&entity.world.load());
+        reach.scan_contact_blocks(&world);
         Some(reach)
     }
 

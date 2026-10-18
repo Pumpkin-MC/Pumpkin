@@ -23,6 +23,8 @@ use tracing::{debug, error, info, trace, warn};
 mod active_chunks;
 pub mod brightness;
 pub mod chunker;
+mod entity_index;
+pub(crate) use entity_index::EntityIndex;
 pub mod entity_islands;
 pub mod explosion;
 pub mod generation_cache;
@@ -263,6 +265,9 @@ pub struct World {
     /// A map of active entities within the world, keyed by their unique UUID.
     /// This does not include players.
     pub entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
+    pub(crate) entity_index: Arc<EntityIndex>,
+    island_timing: std::sync::Mutex<island_timing::Sums>,
+    island_schedule: std::sync::Mutex<entity_islands::Schedule>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: std::sync::Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -408,6 +413,9 @@ impl World {
             level_info,
             players: ArcSwap::new(Arc::new(Vec::new())),
             entities: ArcSwap::new(Arc::new(Vec::new())),
+            entity_index: Arc::default(),
+            island_timing: std::sync::Mutex::new(island_timing::Sums::default()),
+            island_schedule: std::sync::Mutex::default(),
             scoreboard: std::sync::Mutex::new(Scoreboard::default()),
             worldborder: std::sync::Mutex::new(Worldborder::new(
                 0.0,
@@ -1625,77 +1633,155 @@ impl World {
 
         // Entities that can affect each other tick in list order; separate islands run in
         // parallel.
-        let reports: Vec<_> = tickable
-            .par_iter()
-            .map(|(entity, _)| entity_islands::EntityReach::of(entity.as_ref()))
-            .collect();
-        let nodes: Vec<_> = tickable
-            .iter()
-            .map(|(entity, _)| entity.get_entity().entity_id)
-            .zip(entity_islands::resolve(reports))
-            .collect();
-        let ticking: FxHashSet<i32> = nodes.iter().map(|(id, _)| *id).collect();
-        let idle_entities: Vec<_> = entities_to_tick
-            .iter()
-            .map(|entity| entity.get_entity())
-            .filter(|entity| !ticking.contains(&entity.entity_id))
-            .map(|entity| (entity.entity_id, entity.bounding_box.load()))
-            .collect();
-        let player_bodies: Vec<_> = players
-            .iter()
-            .map(|player| {
-                let entity = player.get_entity();
-                (entity.entity_id, entity.bounding_box.load())
-            })
-            .collect();
-        let mut islands = entity_islands::partition(&nodes, &idle_entities, &player_bodies);
-        // Start the largest islands first.
-        islands
-            .islands
-            .sort_by_key(|island| std::cmp::Reverse(island.len()));
+        let islands_config = &server.advanced_config.world.entity_islands;
+        let plan_islands = self
+            .island_schedule
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .should_plan(tickable.len());
+        let (islands, audited_count, reports_elapsed, resolve_elapsed, partition_elapsed) =
+            if plan_islands {
+                let t_reports = std::time::Instant::now();
+                let reports: Vec<_> = tickable
+                    .par_iter()
+                    .map(|(entity, _)| {
+                        entity_islands::EntityReach::of(entity.as_ref(), islands_config)
+                    })
+                    .collect();
+                let audited_count = reports
+                    .iter()
+                    .filter(|report| matches!(report, entity_islands::EntityReach::Audited(_)))
+                    .count();
+                let reports_elapsed = t_reports.elapsed();
+                let t_resolve = std::time::Instant::now();
+                let block_write_checks: Vec<_> = reports
+                    .iter()
+                    .zip(&tickable)
+                    .map(|(report, (entity, _))| report.block_write_check(entity.as_ref()))
+                    .collect();
+                let mut reaches = entity_islands::resolve(reports, islands_config);
+                entity_islands::prune_block_writes(self, &mut reaches, &block_write_checks);
+                let nodes: Vec<_> = tickable
+                    .iter()
+                    .map(|(entity, _)| entity.get_entity().entity_id)
+                    .zip(reaches)
+                    .collect();
+                let resolve_elapsed = t_resolve.elapsed();
+                let t_partition = std::time::Instant::now();
+                let ticking: FxHashSet<i32> = nodes.iter().map(|(id, _)| *id).collect();
+                let idle_entities: Vec<_> = entities_to_tick
+                    .iter()
+                    .map(|entity| entity.get_entity())
+                    .filter(|entity| !ticking.contains(&entity.entity_id))
+                    .map(|entity| (entity.entity_id, entity.bounding_box.load()))
+                    .collect();
+                let player_bodies: Vec<_> = players
+                    .iter()
+                    .map(|player| {
+                        let entity = player.get_entity();
+                        (entity.entity_id, entity.bounding_box.load())
+                    })
+                    .collect();
+                let mut islands = entity_islands::partition(&nodes, &idle_entities, &player_bodies);
+                // Start the largest islands first.
+                islands
+                    .islands
+                    .sort_by_key(|island| std::cmp::Reverse(island.len()));
+                let parallel = self
+                    .island_schedule
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .record_plan(islands.islands.first().map_or(0, Vec::len));
+                let partition_elapsed = t_partition.elapsed();
+                (
+                    parallel.then_some(islands),
+                    audited_count,
+                    reports_elapsed,
+                    resolve_elapsed,
+                    partition_elapsed,
+                )
+            } else {
+                (
+                    None,
+                    0,
+                    std::time::Duration::ZERO,
+                    std::time::Duration::ZERO,
+                    std::time::Duration::ZERO,
+                )
+            };
         let first_order = self.level.reserve_entity_tick_orders(tickable.len());
+        let largest_island = islands.as_ref().map_or(tickable.len(), |islands| {
+            islands.islands.first().map_or(0, Vec::len)
+        });
+        let island_count = islands
+            .as_ref()
+            .map_or(usize::from(!tickable.is_empty()), |islands| {
+                islands.islands.len()
+            });
+        let t_run = std::time::Instant::now();
 
         let server_ref = server.as_ref();
-        islands
-            .islands
-            .par_iter()
-            .with_max_len(1)
-            .for_each(|island| {
-                let _guard = entity_handle.enter();
+        let tick_entity = |index: usize| {
+            let (entity, entity_chunk) = &tickable[index];
+            order::set_entity_order(Some(first_order + index as u64 * order::ORDERS_PER_ENTITY));
 
-                for &index in island {
-                    let (entity, entity_chunk) = &tickable[index];
-                    order::set_entity_order(Some(
-                        first_order + index as u64 * order::ORDERS_PER_ENTITY,
-                    ));
-                    #[cfg(debug_assertions)]
-                    entity_islands::enter(&islands, entity.get_entity().entity_id);
+            entity.get_entity().tick_count.fetch_add(1, Relaxed);
+            entity.tick(entity.as_ref(), server_ref);
 
-                    entity.get_entity().tick_count.fetch_add(1, Relaxed);
-                    entity.tick(entity.as_ref(), server_ref);
+            let entity_inner = entity.get_entity();
+            let entity_pos = entity_inner.pos.load();
+            let entity_bb = entity_inner.bounding_box.load();
 
-                    let entity_inner = entity.get_entity();
-                    let entity_pos = entity_inner.pos.load();
-                    let entity_bb = entity_inner.bounding_box.load();
-
-                    for (player, player_pos, player_bb, player_chunk) in &players_cache {
-                        if (player_chunk.x - entity_chunk.x).abs() <= 1
-                            && (player_chunk.y - entity_chunk.y).abs() <= 1
-                            && (player_pos.x - entity_pos.x).abs() < 5.0
-                            && (player_pos.y - entity_pos.y).abs() < 5.0
-                            && (player_pos.z - entity_pos.z).abs() < 5.0
-                            && player_bb.intersects(&entity_bb)
-                        {
-                            entity.on_player_collision(player);
-                            break;
-                        }
-                    }
+            for (player, player_pos, player_bb, player_chunk) in &players_cache {
+                if (player_chunk.x - entity_chunk.x).abs() <= 1
+                    && (player_chunk.y - entity_chunk.y).abs() <= 1
+                    && (player_pos.x - entity_pos.x).abs() < 5.0
+                    && (player_pos.y - entity_pos.y).abs() < 5.0
+                    && (player_pos.z - entity_pos.z).abs() < 5.0
+                    && player_bb.intersects(&entity_bb)
+                {
+                    entity.on_player_collision(player);
+                    break;
                 }
-                order::set_entity_order(None);
-                #[cfg(debug_assertions)]
-                entity_islands::leave();
-            });
+            }
+        };
+        if let Some(islands) = islands {
+            islands
+                .islands
+                .par_iter()
+                .with_max_len(1)
+                .for_each(|island| {
+                    let _guard = entity_handle.enter();
+                    for &index in island {
+                        #[cfg(debug_assertions)]
+                        entity_islands::enter(&islands, tickable[index].0.get_entity().entity_id);
+                        tick_entity(index);
+                    }
+                    order::set_entity_order(None);
+                    #[cfg(debug_assertions)]
+                    entity_islands::leave();
+                });
+        } else {
+            let _guard = entity_handle.enter();
+            for index in 0..tickable.len() {
+                tick_entity(index);
+            }
+            order::set_entity_order(None);
+        }
         self.order_tick_spawns();
+        island_timing::record(
+            self,
+            tickable.len(),
+            audited_count,
+            island_count,
+            largest_island,
+            [
+                reports_elapsed,
+                resolve_elapsed,
+                partition_elapsed,
+                t_run.elapsed(),
+            ],
+        );
         let entity_elapsed = t_entities.elapsed();
 
         self.entity_tracker.update_all(self);
@@ -3976,7 +4062,7 @@ impl World {
             return;
         };
         for recipient in self.players.load().iter() {
-            if tracked.seen_by.contains(&recipient.gameprofile.id)
+            if tracked.is_seen_by(&recipient.gameprofile.id)
                 && let ClientPlatform::Bedrock(client) = recipient.client.as_ref()
             {
                 client.send_packet(&remove).await;
@@ -4460,30 +4546,25 @@ impl World {
 
     // Gets all entities at a Box
     pub fn get_all_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
-        let entities_guard = self.entities.load();
         let players_guard = self.players.load();
 
-        entities_guard
-            .iter()
-            .map(|e| e.clone() as Arc<dyn EntityBase>)
+        self.entity_index
+            .query(self.entities.load_full(), *aabb)
             .chain(
                 players_guard
                     .iter()
+                    .filter(|player| player.get_entity().bounding_box.load().intersects(aabb))
                     .map(|p| p.clone() as Arc<dyn EntityBase>),
             )
-            .filter(|entity| entity.get_entity().bounding_box.load().intersects(aabb))
             .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
             .collect()
     }
 
     // Gets all non Player entities at a Box
     pub fn get_entities_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
-        self.entities
-            .load()
-            .iter()
-            .filter(|entity| entity.get_entity().bounding_box.load().intersects(aabb))
+        self.entity_index
+            .query(self.entities.load_full(), *aabb)
             .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
-            .cloned()
             .collect()
     }
 
@@ -4692,9 +4773,32 @@ impl World {
         bounding_box: BoundingBox,
         predicate: impl Fn(&dyn EntityBase) -> bool,
     ) {
-        self.extend_entities_where(list, max_list_capacity, |e| {
-            bounding_box.intersects(&e.get_entity().bounding_box.load()) && predicate(e)
-        });
+        if list.len() >= max_list_capacity {
+            return;
+        }
+        for player in self.players.load().iter() {
+            if bounding_box.intersects(&player.get_entity().bounding_box.load())
+                && predicate(player.as_ref())
+            {
+                entity_islands::check_reached(player.entity_id());
+                list.push(player.clone());
+                if list.len() > max_list_capacity {
+                    return;
+                }
+            }
+        }
+        for entity in self
+            .entity_index
+            .query(self.entities.load_full(), bounding_box)
+        {
+            if predicate(entity.as_ref()) {
+                entity_islands::check_reached(entity.get_entity().entity_id);
+                list.push(entity);
+                if list.len() > max_list_capacity {
+                    return;
+                }
+            }
+        }
     }
 
     /// Adds entities to the provided [`Vec`] that satisfy a particular condition.
@@ -7989,5 +8093,59 @@ mod tests {
         assert!(empty);
         assert!(no_entities);
         Ok(())
+    }
+}
+
+/// Temporary island timing, logged every 200 ticks.
+mod island_timing {
+    use std::time::Duration;
+
+    #[derive(Default)]
+    pub(super) struct Sums {
+        ticks: u32,
+        entities: usize,
+        audited: usize,
+        islands: usize,
+        largest: usize,
+        phases: [Duration; 4],
+    }
+
+    pub fn record(
+        world: &super::World,
+        entities: usize,
+        audited: usize,
+        islands: usize,
+        largest: usize,
+        phases: [Duration; 4],
+    ) {
+        let mut sums = world
+            .island_timing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        sums.ticks += 1;
+        sums.entities += entities;
+        sums.audited += audited;
+        sums.islands += islands;
+        sums.largest += largest;
+        for (sum, phase) in sums.phases.iter_mut().zip(phases) {
+            *sum += phase;
+        }
+        if sums.ticks == 200 {
+            let n = f64::from(sums.ticks);
+            let ms = |d: Duration| d.as_secs_f64() * 1000.0 / n;
+            tracing::info!(
+                world = world.dimension.minecraft_name,
+                "islands: entities {:.0} audited {:.0} islands {:.0} largest {:.0} | reach {:.3} ms resolve {:.3} ms partition {:.3} ms run {:.3} ms",
+                sums.entities as f64 / n,
+                sums.audited as f64 / n,
+                sums.islands as f64 / n,
+                sums.largest as f64 / n,
+                ms(sums.phases[0]),
+                ms(sums.phases[1]),
+                ms(sums.phases[2]),
+                ms(sums.phases[3]),
+            );
+            *sums = Sums::default();
+        }
     }
 }

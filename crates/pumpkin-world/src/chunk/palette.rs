@@ -450,6 +450,15 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         }
     }
 
+    /// Returns whether any palette entry matches the predicate.
+    #[must_use]
+    pub fn contains_matching(&self, mut predicate: impl FnMut(V) -> bool) -> bool {
+        match self {
+            Self::Homogeneous(value) => predicate(*value),
+            Self::Heterogeneous(data) => data.palette.iter().copied().any(predicate),
+        }
+    }
+
     pub fn iter(&self) -> Box<dyn Iterator<Item = V> + '_> {
         match self {
             Self::Homogeneous(registry_id) => {
@@ -1006,6 +1015,23 @@ pub(crate) const BIOME_NETWORK_MAX_BITS: u8 = 7;
 mod tests {
     use super::{BlockPalette, NetworkPalette};
     use pumpkin_data::{Block, BlockStateId};
+
+    #[test]
+    fn matching_visits_distinct_values_after_mutations() {
+        let mut palette = BlockPalette::default();
+        let plate = Block::STONE_PRESSURE_PLATE.default_state.id;
+        assert!(!palette.contains_matching(|state| state == plate));
+        palette.set(1, 2, 3, plate);
+        assert!(palette.contains_matching(|state| state == plate));
+        let mut visited = Vec::new();
+        assert!(!palette.contains_matching(|state| {
+            visited.push(state);
+            false
+        }));
+        assert_eq!(visited.len(), 2);
+        palette.set(1, 2, 3, Block::AIR.default_state.id);
+        assert!(!palette.contains_matching(|state| state == plate));
+    }
 
     fn network_palette_values(palette: NetworkPalette<u16>) -> Option<Box<[u16]>> {
         match palette {

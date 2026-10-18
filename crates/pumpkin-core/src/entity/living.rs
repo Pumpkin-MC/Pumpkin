@@ -1564,8 +1564,17 @@ impl LivingEntity {
         }
     }
 
-    fn compute_modified_friction(friction: f32, modifier: f32) -> f64 {
+    pub(crate) fn compute_modified_friction(friction: f32, modifier: f32) -> f64 {
         f64::from((1.0 - (1.0 - friction) * modifier).clamp(0.0, 1.0))
+    }
+
+    /// `getFrictionInfluencedSpeed`.
+    pub(crate) fn friction_influenced_speed(speed: f64, block_friction: f64) -> f64 {
+        if block_friction > 0.6 {
+            speed * 0.216_000_02 / block_friction.powi(3)
+        } else {
+            speed
+        }
     }
 
     fn get_block_friction(&self) -> f64 {
@@ -1616,11 +1625,7 @@ impl LivingEntity {
         let air_drag = Self::compute_modified_friction(0.91, air_drag_modifier);
         let block_friction = self.get_block_friction();
         let speed = if self.entity.on_ground.load(Relaxed) {
-            if block_friction > 0.6 {
-                effective_speed * 0.216_000_02 / block_friction.powi(3)
-            } else {
-                effective_speed
-            }
+            Self::friction_influenced_speed(effective_speed, block_friction)
         } else {
             caller
                 .get_player()

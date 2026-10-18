@@ -422,6 +422,8 @@ pub trait PathNavigationTrait: Send + Sync {
     fn can_float(&self) -> bool;
     fn can_navigate_ground(&self) -> bool;
     fn set_required_path_length(&mut self, length: f32);
+    /// Furthest a search reaches from the mob.
+    fn max_path_length(&self, entity: &LivingEntity) -> f32;
     /// Vanilla `updatePathfinderMaxVisitedNodes`, applied before the next search.
     fn update_pathfinder_max_visited_nodes(&mut self);
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32);
@@ -1321,6 +1323,10 @@ impl PathNavigationTrait for GroundPathNavigation {
         self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
+    fn max_path_length(&self, entity: &LivingEntity) -> f32 {
+        self.inner.mob_max_follow_range(entity)
+    }
+
     fn update_pathfinder_max_visited_nodes(&mut self) {
         self.inner.update_pathfinder_max_visited_nodes = true;
     }
@@ -1555,6 +1561,10 @@ impl PathNavigationTrait for FlyingPathNavigation {
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.required_path_length = length;
         self.inner.update_pathfinder_max_visited_nodes = true;
+    }
+
+    fn max_path_length(&self, entity: &LivingEntity) -> f32 {
+        self.inner.mob_max_follow_range(entity)
     }
 
     fn update_pathfinder_max_visited_nodes(&mut self) {
@@ -1803,6 +1813,10 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
+    fn max_path_length(&self, entity: &LivingEntity) -> f32 {
+        self.inner.mob_max_follow_range(entity)
+    }
+
     fn update_pathfinder_max_visited_nodes(&mut self) {
         self.inner.update_pathfinder_max_visited_nodes = true;
     }
@@ -2034,6 +2048,10 @@ impl PathNavigationTrait for WallClimberNavigation {
 
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.set_required_path_length(length);
+    }
+
+    fn max_path_length(&self, entity: &LivingEntity) -> f32 {
+        self.inner.max_path_length(entity)
     }
 
     fn update_pathfinder_max_visited_nodes(&mut self) {
@@ -2282,6 +2300,10 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.required_path_length = length;
         self.inner.update_pathfinder_max_visited_nodes = true;
+    }
+
+    fn max_path_length(&self, entity: &LivingEntity) -> f32 {
+        self.inner.mob_max_follow_range(entity)
     }
 
     fn update_pathfinder_max_visited_nodes(&mut self) {

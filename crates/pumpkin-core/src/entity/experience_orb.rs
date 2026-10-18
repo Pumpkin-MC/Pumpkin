@@ -8,6 +8,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
+    block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION,
     server::Server,
     world::{
         World,
@@ -16,9 +17,6 @@ use crate::{
 };
 
 use super::{Entity, EntityBase, living::LivingEntity, player::Player};
-
-/// Speed fluid currents can add in one tick.
-const FLUID_MOTION: f64 = 0.1;
 
 pub struct ExperienceOrbEntity {
     entity: Entity,
@@ -77,12 +75,14 @@ impl ExperienceOrbEntity {
 impl EntityBase for ExperienceOrbEntity {
     fn audited_reach(&self) -> Option<AuditedReach> {
         let entity = &self.entity;
+        let world = entity.world.load();
+        let fluid_push = super::max_fluid_push_speed(world.dimension.fast_lava);
         let velocity = entity.velocity.load();
         let mut reach = AuditedReach {
             bounding_box: entity.bounding_box.load(),
             motion: (
-                velocity.x.hypot(velocity.z) + FLUID_MOTION,
-                velocity.y.abs() + self.get_gravity() + FLUID_MOTION,
+                velocity.x.hypot(velocity.z) + fluid_push,
+                velocity.y.abs() + self.get_gravity() + SURFACE_UPWARD_ACCELERATION + fluid_push,
             ),
             entities: 0.0,
             players: 0.0,
@@ -92,7 +92,7 @@ impl EntityBase for ExperienceOrbEntity {
             global: false,
             links: entity_islands::links_of(self),
         };
-        reach.scan_contact_blocks(&entity.world.load());
+        reach.scan_contact_blocks(&world);
         Some(reach)
     }
 

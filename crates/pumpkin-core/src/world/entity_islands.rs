@@ -1,41 +1,84 @@
 //! Splits a tick's entities into islands that touch disjoint state. Each island ticks in list
 //! order on its own thread, which gives the same result as ticking the whole list in order.
 
-use std::sync::{Arc, atomic::Ordering::Relaxed};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, atomic::Ordering::Relaxed},
+};
 
-use pumpkin_data::{Block, attributes::Attributes, tag, tag::Taggable};
-use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
-use rayon::prelude::*;
+use pumpkin_data::{Block, attributes::Attributes, entity::EntityType, tag, tag::Taggable};
+use pumpkin_util::math::{
+    boundingbox::BoundingBox, get_section_cord, position::BlockPos, vector2::Vector2,
+    vector3::Vector3,
+};
 use rustc_hash::FxHashMap;
 
-use crate::entity::EntityBase;
+use pumpkin_config::world::EntityIslandsConfig;
+
+use crate::block::blocks::redstone::SIGNAL_MAX;
+use crate::entity::{EntityBase, PUSH_STRENGTH};
+use crate::plugin::{
+    api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
+};
 use crate::world::World;
 
-/// Reach of same-tick neighbour updates: 15 wire, the powered block and one component.
-pub const BLOCK_UPDATE_REACH: f64 = 17.0;
-
-/// Extra reach of unaudited entities.
-pub const CONSERVATIVE_MARGIN: f64 = 16.0;
+/// Reach of same-tick neighbour updates: a full wire line, the powered block and one component.
+const BLOCK_UPDATE_REACH: f64 = SIGNAL_MAX as f64 + 2.0;
 
 /// Grid cell size for large boxes.
 const CELL_SIZE: f64 = 16.0;
 
-/// Grid cell size for bodies.
-const FINE_CELL_SIZE: f64 = 4.0;
-
 /// Largest speed one `Entity.push` adds.
-const PUSH_SPEED: f64 = 0.05 * std::f64::consts::SQRT_2;
+const PUSH_SPEED: f64 = PUSH_STRENGTH * std::f64::consts::SQRT_2;
 
 /// Extra motion covered by the contact block scan.
 const SCAN_SLACK: f64 = 0.5;
 
-/// Pushes assumed for every entity in the first round.
+/// Minimum probe margin for conservative neighbour effects.
 const PUSH_SLACK: f64 = 3.0 * PUSH_SPEED;
 
-/// Speed a hit from an unaudited entity can add, well above melee, explosions and wind charges.
-const KNOCKBACK_MOTION: f64 = 4.0;
+// Larger regions retain the conservative contact-write fallback.
+const MAX_CONTACT_SECTIONS: i64 = 64;
 
-const PUSH_ROUNDS: usize = 16;
+const MIN_PARALLEL_ENTITIES: usize = 16;
+const SERIAL_PROBE_INTERVAL: u8 = 20;
+const PARALLEL_SHARE_DIVISOR: usize = 4;
+
+#[derive(Default)]
+pub(super) struct Schedule {
+    entity_count: usize,
+    ticks_until_probe: u8,
+}
+
+impl Schedule {
+    pub(super) const fn should_plan(&mut self, entity_count: usize) -> bool {
+        if self.entity_count != entity_count {
+            self.entity_count = entity_count;
+            self.ticks_until_probe = 0;
+        }
+        if entity_count < MIN_PARALLEL_ENTITIES {
+            return false;
+        }
+        if self.ticks_until_probe > 0 {
+            self.ticks_until_probe -= 1;
+            return false;
+        }
+        true
+    }
+
+    pub(super) const fn record_plan(&mut self, largest_island: usize) -> bool {
+        // A dominant island leaves too little parallel work to pay for planning.
+        let parallel =
+            largest_island < self.entity_count - self.entity_count / PARALLEL_SHARE_DIVISOR;
+        // Only the serial preference is cached; parallel ticks always use a fresh plan.
+        self.ticks_until_probe = if parallel {
+            0
+        } else {
+            SERIAL_PROBE_INTERVAL - 1
+        };
+        parallel
+    }
+}
 
 /// What one entity can read or change next tick.
 #[derive(Clone, Debug)]
@@ -101,6 +144,10 @@ impl AuditedReach {
             // Blocks stepped and landed on.
             .expand_towards(0.0, -1.0, 0.0);
         let (min, max) = (area.min_block_pos().0, area.max_block_pos().0);
+        let contact = BoundingBox::new(min.to_f64(), max.to_f64() + Vector3::new(1.0, 1.0, 1.0));
+        if !contact_may_change_blocks(world, &contact, &mut FxHashMap::default()) {
+            return;
+        }
         for x in min.x..=max.x {
             for y in min.y..=max.y {
                 for z in min.z..=max.z {
@@ -144,20 +191,54 @@ pub enum EntityReach {
     Conservative(TickReach),
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum BlockWriteCheck {
+    Unconditional,
+    Contact,
+    DetectorRail(BlockPos),
+}
+
 impl EntityReach {
     #[must_use]
-    pub fn of(entity: &dyn EntityBase) -> Self {
+    pub(crate) fn block_write_check(&self, entity: &dyn EntityBase) -> BlockWriteCheck {
+        match self {
+            Self::Audited(audited) if !audited.changes_blocks => BlockWriteCheck::Contact,
+            Self::Conservative(reach)
+                if entity.get_entity().entity_type == &EntityType::CHEST_MINECART
+                    && entity
+                        .cast_any()
+                        .is::<crate::entity::vehicle::minecart::MinecartEntity>()
+                    && reach.links.is_empty() =>
+            {
+                let base = entity.get_entity();
+                let world = base.world.load();
+                if world.server.upgrade().is_some_and(|server| {
+                    server.plugin_manager.has_handlers::<VehicleUpdateEvent>()
+                        || server.plugin_manager.has_handlers::<PacketSentEvent>()
+                }) {
+                    return BlockWriteCheck::Unconditional;
+                }
+                // Chest carts only activate the rail inspected before movement. Their tick
+                // does not run Entity's general contact callbacks.
+                BlockWriteCheck::DetectorRail(BlockPos::floored_v(base.pos.load()))
+            }
+            _ => BlockWriteCheck::Unconditional,
+        }
+    }
+
+    #[must_use]
+    pub fn of(entity: &dyn EntityBase, config: &EntityIslandsConfig) -> Self {
         if let Some(reach) = entity.audited_reach() {
             return Self::Audited(reach);
         }
         let base = entity.get_entity();
         let radius = entity.get_living_entity().map_or_else(
-            || base.velocity.load().length() + CONSERVATIVE_MARGIN,
+            || base.velocity.load().length() + config.unaudited_reach,
             |living| {
                 living
                     .get_attribute_value(&Attributes::FOLLOW_RANGE)
                     .max(0.0)
-                    + CONSERVATIVE_MARGIN
+                    + config.unaudited_reach
             },
         );
         Self::Conservative(TickReach::conservative(
@@ -209,76 +290,195 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
 }
 
 /// Turns reports into reaches. Audited bodies grow by the pushes they can receive, and by
-/// `KNOCKBACK_MOTION` within reach of an unaudited entity.
+/// `knockback_reach` within reach of an unaudited entity.
 #[must_use]
-pub fn resolve(reports: Vec<EntityReach>) -> Vec<TickReach> {
-    let boxes: Vec<BoundingBox> = reports
-        .iter()
-        .map(|report| match report {
-            EntityReach::Audited(audited) => audited.bounding_box,
-            EntityReach::Conservative(reach) => reach.body,
-        })
-        .collect();
-    let threats: Vec<BoundingBox> = reports
-        .iter()
-        .filter_map(|report| match report {
-            EntityReach::Conservative(reach) => Some(reach.entities),
-            EntityReach::Audited(_) => None,
-        })
-        .collect();
-    let audited = |index: usize| matches!(reports[index], EntityReach::Audited(_));
-    let bodies_with = |extra: &[f64]| -> Vec<BoundingBox> {
-        reports
-            .iter()
-            .zip(extra)
-            .map(|(report, extra)| match report {
-                EntityReach::Audited(audited) => grown_body(audited, *extra),
-                EntityReach::Conservative(reach) => reach.body,
-            })
-            .collect()
-    };
-
-    // Count neighbours as if every body grew by `PUSH_SLACK`, then recount the ones that grew
-    // more. Still growing after the last round means the conservative margin.
-    let mut extra: Vec<f64> = vec![0.0; reports.len()];
-    for round in 0..=PUSH_ROUNDS {
-        let counted: Vec<f64> = extra.iter().map(|extra| extra.max(PUSH_SLACK)).collect();
-        let bodies = bodies_with(&counted);
-        let hits = overlap_counts(&threats, &bodies);
-        let pushers = overlap_counts(&bodies, &boxes);
-        let mut outgrown = false;
-        for index in 0..reports.len() {
-            if !audited(index) {
-                continue;
+pub fn resolve(reports: Vec<EntityReach>, config: &EntityIslandsConfig) -> Vec<TickReach> {
+    let mut pushers = Grid::default();
+    let mut threats = Grid::default();
+    for report in &reports {
+        if let EntityReach::Conservative(reach) = report {
+            pushers.insert(pushers.boxes.len(), reach.body);
+            threats.insert(threats.boxes.len(), reach.entities);
+        }
+    }
+    let mut query = Query::new(reports.len());
+    let mut reaches = Vec::with_capacity(reports.len());
+    for report in reports {
+        match report {
+            EntityReach::Conservative(reach) => reaches.push(reach),
+            EntityReach::Audited(audited) => {
+                let mut count = 0;
+                pushers.for_each_overlapping(&mut query, &audited.bounding_box, |_| count += 1);
+                let pushes = PUSH_SPEED * count as f64;
+                let probe = grown_body(&audited, pushes + config.knockback_reach.max(PUSH_SLACK));
+                let mut threatened = false;
+                threats.for_each_overlapping(&mut query, &probe, |_| threatened = true);
+                let extra = pushes
+                    + if threatened {
+                        config.knockback_reach
+                    } else {
+                        0.0
+                    };
+                let reach = finish(audited, extra);
+                // Travel precedes pushing. Later audited turns can only change this body's
+                // velocity for the next tick, so they do not grow its current movement bound.
+                pushers.insert(pushers.boxes.len(), reach.body);
+                reaches.push(reach);
             }
-            let knockback = if hits[index] > 0 {
-                KNOCKBACK_MOTION
-            } else {
-                0.0
-            };
-            // Minus itself.
-            let pushes = PUSH_SPEED * pushers[index].saturating_sub(1) as f64;
-            extra[index] = knockback + pushes;
-            if extra[index] > counted[index] {
-                outgrown = true;
-                if round == PUSH_ROUNDS {
-                    extra[index] = CONSERVATIVE_MARGIN;
+        }
+    }
+    reaches
+}
+
+/// Removes contact-write fallbacks that no writer can make necessary.
+pub(crate) fn prune_block_writes(
+    world: &World,
+    reaches: &mut [TickReach],
+    checks: &[BlockWriteCheck],
+) {
+    if reaches.iter().any(|reach| reach.global) {
+        return;
+    }
+    let mut candidates = Vec::new();
+    let mut contacts = Grid::default();
+    let mut sections = FxHashMap::default();
+    let mut active: Vec<bool> = reaches
+        .iter()
+        .map(|reach| reach.block_writes.is_some())
+        .collect();
+    for (slot, reach) in reaches.iter().enumerate() {
+        if !active[slot] {
+            continue;
+        }
+        let contact = match checks[slot] {
+            BlockWriteCheck::Unconditional => continue,
+            BlockWriteCheck::Contact => {
+                let area = reach.body.expand_towards(0.0, -1.0, 0.0);
+                let contact = BoundingBox::new(
+                    area.min_block_pos().0.to_f64(),
+                    area.max_block_pos().0.to_f64() + Vector3::new(1.0, 1.0, 1.0),
+                );
+                if contact_may_change_blocks(world, &contact, &mut sections) {
+                    continue;
+                }
+                contact
+            }
+            BlockWriteCheck::DetectorRail(pos) => {
+                if !world.level.is_chunk_loaded(&pos.chunk_position())
+                    || [pos, pos.down()]
+                        .iter()
+                        .any(|pos| world.get_block(pos).id == Block::DETECTOR_RAIL.id)
+                {
+                    continue;
+                }
+                BoundingBox::from_block(&pos).expand_towards(0.0, -1.0, 0.0)
+            }
+        };
+        active[slot] = false;
+        contacts.insert(candidates.len(), contact);
+        candidates.push(slot);
+    }
+    if candidates.is_empty() {
+        return;
+    }
+    let mut pending: VecDeque<_> = active
+        .iter()
+        .enumerate()
+        .filter_map(|(slot, active)| active.then_some(slot))
+        .collect();
+    let mut query = Query::new(candidates.len());
+    while let Some(slot) = pending.pop_front() {
+        let Some(writes) = reaches[slot].block_writes else {
+            continue;
+        };
+        contacts.for_each_overlapping(&mut query, &writes, |candidate| {
+            let slot = candidates[candidate];
+            if !active[slot] {
+                active[slot] = true;
+                pending.push_back(slot);
+            }
+        });
+    }
+    for slot in candidates {
+        if !active[slot] {
+            reaches[slot].block_writes = None;
+        }
+    }
+}
+
+fn contact_may_change_blocks(
+    world: &World,
+    contact: &BoundingBox,
+    sections: &mut FxHashMap<(i32, i32, i32), bool>,
+) -> bool {
+    if [
+        contact.min.x,
+        contact.min.y,
+        contact.min.z,
+        contact.max.x,
+        contact.max.y,
+        contact.max.z,
+    ]
+    .iter()
+    .any(|value| !value.is_finite())
+    {
+        return true;
+    }
+    let bottom = world.dimension.min_y;
+    let top = bottom + world.dimension.height;
+    let min_y = (contact.min.y as i32).max(bottom);
+    let max_y = ((contact.max.y - 1.0) as i32).min(top - 1);
+    if min_y > max_y {
+        return false;
+    }
+    let min = [
+        get_section_cord(contact.min.x as i32),
+        get_section_cord(min_y),
+        get_section_cord(contact.min.z as i32),
+    ];
+    let max = [
+        get_section_cord((contact.max.x - 1.0) as i32),
+        get_section_cord(max_y),
+        get_section_cord((contact.max.z - 1.0) as i32),
+    ];
+    let volume = (0..3).fold(1i64, |volume, axis| {
+        volume.saturating_mul(i64::from(max[axis]) - i64::from(min[axis]) + 1)
+    });
+    if volume > MAX_CONTACT_SECTIONS {
+        return true;
+    }
+    for x in min[0]..=max[0] {
+        for z in min[2]..=max[2] {
+            for y in min[1]..=max[1] {
+                if *sections.entry((x, y, z)).or_insert_with(|| {
+                    world
+                        .level
+                        .read_chunk_sync(&Vector2::new(x, z), |chunk| {
+                            let blocks = chunk
+                                .section
+                                .block_sections
+                                .read()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner);
+                            let index = y - get_section_cord(chunk.section.min_y);
+                            usize::try_from(index)
+                                .ok()
+                                .and_then(|index| blocks.get(index))
+                                .is_none_or(|palette| {
+                                    palette.contains_matching(|state| {
+                                        let block = Block::from_state_id(state);
+                                        block.id == Block::END_GATEWAY.id
+                                            || changes_on_contact(block)
+                                    })
+                                })
+                        })
+                        .unwrap_or(true)
+                }) {
+                    return true;
                 }
             }
         }
-        if !outgrown {
-            break;
-        }
     }
-
-    reports
-        .into_iter()
-        .zip(extra)
-        .map(|(report, extra)| match report {
-            EntityReach::Conservative(reach) => reach,
-            EntityReach::Audited(audited) => finish(audited, extra),
-        })
-        .collect()
+    false
 }
 
 fn grown_body(audited: &AuditedReach, extra: f64) -> BoundingBox {
@@ -307,6 +507,9 @@ fn finish(audited: AuditedReach, extra: f64) -> TickReach {
     if let Some(route) = audited.route {
         block_reads = union(&block_reads, &route);
     }
+    // Searches follow water columns down to the bottom of the world.
+    block_reads.min.y = f64::NEG_INFINITY;
+    block_reads.max.y = f64::INFINITY;
     TickReach {
         body,
         entities: around(audited.entities),
@@ -331,50 +534,6 @@ const fn union(a: &BoundingBox, b: &BoundingBox) -> BoundingBox {
             a.max.z.max(b.max.z),
         ),
     )
-}
-
-fn overlap_counts(sources: &[BoundingBox], targets: &[BoundingBox]) -> Vec<usize> {
-    let mut fine: FxHashMap<(i32, i32), Vec<usize>> = FxHashMap::default();
-    let mut coarse: FxHashMap<(i32, i32), Vec<usize>> = FxHashMap::default();
-    for (index, source) in sources.iter().enumerate() {
-        let small = source.max.x - source.min.x <= FINE_CELL_SIZE
-            && source.max.z - source.min.z <= FINE_CELL_SIZE;
-        let (cells, size) = if small {
-            (&mut fine, FINE_CELL_SIZE)
-        } else {
-            (&mut coarse, CELL_SIZE)
-        };
-        for x in cells_of(source.min.x, source.max.x, size) {
-            for z in cells_of(source.min.z, source.max.z, size) {
-                cells.entry((x, z)).or_default().push(index);
-            }
-        }
-    }
-    targets
-        .par_iter()
-        .map(|target| {
-            let mut seen: Vec<usize> = Vec::new();
-            for (cells, size) in [(&fine, FINE_CELL_SIZE), (&coarse, CELL_SIZE)] {
-                if cells.is_empty() {
-                    continue;
-                }
-                for x in cells_of(target.min.x, target.max.x, size) {
-                    for z in cells_of(target.min.z, target.max.z, size) {
-                        seen.extend(
-                            cells
-                                .get(&(x, z))
-                                .into_iter()
-                                .flatten()
-                                .filter(|&&source| overlaps(&sources[source], target)),
-                        );
-                    }
-                }
-            }
-            seen.sort_unstable();
-            seen.dedup();
-            seen.len()
-        })
-        .collect()
 }
 
 pub struct Islands {
@@ -573,6 +732,26 @@ impl Grid {
         self.boxes.push(area);
     }
 
+    fn for_each_overlapping(
+        &self,
+        query: &mut Query,
+        area: &BoundingBox,
+        mut visit: impl FnMut(usize),
+    ) {
+        query.next();
+        for x in cell_range(area.min.x, area.max.x) {
+            for z in cell_range(area.min.z, area.max.z) {
+                if let Some(cell) = self.cells.get(&(x, z)) {
+                    for &member in &cell.members {
+                        if query.visit(member) && overlaps(area, &self.boxes[member]) {
+                            visit(member);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn union_overlapping(
         &mut self,
         sets: &mut DisjointSets,
@@ -684,6 +863,32 @@ mod tests {
     use super::*;
     use pumpkin_util::math::vector3::Vector3;
 
+    #[test]
+    fn serial_schedule_retries_after_twenty_ticks_or_a_count_change() {
+        let mut schedule = Schedule::default();
+        assert!(!schedule.should_plan(1));
+        assert!(schedule.should_plan(64));
+        assert!(!schedule.record_plan(64));
+        for _ in 0..19 {
+            assert!(!schedule.should_plan(64));
+        }
+        assert!(schedule.should_plan(64));
+        assert!(!schedule.record_plan(48));
+        assert!(!schedule.should_plan(64));
+        assert!(schedule.should_plan(65));
+        assert!(!schedule.record_plan(49));
+        assert!(!schedule.should_plan(65));
+        assert!(schedule.should_plan(66));
+        assert!(schedule.record_plan(32));
+        assert!(schedule.should_plan(66));
+        assert!(schedule.should_plan(66));
+        assert!(!schedule.should_plan(1));
+        assert!(!schedule.should_plan(1));
+        assert!(schedule.should_plan(65));
+        assert!(schedule.record_plan(48));
+        assert!(schedule.should_plan(65));
+    }
+
     fn islands(
         nodes: &[(i32, TickReach)],
         idle_entities: &[(i32, BoundingBox)],
@@ -794,29 +999,225 @@ mod tests {
     }
 
     #[test]
-    fn neighbours_that_can_push_grow_the_body() {
-        let alone = resolve(vec![audited(0.0)]);
+    fn only_earlier_pushers_grow_current_turn() {
+        let alone = resolve(vec![audited(0.0)], &EntityIslandsConfig::default());
         assert_box(&alone[0].body, &cube(0.0, 1.0).expand(0.25, 0.5, 0.25));
-        let crowded = resolve(vec![audited(0.0), audited(1.2), audited(-1.2)]);
-        let pushed = 0.25 + 2.0 * PUSH_SPEED;
-        assert_box(
-            &crowded[0].body,
-            &cube(0.0, 1.0).expand(pushed, 0.5 + 2.0 * PUSH_SPEED, pushed),
+        let crowded = resolve(
+            vec![audited(0.0), audited(0.0), audited(0.0)],
+            &EntityIslandsConfig::default(),
         );
+        assert_box(&crowded[0].body, &alone[0].body);
+        assert!(crowded[1].body.min.x < crowded[0].body.min.x);
+        assert!(crowded[2].body.min.x < crowded[1].body.min.x);
+        assert!(crowded[2].body.max.x > crowded[1].body.max.x);
     }
 
     #[test]
     fn unaudited_neighbours_can_throw_audited_entities_around() {
         let zombie =
             EntityReach::Conservative(TickReach::conservative(&cube(10.0, 1.0), 10.0, Vec::new()));
-        let reaches = resolve(vec![audited(0.0), zombie, audited(40.0)]);
+        let reaches = resolve(
+            vec![audited(0.0), zombie, audited(40.0)],
+            &EntityIslandsConfig::default(),
+        );
         // The zombie can both hit and push it.
-        let thrown = KNOCKBACK_MOTION + PUSH_SPEED;
+        let thrown = EntityIslandsConfig::default().knockback_reach + PUSH_SPEED;
         assert_box(
             &reaches[0].body,
             &cube(0.0, 1.0).expand(0.25 + thrown, 0.5 + thrown, 0.25 + thrown),
         );
         assert!(reaches[0].block_writes.is_some());
         assert_box(&reaches[2].body, &cube(40.0, 1.0).expand(0.25, 0.5, 0.25));
+    }
+
+    #[tokio::test]
+    async fn contact_writers_propagate_through_a_reverse_ordered_chain()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        for x in 0..=4 {
+            world.level.loaded_chunks.insert(
+                Vector2::new(x, 0),
+                pumpkin_world::chunk::ChunkData::empty_sync(x, 0),
+            );
+        }
+        let mut reaches: Vec<_> = [30.0, 20.0, 10.0, 60.0]
+            .into_iter()
+            .map(|x| node(0, x, 0.0).1)
+            .collect();
+        // The seed reaches the second candidate, whose writes reach the first.
+        reaches[0].block_writes = Some(cube(30.0, 1.0));
+        reaches[1].block_writes = Some(cube(30.0, 1.0));
+        reaches[2].block_writes = Some(cube(20.0, 1.0));
+        reaches[3].block_writes = Some(cube(60.0, 1.0));
+        let body = reaches[3].body;
+        let reads = reaches[3].block_reads;
+        prune_block_writes(
+            &world,
+            &mut reaches,
+            &[
+                BlockWriteCheck::Contact,
+                BlockWriteCheck::Contact,
+                BlockWriteCheck::Unconditional,
+                BlockWriteCheck::Contact,
+            ],
+        );
+        assert!(
+            reaches[..3]
+                .iter()
+                .all(|reach| reach.block_writes.is_some())
+        );
+        assert!(reaches[3].block_writes.is_none());
+        assert_box(&reaches[3].body, &body);
+        assert_box(&reaches[3].block_reads, &reads);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn final_contact_region_keeps_hazards_and_missing_chunks_conservative()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), chunk.clone());
+        let mut reach = node(0, 10.0, 0.0).1;
+        reach.body = BoundingBox::new(Vector3::new(10.0, 64.0, 1.0), Vector3::new(18.0, 65.0, 2.0));
+        reach.block_writes = Some(reach.body.expand(
+            BLOCK_UPDATE_REACH,
+            BLOCK_UPDATE_REACH,
+            BLOCK_UPDATE_REACH,
+        ));
+        let original = reach.clone();
+        prune_block_writes(
+            &world,
+            std::slice::from_mut(&mut reach),
+            &[BlockWriteCheck::Contact],
+        );
+        assert!(reach.block_writes.is_some());
+        let neighbor = pumpkin_world::chunk::ChunkData::empty_sync(1, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(1, 0), neighbor.clone());
+        neighbor.set_block_absolute_y(1, 63, 1, Block::STONE_PRESSURE_PLATE.default_state.id);
+        prune_block_writes(
+            &world,
+            std::slice::from_mut(&mut reach),
+            &[BlockWriteCheck::Contact],
+        );
+        assert!(reach.block_writes.is_some());
+        neighbor.set_block_absolute_y(1, 63, 1, Block::AIR.default_state.id);
+        prune_block_writes(
+            &world,
+            std::slice::from_mut(&mut reach),
+            &[BlockWriteCheck::Contact],
+        );
+        assert!(reach.block_writes.is_none());
+        assert_box(&reach.body, &original.body);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn chest_cart_writes_only_bridge_elevated_readers_when_a_rail_can_activate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{Entity, vehicle::minecart::MinecartEntity};
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), chunk.clone());
+        let pos = BlockPos::new(8, 40, 8);
+        let cart = MinecartEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(8.5, 40.0, 8.5),
+            &EntityType::CHEST_MINECART,
+        ));
+        let config = EntityIslandsConfig::default();
+        let custom = Entity::new(
+            world.clone(),
+            cart.get_entity().pos.load(),
+            &EntityType::CHEST_MINECART,
+        );
+        assert!(matches!(
+            EntityReach::of(&custom, &config).block_write_check(&custom),
+            BlockWriteCheck::Unconditional
+        ));
+        let report = EntityReach::of(&cart, &config);
+        assert!(matches!(report, EntityReach::Conservative(_)));
+        let check = report.block_write_check(&cart);
+        let mut reader = node(1, 8.0, 0.0).1;
+        reader.body =
+            BoundingBox::new(Vector3::new(8.0, 200.0, 8.0), Vector3::new(9.0, 201.0, 9.0));
+        reader.entities = reader.body;
+        reader.players = reader.body;
+        reader.block_reads = reader.body;
+        reader.block_reads.min.y = f64::NEG_INFINITY;
+        reader.block_reads.max.y = f64::INFINITY;
+        let mut original = resolve(vec![report], &config);
+        original.push(reader);
+        let partitioned = |reaches: &[TickReach]| {
+            let nodes: Vec<_> = reaches
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(id, reach)| (id as i32, reach))
+                .collect();
+            islands(&nodes, &[], &[])
+        };
+        assert_eq!(partitioned(&original), [vec![0, 1]]);
+        let mut reaches = original.clone();
+        prune_block_writes(
+            &world,
+            &mut reaches,
+            &[check, BlockWriteCheck::Unconditional],
+        );
+        assert_eq!(partitioned(&reaches), [vec![0], vec![1]]);
+        assert_box(&reaches[0].body, &original[0].body);
+        assert_box(&reaches[0].entities, &original[0].entities);
+        assert_box(&reaches[0].block_reads, &original[0].block_reads);
+
+        chunk.set_block_absolute_y(8, 39, 8, Block::DETECTOR_RAIL.default_state.id);
+        let mut reaches = original.clone();
+        prune_block_writes(
+            &world,
+            &mut reaches,
+            &[check, BlockWriteCheck::Unconditional],
+        );
+        assert_eq!(partitioned(&reaches), [vec![0, 1]]);
+
+        chunk.set_block_absolute_y(8, 39, 8, Block::AIR.default_state.id);
+        let mut reaches = original.clone();
+        let mut writer = node(2, 100.0, 0.0).1;
+        writer.block_writes = Some(BoundingBox::from_block(&pos.down()));
+        reaches.push(writer);
+        prune_block_writes(
+            &world,
+            &mut reaches,
+            &[
+                check,
+                BlockWriteCheck::Unconditional,
+                BlockWriteCheck::Unconditional,
+            ],
+        );
+        assert!(reaches[0].block_writes.is_some());
+
+        world.level.loaded_chunks.remove(&Vector2::new(0, 0));
+        let mut reaches = original;
+        prune_block_writes(
+            &world,
+            &mut reaches,
+            &[check, BlockWriteCheck::Unconditional],
+        );
+        assert!(reaches[0].block_writes.is_some());
+        world.level.shutdown().await;
+        Ok(())
     }
 }

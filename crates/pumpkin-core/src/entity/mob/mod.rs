@@ -1,4 +1,5 @@
 use super::{Entity, EntityBase, ai::pathfinder::Navigator, living::LivingEntity};
+use crate::block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION;
 use crate::entity::ai::brain::Brain;
 use crate::entity::ai::brain::memory::PackedMemories;
 use crate::entity::ai::control::body_rotation_control::BodyRotationControl;
@@ -25,7 +26,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, BlockId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -34,9 +35,9 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
+use std::sync::{Arc, LazyLock};
 use uuid::Uuid;
 
 pub mod bat;
@@ -972,22 +973,32 @@ impl MobEntity {
     }
 }
 
-/// Largest factor of `getFrictionInfluencedSpeed`, on the least slippery blocks.
-const MAX_GROUND_SPEED_FACTOR: f64 = 0.216_000_02 / (0.6 * 0.91 * 0.6 * 0.91 * 0.6 * 0.91);
-
-/// Water (0.014) plus lava (0.007) current per tick.
-const FLUID_PUSH_MOTION: f64 = 0.021;
-
-/// Vertical speed gravity, fluids and bubble columns can add in one tick.
-const VERTICAL_MOTION: f64 = 0.5;
+/// Least slippery block in the game data, which lets walking speed up the most.
+static LEAST_SLIPPERINESS: LazyLock<f32> = LazyLock::new(|| {
+    (0..BlockId::COUNT)
+        .filter_map(BlockId::new)
+        .map(|id| id.to_block().slipperiness)
+        .fold(f32::MAX, f32::min)
+});
 
 impl MobEntity {
     /// What this mob can touch next tick, if its species and goals are audited.
     pub fn audited_reach(&self, mob: &dyn Mob) -> Option<AuditedReach> {
         let living = &self.living_entity;
         let entity = &living.entity;
-        // Riders, vehicles and leashes move it from outside its tick.
+        // Effects, enchanted boots and attachments can act outside the audited movement path.
         if !mob.has_audited_tick()
+            || !living
+                .active_effects
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty()
+            || !living
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&EquipmentSlot::FEET)
+                .is_empty()
             || entity.has_vehicle()
             || entity.has_passengers()
             || entity
@@ -1005,18 +1016,30 @@ impl MobEntity {
 
         // `Mob.setSpeed` also sets the forward input to the speed.
         let speed = living.get_attribute_value(&Attributes::MOVEMENT_SPEED) * goals.speed.max(1.0);
-        let acceleration = MAX_GROUND_SPEED_FACTOR * speed * speed.min(1.0);
+        let block_friction = LivingEntity::compute_modified_friction(
+            *LEAST_SLIPPERINESS,
+            living.get_attribute_value(&Attributes::FRICTION_MODIFIER) as f32,
+        );
+        let acceleration =
+            LivingEntity::friction_influenced_speed(speed, block_friction) * speed.min(1.0);
+        let world = entity.world.load();
+        let fluid_push = super::max_fluid_push_speed(world.dimension.fast_lava);
         let velocity = entity.velocity.load();
         let spawns = mob.audited_spawn_distance();
-        let horizontal = velocity.x.hypot(velocity.z) + acceleration + FLUID_PUSH_MOTION + spawns;
-        let vertical = velocity.y.abs() + living.get_jump_velocity(1.0) + VERTICAL_MOTION + spawns;
+        let horizontal = velocity.x.hypot(velocity.z) + acceleration + fluid_push + spawns;
+        let vertical = velocity.y.abs()
+            + living.get_jump_velocity(1.0)
+            + living.get_attribute_value(&Attributes::GRAVITY)
+            + SURFACE_UPWARD_ACCELERATION
+            + fluid_push
+            + spawns;
 
-        let route = {
+        let (route, path_length) = {
             let navigator = self
                 .navigator
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            navigator
+            let route = navigator
                 .get_path()
                 .filter(|path| !path.is_done())
                 .and_then(|path| {
@@ -1025,7 +1048,8 @@ impl MobEntity {
                     let middle = (end + entity.pos.load()) * 0.5;
                     let radius = (path.get_node_count() - path.get_next_node_index()) as f64 + 1.0;
                     Some(BoundingBox::new(middle, middle).expand(radius, radius, radius))
-                })
+                });
+            (route, f64::from(navigator.max_path_length(living)))
         };
 
         let mut links = entity_islands::links_of(mob);
@@ -1035,16 +1059,14 @@ impl MobEntity {
             motion: (horizontal, vertical),
             entities: goals.entities,
             players: goals.players,
-            block_reads: living
-                .get_attribute_value(&Attributes::FOLLOW_RANGE)
-                .max(0.0)
-                + entity_islands::CONSERVATIVE_MARGIN,
+            // Searches also check the nodes next to their furthest ones.
+            block_reads: path_length + 1.0,
             route,
             changes_blocks: goals.changes_blocks,
             global: false,
             links,
         };
-        reach.scan_contact_blocks(&entity.world.load());
+        reach.scan_contact_blocks(&world);
         Some(reach)
     }
 }

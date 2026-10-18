@@ -15,7 +15,31 @@ pub struct LevelConfig {
     /// Number of ticks between autosave checks. If 0, autosave is disabled.
     #[serde(default = "default_autosave_ticks")]
     pub autosave_ticks: u64,
+    /// Margins for ticking entities in parallel islands.
+    #[serde(default)]
+    pub entity_islands: EntityIslandsConfig,
     // TODO: More options
+}
+
+/// Safety margins for ticking entities in parallel islands. Lower values tick more entities in
+/// parallel but can let interactions run out of tick order.
+#[derive(Deserialize, Serialize, Clone, Copy)]
+#[serde(default)]
+pub struct EntityIslandsConfig {
+    /// Blocks an entity whose tick is not audited can reach beyond its follow range.
+    pub unaudited_reach: f64,
+    /// Blocks a hit from such an entity can throw an audited one in a tick. Raise it for TNT
+    /// cannons.
+    pub knockback_reach: f64,
+}
+
+impl Default for EntityIslandsConfig {
+    fn default() -> Self {
+        Self {
+            unaudited_reach: 16.0,
+            knockback_reach: 4.0,
+        }
+    }
 }
 
 const fn default_autosave_ticks() -> u64 {
@@ -28,6 +52,7 @@ impl Default for LevelConfig {
             chunk: ChunkConfig::default(),
             lighting: LightingEngineConfig::default(),
             autosave_ticks: default_autosave_ticks(),
+            entity_islands: EntityIslandsConfig::default(),
         }
     }
 }
