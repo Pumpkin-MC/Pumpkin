@@ -31,6 +31,27 @@ pub fn get_pos(mob: &dyn Mob, horizontal_dist: i32, vertical_dist: i32) -> Optio
     )
 }
 
+/// A random spot in water; vanilla `BehaviorUtils.getRandomSwimmablePos`.
+#[must_use]
+pub fn get_swimmable_pos(
+    mob: &dyn Mob,
+    horizontal_dist: i32,
+    vertical_dist: i32,
+) -> Option<Vector3<f64>> {
+    let world = mob.get_entity().world.load_full();
+    let mut pos = get_pos(mob, horizontal_dist, vertical_dist);
+    // Like vanilla, give up after ten more tries and keep the last spot found.
+    for _ in 0..10 {
+        match pos {
+            Some(found) if !goal_utils::is_water(&world, &BlockPos::floored_v(found)) => {
+                pos = get_pos(mob, horizontal_dist, vertical_dist);
+            }
+            _ => break,
+        }
+    }
+    pos
+}
+
 #[must_use]
 pub fn get_pos_towards(
     mob: &dyn Mob,
@@ -125,7 +146,7 @@ fn toward_direction(
         random_pos::generate_random_pos_toward_direction(mob, horizontal_dist, rng, direction);
     (!goal_utils::is_outside_limits(&pos, world)
         && !goal_utils::is_restricted(restrict, mob, &pos)
-        && !goal_utils::is_not_stable(world, &pos)
+        && !goal_utils::is_not_stable(mob, world, &pos)
         && !goal_utils::has_malus(mob, context, &pos))
     .then_some(pos)
 }

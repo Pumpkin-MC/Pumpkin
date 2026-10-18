@@ -374,6 +374,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
+    /// Moves the entity through water itself instead of the shared water movement, and says
+    /// whether it did. Fish do, so they neither sink like walkers nor hop out at the shore.
+    fn travel_in_water(&self) -> bool {
+        false
+    }
+
     fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
         if version < JavaMinecraftVersion::V_1_9 {
             let entity = self.get_entity();
