@@ -1,0 +1,73 @@
+{
+  "values": [
+    "minecraft:baked_potato",
+    "minecraft:pumpkin_pie",
+    "minecraft:honey_bottle",
+    "minecraft:ominous_bottle",
+    "minecraft:dried_kelp",
+    {
+      "id": "#c:foods/fruit",
+      "required": false
+    },
+    {
+      "id": "#c:foods/vegetable",
+      "required": false
+    },
+    {
+      "id": "#c:foods/berry",
+      "required": false
+    },
+    {
+      "id": "#c:foods/bread",
+      "required": false
+    },
+    {
+      "id": "#c:foods/cookie",
+      "required": false
+    },
+    {
+      "id": "#c:foods/dough",
+      "required": false
+    },
+    {
+      "id": "#c:foods/raw_meat",
+      "required": false
+    },
+    {
+      "id": "#c:foods/raw_fish",
+      "required": false
+    },
+    {
+      "id": "#c:foods/cooked_meat",
+      "required": false
+    },
+    {
+      "id": "#c:foods/cooked_fish",
+      "required": false
+    },
+    {
+      "id": "#c:foods/soup",
+      "required": false
+    },
+    {
+      "id": "#c:foods/candy",
+      "required": false
+    },
+    {
+      "id": "#c:foods/pie",
+      "required": false
+    },
+    {
+      "id": "#c:foods/golden",
+      "required": false
+    },
+    {
+      "id": "#c:foods/edible_when_placed",
+      "required": false
+    },
+    {
+      "id": "#c:foods/food_poisoning",
+      "required": false
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+//! Clientbound Bedrock protocol packets sent to clients.
+
 pub mod add_actor;
 pub mod add_item_actor;
 pub mod add_player;
@@ -20,6 +22,7 @@ pub mod inventory_content;
 pub mod inventory_slot;
 pub mod item_registry;
 pub mod item_stack_response;
+pub mod jigsaw_structure_data;
 pub mod level_event;
 pub mod level_sound_event;
 pub mod mob_effect;
@@ -56,6 +59,7 @@ pub mod update_abilities;
 pub mod update_attributes;
 pub mod update_block;
 pub mod update_trade;
+pub mod voxel_shapes;
 
 pub use add_actor::*;
 pub use add_item_actor::*;
@@ -79,6 +83,7 @@ pub use inventory_content::*;
 pub use inventory_slot::*;
 pub use item_registry::*;
 pub use item_stack_response::*;
+pub use jigsaw_structure_data::*;
 pub use level_event::*;
 pub use level_sound_event::*;
 pub use mob_effect::*;
@@ -115,3 +120,4 @@ pub use update_abilities::*;
 pub use update_attributes::*;
 pub use update_block::*;
 pub use update_trade::*;
+pub use voxel_shapes::*;

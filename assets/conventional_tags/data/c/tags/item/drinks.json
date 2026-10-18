@@ -1,0 +1,32 @@
+{
+  "values": [
+    {
+      "id": "#c:drinks/water",
+      "required": false
+    },
+    {
+      "id": "#c:drinks/watery",
+      "required": false
+    },
+    {
+      "id": "#c:drinks/milk",
+      "required": false
+    },
+    {
+      "id": "#c:drinks/honey",
+      "required": false
+    },
+    {
+      "id": "#c:drinks/magic",
+      "required": false
+    },
+    {
+      "id": "#c:drinks/ominous",
+      "required": false
+    },
+    {
+      "id": "#c:drinks/juice",
+      "required": false
+    }
+  ]
+}

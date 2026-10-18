@@ -107,8 +107,35 @@ pub static MOB_EFFECT_ARGUMENT: ResourceArgument =
             .map(|value| value as &'static (dyn Any + Send + Sync))
     });
 
+pub type DynamicDamageTypeResolver =
+    Box<dyn Fn(&str) -> Option<&'static pumpkin_data::damage::DamageType> + Send + Sync>;
+
+pub static DYNAMIC_DAMAGE_TYPE_RESOLVER: std::sync::RwLock<Option<DynamicDamageTypeResolver>> =
+    std::sync::RwLock::new(None);
+pub static DYNAMIC_DAMAGE_TYPE_NAMES: std::sync::RwLock<Vec<String>> =
+    std::sync::RwLock::new(Vec::new());
+
+pub fn register_dynamic_damage_types(resolver: DynamicDamageTypeResolver, names: Vec<String>) {
+    if let Ok(mut guard) = DYNAMIC_DAMAGE_TYPE_RESOLVER.write() {
+        *guard = Some(resolver);
+    }
+    if let Ok(mut guard) = DYNAMIC_DAMAGE_TYPE_NAMES.write() {
+        *guard = names;
+    }
+}
+
 pub static DAMAGE_TYPE_ARGUMENT: ResourceArgument =
     ResourceArgument(DAMAGE_TYPE_REGISTRY, &|id: Identifier| {
+        if let Ok(guard) = DYNAMIC_DAMAGE_TYPE_RESOLVER.read()
+            && let Some(resolver) = guard.as_ref()
+        {
+            let id_str = id.to_string();
+            let path_str = id.path();
+            if let Some(dt) = resolver(&id_str).or_else(|| resolver(path_str)) {
+                return Some(dt as &'static (dyn Any + Send + Sync));
+            }
+        }
+
         let dt = pumpkin_data::damage::DamageType::from_name(id.path())
             .or_else(|| pumpkin_data::damage::DamageType::from_name(&id.to_string()))?;
         let idx = dt.id as usize;
@@ -207,7 +234,13 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for ResourceArgument {
             let types = DAMAGE_TYPES
                 .iter()
                 .map(|dt| format!("minecraft:{}", dt.message_id));
-            suggestions_builder.filter_and_suggest_iter(types).build()
+            let extra = DYNAMIC_DAMAGE_TYPE_NAMES
+                .read()
+                .map(|g| g.clone())
+                .unwrap_or_default();
+            suggestions_builder
+                .filter_and_suggest_iter(types.chain(extra))
+                .build()
         } else {
             Suggestions::empty()
         }

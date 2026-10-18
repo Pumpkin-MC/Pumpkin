@@ -1,0 +1,100 @@
+{
+  "values": [
+    {
+      "id": "#minecraft:armadillo_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:axolotl_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:bee_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:camel_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:cat_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:chicken_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:cow_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:fox_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:frog_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:goat_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:hoglin_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:horse_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:llama_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:ocelot_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:panda_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:parrot_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:pig_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:piglin_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:rabbit_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:sheep_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:sniffer_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:strider_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:turtle_food",
+      "required": false
+    },
+    {
+      "id": "#minecraft:wolf_food",
+      "required": false
+    }
+  ]
+}

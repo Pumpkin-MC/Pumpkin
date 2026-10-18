@@ -1,4 +1,3 @@
-use pumpkin_data::block_state_remap::remap_block_state_for_version;
 use pumpkin_data::packet::clientbound::play::BLOCK_UPDATE;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -38,11 +37,7 @@ impl ClientPacket for CBlockUpdate {
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_block_pos(&self.location, version)?;
-
-        let remapped_state = u16::try_from(self.state_id.0).map_or(self.state_id.0, |state_id| {
-            i32::from(remap_block_state_for_version(state_id, *version))
-        });
-        write.write_var_int(&VarInt(remapped_state))?;
+        write.write_var_int(&self.state_id)?;
 
         Ok(())
     }
