@@ -357,7 +357,6 @@ impl LivingEntity {
     /// Following vanilla Java logic (`LivingEntity.getKillCredit`):
     /// 1. Prioritize `last_hurt_by_player` if hurt within the last 100 ticks (5 seconds).
     /// 2. Then `last_hurt_by_mob` if hurt within the last 100 ticks.
-    /// 3. Fall back to combat tracker's killer entry if available.
     pub fn get_kill_credit(&self) -> Option<Arc<dyn EntityBase>> {
         let world = self.entity.world.load();
         let current_tick = world.get_world_age();
@@ -378,16 +377,6 @@ impl LivingEntity {
             && let Some(mob) = world.get_entity_by_id(mob_id)
         {
             return Some(mob);
-        }
-
-        let tracker = self
-            .combat_tracker
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(killer) = tracker.get_killer_entry()
-            && let Some(killer_id) = killer.attacker_id
-        {
-            return world.get_entity_by_id(killer_id);
         }
 
         None
@@ -2113,10 +2102,11 @@ impl LivingEntity {
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
 
+            // Like vanilla, stats go to the kill credit, loot and XP to the killing blow.
             let kill_credit = self.get_kill_credit();
-            let killer = cause.or(source).or(kill_credit.as_deref());
+            let killer = cause.or(source);
 
-            self.update_death_stats(&*dyn_self, killer);
+            self.update_death_stats(&*dyn_self, kill_credit.as_deref());
 
             // Plays the death sound
             world.play_sound_fine(

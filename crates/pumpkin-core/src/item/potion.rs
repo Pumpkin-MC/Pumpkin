@@ -16,11 +16,11 @@ pub enum PotionApplicationSource {
 }
 
 impl PotionApplicationSource {
-    const fn instant_scale(self, scale: f32) -> f32 {
+    const fn instant_scale(self, scale: f32) -> Option<f32> {
         match self {
-            Self::AreaEffectCloud => scale * 0.5,
-            Self::Arrow => 1.0,
-            Self::Normal => scale,
+            Self::AreaEffectCloud => Some(scale * 0.5),
+            Self::Arrow => None,
+            Self::Normal => Some(scale),
         }
     }
 
@@ -144,7 +144,7 @@ impl PotionContents {
             if !target.apply_instant_effect(
                 effect_type,
                 amplifier,
-                Some(f64::from(source.instant_scale(scale))),
+                source.instant_scale(scale).map(f64::from),
                 effect_source,
             ) {
                 // Duration scaling
@@ -186,6 +186,6 @@ mod tests {
             (160.0 * PotionApplicationSource::Arrow.duration_scale(scale)) as i32,
             20
         );
-        assert_eq!(PotionApplicationSource::Arrow.instant_scale(scale), 1.0);
+        assert_eq!(PotionApplicationSource::Arrow.instant_scale(scale), None);
     }
 }

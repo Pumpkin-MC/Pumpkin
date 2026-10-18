@@ -924,8 +924,9 @@ impl EntityBase for ArrowEntity {
                     damage as f32,
                     DamageType::ARROW,
                     Some(hit_pos),
-                    owner_entity.as_deref(),
-                    None,
+                    Some(self),
+                    // Like vanilla, an ownerless arrow is its own cause.
+                    Some(owner_entity.as_deref().unwrap_or(self)),
                 );
 
                 if let Some(living) = target.get_living_entity() {
