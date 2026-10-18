@@ -6,9 +6,10 @@ use pumpkin_util::text::TextComponent;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command};
 use crate::command::argument_types::function::FunctionArgumentType;
 use crate::command::context::command_context::CommandContext;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::data::datapack::FunctionCallError;
 use crate::command::suggestion::provider::{SuggestionProvider, SuggestionProviderResult};
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
 
@@ -19,6 +20,12 @@ static ERROR_UNKNOWN_FUNCTION: CommandErrorType<1> = CommandErrorType::new(
     translation::java::ARGUMENTS_FUNCTION_UNKNOWN,
     translation::java::ARGUMENTS_FUNCTION_UNKNOWN,
 );
+
+/// Internal queue/execution failures are not user input errors; they are
+/// logged with detail and surfaced as a generic internal error instead of the
+/// "unknown function" message.
+static ERROR_FUNCTION_INTERNAL: LiteralCommandErrorType =
+    LiteralCommandErrorType::new("Internal error while running function");
 
 struct FunctionSuggestionProvider;
 
@@ -44,13 +51,19 @@ impl CommandExecutor for FunctionExecutor {
         let name_str = FunctionArgumentType::get(context, "name")?;
         let server = context.server();
 
-        let Ok(executed_count) =
-            server
-                .datapack_manager
-                .execute_function(server, &context.source, name_str)
-        else {
-            return Err(ERROR_UNKNOWN_FUNCTION
-                .create_without_context(TextComponent::text(name_str.to_string())));
+        let executed_count = match server
+            .datapack_manager
+            .execute_function(server, &context.source, name_str)
+        {
+            Ok(executed_count) => executed_count,
+            Err(FunctionCallError::Unknown(_)) => {
+                return Err(ERROR_UNKNOWN_FUNCTION
+                    .create_without_context(TextComponent::text(name_str.to_string())));
+            }
+            Err(FunctionCallError::Internal(message)) => {
+                tracing::error!("Internal error running function {name_str}: {message}");
+                return Err(ERROR_FUNCTION_INTERNAL.create_without_context());
+            }
         };
 
         if name_str.starts_with('#') {
@@ -79,7 +92,9 @@ impl CommandExecutor for FunctionExecutor {
             );
         }
 
-        Ok(executed_count as i32)
+        // The count is saturated rather than truncated: a saturated feedback
+        // beats a wrapped negative one for absurdly large queues.
+        Ok(i32::try_from(executed_count).unwrap_or(i32::MAX))
     }
 }
 

@@ -8,13 +8,15 @@ pub mod structure_loader;
 pub mod test_loader;
 pub mod trade_loader;
 
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tracing::{info, warn};
 
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_data::registry::RegistryEntryData;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_nbt::{NbtCompound, nbt_compress::read_gzip_compound_tag};
@@ -32,6 +34,284 @@ use self::test_loader::{
     TestInstance, TestInstanceRegistry, load_test_instances_from_dir, to_registry_entry,
 };
 use self::trade_loader::{DynamicVillagerTradeSet, TradeRegistry};
+
+/// Vanilla caps chained command execution at the `maxCommandSequenceLength` game
+/// rule (`Commands.executeCommandInContext`). Used when the source has no world
+/// to read the rule from; mirrors the vanilla default.
+const DEFAULT_MAX_COMMAND_SEQUENCE_LENGTH: i64 = 65536;
+
+/// Mirrors vanilla `ExecutionContext.MAX_QUEUE_DEPTH`. Vanilla's check is
+/// `newTopCommands.size() + commandQueue.size() > 10000000` in `queueNext`,
+/// evaluated before the entry is added, so the 10,000,001st entry is admitted
+/// and the one after it overflows the execution. The cap counts queued work
+/// items (calls and body continuations here, individual commands in vanilla),
+/// so it bounds memory without materializing per-line entries.
+const MAX_FUNCTION_QUEUE_DEPTH: usize = 10_000_000;
+
+/// Clamps a `maxCommandSequenceLength` game rule value the way vanilla does in
+/// `Commands.executeCommandInContext` (`Math.max(1, ...)`): a rule of 0 or less
+/// is clamped to one quota unit, which the function call itself consumes, so
+/// no body lines run.
+fn clamp_sequence_limit(rule_value: Option<i64>) -> i64 {
+    rule_value
+        .unwrap_or(DEFAULT_MAX_COMMAND_SEQUENCE_LENGTH)
+        .max(1)
+}
+
+/// Whether a nested call may join the active execution. Production callers
+/// always pass their server; tests pass none. A mismatch in either direction
+/// means the queued lines would be dispatched by the wrong server.
+fn execution_servers_match(active: &Option<Arc<Server>>, caller: Option<&Arc<Server>>) -> bool {
+    match (active, caller) {
+        (Some(active), Some(caller)) => Arc::ptr_eq(active, caller),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+/// Error from [`DatapackManager::execute_function`].
+#[derive(Debug)]
+pub enum FunctionCallError {
+    /// The function or tag name did not resolve; a user input problem.
+    Unknown(String),
+    /// An internal invariant broke; not the caller's input.
+    Internal(String),
+}
+
+impl std::fmt::Display for FunctionCallError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unknown(message) | Self::Internal(message) => f.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for FunctionCallError {}
+
+/// One queued unit of function execution. Entries carry their own source so a
+/// function called through `execute as`/`execute at` keeps the context it was
+/// called with instead of inheriting the outer call's.
+#[derive(Clone)]
+enum FunctionWork<S> {
+    /// A function call: costs one quota like vanilla's `CallFunction`, then
+    /// continues as a `Body` cursor.
+    Call { lines: Arc<[String]>, source: S },
+    /// A cursor over a function body: each executed line costs one quota. The
+    /// body stays shared behind the `Arc` instead of being materialized into
+    /// per-line queue entries; vanilla's `ContinuationTask` keeps the same
+    /// lazy cursor for bodies of more than two entries.
+    Body {
+        lines: Arc<[String]>,
+        next: usize,
+        source: S,
+    },
+}
+
+/// What [`FunctionExecution::step`] decided; the driver acts on it.
+enum FunctionStep<S> {
+    /// Queue drained cleanly; no stop message.
+    Done,
+    /// Quota exhausted. Vanilla logs the limit message whenever the loop
+    /// reaches the quota check with none left, even when the last command
+    /// landed exactly on it.
+    LimitHit,
+    /// Run one command line with the source recorded for it.
+    RunLine { line: String, source: S },
+}
+
+/// Why [`drive_function_execution`] stopped.
+enum FunctionExecutionOutcome {
+    Completed,
+    LimitHit,
+    /// Queue overflowed past [`MAX_FUNCTION_QUEUE_DEPTH`] while a command ran.
+    Overflow,
+    /// The thread-local execution state vanished mid-drain; an internal bug,
+    /// never a clean finish.
+    MissingState,
+}
+
+/// Iterative command queue mirroring the parts of vanilla's `ExecutionContext`
+/// that chained `function` execution needs: a front queue plus a staging list,
+/// a command quota, and an overflow flag. Vanilla's frame controls for
+/// `execute` forking and its result callbacks are separate subsystems and are
+/// not modeled here. This is a pure state machine with no thread state of its
+/// own so it can be unit tested; the active instance lives in
+/// [`FUNCTION_EXECUTION`] while a top-level call drains it, like vanilla's
+/// `CURRENT_EXECUTION_CONTEXT` thread local.
+struct FunctionExecution<S> {
+    remaining: i64,
+    queue: VecDeque<FunctionWork<S>>,
+    staged: Vec<FunctionWork<S>>,
+    queue_depth_limit: usize,
+    overflow: bool,
+}
+
+impl<S: Clone> FunctionExecution<S> {
+    fn new(limit: i64) -> Self {
+        Self::with_queue_depth_limit(limit, MAX_FUNCTION_QUEUE_DEPTH)
+    }
+
+    fn with_queue_depth_limit(limit: i64, queue_depth_limit: usize) -> Self {
+        Self {
+            remaining: limit,
+            queue: VecDeque::new(),
+            staged: Vec::new(),
+            queue_depth_limit,
+            overflow: false,
+        }
+    }
+
+    /// Mirrors `ExecutionContext.queueNext`: past the depth limit the whole
+    /// execution is aborted (`handleQueueOverflow` clears both lists and drops
+    /// the incoming entry), otherwise the entry is staged.
+    fn queue_next(&mut self, work: FunctionWork<S>) {
+        if self.staged.len() + self.queue.len() > self.queue_depth_limit {
+            self.overflow = true;
+            self.staged.clear();
+            self.queue.clear();
+        }
+        if !self.overflow {
+            self.staged.push(work);
+        }
+    }
+
+    /// Mirrors `ExecutionContext.pushNewCommands`: staged entries land at the
+    /// front of the queue in their original order, ahead of older entries.
+    fn push_staged(&mut self) {
+        for work in self.staged.drain(..).rev() {
+            self.queue.push_front(work);
+        }
+    }
+
+    /// Advances the queue until a command line has to run, the queue drains,
+    /// or the quota is exhausted. Mirrors the quota-before-poll order of
+    /// `ExecutionContext.runCommandQueue`. The overflow flag is deliberately
+    /// not checked here: vanilla checks it right after an entry executes, so
+    /// an execution that overflowed during initial queueing just finds an
+    /// empty queue and returns silently. The driver performs the post-command
+    /// overflow check.
+    fn step(&mut self) -> FunctionStep<S> {
+        loop {
+            self.push_staged();
+            if self.remaining <= 0 {
+                return FunctionStep::LimitHit;
+            }
+            match self.queue.pop_front() {
+                None => return FunctionStep::Done,
+                Some(FunctionWork::Call { lines, source }) => {
+                    self.remaining -= 1;
+                    // Depth-cap accounting: this `push_front` and the Body
+                    // continuation below bypass `queue_next`'s check
+                    // deliberately: each replaces the entry just popped
+                    // one-for-one, so the entry count can only shrink here and
+                    // the cap invariant is preserved. Only `queue_next`
+                    // (initial queueing and nested calls) can grow the queue,
+                    // and it enforces the cap.
+                    if !lines.is_empty() {
+                        self.queue.push_front(FunctionWork::Body {
+                            lines,
+                            next: 0,
+                            source,
+                        });
+                    }
+                }
+                Some(FunctionWork::Body {
+                    lines,
+                    next,
+                    source,
+                }) => {
+                    if next >= lines.len() {
+                        continue;
+                    }
+                    self.remaining -= 1;
+                    let line = lines[next].clone();
+                    // The continuation goes back on the front of the queue
+                    // before the line runs (replacing the popped entry, so
+                    // the depth cap is unaffected); work staged by nested
+                    // calls during the run is then spliced ahead of it, ahead
+                    // of older entries, in `push_staged` order.
+                    if next + 1 < lines.len() {
+                        self.queue.push_front(FunctionWork::Body {
+                            lines: Arc::clone(&lines),
+                            next: next + 1,
+                            source: source.clone(),
+                        });
+                    }
+                    return FunctionStep::RunLine { line, source };
+                }
+            }
+        }
+    }
+}
+
+/// The execution a top-level `execute_function` call is draining, plus the
+/// server whose dispatcher runs it. Nested calls carrying a different server
+/// are rejected: their lines would otherwise be dispatched by the wrong
+/// server.
+struct ActiveFunctionExecution {
+    execution: FunctionExecution<CommandSource>,
+    server: Option<Arc<Server>>,
+}
+
+thread_local! {
+    /// The function execution currently draining on this thread. Vanilla keeps
+    /// the same shape with its `CURRENT_EXECUTION_CONTEXT` thread local.
+    /// Thread safety invariant: `drive_function_execution` and
+    /// `CommandDispatcher::handle_command` are synchronous `fn`s, so a drain
+    /// contains no `.await`/yield point and a tokio task cannot migrate
+    /// threads mid-drain; a nested `function` call always lands on the
+    /// execution dynamically above it. A handler that ran commands on another
+    /// thread would break this, but no command handler does that.
+    static FUNCTION_EXECUTION: RefCell<Option<ActiveFunctionExecution>> =
+        const { RefCell::new(None) };
+}
+
+/// Clears [`FUNCTION_EXECUTION`] when the top-level call returns or unwinds,
+/// mirroring the `finally` around vanilla's `runCommandQueue`; without it a
+/// panic mid-command would poison later executions on the same thread.
+struct FunctionExecutionGuard;
+
+impl Drop for FunctionExecutionGuard {
+    fn drop(&mut self) {
+        FUNCTION_EXECUTION.with(|exec| *exec.borrow_mut() = None);
+    }
+}
+
+/// Drives the active [`FUNCTION_EXECUTION`] until it completes, hits the
+/// command quota, or overflows the queue, running each command line through
+/// `run`. Mirrors the loop in `ExecutionContext.runCommandQueue`, including
+/// its post-command overflow check; the stop messages are logged by the
+/// caller. Returns the outcome and the number of command lines run.
+fn drive_function_execution(
+    run: &mut impl FnMut(&CommandSource, &str),
+) -> (FunctionExecutionOutcome, usize) {
+    let mut executed = 0usize;
+    let outcome = loop {
+        let step = FUNCTION_EXECUTION.with(|exec| {
+            exec.borrow_mut()
+                .as_mut()
+                .map(|active| active.execution.step())
+        });
+        match step {
+            None => break FunctionExecutionOutcome::MissingState,
+            Some(FunctionStep::Done) => break FunctionExecutionOutcome::Completed,
+            Some(FunctionStep::LimitHit) => break FunctionExecutionOutcome::LimitHit,
+            Some(FunctionStep::RunLine { line, source }) => {
+                run(&source, &line);
+                executed = executed.saturating_add(1);
+                let overflowed = FUNCTION_EXECUTION.with(|exec| {
+                    exec.borrow()
+                        .as_ref()
+                        .is_some_and(|active| active.execution.overflow)
+                });
+                if overflowed {
+                    break FunctionExecutionOutcome::Overflow;
+                }
+            }
+        }
+    };
+    (outcome, executed)
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KnownPackData {
@@ -736,60 +1016,222 @@ impl DatapackManager {
         server: &Arc<Server>,
         source: &CommandSource,
         name: &str,
-    ) -> Result<usize, String> {
-        self.visit_function_lines(name, |line| {
+    ) -> Result<usize, FunctionCallError> {
+        // Load the dispatcher per line, as the pre-queue implementation did,
+        // so a dispatcher reload between lines is picked up mid-function.
+        self.execute_function_with(source, name, Some(server), &mut |line_source, line| {
             server
                 .command_dispatcher
                 .load()
-                .handle_command(source, line);
+                .handle_command(line_source, line);
         })
     }
 
-    fn visit_function_lines(
+    /// Shared implementation of [`Self::execute_function`], with the command
+    /// runner injected so the queue machinery can be tested without a server.
+    ///
+    /// Quota scope: one unit per function call plus one per executed command
+    /// line. Vanilla additionally charges one unit per `execute` redirect
+    /// stage in a line (MC-265772) and runs the typed command that started
+    /// the chain inside the same context; Pumpkin's dispatcher runs lines
+    /// atomically and typed commands outside this quota, so neither is
+    /// modeled here.
+    fn execute_function_with(
+        &self,
+        source: &CommandSource,
+        name: &str,
+        server: Option<&Arc<Server>>,
+        run: &mut impl FnMut(&CommandSource, &str),
+    ) -> Result<usize, FunctionCallError> {
+        let already_running = FUNCTION_EXECUTION.with(|exec| exec.borrow().is_some());
+        if already_running {
+            return self.queue_nested_function_call(source, name, server);
+        }
+
+        // Vanilla opens an `ExecutionContext` whose quota is the source world's
+        // `maxCommandSequenceLength` game rule, clamped to at least 1
+        // (`Commands.executeCommandInContext`: `context.getLevel()` is the
+        // source's level; Pumpkin's console, scheduled, and `#minecraft:load`/
+        // `#minecraft:tick` sources all carry the overworld). The fallback only
+        // covers synthetic world-less sources.
+        let limit = clamp_sequence_limit(source.world.as_ref().map(|world| {
+            match world.get_game_rule(&GameRule::MaxCommandSequenceLength) {
+                GameRuleValue::Int(value) => value,
+                GameRuleValue::Bool(_) => DEFAULT_MAX_COMMAND_SEQUENCE_LENGTH,
+            }
+        }));
+
+        let mut execution = FunctionExecution::new(limit);
+        self.stream_function_lines(name, &mut |lines| {
+            execution.queue_next(FunctionWork::Call {
+                lines: Arc::clone(lines),
+                source: source.clone(),
+            });
+            !execution.overflow
+        })?;
+        FUNCTION_EXECUTION.with(|exec| {
+            *exec.borrow_mut() = Some(ActiveFunctionExecution {
+                execution,
+                server: server.cloned(),
+            });
+        });
+        let _guard = FunctionExecutionGuard;
+
+        let (outcome, executed) = drive_function_execution(run);
+
+        match outcome {
+            FunctionExecutionOutcome::Completed => Ok(executed),
+            FunctionExecutionOutcome::LimitHit => {
+                info!("Command execution stopped due to limit (executed {limit} commands)");
+                Ok(executed)
+            }
+            FunctionExecutionOutcome::Overflow => {
+                tracing::error!(
+                    "Command execution stopped due to command queue overflow (max {MAX_FUNCTION_QUEUE_DEPTH})"
+                );
+                Ok(executed)
+            }
+            FunctionExecutionOutcome::MissingState => {
+                tracing::error!("Function execution state vanished mid-drain; this is a bug");
+                Err(FunctionCallError::Internal(
+                    "function execution state vanished mid-drain".to_string(),
+                ))
+            }
+        }
+    }
+
+    /// Queues a function call onto the execution already running on this
+    /// thread instead of recursing into it, mirroring
+    /// `ExecutionContext.queueInitialFunctionCall`. The caller's source
+    /// travels with the queued work, so `execute as`/`execute at` contexts
+    /// survive the queue. A nested call from a different server than the one
+    /// draining the active execution is rejected: its lines would be
+    /// dispatched by the wrong server.
+    fn queue_nested_function_call(
+        &self,
+        source: &CommandSource,
+        name: &str,
+        server: Option<&Arc<Server>>,
+    ) -> Result<usize, FunctionCallError> {
+        let mut queued = 0usize;
+        FUNCTION_EXECUTION.with(|exec| {
+            let mut exec = exec.borrow_mut();
+            let Some(active) = exec.as_mut() else {
+                return Err(FunctionCallError::Internal(format!(
+                    "Function {name} called without an active function execution"
+                )));
+            };
+            if !execution_servers_match(&active.server, server) {
+                return Err(FunctionCallError::Internal(format!(
+                    "Function {name} called from a different server while a function execution is active"
+                )));
+            }
+            self.stream_function_lines(name, &mut |lines| {
+                if active.execution.overflow {
+                    return false;
+                }
+                queued = queued.saturating_add(lines.len());
+                active.execution.queue_next(FunctionWork::Call {
+                    lines: Arc::clone(lines),
+                    source: source.clone(),
+                });
+                !active.execution.overflow
+            })?;
+            Ok(queued)
+        })
+    }
+
+    /// Resolves `name` like `resolve_function_lines`, but streams each
+    /// function to `queue` instead of collecting, so a huge tag is not cloned
+    /// wholesale before the queue cap applies. `queue` returns false to stop
+    /// early (the execution overflowed). Resolution errors keep the existing
+    /// policy: an unknown function or tag errors, unknown tag members are
+    /// skipped. The tag's id list is cloned so the tag and function locks are
+    /// never held together; function bodies are only cloned per queued entry.
+    fn stream_function_lines(
         &self,
         name: &str,
-        mut visit: impl FnMut(&str),
-    ) -> Result<usize, String> {
-        let (functions_to_run, is_tag) = if let Some(tag_name) = name.strip_prefix('#') {
-            let tags = self
-                .function_tags
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let Some(fns) = tags.get(tag_name) else {
-                return Err(format!("Unknown function tag: #{tag_name}"));
+        queue: &mut impl FnMut(&Arc<[String]>) -> bool,
+    ) -> Result<(), FunctionCallError> {
+        if let Some(tag_name) = name.strip_prefix('#') {
+            let fns: Arc<Vec<String>> = {
+                let tags = self
+                    .function_tags
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let Some(fns) = tags.get(tag_name) else {
+                    return Err(FunctionCallError::Unknown(format!(
+                        "Unknown function tag: #{tag_name}"
+                    )));
+                };
+                // Explicit resolution ceiling: a tag larger than the queue
+                // can ever admit is rejected with a resource error BEFORE
+                // its id list is copied, instead of being silently
+                // truncated. Tag contents come from the server owner's own
+                // datapacks, so an honest error beats silent clipping here.
+                let ceiling = MAX_FUNCTION_QUEUE_DEPTH + 2;
+                if fns.len() > ceiling {
+                    return Err(FunctionCallError::Internal(format!(
+                        "Function tag #{tag_name} has {} members, exceeding the resolution ceiling of {ceiling}",
+                        fns.len()
+                    )));
+                }
+                // Snapshot the id list once behind an Arc so a datapack
+                // reload mid-resolution cannot swap the member list under
+                // us. The ceiling bounds the ENTRY COUNT only: the copy
+                // holds up to that many Strings with no total byte cap, so
+                // a pathological tag could still make it large. Tag contents
+                // come from the server owner's own datapacks, so this is
+                // accepted scope rather than attacker-controlled memory;
+                // a byte precheck or an Arc-backed tag store would close it.
+                Arc::new(fns.clone())
             };
-            (fns.clone(), true)
-        } else {
-            (vec![name.to_string()], false)
-        };
-
-        let functions = {
+            // Bodies are resolved under a single functions-registry read
+            // lock, so all bodies within one execution come from one
+            // generation of that registry. Note the tag snapshot above and
+            // this registry are captured under separate locks, so a reload
+            // landing between the two captures can still pair a newer tag
+            // with older bodies; that cross-store gap predates this change.
+            // Unknown members are skipped wherever they appear, as before;
+            // skipped members consume resolution work (bounded by the
+            // ceiling) but no queue space.
             let all_fns = self
                 .functions
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut functions = Vec::with_capacity(functions_to_run.len());
-            for fn_id in functions_to_run {
-                let Some(lines) = all_fns.get(&fn_id) else {
-                    if !is_tag {
-                        return Err(format!("Unknown function: {fn_id}"));
-                    }
+            for fn_id in fns.iter() {
+                let Some(lines) = all_fns.get(fn_id) else {
                     continue;
                 };
-                functions.push(Arc::clone(lines));
+                if !queue(lines) {
+                    break;
+                }
             }
-            functions
-        };
-
-        let mut total_executed = 0;
-        for lines in functions {
-            for line in lines.iter() {
-                visit(line);
-                total_executed += 1;
-            }
+            Ok(())
+        } else {
+            let all_fns = self
+                .functions
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let Some(lines) = all_fns.get(name) else {
+                return Err(FunctionCallError::Unknown(format!(
+                    "Unknown function: {name}"
+                )));
+            };
+            let _ = queue(lines);
+            Ok(())
         }
+    }
 
-        Ok(total_executed)
+    #[cfg(test)]
+    fn resolve_function_lines(&self, name: &str) -> Result<Vec<Arc<[String]>>, String> {
+        let mut resolved = Vec::new();
+        self.stream_function_lines(name, &mut |lines| {
+            resolved.push(Arc::clone(lines));
+            true
+        })
+        .map_err(|error| error.to_string())?;
+        Ok(resolved)
     }
 
     #[must_use]
@@ -1132,6 +1574,7 @@ impl DatapackManager {
         server
             .datapack_manager
             .execute_function(server, &source, name)
+            .map_err(|error| error.to_string())
     }
 }
 
@@ -1672,7 +2115,13 @@ fn load_recipes_from_dir(
 }
 #[cfg(test)]
 mod tests {
-    use super::DatapackManager;
+    use super::{
+        ActiveFunctionExecution, DatapackManager, FunctionExecution, FunctionExecutionGuard,
+        FunctionExecutionOutcome, FunctionStep, FunctionWork, clamp_sequence_limit,
+        drive_function_execution,
+    };
+    use crate::command::context::command_source::CommandSource;
+    use std::sync::Arc;
 
     #[test]
     fn function_dispatch_releases_the_functions_lock() {
@@ -1686,19 +2135,22 @@ mod tests {
                 vec!["first command".to_string(), "second command".to_string()].into(),
             );
 
-        let mut visited = Vec::new();
-        let executed = manager
-            .visit_function_lines("test:reentrant", |line| {
-                let functions = manager
-                    .functions
-                    .try_write()
-                    .expect("function dispatch must not hold the functions read lock");
-                drop(functions);
-                visited.push(line.to_string());
-            })
-            .expect("execute function lines");
+        let functions = manager
+            .resolve_function_lines("test:reentrant")
+            .expect("resolve function lines");
 
-        assert_eq!(executed, 2);
+        // Resolving must not hold the functions read lock while the lines run.
+        let mut visited = Vec::new();
+        for lines in &functions {
+            let guard = manager
+                .functions
+                .try_write()
+                .expect("function dispatch must not hold the functions read lock");
+            drop(guard);
+            for line in lines.iter() {
+                visited.push(line.clone());
+            }
+        }
         assert_eq!(visited, ["first command", "second command"]);
     }
 
@@ -1722,25 +2174,691 @@ mod tests {
                 vec!["test:missing".to_string(), "test:known".to_string()],
             );
 
-        let mut visited = Vec::new();
-        let executed = manager
-            .visit_function_lines("#test:mixed", |line| visited.push(line.to_string()))
-            .expect("execute function tag");
-        assert_eq!(executed, 1);
+        let functions = manager
+            .resolve_function_lines("#test:mixed")
+            .expect("resolve function tag");
+        let visited: Vec<String> = functions
+            .iter()
+            .flat_map(|lines| lines.iter().cloned())
+            .collect();
         assert_eq!(visited, ["known command"]);
 
         assert_eq!(
             manager
-                .visit_function_lines("test:missing", |_| {})
+                .resolve_function_lines("test:missing")
                 .expect_err("unknown function must fail"),
             "Unknown function: test:missing"
         );
         assert_eq!(
             manager
-                .visit_function_lines("#test:missing", |_| {})
+                .resolve_function_lines("#test:missing")
                 .expect_err("unknown function tag must fail"),
             "Unknown function tag: #test:missing"
         );
+    }
+
+    fn function_lines(text: &str) -> Arc<[String]> {
+        Arc::from(vec![text.to_string()])
+    }
+
+    fn install_test_execution(execution: FunctionExecution<CommandSource>) {
+        super::FUNCTION_EXECUTION.with(|exec| {
+            *exec.borrow_mut() = Some(ActiveFunctionExecution {
+                execution,
+                server: None,
+            });
+        });
+    }
+
+    /// Queues a call onto the active test execution, standing in for a nested
+    /// `function` command during a driven run.
+    fn queue_test_call(lines: Arc<[String]>, source: CommandSource) {
+        super::FUNCTION_EXECUTION.with(|exec| {
+            if let Some(active) = exec.borrow_mut().as_mut() {
+                active
+                    .execution
+                    .queue_next(FunctionWork::Call { lines, source });
+            }
+        });
+    }
+
+    #[test]
+    fn sequence_limit_clamp_matches_vanilla() {
+        // `Math.max(1, ...)` in `Commands.executeCommandInContext`: a rule of 0
+        // or less still runs one command.
+        assert_eq!(clamp_sequence_limit(None), 65536);
+        assert_eq!(clamp_sequence_limit(Some(0)), 1);
+        assert_eq!(clamp_sequence_limit(Some(-3)), 1);
+        assert_eq!(clamp_sequence_limit(Some(42)), 42);
+    }
+
+    #[test]
+    fn self_recursive_function_stops_at_the_limit() {
+        let mut execution = FunctionExecution::with_queue_depth_limit(10, 100);
+        execution.queue_next(FunctionWork::Call {
+            lines: function_lines("function test:loop"),
+            source: 0u32,
+        });
+
+        let mut ran = 0;
+        loop {
+            match execution.step() {
+                FunctionStep::RunLine { .. } => {
+                    ran += 1;
+                    // The line calls the function again, as `function test:loop` would.
+                    execution.queue_next(FunctionWork::Call {
+                        lines: function_lines("function test:loop"),
+                        source: 0,
+                    });
+                }
+                FunctionStep::LimitHit => break,
+                FunctionStep::Done => {
+                    panic!("self recursion must hit the limit")
+                }
+            }
+        }
+        // 10 quota = initial call + 5 (call + line) pairs.
+        assert_eq!(ran, 5);
+    }
+
+    #[test]
+    fn mutually_recursive_functions_stop_at_the_limit() {
+        let mut execution = FunctionExecution::with_queue_depth_limit(10, 100);
+        execution.queue_next(FunctionWork::Call {
+            lines: function_lines("function test:b"),
+            source: 0u32,
+        });
+
+        let mut a_lines = 0;
+        let mut b_lines = 0;
+        loop {
+            match execution.step() {
+                FunctionStep::RunLine { line, .. } if line == "function test:b" => {
+                    b_lines += 1;
+                    execution.queue_next(FunctionWork::Call {
+                        lines: function_lines("function test:a"),
+                        source: 0,
+                    });
+                }
+                FunctionStep::RunLine { .. } => {
+                    a_lines += 1;
+                    execution.queue_next(FunctionWork::Call {
+                        lines: function_lines("function test:b"),
+                        source: 0,
+                    });
+                }
+                FunctionStep::LimitHit => break,
+                FunctionStep::Done => {
+                    panic!("mutual recursion must hit the limit")
+                }
+            }
+        }
+        assert!(a_lines > 0 && b_lines > 0);
+    }
+
+    #[test]
+    fn exact_limit_boundary_finishes_all_work_and_reports_the_limit() {
+        // Vanilla logs the stop message whenever the loop reaches the quota
+        // check with none left, even when the last command landed exactly on it.
+        let mut execution: FunctionExecution<u32> = FunctionExecution::new(3);
+        execution.queue_next(FunctionWork::Call {
+            lines: Arc::from(vec!["say a".to_string(), "say b".to_string()]),
+            source: 0,
+        });
+
+        let mut ran = Vec::new();
+        let outcome = loop {
+            match execution.step() {
+                FunctionStep::RunLine { line, .. } => ran.push(line),
+                FunctionStep::LimitHit => break "limit",
+                FunctionStep::Done => break "done",
+            }
+        };
+        assert_eq!(outcome, "limit");
+        assert_eq!(ran, ["say a", "say b"]);
+    }
+
+    #[test]
+    fn finishing_below_the_limit_reports_no_stop() {
+        let mut execution: FunctionExecution<u32> = FunctionExecution::new(4);
+        execution.queue_next(FunctionWork::Call {
+            lines: Arc::from(vec!["say a".to_string(), "say b".to_string()]),
+            source: 0,
+        });
+
+        let mut ran = 0;
+        loop {
+            match execution.step() {
+                FunctionStep::RunLine { .. } => ran += 1,
+                FunctionStep::Done => break,
+                FunctionStep::LimitHit => {
+                    panic!("must not report a stop below the limit")
+                }
+            }
+        }
+        assert_eq!(ran, 2);
+    }
+
+    #[test]
+    fn nested_calls_run_first_and_keep_their_own_source() {
+        // A = [call B, say a2], B = [say b]. Vanilla's continuation order runs
+        // B's lines before A's remaining lines, and B runs with the source it
+        // was called with.
+        let mut execution: FunctionExecution<u32> = FunctionExecution::new(100);
+        execution.queue_next(FunctionWork::Call {
+            lines: Arc::from(vec!["call b".to_string(), "say a2".to_string()]),
+            source: 1,
+        });
+
+        let mut observed = Vec::new();
+        loop {
+            match execution.step() {
+                FunctionStep::RunLine { line, source } => {
+                    observed.push((line.clone(), source));
+                    if line == "call b" {
+                        execution.queue_next(FunctionWork::Call {
+                            lines: function_lines("say b"),
+                            source: 2,
+                        });
+                    }
+                }
+                FunctionStep::Done => break,
+                FunctionStep::LimitHit => panic!("unexpected stop"),
+            }
+        }
+        assert_eq!(
+            observed,
+            [
+                ("call b".to_string(), 1),
+                ("say b".to_string(), 2),
+                ("say a2".to_string(), 1)
+            ]
+        );
+    }
+
+    #[test]
+    fn tag_fanout_past_the_queue_depth_overflows_and_clears() {
+        let mut execution = FunctionExecution::with_queue_depth_limit(1000, 4);
+        execution.queue_next(FunctionWork::Call {
+            lines: Arc::from(vec![
+                "say a".to_string(),
+                "say b".to_string(),
+                "say c".to_string(),
+            ]),
+            source: 0u32,
+        });
+
+        match execution.step() {
+            FunctionStep::RunLine { .. } => {}
+            _ => panic!("first line should run"),
+        }
+        // A nested call fanning out past the depth limit sets the overflow
+        // flag and clears both lists.
+        for _ in 0..5 {
+            execution.queue_next(FunctionWork::Call {
+                lines: function_lines("say x"),
+                source: 0,
+            });
+        }
+        assert!(execution.overflow);
+        assert!(execution.queue.is_empty() && execution.staged.is_empty());
+        // Vanilla checks the flag right after an entry executes; outside that
+        // check the drained-now-empty queue just ends the run silently.
+        assert!(matches!(execution.step(), FunctionStep::Done));
+    }
+
+    #[test]
+    fn driver_reports_overflow_right_after_the_command_that_caused_it() {
+        let mut execution = FunctionExecution::with_queue_depth_limit(1000, 3);
+        execution.queue_next(FunctionWork::Call {
+            lines: function_lines("call y"),
+            source: CommandSource::dummy(),
+        });
+        install_test_execution(execution);
+        let _guard = FunctionExecutionGuard;
+
+        let (outcome, _) = drive_function_execution(&mut |_, _| {
+            // The line queues more work than the depth limit allows.
+            for _ in 0..5 {
+                queue_test_call(function_lines("say x"), CommandSource::dummy());
+            }
+        });
+        assert!(matches!(outcome, FunctionExecutionOutcome::Overflow));
+    }
+
+    #[test]
+    fn a_limit_of_one_is_consumed_by_the_call_itself() {
+        let mut execution: FunctionExecution<u32> = FunctionExecution::new(1);
+        execution.queue_next(FunctionWork::Call {
+            lines: function_lines("say hi"),
+            source: 0,
+        });
+        assert!(matches!(execution.step(), FunctionStep::LimitHit));
+    }
+
+    #[test]
+    fn active_execution_state_is_cleared_when_a_command_panics() {
+        let mut execution = FunctionExecution::new(10);
+        execution.queue_next(FunctionWork::Call {
+            lines: function_lines("boom"),
+            source: CommandSource::dummy(),
+        });
+        install_test_execution(execution);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = FunctionExecutionGuard;
+            let _ = drive_function_execution(&mut |_, _| panic!("boom"));
+        }));
+        assert!(result.is_err());
+        super::FUNCTION_EXECUTION.with(|exec| assert!(exec.borrow().is_none()));
+    }
+
+    #[test]
+    fn sequential_executions_on_one_thread_do_not_share_state() {
+        // First execution runs to completion and clears the thread state.
+        let mut first = FunctionExecution::new(5);
+        first.queue_next(FunctionWork::Call {
+            lines: function_lines("say first"),
+            source: CommandSource::dummy(),
+        });
+        install_test_execution(first);
+        {
+            let _guard = FunctionExecutionGuard;
+            let mut visited = Vec::new();
+            let (outcome, _) =
+                drive_function_execution(&mut |_, line| visited.push(line.to_string()));
+            assert!(matches!(outcome, FunctionExecutionOutcome::Completed));
+            assert_eq!(visited, ["say first"]);
+        }
+        super::FUNCTION_EXECUTION.with(|exec| assert!(exec.borrow().is_none()));
+
+        // A second execution starts with its own full quota; with leaked state
+        // (quota 0) its line would never run.
+        let mut second = FunctionExecution::new(2);
+        second.queue_next(FunctionWork::Call {
+            lines: function_lines("say second"),
+            source: CommandSource::dummy(),
+        });
+        install_test_execution(second);
+        let _guard = FunctionExecutionGuard;
+        let mut visited = Vec::new();
+        let _ = drive_function_execution(&mut |_, line| visited.push(line.to_string()));
+        assert_eq!(visited, ["say second"]);
+    }
+
+    #[test]
+    fn unknown_nested_function_errors_without_disturbing_the_active_execution() {
+        let manager = DatapackManager::new();
+        manager
+            .functions
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert("test:known".to_string(), vec!["say hi".to_string()].into());
+
+        install_test_execution(FunctionExecution::new(10));
+        let _guard = FunctionExecutionGuard;
+        let source = CommandSource::dummy();
+
+        assert!(matches!(
+            manager.queue_nested_function_call(&source, "test:missing", None),
+            Err(super::FunctionCallError::Unknown(_))
+        ));
+        assert_eq!(
+            manager
+                .queue_nested_function_call(&source, "test:known", None)
+                .expect("known function queues"),
+            1
+        );
+
+        let mut visited = Vec::new();
+        let (outcome, executed) =
+            drive_function_execution(&mut |_, line| visited.push(line.to_string()));
+        assert!(matches!(outcome, FunctionExecutionOutcome::Completed));
+        assert_eq!(visited, ["say hi"]);
+        assert_eq!(executed, 1);
+    }
+
+    #[test]
+    fn empty_function_costs_only_its_call() {
+        // Limit 1: the call consumes the only quota unit and no line runs.
+        let mut execution: FunctionExecution<u32> = FunctionExecution::new(1);
+        execution.queue_next(FunctionWork::Call {
+            lines: Arc::from(Vec::<String>::new()),
+            source: 0,
+        });
+        assert!(matches!(execution.step(), FunctionStep::LimitHit));
+
+        // Limit 2: the call runs, the empty body adds nothing, clean finish.
+        let mut execution: FunctionExecution<u32> = FunctionExecution::new(2);
+        execution.queue_next(FunctionWork::Call {
+            lines: Arc::from(Vec::<String>::new()),
+            source: 0,
+        });
+        assert!(matches!(execution.step(), FunctionStep::Done));
+    }
+
+    #[test]
+    fn empty_tag_resolves_to_no_work() {
+        let manager = DatapackManager::new();
+        manager
+            .function_tags
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert("test:empty".to_string(), Vec::new());
+
+        let source = CommandSource::dummy();
+        let mut run = |_: &CommandSource, _: &str| panic!("no lines should run");
+        let executed = manager
+            .execute_function_with(&source, "#test:empty", None, &mut run)
+            .expect("empty tag is valid");
+        assert_eq!(executed, 0);
+    }
+
+    #[test]
+    fn sibling_tag_entries_run_in_tag_order() {
+        let manager = DatapackManager::new();
+        {
+            let mut functions = manager
+                .functions
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            functions.insert("test:first".to_string(), vec!["say 1".to_string()].into());
+            functions.insert("test:second".to_string(), vec!["say 2".to_string()].into());
+        }
+        manager
+            .function_tags
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                "test:pair".to_string(),
+                vec!["test:first".to_string(), "test:second".to_string()],
+            );
+
+        let source = CommandSource::dummy();
+        let mut visited = Vec::new();
+        let executed = manager
+            .execute_function_with(&source, "#test:pair", None, &mut |_, line| {
+                visited.push(line.to_string());
+            })
+            .expect("tag runs");
+        assert_eq!(visited, ["say 1", "say 2"]);
+        assert_eq!(executed, 2);
+    }
+
+    #[test]
+    fn tag_resolution_skips_unknowns_throughout_the_member_list() {
+        let manager = DatapackManager::new();
+        {
+            let mut functions = manager
+                .functions
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for i in 1..=70 {
+                functions.insert(format!("test:f{i}"), vec![format!("say {i}")].into());
+            }
+        }
+        let mut members = vec!["test:unknown_head".to_string()];
+        for i in 1..=68 {
+            members.push(format!("test:f{i}"));
+        }
+        members.push("test:unknown_middle".to_string());
+        members.push("test:f69".to_string());
+        members.push("test:f70".to_string());
+        manager
+            .function_tags
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert("test:chunked".to_string(), members);
+
+        let source = CommandSource::dummy();
+        let mut visited = Vec::new();
+        let executed = manager
+            .execute_function_with(&source, "#test:chunked", None, &mut |_, line| {
+                visited.push(line.to_string());
+            })
+            .expect("tag runs");
+        // Valid members anywhere in the snapshot still run, and unknown
+        // members are skipped wherever they appear.
+        assert_eq!(visited.len(), 70);
+        assert_eq!(visited[69], "say 70");
+        assert_eq!(executed, 70);
+    }
+
+    #[test]
+    fn oversized_body_stops_after_the_quota_with_work_pending() {
+        let mut execution: FunctionExecution<u32> = FunctionExecution::new(2);
+        execution.queue_next(FunctionWork::Call {
+            lines: Arc::from(vec![
+                "say 1".to_string(),
+                "say 2".to_string(),
+                "say 3".to_string(),
+                "say 4".to_string(),
+                "say 5".to_string(),
+            ]),
+            source: 0,
+        });
+
+        let mut ran = Vec::new();
+        let outcome = loop {
+            match execution.step() {
+                FunctionStep::RunLine { line, .. } => ran.push(line),
+                FunctionStep::LimitHit => break "limit",
+                FunctionStep::Done => break "done",
+            }
+        };
+        // Call (1) + first line (1) exhaust the quota; the stop is reported
+        // even though only one of five lines ran.
+        assert_eq!(outcome, "limit");
+        assert_eq!(ran, ["say 1"]);
+    }
+
+    #[test]
+    fn nested_call_through_the_entry_point_queues_and_reports_queued_lines() {
+        let manager = DatapackManager::new();
+        {
+            let mut functions = manager
+                .functions
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            functions.insert(
+                "test:outer".to_string(),
+                vec!["function test:inner".to_string()].into(),
+            );
+            functions.insert(
+                "test:inner".to_string(),
+                vec!["say inner".to_string()].into(),
+            );
+        }
+
+        let source = CommandSource::dummy();
+        let mut visited = Vec::new();
+        let executed = manager
+            .execute_function_with(&source, "test:outer", None, &mut |line_source, line| {
+                if line == "function test:inner" {
+                    // The outer line is `function test:inner`: run it through
+                    // the real entry point, which must queue onto the active
+                    // execution instead of recursing, and report the queued
+                    // body lines.
+                    let queued = manager
+                        .execute_function_with(line_source, "test:inner", None, &mut |_, _| {
+                            panic!("nested lines must queue, not run inline");
+                        })
+                        .expect("nested call queues");
+                    assert_eq!(queued, 1);
+                    visited.push("nested-call".to_string());
+                } else {
+                    visited.push(line.to_string());
+                }
+            })
+            .expect("outer runs");
+        // The outer run reports the call; the queued inner line then runs
+        // through the same runner on the next step.
+        assert_eq!(visited, ["nested-call", "say inner"]);
+        assert_eq!(executed, 2);
+    }
+
+    struct RecExecutor {
+        name: &'static str,
+        log: Arc<std::sync::Mutex<Vec<(String, String)>>>,
+    }
+
+    impl crate::command::node::CommandExecutor for RecExecutor {
+        fn execute(
+            &self,
+            context: &crate::command::context::command_context::CommandContext,
+        ) -> crate::command::node::CommandExecutorResult {
+            self.log
+                .lock()
+                .unwrap()
+                .push((self.name.to_string(), context.source.name.clone()));
+            Ok(0)
+        }
+    }
+
+    struct SwappedExecutor {
+        manager: Arc<DatapackManager>,
+        dispatcher_slot:
+            Arc<std::sync::Mutex<Option<Arc<crate::command::dispatcher::CommandDispatcher>>>>,
+    }
+
+    impl crate::command::node::CommandExecutor for SwappedExecutor {
+        fn execute(
+            &self,
+            context: &crate::command::context::command_context::CommandContext,
+        ) -> crate::command::node::CommandExecutorResult {
+            // Stands in for `execute as`/`execute at`: the command swaps the
+            // source context before calling the function.
+            let mut source = (*context.source).clone();
+            source.name = "swapped-ctx".to_string();
+            let dispatcher = self
+                .dispatcher_slot
+                .lock()
+                .unwrap()
+                .clone()
+                .expect("dispatcher");
+            self.manager
+                .execute_function_with(&source, "test:inner", None, &mut |s, line| {
+                    dispatcher.handle_command(s, line);
+                })
+                .expect("inner function queues");
+            Ok(0)
+        }
+    }
+
+    #[test]
+    fn dispatch_through_a_real_dispatcher_keeps_order_and_sources() {
+        use crate::command::argument_builder::{ArgumentBuilder, command};
+        use crate::command::dispatcher::CommandDispatcher;
+        use std::sync::Mutex;
+
+        let manager = Arc::new(DatapackManager::new());
+        {
+            let mut functions = manager
+                .functions
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            functions.insert(
+                "test:outer".to_string(),
+                vec![
+                    "rec_a".to_string(),
+                    "swapped".to_string(),
+                    "rec_c".to_string(),
+                ]
+                .into(),
+            );
+            functions.insert("test:inner".to_string(), vec!["rec_b".to_string()].into());
+        }
+
+        let log = Arc::new(Mutex::new(Vec::<(String, String)>::new()));
+        let dispatcher_slot = Arc::new(Mutex::new(None::<Arc<CommandDispatcher>>));
+
+        let mut dispatcher = CommandDispatcher::new();
+        for name in ["rec_a", "rec_b", "rec_c"] {
+            dispatcher.register(command(name, "test").executes(RecExecutor {
+                name,
+                log: Arc::clone(&log),
+            }));
+        }
+        dispatcher.register(command("swapped", "test").executes(SwappedExecutor {
+            manager: Arc::clone(&manager),
+            dispatcher_slot: Arc::clone(&dispatcher_slot),
+        }));
+        let dispatcher = Arc::new(dispatcher);
+        *dispatcher_slot.lock().unwrap() = Some(Arc::clone(&dispatcher));
+
+        let mut source = CommandSource::dummy();
+        source.name = "outer".to_string();
+        let executed = manager
+            .execute_function_with(&source, "test:outer", None, &mut |s, line| {
+                dispatcher.handle_command(s, line);
+            })
+            .expect("outer runs");
+
+        // `swapped` queues test:inner with the swapped source; its line runs
+        // before the outer function's remaining line (continuation order).
+        let log = log.lock().unwrap();
+        assert_eq!(
+            *log,
+            [
+                ("rec_a".to_string(), "outer".to_string()),
+                ("rec_b".to_string(), "swapped-ctx".to_string()),
+                ("rec_c".to_string(), "outer".to_string()),
+            ]
+        );
+        drop(log);
+        assert_eq!(executed, 4);
+    }
+
+    #[test]
+    fn a_vanished_execution_state_is_reported_not_treated_as_success() {
+        let mut execution = FunctionExecution::new(10);
+        execution.queue_next(FunctionWork::Call {
+            lines: function_lines("say a"),
+            source: CommandSource::dummy(),
+        });
+        install_test_execution(execution);
+        let _guard = FunctionExecutionGuard;
+
+        // Simulate the internal bug: the state disappears mid-drain.
+        let (outcome, _) = drive_function_execution(&mut |_, _| {
+            super::FUNCTION_EXECUTION.with(|exec| *exec.borrow_mut() = None);
+        });
+        assert!(matches!(outcome, FunctionExecutionOutcome::MissingState));
+    }
+
+    #[test]
+    fn the_entry_point_errors_when_the_execution_state_vanishes() {
+        let manager = DatapackManager::new();
+        manager
+            .functions
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert("test:a".to_string(), vec!["say a".to_string()].into());
+
+        let source = CommandSource::dummy();
+        let result = manager.execute_function_with(&source, "test:a", None, &mut |_, _| {
+            super::FUNCTION_EXECUTION.with(|exec| *exec.borrow_mut() = None);
+        });
+        assert!(result.is_err());
+        super::FUNCTION_EXECUTION.with(|exec| assert!(exec.borrow().is_none()));
+    }
+
+    #[test]
+    fn a_nested_call_without_an_active_execution_is_an_error() {
+        let manager = DatapackManager::new();
+        let source = CommandSource::dummy();
+        assert!(matches!(
+            manager.queue_nested_function_call(&source, "test:anything", None),
+            Err(super::FunctionCallError::Internal(_))
+        ));
+    }
+
+    #[test]
+    fn server_matching_for_nested_calls() {
+        // Only the none/none arm is constructible without a server; it is the
+        // test-only path. The production invariant (both some, same server)
+        // is enforced by `execution_servers_match`.
+        assert!(super::execution_servers_match(&None, None));
     }
 
     #[test]
