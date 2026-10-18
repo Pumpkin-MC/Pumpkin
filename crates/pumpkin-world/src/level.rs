@@ -1,12 +1,9 @@
-use crate::chunk::format::linear::LinearV2File;
-use crate::chunk::format::pump::PumpFile;
 use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
 use crate::generation::generator::WorldGenerator;
 use crate::lighting::DynamicLightEngine;
 use crate::{
     chunk::{
         ChunkData, ChunkEntityData, ChunkReadingError,
-        format::anvil::AnvilChunkFile,
         io::{
             Dirtiable, FileIO, LoadedData,
             file_manager::{ChunkFileManager, LevelFileIO},
@@ -57,14 +54,9 @@ pub enum LoadedChunkChange {
     Unloaded(Vector2<i32>),
 }
 
-pub type ChunkSaver =
-    LevelFileIO<LinearV2File<ChunkData>, AnvilChunkFile<ChunkData>, PumpFile<ChunkData>>;
+pub type ChunkSaver = LevelFileIO<ChunkData>;
 
-pub type EntitySaver = LevelFileIO<
-    LinearV2File<ChunkEntityData>,
-    AnvilChunkFile<ChunkEntityData>,
-    PumpFile<ChunkEntityData>,
->;
+pub type EntitySaver = LevelFileIO<ChunkEntityData>;
 
 /// The `Level` module provides functionality for working with chunks within or outside a Minecraft world.
 ///
@@ -248,6 +240,30 @@ impl Level {
             structure_overrides.as_deref(),
         ));
 
+        let target_format =
+            crate::chunk::io::converter::RegionFormat::from_config(&level_config.chunk);
+        for folder in [&level_folder.region_folder, &level_folder.entities_folder] {
+            match crate::chunk::io::converter::convert_folder(folder, &level_config.chunk, true) {
+                Ok(stats) if stats.regions_converted > 0 => {
+                    info!(
+                        "Converted {} region(s) ({} chunk(s)) in {} to {} format",
+                        stats.regions_converted,
+                        stats.chunks_converted,
+                        folder.display(),
+                        target_format.name()
+                    );
+                }
+                Ok(_) => {}
+                Err(err) => {
+                    error!(
+                        "Failed converting region files in {} to {} format: {err}",
+                        folder.display(),
+                        target_format.name()
+                    );
+                }
+            }
+        }
+
         let chunk_saver = match &level_config.chunk {
             ChunkConfig::Linear => Arc::new(ChunkSaver::Linear(ChunkFileManager::new(()))),
             ChunkConfig::Anvil(config) => {
@@ -406,11 +422,6 @@ impl Level {
         self.tasks.wait().await;
         self.chunk_system_tasks.wait().await;
 
-        info!("Flushing chunk data to disk for {}...", world_id);
-        self.chunk_saver.block_and_await_ongoing_tasks().await;
-        info!("Flushing entity data to disk for {}...", world_id);
-        self.entity_saver.block_and_await_ongoing_tasks().await;
-
         // save all chunks currently in memory
         let chunks_to_write = self
             .loaded_entity_chunks
@@ -419,9 +430,18 @@ impl Level {
             .collect::<Vec<_>>();
         self.loaded_entity_chunks.clear();
 
-        // TODO: I think the chunk_saver should be at the server level
-        self.entity_saver.clear_watched_chunks().await;
         self.write_entity_chunks(chunks_to_write).await;
+
+        info!("Flushing chunk data to disk for {}...", world_id);
+        self.chunk_saver.flush_all().await;
+        info!("Flushing entity data to disk for {}...", world_id);
+        self.entity_saver.flush_all().await;
+    }
+
+    /// Writes region files whose saved chunks have waited long enough.
+    pub async fn flush_due_regions(&self) {
+        self.chunk_saver.flush_due().await;
+        self.entity_saver.flush_due().await;
     }
 
     pub fn loaded_chunk_count(&self) -> usize {
@@ -437,29 +457,25 @@ impl Level {
     /// Marks chunks as "watched" by a unique player. When no players are watching a chunk,
     /// it is removed from memory. Should only be called on chunks the player was not watching
     /// before
-    pub async fn mark_chunks_as_newly_watched(&self, chunks: &[Vector2<i32>]) {
+    pub fn mark_chunks_as_newly_watched(&self, chunks: &[Vector2<i32>]) {
         for chunk in chunks {
             self.chunk_watchers
                 .entry(*chunk)
                 .and_modify(|count| *count = count.saturating_add(1))
                 .or_insert(1);
         }
-
-        self.entity_saver
-            .watch_chunks(&self.level_folder, chunks)
-            .await;
     }
 
     /// Marks chunks no longer "watched" by a unique player. When no players are watching a chunk,
     /// it is removed from memory. Should only be called on chunks the player was watching before
-    pub async fn mark_chunks_as_not_watched(
+    pub fn mark_chunks_as_not_watched(
         &self,
         chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
     ) -> Vec<Vector2<i32>> {
         let mut chunks_to_clean = Vec::new();
-        let chunks_vec: Vec<Vector2<i32>> = chunks.into_iter().map(|c| *c.borrow()).collect();
 
-        for chunk in &chunks_vec {
+        for chunk in chunks {
+            let chunk = chunk.borrow();
             if let Entry::Occupied(mut entry) = self.chunk_watchers.entry(*chunk) {
                 *entry.get_mut() = entry.get().saturating_sub(1);
                 if *entry.get() == 0 {
@@ -469,16 +485,13 @@ impl Level {
             }
         }
 
-        self.entity_saver
-            .unwatch_chunks(&self.level_folder, &chunks_vec)
-            .await;
         chunks_to_clean
     }
 
     /// Returns whether the chunk should be removed from memory
     #[inline]
-    pub async fn mark_chunk_as_not_watched(&self, chunk: Vector2<i32>) -> bool {
-        !self.mark_chunks_as_not_watched([chunk]).await.is_empty()
+    pub fn mark_chunk_as_not_watched(&self, chunk: Vector2<i32>) -> bool {
+        !self.mark_chunks_as_not_watched([chunk]).is_empty()
     }
 
     // In Level::clean_entity_chunks()
