@@ -2109,7 +2109,10 @@ impl LivingEntity {
             };
 
             // Drop loot
-            self.drop_loot(&params);
+            let should_drop_loot = self.should_drop_loot(&*dyn_self);
+            if should_drop_loot {
+                self.drop_loot(&params);
+            }
 
             // Award experience
             if params.killed_by_player.unwrap_or(false)
@@ -2122,7 +2125,9 @@ impl LivingEntity {
             }
             self.entity.pose.store(EntityPose::Dying);
 
-            self.drop_equipment(looting_level);
+            if should_drop_loot {
+                self.drop_equipment(looting_level);
+            }
 
             // Broadcast death message if it's a player and the gamerule is enabled
             self.broadcast_death_message(&*dyn_self, damage_type, source, cause);
@@ -2318,6 +2323,17 @@ impl LivingEntity {
                 }
             }
         }
+    }
+
+    /// Vanilla `LivingEntity.shouldDropLoot`. `Monster` drops the baby check, but no
+    /// monster is an `AgeableMob`, so only ageable babies are excluded here.
+    pub(crate) fn should_drop_loot(&self, dyn_self: &dyn EntityBase) -> bool {
+        let world = self.entity.world.load();
+        world.level_info.load().game_rules.mob_drops
+            && !dyn_self
+                .get_mob()
+                .and_then(|x| x.as_ageable())
+                .is_some_and(AgeableMob::is_baby)
     }
 
     fn drop_loot(&self, params: &LootContextParameters) {
