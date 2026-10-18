@@ -26,7 +26,7 @@ use crate::entity::{
         patrol::{PatrolData, PatrollingMonster},
         raider::{
             PathfindToRaidGoal, Raider, RaiderCelebrationGoal, RaiderData,
-            RaiderMoveThroughVillageGoal,
+            RaiderMoveThroughVillageGoal, is_raider,
         },
     },
     projectile::splash_potion::SplashPotionEntity,
@@ -110,12 +110,7 @@ impl WitchEntity {
             );
             goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
-            target_selector.add_goal(
-                1,
-                Box::new(RevengeGoal::new(true).ignoring(|entity_type| {
-                    entity_type.has_tag(&tag::EntityType::MINECRAFT_RAIDERS)
-                })),
-            );
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true).ignoring(is_raider)));
             // TODO: NearestHealableRaiderTargetGoal at 2, attack goal off while healing in a raid.
             hunting::apply(&mut target_selector, &mob_arc.mob_entity, WITCH_HUNTS);
         };

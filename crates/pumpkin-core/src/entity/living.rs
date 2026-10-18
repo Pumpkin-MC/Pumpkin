@@ -944,6 +944,45 @@ impl LivingEntity {
             .map_or(attribute.default_value, |a| a.1)
     }
 
+    /// Undead: healing hurts them, harming heals them.
+    #[must_use]
+    pub fn is_inverted_heal_and_harm(&self) -> bool {
+        self.entity
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_INVERTED_HEALING_AND_HARM)
+    }
+
+    /// Vanilla `HealOrHarmMobEffect`, `scale` from splash distance. False for other effects.
+    pub fn apply_instant_effect(
+        &self,
+        effect_type: &StatusEffect,
+        amplifier: u8,
+        scale: f64,
+    ) -> bool {
+        let is_harm = if effect_type == &StatusEffect::INSTANT_DAMAGE {
+            true
+        } else if effect_type == &StatusEffect::INSTANT_HEALTH {
+            false
+        } else {
+            return false;
+        };
+        // Java's int shift: wraps the count, so high amplifiers stay in range.
+        let scaled = |base: i32| {
+            (scale * f64::from(base.wrapping_shl(u32::from(amplifier))) + 0.5) as i32 as f32
+        };
+        if is_harm == self.is_inverted_heal_and_harm() {
+            self.heal(scaled(4).max(0.0));
+        } else if let Some(dyn_self) = self
+            .entity
+            .world
+            .load()
+            .get_entity_by_id(self.entity.entity_id)
+        {
+            dyn_self.damage(&*dyn_self, scaled(6), DamageType::MAGIC);
+        }
+        true
+    }
+
     /// Update or insert the base value for an attribute on this entity.
     /// If the attribute doesn't exist locally yet, it will be inserted.
     pub fn set_attribute_base(&self, attribute: &Attributes, new_base: f64) {
@@ -1023,22 +1062,8 @@ impl LivingEntity {
             return;
         }
 
-        // Apply instant effects immediately before storing
-        if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
-            let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
-            self.heal(heal_amount);
-            // Like vanilla, instant effects are never sent or stored as active effects.
-            return;
-        } else if effect.effect_type == &StatusEffect::INSTANT_DAMAGE {
-            let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
-            let dyn_self = self
-                .entity
-                .world
-                .load()
-                .get_entity_by_id(self.entity.entity_id);
-            if let Some(dyn_self) = dyn_self {
-                let _ = dyn_self.damage(&*dyn_self, damage_amount, DamageType::MAGIC);
-            }
+        // Like vanilla, instant effects are never sent or stored as active effects.
+        if self.apply_instant_effect(effect.effect_type, effect.amplifier, 1.0) {
             return;
         }
 

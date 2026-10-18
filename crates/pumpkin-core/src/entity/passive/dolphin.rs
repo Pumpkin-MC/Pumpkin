@@ -19,6 +19,7 @@ use crate::entity::{
         swim::SwimGoal, tempt::TemptGoal, try_find_water::TryFindWaterGoal,
         wander_around::WanderAroundGoal,
     },
+    ai::target_match::TargetMatch,
     mob::{Mob, MobEntity},
     player::Player,
 };
@@ -72,7 +73,14 @@ impl DolphinEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(
+                1,
+                Box::new(
+                    RevengeGoal::new(true)
+                        .ignoring(|entity_type| TargetMatch::GUARDIAN_LIKE.matches(entity_type))
+                        .alerting_others(),
+                ),
+            );
         };
 
         mob_arc

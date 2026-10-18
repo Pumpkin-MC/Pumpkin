@@ -322,6 +322,11 @@ impl Mob for NautilusEntity {
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             if rand::random::<u32>().is_multiple_of(3) && self.approve_taming(player) {
                 self.set_tame(true, Some(player.gameprofile.id));
+                mob_entity
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .stop();
                 let world = entity.world.load();
                 world.send_entity_status(entity, EntityStatus::TamingSucceeded, None);
             } else {

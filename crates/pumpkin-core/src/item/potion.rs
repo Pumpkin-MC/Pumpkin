@@ -1,4 +1,3 @@
-use crate::entity::EntityBase;
 use crate::entity::living::LivingEntity;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::item_stack::ItemStack;
@@ -139,32 +138,13 @@ impl PotionContents {
         source: PotionApplicationSource,
     ) {
         for (effect_type, duration, amplifier, ambient, show_particles, show_icon) in effects {
-            // Instant effects should apply immediately
-            let is_instant = effect_type.id
-                == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id
-                || effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id;
-
-            if is_instant {
-                // Instant potency scaling
-                let instant_scale = source.instant_scale(scale);
-
-                // Apply instant effects logic directly as they don't tick
-                if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id {
-                    let amount = 4.0 * (1 << amplifier) as f32 * instant_scale;
-                    target.heal(amount);
-                } else if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id {
-                    let amount = 6.0 * (1 << amplifier) as f32 * instant_scale;
-
-                    let _ = target.damage(
-                        target.get_entity(),
-                        amount,
-                        pumpkin_data::damage::DamageType::MAGIC,
-                    );
-                }
-
-                // Like vanilla, instant effects are applied once and never added to the active
-                // effects, where they would linger.
-            } else {
+            // Like vanilla, instant effects are applied once and never added to the active
+            // effects, where they would linger.
+            if !target.apply_instant_effect(
+                effect_type,
+                amplifier,
+                f64::from(source.instant_scale(scale)),
+            ) {
                 // Duration scaling
                 let duration_scale = source.duration_scale(scale);
 
