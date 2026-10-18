@@ -24,6 +24,7 @@ use crate::block::blocks::abstract_wall_mounting::WallMountedBlock;
 use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, NormalUseArgs};
+use crate::entity::player::Player;
 use crate::world::World;
 
 fn get_sound(block: &Block, on: bool) -> Sound {
@@ -43,7 +44,7 @@ fn get_sound(block: &Block, on: bool) -> Sound {
 /// Presses the button, unless it is already pressed. Returns whether it was
 /// pressed, so callers can tell the two cases apart the way vanilla's
 /// `ButtonBlock::useWithoutItem` does.
-fn click_button(world: &Arc<World>, block_pos: &BlockPos) -> bool {
+fn click_button(player: &Player, world: &Arc<World>, block_pos: &BlockPos) -> bool {
     let (block, state) = world.get_block_and_state_id(block_pos);
 
     let mut button_props = ButtonLikeProperties::from_state_id(state);
@@ -64,7 +65,13 @@ fn click_button(world: &Arc<World>, block_pos: &BlockPos) -> bool {
     };
     world.schedule_block_tick(block, *block_pos, delay, TickPriority::Normal);
     ButtonBlock::update_neighbors(world, block_pos, button_props);
-    world.play_block_sound(get_sound(block, true), SoundCategory::Blocks, *block_pos);
+    // The client predicts the press sound, so exclude the pressing player.
+    world.play_block_sound_expect(
+        player,
+        get_sound(block, true),
+        SoundCategory::Blocks,
+        *block_pos,
+    );
 
     true
 }
@@ -74,7 +81,7 @@ pub struct ButtonBlock;
 
 impl BlockBehaviour for ButtonBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if click_button(args.world, args.position) {
+        if click_button(args.player, args.world, args.position) {
             BlockActionResult::Success
         } else {
             BlockActionResult::Consume
