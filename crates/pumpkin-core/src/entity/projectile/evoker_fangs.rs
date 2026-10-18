@@ -5,7 +5,7 @@ use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::sound::Sound;
 
 use crate::{
-    entity::{Entity, EntityBase},
+    entity::{Entity, EntityBase, projectile::owner::EntityReference},
     server::Server,
 };
 
@@ -13,19 +13,19 @@ pub struct EvokerFangsEntity {
     pub entity: Entity,
     pub warmup_delay_ticks: AtomicI32,
     pub life_ticks: AtomicI32,
-    pub owner_id: Option<i32>,
+    pub owner: EntityReference,
     pub sent_spike_event: AtomicBool,
 }
 
 impl EvokerFangsEntity {
     #[must_use]
-    pub fn new(entity: Entity, warmup_ticks: u32, yaw: f32, owner_id: Option<i32>) -> Self {
+    pub fn new(entity: Entity, warmup_ticks: u32, yaw: f32, owner: Option<&Entity>) -> Self {
         entity.set_rotation(yaw, 0.0);
         Self {
             entity,
             warmup_delay_ticks: AtomicI32::new(warmup_ticks as i32),
             life_ticks: AtomicI32::new(22),
-            owner_id,
+            owner: EntityReference::new(owner),
             sent_spike_event: AtomicBool::new(false),
         }
     }
@@ -34,12 +34,14 @@ impl EvokerFangsEntity {
 impl EntityBase for EvokerFangsEntity {
     fn write_custom_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         nbt.put_int("Warmup", self.warmup_delay_ticks.load(Ordering::Relaxed));
+        self.owner.write_nbt(nbt, "Owner");
     }
 
     fn read_custom_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
         if let Some(warmup) = nbt.get_int("Warmup") {
             self.warmup_delay_ticks.store(warmup, Ordering::Relaxed);
         }
+        self.owner.read_nbt(nbt, "Owner");
     }
 
     fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
@@ -52,11 +54,11 @@ impl EntityBase for EvokerFangsEntity {
                 let bb = entity.bounding_box.load().expand(0.2, 0.0, 0.2);
                 let candidates = world.get_entities_at_box(&bb);
 
-                let owner = self.owner_id.and_then(|id| world.get_entity_by_id(id));
+                let owner = self.owner.get(&world);
 
                 for cand in candidates {
                     let cand_ent = cand.get_entity();
-                    if Some(cand_ent.entity_id) == self.owner_id {
+                    if self.owner.matches(cand_ent) {
                         continue;
                     }
 

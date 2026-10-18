@@ -332,7 +332,6 @@ impl Goal for EvokerAttackSpellGoal {
             let min_y = evoker_pos.y.min(target_pos.y);
             let dist_sq = evoker_pos.squared_distance_to_vec(&target_pos);
             let world = evoker_ent.world.load();
-            let evoker_id = evoker_ent.entity_id;
 
             if dist_sq < 81.0 {
                 // Close range: concentric rings around Evoker
@@ -348,7 +347,8 @@ impl Goal for EvokerAttackSpellGoal {
                         pos,
                         &EntityType::EVOKER_FANGS,
                     );
-                    let fangs = Arc::new(EvokerFangsEntity::new(entity, 0, angle, Some(evoker_id)));
+                    let fangs =
+                        Arc::new(EvokerFangsEntity::new(entity, 0, angle, Some(evoker_ent)));
                     world.spawn_entity(fangs);
                 }
 
@@ -366,7 +366,8 @@ impl Goal for EvokerAttackSpellGoal {
                         pos,
                         &EntityType::EVOKER_FANGS,
                     );
-                    let fangs = Arc::new(EvokerFangsEntity::new(entity, 3, angle, Some(evoker_id)));
+                    let fangs =
+                        Arc::new(EvokerFangsEntity::new(entity, 3, angle, Some(evoker_ent)));
                     world.spawn_entity(fangs);
                 }
             } else {
@@ -387,7 +388,7 @@ impl Goal for EvokerAttackSpellGoal {
                         entity,
                         i as u32,
                         angle_towards_target,
-                        Some(evoker_id),
+                        Some(evoker_ent),
                     ));
                     world.spawn_entity(fangs);
                 }

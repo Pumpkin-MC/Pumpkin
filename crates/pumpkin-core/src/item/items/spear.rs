@@ -626,17 +626,7 @@ impl SpearItem {
                 return false;
             }
         }
-        Self::root_vehicle_id(player.get_entity()) != Self::root_vehicle_id(entity)
-    }
-
-    fn root_vehicle_id(entity: &Entity) -> i32 {
-        let mut id = entity.entity_id;
-        let mut vehicle = entity.get_vehicle();
-        while let Some(current) = vehicle {
-            id = current.get_entity().entity_id;
-            vehicle = current.get_entity().get_vehicle();
-        }
-        id
+        !player.get_entity().is_passenger_of_same_vehicle(entity)
     }
 }
 

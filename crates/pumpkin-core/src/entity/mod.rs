@@ -137,6 +137,9 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         if let Some(living) = self.get_living_entity() {
             living.write_living_nbt(nbt);
         }
+        if let Some(owner) = self.get_projectile_owner() {
+            owner.write_nbt(nbt);
+        }
         self.write_custom_nbt(nbt);
     }
 
@@ -146,6 +149,9 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         self.get_entity().read_nbt_non_mut(nbt);
         if let Some(living) = self.get_living_entity() {
             living.read_living_nbt_non_mut(nbt);
+        }
+        if let Some(owner) = self.get_projectile_owner() {
+            owner.read_nbt(nbt);
         }
         self.read_custom_nbt(nbt);
     }
@@ -185,8 +191,15 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
-    fn get_owner_id(&self) -> Option<i32> {
+    /// Who shot or threw this, for projectiles.
+    fn get_projectile_owner(&self) -> Option<&projectile::owner::ProjectileOwner> {
         None
+    }
+
+    /// Vanilla `Projectile.getOwner`.
+    fn get_owner_entity(&self) -> Option<Arc<dyn EntityBase>> {
+        self.get_projectile_owner()?
+            .get(&self.get_entity().world.load())
     }
 
     fn get_eye_pos(&self) -> Vector3<f64> {
@@ -3483,6 +3496,27 @@ impl Entity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
+    }
+
+    /// Vanilla `getRootVehicle`, `None` when not riding.
+    pub fn get_root_vehicle(&self) -> Option<Arc<dyn EntityBase>> {
+        let mut root = self.get_vehicle()?;
+        while let Some(vehicle) = root.get_entity().get_vehicle() {
+            root = vehicle;
+        }
+        Some(root)
+    }
+
+    #[must_use]
+    pub fn root_vehicle_id(&self) -> i32 {
+        self.get_root_vehicle()
+            .map_or(self.entity_id, |root| root.get_entity().entity_id)
+    }
+
+    /// Vanilla `isPassengerOfSameVehicle`: same root vehicle, or the same entity.
+    #[must_use]
+    pub fn is_passenger_of_same_vehicle(&self, other: &Self) -> bool {
+        self.root_vehicle_id() == other.root_vehicle_id()
     }
 
     pub fn is_leashed(&self) -> bool {

@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use rand::{Rng, RngExt, rng};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -739,7 +740,7 @@ impl DispenserBlock {
         );
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner: ProjectileOwner::none(),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
             gravity: WIND_CHARGE_GRAVITY,

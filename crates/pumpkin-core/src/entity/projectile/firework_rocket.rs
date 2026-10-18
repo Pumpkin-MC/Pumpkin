@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use crate::{
     entity::{Entity, EntityBase, projectile::ThrownItemEntity},
     server::Server,
@@ -32,7 +33,7 @@ impl FireworkRocketEntity {
         Self {
             entity: ThrownItemEntity {
                 entity,
-                owner_id: None,
+                owner: ProjectileOwner::none(),
                 collides_with_projectiles: false,
                 has_hit: AtomicBool::new(false),
                 gravity: GRAVITY,
@@ -92,8 +93,8 @@ impl FireworkRocketEntity {
 }
 
 impl EntityBase for FireworkRocketEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.entity.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.entity.owner)
     }
 
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
@@ -103,13 +104,13 @@ impl EntityBase for FireworkRocketEntity {
         let world = entity.world.load();
         let mut velocity = entity.velocity.load();
 
-        if let Some(shooter_id) = self.entity.owner_id {
-            if let Some(shooter) = world.get_entity_by_id(shooter_id) {
+        if self.entity.owner.uuid().is_some() {
+            if let Some(shooter) = self.entity.owner.get(&world) {
                 let shooter = shooter.get_entity();
 
                 if shooter.is_fall_flying() {
                     let mut boost_cancelled = false;
-                    if let Some(player) = world.get_player_by_id(shooter_id)
+                    if let Some(player) = self.entity.owner.get_player(&world)
                         && let Some(server) = world.server.upgrade()
                     {
                         let mut event = crate::plugin::api::events::player::player_elytra_boost::PlayerElytraBoostEvent {
