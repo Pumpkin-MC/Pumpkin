@@ -144,7 +144,7 @@ impl PotionContents {
             if !target.apply_instant_effect(
                 effect_type,
                 amplifier,
-                f64::from(source.instant_scale(scale)),
+                Some(f64::from(source.instant_scale(scale))),
                 effect_source,
             ) {
                 // Duration scaling

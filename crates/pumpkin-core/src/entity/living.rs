@@ -805,8 +805,12 @@ impl LivingEntity {
         false
     }
 
+    /// Like vanilla, the dead are not healed and a negative amount takes health.
     pub fn heal(&self, additional_health: f32) {
-        assert!(additional_health > 0.0);
+        let health = self.health.load();
+        if health <= 0.0 || additional_health == 0.0 {
+            return;
+        }
         let mut event =
             crate::plugin::api::events::entity::entity_regain_health::EntityRegainHealthEvent::new(
                 self.entity.entity_id,
@@ -818,7 +822,7 @@ impl LivingEntity {
                 return;
             }
         }
-        self.set_health(self.health.load() + additional_health);
+        self.set_health(health + additional_health);
     }
 
     pub fn set_health(&self, health: f32) {
@@ -958,13 +962,15 @@ impl LivingEntity {
             .has_tag(&tag::EntityType::MINECRAFT_INVERTED_HEALING_AND_HARM)
     }
 
-    /// Vanilla `HealOrHarmMobEffect`, `scale` from splash distance. False for other effects.
-    /// With a `source`, harm is indirect magic credited to it and its owner.
+    /// Vanilla `HealOrHarmMobEffect`. False for other effects.
+    /// `scale` from splash distance or 1 when drunk, `None` for an added effect,
+    /// whose heal never goes negative. With a `source`, harm is indirect magic
+    /// credited to it and its owner.
     pub fn apply_instant_effect(
         &self,
         effect_type: &StatusEffect,
         amplifier: u8,
-        scale: f64,
+        scale: Option<f64>,
         source: Option<EffectSource<'_>>,
     ) -> bool {
         let is_harm = if effect_type == &StatusEffect::INSTANT_DAMAGE {
@@ -976,10 +982,16 @@ impl LivingEntity {
         };
         // Java's int shift: wraps the count, so high amplifiers stay in range.
         let scaled = |base: i32| {
-            (scale * f64::from(base.wrapping_shl(u32::from(amplifier))) + 0.5) as i32 as f32
+            let shifted = base.wrapping_shl(u32::from(amplifier));
+            scale.map_or(shifted, |scale| (scale * f64::from(shifted) + 0.5) as i32) as f32
         };
         if is_harm == self.is_inverted_heal_and_harm() {
-            self.heal(scaled(4).max(0.0));
+            let amount = scaled(4);
+            self.heal(if scale.is_none() {
+                amount.max(0.0)
+            } else {
+                amount
+            });
         } else if let Some(dyn_self) = self
             .entity
             .world
@@ -1075,7 +1087,7 @@ impl LivingEntity {
         }
 
         // Like vanilla, instant effects are never sent or stored as active effects.
-        if self.apply_instant_effect(effect.effect_type, effect.amplifier, 1.0, None) {
+        if self.apply_instant_effect(effect.effect_type, effect.amplifier, None, None) {
             return;
         }
 
@@ -3063,9 +3075,8 @@ impl LivingEntity {
             return false; // Dying or dead
         }
 
-        if amount < 0.0 {
-            return false;
-        }
+        // Like vanilla, negative damage is still a hit, just of zero.
+        amount = amount.max(0.0);
 
         let mut damage_event =
             crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
