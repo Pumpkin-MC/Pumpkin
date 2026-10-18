@@ -695,16 +695,20 @@ pub struct MobVisibilityImpl {
 impl MobVisibilityImpl {
     pub const MAX_VISIBILITY: f32 = 10.0;
 
+    /// Vanilla `floatRange(0, MAX_VISIBILITY)`, which also rejects NaN.
+    #[must_use]
+    pub fn is_valid_visibility(visibility: f32) -> bool {
+        (0.0..=Self::MAX_VISIBILITY).contains(&visibility)
+    }
+
     pub fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
         let targeting_entity_types = IDSet::read(compound.get("targeting_entity_types")?)?;
         let visibility = compound.get_float("visibility")?;
-        (0.0..=Self::MAX_VISIBILITY)
-            .contains(&visibility)
-            .then_some(Self {
-                targeting_entity_types,
-                visibility,
-            })
+        Self::is_valid_visibility(visibility).then_some(Self {
+            targeting_entity_types,
+            visibility,
+        })
     }
 }
 impl DataComponentImpl for MobVisibilityImpl {
