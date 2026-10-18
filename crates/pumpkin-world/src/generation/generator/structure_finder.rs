@@ -5,7 +5,7 @@ use pumpkin_data::structures::{
 use pumpkin_util::math::{floor_div, position::BlockPos};
 
 use crate::generation::structure::placement::{
-    GlobalStructureCache, get_structure_chunk_in_region,
+    GlobalStructureCache, StrongholdLayout, get_structure_chunk_in_region,
 };
 
 use super::WorldGenerator;
@@ -261,8 +261,10 @@ fn find_nearest_concentric(
     global_cache: &GlobalStructureCache,
 ) -> ConcentricSearch {
     // No block, callers run in server tasks and the tick, which shutdown waits on
-    let Some(strongholds) = global_cache.try_get_stronghold_chunks() else {
-        return ConcentricSearch::Pending;
+    let strongholds = match global_cache.try_get_stronghold_chunks() {
+        StrongholdLayout::Ready(strongholds) => strongholds,
+        StrongholdLayout::Pending => return ConcentricSearch::Pending,
+        StrongholdLayout::Failed => return ConcentricSearch::Done(None),
     };
 
     let ox = origin.0.x as f64;
