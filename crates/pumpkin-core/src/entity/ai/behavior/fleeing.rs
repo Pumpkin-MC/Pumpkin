@@ -1,4 +1,4 @@
-use crate::entity::ai::goal::avoid_entity::{AvoidEntityGoal, ThreatFilter};
+use crate::entity::ai::goal::avoid_entity::{AvoidEntityGoal, ThreatDistances, ThreatFilter};
 use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::ai::goal::revenge::MobFilter;
 use crate::entity::ai::target_match::TargetMatch;
@@ -16,6 +16,7 @@ pub struct Flee {
     keep_when: bool,
     confirm: Option<ThreatFilter>,
     drop_target: bool,
+    per_type: Option<ThreatDistances>,
 }
 
 impl Flee {
@@ -37,7 +38,21 @@ impl Flee {
             keep_when: false,
             confirm: None,
             drop_target: false,
+            per_type: None,
         }
+    }
+
+    /// See [`AvoidEntityGoal::nearest_of`].
+    #[must_use]
+    pub const fn nearest_of(
+        priority: u8,
+        threats: ThreatDistances,
+        walk_speed: f64,
+        sprint_speed: f64,
+    ) -> Self {
+        let mut flee = Self::new(priority, TargetMatch::Any, 0.0, walk_speed, sprint_speed);
+        flee.per_type = Some(threats);
+        flee
     }
 
     /// See [`AvoidEntityGoal::when`].
@@ -70,8 +85,10 @@ impl Flee {
     }
 
     fn build(self) -> AvoidEntityGoal {
-        let mut goal =
-            AvoidEntityGoal::new(self.from, self.distance, self.walk_speed, self.sprint_speed);
+        let mut goal = self.per_type.map_or_else(
+            || AvoidEntityGoal::new(self.from, self.distance, self.walk_speed, self.sprint_speed),
+            |threats| AvoidEntityGoal::nearest_of(threats, self.walk_speed, self.sprint_speed),
+        );
         if let Some(when) = self.when {
             goal = if self.keep_when {
                 goal.as_long_as(when)

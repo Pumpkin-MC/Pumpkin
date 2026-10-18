@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityType, MobCategory};
 use pumpkin_data::tag::{self, Tag, Taggable};
 use pumpkin_util::math::vector3::Vector3;
 
@@ -17,6 +17,34 @@ pub enum TargetMatch {
     Tag(&'static Tag),
     /// Every type outside the tag. e.g. Wither: `wither_friends`.
     AllExcept(&'static Tag),
+    /// Vanilla `Enemy`: every monster but the undead mounts and the sulfur cube.
+    Enemy,
+    /// Vanilla `Monster.class`: an [`Self::Enemy`] that is not a slime, ghast, phantom,
+    /// shulker, hoglin or the dragon.
+    Monster,
+}
+
+/// Monster category, but not vanilla `Enemy`.
+const NOT_ENEMY: &[&EntityType] = &[
+    &EntityType::CAMEL_HUSK,
+    &EntityType::ZOMBIE_HORSE,
+    &EntityType::ZOMBIE_NAUTILUS,
+    &EntityType::SULFUR_CUBE,
+];
+
+/// Vanilla `Enemy` outside the `Monster` class.
+const ENEMY_NOT_MONSTER: &[&EntityType] = &[
+    &EntityType::ENDER_DRAGON,
+    &EntityType::GHAST,
+    &EntityType::HOGLIN,
+    &EntityType::MAGMA_CUBE,
+    &EntityType::PHANTOM,
+    &EntityType::SHULKER,
+    &EntityType::SLIME,
+];
+
+fn is_enemy(entity_type: &EntityType) -> bool {
+    entity_type.category == &MobCategory::MONSTER && !NOT_ENEMY.contains(&entity_type)
 }
 
 impl TargetMatch {
@@ -28,6 +56,8 @@ impl TargetMatch {
             Self::AnyOf(types) => types.contains(&entity_type),
             Self::Tag(tag) => entity_type.has_tag(tag),
             Self::AllExcept(tag) => !entity_type.has_tag(tag),
+            Self::Enemy => is_enemy(entity_type),
+            Self::Monster => is_enemy(entity_type) && !ENEMY_NOT_MONSTER.contains(&entity_type),
         }
     }
 

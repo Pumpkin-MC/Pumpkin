@@ -32,7 +32,6 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::entity::ai::behavior::fleeing::{self, Flee};
-use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase,
@@ -331,39 +330,25 @@ fn explorer_map_target(
     })
 }
 
-/// Vanilla `VillagerHostilesSensor` distances.
-// TODO: the brain flees the nearest hostile, goals let the first listed one win.
-const VILLAGER_FLEES: &[Flee] = &[
-    Flee::new(1, TargetMatch::Type(&EntityType::DROWNED), 8.0, 0.5, 0.5),
-    Flee::new(1, TargetMatch::Type(&EntityType::EVOKER), 12.0, 0.5, 0.5),
-    Flee::new(1, TargetMatch::Type(&EntityType::HUSK), 8.0, 0.5, 0.5),
-    Flee::new(
-        1,
-        TargetMatch::Type(&EntityType::ILLUSIONER),
-        12.0,
-        0.5,
-        0.5,
-    ),
-    Flee::new(1, TargetMatch::Type(&EntityType::PILLAGER), 15.0, 0.5, 0.5),
-    Flee::new(1, TargetMatch::Type(&EntityType::RAVAGER), 12.0, 0.5, 0.5),
-    Flee::new(1, TargetMatch::Type(&EntityType::VEX), 8.0, 0.5, 0.5),
-    Flee::new(
-        1,
-        TargetMatch::Type(&EntityType::VINDICATOR),
-        10.0,
-        0.5,
-        0.5,
-    ),
-    Flee::new(1, TargetMatch::Type(&EntityType::ZOGLIN), 10.0, 0.5, 0.5),
-    Flee::new(1, TargetMatch::Type(&EntityType::ZOMBIE), 8.0, 0.5, 0.5),
-    Flee::new(
-        1,
-        TargetMatch::Type(&EntityType::ZOMBIE_VILLAGER),
-        8.0,
-        0.5,
-        0.5,
-    ),
-];
+/// Vanilla `VillagerHostilesSensor` distances; panic runs at 0.5 * 1.5.
+const VILLAGER_FLEES: &[Flee] = &[Flee::nearest_of(
+    1,
+    &[
+        (&EntityType::DROWNED, 8.0),
+        (&EntityType::EVOKER, 12.0),
+        (&EntityType::HUSK, 8.0),
+        (&EntityType::ILLUSIONER, 12.0),
+        (&EntityType::PILLAGER, 15.0),
+        (&EntityType::RAVAGER, 12.0),
+        (&EntityType::VEX, 8.0),
+        (&EntityType::VINDICATOR, 10.0),
+        (&EntityType::ZOGLIN, 10.0),
+        (&EntityType::ZOMBIE, 8.0),
+        (&EntityType::ZOMBIE_VILLAGER, 8.0),
+    ],
+    0.75,
+    0.75,
+)];
 
 pub struct VillagerEntity {
     pub mob_entity: MobEntity,

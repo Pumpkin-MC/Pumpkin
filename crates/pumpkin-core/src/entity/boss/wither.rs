@@ -32,6 +32,8 @@ use crate::{
             revenge::RevengeGoal,
         },
         ai::target_match::TargetMatch,
+        ai::target_predicate::TargetPredicate,
+        living::LivingEntity,
         mob::{Mob, MobEntity},
         projectile::wither_skull::WitherSkullEntity,
     },
@@ -49,7 +51,12 @@ const WITHER_HUNTS: &[Hunt] = &[Hunt::new(
     false,
 )
 .every(0)
-.matching(|_hunter, target, _world| target.entity.entity_type != &EntityType::ARMOR_STAND)];
+.matching(|_hunter, target, _world| is_attackable(target))];
+
+/// Vanilla `attackable()`: false only for armor stands.
+fn is_attackable(target: &LivingEntity) -> bool {
+    target.entity.entity_type != &EntityType::ARMOR_STAND
+}
 
 pub struct WitherEntity {
     pub mob_entity: MobEntity,
@@ -489,8 +496,9 @@ impl WitherEntity {
                         let head_target = world.get_entity_by_id(head_target_id);
                         if let Some(target) = head_target {
                             let t_pos = target.get_entity().pos.load();
-                            if target.get_entity().is_alive()
+                            if self.can_attack(target.as_ref())
                                 && (wither_pos - t_pos).length_squared() <= 900.0
+                                && self.has_line_of_sight(target.get_entity())
                             {
                                 let eye_h = target.get_entity().get_eye_height();
                                 self.perform_ranged_attack(
@@ -511,21 +519,25 @@ impl WitherEntity {
                             self.set_alternative_target(i, 0);
                         }
                     } else {
-                        // TODO: vanilla tests head targets like the main target: no armor stands, range and sight checks.
+                        // Vanilla `TARGETING_CONDITIONS`: combat test within 20, players included.
                         let search_box = entity.bounding_box.load().expand(20.0, 8.0, 20.0);
-                        let entities = world.get_entities_at_box(&search_box);
-                        let candidates: Vec<_> = entities
-                            .into_iter()
-                            .filter(|e| {
-                                e.get_entity().entity_id != entity.entity_id
-                                    && e.get_living_entity().is_some()
-                                    && e.get_entity().is_alive()
-                                    && !e
-                                        .get_entity()
-                                        .entity_type
-                                        .has_tag(&tag::EntityType::MINECRAFT_WITHER_FRIENDS)
-                            })
-                            .collect();
+                        let predicate =
+                            TargetPredicate::create_attackable().set_base_max_distance(20.0);
+                        let mut candidates = world.get_entities_at_box(&search_box);
+                        candidates.extend(
+                            world
+                                .get_players_at_box(&search_box)
+                                .into_iter()
+                                .map(|player| player as Arc<dyn EntityBase>),
+                        );
+                        candidates.retain(|candidate| {
+                            let candidate_entity = candidate.get_entity();
+                            !candidate_entity
+                                .entity_type
+                                .has_tag(&tag::EntityType::MINECRAFT_WITHER_FRIENDS)
+                                && candidate.get_living_entity().is_some_and(is_attackable)
+                                && predicate.test(&world, Some(self), candidate.as_ref())
+                        });
 
                         if !candidates.is_empty() {
                             let idx = rand::random_range(0..candidates.len());

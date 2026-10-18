@@ -21,8 +21,7 @@ use crate::entity::{
     projectile::snowball::SnowballEntity,
 };
 
-const SNOW_GOLEM_HUNTS: &[Hunt] =
-    &[Hunt::new(1, TargetMatch::Any, true).matching(hunting::is_enemy)];
+const SNOW_GOLEM_HUNTS: &[Hunt] = &[Hunt::new(1, TargetMatch::Enemy, true)];
 
 pub struct SnowGolemEntity {
     pub mob_entity: MobEntity,

@@ -1,4 +1,4 @@
-use pumpkin_data::entity::{EntityType, MobCategory};
+use pumpkin_data::entity::EntityType;
 
 use crate::entity::ai::goal::active_target::{ActiveTargetGoal, TargetCondition};
 use crate::entity::ai::goal::goal_selector::GoalSelector;
@@ -120,11 +120,6 @@ pub fn apply(targets: &mut GoalSelector, mob: &MobEntity, hunts: &[Hunt]) {
     for hunt in hunts {
         targets.add_goal(hunt.priority, hunt.build(mob));
     }
-}
-
-/// Vanilla `Enemy`: the monster category.
-pub fn is_enemy(_hunter: &dyn Mob, target: &LivingEntity, _world: &World) -> bool {
-    target.entity.entity_type.category == &MobCategory::MONSTER
 }
 
 /// Vanilla `Turtle.BABY_ON_LAND_SELECTOR` hunts.

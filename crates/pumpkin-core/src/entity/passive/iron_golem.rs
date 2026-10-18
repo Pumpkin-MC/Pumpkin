@@ -30,13 +30,9 @@ use crate::entity::{
 /// Represents an Iron Golem, a powerful neutral mob that protects villagers and players.
 ///
 /// Wiki: <https://minecraft.wiki/w/Iron_Golem>
-const IRON_GOLEM_HUNTS: &[Hunt] =
-    &[Hunt::new(3, TargetMatch::Any, false)
-        .every(5)
-        .matching(|hunter, target, world| {
-            hunting::is_enemy(hunter, target, world)
-                && target.entity.entity_type != &EntityType::CREEPER
-        })];
+const IRON_GOLEM_HUNTS: &[Hunt] = &[Hunt::new(3, TargetMatch::Enemy, false)
+    .every(5)
+    .matching(|_hunter, target, _world| target.entity.entity_type != &EntityType::CREEPER)];
 
 pub struct IronGolemEntity {
     pub mob_entity: MobEntity,

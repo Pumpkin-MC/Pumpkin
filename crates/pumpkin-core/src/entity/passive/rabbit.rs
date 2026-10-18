@@ -78,11 +78,10 @@ impl RabbitVariant {
     }
 }
 
-// TODO: vanilla's third entry is `Monster.class` at 4.0, not the fox.
 const RABBIT_FLEES: &[Flee] = &[
     Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 8.0, 2.2, 2.2).when(is_not_evil),
     Flee::new(4, TargetMatch::Type(&EntityType::WOLF), 10.0, 2.2, 2.2).when(is_not_evil),
-    Flee::new(4, TargetMatch::Type(&EntityType::FOX), 10.0, 2.2, 2.2).when(is_not_evil),
+    Flee::new(4, TargetMatch::Monster, 4.0, 2.2, 2.2).when(is_not_evil),
 ];
 
 fn is_not_evil(mob: &dyn Mob) -> bool {

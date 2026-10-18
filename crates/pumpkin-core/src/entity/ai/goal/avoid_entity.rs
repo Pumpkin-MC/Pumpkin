@@ -8,6 +8,8 @@ use crate::entity::ai::util::default_random_pos;
 use crate::entity::predicate::EntityPredicate;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob};
 use crate::plugin::api::events::entity::entity_target::TargetReason;
+use pumpkin_data::attributes::Attributes;
+use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 
 const FAST_DISTANCE_SQ: f64 = 49.0;
@@ -18,6 +20,9 @@ const THREAT_SEARCH_HEIGHT: f64 = 3.0;
 
 /// A check on the threat that was found.
 pub type ThreatFilter = fn(&dyn EntityBase) -> bool;
+
+/// Threat types, each with the distance it starts the flee at.
+pub type ThreatDistances = &'static [(&'static EntityType, f64)];
 
 pub struct AvoidEntityGoal {
     goal_control: Controls,
@@ -32,6 +37,7 @@ pub struct AvoidEntityGoal {
     keep_when: bool,
     confirm: Option<ThreatFilter>,
     drop_target: bool,
+    per_type: Option<ThreatDistances>,
 }
 
 impl AvoidEntityGoal {
@@ -57,6 +63,21 @@ impl AvoidEntityGoal {
             keep_when: false,
             confirm: None,
             drop_target: false,
+            per_type: None,
+        }
+    }
+
+    /// Vanilla brain sensors (`VillagerHostilesSensor`): the nearest visible threat
+    /// within its own type's distance, seen like any entity, no height limit.
+    #[must_use]
+    pub fn nearest_of(threats: ThreatDistances, slow_speed: f64, fast_speed: f64) -> Self {
+        let reach = threats
+            .iter()
+            .fold(0.0, |max, &(_, dist)| f64::max(max, dist));
+        Self {
+            threat_predicate: TargetPredicate::create_non_attackable(),
+            per_type: Some(threats),
+            ..Self::new(TargetMatch::Any, reach, slow_speed, fast_speed)
         }
     }
 
@@ -90,21 +111,44 @@ impl AvoidEntityGoal {
     }
 
     fn find_threat(&self, mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
-        let entity = &mob.get_mob_entity().living_entity.entity;
+        let living = &mob.get_mob_entity().living_entity;
+        let entity = &living.entity;
         let pos = entity.pos.load();
         let world = entity.world.load();
-        let search_box = entity.bounding_box.load().expand(
-            self.flee_distance,
-            THREAT_SEARCH_HEIGHT,
-            self.flee_distance,
-        );
+        let height = if self.per_type.is_some() {
+            self.flee_distance
+        } else {
+            THREAT_SEARCH_HEIGHT
+        };
+        let search_box =
+            entity
+                .bounding_box
+                .load()
+                .expand(self.flee_distance, height, self.flee_distance);
+        // Sensors see as far as the follow range; the per-type distance cuts it down after.
+        let sensor_predicate;
+        let predicate = if self.per_type.is_some() {
+            sensor_predicate = self
+                .threat_predicate
+                .copy()
+                .set_base_max_distance(living.get_attribute_value(&Attributes::FOLLOW_RANGE));
+            &sensor_predicate
+        } else {
+            &self.threat_predicate
+        };
 
         self.flee_from
             .find_nearest(&world, pos, self.flee_distance, |candidate| {
                 let candidate_entity = candidate.get_entity();
-                candidate_entity.bounding_box.load().intersects(&search_box)
+                self.per_type.is_none_or(|threats| {
+                    threats.iter().any(|&(threat, dist)| {
+                        threat == candidate_entity.entity_type
+                            && candidate_entity.pos.load().squared_distance_to_vec(&pos)
+                                <= dist * dist
+                    })
+                }) && candidate_entity.bounding_box.load().intersects(&search_box)
                     && EntityPredicate::ExceptCreativeOrSpectator.test(candidate_entity)
-                    && self.threat_predicate.test(&world, Some(mob), candidate)
+                    && predicate.test(&world, Some(mob), candidate)
             })
     }
 }
