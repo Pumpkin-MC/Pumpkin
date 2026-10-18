@@ -2,7 +2,7 @@ use crate::context::string_range::StringRange;
 use crate::errors::command_syntax_error::CommandSyntaxError;
 use crate::errors::error_types::DISPATCHER_PARSE_EXCEPTION;
 use crate::node::attached::NodeId;
-use crate::node::dispatcher::{CommandDispatcher, ResultConsumer};
+use crate::node::dispatcher::{CommandDispatcher, EmptyResultConsumer, ResultConsumer};
 use crate::node::tree::Tree;
 use crate::node::{Command, RedirectModifier};
 use crate::source::{CommandSource, DummySource, ReturnValue};
@@ -243,7 +243,7 @@ impl<'a, S: CommandSource> ContextChain<'a, S> {
         let mut result = source_modifier.sources(&context_to_use);
 
         if result.is_err() {
-            result_consumer.on_command_completion(&context_to_use, ReturnValue::Failure);
+            result_consumer.on_command_completion(&context_to_use, ReturnValue::Failure)?;
             if forked_mode {
                 result = Ok(vec![]);
             }
@@ -271,10 +271,10 @@ impl<'a, S: CommandSource> ContextChain<'a, S> {
         );
 
         if let Ok(result) = result {
-            result_consumer.on_command_completion(&context_to_use, ReturnValue::Success(result));
+            result_consumer.on_command_completion(&context_to_use, ReturnValue::Success(result))?;
             Ok(if forked_mode { 1 } else { result })
         } else {
-            result_consumer.on_command_completion(&context_to_use, ReturnValue::Failure);
+            result_consumer.on_command_completion(&context_to_use, ReturnValue::Failure)?;
             if forked_mode {
                 result = Ok(0);
             }
@@ -300,8 +300,9 @@ impl<'a, S: CommandSource> ContextChain<'a, S> {
 
             let mut next_sources = Vec::new();
             for source in current_sources {
+                // Vanilla's BuildContexts only reports results for executed commands.
                 let mut to_add =
-                    Self::run_modifier(modifier, &source, result_consumer, forked_mode)?;
+                    Self::run_modifier(modifier, &source, &EmptyResultConsumer, forked_mode)?;
                 next_sources.append(&mut to_add);
             }
             if next_sources.is_empty() {
@@ -627,6 +628,144 @@ mod test {
             .expect("The context should have properly flattened, as it has a command to execute");
 
         assert_eq!(chain.execute_all(&source, &EmptyResultConsumer), Ok(10));
+    }
+
+    #[test]
+    fn result_callbacks_only_observe_executed_commands() {
+        use crate::argument_builder::command;
+        use crate::errors::error_types::DISPATCHER_UNKNOWN_ARGUMENT;
+        use crate::source::{ResultValueTaker, ReturnValue, ReturnValueCallable};
+        use std::sync::Mutex;
+
+        #[derive(Default)]
+        struct Results(Mutex<Vec<ReturnValue>>);
+        impl ReturnValueCallable for Results {
+            fn call(&self, result: ReturnValue) -> Result<(), CommandSyntaxError> {
+                self.0
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(result);
+                Ok(())
+            }
+        }
+
+        let mut dispatcher = CommandDispatcher::new();
+        dispatcher.register(command("finish", "").executes(|_: &CommandContext| Ok(0)));
+        dispatcher.register(command("value", "").executes(|_: &CommandContext| Ok(7)));
+        dispatcher.register(command("fail", "").executes(|_: &CommandContext| {
+            Err(DISPATCHER_UNKNOWN_ARGUMENT.create_without_context())
+        }));
+        for forked in [false, true] {
+            let name = if forked { "fork" } else { "redirect" };
+            let modifier = RedirectModifier::Custom(Arc::new(|_: &CommandContext| {
+                Err(DISPATCHER_UNKNOWN_ARGUMENT.create_without_context())
+            }));
+            let builder = command(name, "");
+            dispatcher.register(if forked {
+                builder.fork(Redirection::Root, modifier)
+            } else {
+                builder.redirect_with_modifier(Redirection::Root, modifier)
+            });
+        }
+        dispatcher.register(command("fork-success", "").fork(
+            Redirection::Root,
+            RedirectModifier::Custom(Arc::new(|context: &CommandContext| {
+                Ok(vec![context.source.clone()])
+            })),
+        ));
+        let results = Arc::new(Results::default());
+        let source = DummySource {
+            command_result_taker: ResultValueTaker(vec![results.clone()]),
+            ..DummySource::dummy()
+        };
+        assert!(
+            dispatcher
+                .execute_input("redirect finish", &source)
+                .is_err()
+        );
+        assert_eq!(dispatcher.execute_input("fork finish", &source), Ok(0));
+        assert!(
+            results
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty()
+        );
+        assert_eq!(dispatcher.execute_input("finish", &source), Ok(0));
+        assert!(dispatcher.execute_input("fail", &source).is_err());
+        assert_eq!(
+            dispatcher.execute_input("fork-success value", &source),
+            Ok(1)
+        );
+        assert_eq!(
+            *results
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            vec![
+                ReturnValue::Success(0),
+                ReturnValue::Failure,
+                ReturnValue::Success(7)
+            ]
+        );
+    }
+
+    #[test]
+    fn callback_error_stops_callbacks_without_reexecuting_command() {
+        use crate::argument_builder::command;
+        use crate::errors::error_types::DISPATCHER_UNKNOWN_ARGUMENT;
+        use crate::source::{ResultValueTaker, ReturnValue, ReturnValueCallable};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct CounterCallback {
+            calls: Arc<AtomicUsize>,
+            fail: bool,
+        }
+        impl ReturnValueCallable for CounterCallback {
+            fn call(&self, _result: ReturnValue) -> Result<(), CommandSyntaxError> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                if self.fail {
+                    Err(DISPATCHER_UNKNOWN_ARGUMENT.create_without_context())
+                } else {
+                    Ok(())
+                }
+            }
+        }
+
+        let executor_calls = Arc::new(AtomicUsize::new(0));
+        let executor_calls_clone = executor_calls.clone();
+        let mut dispatcher = CommandDispatcher::new();
+        dispatcher.register(command("run", "").executes(move |_: &CommandContext| {
+            executor_calls_clone.fetch_add(1, Ordering::SeqCst);
+            Ok(0)
+        }));
+        dispatcher.register(command("fork-run", "").fork(
+            Redirection::Root,
+            RedirectModifier::Custom(Arc::new(|context: &CommandContext| {
+                Ok(vec![context.source.clone(), context.source.clone()])
+            })),
+        ));
+
+        let failing_calls = Arc::new(AtomicUsize::new(0));
+        let later_calls = Arc::new(AtomicUsize::new(0));
+        let source = DummySource {
+            command_result_taker: ResultValueTaker(vec![
+                Arc::new(CounterCallback {
+                    calls: failing_calls.clone(),
+                    fail: true,
+                }),
+                Arc::new(CounterCallback {
+                    calls: later_calls.clone(),
+                    fail: false,
+                }),
+            ]),
+            ..DummySource::dummy()
+        };
+
+        assert!(dispatcher.execute_input("fork-run run", &source).is_err());
+        assert_eq!(executor_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(failing_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(later_calls.load(Ordering::SeqCst), 0);
     }
 
     #[test]
