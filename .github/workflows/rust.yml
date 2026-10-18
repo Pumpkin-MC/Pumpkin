@@ -130,7 +130,7 @@ jobs:
       - run: cargo clippy --release --all-targets --all-features
 
   check_wit:
-    name: Test `pumpkin-plugin-wit` against `wit-bindgen`
+    name: Validate `pumpkin-plugin-wit`
     needs: prepare
     if: needs.prepare.outputs.should_check_wit == 'true'
     runs-on: ubuntu-slim
@@ -139,8 +139,14 @@ jobs:
         with:
           sparse-checkout: "crates/pumpkin-plugin-wit"
       - uses: bytecodealliance/actions/wit-bindgen/setup@v1
-      - run: wit-bindgen rust crates/pumpkin-plugin-wit/v0.1
-      - run: wit-bindgen rust crates/pumpkin-plugin-wit/v0.2
+      - uses: bytecodealliance/actions/wasm-tools/setup@v1
+      - name: Generate bindings and validate both WIT packages
+        run: |
+          for version in v0.1 v0.2; do
+            wit-bindgen rust "crates/pumpkin-plugin-wit/$version" --out-dir "$RUNNER_TEMP/bindings-$version"
+            wasm-tools component wit "crates/pumpkin-plugin-wit/$version" --wasm -o "$RUNNER_TEMP/pumpkin-$version.wasm"
+            wasm-tools validate "$RUNNER_TEMP/pumpkin-$version.wasm"
+          done
 
   test:
     name: Test (${{ matrix.name }})
