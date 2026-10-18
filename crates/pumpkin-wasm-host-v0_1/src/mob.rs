@@ -740,6 +740,7 @@ impl HostMob for PluginHostState {
                 {
                     wolf.set_tame(wolf_data.is_tamed);
                     wolf.set_owner(wolf_data.owner.map(|u| Uuid::from_wit(&u)));
+                    wolf.set_ordered_to_sit(wolf_data.is_sitting);
                     wolf.set_in_sitting_pose(wolf_data.is_sitting);
                     wolf.set_collar_color(from_wit_dye_color(wolf_data.collar_color));
                     return Ok(true);
