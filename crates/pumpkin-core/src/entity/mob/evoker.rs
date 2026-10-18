@@ -8,17 +8,19 @@ use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        Controls, Goal, active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        Controls, Goal, look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{
         Mob, MobEntity,
         patrol::{PatrolData, PatrollingMonster},
         raider::{
-            ObtainRaidLeaderBannerGoal, PathfindToRaidGoal, Raider, RaiderCelebrationGoal,
+            self, ObtainRaidLeaderBannerGoal, PathfindToRaidGoal, Raider, RaiderCelebrationGoal,
             RaiderData, RaiderMoveThroughVillageGoal,
         },
     },
@@ -50,6 +52,12 @@ impl IllagerSpell {
         }
     }
 }
+
+const EVOKER_HUNTS: &[Hunt] = &[
+    Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true).forget_unseen_after(300),
+    Hunt::new(3, TargetMatch::VILLAGER_LIKE, false).forget_unseen_after(300),
+    Hunt::new(3, TargetMatch::Type(&EntityType::IRON_GOLEM), false),
+];
 
 pub struct EvokerEntity {
     pub mob_entity: MobEntity,
@@ -104,19 +112,8 @@ impl EvokerEntity {
                 .target_selector
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            // TODO: VILLAGER_LIKE, no sight check, 300 unseen memory ticks.
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
-            );
+            target_selector.add_goal(1, raider::revenge_goal());
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, EVOKER_HUNTS);
         };
 
         mob_arc

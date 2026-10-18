@@ -9,11 +9,11 @@ use pumpkin_util::Difficulty;
 use crate::entity::{
     Entity,
     ai::behavior::fleeing::{self, Flee},
+    ai::behavior::hunting::{self, Hunt},
     ai::goal::{
-        active_target::ActiveTargetGoal, bow_attack::BowAttackGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        bow_attack::BowAttackGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     ai::target_match::TargetMatch,
     mob::{Mob, MobEntity, equipment::RegionalDifficulty},
@@ -35,12 +35,23 @@ const SKELETON_FLEES: &[Flee] = &[Flee::new(
     1.2,
 )];
 
+const SKELETON_HUNTS: &[Hunt] = &[
+    Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true),
+    Hunt::new(3, TargetMatch::Type(&EntityType::IRON_GOLEM), true),
+    hunting::baby_turtles(3, true),
+];
+
 pub struct SkeletonEntityBase {
     pub mob_entity: MobEntity,
 }
 
 impl SkeletonEntityBase {
     pub fn new(entity: Entity) -> Arc<Self> {
+        Self::with_hunts(entity, &[])
+    }
+
+    /// `extra` goes first, like vanilla subclasses adding targets before `super`.
+    pub fn with_hunts(entity: Entity, extra: &[Hunt]) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let mob = Self { mob_entity };
         let mob_arc = Arc::new(mob);
@@ -73,11 +84,8 @@ impl SkeletonEntityBase {
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            // TODO: iron golem and baby turtle on land at 3.
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, extra);
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, SKELETON_HUNTS);
         };
 
         mob_arc

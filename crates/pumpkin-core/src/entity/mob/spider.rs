@@ -8,16 +8,14 @@ use pumpkin_util::difficulty::Difficulty;
 use rand::RngExt;
 use uuid::Uuid;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::{ActiveTargetGoal, TargetCondition},
-        look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal,
-        revenge::RevengeGoal,
-        spider_attack::SpiderAttackGoal,
-        swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        active_target::TargetCondition, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, revenge::RevengeGoal, spider_attack::SpiderAttackGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{
         Mob, MobEntity,
@@ -27,6 +25,12 @@ use crate::entity::{
     r#type::from_type,
 };
 use crate::world::World;
+
+pub const SPIDER_HUNTS: &[Hunt] = &[
+    Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true).when(TargetCondition::NoDaylight),
+    Hunt::new(3, TargetMatch::Type(&EntityType::IRON_GOLEM), true)
+        .when(TargetCondition::NoDaylight),
+];
 
 pub struct SpiderEntity {
     pub mob_entity: MobEntity,
@@ -68,16 +72,7 @@ impl SpiderEntity {
             goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true)
-                    .when(TargetCondition::NoDaylight),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true)
-                    .when(TargetCondition::NoDaylight),
-            );
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, SPIDER_HUNTS);
         };
 
         mob_arc

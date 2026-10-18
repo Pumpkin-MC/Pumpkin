@@ -12,15 +12,17 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use rand::RngExt;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::goal::revenge::RevengeGoal;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::behavior::fleeing::{self, Flee},
     ai::goal::{
-        active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     ai::target_match::TargetMatch,
     mob::{Mob, MobEntity},
@@ -88,6 +90,11 @@ fn is_not_evil(mob: &dyn Mob) -> bool {
         .downcast_ref::<RabbitEntity>()
         .is_some_and(|rabbit| rabbit.get_variant() != RabbitVariant::Evil)
 }
+
+const KILLER_BUNNY_HUNTS: &[Hunt] = &[
+    Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true),
+    Hunt::new(2, TargetMatch::Type(&EntityType::WOLF), true),
+];
 
 pub struct RabbitEntity {
     pub mob_entity: MobEntity,
@@ -162,18 +169,8 @@ impl RabbitEntity {
                 .target_selector
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::PLAYER, true),
-            );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::WOLF, true),
-            );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::FOX, true),
-            );
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true).alerting_others()));
+            hunting::apply(&mut target_selector, &self.mob_entity, KILLER_BUNNY_HUNTS);
         }
     }
 }

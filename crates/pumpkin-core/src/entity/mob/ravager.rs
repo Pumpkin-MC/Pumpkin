@@ -4,22 +4,34 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 
+use crate::entity::ageable::AgeableMob;
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{
         Mob, MobEntity,
         patrol::{LongDistancePatrolGoal, PatrolData, PatrollingMonster},
         raider::{
-            HoldGroundAttackGoal, PathfindToRaidGoal, Raider, RaiderCelebrationGoal, RaiderData,
-            RaiderMoveThroughVillageGoal,
+            self, HoldGroundAttackGoal, PathfindToRaidGoal, Raider, RaiderCelebrationGoal,
+            RaiderData, RaiderMoveThroughVillageGoal,
         },
     },
 };
+
+const RAVAGER_HUNTS: &[Hunt] = &[
+    Hunt::new(3, TargetMatch::Type(&EntityType::PLAYER), true),
+    Hunt::new(4, TargetMatch::VILLAGER_LIKE, true).only_mobs(is_adult),
+    Hunt::new(4, TargetMatch::Type(&EntityType::IRON_GOLEM), true),
+];
+
+fn is_adult(mob: &dyn Mob) -> bool {
+    !mob.as_ageable().is_some_and(AgeableMob::is_baby)
+}
 
 pub struct RavagerEntity {
     pub mob_entity: MobEntity,
@@ -66,19 +78,8 @@ impl RavagerEntity {
                 .target_selector
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            // TODO: VILLAGER_LIKE, adults only.
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
-            );
+            target_selector.add_goal(2, raider::revenge_goal());
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, RAVAGER_HUNTS);
         };
 
         mob_arc

@@ -4,22 +4,30 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, open_door::OpenDoorGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, open_door::OpenDoorGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{
         Mob, MobEntity,
         patrol::{LongDistancePatrolGoal, PatrolData, PatrollingMonster},
         raider::{
-            HoldGroundAttackGoal, ObtainRaidLeaderBannerGoal, PathfindToRaidGoal, Raider,
+            self, HoldGroundAttackGoal, ObtainRaidLeaderBannerGoal, PathfindToRaidGoal, Raider,
             RaiderCelebrationGoal, RaiderData, RaiderMoveThroughVillageGoal,
         },
     },
 };
+
+const VINDICATOR_HUNTS: &[Hunt] = &[
+    Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true),
+    Hunt::new(3, TargetMatch::VILLAGER_LIKE, true),
+    Hunt::new(3, TargetMatch::Type(&EntityType::IRON_GOLEM), true),
+];
 
 pub struct VindicatorEntity {
     pub mob_entity: MobEntity,
@@ -68,19 +76,9 @@ impl VindicatorEntity {
                 .target_selector
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            // TODO: VILLAGER_LIKE.
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
-            );
+            target_selector.add_goal(1, raider::revenge_goal());
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, VINDICATOR_HUNTS);
+            // TODO: VindicatorJohnnyAttackGoal at 4.
         };
 
         mob_arc

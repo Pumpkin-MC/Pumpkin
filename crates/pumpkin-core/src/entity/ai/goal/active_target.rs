@@ -1,6 +1,7 @@
 use super::{Controls, Goal, to_goal_ticks};
 
 use crate::entity::ageable::AgeableMob;
+use crate::entity::ai::behavior::hunting::TargetPredicateFn;
 use crate::entity::ai::goal::revenge::MobFilter;
 use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_match::TargetMatch;
@@ -81,6 +82,7 @@ pub struct ActiveTargetGoal {
     condition: TargetCondition,
     gate: Option<MobFilter>,
     target_filter: Option<MobFilter>,
+    selector: Option<TargetPredicateFn>,
 }
 
 impl ActiveTargetGoal {
@@ -114,6 +116,7 @@ impl ActiveTargetGoal {
             condition: TargetCondition::Always,
             gate: None,
             target_filter: None,
+            selector: None,
         }
     }
 
@@ -136,6 +139,34 @@ impl ActiveTargetGoal {
     #[must_use]
     pub fn only_mobs(mut self: Box<Self>, filter: MobFilter) -> Box<Self> {
         self.target_filter = Some(filter);
+        self
+    }
+
+    /// Search roughly once per `chance` ticks, 0 every tick.
+    #[must_use]
+    pub fn every(mut self: Box<Self>, chance: i32) -> Box<Self> {
+        self.reciprocal_chance = to_goal_ticks(chance);
+        self
+    }
+
+    /// Hunter-aware test on each candidate, checked only while searching.
+    #[must_use]
+    pub fn selecting(mut self: Box<Self>, selector: TargetPredicateFn) -> Box<Self> {
+        self.selector = Some(selector);
+        self
+    }
+
+    /// Ticks an unseen target is kept, vanilla `setUnseenMemoryTicks`.
+    #[must_use]
+    pub fn forget_unseen_after(mut self: Box<Self>, ticks: i32) -> Box<Self> {
+        self.track_target_goal.max_time_without_visibility = ticks;
+        self
+    }
+
+    /// Follow range factor for searching and keeping the target.
+    #[must_use]
+    pub fn scale_range(mut self: Box<Self>, scale: f64) -> Box<Self> {
+        self.track_target_goal.follow_range_scale = scale;
         self
     }
 
@@ -165,35 +196,7 @@ impl ActiveTargetGoal {
             condition: TargetCondition::Always,
             gate: None,
             target_filter: None,
-        })
-    }
-
-    /// Targets the closest entity of any type passing `predicate`, like vanilla's
-    /// class-agnostic `NearestAttackableTargetGoal` (e.g. iron golems targeting
-    /// every `Enemy` but creepers). All candidates are tested, so an invalid
-    /// entity nearest to the mob cannot block a valid one farther away.
-    pub fn predicated(
-        mob: &MobEntity,
-        reciprocal_chance: i32,
-        check_visibility: bool,
-        predicate: impl Fn(&LivingEntity, &World) -> bool + Send + Sync + 'static,
-    ) -> Box<Self> {
-        let track_target_goal = TrackTargetGoal::new(check_visibility, false);
-        let mut target_predicate = TargetPredicate::create_attackable();
-        target_predicate.base_max_distance = mob
-            .living_entity
-            .get_attribute_value(&Attributes::FOLLOW_RANGE);
-        target_predicate.set_predicate(predicate);
-
-        Box::new(Self {
-            track_target_goal,
-            target: None,
-            reciprocal_chance: to_goal_ticks(reciprocal_chance),
-            target_type: TargetMatch::Any,
-            target_predicate,
-            condition: TargetCondition::Always,
-            gate: None,
-            target_filter: None,
+            selector: None,
         })
     }
 
@@ -203,9 +206,7 @@ impl ActiveTargetGoal {
 
     fn find_closest_target(&mut self, mob: &dyn Mob) {
         let mob_entity = mob.get_mob_entity();
-        let follow_range = mob_entity
-            .living_entity
-            .get_attribute_value(&Attributes::FOLLOW_RANGE);
+        let follow_range = self.track_target_goal.follow_range(mob_entity);
 
         // Vanilla updates the target conditions with the current follow distance on every search
         self.target_predicate.base_max_distance = follow_range;
@@ -223,6 +224,13 @@ impl ActiveTargetGoal {
 
         // Pick the nearest candidate that passes the conditions, not the nearest overall.
         let predicate = &self.target_predicate;
+        let selector = |candidate: &dyn EntityBase| {
+            self.selector.is_none_or(|selector| {
+                candidate
+                    .get_living_entity()
+                    .is_some_and(|living| selector(mob, living, &world))
+            })
+        };
         let condition = self.condition;
         let target_type = self.target_type;
         let found = condition.grudge_target(mob).map_or_else(
@@ -230,6 +238,7 @@ impl ActiveTargetGoal {
                 target_type.find_nearest(&world, search_pos, follow_range, |candidate| {
                     self.passes_filter(candidate)
                         && predicate.test(&world, Some(mob), candidate)
+                        && selector(candidate)
                         && condition.allows_target(mob, candidate, &world)
                 })
             },
@@ -242,6 +251,7 @@ impl ActiveTargetGoal {
                         && entity.pos.load().squared_distance_to_vec(&search_pos)
                             <= follow_range * follow_range
                         && predicate.test(&world, Some(mob), candidate.as_ref())
+                        && selector(candidate.as_ref())
                         && condition.allows_target(mob, candidate.as_ref(), &world)
                 })
             },

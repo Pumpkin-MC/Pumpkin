@@ -14,14 +14,17 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use rand::RngExt;
 use uuid::Uuid;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
+use crate::entity::passive::tamable::is_untamed;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
-        active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        ranged_attack::RangedAttackGoal, revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity, RangedAttackMob},
     passive::{
@@ -90,6 +93,12 @@ pub fn scares_wolves(threat: &dyn EntityBase) -> bool {
         });
     strength.is_some_and(|strength| strength >= rand::rng().random_range(0..5))
 }
+
+/// Vanilla `LlamaAttackWolfGoal`: untamed wolves within a quarter of the follow range.
+pub const LLAMA_HUNTS: &[Hunt] = &[Hunt::new(2, TargetMatch::Type(&EntityType::WOLF), false)
+    .every(16)
+    .only_mobs(is_untamed)
+    .range_scale(0.25)];
 
 pub struct LlamaEntity {
     pub mob_entity: MobEntity,
@@ -161,10 +170,7 @@ impl LlamaEntity {
             goal_selector.add_goal(9, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WOLF, true),
-            );
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, LLAMA_HUNTS);
         };
 
         mob_arc

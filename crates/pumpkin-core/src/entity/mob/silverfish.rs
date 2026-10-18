@@ -4,15 +4,19 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
+
+const SILVERFISH_HUNTS: &[Hunt] = &[Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true)];
 
 pub struct SilverfishEntity {
     pub entity: Arc<MobEntity>,
@@ -53,11 +57,8 @@ impl SilverfishEntity {
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.entity, &EntityType::PLAYER, true),
-            );
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true).alerting_others()));
+            hunting::apply(&mut target_selector, &mob_arc.entity, SILVERFISH_HUNTS);
         };
 
         mob_arc

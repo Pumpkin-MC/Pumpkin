@@ -14,14 +14,17 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use rand::RngExt;
 use uuid::Uuid;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
+use crate::entity::passive::llama::LLAMA_HUNTS;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
-        active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        ranged_attack::RangedAttackGoal, revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity, RangedAttackMob},
     passive::animal::{Animal, get_carpet_color_from_item},
@@ -74,6 +77,8 @@ impl TraderLlamaVariant {
         }
     }
 }
+
+const TRADER_LLAMA_HUNTS: &[Hunt] = &[Hunt::new(2, TargetMatch::ILLAGER, true)];
 
 pub struct TraderLlamaEntity {
     pub mob_entity: MobEntity,
@@ -145,9 +150,12 @@ impl TraderLlamaEntity {
             goal_selector.add_goal(9, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WOLF, true),
+            // TODO: TraderLlamaDefendWanderingTraderGoal at 1.
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, LLAMA_HUNTS);
+            hunting::apply(
+                &mut target_selector,
+                &mob_arc.mob_entity,
+                TRADER_LLAMA_HUNTS,
             );
         };
 

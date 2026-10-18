@@ -12,12 +12,14 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        ranged_attack::RangedAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{
         Mob, MobEntity, RangedAttackMob,
@@ -52,6 +54,8 @@ fn create_potion_stack(item: &'static Item, potion: &'static Potion) -> ItemStac
 /// Represents a Witch, a hostile ranged mob that throws splash potions and drinks restorative potions.
 ///
 /// Wiki: <https://minecraft.wiki/w/Witch>
+const WITCH_HUNTS: &[Hunt] = &[Hunt::new(3, TargetMatch::Type(&EntityType::PLAYER), true)];
+
 pub struct WitchEntity {
     pub mob_entity: MobEntity,
     pub raider_data: RaiderData,
@@ -112,10 +116,8 @@ impl WitchEntity {
                     entity_type.has_tag(&tag::EntityType::MINECRAFT_RAIDERS)
                 })),
             );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
+            // TODO: NearestHealableRaiderTargetGoal at 2, attack goal off while healing in a raid.
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, WITCH_HUNTS);
         };
 
         mob_arc

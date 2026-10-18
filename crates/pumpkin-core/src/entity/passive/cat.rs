@@ -79,7 +79,7 @@ const CAT_FLEES: &[Flee] = &[feline::flee_players(4, is_untamed)];
 
 const CAT_HUNTS: &[Hunt] = &[
     Hunt::new(1, TargetMatch::Type(&EntityType::RABBIT), false).when(TargetCondition::Untamed),
-    feline::hunt_baby_turtles(1).when(TargetCondition::Untamed),
+    hunting::baby_turtles(1, false).when(TargetCondition::Untamed),
 ];
 
 pub struct CatEntity {

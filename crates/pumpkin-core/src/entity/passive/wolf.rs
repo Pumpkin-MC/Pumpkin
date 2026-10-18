@@ -41,7 +41,6 @@ use crate::entity::{
         animal::Animal,
         llama::scares_wolves,
         tamable::{TamableAnimal, TamableData, is_untamed},
-        turtle::is_baby_on_land,
     },
     player::Player,
 };
@@ -57,9 +56,7 @@ const WOLF_FLEES: &[Flee] = &[Flee::new(3, TargetMatch::LLAMA_LIKE, 24.0, 1.5, 1
 
 const WOLF_HUNTS: &[Hunt] = &[
     Hunt::new(5, WOLF_PREY, false).when(TargetCondition::Untamed),
-    Hunt::new(6, TargetMatch::Type(&EntityType::TURTLE), false)
-        .when(TargetCondition::Untamed)
-        .only_mobs(is_baby_on_land),
+    hunting::baby_turtles(6, false).when(TargetCondition::Untamed),
     Hunt::new(7, TargetMatch::SKELETON_LIKE, false),
 ];
 

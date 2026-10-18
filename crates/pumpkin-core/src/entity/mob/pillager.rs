@@ -10,23 +10,31 @@ use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, ranged_crossbow_attack::RangedCrossbowAttackGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        ranged_crossbow_attack::RangedCrossbowAttackGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{
         Mob, MobEntity,
         crossbow_attack_mob::CrossbowAttackMob,
         patrol::{LongDistancePatrolGoal, PatrolData, PatrollingMonster},
         raider::{
-            HoldGroundAttackGoal, ObtainRaidLeaderBannerGoal, PathfindToRaidGoal, Raider,
+            self, HoldGroundAttackGoal, ObtainRaidLeaderBannerGoal, PathfindToRaidGoal, Raider,
             RaiderCelebrationGoal, RaiderData, RaiderMoveThroughVillageGoal,
         },
     },
 };
+
+const PILLAGER_HUNTS: &[Hunt] = &[
+    Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true),
+    Hunt::new(3, TargetMatch::VILLAGER_LIKE, false),
+    Hunt::new(3, TargetMatch::Type(&EntityType::IRON_GOLEM), true),
+];
 
 pub struct PillagerEntity {
     pub mob_entity: MobEntity,
@@ -79,19 +87,8 @@ impl PillagerEntity {
                 .target_selector
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            // TODO: VILLAGER_LIKE, no sight check.
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
-            );
+            target_selector.add_goal(1, raider::revenge_goal());
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, PILLAGER_HUNTS);
         };
 
         mob_arc

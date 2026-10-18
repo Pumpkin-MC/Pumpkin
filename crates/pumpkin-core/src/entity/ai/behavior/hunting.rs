@@ -1,12 +1,16 @@
+use pumpkin_data::entity::{EntityType, MobCategory};
+
 use crate::entity::ai::goal::active_target::{ActiveTargetGoal, TargetCondition};
 use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::ai::goal::revenge::MobFilter;
 use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::living::LivingEntity;
-use crate::entity::mob::MobEntity;
+use crate::entity::mob::{Mob, MobEntity};
+use crate::entity::passive::turtle::is_baby_on_land;
 use crate::world::World;
 
-pub type TargetPredicateFn = fn(&LivingEntity, &World) -> bool;
+/// Vanilla's target selector: hunter, candidate.
+pub type TargetPredicateFn = fn(&dyn Mob, &LivingEntity, &World) -> bool;
 
 /// One vanilla `NearestAttackableTargetGoal`, defaults as its short constructor:
 /// reciprocal chance 10, no reach check.
@@ -18,7 +22,10 @@ pub struct Hunt {
     reciprocal_chance: i32,
     condition: TargetCondition,
     only: Option<MobFilter>,
+    gate: Option<MobFilter>,
     predicate: Option<TargetPredicateFn>,
+    unseen_memory_ticks: Option<i32>,
+    range_scale: f64,
 }
 
 impl Hunt {
@@ -31,7 +38,10 @@ impl Hunt {
             reciprocal_chance: 10,
             condition: TargetCondition::Always,
             only: None,
+            gate: None,
             predicate: None,
+            unseen_memory_ticks: None,
+            range_scale: 1.0,
         }
     }
 
@@ -56,6 +66,13 @@ impl Hunt {
         self
     }
 
+    /// See [`ActiveTargetGoal::gated_by`].
+    #[must_use]
+    pub const fn gated_by(mut self, gate: MobFilter) -> Self {
+        self.gate = Some(gate);
+        self
+    }
+
     /// Extra test on each candidate, vanilla's selector.
     #[must_use]
     pub const fn matching(mut self, predicate: TargetPredicateFn) -> Self {
@@ -63,20 +80,38 @@ impl Hunt {
         self
     }
 
+    /// Ticks an unseen target is kept, vanilla `setUnseenMemoryTicks`.
+    #[must_use]
+    pub const fn forget_unseen_after(mut self, ticks: i32) -> Self {
+        self.unseen_memory_ticks = Some(ticks);
+        self
+    }
+
+    /// Follow range factor for searching and keeping the target.
+    #[must_use]
+    pub const fn range_scale(mut self, scale: f64) -> Self {
+        self.range_scale = scale;
+        self
+    }
+
     fn build(self, mob: &MobEntity) -> Box<ActiveTargetGoal> {
-        let goal = Box::new(ActiveTargetGoal::new(
-            mob,
-            self.target,
-            self.reciprocal_chance,
-            self.must_see,
-            false,
-            self.predicate,
-        ))
-        .when(self.condition);
-        match self.only {
-            Some(filter) => goal.only_mobs(filter),
-            None => goal,
+        let mut goal = ActiveTargetGoal::with_default(mob, self.target, self.must_see)
+            .every(self.reciprocal_chance)
+            .when(self.condition)
+            .scale_range(self.range_scale);
+        if let Some(predicate) = self.predicate {
+            goal = goal.selecting(predicate);
         }
+        if let Some(filter) = self.only {
+            goal = goal.only_mobs(filter);
+        }
+        if let Some(gate) = self.gate {
+            goal = goal.gated_by(gate);
+        }
+        if let Some(ticks) = self.unseen_memory_ticks {
+            goal = goal.forget_unseen_after(ticks);
+        }
+        goal
     }
 }
 
@@ -85,4 +120,21 @@ pub fn apply(targets: &mut GoalSelector, mob: &MobEntity, hunts: &[Hunt]) {
     for hunt in hunts {
         targets.add_goal(hunt.priority, hunt.build(mob));
     }
+}
+
+/// Vanilla `Enemy`: the monster category.
+pub fn is_enemy(_hunter: &dyn Mob, target: &LivingEntity, _world: &World) -> bool {
+    target.entity.entity_type.category == &MobCategory::MONSTER
+}
+
+/// Vanilla `Turtle.BABY_ON_LAND_SELECTOR` hunts.
+#[must_use]
+pub const fn baby_turtles(priority: u8, must_see: bool) -> Hunt {
+    Hunt::new(priority, TargetMatch::Type(&EntityType::TURTLE), must_see).only_mobs(is_baby_on_land)
+}
+
+/// Cube mobs and ghasts: target at most 4 blocks above or below.
+pub fn within_four_blocks_height(hunter: &dyn Mob, target: &LivingEntity, _world: &World) -> bool {
+    let hunter_y = hunter.get_mob_entity().living_entity.entity.pos.load().y;
+    (target.entity.pos.load().y - hunter_y).abs() <= 4.0
 }

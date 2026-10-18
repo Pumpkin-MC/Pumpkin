@@ -49,7 +49,7 @@ const WITHER_HUNTS: &[Hunt] = &[Hunt::new(
     false,
 )
 .every(0)
-.matching(|target, _world| target.entity.entity_type != &EntityType::ARMOR_STAND)];
+.matching(|_hunter, target, _world| target.entity.entity_type != &EntityType::ARMOR_STAND)];
 
 pub struct WitherEntity {
     pub mob_entity: MobEntity,

@@ -9,7 +9,9 @@ use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
 use crate::entity::mob::equipment::RegionalDifficulty;
 use crate::entity::{
     Entity,
-    ai::goal::{Goal, active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
+    ai::behavior::hunting::{self, Hunt},
+    ai::goal::{Goal, look_at_entity::LookAtEntityGoal},
+    ai::target_match::TargetMatch,
 };
 use crate::world::World;
 use pumpkin_data::data_component_impl::EquipmentSlot;
@@ -26,6 +28,13 @@ pub mod husk;
 #[allow(clippy::module_inception)]
 pub mod zombie;
 pub mod zombie_villager;
+
+const ZOMBIE_HUNTS: &[Hunt] = &[
+    Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true),
+    Hunt::new(3, TargetMatch::VILLAGER_LIKE, false),
+    Hunt::new(3, TargetMatch::Type(&EntityType::IRON_GOLEM), true),
+    hunting::baby_turtles(5, true),
+];
 
 pub struct ZombieEntityBase {
     pub mob_entity: MobEntity,
@@ -84,24 +93,7 @@ impl ZombieEntityBase {
                     }),
                 ),
             );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            // TODO: VILLAGER_LIKE, no sight check.
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
-            );
-            // TODO: `.only_mobs(is_baby_on_land)`, like vanilla.
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, true),
-            );
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, ZOMBIE_HUNTS);
         };
 
         mob_arc

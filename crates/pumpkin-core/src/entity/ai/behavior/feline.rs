@@ -6,7 +6,6 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 
 use crate::entity::ai::behavior::fleeing::Flee;
-use crate::entity::ai::behavior::hunting::Hunt;
 use crate::entity::ai::goal::breed::BreedGoal;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::ai::goal::leap_at_target::LeapAtTargetGoal;
@@ -17,7 +16,6 @@ use crate::entity::ai::goal::tempt::TemptGoal;
 use crate::entity::ai::goal::wander_around::WanderAroundGoal;
 use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::mob::Mob;
-use crate::entity::passive::turtle::is_baby_on_land;
 
 pub const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
 
@@ -37,11 +35,6 @@ pub const fn flee_players(priority: u8, gate: MobFilter) -> Flee {
         1.33,
     )
     .as_long_as(gate)
-}
-
-#[must_use]
-pub const fn hunt_baby_turtles(priority: u8) -> Hunt {
-    Hunt::new(priority, TargetMatch::Type(&EntityType::TURTLE), false).only_mobs(is_baby_on_land)
 }
 
 /// Leap, pounce, breed, stroll and look at players, on consecutive priorities from `first`.

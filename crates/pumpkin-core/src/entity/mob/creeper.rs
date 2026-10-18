@@ -12,14 +12,14 @@ use pumpkin_data::{
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
 use crate::entity::{
     Entity, EntityBase,
     ai::behavior::fleeing::{self, Flee},
     ai::goal::{
-        active_target::ActiveTargetGoal, creeper_ignite::CreeperIgniteGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        creeper_ignite::CreeperIgniteGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     ai::target_match::TargetMatch,
     mob::{Mob, MobEntity},
@@ -33,6 +33,8 @@ const CREEPER_FLEES: &[Flee] = &[
     Flee::new(3, TargetMatch::Type(&EntityType::OCELOT), 6.0, 1.0, 1.2),
     Flee::new(3, TargetMatch::Type(&EntityType::CAT), 6.0, 1.0, 1.2),
 ];
+
+const CREEPER_HUNTS: &[Hunt] = &[Hunt::new(1, TargetMatch::Type(&EntityType::PLAYER), true)];
 
 pub struct CreeperEntity {
     pub mob_entity: MobEntity,
@@ -88,10 +90,7 @@ impl CreeperEntity {
             );
             goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, CREEPER_HUNTS);
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
         };
 
