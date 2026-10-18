@@ -79,13 +79,13 @@ impl GeodeFeature {
         }
     }
 
-    fn has_property(codec: &BlockStateCodec, property: &str) -> bool {
+    fn has_property(codec: &BlockStateCodec, property: pumpkin_data::PropertyKey) -> bool {
         let state = codec.get_state();
         // Obtain the block corresponding to this state id
         let block = Block::from_state_id(state.id);
         block
             .properties(state.id)
-            .is_some_and(|props| props.to_props().iter().any(|(k, _)| *k == property))
+            .is_some_and(|props| props.to_props().iter().any(|p| p.key() == property))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -334,7 +334,7 @@ impl GeodeFeature {
                             pumpkin_data::BlockDirection::West => "west",
                         };
 
-                        if Self::has_property(&final_codec, "facing") {
+                        if Self::has_property(&final_codec, pumpkin_data::PropertyKey::Facing) {
                             final_codec
                                 .properties
                                 .get_or_insert_with(HashMap::new)
@@ -342,7 +342,8 @@ impl GeodeFeature {
                         }
 
                         // Handle waterlogging dynamically based on the block we are replacing
-                        if Self::has_property(&final_codec, "waterlogged") {
+                        if Self::has_property(&final_codec, pumpkin_data::PropertyKey::Waterlogged)
+                        {
                             final_codec
                                 .properties
                                 .get_or_insert_with(HashMap::new)

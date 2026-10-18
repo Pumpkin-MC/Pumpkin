@@ -174,14 +174,20 @@ fn resolve_palette(structure: &NbtCompound) -> GameTestResult<Vec<PaletteEntry>>
 
         let mut test_mode = None;
         let state = if let Some(properties) = entry.get_compound("Properties") {
-            let mut property_pairs = Vec::with_capacity(properties.child_tags.len());
+            let mut parsed_properties = Vec::with_capacity(properties.child_tags.len());
             for (property_name, property_value) in &properties.child_tags {
                 let property_value = property_value.extract_string().ok_or_else(|| {
                     invalid_structure(format!(
                         "Block '{name}' property '{property_name}' in palette entry {index} is not a string"
                     ))
                 })?;
-                if block == &Block::TEST_BLOCK && property_name.as_ref() == "mode" {
+                let property_key =
+                    pumpkin_data::PropertyKey::from_str(property_name.as_ref()).ok_or_else(|| {
+                        invalid_structure(format!(
+                            "Unknown block property '{property_name}' for '{name}' in palette entry {index}"
+                        ))
+                    })?;
+                if block == &Block::TEST_BLOCK && property_key == pumpkin_data::PropertyKey::Mode {
                     test_mode = Some(TestBlockMode::from_serialized_name(property_value).ok_or_else(
                         || {
                             invalid_structure(format!(
@@ -190,11 +196,17 @@ fn resolve_palette(structure: &NbtCompound) -> GameTestResult<Vec<PaletteEntry>>
                         },
                     )?);
                 }
-                property_pairs.push((property_name.as_ref(), property_value));
+                let prop = pumpkin_data::Property::from_key_value_str(property_key, property_value)
+                    .ok_or_else(|| {
+                        invalid_structure(format!(
+                            "No Pumpkin block state matches palette entry {index} for '{name}'"
+                        ))
+                    })?;
+                parsed_properties.push(prop);
             }
 
             block
-                .state_from_properties(&property_pairs)
+                .state_from_properties(&parsed_properties)
                 .ok_or_else(|| {
                     invalid_structure(format!(
                         "No Pumpkin block state matches palette entry {index} for '{name}'"

@@ -6,6 +6,7 @@ use pumpkin_util::math::vector2::Vector2;
 use super::{ChunkReadingError, ChunkWritingError};
 use crate::level::LevelFolder;
 
+pub mod converter;
 pub mod file_manager;
 
 pub(crate) async fn run_blocking<T, F>(task: F) -> Result<T, tokio::task::JoinError>
@@ -110,6 +111,12 @@ pub trait RegionFile: Send + Sync + Sized + 'static {
 
     /// Returns the uncompressed NBT of a chunk from `read_chunk`.
     fn decode_chunk(raw: Self::Raw) -> Result<Bytes, ChunkReadingError>;
+
+    fn serialize_chunk<D: crate::chunk::format::anvil::SingleChunkDataSerializer>(
+        chunk: &D,
+    ) -> Result<Bytes, crate::chunk::ChunkSerializingError> {
+        chunk.to_bytes()
+    }
 
     fn encode_chunk(nbt: Bytes, config: &Self::Config) -> Result<Self::Encoded, ChunkWritingError>;
 
