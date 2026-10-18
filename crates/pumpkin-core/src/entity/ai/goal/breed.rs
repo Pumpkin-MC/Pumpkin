@@ -66,6 +66,13 @@ impl BreedGoal {
             baby.get_entity().entity_id,
             experience,
         ) else {
+            // Cancelled: end love mode with the usual cooldown, a plugin resets it if wanted.
+            mob_entity.reset_love_ticks();
+            mob_entity
+                .breeding_cooldown
+                .store(6000, std::sync::atomic::Ordering::Relaxed);
+            mate.reset_love();
+            mate.set_breeding_cooldown(6000);
             return;
         };
 
