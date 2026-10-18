@@ -1,4 +1,4 @@
-use crate::entity::living::LivingEntity;
+use crate::entity::living::{EffectSource, LivingEntity};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::item_stack::ItemStack;
 
@@ -136,6 +136,7 @@ impl PotionContents {
         effects: Vec<(&'static StatusEffect, i32, u8, bool, bool, bool)>,
         scale: f32,
         source: PotionApplicationSource,
+        effect_source: Option<EffectSource<'_>>,
     ) {
         for (effect_type, duration, amplifier, ambient, show_particles, show_icon) in effects {
             // Like vanilla, instant effects are applied once and never added to the active
@@ -144,6 +145,7 @@ impl PotionContents {
                 effect_type,
                 amplifier,
                 f64::from(source.instant_scale(scale)),
+                effect_source,
             ) {
                 // Duration scaling
                 let duration_scale = source.duration_scale(scale);

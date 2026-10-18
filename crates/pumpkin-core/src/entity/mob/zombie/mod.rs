@@ -48,6 +48,23 @@ impl ZombieEntityBase {
     }
 
     pub fn with_can_break_doors(entity: Entity, can_break_doors: bool) -> Arc<Self> {
+        Self::with_targets(entity, can_break_doors, Self::revenge_goal(), ZOMBIE_HUNTS)
+    }
+
+    /// Vanilla `HurtByTargetGoal(this).setAlertOthers(ZombifiedPiglin.class)`.
+    #[must_use]
+    pub fn revenge_goal() -> RevengeGoal {
+        RevengeGoal::new(true)
+            .alerting_others_except(|entity_type| entity_type == &EntityType::ZOMBIFIED_PIGLIN)
+    }
+
+    /// For subclasses that replace the target goals, like the drowned.
+    pub fn with_targets(
+        entity: Entity,
+        can_break_doors: bool,
+        revenge: RevengeGoal,
+        hunts: &[Hunt],
+    ) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let zombie = Self {
             mob_entity,
@@ -85,15 +102,8 @@ impl ZombieEntityBase {
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
-            target_selector.add_goal(
-                1,
-                Box::new(
-                    RevengeGoal::new(true).alerting_others_except(|entity_type| {
-                        entity_type == &EntityType::ZOMBIFIED_PIGLIN
-                    }),
-                ),
-            );
-            hunting::apply(&mut target_selector, &mob_arc.mob_entity, ZOMBIE_HUNTS);
+            target_selector.add_goal(1, Box::new(revenge));
+            hunting::apply(&mut target_selector, &mob_arc.mob_entity, hunts);
         };
 
         mob_arc

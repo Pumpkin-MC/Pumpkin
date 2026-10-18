@@ -30,7 +30,7 @@ pub enum TargetCondition {
     NoDaylight,
     /// Nothing at all while the mob is a baby. (Polar bears hunting foxes)
     Adult,
-    /// Only starts while the mob is untamed. (Wolves hunting prey)
+    /// Only starts while the mob is untamed, and re-runs the search test to continue. (Wolves hunting prey)
     Untamed,
 }
 
@@ -135,7 +135,7 @@ impl ActiveTargetGoal {
     }
 
     /// Only mob targets passing `filter`. Re-checked while continuing only with
-    /// [`TargetCondition::Untamed`], like vanilla `NonTameRandomTargetGoal`.
+    /// [`TargetCondition::Untamed`], which re-runs the whole search test.
     #[must_use]
     pub fn only_mobs(mut self: Box<Self>, filter: MobFilter) -> Box<Self> {
         self.target_filter = Some(filter);
@@ -204,6 +204,18 @@ impl ActiveTargetGoal {
         self.target = target;
     }
 
+    /// Vanilla's targeting conditions plus the per-mob filters.
+    fn accepts(&self, mob: &dyn Mob, world: &World, candidate: &dyn EntityBase) -> bool {
+        self.passes_filter(candidate)
+            && self.target_predicate.test(world, Some(mob), candidate)
+            && self.selector.is_none_or(|selector| {
+                candidate
+                    .get_living_entity()
+                    .is_some_and(|living| selector(mob, living, world))
+            })
+            && self.condition.allows_target(mob, candidate, world)
+    }
+
     fn find_closest_target(&mut self, mob: &dyn Mob) {
         let mob_entity = mob.get_mob_entity();
         let follow_range = self.track_target_goal.follow_range(mob_entity);
@@ -223,23 +235,11 @@ impl ActiveTargetGoal {
             .eye_height as f64;
 
         // Pick the nearest candidate that passes the conditions, not the nearest overall.
-        let predicate = &self.target_predicate;
-        let selector = |candidate: &dyn EntityBase| {
-            self.selector.is_none_or(|selector| {
-                candidate
-                    .get_living_entity()
-                    .is_some_and(|living| selector(mob, living, &world))
-            })
-        };
-        let condition = self.condition;
         let target_type = self.target_type;
-        let found = condition.grudge_target(mob).map_or_else(
+        let found = self.condition.grudge_target(mob).map_or_else(
             || {
                 target_type.find_nearest(&world, search_pos, follow_range, |candidate| {
-                    self.passes_filter(candidate)
-                        && predicate.test(&world, Some(mob), candidate)
-                        && selector(candidate)
-                        && condition.allows_target(mob, candidate, &world)
+                    self.accepts(mob, &world, candidate)
                 })
             },
             // Same range rule as the area search: follow range from the eye.
@@ -247,12 +247,9 @@ impl ActiveTargetGoal {
                 find_by_uuid(&world, uuid).filter(|candidate| {
                     let entity = candidate.get_entity();
                     target_type.matches(entity.entity_type)
-                        && self.passes_filter(candidate.as_ref())
                         && entity.pos.load().squared_distance_to_vec(&search_pos)
                             <= follow_range * follow_range
-                        && predicate.test(&world, Some(mob), candidate.as_ref())
-                        && selector(candidate.as_ref())
-                        && condition.allows_target(mob, candidate.as_ref(), &world)
+                        && self.accepts(mob, &world, candidate.as_ref())
                 })
             },
         );
@@ -283,14 +280,13 @@ impl Goal for ActiveTargetGoal {
             self.target = None;
             return false;
         }
-        if self.condition == TargetCondition::Untamed
-            && self.target_filter.is_some()
-            && mob
-                .get_mob_entity()
-                .get_target()
-                .is_some_and(|target| !self.passes_filter(target.as_ref()))
-        {
-            return false;
+        // Vanilla `NonTameRandomTargetGoal`: the search test again, so no unseen memory.
+        if self.condition == TargetCondition::Untamed {
+            let world = mob.get_mob_entity().living_entity.entity.world.load();
+            return self
+                .target
+                .as_ref()
+                .is_some_and(|target| self.accepts(mob, &world, target.as_ref()));
         }
         // Like vanilla TargetGoal.canContinueToUse, the condition only gates the search.
         self.track_target_goal.should_continue(mob)

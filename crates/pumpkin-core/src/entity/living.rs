@@ -240,6 +240,13 @@ fn is_allowed_by_team_rules(
         || same_team
 }
 
+/// Who an instant effect came from: the potion or cloud, and who threw or placed it.
+#[derive(Clone, Copy)]
+pub struct EffectSource<'a> {
+    pub direct: &'a dyn EntityBase,
+    pub owner: Option<&'a dyn EntityBase>,
+}
+
 impl LivingEntity {
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
@@ -953,11 +960,13 @@ impl LivingEntity {
     }
 
     /// Vanilla `HealOrHarmMobEffect`, `scale` from splash distance. False for other effects.
+    /// With a `source`, harm is indirect magic credited to it and its owner.
     pub fn apply_instant_effect(
         &self,
         effect_type: &StatusEffect,
         amplifier: u8,
         scale: f64,
+        source: Option<EffectSource<'_>>,
     ) -> bool {
         let is_harm = if effect_type == &StatusEffect::INSTANT_DAMAGE {
             true
@@ -978,7 +987,11 @@ impl LivingEntity {
             .load()
             .get_entity_by_id(self.entity.entity_id)
         {
-            dyn_self.damage(&*dyn_self, scaled(6), DamageType::MAGIC);
+            let (damage_type, direct, owner) = source
+                .map_or((DamageType::MAGIC, None, None), |s| {
+                    (DamageType::INDIRECT_MAGIC, Some(s.direct), s.owner)
+                });
+            dyn_self.damage_with_context(&*dyn_self, scaled(6), damage_type, None, direct, owner);
         }
         true
     }
@@ -1063,7 +1076,7 @@ impl LivingEntity {
         }
 
         // Like vanilla, instant effects are never sent or stored as active effects.
-        if self.apply_instant_effect(effect.effect_type, effect.amplifier, 1.0) {
+        if self.apply_instant_effect(effect.effect_type, effect.amplifier, 1.0, None) {
             return;
         }
 
@@ -3592,6 +3605,7 @@ impl EntityBase for LivingEntity {
                         effects,
                         1.0,
                         crate::item::potion::PotionApplicationSource::Normal,
+                        None,
                     );
                     is_potion = true;
                 }
