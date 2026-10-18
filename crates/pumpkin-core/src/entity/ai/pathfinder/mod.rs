@@ -9,7 +9,7 @@ use crate::entity::ai::pathfinder::amphibious_node_evaluator::AmphibiousNodeEval
 use crate::entity::ai::pathfinder::binary_heap::BinaryHeap;
 use crate::entity::ai::pathfinder::fly_node_evaluator::FlyNodeEvaluator;
 use crate::entity::ai::pathfinder::node::Node;
-use crate::entity::ai::pathfinder::node::PathType;
+pub use crate::entity::ai::pathfinder::node::PathType;
 use crate::entity::ai::pathfinder::node_evaluator::{MobData, NodeEvaluator};
 use crate::entity::ai::pathfinder::path::Path;
 use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
@@ -528,8 +528,13 @@ impl PathNavigation {
 
     pub fn finish_navigation(&mut self, entity: &LivingEntity) {
         self.stop();
+        entity.set_speed(0.0);
         entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-        entity.jumping.store(false, Ordering::Relaxed);
+        if !entity.entity.touching_water.load(Ordering::Relaxed)
+            && !entity.entity.touching_lava.load(Ordering::Relaxed)
+        {
+            entity.jumping.store(false, Ordering::Relaxed);
+        }
     }
 
     pub fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
@@ -579,10 +584,16 @@ impl PathNavigation {
         let mut mob_data = MobData::new(start_pos_f, self.mob_width, self.mob_height, 1.0);
         mob_data.on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
         mob_data.can_swim = self.can_float;
+        mob_data.is_in_water =
+            entity.entity.touching_water.load(Ordering::Relaxed) || entity.entity.is_in_water();
 
         mob_data.set_pathfinding_malus(PathType::DangerFire, 16.0);
         mob_data.set_pathfinding_malus(PathType::DamageFire, -1.0);
         mob_data.set_pathfinding_malus(PathType::Water, if self.can_float { 0.0 } else { 8.0 });
+        mob_data.set_pathfinding_malus(
+            PathType::WaterBorder,
+            if self.can_float { 0.0 } else { 8.0 },
+        );
         mob_data.set_pathfinding_malus(PathType::Lava, -1.0);
         mob_data.set_pathfinding_malus(PathType::DangerOther, 8.0);
 
@@ -993,6 +1004,7 @@ impl PathNavigation {
 
         let Some(goal) = self.current_goal.take() else {
             self.is_idle.store(true, Ordering::Relaxed);
+            entity.set_speed(0.0);
             entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
             return;
         };
@@ -1027,7 +1039,7 @@ impl PathNavigation {
         }
 
         if self.path.is_none() {
-            self.finish_navigation(entity);
+            self.stop();
             return;
         }
 
@@ -1076,6 +1088,57 @@ impl PathNavigation {
 
             let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
 
+            self.max_distance_to_waypoint = if self.mob_width > 0.75 {
+                self.mob_width * 0.5
+            } else {
+                0.75 - self.mob_width * 0.5
+            };
+
+            while let Some(next_block) = path.get_next_node_pos() {
+                let target_pos = Vector3::new(
+                    f64::from(next_block.0.x) + 0.5,
+                    f64::from(next_block.0.y),
+                    f64::from(next_block.0.z) + 0.5,
+                );
+
+                let current_pos = entity.entity.pos.load();
+                let dx = target_pos.x - current_pos.x;
+                let check_y =
+                    if entity.entity.touching_water.load(Ordering::Relaxed) && self.can_float {
+                        mob_pos.y
+                    } else {
+                        current_pos.y
+                    };
+                let dy = target_pos.y - check_y;
+                let dz = target_pos.z - current_pos.z;
+
+                let horizontal_dist_sq = dx * dx + dz * dz;
+                let horizontal_dist = horizontal_dist_sq.sqrt();
+
+                let dropping_down = !on_ground
+                    && horizontal_dist < f64::from(self.max_distance_to_waypoint)
+                    && dy < -0.5;
+
+                let close_enough = horizontal_dist < f64::from(self.max_distance_to_waypoint)
+                    && dy.abs() < NODE_REACH_Y;
+
+                let corner_cut = path.get_next_node().is_some_and(|n| {
+                    n.path_type != PathType::DangerFire
+                        && n.path_type != PathType::DamageFire
+                        && n.path_type != PathType::WalkableDoor
+                }) && Self::should_target_next_node_in_direction(mob_pos, path);
+
+                let skip_start_node = path.get_next_node_index() == 0
+                    && path.get_node_count() > 1
+                    && (close_enough || Self::should_target_next_node_in_direction(mob_pos, path));
+
+                if dropping_down || close_enough || corner_cut || skip_start_node {
+                    path.advance();
+                    continue;
+                }
+                break;
+            }
+
             if let Some(next_block) = path.get_next_node_pos() {
                 let target_pos = Vector3::new(
                     f64::from(next_block.0.x) + 0.5,
@@ -1089,37 +1152,6 @@ impl PathNavigation {
                 let dz = target_pos.z - current_pos.z;
 
                 let horizontal_dist_sq = dx * dx + dz * dz;
-                let horizontal_dist = horizontal_dist_sq.sqrt();
-
-                self.max_distance_to_waypoint = if self.mob_width > 0.75 {
-                    self.mob_width * 0.5
-                } else {
-                    0.75 - self.mob_width * 0.5
-                };
-
-                if !on_ground
-                    && horizontal_dist < f64::from(self.max_distance_to_waypoint)
-                    && dy < -0.5
-                {
-                    path.advance();
-                    self.current_goal = Some(goal);
-                    return;
-                }
-
-                let close_enough = horizontal_dist < f64::from(self.max_distance_to_waypoint)
-                    && dy.abs() < NODE_REACH_Y;
-
-                let corner_cut = path.get_next_node().is_some_and(|n| {
-                    n.path_type != PathType::DangerFire
-                        && n.path_type != PathType::DamageFire
-                        && n.path_type != PathType::WalkableDoor
-                }) && Self::should_target_next_node_in_direction(mob_pos, path);
-
-                if close_enough || corner_cut {
-                    path.advance();
-                    self.current_goal = Some(goal);
-                    return;
-                }
 
                 let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
                 let current_yaw = entity.entity.yaw.load();
@@ -1127,12 +1159,12 @@ impl PathNavigation {
                 let target_yaw =
                     current_yaw + yaw_diff.clamp(-MAX_YAW_TURN_PER_TICK, MAX_YAW_TURN_PER_TICK);
                 entity.entity.yaw.store(target_yaw);
-                entity.entity.head_yaw.store(target_yaw);
                 entity.entity.body_yaw.store(target_yaw);
 
                 let mob_speed =
                     goal.speed * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
 
+                entity.set_speed(mob_speed);
                 entity
                     .movement_input
                     .store(Vector3::new(0.0, 0.0, mob_speed));
@@ -1144,7 +1176,9 @@ impl PathNavigation {
                     && horizontal_dist_sq < jump_distance * jump_distance
                 {
                     entity.jumping.store(true, Ordering::SeqCst);
-                } else {
+                } else if !entity.entity.touching_water.load(Ordering::Relaxed)
+                    && !entity.entity.touching_lava.load(Ordering::Relaxed)
+                {
                     entity.jumping.store(false, Ordering::SeqCst);
                 }
             } else {
@@ -1546,6 +1580,7 @@ impl PathNavigationTrait for FlyingPathNavigation {
                     entity.get_attribute_value(&Attributes::MOVEMENT_SPEED)
                 };
                 let speed = self.inner.speed_modifier * base_speed;
+                entity.set_speed(speed);
                 let y_input = if dy.abs() > 0.1 {
                     if dy > 0.0 { speed } else { -speed }
                 } else {
@@ -1846,6 +1881,7 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
 
                 let speed = self.inner.speed_modifier
                     * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+                entity.set_speed(speed);
                 let y_input = if dy.abs() > 0.1 {
                     if dy > 0.0 { speed } else { -speed }
                 } else {
@@ -2105,10 +2141,13 @@ impl PathNavigationTrait for WallClimberNavigation {
 
                 let speed = self.inner.inner.speed_modifier
                     * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+                entity.set_speed(speed);
                 entity.movement_input.store(Vector3::new(0.0, 0.0, speed));
                 if dy > 0.0 {
                     entity.jumping.store(true, Ordering::SeqCst);
-                } else {
+                } else if !entity.entity.touching_water.load(Ordering::Relaxed)
+                    && !entity.entity.touching_lava.load(Ordering::Relaxed)
+                {
                     entity.jumping.store(false, Ordering::SeqCst);
                 }
             }
@@ -2373,6 +2412,7 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
 
                     let speed = self.inner.speed_modifier
                         * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+                    entity.set_speed(speed);
                     let y_input = if dy.abs() > 0.1 {
                         if dy > 0.0 { speed } else { -speed }
                     } else {
