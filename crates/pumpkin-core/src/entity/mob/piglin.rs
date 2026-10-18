@@ -1161,7 +1161,9 @@ impl Mob for PiglinEntity {
         source: Option<&dyn EntityBase>,
     ) {
         if self.mob_entity.living_entity.dead.load(Ordering::Relaxed) {
-            self.drop_inventory();
+            if Mob::should_drop_loot(self) {
+                self.drop_inventory();
+            }
         } else if let Some(attacker) = source {
             self.was_hurt_by(attacker);
         }
