@@ -357,6 +357,7 @@ pub struct PlayerPlacedArgs<'a> {
     pub position: &'a BlockPos,
     pub direction: BlockDirection,
     pub player: &'a Player,
+    pub stack: &'a ItemStack,
 }
 
 pub struct OnLandedUponArgs<'a> {

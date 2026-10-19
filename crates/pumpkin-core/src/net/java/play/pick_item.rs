@@ -22,7 +22,13 @@ impl JavaClient {
         let Some(item) = Item::from_id(block.item_id) else {
             return;
         };
-        let stack = ItemStack::new(1, item);
+        let mut stack = ItemStack::new(1, item);
+        if player.gamemode.load() == GameMode::Creative
+            && pick_item.include_data
+            && let Some(block_entity) = world.get_block_entity(&pick_item.pos)
+        {
+            block_entity.collect_implicit_components(&mut stack);
+        }
 
         let slot_with_stack = player.inventory().get_slot_with_stack(&stack);
 
