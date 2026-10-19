@@ -22,29 +22,6 @@ use crate::{
     world::World,
 };
 
-fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, state) = world.get_block_and_state_id(block_pos);
-
-    let mut lever_props = LeverLikeProperties::from_state_id(state);
-    lever_props.powered = !lever_props.powered;
-    world.set_block_state(
-        block_pos,
-        lever_props.to_state_id(block),
-        BlockFlags::NOTIFY_ALL,
-    );
-
-    LeverBlock::update_neighbors(world, block_pos, lever_props);
-
-    play_lever_sound(world, block_pos, lever_props.powered);
-
-    let game_event = if lever_props.powered {
-        GameEvent::BlockActivate
-    } else {
-        GameEvent::BlockDeactivate
-    };
-    world.emit_game_event(game_event.name(), block_pos.to_centered_f64());
-}
-
 fn play_lever_sound(world: &Arc<World>, block_pos: &BlockPos, powered: bool) {
     world.play_sound_fine(
         Sound::BlockLeverClick,
@@ -60,7 +37,7 @@ pub struct LeverBlock;
 
 impl BlockBehaviour for LeverBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        toggle_lever(args.world, args.position);
+        Self::pull(args.world, args.position);
         BlockActionResult::Consume
     }
 
@@ -129,6 +106,29 @@ impl WallMountedBlock for LeverBlock {
 }
 
 impl LeverBlock {
+    pub(crate) fn pull(world: &Arc<World>, block_pos: &BlockPos) {
+        let (block, state) = world.get_block_and_state_id(block_pos);
+
+        let mut lever_props = LeverLikeProperties::from_state_id(state);
+        lever_props.powered = !lever_props.powered;
+        world.set_block_state(
+            block_pos,
+            lever_props.to_state_id(block),
+            BlockFlags::NOTIFY_ALL,
+        );
+
+        Self::update_neighbors(world, block_pos, lever_props);
+
+        play_lever_sound(world, block_pos, lever_props.powered);
+
+        let game_event = if lever_props.powered {
+            GameEvent::BlockActivate
+        } else {
+            GameEvent::BlockDeactivate
+        };
+        world.emit_game_event(game_event.name(), block_pos.to_centered_f64());
+    }
+
     fn update_neighbors(
         world: &Arc<World>,
         block_pos: &BlockPos,

@@ -77,6 +77,7 @@ impl PathFinder {
         )
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn find_path(
         &mut self,
         evaluator: &mut EvaluatorKind,
@@ -147,6 +148,9 @@ impl PathFinder {
 
                 for neighbor in self.neighbors_buf.drain(..) {
                     let mut neighbor = evaluator.base_mut().get_node(neighbor.pos);
+                    if neighbor.closed {
+                        continue;
+                    }
                     let distance = current.distance_to_node(&neighbor);
                     neighbor.walked_dist = current.walked_dist + distance;
                     let tentative_g = current.g + distance + neighbor.cost_malus;
@@ -495,7 +499,7 @@ impl PathNavigation {
             has_delayed_recomputation: false,
             time_last_recompute: 0,
             target_pos: None,
-            reach_range: 1,
+            reach_range: 0,
             max_visited_nodes_multiplier: 1.0,
             is_stuck: false,
             required_path_length: 16.0,
