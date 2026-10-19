@@ -33,6 +33,7 @@ impl ItemBehaviour for BundleItem {
                 let updated_bundle = held_item.clone();
 
                 player.drop_item(extracted_stack);
+                player.inventory.set_held_item(updated_bundle.clone());
                 player.sync_hand_slot(used_slot_index, updated_bundle);
             }
         }
@@ -54,6 +55,9 @@ impl ItemBehaviour for BundleItem {
                     let updated_bundle = off_hand_item.clone();
 
                     player.drop_item(extracted_stack);
+                    player
+                        .inventory
+                        .set_stack_in_hand(pumpkin_util::Hand::Left, updated_bundle.clone());
                     player.sync_hand_slot(used_slot_index, updated_bundle);
                 }
             }

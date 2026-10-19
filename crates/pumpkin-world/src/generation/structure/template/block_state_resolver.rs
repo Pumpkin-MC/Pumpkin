@@ -44,22 +44,17 @@ impl BlockStateResolver {
         }
 
         // Transform properties for rotation/mirror using the unified vanilla logic
-        let transformed_props = pumpkin_data::transform_block_properties(
-            &entry.name,
-            &entry.properties,
-            rotation,
-            mirror,
-        );
-
-        // Convert to the format expected by from_properties
-        let props_slice = transformed_props
-            .iter()
-            .map(|(key, value)| (key.as_str(), value.as_str()))
-            .collect::<Vec<_>>();
-
-        // Get the state ID from properties
-        let props_box = block.from_properties(&props_slice);
-        let state_id = props_box.to_state_id(block);
+        let state_id = if rotation == Rotation::None && mirror == Mirror::None {
+            block.from_properties(&entry.properties).to_state_id(block)
+        } else {
+            let transformed_props = pumpkin_data::transform_block_properties(
+                &entry.name,
+                &entry.properties,
+                rotation,
+                mirror,
+            );
+            block.from_properties(&transformed_props).to_state_id(block)
+        };
 
         Some(BlockState::from_id(state_id))
     }
@@ -73,6 +68,10 @@ impl BlockStateResolver {
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_data::block_properties::{
+        DoorHinge, DoubleBlockHalf, Facing, Half, Property, StairsShape,
+    };
+
     use super::*;
 
     #[test]
@@ -87,10 +86,10 @@ mod tests {
         let entry = PaletteEntry::with_properties(
             "minecraft:oak_stairs".to_string(),
             vec![
-                ("facing".to_string(), "north".to_string()),
-                ("half".to_string(), "bottom".to_string()),
-                ("shape".to_string(), "straight".to_string()),
-                ("waterlogged".to_string(), "false".to_string()),
+                Property::Facing(Facing::North),
+                Property::Half(Half::Bottom),
+                Property::StairsShape(StairsShape::Straight),
+                Property::Waterlogged(false),
             ],
         );
         let state = BlockStateResolver::resolve_simple(&entry);
@@ -101,19 +100,12 @@ mod tests {
     fn rotation_transforms_facing() {
         let entry = PaletteEntry::with_properties(
             "minecraft:furnace".to_string(),
-            vec![
-                ("facing".to_string(), "north".to_string()),
-                ("lit".to_string(), "false".to_string()),
-            ],
+            vec![Property::Facing(Facing::North), Property::Lit(false)],
         );
 
         // Get state with rotation
         let rotated = BlockStateResolver::resolve(&entry, Rotation::Clockwise90, Mirror::None);
         assert!(rotated.is_some());
-
-        // The rotated block should have facing=east after 90 degree clockwise rotation
-        // We can't easily verify the exact facing here without more infrastructure,
-        // but we can verify it resolves successfully
     }
 
     #[test]
@@ -128,10 +120,10 @@ mod tests {
         let entry = PaletteEntry::with_properties(
             "minecraft:oak_stairs".to_string(),
             vec![
-                ("facing".to_string(), "north".to_string()),
-                ("half".to_string(), "bottom".to_string()),
-                ("shape".to_string(), "inner_left".to_string()),
-                ("waterlogged".to_string(), "false".to_string()),
+                Property::Facing(Facing::North),
+                Property::Half(Half::Bottom),
+                Property::StairsShape(StairsShape::InnerLeft),
+                Property::Waterlogged(false),
             ],
         );
 
@@ -144,10 +136,10 @@ mod tests {
         let target_entry = PaletteEntry::with_properties(
             "minecraft:oak_stairs".to_string(),
             vec![
-                ("facing".to_string(), "west".to_string()),
-                ("half".to_string(), "bottom".to_string()),
-                ("shape".to_string(), "inner_right".to_string()),
-                ("waterlogged".to_string(), "false".to_string()),
+                Property::Facing(Facing::West),
+                Property::Half(Half::Bottom),
+                Property::StairsShape(StairsShape::InnerRight),
+                Property::Waterlogged(false),
             ],
         );
         let expected = BlockStateResolver::resolve_simple(&target_entry).unwrap();
@@ -159,11 +151,11 @@ mod tests {
         let entry = PaletteEntry::with_properties(
             "minecraft:oak_door".to_string(),
             vec![
-                ("facing".to_string(), "east".to_string()),
-                ("half".to_string(), "lower".to_string()),
-                ("hinge".to_string(), "left".to_string()),
-                ("open".to_string(), "false".to_string()),
-                ("powered".to_string(), "false".to_string()),
+                Property::Facing(Facing::East),
+                Property::DoubleBlockHalf(DoubleBlockHalf::Lower),
+                Property::Hinge(DoorHinge::Left),
+                Property::Open(false),
+                Property::Powered(false),
             ],
         );
 
@@ -174,11 +166,11 @@ mod tests {
         let target_entry = PaletteEntry::with_properties(
             "minecraft:oak_door".to_string(),
             vec![
-                ("facing".to_string(), "west".to_string()),
-                ("half".to_string(), "lower".to_string()),
-                ("hinge".to_string(), "right".to_string()),
-                ("open".to_string(), "false".to_string()),
-                ("powered".to_string(), "false".to_string()),
+                Property::Facing(Facing::West),
+                Property::DoubleBlockHalf(DoubleBlockHalf::Lower),
+                Property::Hinge(DoorHinge::Right),
+                Property::Open(false),
+                Property::Powered(false),
             ],
         );
         let expected = BlockStateResolver::resolve_simple(&target_entry).unwrap();

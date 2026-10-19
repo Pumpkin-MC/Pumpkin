@@ -3,7 +3,7 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::block_properties::{DoubleBlockHalf, OakDoorLikeProperties};
-use pumpkin_data::block_transformer::AXE;
+use pumpkin_data::data_component_impl::BlockTransformerImpl;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
@@ -32,6 +32,13 @@ impl ItemBehaviour for AxeItem {
         block: &Block,
         _server: &Server,
     ) -> BlockActionResult {
+        let Some(transformer) = item
+            .get_data_component::<BlockTransformerImpl>()
+            .and_then(BlockTransformerImpl::get_transformer)
+        else {
+            return BlockActionResult::Pass;
+        };
+
         let world = player.world();
         let get_block = |dx: i8, dy: i8, dz: i8| {
             let check_pos = BlockPos(location.0 + Vector3::new(dx as i32, dy as i32, dz as i32));
@@ -40,7 +47,7 @@ impl ItemBehaviour for AxeItem {
 
         let current_state_id = world.get_block_state_id(&location);
 
-        if let Some(result) = AXE.transform(block, current_state_id, face, &get_block) {
+        if let Some(result) = transformer.transform(block, current_state_id, face, &get_block) {
             if let Some(sound) = result.entry.sound {
                 world.play_sound(sound, SoundCategory::Blocks, &location.to_f64());
             }
