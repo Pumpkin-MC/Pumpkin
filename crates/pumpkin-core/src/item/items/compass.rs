@@ -54,12 +54,17 @@ impl ItemBehaviour for CompassItem {
                 .patch
                 .push((DataComponent::LodestoneTracker, Some(tracker.to_dyn())));
 
-            item.decrement_unless_creative(player.gamemode.load(), 1);
-            let was_added = player
-                .inventory
-                .insert_stack_anywhere(&mut lodestone_compass);
-            if !was_added && !lodestone_compass.is_empty() {
-                world.drop_stack(&player.position().to_block_pos(), lodestone_compass);
+            let gamemode = player.gamemode.load();
+            if gamemode != pumpkin_util::GameMode::Creative && item.item_count == 1 {
+                *item = lodestone_compass;
+            } else {
+                item.decrement_unless_creative(gamemode, 1);
+                let was_added = player
+                    .inventory
+                    .insert_stack_anywhere(&mut lodestone_compass);
+                if !was_added && !lodestone_compass.is_empty() {
+                    world.drop_stack(&player.position().to_block_pos(), lodestone_compass);
+                }
             }
             BlockActionResult::Success
         } else {

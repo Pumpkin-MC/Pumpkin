@@ -144,9 +144,21 @@ impl Mob for SnowGolemEntity {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         if item_stack.get_item() == &Item::SHEARS && self.has_pumpkin() {
-            self.set_has_pumpkin(false);
             let entity = self.get_entity();
             let world = entity.world.load();
+            if let Some(server) = world.server.upgrade() {
+                let mut event = crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
+                    player: player.clone(),
+                    entity_id: entity.entity_id,
+                    hand: 0,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return false;
+                }
+            }
+            self.set_has_pumpkin(false);
             let pos = entity.pos.load();
             world.play_sound(Sound::EntitySnowGolemShear, SoundCategory::Players, &pos);
             let item_entity = Arc::new(ItemEntity::new(
@@ -154,7 +166,9 @@ impl Mob for SnowGolemEntity {
                 ItemStack::new(1, &Item::CARVED_PUMPKIN),
             ));
             world.spawn_entity(item_entity);
-            player.damage_held_item(1);
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                let _ = item_stack.damage_item(1);
+            }
             return true;
         }
         false

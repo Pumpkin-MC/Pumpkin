@@ -708,7 +708,16 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::CookingFuel => Some(CookingFuelImpl::read_data(data)?.to_dyn()),
         DataComponent::Compostable => Some(CompostableImpl::read_data(data)?.to_dyn()),
         DataComponent::Waxed => Some(WaxedImpl::read_data(data)?.to_dyn()),
-        _ => None,
+        DataComponent::InteractAnimation => Some(InteractAnimationImpl::read_data(data)?.to_dyn()),
+        DataComponent::BlockTransformer => Some(BlockTransformerImpl::read_data(data)?.to_dyn()),
+        DataComponent::VillagerFood => Some(VillagerFoodImpl::read_data(data)?.to_dyn()),
+        DataComponent::MobVisibility => Some(MobVisibilityImpl::read_data(data)?.to_dyn()),
+        DataComponent::ProvidesPotteryPattern => {
+            Some(ProvidesPotteryPatternImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::SignTextFront => Some(SignTextFrontImpl::read_data(data)?.to_dyn()),
+        DataComponent::SignTextBack => Some(SignTextBackImpl::read_data(data)?.to_dyn()),
+        DataComponent::CushionColor => Some(CushionColorImpl::read_data(data)?.to_dyn()),
     }
 }
 

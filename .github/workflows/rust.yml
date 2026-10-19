@@ -185,6 +185,28 @@ jobs:
           python .github/scripts/ci_packages.py run --
           cargo test --doc --verbose
 
+  gametest:
+    name: GameTest and Bot Harness
+    needs: [prepare, format, machete, clippy, check_wit]
+    if: >-
+      !cancelled() &&
+      needs.prepare.outputs.has_code == 'true' &&
+      needs.format.result == 'success' &&
+      needs.machete.result == 'success' &&
+      needs.clippy.result == 'success' &&
+      (needs.check_wit.result == 'success' || needs.check_wit.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: debug-${{ runner.os }}-${{ runner.arch }}
+      - name: Run pumpkin-tester (headless bots + Mojang GameTests)
+        run: cargo run -p pumpkin-tester
+
   test_android:
     name: Test on Android AArch64
     needs: [prepare, format, machete, clippy, check_wit]
