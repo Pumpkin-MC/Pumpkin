@@ -650,7 +650,7 @@ impl ScreenHandler for CraftingTableScreenHandler {
             if stack.is_empty() {
                 slot.set_stack_prev(ItemStack::EMPTY.clone(), stack_prev.clone());
             } else {
-                slot.mark_dirty();
+                slot.set_stack(stack.clone());
             }
             if stack.item_count == stack_prev.item_count {
                 return ItemStack::EMPTY.clone();
@@ -673,3 +673,124 @@ impl ScreenHandler for CraftingTableScreenHandler {
 }
 
 impl CraftingScreenHandler<CraftingInventory> for CraftingTableScreenHandler {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity_equipment::EntityEquipment;
+    use pumpkin_data::item::Item;
+    use pumpkin_protocol::java::client::play::{
+        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+        CSetPlayerInventory, CSetSelectedSlot,
+    };
+
+    struct DummyPlayer {
+        inventory: Arc<PlayerInventory>,
+    }
+
+    impl InventoryPlayer for DummyPlayer {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn drop_item(&self, _item: ItemStack, _retain_ownership: bool) {}
+
+        fn is_creative(&self) -> bool {
+            false
+        }
+
+        fn has_infinite_materials(&self) -> bool {
+            false
+        }
+
+        fn experience_level(&self) -> i32 {
+            0
+        }
+
+        fn add_experience_levels(&self, _levels: i32) {}
+
+        fn enchantment_seed(&self) -> i32 {
+            0
+        }
+
+        fn set_enchantment_seed(&self, _seed: i32) {}
+
+        fn get_inventory(&self) -> Arc<PlayerInventory> {
+            self.inventory.clone()
+        }
+
+        fn enqueue_inventory_packet(
+            &self,
+            _packet: &CSetContainerContent,
+            _window_type: Option<WindowType>,
+        ) {
+        }
+
+        fn enqueue_slot_packet(
+            &self,
+            _packet: &CSetContainerSlot,
+            _window_type: Option<WindowType>,
+            _total_slots: usize,
+        ) {
+        }
+
+        fn enqueue_cursor_packet(&self, _packet: &CSetCursorItem) {}
+
+        fn enqueue_property_packet(&self, _packet: &CSetContainerProperty) {}
+
+        fn enqueue_slot_set_packet(&self, _packet: &CSetPlayerInventory) {}
+
+        fn enqueue_set_held_item_packet(&self, _packet: &CSetSelectedSlot) {}
+
+        fn enqueue_equipment_change(
+            &self,
+            _slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+            _stack: &ItemStack,
+        ) {
+        }
+
+        fn award_experience(&self, _amount: i32) {}
+
+        fn increment_stat(&self, _category: StatisticCategory, _stat_id: i32, _amount: i32) {}
+
+        fn play_block_sound(&self, _sound: pumpkin_data::sound::Sound, _pitch: f32) {}
+    }
+
+    #[test]
+    fn quick_move_partial_fit_writes_remainder_back() {
+        let player = DummyPlayer {
+            inventory: Arc::new(PlayerInventory::new(
+                Arc::new(Mutex::new(EntityEquipment::new())),
+                Arc::new(rustc_hash::FxHashMap::default()),
+            )),
+        };
+        let mut handler = CraftingTableScreenHandler::new(1, &player.inventory, None);
+
+        // The grid has room for one cobblestone and the hotbar (slots 37..46) is full.
+        handler
+            .crafting_inventory
+            .set_stack(0, ItemStack::new(63, &Item::COBBLESTONE));
+        for i in 1..9 {
+            handler
+                .crafting_inventory
+                .set_stack(i, ItemStack::new(64, &Item::DIRT));
+        }
+        for i in 0..9 {
+            player
+                .inventory
+                .set_stack(i, ItemStack::new(64, &Item::DIRT));
+        }
+        // Handler slot 10 is player inventory index 9, the first main inventory slot.
+        player
+            .inventory
+            .set_stack(9, ItemStack::new(64, &Item::COBBLESTONE));
+
+        handler.quick_move(&player, 10);
+
+        let grid = handler.crafting_inventory.get_stack(0).item_count;
+        let source = player.inventory.get_stack(9).item_count;
+        assert_eq!(grid, 64);
+        assert_eq!(source, 63);
+        assert_eq!(grid + source, 63 + 64);
+    }
+}
