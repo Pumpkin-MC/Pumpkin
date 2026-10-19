@@ -811,7 +811,8 @@ mod tests {
     use crate::level::Level;
     use pumpkin_config::world::LevelConfig;
     use pumpkin_data::dimension::Dimension;
-    use pumpkin_data::{Block, BlockStateId};
+    use pumpkin_data::block_properties::{Facing, Half, SlabType, StairsShape};
+    use pumpkin_data::{Block, BlockStateId, Property};
     use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector2::Vector2;
     use std::sync::Arc;
@@ -1108,7 +1109,10 @@ mod tests {
     #[tokio::test]
     async fn a_top_slab_has_no_direct_sky() {
         let slab = Block::OAK_SLAB
-            .from_properties(&[("type", "top"), ("waterlogged", "false")])
+            .from_properties(&[
+                Property::SlabType(SlabType::Top),
+                Property::Waterlogged(false),
+            ])
             .to_state_id(&Block::OAK_SLAB);
         assert_eq!(
             BlockStateId::to_state(slab).opacity,
@@ -1131,10 +1135,10 @@ mod tests {
     async fn a_stair_side_face_darkens_a_cell_lit_only_through_it() {
         let stair = Block::OAK_STAIRS
             .from_properties(&[
-                ("facing", "east"),
-                ("half", "bottom"),
-                ("shape", "straight"),
-                ("waterlogged", "false"),
+                Property::Facing(Facing::East),
+                Property::Half(Half::Bottom),
+                Property::StairsShape(StairsShape::Straight),
+                Property::Waterlogged(false),
             ])
             .to_state_id(&Block::OAK_STAIRS);
         assert!(

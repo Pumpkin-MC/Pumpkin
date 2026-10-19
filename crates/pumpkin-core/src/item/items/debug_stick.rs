@@ -10,13 +10,13 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::{Block, BlockDirection, BlockId, BlockStateId};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockStateId, PropertyKey};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
 
-static SELECTED_PROPERTIES: LazyLock<Mutex<FxHashMap<BlockId, &'static str>>> =
+static SELECTED_PROPERTIES: LazyLock<Mutex<FxHashMap<BlockId, PropertyKey>>> =
     LazyLock::new(|| Mutex::new(FxHashMap::default()));
 
 pub struct DebugStickItem;
@@ -59,7 +59,7 @@ impl DebugStickItem {
             return false;
         }
 
-        let prop_names: Vec<&'static str> = prop_list.iter().map(|(k, _)| *k).collect();
+        let prop_names: Vec<PropertyKey> = prop_list.iter().map(|p| p.key()).collect();
         let mut map = SELECTED_PROPERTIES
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -69,12 +69,12 @@ impl DebugStickItem {
         }
 
         if cycle {
-            let mut possible_values: Vec<&'static str> = Vec::new();
+            let mut possible_values: Vec<pumpkin_data::Property> = Vec::new();
             for state in block.states {
                 if let Some(state_props) = block.properties(state.id) {
-                    for (k, v) in state_props.to_props() {
-                        if k == selected_prop && !possible_values.contains(&v) {
-                            possible_values.push(v);
+                    for p in state_props.to_props() {
+                        if p.key() == selected_prop && !possible_values.contains(&p) {
+                            possible_values.push(p);
                         }
                     }
                 }
@@ -86,8 +86,9 @@ impl DebugStickItem {
 
             let current_val = prop_list
                 .iter()
-                .find(|(k, _)| *k == selected_prop)
-                .map_or(possible_values[0], |(_, v)| *v);
+                .find(|p| p.key() == selected_prop)
+                .copied()
+                .unwrap_or(possible_values[0]);
             let cur_idx = possible_values
                 .iter()
                 .position(|v| *v == current_val)
@@ -100,10 +101,10 @@ impl DebugStickItem {
             };
             let new_val = possible_values[new_idx];
 
-            let mut new_props = prop_list.clone();
-            for (k, v) in &mut new_props {
-                if *k == selected_prop {
-                    *v = new_val;
+            let mut new_props = prop_list;
+            for p in &mut new_props {
+                if p.key() == selected_prop {
+                    *p = new_val;
                 }
             }
 
@@ -115,8 +116,8 @@ impl DebugStickItem {
                 &TextComponent::translate(
                     "item.minecraft.debug_stick.update",
                     [
-                        TextComponent::text(selected_prop),
-                        TextComponent::text(new_val),
+                        TextComponent::text(selected_prop.to_str()),
+                        TextComponent::text(new_val.value_str()),
                     ],
                 ),
                 true,
@@ -137,14 +138,14 @@ impl DebugStickItem {
 
             let current_val = prop_list
                 .iter()
-                .find(|(k, _)| *k == new_selected_prop)
-                .map_or("", |(_, v)| *v);
+                .find(|p| p.key() == new_selected_prop)
+                .map_or("", |p| p.value_str());
 
             player.send_system_message_raw(
                 &TextComponent::translate(
                     "item.minecraft.debug_stick.select",
                     [
-                        TextComponent::text(new_selected_prop),
+                        TextComponent::text(new_selected_prop.to_str()),
                         TextComponent::text(current_val),
                     ],
                 ),
