@@ -337,6 +337,47 @@ pub(super) async fn test_water_breaks_torch_and_carpet_in_path(
     Ok(())
 }
 
+pub(super) async fn test_water_flow_keeps_structure_void(
+    helper: GameTestHelper,
+) -> GameTestResult<()> {
+    build_stone_floor(&helper, 6, 5).await?;
+    for x in 0..=5 {
+        helper
+            .set_block_default(&BlockPos::new(x, 1, 1), &Block::STONE)
+            .await?;
+        helper
+            .set_block_default(&BlockPos::new(x, 1, 3), &Block::STONE)
+            .await?;
+    }
+    helper
+        .set_block_default(&BlockPos::new(0, 1, 2), &Block::STONE)
+        .await?;
+    helper
+        .set_block_default(&BlockPos::new(5, 1, 2), &Block::STONE)
+        .await?;
+
+    let structure_void = BlockPos::new(2, 1, 2);
+    let behind = BlockPos::new(3, 1, 2);
+    helper
+        .set_block_default(&structure_void, &Block::STRUCTURE_VOID)
+        .await?;
+    helper
+        .set_block_default(&BlockPos::new(1, 1, 2), &Block::WATER)
+        .await?;
+
+    helper
+        .start_sequence()
+        .then_idle(8)
+        .then_execute(move |helper| async move {
+            helper
+                .assert_block_present(&structure_void, &Block::STRUCTURE_VOID)
+                .await?;
+            helper.assert_block_present(&behind, &Block::AIR).await
+        })
+        .then_succeed();
+    Ok(())
+}
+
 pub(super) async fn test_sponge_ignores_lava_and_stays_dry(
     helper: GameTestHelper,
 ) -> GameTestResult<()> {
