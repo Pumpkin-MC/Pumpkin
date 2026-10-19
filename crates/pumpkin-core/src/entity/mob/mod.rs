@@ -1013,6 +1013,26 @@ impl MobEntity {
         GoalSelector::tick_reach(&self.goals_selector, mob, &mut goals)?;
         GoalSelector::tick_reach(&self.target_selector, mob, &mut goals)?;
 
+        let (route, path_length) = {
+            let navigator = self
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let route = navigator
+                .get_path()
+                .filter(|path| !path.is_done())
+                .and_then(|path| {
+                    // A stopped goal can leave its faster route active.
+                    goals.speed = goals.speed.max(navigator.get_speed_modifier());
+                    // Area checked by `shouldRecomputePath`.
+                    let end = path.get_end_node()?.pos.0.to_f64();
+                    let middle = (end + entity.pos.load()) * 0.5;
+                    let radius = (path.get_node_count() - path.get_next_node_index()) as f64 + 1.0;
+                    Some(BoundingBox::new(middle, middle).expand(radius, radius, radius))
+                });
+            (route, f64::from(navigator.max_path_length(living)))
+        };
+
         // `Mob.setSpeed` also sets the forward input to the speed.
         let speed = living.get_attribute_value(&Attributes::MOVEMENT_SPEED) * goals.speed.max(1.0);
         let block_friction = LivingEntity::compute_modified_friction(
@@ -1032,24 +1052,6 @@ impl MobEntity {
             + SURFACE_UPWARD_ACCELERATION
             + fluid_push
             + spawns;
-
-        let (route, path_length) = {
-            let navigator = self
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let route = navigator
-                .get_path()
-                .filter(|path| !path.is_done())
-                .and_then(|path| {
-                    // Area checked by `shouldRecomputePath`.
-                    let end = path.get_end_node()?.pos.0.to_f64();
-                    let middle = (end + entity.pos.load()) * 0.5;
-                    let radius = (path.get_node_count() - path.get_next_node_index()) as f64 + 1.0;
-                    Some(BoundingBox::new(middle, middle).expand(radius, radius, radius))
-                });
-            (route, f64::from(navigator.max_path_length(living)))
-        };
 
         let mut links = entity_islands::links_of(mob);
         links.extend(goals.links);
@@ -2113,6 +2115,67 @@ mod lifecycle_tests {
     };
 
     struct ControlProbe(Controls, Arc<AtomicBool>);
+
+    #[tokio::test]
+    async fn audited_reach_covers_a_route_after_the_mob_grows_up()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::ai::pathfinder::{node::Node, path::Path};
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        let mob = cow.get_mob_entity();
+        let standing = mob
+            .audited_reach(cow.as_ref())
+            .ok_or("missing adult reach")?;
+        let destination = BlockPos::new(8, 64, 0);
+        assert!(
+            mob.navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .move_to_path(
+                    Some(Path::new(vec![Node::new(destination)], destination, true)),
+                    1.25,
+                    &mob.living_entity,
+                )
+        );
+        cow.get_entity().age.store(-1, Relaxed);
+        let baby = mob
+            .audited_reach(cow.as_ref())
+            .ok_or("missing baby reach")?;
+        cow.get_entity().age.store(0, Relaxed);
+        let grown = mob
+            .audited_reach(cow.as_ref())
+            .ok_or("missing grown reach")?;
+        assert!(baby.motion.0 > standing.motion.0);
+        assert_eq!(grown.motion, baby.motion);
+        cow.get_entity().age.store(-1, Relaxed);
+        mob.navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set_speed(1.0);
+        let slower_route = mob
+            .audited_reach(cow.as_ref())
+            .ok_or("missing slower route reach")?;
+        assert_eq!(slower_route.motion, baby.motion);
+        cow.get_entity().age.store(0, Relaxed);
+        mob.navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_path_mut()
+            .ok_or("missing retained path")?
+            .advance();
+        let done = mob
+            .audited_reach(cow.as_ref())
+            .ok_or("missing done reach")?;
+        assert_eq!(done.motion, standing.motion);
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     impl Goal for ControlProbe {
         fn can_start(&mut self, _mob: &dyn Mob) -> bool {
