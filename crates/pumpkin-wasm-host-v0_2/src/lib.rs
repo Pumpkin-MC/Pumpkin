@@ -3,12 +3,14 @@
 // Not warn event sending macros
 #![allow(unused_labels, deprecated)]
 
+use pumpkin_wasm_host_common::state::FromResource;
+
 use crate::bindings::PluginPre;
 use pumpkin_core::plugin::PluginMetadata;
 use pumpkin_wasm_host_common::{
     concurrent_store::LegacySyncReentry, plugin::PluginInitError, state::PluginHostState,
 };
-use wasmtime::component::{HasSelf, InstancePre, Linker};
+use wasmtime::component::{Accessor, HasSelf, InstancePre, Linker, Resource};
 use wasmtime::{Engine, Store};
 
 mod bindings;
@@ -25,7 +27,6 @@ pub mod enchantment;
 pub mod entity;
 pub mod events;
 pub mod forms;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod gametest;
 pub mod generated_packets;
 pub mod gui;
@@ -49,6 +50,131 @@ pub mod uuid;
 pub mod world;
 
 pub use crate::bindings::{Plugin, pumpkin};
+
+fn active_plugin(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
+) -> wasmtime::Result<std::sync::Arc<pumpkin_wasm_host_common::plugin::WasmPlugin>> {
+    accessor.with(|mut host| {
+        host.get()
+            .plugin
+            .as_ref()
+            .and_then(std::sync::Weak::upgrade)
+            .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))
+    })
+}
+
+/// Runs synchronous server work on Tokio's blocking pool without holding a store borrow
+///
+/// Callbacks from `operation` inherit the active guest call's chain and root admission
+/// The reentry depth is checked before the operation is spawned
+pub(crate) async fn run_blocking<R: Send + 'static>(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
+    operation: impl FnOnce() -> R + Send + 'static,
+) -> wasmtime::Result<R> {
+    active_plugin(accessor)?
+        .store
+        .spawn_blocking_in_active_context(operation)
+        .await
+}
+
+/// Awaits host work with the active guest call's chain and root admission
+///
+/// Use this when the operation can call back into plugins so callbacks stay in the same chain
+/// The reentry depth is checked before the future is polled
+pub(crate) async fn in_active_context<R>(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
+    future: impl std::future::Future<Output = R>,
+) -> wasmtime::Result<R> {
+    active_plugin(accessor)?
+        .store
+        .in_active_context(future)
+        .await
+}
+
+/// Resource-table access from an [`Accessor`] without holding the store borrow across an
+/// `.await`.
+pub(crate) trait AccessorExt {
+    fn get_res<T: FromResource>(&self, res: &Resource<T>) -> wasmtime::Result<T::Internal>
+    where
+        T::Internal: Clone;
+    fn take_res<T: FromResource>(&self, res: Resource<T>) -> wasmtime::Result<T::Internal>;
+    fn add_res<T: FromResource>(&self, item: T::Internal) -> wasmtime::Result<Resource<T>>;
+    fn server(&self) -> wasmtime::Result<std::sync::Arc<pumpkin_core::server::Server>>;
+}
+
+impl AccessorExt for Accessor<PluginHostState, HasSelf<PluginHostState>> {
+    fn get_res<T: FromResource>(&self, res: &Resource<T>) -> wasmtime::Result<T::Internal>
+    where
+        T::Internal: Clone,
+    {
+        self.with(|mut host| host.get().get(res).cloned())
+    }
+
+    fn take_res<T: FromResource>(&self, res: Resource<T>) -> wasmtime::Result<T::Internal> {
+        self.with(|mut host| host.get().take(res))
+    }
+
+    fn add_res<T: FromResource>(&self, item: T::Internal) -> wasmtime::Result<Resource<T>> {
+        self.with(|mut host| host.get().add(item))
+    }
+
+    fn server(&self) -> wasmtime::Result<std::sync::Arc<pumpkin_core::server::Server>> {
+        self.with(|mut host| host.get().require_server().cloned())
+    }
+}
+
+/// Server access for synchronous host imports, which work on the host state directly instead of
+/// through an [`Accessor`].
+pub(crate) trait RequireServer {
+    /// Borrows the server, failing if the host state has none set.
+    fn require_server(&self) -> wasmtime::Result<&std::sync::Arc<pumpkin_core::server::Server>>;
+}
+
+impl RequireServer for PluginHostState {
+    fn require_server(&self) -> wasmtime::Result<&std::sync::Arc<pumpkin_core::server::Server>> {
+        self.server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))
+    }
+}
+
+/// Locking for a standard [`Mutex`](std::sync::Mutex) that ignores poisoning.
+///
+/// Returns the guard even after a panic has poisoned the mutex
+/// The protected data is left as the panicking thread left it, with no validation or repair
+pub(crate) trait LockIgnorePoison<T: ?Sized> {
+    /// Locks the mutex, taking the guard out of the poison error if it was poisoned.
+    fn lock_ignore_poison(&self) -> std::sync::MutexGuard<'_, T>;
+}
+
+impl<T: ?Sized> LockIgnorePoison<T> for std::sync::Mutex<T> {
+    fn lock_ignore_poison(&self) -> std::sync::MutexGuard<'_, T> {
+        self.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+/// Locking for a standard [`RwLock`](std::sync::RwLock) that ignores poisoning, see
+/// [`LockIgnorePoison`].
+pub(crate) trait RwLockIgnorePoison<T: ?Sized> {
+    /// Takes a read lock, taking the guard out of the poison error if it was poisoned.
+    fn read_ignore_poison(&self) -> std::sync::RwLockReadGuard<'_, T>;
+
+    /// Takes a write lock, taking the guard out of the poison error if it was poisoned.
+    fn write_ignore_poison(&self) -> std::sync::RwLockWriteGuard<'_, T>;
+}
+
+impl<T: ?Sized> RwLockIgnorePoison<T> for std::sync::RwLock<T> {
+    fn read_ignore_poison(&self) -> std::sync::RwLockReadGuard<'_, T> {
+        self.read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn write_ignore_poison(&self) -> std::sync::RwLockWriteGuard<'_, T> {
+        self.write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
 
 mod resource_with {
     use super::pumpkin::plugin;

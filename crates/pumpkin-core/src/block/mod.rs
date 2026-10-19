@@ -480,8 +480,10 @@ pub fn drop_loot(
     params: &LootContextParameters,
 ) {
     let loot_block = loot_table_block(block);
-    let key = format!("minecraft:blocks/{}", loot_block.name);
-    if let Some(loot_table) = world.get_loot_table(&key) {
+    if let Some(loot_table) = loot_block
+        .loot_table
+        .and_then(|key| world.get_loot_table(key))
+    {
         let seed: i64 = rand::random();
         let items = crate::world::loot::generate_loot_from_handle(&loot_table, seed, params);
         if !items.is_empty() {
