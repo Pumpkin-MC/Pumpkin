@@ -192,6 +192,9 @@ pub trait InventoryPlayer: Send + Sync {
     /// Plays a block sound at the open container position.
     fn play_block_sound(&self, sound: Sound, pitch: f32);
 
+    // Vanilla `Entity.playSound`, for the item overrides that play their own sounds.
+    fn play_item_sound(&self, _sound: Sound, _volume: f32, _pitch: f32) {}
+
     /// Fires a prepare item enchant event. Returns true if cancelled.
     fn fire_prepare_item_enchant_event(
         &self,
@@ -1008,54 +1011,15 @@ pub trait ScreenHandler: Send + Sync {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-                if click_type == MouseClick::Right {
-                    let mut intercepted = false;
-
-                    if !cursor_stack.is_empty() {
-                        let mut inner_slot_stack = slot.get_stack();
-                        if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                            && bundle.try_insert(&mut cursor_stack) {
-                                slot.set_stack(inner_slot_stack);
-                                intercepted = true;
-                            }
-                    }
-
-                    if !intercepted && !slot_stack.is_empty()
-                        && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
-                            let mut inner_slot_stack = slot.get_stack();
-                            if bundle.try_insert(&mut inner_slot_stack) {
-                                if inner_slot_stack.item_count == 0 {
-                                    inner_slot_stack = ItemStack::EMPTY.clone();
-                                }
-                                slot.set_stack(inner_slot_stack);
-                                intercepted = true;
-                            }
-                        }
-
-                    if !intercepted && cursor_stack.is_empty() {
-                        let mut inner_slot_stack = slot.get_stack();
-                        if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                            && let Some(extracted) = bundle.try_extract() {
-                                *cursor_stack = extracted;
-                                slot.set_stack(inner_slot_stack);
-                                intercepted = true;
-                            }
-                    }
-
-                    if !intercepted && slot_stack.is_empty()
-                        && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                        && let Some(extracted) = bundle.try_extract() {
-                            slot.set_stack(extracted);
-                            intercepted = true;
-                        }
-
-                    if intercepted {
-                        if cursor_stack.item_count == 0 {
-                            *cursor_stack = ItemStack::EMPTY.clone();
-                        }
-                        slot.mark_dirty();
-                        return;
-                    }
+                if crate::bundle::try_item_click_behaviour_override(
+                    player,
+                    &click_type,
+                    &slot,
+                    &slot_stack,
+                    &mut cursor_stack,
+                ) {
+                    slot.mark_dirty();
+                    return;
                 }
 
                 let equipment_slot = cursor_stack
