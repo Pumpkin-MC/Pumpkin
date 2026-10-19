@@ -14,7 +14,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_util::{
-    GameMode,
+    GameMode, Hand,
     math::{position::BlockPos, vector3::Vector3},
 };
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
@@ -109,7 +109,8 @@ const fn get_fill_sound(item: &Item) -> Sound {
     }
 }
 
-fn give_player_bucket_item(player: &Player, item: &'static Item) {
+/// Gives the player the bucket that results from using the one in `hand`, in its place.
+fn give_player_bucket_item(player: &Player, hand: Hand, item: &'static Item) {
     if player.gamemode.load() == GameMode::Creative {
         let has_item = {
             let inv = player
@@ -126,13 +127,13 @@ fn give_player_bucket_item(player: &Player, item: &'static Item) {
         player.inventory.insert_stack_anywhere(&mut item_stack);
     } else {
         let item_stack = ItemStack::new(1, item);
-        let mut held_stack = player.inventory.held_item();
+        let mut held_stack = player.inventory.get_stack_in_hand(hand);
 
         if held_stack.item_count == 1 {
-            player.inventory.set_held_item(item_stack);
+            player.inventory.set_stack_in_hand(hand, item_stack);
         } else {
             held_stack.decrement(1);
-            player.inventory.set_held_item(held_stack);
+            player.inventory.set_stack_in_hand(hand, held_stack);
             let mut stack_to_give = item_stack;
             let was_added = player.inventory.insert_stack_anywhere(&mut stack_to_give);
             if !was_added && !stack_to_give.is_empty() {
@@ -290,7 +291,19 @@ impl ItemBehaviour for EmptyBucketItem {
         self.normal_use_with_rotation(item, player, yaw, pitch);
     }
 
-    fn normal_use_with_rotation(&self, _block: &Item, player: &Player, yaw: f32, pitch: f32) {
+    fn normal_use_with_rotation(&self, item: &Item, player: &Player, yaw: f32, pitch: f32) {
+        self.normal_use_with_hand(item, player, yaw, pitch, Hand::Right);
+    }
+
+    // The filled bucket replaces the one in the hand that was used, not the main hand.
+    fn normal_use_with_hand(
+        &self,
+        _item: &Item,
+        player: &Player,
+        yaw: f32,
+        pitch: f32,
+        hand: Hand,
+    ) {
         let world = player.world();
         let (start_pos, end_pos) = get_start_and_end_pos(player, yaw, pitch);
 
@@ -332,7 +345,7 @@ impl ItemBehaviour for EmptyBucketItem {
             &block_pos.to_f64(),
         );
 
-        give_player_bucket_item(player, item);
+        give_player_bucket_item(player, hand, item);
     }
 
     fn use_on_entity(&self, _item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
@@ -358,7 +371,8 @@ impl ItemBehaviour for EmptyBucketItem {
                 Sound::EntityCowMilk
             };
             world.play_sound(sound, SoundCategory::Neutral, &ent.pos.load());
-            give_player_bucket_item(player, &Item::MILK_BUCKET);
+            // Entity interactions are dispatched with the main hand stack.
+            give_player_bucket_item(player, Hand::Right, &Item::MILK_BUCKET);
         }
     }
 
@@ -374,6 +388,11 @@ impl ItemBehaviour for FilledBucketItem {
     }
 
     fn normal_use_with_rotation(&self, item: &Item, player: &Player, yaw: f32, pitch: f32) {
+        self.normal_use_with_hand(item, player, yaw, pitch, Hand::Right);
+    }
+
+    // The empty bucket replaces the one in the hand that was used, not the main hand.
+    fn normal_use_with_hand(&self, item: &Item, player: &Player, yaw: f32, pitch: f32, hand: Hand) {
         let world = player.world();
         let (start_pos, end_pos) = get_start_and_end_pos(player, yaw, pitch);
         let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
@@ -436,10 +455,9 @@ impl ItemBehaviour for FilledBucketItem {
         }
 
         if player.gamemode.load() != GameMode::Creative {
-            let item_stack = ItemStack::new(1, &Item::BUCKET);
             player
                 .inventory
-                .set_slot(player.inventory.get_selected_slot() as usize, item_stack);
+                .set_stack_in_hand(hand, ItemStack::new(1, &Item::BUCKET));
         }
     }
 
@@ -466,7 +484,8 @@ impl ItemBehaviour for FilledBucketItem {
                 let ent = entity.get_entity();
                 let world = ent.world.load();
                 world.play_sound(sound, SoundCategory::Neutral, &ent.pos.load());
-                give_player_bucket_item(player, mob_bucket);
+                // Entity interactions are dispatched with the main hand stack.
+                give_player_bucket_item(player, Hand::Right, mob_bucket);
                 ent.remove();
             }
         }
@@ -487,7 +506,8 @@ impl ItemBehaviour for MilkBucketItem {
 
     fn on_stopped_using(&self, _stack: &ItemStack, player: &Player) {
         player.living_entity.reset_effects_and_attributes();
-        give_player_bucket_item(player, &Item::BUCKET);
+        // Milk is only ever drunk from the main hand (see `normal_use`).
+        give_player_bucket_item(player, Hand::Right, &Item::BUCKET);
     }
 
     fn get_use_duration(&self) -> i32 {
