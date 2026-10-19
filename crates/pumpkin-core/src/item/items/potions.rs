@@ -1,3 +1,4 @@
+use rand::{RngExt, rng};
 use std::sync::Arc;
 
 use crate::entity::Entity;
@@ -9,8 +10,7 @@ use crate::entity::projectile::{
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
-use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::{Sound, SoundCategory};
 
 pub struct PotionItem;
 pub struct SplashPotionItem;
@@ -34,7 +34,10 @@ impl ItemMetadata for LingeringPotionItem {
     }
 }
 
+const ROLL: f32 = -20.0;
 const POWER: f32 = 0.5;
+const DIVERGENCE: f32 = 1.0;
+const THROW_SOUND_VOLUME: f32 = 0.5;
 
 impl ItemBehaviour for PotionItem {
     fn normal_use(&self, _item: &Item, _player: &Player) {
@@ -47,49 +50,52 @@ impl ItemBehaviour for PotionItem {
 }
 
 impl ItemBehaviour for SplashPotionItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, item: &Item, player: &Player) {
+        let (yaw, pitch) = player.rotation();
+        self.normal_use_with_hand(item, player, yaw, pitch, pumpkin_util::Hand::Right);
+    }
+
+    fn normal_use_with_hand(
+        &self,
+        _item: &Item,
+        player: &Player,
+        yaw: f32,
+        pitch: f32,
+        hand: pumpkin_util::Hand,
+    ) {
+        let mut stack = match hand {
+            pumpkin_util::Hand::Right => player.inventory.held_item(),
+            pumpkin_util::Hand::Left => player.inventory.off_hand_item(),
+        };
+        if stack.is_empty() || stack.item.id != Item::SPLASH_POTION.id {
+            return;
+        }
+
         let position = player.position();
         let world = player.world();
-        world.play_sound(
-            Sound::EntityWitchThrow,
-            pumpkin_data::sound::SoundCategory::Neutral,
+        world.play_sound_fine(
+            Sound::EntitySplashPotionThrow,
+            SoundCategory::Players,
             &position,
+            THROW_SOUND_VOLUME,
+            0.4 / (rng().random::<f32>() * 0.4 + 0.8),
         );
         let entity = Entity::new(world.clone(), position, &EntityType::SPLASH_POTION);
         let splash = SplashPotionEntity::new_shot(entity, player.get_entity());
+        splash.set_item_stack(stack.copy_with_count(1));
 
-        // Copy the held item stack data into the projectile
-        let main_s = player.inventory.held_item();
-        let mut used_main = true;
-        let mut stack = (!main_s.is_empty()
-            && main_s.item.id == pumpkin_data::item::Item::SPLASH_POTION.id)
-            .then_some(main_s);
-        if stack.is_none() {
-            let off_s = player.inventory.off_hand_item();
-            if !off_s.is_empty() && off_s.item.id == pumpkin_data::item::Item::SPLASH_POTION.id {
-                stack = Some(off_s);
-                used_main = false;
-            }
-        }
-        let stack = stack.unwrap_or_else(|| ItemStack::EMPTY.clone());
-        splash.set_item_stack(stack);
-
-        let (yaw, pitch) = player.rotation();
-        splash.thrown.set_velocity_from(pitch, yaw, 0.0, POWER, 1.0);
+        splash
+            .thrown
+            .set_velocity_from(pitch, yaw, ROLL, POWER, DIVERGENCE);
 
         world.spawn_entity(Arc::new(splash));
 
-        // Decrement the used stack (clear)
-        if used_main {
-            let mut s = player.inventory.held_item();
-            s.decrement_unless_creative(player.gamemode.load(), 1);
-            player.inventory.set_held_item(s);
-        } else {
-            let mut s = player.inventory.off_hand_item();
-            s.decrement_unless_creative(player.gamemode.load(), 1);
-            player
+        stack.decrement_unless_creative(player.gamemode.load(), 1);
+        match hand {
+            pumpkin_util::Hand::Right => player.inventory.set_held_item(stack),
+            pumpkin_util::Hand::Left => player
                 .inventory
-                .set_stack_in_hand(pumpkin_util::Hand::Left, s);
+                .set_stack_in_hand(pumpkin_util::Hand::Left, stack),
         }
     }
 
@@ -99,49 +105,51 @@ impl ItemBehaviour for SplashPotionItem {
 }
 
 impl ItemBehaviour for LingeringPotionItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, item: &Item, player: &Player) {
+        let (yaw, pitch) = player.rotation();
+        self.normal_use_with_hand(item, player, yaw, pitch, pumpkin_util::Hand::Right);
+    }
+
+    fn normal_use_with_hand(
+        &self,
+        _item: &Item,
+        player: &Player,
+        yaw: f32,
+        pitch: f32,
+        hand: pumpkin_util::Hand,
+    ) {
+        let mut stack = match hand {
+            pumpkin_util::Hand::Right => player.inventory.held_item(),
+            pumpkin_util::Hand::Left => player.inventory.off_hand_item(),
+        };
+        if stack.is_empty() || stack.item.id != Item::LINGERING_POTION.id {
+            return;
+        }
+
         let position = player.position();
         let world = player.world();
-        world.play_sound(
-            Sound::EntityWitchThrow,
-            pumpkin_data::sound::SoundCategory::Neutral,
+        world.play_sound_fine(
+            Sound::EntityLingeringPotionThrow,
+            SoundCategory::Neutral,
             &position,
+            THROW_SOUND_VOLUME,
+            0.4 / (rng().random::<f32>() * 0.4 + 0.8),
         );
         let entity = Entity::new(world.clone(), position, &EntityType::LINGERING_POTION);
         let ling = LingeringPotionEntity::new_shot(entity, player.get_entity());
+        ling.set_item_stack(stack.copy_with_count(1));
 
-        // Copy the held item stack data into the projectile
-        let main_s = player.inventory.held_item();
-        let mut used_main = true;
-        let mut stack = (!main_s.is_empty()
-            && main_s.item.id == pumpkin_data::item::Item::LINGERING_POTION.id)
-            .then_some(main_s);
-        if stack.is_none() {
-            let off_s = player.inventory.off_hand_item();
-            if !off_s.is_empty() && off_s.item.id == pumpkin_data::item::Item::LINGERING_POTION.id {
-                stack = Some(off_s);
-                used_main = false;
-            }
-        }
-        let stack = stack.unwrap_or_else(|| ItemStack::EMPTY.clone());
-        ling.set_item_stack(stack);
-
-        let (yaw, pitch) = player.rotation();
-        ling.thrown.set_velocity_from(pitch, yaw, 0.0, POWER, 1.0);
+        ling.thrown
+            .set_velocity_from(pitch, yaw, ROLL, POWER, DIVERGENCE);
 
         world.spawn_entity(Arc::new(ling));
 
-        // Decrement the used stack (clear)
-        if used_main {
-            let mut s = player.inventory.held_item();
-            s.decrement_unless_creative(player.gamemode.load(), 1);
-            player.inventory.set_held_item(s);
-        } else {
-            let mut s = player.inventory.off_hand_item();
-            s.decrement_unless_creative(player.gamemode.load(), 1);
-            player
+        stack.decrement_unless_creative(player.gamemode.load(), 1);
+        match hand {
+            pumpkin_util::Hand::Right => player.inventory.set_held_item(stack),
+            pumpkin_util::Hand::Left => player
                 .inventory
-                .set_stack_in_hand(pumpkin_util::Hand::Left, s);
+                .set_stack_in_hand(pumpkin_util::Hand::Left, stack),
         }
     }
 

@@ -1,12 +1,18 @@
-use crate::block::{BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs};
-use pumpkin_data::BlockStateId;
+use crate::block::{
+    BlockBehaviour, BlockMetadata, GetStateForNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
+};
 use pumpkin_data::block_properties::MangroveRootsLikeProperties;
 use pumpkin_data::fluid::Fluid;
-use pumpkin_macros::pumpkin_block;
+use pumpkin_data::{Block, BlockId, BlockState, BlockStateId};
 use pumpkin_world::tick::TickPriority;
 
-#[pumpkin_block("minecraft:mangrove_roots")]
 pub struct MangroveRootsBlock;
+
+impl BlockMetadata for MangroveRootsBlock {
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::MANGROVE_ROOTS, BlockId::HEAVY_CORE].into()
+    }
+}
 
 impl BlockBehaviour for MangroveRootsBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
@@ -29,5 +35,9 @@ impl BlockBehaviour for MangroveRootsBlock {
             );
         }
         props.to_state_id(args.block)
+    }
+
+    fn is_pathfindable(&self, state: &BlockState, _computation_type: PathComputationType) -> bool {
+        Block::from_state_id(state.id) != &Block::HEAVY_CORE
     }
 }
