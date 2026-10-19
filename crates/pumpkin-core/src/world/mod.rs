@@ -1649,47 +1649,55 @@ impl World {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .should_plan(tickable.len());
         let islands = if plan_islands {
-            let reports: Vec<_> = tickable
-                .par_iter()
-                .map(|(entity, _)| entity_islands::EntityReach::of(entity.as_ref(), islands_config))
-                .collect();
-            let block_write_checks: Vec<_> = reports
-                .iter()
-                .zip(&tickable)
-                .map(|(report, (entity, _))| report.block_write_check(entity.as_ref()))
-                .collect();
-            let mut reaches = entity_islands::resolve(reports, islands_config);
-            entity_islands::prune_block_writes(self, &mut reaches, &block_write_checks);
-            let nodes: Vec<_> = tickable
-                .iter()
-                .map(|(entity, _)| entity.get_entity().entity_id)
-                .zip(reaches)
-                .collect();
-            let ticking: FxHashSet<i32> = nodes.iter().map(|(id, _)| *id).collect();
-            let idle_entities: Vec<_> = entities_to_tick
-                .iter()
-                .map(|entity| entity.get_entity())
-                .filter(|entity| !ticking.contains(&entity.entity_id))
-                .map(|entity| (entity.entity_id, entity.bounding_box.load()))
-                .collect();
-            let player_bodies: Vec<_> = players
-                .iter()
-                .map(|player| {
-                    let entity = player.get_entity();
-                    (entity.entity_id, entity.bounding_box.load())
-                })
-                .collect();
-            let mut islands = entity_islands::partition(&nodes, &idle_entities, &player_bodies);
-            // Start the largest islands first.
-            islands
-                .islands
-                .sort_by_key(|island| std::cmp::Reverse(island.len()));
+            let islands = (|| {
+                let reports: Vec<_> = tickable
+                    .par_iter()
+                    .map(|(entity, _)| {
+                        entity_islands::EntityReach::of(entity.as_ref(), islands_config)
+                    })
+                    .collect();
+                let block_write_checks: Vec<_> = reports
+                    .iter()
+                    .zip(&tickable)
+                    .map(|(report, (entity, _))| report.block_write_check(entity.as_ref()))
+                    .collect();
+                let mut reaches = entity_islands::resolve(reports, islands_config)?;
+                entity_islands::prune_block_writes(self, &mut reaches, &block_write_checks)?;
+                let nodes: Vec<_> = tickable
+                    .iter()
+                    .map(|(entity, _)| entity.get_entity().entity_id)
+                    .zip(reaches)
+                    .collect();
+                let ticking: FxHashSet<i32> = nodes.iter().map(|(id, _)| *id).collect();
+                let idle_entities: Vec<_> = entities_to_tick
+                    .iter()
+                    .map(|entity| entity.get_entity())
+                    .filter(|entity| !ticking.contains(&entity.entity_id))
+                    .map(|entity| (entity.entity_id, entity.bounding_box.load()))
+                    .collect();
+                let player_bodies: Vec<_> = players
+                    .iter()
+                    .map(|player| {
+                        let entity = player.get_entity();
+                        (entity.entity_id, entity.bounding_box.load())
+                    })
+                    .collect();
+                let mut islands =
+                    entity_islands::partition(&nodes, &idle_entities, &player_bodies)?;
+                // Start the largest islands first.
+                islands
+                    .islands
+                    .sort_by_key(|island| std::cmp::Reverse(island.len()));
+                Some(islands)
+            })();
             let parallel = self
                 .island_schedule
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .record_plan(islands.islands.first().map_or(0, Vec::len));
-            parallel.then_some(islands)
+                .record_plan(islands.as_ref().map_or(tickable.len(), |islands| {
+                    islands.islands.first().map_or(0, Vec::len)
+                }));
+            islands.filter(|_| parallel)
         } else {
             None
         };

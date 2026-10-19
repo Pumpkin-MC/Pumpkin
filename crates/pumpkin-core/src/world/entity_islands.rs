@@ -41,6 +41,44 @@ const PUSH_SLACK: f64 = 3.0 * PUSH_SPEED;
 
 // Larger regions retain the conservative contact-write fallback.
 const MAX_CONTACT_SECTIONS: i64 = 64;
+const MAX_CONTACT_BLOCKS: usize = 4096;
+
+// Cell operations and candidate visits allowed in each planning phase.
+const MAX_PLANNING_WORK: usize = 262_144;
+
+struct PlanningBudget {
+    remaining: usize,
+}
+
+impl Default for PlanningBudget {
+    fn default() -> Self {
+        Self {
+            remaining: MAX_PLANNING_WORK,
+        }
+    }
+}
+
+impl PlanningBudget {
+    fn spend(&mut self, work: usize) -> Option<()> {
+        self.remaining = self.remaining.checked_sub(work)?;
+        Some(())
+    }
+
+    fn cells(
+        &mut self,
+        area: &BoundingBox,
+        size: f64,
+    ) -> Option<[std::ops::RangeInclusive<i32>; 2]> {
+        // Block reads intentionally span all Y levels.
+        if area.min.y.is_nan() || area.max.y.is_nan() || area.min.y > area.max.y {
+            return None;
+        }
+        let x = cells_of(area.min.x, area.max.x, size)?;
+        let z = cells_of(area.min.z, area.max.z, size)?;
+        self.spend(cell_count(&x)?.checked_mul(cell_count(&z)?)?)?;
+        Some([x, z])
+    }
+}
 
 const MIN_PARALLEL_ENTITIES: usize = 16;
 const SERIAL_PROBE_INTERVAL: u8 = 20;
@@ -145,6 +183,18 @@ impl AuditedReach {
             )
             // Blocks stepped and landed on.
             .expand_towards(0.0, -1.0, 0.0);
+        let blocks = (|| {
+            let x = cells_of(area.min.x, area.max.x, 1.0)?;
+            let y = cells_of(area.min.y, area.max.y, 1.0)?;
+            let z = cells_of(area.min.z, area.max.z, 1.0)?;
+            cell_count(&x)?
+                .checked_mul(cell_count(&y)?)?
+                .checked_mul(cell_count(&z)?)
+        })();
+        if blocks.is_none_or(|blocks| blocks > MAX_CONTACT_BLOCKS) {
+            self.global = true;
+            return;
+        }
         let (min, max) = (area.min_block_pos().0, area.max_block_pos().0);
         let contact = BoundingBox::new(min.to_f64(), max.to_f64() + Vector3::new(1.0, 1.0, 1.0));
         if !contact_may_change_blocks(world, &contact, &mut FxHashMap::default()) {
@@ -292,16 +342,27 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
     links
 }
 
-/// Turns reports into reaches. Audited bodies grow by the pushes they can receive, and by
+/// Turns reports into reaches.
+///
+/// Audited bodies grow by the pushes they can receive, and by
 /// `knockback_reach` within reach of an unaudited entity.
+/// Returns `None` when the tick needs serial execution or planning exceeds its budget.
 #[must_use]
-pub fn resolve(reports: Vec<EntityReach>, config: &EntityIslandsConfig) -> Vec<TickReach> {
+pub fn resolve(reports: Vec<EntityReach>, config: &EntityIslandsConfig) -> Option<Vec<TickReach>> {
+    if reports.iter().any(|report| match report {
+        EntityReach::Audited(reach) => reach.global,
+        EntityReach::Conservative(reach) => reach.global,
+    }) {
+        return None;
+    }
+    let mut budget = PlanningBudget::default();
+    budget.spend(reports.len())?;
     let mut pushers = Grid::default();
     let mut threats = Grid::default();
     for report in &reports {
         if let EntityReach::Conservative(reach) = report {
-            pushers.insert(pushers.boxes.len(), reach.body);
-            threats.insert(threats.boxes.len(), reach.entities);
+            pushers.insert(pushers.boxes.len(), reach.body, &mut budget)?;
+            threats.insert(threats.boxes.len(), reach.entities, &mut budget)?;
         }
     }
     let mut query = Query::new(reports.len());
@@ -311,11 +372,17 @@ pub fn resolve(reports: Vec<EntityReach>, config: &EntityIslandsConfig) -> Vec<T
             EntityReach::Conservative(reach) => reaches.push(reach),
             EntityReach::Audited(audited) => {
                 let mut count = 0;
-                pushers.for_each_overlapping(&mut query, &audited.bounding_box, |_| count += 1);
+                pushers.for_each_overlapping(
+                    &mut query,
+                    &audited.bounding_box,
+                    &mut budget,
+                    |_| count += 1,
+                )?;
                 let pushes = PUSH_SPEED * count as f64;
                 let probe = grown_body(&audited, pushes + config.knockback_reach.max(PUSH_SLACK));
                 let mut threatened = false;
-                threats.for_each_overlapping(&mut query, &probe, |_| threatened = true);
+                threats
+                    .for_each_overlapping(&mut query, &probe, &mut budget, |_| threatened = true)?;
                 let extra = pushes
                     + if threatened {
                         config.knockback_reach
@@ -325,12 +392,12 @@ pub fn resolve(reports: Vec<EntityReach>, config: &EntityIslandsConfig) -> Vec<T
                 let reach = finish(audited, extra);
                 // Travel precedes pushing. Later audited turns can only change this body's
                 // velocity for the next tick, so they do not grow its current movement bound.
-                pushers.insert(pushers.boxes.len(), reach.body);
+                pushers.insert(pushers.boxes.len(), reach.body, &mut budget)?;
                 reaches.push(reach);
             }
         }
     }
-    reaches
+    Some(reaches)
 }
 
 /// Removes contact-write fallbacks that no writer can make necessary.
@@ -338,10 +405,12 @@ pub(crate) fn prune_block_writes(
     world: &World,
     reaches: &mut [TickReach],
     checks: &[BlockWriteCheck],
-) {
+) -> Option<()> {
     if reaches.iter().any(|reach| reach.global) {
-        return;
+        return Some(());
     }
+    let mut budget = PlanningBudget::default();
+    budget.spend(reaches.len())?;
     let mut candidates = Vec::new();
     let mut contacts = Grid::default();
     let mut sections = FxHashMap::default();
@@ -378,11 +447,11 @@ pub(crate) fn prune_block_writes(
             }
         };
         active[slot] = false;
-        contacts.insert(candidates.len(), contact);
+        contacts.insert(candidates.len(), contact, &mut budget)?;
         candidates.push(slot);
     }
     if candidates.is_empty() {
-        return;
+        return Some(());
     }
     let mut pending: VecDeque<_> = active
         .iter()
@@ -394,19 +463,20 @@ pub(crate) fn prune_block_writes(
         let Some(writes) = reaches[slot].block_writes else {
             continue;
         };
-        contacts.for_each_overlapping(&mut query, &writes, |candidate| {
+        contacts.for_each_overlapping(&mut query, &writes, &mut budget, |candidate| {
             let slot = candidates[candidate];
             if !active[slot] {
                 active[slot] = true;
                 pending.push_back(slot);
             }
-        });
+        })?;
     }
     for slot in candidates {
         if !active[slot] {
             reaches[slot].block_writes = None;
         }
     }
+    Some(())
 }
 
 fn contact_may_change_blocks(
@@ -551,27 +621,20 @@ pub type IslandMap = FxHashMap<i32, usize>;
 
 /// Splits `nodes` (ticking entities in list order) into islands. Idle entities and players only
 /// connect islands.
+/// Returns `None` when the tick needs serial execution or planning exceeds its budget.
 #[must_use]
 pub fn partition(
     nodes: &[(i32, TickReach)],
     idle_entities: &[(i32, BoundingBox)],
     players: &[(i32, BoundingBox)],
-) -> Islands {
+) -> Option<Islands> {
     if nodes.iter().any(|(_, reach)| reach.global) {
-        #[cfg(debug_assertions)]
-        let island_of = nodes
-            .iter()
-            .map(|(id, _)| *id)
-            .chain(idle_entities.iter().map(|(id, _)| *id))
-            .chain(players.iter().map(|(id, _)| *id))
-            .map(|id| (id, 0))
-            .collect();
-        return Islands {
-            islands: vec![(0..nodes.len()).collect()],
-            #[cfg(debug_assertions)]
-            island_of: Arc::new(island_of),
-        };
+        return None;
     }
+    let mut budget = PlanningBudget::default();
+    budget.spend(nodes.len())?;
+    budget.spend(idle_entities.len())?;
+    budget.spend(players.len())?;
 
     let mut sets = DisjointSets::new(nodes.len() + idle_entities.len() + players.len());
     let mut slots: FxHashMap<i32, usize> = FxHashMap::default();
@@ -582,7 +645,7 @@ pub fn partition(
     let mut entity_grid = Grid::default();
     for (slot, (id, body)) in bodies.enumerate() {
         slots.insert(id, slot);
-        entity_grid.insert(slot, body);
+        entity_grid.insert(slot, body, &mut budget)?;
     }
     let first_player = nodes.len() + idle_entities.len();
     for (offset, (id, _)) in players.iter().enumerate() {
@@ -591,12 +654,14 @@ pub fn partition(
 
     let mut query = Query::new(sets.len());
     for (slot, (_, reach)) in nodes.iter().enumerate() {
-        entity_grid.union_overlapping(&mut sets, &mut query, slot, &reach.entities);
+        entity_grid.union_overlapping(&mut sets, &mut query, slot, &reach.entities, &mut budget)?;
+        budget.spend(players.len())?;
         for (offset, (_, body)) in players.iter().enumerate() {
             if overlaps(&reach.players, body) {
                 sets.union(slot, first_player + offset);
             }
         }
+        budget.spend(reach.links.len())?;
         for link in &reach.links {
             let other = *slots.entry(*link).or_insert_with(|| sets.push());
             sets.union(slot, other);
@@ -611,11 +676,11 @@ pub fn partition(
     if !writers.is_empty() {
         let mut block_grid = Grid::default();
         for (slot, (_, reach)) in nodes.iter().enumerate() {
-            block_grid.insert(slot, reach.block_reads);
+            block_grid.insert(slot, reach.block_reads, &mut budget)?;
         }
         let mut query = Query::new(sets.len());
         for (slot, writes) in writers {
-            block_grid.union_overlapping(&mut sets, &mut query, slot, &writes);
+            block_grid.union_overlapping(&mut sets, &mut query, slot, &writes, &mut budget)?;
         }
     }
 
@@ -638,11 +703,11 @@ pub fn partition(
                 .map(|island| (id, *island))
         })
         .collect();
-    Islands {
+    Some(Islands {
         islands,
         #[cfg(debug_assertions)]
         island_of: Arc::new(island_of),
-    }
+    })
 }
 
 #[cfg(debug_assertions)]
@@ -698,8 +763,15 @@ fn overlaps(a: &BoundingBox, b: &BoundingBox) -> bool {
         && a.max.z >= b.min.z
 }
 
-fn cells_of(min: f64, max: f64, size: f64) -> std::ops::RangeInclusive<i32> {
-    ((min / size).floor() as i32)..=((max / size).floor() as i32)
+fn cells_of(min: f64, max: f64, size: f64) -> Option<std::ops::RangeInclusive<i32>> {
+    if !min.is_finite() || !max.is_finite() || min > max {
+        return None;
+    }
+    Some(((min / size).floor() as i32)..=((max / size).floor() as i32))
+}
+
+fn cell_count(range: &std::ops::RangeInclusive<i32>) -> Option<usize> {
+    usize::try_from(i64::from(*range.end()) - i64::from(*range.start()) + 1).ok()
 }
 
 struct Cell {
@@ -720,10 +792,15 @@ struct Grid {
 }
 
 impl Grid {
-    fn insert(&mut self, slot: usize, area: BoundingBox) {
+    fn insert(
+        &mut self,
+        slot: usize,
+        area: BoundingBox,
+        budget: &mut PlanningBudget,
+    ) -> Option<()> {
         debug_assert_eq!(slot, self.boxes.len());
+        self.insert_cells(slot, area, budget)?;
         self.boxes.push(area);
-        self.insert_cells(slot, area);
         if !self.refined
             && !self.cells.is_empty()
             && self.boxes.len() / MIN_COLUMN_DENSITY >= self.cells.len()
@@ -732,12 +809,18 @@ impl Grid {
             self.refined = true;
             self.cells.clear();
             for slot in 0..self.boxes.len() {
-                self.insert_cells(slot, self.boxes[slot]);
+                self.insert_cells(slot, self.boxes[slot], budget)?;
             }
         }
+        Some(())
     }
 
-    fn insert_cells(&mut self, slot: usize, area: BoundingBox) {
+    fn insert_cells(
+        &mut self,
+        slot: usize,
+        area: BoundingBox,
+        budget: &mut PlanningBudget,
+    ) -> Option<()> {
         let (cells, size) = if self.refined
             && area.max.x - area.min.x <= SMALL_CELL_SIZE
             && area.max.z - area.min.z <= SMALL_CELL_SIZE
@@ -746,8 +829,9 @@ impl Grid {
         } else {
             (&mut self.cells, CELL_SIZE)
         };
-        for x in cells_of(area.min.x, area.max.x, size) {
-            for z in cells_of(area.min.z, area.max.z, size) {
+        let [xs, zs] = budget.cells(&area, size)?;
+        for x in xs {
+            for z in zs.clone() {
                 let cell = cells.entry((x, z)).or_insert_with(|| Cell {
                     members: Vec::new(),
                     lowest_top: f64::INFINITY,
@@ -759,14 +843,16 @@ impl Grid {
                 cell.highest_bottom = cell.highest_bottom.max(area.min.y);
             }
         }
+        Some(())
     }
 
     fn for_each_overlapping(
         &self,
         query: &mut Query,
         area: &BoundingBox,
+        budget: &mut PlanningBudget,
         mut visit: impl FnMut(usize),
-    ) {
+    ) -> Option<()> {
         query.next();
         for (cells, size) in [
             (&self.small_cells, SMALL_CELL_SIZE),
@@ -775,9 +861,11 @@ impl Grid {
             if cells.is_empty() {
                 continue;
             }
-            for x in cells_of(area.min.x, area.max.x, size) {
-                for z in cells_of(area.min.z, area.max.z, size) {
+            let [xs, zs] = budget.cells(area, size)?;
+            for x in xs {
+                for z in zs.clone() {
                     if let Some(cell) = cells.get(&(x, z)) {
+                        budget.spend(cell.members.len())?;
                         for &member in &cell.members {
                             if query.visit(member) && overlaps(area, &self.boxes[member]) {
                                 visit(member);
@@ -787,6 +875,7 @@ impl Grid {
                 }
             }
         }
+        Some(())
     }
 
     fn union_overlapping(
@@ -795,7 +884,8 @@ impl Grid {
         query: &mut Query,
         slot: usize,
         area: &BoundingBox,
-    ) {
+        budget: &mut PlanningBudget,
+    ) -> Option<()> {
         query.next();
         for (cells, size) in [
             (&mut self.small_cells, SMALL_CELL_SIZE),
@@ -804,8 +894,9 @@ impl Grid {
             if cells.is_empty() {
                 continue;
             }
-            for x in cells_of(area.min.x, area.max.x, size) {
-                for z in cells_of(area.min.z, area.max.z, size) {
+            let [xs, zs] = budget.cells(area, size)?;
+            for x in xs {
+                for z in zs.clone() {
                     let Some(cell) = cells.get_mut(&(x, z)) else {
                         continue;
                     };
@@ -819,8 +910,10 @@ impl Grid {
                         && area.max.y >= cell.highest_bottom;
                     if covered {
                         if cell.merged {
+                            budget.spend(1)?;
                             sets.union(slot, cell.members[0]);
                         } else {
+                            budget.spend(cell.members.len())?;
                             for &member in &cell.members {
                                 sets.union(slot, member);
                             }
@@ -828,6 +921,7 @@ impl Grid {
                         }
                         continue;
                     }
+                    budget.spend(cell.members.len())?;
                     for &member in &cell.members {
                         if query.visit(member) && overlaps(area, &self.boxes[member]) {
                             sets.union(slot, member);
@@ -836,6 +930,7 @@ impl Grid {
                 }
             }
         }
+        Some(())
     }
 }
 
@@ -934,12 +1029,18 @@ mod tests {
         assert!(schedule.should_plan(65));
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "Ordinary fixtures must fit the planning budget."
+    )]
     fn islands(
         nodes: &[(i32, TickReach)],
         idle_entities: &[(i32, BoundingBox)],
         players: &[(i32, BoundingBox)],
     ) -> Vec<Vec<usize>> {
-        partition(nodes, idle_entities, players).islands
+        partition(nodes, idle_entities, players)
+            .expect("ordinary fixture exceeded the planning budget")
+            .islands
     }
 
     fn cube(x: f64, size: f64) -> BoundingBox {
@@ -967,9 +1068,10 @@ mod tests {
     }
 
     #[test]
-    fn incremental_grid_queries_match_all_inserted_boxes() {
+    fn incremental_grid_queries_match_all_inserted_boxes() -> Result<(), &'static str> {
         let mut grid = Grid::default();
         let mut query = Query::new(128);
+        let mut budget = PlanningBudget::default();
         for slot in 0..128 {
             let min = if slot < 32 {
                 Vector3::new(
@@ -996,7 +1098,8 @@ mod tests {
                 body.min.y = f64::NEG_INFINITY;
                 body.max.y = f64::INFINITY;
             }
-            grid.insert(slot as usize, body);
+            grid.insert(slot as usize, body, &mut budget)
+                .ok_or("grid budget exhausted")?;
             for area in [body, body.expand(16.0, 0.0, 16.0)] {
                 let expected: Vec<_> = grid
                     .boxes
@@ -1005,11 +1108,13 @@ mod tests {
                     .filter_map(|(slot, body)| overlaps(&area, body).then_some(slot))
                     .collect();
                 let mut found = Vec::new();
-                grid.for_each_overlapping(&mut query, &area, |slot| found.push(slot));
+                grid.for_each_overlapping(&mut query, &area, &mut budget, |slot| found.push(slot))
+                    .ok_or("query budget exhausted")?;
                 found.sort_unstable();
                 assert_eq!(found, expected);
             }
         }
+        Ok(())
     }
 
     #[test]
@@ -1159,16 +1264,17 @@ mod tests {
             nbt.put_float("explosion_power", 128.0);
             tnt.read_custom_nbt(&nbt);
             let reaches = resolve(vec![EntityReach::of(&tnt, &config)], &config);
+            if fuse <= 1 {
+                assert!(reaches.is_none());
+                continue;
+            }
+            let reaches = reaches.ok_or("unexpected serial fallback")?;
             let nodes = [
                 (tnt.get_entity().entity_id, reaches[0].clone()),
                 node(-1, 150.0, 0.0),
                 node(-2, 400.0, 0.0),
             ];
-            if fuse > 1 {
-                assert_eq!(islands(&nodes, &[], &[]), [vec![0], vec![1], vec![2]]);
-            } else {
-                assert_eq!(islands(&nodes, &[], &[]), [vec![0, 1, 2]]);
-            }
+            assert_eq!(islands(&nodes, &[], &[]), [vec![0], vec![1], vec![2]]);
         }
         world.level.shutdown().await;
         Ok(())
@@ -1193,7 +1299,8 @@ mod tests {
                 .get_entity()
                 .velocity
                 .store(Vector3::new(speed, 0.0, 0.0));
-            let reaches = resolve(vec![EntityReach::of(zombie.as_ref(), &config)], &config);
+            let reaches = resolve(vec![EntityReach::of(zombie.as_ref(), &config)], &config)
+                .ok_or("unexpected serial fallback")?;
             let nodes = [
                 (zombie.get_entity().entity_id, reaches[0].clone()),
                 node(-1, 96.0, 0.0),
@@ -1249,7 +1356,7 @@ mod tests {
     fn a_global_entity_serializes_the_tick() {
         let mut nodes = [node(10, 0.0, 0.0), node(11, 300.0, 0.0)];
         nodes[1].1.global = true;
-        assert_eq!(islands(&nodes, &[], &[]), [vec![0, 1]]);
+        assert!(partition(&nodes, &[], &[]).is_none());
     }
 
     fn assert_box(actual: &BoundingBox, expected: &BoundingBox) {
@@ -1270,28 +1377,159 @@ mod tests {
         })
     }
 
+    #[tokio::test]
+    async fn large_contact_scans_request_serial_ticking() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let EntityReach::Audited(mut reach) = audited(0.0) else {
+            return Err("expected audited reach".into());
+        };
+        for motion in [8.0, f64::INFINITY, f64::NAN] {
+            reach.motion = (motion, motion);
+            reach.global = false;
+            reach.scan_contact_blocks(&world);
+            assert!(reach.global);
+            assert!(
+                resolve(
+                    vec![EntityReach::Audited(reach.clone())],
+                    &EntityIslandsConfig::default()
+                )
+                .is_none()
+            );
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn large_follow_ranges_exhaust_planning_without_changing_attributes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{
+            Entity,
+            mob::{Mob, zombie::zombie::ZombieEntity},
+        };
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let zombie = ZombieEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::ZOMBIE,
+        ));
+        zombie
+            .get_mob_entity()
+            .living_entity
+            .set_attribute_base(&Attributes::FOLLOW_RANGE, 1000.0);
+        let config = EntityIslandsConfig::default();
+        let reports = (0..16)
+            .map(|_| EntityReach::of(zombie.as_ref(), &config))
+            .collect();
+        assert!(resolve(reports, &config).is_none());
+        assert_eq!(
+            zombie
+                .get_mob_entity()
+                .living_entity
+                .get_attribute_value(&Attributes::FOLLOW_RANGE),
+            1000.0
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
     #[test]
-    fn only_earlier_pushers_grow_current_turn() {
-        let alone = resolve(vec![audited(0.0)], &EntityIslandsConfig::default());
+    fn broad_queries_exhaust_the_budget_without_clipping_the_query() -> Result<(), &'static str> {
+        let mut grid = Grid::default();
+        let mut budget = PlanningBudget::default();
+        for slot in 0..64 {
+            grid.insert(slot, cube((slot % 8) as f64 * 0.5, 0.25), &mut budget)
+                .ok_or("insertion refused")?;
+        }
+        grid.insert(64, cube(900.0, 1.0), &mut budget)
+            .ok_or("distant insertion refused")?;
+        assert!(grid.refined);
+        let mut query = Query::new(65);
+        let area = cube(0.0, 1.0).expand(1000.0, 0.0, 1000.0);
+        let mut found = Vec::new();
+        grid.for_each_overlapping(&mut query, &area, &mut budget, |slot| found.push(slot))
+            .ok_or("first query refused")?;
+        found.sort_unstable();
+        assert_eq!(found, (0..65).collect::<Vec<_>>());
+        assert!(
+            grid.for_each_overlapping(&mut query, &area, &mut budget, |_| {})
+                .is_none()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn oversized_and_nonfinite_partition_bounds_request_serial_ticking() {
+        for bound in [1.0e20, f64::INFINITY, f64::NAN] {
+            let mut nodes = [node(0, 0.0, 0.0), node(1, 20.0, 0.0)];
+            nodes[0].1.entities = nodes[0].1.entities.expand(bound, 0.0, bound);
+            assert!(partition(&nodes, &[], &[]).is_none());
+            nodes[0].1.entities = nodes[0].1.body;
+            nodes[0].1.block_reads = nodes[0].1.body.expand(bound, 0.0, bound);
+            nodes[1].1.block_writes = Some(nodes[1].1.body);
+            assert!(partition(&nodes, &[], &[]).is_none());
+        }
+        let nodes: Vec<_> = (0..2000)
+            .map(|id| node(id, f64::from(id) * 4.0, 0.5))
+            .collect();
+        assert!(partition(&nodes, &[], &[]).is_some());
+    }
+
+    #[tokio::test]
+    async fn oversized_write_queries_leave_pruning_results_unused()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        world.level.loaded_chunks.insert(
+            Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        let mut reaches = vec![node(0, 1.0, 0.0).1, node(1, 32.0, 0.0).1];
+        reaches[0].block_writes = Some(reaches[0].body);
+        reaches[1].block_writes = Some(reaches[1].body.expand(10_000.0, 0.0, 10_000.0));
+        assert!(
+            prune_block_writes(
+                &world,
+                &mut reaches,
+                &[BlockWriteCheck::Contact, BlockWriteCheck::Unconditional]
+            )
+            .is_none()
+        );
+        assert!(reaches.iter().all(|reach| reach.block_writes.is_some()));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[test]
+    fn only_earlier_pushers_grow_current_turn() -> Result<(), &'static str> {
+        let alone = resolve(vec![audited(0.0)], &EntityIslandsConfig::default())
+            .ok_or("unexpected serial fallback")?;
         assert_box(&alone[0].body, &cube(0.0, 1.0).expand(0.25, 0.5, 0.25));
         let crowded = resolve(
             vec![audited(0.0), audited(0.0), audited(0.0)],
             &EntityIslandsConfig::default(),
-        );
+        )
+        .ok_or("unexpected serial fallback")?;
         assert_box(&crowded[0].body, &alone[0].body);
         assert!(crowded[1].body.min.x < crowded[0].body.min.x);
         assert!(crowded[2].body.min.x < crowded[1].body.min.x);
         assert!(crowded[2].body.max.x > crowded[1].body.max.x);
+        Ok(())
     }
 
     #[test]
-    fn unaudited_neighbours_can_throw_audited_entities_around() {
+    fn unaudited_neighbours_can_throw_audited_entities_around() -> Result<(), &'static str> {
         let zombie =
             EntityReach::Conservative(TickReach::conservative(&cube(10.0, 1.0), 10.0, Vec::new()));
         let reaches = resolve(
             vec![audited(0.0), zombie, audited(40.0)],
             &EntityIslandsConfig::default(),
-        );
+        )
+        .ok_or("unexpected serial fallback")?;
         // The zombie can both hit and push it.
         let thrown = EntityIslandsConfig::default().knockback_reach + PUSH_SPEED;
         assert_box(
@@ -1300,6 +1538,7 @@ mod tests {
         );
         assert!(reaches[0].block_writes.is_some());
         assert_box(&reaches[2].body, &cube(40.0, 1.0).expand(0.25, 0.5, 0.25));
+        Ok(())
     }
 
     #[tokio::test]
@@ -1333,7 +1572,8 @@ mod tests {
                 BlockWriteCheck::Unconditional,
                 BlockWriteCheck::Contact,
             ],
-        );
+        )
+        .ok_or("unexpected pruning budget exhaustion")?;
         assert!(
             reaches[..3]
                 .iter()
@@ -1368,7 +1608,8 @@ mod tests {
             &world,
             std::slice::from_mut(&mut reach),
             &[BlockWriteCheck::Contact],
-        );
+        )
+        .ok_or("unexpected pruning budget exhaustion")?;
         assert!(reach.block_writes.is_some());
         let neighbor = pumpkin_world::chunk::ChunkData::empty_sync(1, 0);
         world
@@ -1380,14 +1621,16 @@ mod tests {
             &world,
             std::slice::from_mut(&mut reach),
             &[BlockWriteCheck::Contact],
-        );
+        )
+        .ok_or("unexpected pruning budget exhaustion")?;
         assert!(reach.block_writes.is_some());
         neighbor.set_block_absolute_y(1, 63, 1, Block::AIR.default_state.id);
         prune_block_writes(
             &world,
             std::slice::from_mut(&mut reach),
             &[BlockWriteCheck::Contact],
-        );
+        )
+        .ok_or("unexpected pruning budget exhaustion")?;
         assert!(reach.block_writes.is_none());
         assert_box(&reach.body, &original.body);
         world.level.shutdown().await;
@@ -1433,7 +1676,7 @@ mod tests {
         reader.block_reads = reader.body;
         reader.block_reads.min.y = f64::NEG_INFINITY;
         reader.block_reads.max.y = f64::INFINITY;
-        let mut original = resolve(vec![report], &config);
+        let mut original = resolve(vec![report], &config).ok_or("unexpected serial fallback")?;
         original.push(reader);
         let partitioned = |reaches: &[TickReach]| {
             let nodes: Vec<_> = reaches
@@ -1450,7 +1693,8 @@ mod tests {
             &world,
             &mut reaches,
             &[check, BlockWriteCheck::Unconditional],
-        );
+        )
+        .ok_or("unexpected pruning budget exhaustion")?;
         assert_eq!(partitioned(&reaches), [vec![0], vec![1]]);
         assert_box(&reaches[0].body, &original[0].body);
         assert_box(&reaches[0].entities, &original[0].entities);
@@ -1462,7 +1706,8 @@ mod tests {
             &world,
             &mut reaches,
             &[check, BlockWriteCheck::Unconditional],
-        );
+        )
+        .ok_or("unexpected pruning budget exhaustion")?;
         assert_eq!(partitioned(&reaches), [vec![0, 1]]);
 
         chunk.set_block_absolute_y(8, 39, 8, Block::AIR.default_state.id);
@@ -1478,7 +1723,8 @@ mod tests {
                 BlockWriteCheck::Unconditional,
                 BlockWriteCheck::Unconditional,
             ],
-        );
+        )
+        .ok_or("unexpected pruning budget exhaustion")?;
         assert!(reaches[0].block_writes.is_some());
 
         world.level.loaded_chunks.remove(&Vector2::new(0, 0));
@@ -1487,7 +1733,8 @@ mod tests {
             &world,
             &mut reaches,
             &[check, BlockWriteCheck::Unconditional],
-        );
+        )
+        .ok_or("unexpected pruning budget exhaustion")?;
         assert!(reaches[0].block_writes.is_some());
         world.level.shutdown().await;
         Ok(())
