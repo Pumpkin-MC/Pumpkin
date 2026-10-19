@@ -84,7 +84,7 @@ impl ExperienceOrbEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let half = border.new_diameter * 0.5;
-            let epsilon = f64::from(1.0e-5_f32);
+            let epsilon = f64::from(1.0e-5f32);
             collisions.retain(|shape| {
                 shape.min.x >= border.center_x - half
                     && shape.max.x - epsilon < border.center_x + half
@@ -231,7 +231,7 @@ impl EntityBase for ExperienceOrbEntity {
         let on_ground = entity.on_ground.load(Ordering::Relaxed);
         let mut friction = Self::AIR_DRAG;
         if on_ground {
-            let pos = entity.get_pos_with_y_offset(f64::from(0.999_999_f32)).0;
+            let pos = entity.get_pos_with_y_offset(f64::from(0.999_999f32)).0;
             let block = entity.world.load().get_block(&pos);
             friction *= block.slipperiness;
         }
