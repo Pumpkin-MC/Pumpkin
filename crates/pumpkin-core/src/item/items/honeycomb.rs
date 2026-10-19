@@ -12,7 +12,7 @@ use pumpkin_data::Block;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{BlockDirection, BlockId};
+use pumpkin_data::{BlockDirection, BlockId, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
@@ -53,18 +53,19 @@ impl ItemBehaviour for HoneyCombItem {
 /// Waxes the block at `location` if it has a waxed equivalent, emitting the wax
 /// particles and sound on success.
 pub(crate) fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Block) -> bool {
-    let Some(replacement) = get_waxed_equivalent(block.id) else {
+    let Some(new_state_id) = get_waxed(block, world.get_block_state_id(&location)) else {
         return false;
     };
-    let new_state_id = with_properties_of(
-        block,
-        world.get_block_state_id(&location),
-        replacement.to_block(),
-    );
 
     world.set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL);
     world.sync_world_event(WorldEvent::ParticlesWaxOn, location, 0);
     true
+}
+
+/// Mirrors vanilla `HoneycombItem.getWaxed`: the waxed block with the same properties as `state_id`.
+fn get_waxed(block: &Block, state_id: BlockStateId) -> Option<BlockStateId> {
+    let replacement = get_waxed_equivalent(block.id)?;
+    Some(with_properties_of(block, state_id, replacement.to_block()))
 }
 
 impl HoneyCombItem {
@@ -126,5 +127,33 @@ const fn get_waxed_equivalent(id: BlockId) -> Option<BlockId> {
         BlockId::EXPOSED_COPPER_TRAPDOOR => Some(BlockId::WAXED_EXPOSED_COPPER_TRAPDOOR),
         BlockId::COPPER_TRAPDOOR => Some(BlockId::WAXED_COPPER_TRAPDOOR),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::{Block, BlockId};
+
+    use super::get_waxed;
+
+    #[test]
+    fn waxing_keeps_every_block_state() {
+        let mut waxed_states = 0;
+        for block in (0..).map_while(BlockId::new).map(BlockId::to_block) {
+            for state in block.states {
+                let Some(waxed_state) = get_waxed(block, state.id) else {
+                    break;
+                };
+                let waxed_block = Block::from_state_id(waxed_state);
+                assert_eq!(
+                    block.properties(state.id).map(|p| p.to_props()),
+                    waxed_block.properties(waxed_state).map(|p| p.to_props()),
+                    "waxing {} changed its state",
+                    block.name
+                );
+                waxed_states += 1;
+            }
+        }
+        assert!(waxed_states > 0);
     }
 }
