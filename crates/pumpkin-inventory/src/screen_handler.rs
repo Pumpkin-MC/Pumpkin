@@ -917,6 +917,9 @@ pub trait ScreenHandler: Send + Sync {
                             .are_items_and_components_equal(&prev_stack)
                         {
                             let drop_stack = slot.safe_take(prev_stack.item_count, u8::MAX, player);
+                            if drop_stack.is_empty() {
+                                break;
+                            }
                             player.drop_item(drop_stack, true);
                             // player.handleCreativeModeItemDrop(itemStack);
                         }
