@@ -23,6 +23,7 @@ impl BedrockClient {
             && packet.delta.y < 0.0
             && !entity.has_vehicle();
         entity.on_ground.store(on_ground, Ordering::Relaxed);
+        self.input_tick.store(packet.tick.0, Ordering::Relaxed);
 
         let new_pos = packet
             .position
@@ -150,6 +151,8 @@ impl BedrockClient {
                 player.progress_motion(delta);
             }
         }
+
+        crate::entity::client_push::send_bedrock_client_push(player, packet.delta.to_f64());
 
         let input_data = packet.input_data;
 

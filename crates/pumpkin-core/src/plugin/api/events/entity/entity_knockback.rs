@@ -11,6 +11,6 @@ pub struct EntityKnockbackEvent {
     /// The ID of the entity that caused the knockback, if any.
     pub hit_by_id: Option<i32>,
 
-    /// The knockback vector.
+    /// The velocity added to the entity. Plugins may change it.
     pub knockback: Vector3<f64>,
 }
