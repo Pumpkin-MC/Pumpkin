@@ -239,6 +239,9 @@ impl Level {
             biome_source.as_ref(),
             structure_overrides.as_deref(),
         ));
+        if let Some(cache) = world_gen.global_structure_cache() {
+            cache.ensure_strongholds_generated();
+        }
 
         let target_format =
             crate::chunk::io::converter::RegionFormat::from_config(&level_config.chunk);

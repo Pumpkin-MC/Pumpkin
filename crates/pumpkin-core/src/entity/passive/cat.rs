@@ -449,4 +449,8 @@ impl Mob for CatEntity {
 
         self.mob_entity.mob_interact(player, item_stack)
     }
+
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        !self.is_tame() && self.get_entity().age.load(Ordering::Relaxed) > 2400
+    }
 }
