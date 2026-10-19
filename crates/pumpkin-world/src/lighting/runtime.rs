@@ -810,8 +810,8 @@ mod tests {
     use crate::chunk::format::LightContainer;
     use crate::level::Level;
     use pumpkin_config::world::LevelConfig;
-    use pumpkin_data::dimension::Dimension;
     use pumpkin_data::block_properties::{Facing, Half, SlabType, StairsShape};
+    use pumpkin_data::dimension::Dimension;
     use pumpkin_data::{Block, BlockStateId, Property};
     use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector2::Vector2;
