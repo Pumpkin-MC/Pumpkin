@@ -8,6 +8,7 @@ use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::ai::sensing::Sensing;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
+use crate::entity::projectile::arrow::ArrowEntity;
 use crate::server::Server;
 use crate::world::World;
 use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
@@ -723,7 +724,7 @@ impl MobEntity {
     pub fn check_despawn(&self, mob: &dyn Mob) {
         let entity = &self.living_entity.entity;
 
-        if self.persistence_required.load(Relaxed) {
+        if self.persistence_required.load(Relaxed) || mob.requires_custom_persistence() {
             return;
         }
 
@@ -747,13 +748,12 @@ impl MobEntity {
             })
             .fold(f64::MAX, f64::min);
 
-        // Mobs like a converting zombie villager refuse to despawn (`removeWhenFarAway`).
-        if !mob.remove_when_far_away(nearest_dist_sq) {
+        if nearest_dist_sq == f64::MAX {
             return;
         }
 
-        if nearest_dist_sq == f64::MAX {
-            mob.get_entity().remove();
+        // Mobs like a converting zombie villager refuse to despawn (`removeWhenFarAway`).
+        if !mob.remove_when_far_away(nearest_dist_sq) {
             return;
         }
 
@@ -887,7 +887,7 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
-        true
+        self.as_animal().is_none()
     }
 
     fn get_max_look_yaw_change(&self) -> f32 {
@@ -1005,6 +1005,11 @@ pub trait Mob: EntityBase + Send + Sync {
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {}
 
     fn on_attack(&self, _target: &dyn EntityBase) {}
+
+    // getArrow in vanilla, lets skeletons change the arrow before it's shot
+    fn get_arrow(&self, arrow: ArrowEntity) -> ArrowEntity {
+        arrow
+    }
 
     fn on_eating_grass(&self) {}
 
@@ -1736,7 +1741,7 @@ mod tests {
             dx,
             64.0 + dy,
             0.0,
-            &Entity::get_entity_dimensions(pumpkin_data::entity::EntityPose::Standing),
+            &Entity::type_dimensions(&pumpkin_data::entity::EntityType::PLAYER),
         );
         zombie
             .expand(DEFAULT_ATTACK_REACH, 0.0, DEFAULT_ATTACK_REACH)
@@ -1761,7 +1766,7 @@ mod tests {
             0.0,
             64.0,
             0.0,
-            &Entity::get_entity_dimensions(pumpkin_data::entity::EntityPose::Standing),
+            &Entity::type_dimensions(&pumpkin_data::entity::EntityType::PLAYER),
         );
         let seat_y = 64.5f64;
         let hitbox = player.with_min_y(seat_y.max(player.min.y));

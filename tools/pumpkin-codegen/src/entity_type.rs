@@ -24,6 +24,8 @@ pub struct EntityType {
     pub mob: Option<bool>,
     /// Whether this entity's class extends vanilla `Animal`.
     pub animal: Option<bool>,
+    /// Whether the vanilla entity implements the Enemy marker interface.
+    pub is_enemy: bool,
     /// Maximum number of this entity type allowed per chunk, if capped.
     pub limit_per_chunk: Option<i32>,
     /// Whether this entity can be summoned by the `/summon` command.
@@ -207,6 +209,7 @@ impl ToTokens for NamedEntityType<'_> {
         );
         let mob = entity.mob.unwrap_or(false);
         let animal = entity.animal.unwrap_or(false);
+        let is_enemy = entity.is_enemy;
         let limit_per_chunk = entity.limit_per_chunk.unwrap_or(0);
         let can_spawn_far_from_player = entity.can_spawn_far_from_player;
 
@@ -245,6 +248,7 @@ impl ToTokens for NamedEntityType<'_> {
                 attackable: #attackable,
                 mob: #mob,
                 animal: #animal,
+                is_enemy: #is_enemy,
                 saveable: #saveable,
                 limit_per_chunk: #limit_per_chunk,
                 summonable: #summonable,
@@ -323,6 +327,7 @@ pub fn build() -> TokenStream {
             pub attackable: Option<bool>,
             pub mob: bool,
             pub animal: bool,
+            pub is_enemy: bool,
             pub saveable: bool,
             pub limit_per_chunk: i32,
             pub summonable: bool,

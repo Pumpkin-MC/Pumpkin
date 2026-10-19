@@ -36,8 +36,8 @@ impl ItemBehaviour for CrossbowItem {
             return;
         }
 
-        let has_arrows = player.find_arrow().is_some();
-        if !has_arrows && player.gamemode.load() != GameMode::Creative {
+        let has_projectiles = player.find_crossbow_projectile().is_some();
+        if !has_projectiles && player.gamemode.load() != GameMode::Creative {
             return;
         }
 
@@ -55,7 +55,7 @@ impl ItemBehaviour for CrossbowItem {
             crate::enchantment::EnchantmentHelper::modify_crossbow_charge_time(&stack, 25);
 
         if use_ticks >= charge_time {
-            let arrow_slot = player.find_arrow();
+            let arrow_slot = player.find_crossbow_projectile();
             let gamemode = player.gamemode.load();
             let is_creative = gamemode == GameMode::Creative;
 
@@ -113,6 +113,7 @@ impl ItemBehaviour for CrossbowItem {
 
 impl CrossbowItem {
     pub const ARROW_POWER: f32 = 3.15;
+    pub const FIREWORK_POWER: f32 = 1.6;
 
     fn fire_projectiles(player: &Player) {
         let mut held = player.inventory().held_item();
@@ -134,22 +135,42 @@ impl CrossbowItem {
                     &player.position(),
                 );
 
+                let has_firework = projectiles
+                    .iter()
+                    .any(|p| p.item.id == Item::FIREWORK_ROCKET.id);
+                let power = if has_firework {
+                    Self::FIREWORK_POWER
+                } else {
+                    Self::ARROW_POWER
+                };
+
                 let is_creative = player.gamemode.load() == GameMode::Creative;
                 ProjectileWeaponItem::shoot_projectiles(
                     &world,
                     player.get_entity(),
                     &held,
                     &projectiles,
-                    Self::ARROW_POWER,
+                    power,
                     1.0,
                     false,
                     is_creative,
                 );
 
+                let durability_use: i32 = projectiles
+                    .iter()
+                    .map(|p| {
+                        if p.item.id == Item::FIREWORK_ROCKET.id {
+                            3
+                        } else {
+                            1
+                        }
+                    })
+                    .sum();
+
                 held.patch
                     .retain(|(id, _)| *id != DataComponent::ChargedProjectiles);
                 player.inventory().set_held_item(held);
-                player.damage_held_item(1);
+                player.damage_held_item(durability_use);
             }
         }
     }

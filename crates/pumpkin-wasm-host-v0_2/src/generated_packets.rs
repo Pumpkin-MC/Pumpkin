@@ -1440,6 +1440,7 @@ pub fn deserialize_java_serverbound_packet(
             Some(ServerboundPacket::SSetPlayerGround(
                 crate::pumpkin::plugin::java_packets::SSetPlayerGround {
                     on_ground: p.on_ground.try_into().unwrap(),
+                    horizontal_collision: p.horizontal_collision.try_into().unwrap(),
                 },
             ))
         }
@@ -1484,6 +1485,7 @@ pub fn deserialize_java_serverbound_packet(
                     yaw: p.yaw.try_into().unwrap(),
                     pitch: p.pitch.try_into().unwrap(),
                     ground: p.ground.try_into().unwrap(),
+                    horizontal_collision: p.horizontal_collision.try_into().unwrap(),
                 },
             ))
         }
@@ -1659,10 +1661,7 @@ pub fn deserialize_java_serverbound_packet(
             let p = <pumpkin_protocol::java::server::play::SSpectateEntity as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SSpectateEntity(
                 crate::pumpkin::plugin::java_packets::SSpectateEntity {
-                    target: crate::pumpkin::plugin::uuid::Uuid {
-                        high: p.target.as_u64_pair().1,
-                        low: p.target.as_u64_pair().0,
-                    },
+                    target: p.target.0.try_into().unwrap(),
                 },
             ))
         }

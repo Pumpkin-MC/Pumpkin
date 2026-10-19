@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, Mirror, Rotation, structures::StructureKeys};
+use pumpkin_data::{
+    Block, BlockId, BlockState, Mirror, Rotation, block_properties::blocks_movement,
+    structures::StructureKeys,
+};
 use pumpkin_util::{
     HeightMap,
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
@@ -9,27 +12,24 @@ use pumpkin_util::{
 
 use crate::{
     ProtoChunk,
-    generation::{
-        positions::chunk_pos::{get_center_x, get_center_z},
-        structure::{
-            piece::StructurePieceType,
-            structures::{
-                StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
-                StructurePiecesCollector, StructurePosition, WorldPortalExt,
-            },
-            template::{
-                BlockStateResolver, PaletteEntry, StructurePlaceSettings, StructureTemplate,
-                get_template,
-                processor::{
-                    IgnoredBlock, PosRuleTest, ProcessorContext, ProcessorRule, RuleTest,
-                    StructureProcessor,
-                },
+    generation::structure::{
+        piece::StructurePieceType,
+        structures::{
+            HeightSampler, StructureGenerator, StructureGeneratorContext, StructurePiece,
+            StructurePieceBase, StructurePiecesCollector, StructurePosition, WorldPortalExt,
+        },
+        template::{
+            BlockStateResolver, PaletteEntry, StructurePlaceSettings, StructureTemplate,
+            get_template,
+            processor::{
+                IgnoredBlock, PosRuleTest, ProcessorContext, ProcessorRule, RuleTest,
+                StructureProcessor,
             },
         },
     },
 };
 
-const PORTALS: &[&str] = &[
+const STRUCTURE_LOCATION_PORTALS: &[&str] = &[
     "ruined_portal/portal_1",
     "ruined_portal/portal_2",
     "ruined_portal/portal_3",
@@ -40,6 +40,9 @@ const PORTALS: &[&str] = &[
     "ruined_portal/portal_8",
     "ruined_portal/portal_9",
     "ruined_portal/portal_10",
+];
+
+const STRUCTURE_LOCATION_GIANT_PORTALS: &[&str] = &[
     "ruined_portal/giant_portal_1",
     "ruined_portal/giant_portal_2",
     "ruined_portal/giant_portal_3",
@@ -69,6 +72,210 @@ impl VerticalPlacement {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RuinedPortalSetup {
+    pub placement: VerticalPlacement,
+    pub air_pocket_probability: f32,
+    pub mossiness: f32,
+    pub overgrown: bool,
+    pub vines: bool,
+    pub can_be_cold: bool,
+    pub replace_with_blackstone: bool,
+    pub weight: f32,
+}
+
+impl RuinedPortalSetup {
+    #[must_use]
+    pub const fn setups_for_variant(variant: StructureKeys) -> &'static [Self] {
+        match variant {
+            StructureKeys::RuinedPortalNether => &[Self {
+                placement: VerticalPlacement::InNether,
+                air_pocket_probability: 0.0,
+                mossiness: 0.0,
+                overgrown: false,
+                vines: false,
+                can_be_cold: false,
+                replace_with_blackstone: true,
+                weight: 1.0,
+            }],
+            StructureKeys::RuinedPortalDesert => &[Self {
+                placement: VerticalPlacement::PartlyBuried,
+                air_pocket_probability: 0.0,
+                mossiness: 0.0,
+                overgrown: false,
+                vines: false,
+                can_be_cold: false,
+                replace_with_blackstone: false,
+                weight: 1.0,
+            }],
+            StructureKeys::RuinedPortalJungle => &[Self {
+                placement: VerticalPlacement::OnLandSurface,
+                air_pocket_probability: 0.0,
+                mossiness: 0.8,
+                overgrown: true,
+                vines: true,
+                can_be_cold: false,
+                replace_with_blackstone: false,
+                weight: 1.0,
+            }],
+            StructureKeys::RuinedPortalSwamp => &[Self {
+                placement: VerticalPlacement::OnOceanFloor,
+                air_pocket_probability: 0.0,
+                mossiness: 0.5,
+                overgrown: false,
+                vines: true,
+                can_be_cold: false,
+                replace_with_blackstone: false,
+                weight: 1.0,
+            }],
+            StructureKeys::RuinedPortalOcean => &[Self {
+                placement: VerticalPlacement::OnOceanFloor,
+                air_pocket_probability: 0.0,
+                mossiness: 0.8,
+                overgrown: false,
+                vines: false,
+                can_be_cold: true,
+                replace_with_blackstone: false,
+                weight: 1.0,
+            }],
+            StructureKeys::RuinedPortalMountain => &[
+                Self {
+                    placement: VerticalPlacement::InMountain,
+                    air_pocket_probability: 1.0,
+                    mossiness: 0.2,
+                    overgrown: false,
+                    vines: false,
+                    can_be_cold: true,
+                    replace_with_blackstone: false,
+                    weight: 0.5,
+                },
+                Self {
+                    placement: VerticalPlacement::OnLandSurface,
+                    air_pocket_probability: 0.0,
+                    mossiness: 0.2,
+                    overgrown: false,
+                    vines: false,
+                    can_be_cold: true,
+                    replace_with_blackstone: false,
+                    weight: 0.5,
+                },
+            ],
+            _ => &[
+                Self {
+                    placement: VerticalPlacement::Underground,
+                    air_pocket_probability: 1.0,
+                    mossiness: 0.2,
+                    overgrown: false,
+                    vines: false,
+                    can_be_cold: true,
+                    replace_with_blackstone: false,
+                    weight: 0.5,
+                },
+                Self {
+                    placement: VerticalPlacement::OnLandSurface,
+                    air_pocket_probability: 0.0,
+                    mossiness: 0.2,
+                    overgrown: false,
+                    vines: false,
+                    can_be_cold: true,
+                    replace_with_blackstone: false,
+                    weight: 0.5,
+                },
+            ],
+        }
+    }
+}
+
+fn sample(random: &mut RandomGenerator, limit: f32) -> bool {
+    if limit == 0.0 {
+        false
+    } else if (limit - 1.0).abs() < f32::EPSILON {
+        true
+    } else {
+        random.next_f32() < limit
+    }
+}
+
+fn get_random_within_interval(random: &mut RandomGenerator, min_preferred: i32, max: i32) -> i32 {
+    if min_preferred < max {
+        random.next_inbetween_i32(min_preferred, max)
+    } else {
+        max
+    }
+}
+
+fn is_opaque(state: &BlockState, placement: VerticalPlacement) -> bool {
+    if placement == VerticalPlacement::OnOceanFloor {
+        blocks_movement(state, BlockId::from_state_id(state.id))
+    } else {
+        !state.is_air()
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn find_suitable_y(
+    random: &mut RandomGenerator,
+    height_sampler: Option<&mut (dyn HeightSampler + '_)>,
+    vertical_placement: VerticalPlacement,
+    air_pocket: bool,
+    surface_y_at_center: i32,
+    y_span: i32,
+    bounding_box: &BlockBox,
+    min_chunk_y: i32,
+) -> i32 {
+    let min_y = min_chunk_y + 15;
+    let new_y = match vertical_placement {
+        VerticalPlacement::InNether => {
+            if air_pocket {
+                random.next_inbetween_i32(32, 100)
+            } else if random.next_f32() < 0.5 {
+                random.next_inbetween_i32(27, 29)
+            } else {
+                random.next_inbetween_i32(29, 100)
+            }
+        }
+        VerticalPlacement::InMountain => {
+            let max_y = surface_y_at_center - y_span;
+            get_random_within_interval(random, 70, max_y)
+        }
+        VerticalPlacement::Underground => {
+            let max_y = surface_y_at_center - y_span;
+            get_random_within_interval(random, min_y, max_y)
+        }
+        VerticalPlacement::PartlyBuried => {
+            surface_y_at_center - y_span + random.next_inbetween_i32(2, 8)
+        }
+        _ => surface_y_at_center,
+    };
+
+    let bottom_corners = [
+        (bounding_box.min.x, bounding_box.min.z),
+        (bounding_box.max.x, bounding_box.min.z),
+        (bounding_box.min.x, bounding_box.max.z),
+        (bounding_box.max.x, bounding_box.max.z),
+    ];
+
+    let mut projected_y = new_y;
+    if let Some(sampler) = height_sampler {
+        while projected_y > min_y {
+            let mut corners_on_solid_ground = 0;
+            for &(x, z) in &bottom_corners {
+                if let Some(state) = sampler.sample_column_block(x, z, projected_y)
+                    && is_opaque(state, vertical_placement)
+                {
+                    corners_on_solid_ground += 1;
+                    if corners_on_solid_ground == 3 {
+                        return projected_y;
+                    }
+                }
+            }
+            projected_y -= 1;
+        }
+    }
+
+    projected_y
+}
+
 #[derive(Clone, Debug)]
 pub struct RuinedPortalProperties {
     pub cold: bool,
@@ -77,91 +284,6 @@ pub struct RuinedPortalProperties {
     pub overgrown: bool,
     pub vines: bool,
     pub replace_with_blackstone: bool,
-}
-
-impl RuinedPortalProperties {
-    #[must_use]
-    pub const fn for_variant(variant: StructureKeys) -> (VerticalPlacement, Self) {
-        match variant {
-            StructureKeys::RuinedPortalDesert => (
-                VerticalPlacement::PartlyBuried,
-                Self {
-                    cold: false,
-                    mossiness: 0.0,
-                    air_pocket: false,
-                    overgrown: false,
-                    vines: false,
-                    replace_with_blackstone: false,
-                },
-            ),
-            StructureKeys::RuinedPortalJungle => (
-                VerticalPlacement::OnLandSurface,
-                Self {
-                    cold: false,
-                    mossiness: 0.8,
-                    air_pocket: false,
-                    overgrown: true,
-                    vines: true,
-                    replace_with_blackstone: false,
-                },
-            ),
-            StructureKeys::RuinedPortalSwamp => (
-                VerticalPlacement::OnLandSurface,
-                Self {
-                    cold: false,
-                    mossiness: 0.5,
-                    air_pocket: false,
-                    overgrown: false,
-                    vines: true,
-                    replace_with_blackstone: false,
-                },
-            ),
-            StructureKeys::RuinedPortalMountain => (
-                VerticalPlacement::InMountain,
-                Self {
-                    cold: true,
-                    mossiness: 0.2,
-                    air_pocket: true,
-                    overgrown: false,
-                    vines: false,
-                    replace_with_blackstone: false,
-                },
-            ),
-            StructureKeys::RuinedPortalOcean => (
-                VerticalPlacement::OnOceanFloor,
-                Self {
-                    cold: false,
-                    mossiness: 0.8,
-                    air_pocket: false,
-                    overgrown: false,
-                    vines: false,
-                    replace_with_blackstone: false,
-                },
-            ),
-            StructureKeys::RuinedPortalNether => (
-                VerticalPlacement::InNether,
-                Self {
-                    cold: false,
-                    mossiness: 0.0,
-                    air_pocket: false,
-                    overgrown: false,
-                    vines: false,
-                    replace_with_blackstone: true,
-                },
-            ),
-            _ => (
-                VerticalPlacement::OnLandSurface,
-                Self {
-                    cold: false,
-                    mossiness: 0.2,
-                    air_pocket: false,
-                    overgrown: false,
-                    vines: false,
-                    replace_with_blackstone: false,
-                },
-            ),
-        }
-    }
 }
 
 pub struct RuinedPortalGenerator {
@@ -173,56 +295,95 @@ impl StructureGenerator for RuinedPortalGenerator {
         &self,
         mut context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
-        let chunk_center_x = get_center_x(context.chunk_x);
-        let chunk_center_z = get_center_z(context.chunk_z);
+        let setups = RuinedPortalSetup::setups_for_variant(self.variant);
+        let chosen_setup = if setups.len() > 1 {
+            let mut total = 0.0;
+            for s in setups {
+                total += s.weight;
+            }
+            let mut pick = context.random.next_f32();
+            let mut chosen = setups[0];
+            for s in setups {
+                pick -= s.weight / total;
+                if pick < 0.0 {
+                    chosen = *s;
+                    break;
+                }
+            }
+            chosen
+        } else {
+            setups[0]
+        };
 
-        let rotation_idx = context.random.next_bounded_i32(4) as u8;
-        let rotation = Rotation::from_index(rotation_idx);
+        let air_pocket = sample(&mut context.random, chosen_setup.air_pocket_probability);
+        let template_name = if context.random.next_f32() < 0.05 {
+            let idx = context
+                .random
+                .next_bounded_i32(STRUCTURE_LOCATION_GIANT_PORTALS.len() as i32)
+                as usize;
+            STRUCTURE_LOCATION_GIANT_PORTALS[idx]
+        } else {
+            let idx = context
+                .random
+                .next_bounded_i32(STRUCTURE_LOCATION_PORTALS.len() as i32)
+                as usize;
+            STRUCTURE_LOCATION_PORTALS[idx]
+        };
+
+        let template = get_template(template_name)?;
+        let rotation = Rotation::from_index(context.random.next_bounded_i32(4) as u8);
         let mirror = if context.random.next_f32() < 0.5 {
             Mirror::None
         } else {
             Mirror::FrontBack
         };
 
-        let (vertical_placement, properties) = RuinedPortalProperties::for_variant(self.variant);
-
-        let template_idx = context.random.next_bounded_i32(PORTALS.len() as i32) as usize;
-        let template_name = PORTALS[template_idx];
-        let template = get_template(template_name)?;
-
         let pivot = Vector3::new(template.size.x / 2, 0, template.size.z / 2);
+        let base_position = Vector3::new(context.chunk_x * 16, 0, context.chunk_z * 16);
+        let bounding_box =
+            template.get_bounding_box_with_pivot(base_position, rotation, pivot, mirror);
+        let center = bounding_box.get_center();
 
-        let y = match vertical_placement {
+        let surface_y = match chosen_setup.placement {
             VerticalPlacement::OnOceanFloor => context
                 .height_sampler
                 .as_deref_mut()
                 .map_or(context.sea_level, |s| {
-                    s.estimate_ocean_floor_height(chunk_center_x, chunk_center_z)
+                    s.estimate_ocean_floor_height(center.x, center.z)
                 }),
-            VerticalPlacement::InNether => context.random.next_bounded_i32(45) + 45,
-            VerticalPlacement::PartlyBuried => {
-                let surface_y = context
-                    .height_sampler
-                    .as_deref_mut()
-                    .map_or(64, |s| s.estimate_height(chunk_center_x, chunk_center_z));
-                surface_y - 2 - context.random.next_bounded_i32(3)
-            }
-            _ => {
-                let surface_y = context
-                    .height_sampler
-                    .as_deref_mut()
-                    .map_or(64, |s| s.estimate_height(chunk_center_x, chunk_center_z));
-                surface_y - 1
-            }
+            _ => context
+                .height_sampler
+                .as_deref_mut()
+                .map_or(64, |s| s.estimate_height(center.x, center.z) - 1),
         };
 
-        let template_position = Vector3::new(chunk_center_x - pivot.x, y, chunk_center_z - pivot.z);
+        let y_span = bounding_box.get_block_count_y();
+        let projected_y = find_suitable_y(
+            &mut context.random,
+            context.height_sampler.as_deref_mut(),
+            chosen_setup.placement,
+            air_pocket,
+            surface_y,
+            y_span,
+            &bounding_box,
+            context.min_y,
+        );
+
+        let origin = Vector3::new(base_position.x, projected_y, base_position.z);
+        let properties = RuinedPortalProperties {
+            cold: chosen_setup.can_be_cold,
+            mossiness: chosen_setup.mossiness,
+            air_pocket,
+            overgrown: chosen_setup.overgrown,
+            vines: chosen_setup.vines,
+            replace_with_blackstone: chosen_setup.replace_with_blackstone,
+        };
 
         let piece = RuinedPortalPiece::new(
             template,
             template_name.to_string(),
-            template_position,
-            vertical_placement,
+            origin,
+            chosen_setup.placement,
             properties,
             rotation,
             mirror,
@@ -233,7 +394,7 @@ impl StructureGenerator for RuinedPortalGenerator {
         collector.add_piece(Box::new(piece));
 
         Some(StructurePosition {
-            start_pos: BlockPos::new(chunk_center_x, y, chunk_center_z),
+            start_pos: BlockPos::new(origin.x, origin.y, origin.z),
             collector: Arc::new(collector.into()),
         })
     }
@@ -334,11 +495,9 @@ impl RuinedPortalPiece {
             };
 
             if chunk.get_block_state(&world_pos).to_block_id() == Block::WATER.id
-                && let Some((_, waterlogged)) = placed_entry
+                && placed_entry
                     .properties
-                    .iter()
-                    .find(|(name, _)| name == "waterlogged")
-                && waterlogged == "true"
+                    .contains(&pumpkin_data::Property::Waterlogged(true))
             {
                 if let Some(waterlogged_state) =
                     BlockStateResolver::resolve(&placed_entry, rotation, mirror)
@@ -519,22 +678,21 @@ impl RuinedPortalPiece {
     }
 
     fn maybe_add_vines(random: &mut RandomGenerator, chunk: &mut ProtoChunk, pos: Vector3<i32>) {
+        use pumpkin_data::Property;
         let state = chunk.get_block_state(&pos);
         let block_id = state.to_block_id();
         if block_id != Block::AIR.id && block_id != Block::VINE.id {
             let dir_idx = random.next_bounded_i32(4);
             let (dir_offset, vine_face) = match dir_idx {
-                0 => (Vector3::new(0, 0, -1), "south"),
-                1 => (Vector3::new(0, 0, 1), "north"),
-                2 => (Vector3::new(-1, 0, 0), "east"),
-                _ => (Vector3::new(1, 0, 0), "west"),
+                0 => (Vector3::new(0, 0, -1), Property::South(true)),
+                1 => (Vector3::new(0, 0, 1), Property::North(true)),
+                2 => (Vector3::new(-1, 0, 0), Property::East(true)),
+                _ => (Vector3::new(1, 0, 0), Property::West(true)),
             };
             let neighbor_pos = pos + dir_offset;
             if chunk.get_block_state(&neighbor_pos).to_block_id() == Block::AIR.id {
-                let entry = PaletteEntry::with_properties(
-                    "minecraft:vine".to_string(),
-                    vec![(vine_face.to_string(), "true".to_string())],
-                );
+                let entry =
+                    PaletteEntry::with_properties("minecraft:vine".to_string(), vec![vine_face]);
                 if let Some(vine_state) =
                     BlockStateResolver::resolve(&entry, Rotation::None, Mirror::None)
                 {
@@ -561,7 +719,7 @@ impl RuinedPortalPiece {
             if chunk.get_block_state(&above).to_block_id() == Block::AIR.id {
                 let entry = PaletteEntry::with_properties(
                     "minecraft:jungle_leaves".to_string(),
-                    vec![("persistent".to_string(), "true".to_string())],
+                    vec![pumpkin_data::Property::Persistent(true)],
                 );
                 if let Some(leaves_state) =
                     BlockStateResolver::resolve(&entry, Rotation::None, Mirror::None)
@@ -722,7 +880,9 @@ fn make_settings(
             mossiness: properties.mossiness,
         })
         .add_processor(StructureProcessor::ProtectedBlocks(
-            "#minecraft:features_cannot_replace".to_string(),
+            crate::generation::structure::template::processor::BlockTagFilter::Static(
+                pumpkin_data::tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE.1,
+            ),
         ))
         .add_processor(StructureProcessor::LavaSubmergedBlock);
 

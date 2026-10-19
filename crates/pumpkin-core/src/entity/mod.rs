@@ -1410,17 +1410,22 @@ impl Entity {
         self.sync_velocity.store(true, Ordering::SeqCst);
     }
 
+    /// Vanilla `LivingEntity.getDimensions`: the player pose table, sleeping, or the scaled default.
     #[must_use]
-    pub const fn get_entity_dimensions(pose: EntityPose) -> EntityDimensions {
-        match pose {
-            EntityPose::Sleeping => EntityDimensions::new(0.2, 0.2, 0.2),
+    pub fn get_dimensions(&self, pose: EntityPose) -> EntityDimensions {
+        if pose == EntityPose::Sleeping {
+            return EntityDimensions::new(0.2, 0.2, 0.2);
+        }
+        let base = match pose {
+            _ if self.entity_type != &EntityType::PLAYER => self.default_dimension.load(),
             EntityPose::FallFlying | EntityPose::Swimming | EntityPose::SpinAttack => {
                 EntityDimensions::new(0.6, 0.6, 0.4)
             }
             EntityPose::Crouching => EntityDimensions::new(0.6, 1.5, 1.27),
             EntityPose::Dying => EntityDimensions::new(0.2, 0.2, 1.62),
-            _ => EntityDimensions::new(0.6, 1.8, 1.62),
-        }
+            _ => Self::type_dimensions(self.entity_type),
+        };
+        base.scale(self.scale.load())
     }
 
     /// Vanilla `getEyeHeight`: of the current size, which follows the pose
@@ -1830,10 +1835,7 @@ impl Entity {
                 continue;
             }
 
-            // TODO: this is default predicate, vanilla overwrites it for some blocks,
-            // see .suffocates(...) in Blocks.java
-            let check_suffocation =
-                !suffocating && blocks_movement(state, block.id) && state.is_full_cube();
+            let check_suffocation = !suffocating && state.is_suffocating();
 
             World::check_collision(
                 &bounding_box,
@@ -2712,6 +2714,18 @@ impl Entity {
         self.is_in_water() || self.touching_lava.load(Ordering::Relaxed)
     }
 
+    pub fn is_in_water_or_rain(&self) -> bool {
+        let world = self.world.load();
+        let pos = self.block_pos.load();
+        self.is_in_water()
+            || world.is_raining_at(&pos)
+            || world.is_raining_at(&BlockPos::new(
+                pos.0.x,
+                self.bounding_box.load().max.y.floor() as i32,
+                pos.0.z,
+            ))
+    }
+
     #[must_use]
     pub fn is_submerged_in_water(&self) -> bool {
         let pos = self.pos.load();
@@ -3229,19 +3243,6 @@ impl Entity {
         self.refresh_dimensions();
     }
 
-    /// Vanilla `LivingEntity.getDimensions`: the player pose table, sleeping, or the default.
-    fn dimensions_for_pose(&self, pose: EntityPose) -> EntityDimensions {
-        if pose == EntityPose::Sleeping {
-            return Self::get_entity_dimensions(pose);
-        }
-        let base = if self.entity_type == &EntityType::PLAYER {
-            Self::get_entity_dimensions(pose)
-        } else {
-            self.default_dimension.load()
-        };
-        base.scale(self.scale.load())
-    }
-
     /// Vanilla `LivingEntity.getHitbox`: the bounding box, with the bottom clipped
     /// to the vehicle seat when riding.
     #[must_use]
@@ -3255,7 +3256,7 @@ impl Entity {
 
     /// Vanilla `refreshDimensions`: size and bounding box for the current pose.
     fn refresh_dimensions(&self) {
-        let dimension = self.dimensions_for_pose(self.pose.load());
+        let dimension = self.get_dimensions(self.pose.load());
         let old = self.entity_dimension.swap(dimension);
         if old == dimension {
             return;
@@ -3475,7 +3476,7 @@ impl Entity {
         Vector3::new(pos.x, pos.y + self.get_eye_height(), pos.z)
     }
 
-    /// No solid block between the two eye positions.
+    /// No visual-blocking block between the two eye positions (matching vanilla `ClipContext.Block.VISUAL`).
     #[must_use]
     pub fn has_line_of_sight(&self, other: &Self) -> bool {
         let from = self.get_eye_pos();
@@ -3485,10 +3486,13 @@ impl Entity {
         }
         self.world
             .load_full()
-            .raycast(from, to, |block_pos, world| {
-                world.get_block_state(block_pos).is_solid()
-            })
-            .is_none()
+            .clip(&pumpkin_world::clip::ClipContext::new(
+                from,
+                to,
+                pumpkin_world::clip::ClipBlock::Visual,
+                pumpkin_world::clip::ClipFluid::None,
+            ))
+            .is_miss
     }
 
     pub fn get_eye_y(&self) -> f64 {
@@ -4022,7 +4026,7 @@ impl Entity {
                 let mut found = None;
 
                 'search: for (pose, y_offsets) in poses_and_heights {
-                    let dims = Self::get_entity_dimensions(pose);
+                    let dims = passenger_entity.get_dimensions(pose);
 
                     for y_offset in y_offsets {
                         for &(ox, oz) in &offsets {
@@ -4073,7 +4077,7 @@ impl Entity {
                     ];
 
                     for pose in poses {
-                        let dims = Self::get_entity_dimensions(pose);
+                        let dims = passenger_entity.get_dimensions(pose);
                         let bbox = BoundingBox::new_from_pos(
                             self.pos.load().x,
                             vehicle_top,
