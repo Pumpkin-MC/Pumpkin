@@ -7,7 +7,9 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use crate::world::World;
-use pumpkin_data::block_properties::OakDoorLikeProperties;
+use pumpkin_data::block_properties::{
+    ChestLikeProperties, CopperGolemStatueLikeProperties, OakDoorLikeProperties,
+};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::Taggable;
@@ -70,6 +72,12 @@ pub(crate) fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Bloc
         new_door_properties.hinge = door_props.hinge;
         new_door_properties.powered = door_props.powered;
         new_door_properties.to_state_id(new_block)
+    } else if block.has_tag(&tag::Block::MINECRAFT_COPPER_CHESTS) {
+        ChestLikeProperties::from_state_id(world.get_block_state_id(&location))
+            .to_state_id(new_block)
+    } else if block.has_tag(&tag::Block::MINECRAFT_COPPER_GOLEM_STATUES) {
+        CopperGolemStatueLikeProperties::from_state_id(world.get_block_state_id(&location))
+            .to_state_id(new_block)
     } else {
         // TODO: Also carry over the properties of trapdoors.
         new_block.default_state.id
@@ -138,6 +146,16 @@ const fn get_waxed_equivalent(id: BlockId) -> Option<BlockId> {
         BlockId::WEATHERED_COPPER_TRAPDOOR => Some(BlockId::WAXED_WEATHERED_COPPER_TRAPDOOR),
         BlockId::EXPOSED_COPPER_TRAPDOOR => Some(BlockId::WAXED_EXPOSED_COPPER_TRAPDOOR),
         BlockId::COPPER_TRAPDOOR => Some(BlockId::WAXED_COPPER_TRAPDOOR),
+        BlockId::COPPER_CHEST => Some(BlockId::WAXED_COPPER_CHEST),
+        BlockId::EXPOSED_COPPER_CHEST => Some(BlockId::WAXED_EXPOSED_COPPER_CHEST),
+        BlockId::WEATHERED_COPPER_CHEST => Some(BlockId::WAXED_WEATHERED_COPPER_CHEST),
+        BlockId::OXIDIZED_COPPER_CHEST => Some(BlockId::WAXED_OXIDIZED_COPPER_CHEST),
+        BlockId::COPPER_GOLEM_STATUE => Some(BlockId::WAXED_COPPER_GOLEM_STATUE),
+        BlockId::EXPOSED_COPPER_GOLEM_STATUE => Some(BlockId::WAXED_EXPOSED_COPPER_GOLEM_STATUE),
+        BlockId::WEATHERED_COPPER_GOLEM_STATUE => {
+            Some(BlockId::WAXED_WEATHERED_COPPER_GOLEM_STATUE)
+        }
+        BlockId::OXIDIZED_COPPER_GOLEM_STATUE => Some(BlockId::WAXED_OXIDIZED_COPPER_GOLEM_STATUE),
         _ => None,
     }
 }

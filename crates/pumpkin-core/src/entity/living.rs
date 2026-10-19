@@ -112,6 +112,7 @@ pub struct LivingEntity {
     /// The tick at which this entity was last attacked (entity age).
     pub last_attacked_time: AtomicI32,
     last_damage_type: std::sync::Mutex<Option<DamageType>>,
+    last_damage_attacker_id: AtomicI32,
     last_damage_stamp: std::sync::atomic::AtomicI64,
 
     /// The entity ID of the entity this living entity last attacked.
@@ -302,6 +303,7 @@ impl LivingEntity {
             last_attacker_id: AtomicI32::new(0),
             last_attacked_time: AtomicI32::new(0),
             last_damage_type: std::sync::Mutex::new(None),
+            last_damage_attacker_id: AtomicI32::new(0),
             last_damage_stamp: std::sync::atomic::AtomicI64::new(0),
             last_attacking_id: AtomicI32::new(0),
             last_attack_time: AtomicI32::new(0),
@@ -2585,6 +2587,14 @@ impl LivingEntity {
         *last
     }
 
+    pub fn get_last_damage_attacker(&self) -> Option<Arc<dyn EntityBase>> {
+        self.get_last_damage_type()?;
+        self.entity
+            .world
+            .load()
+            .get_entity_by_id(self.last_damage_attacker_id.load(Relaxed))
+    }
+
     pub fn can_take_damage(&self) -> bool {
         !self.entity.invulnerable.load(Ordering::Relaxed) && self.is_part_of_game()
     }
@@ -3176,6 +3186,12 @@ impl LivingEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(damage_type);
         self.last_damage_stamp.store(world.get_world_age(), Relaxed);
+        self.last_damage_attacker_id.store(
+            cause
+                .or(source)
+                .map_or(0, |entity| entity.get_entity().entity_id),
+            Relaxed,
+        );
 
         let Some(server) = world.server.upgrade() else {
             return false;

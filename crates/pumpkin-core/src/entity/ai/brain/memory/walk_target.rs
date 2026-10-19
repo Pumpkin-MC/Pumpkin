@@ -7,7 +7,7 @@ use crate::entity::EntityBase;
 
 use super::position_tracker::{BlockPosTracker, EntityTracker, PositionTracker};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct WalkTarget {
     target: Arc<dyn PositionTracker>,
     speed_modifier: f32,

@@ -7,6 +7,8 @@ use super::memory::{MemoryModuleId, types};
 use super::{BrainTick, VisibilityContext};
 
 pub mod dummy;
+pub mod hurt_by;
+pub mod nearest_living_entities;
 
 pub use dummy::DummySensor;
 
@@ -20,6 +22,8 @@ pub trait Sensor: Send + Sync {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SensorType {
     Dummy,
+    NearestLivingEntities,
+    HurtBy,
 }
 
 impl SensorType {
@@ -27,19 +31,25 @@ impl SensorType {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Dummy => "minecraft:dummy",
+            Self::NearestLivingEntities => "minecraft:nearest_living_entities",
+            Self::HurtBy => "minecraft:hurt_by",
         }
     }
 
     #[must_use]
     pub const fn scan_rate(self) -> i32 {
         match self {
-            Self::Dummy => DEFAULT_SCAN_RATE,
+            Self::Dummy | Self::NearestLivingEntities | Self::HurtBy => DEFAULT_SCAN_RATE,
         }
     }
 
     fn create_sensor(self) -> Box<dyn Sensor> {
         match self {
             Self::Dummy => Box::new(DummySensor),
+            Self::NearestLivingEntities => {
+                Box::new(nearest_living_entities::NearestLivingEntitySensor)
+            }
+            Self::HurtBy => Box::new(hurt_by::HurtBySensor),
         }
     }
 

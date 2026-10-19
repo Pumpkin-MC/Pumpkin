@@ -22,6 +22,7 @@ use crate::block::blocks::chiseled_bookshelf::ChiseledBookshelfBlock;
 use crate::block::blocks::command::CommandBlock;
 use crate::block::blocks::composter::ComposterBlock;
 use crate::block::blocks::conduit::ConduitBlock;
+use crate::block::blocks::copper_golem_statue::CopperGolemStatueBlock;
 use crate::block::blocks::coral::coral_block::CoralBlock;
 use crate::block::blocks::coral::coral_fan::CoralFanBlock;
 use crate::block::blocks::coral::coral_plant::CoralPlantBlock;
@@ -261,6 +262,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ChestBlock);
     manager.register(TrappedChestBlock);
     manager.register(CopperChestBlock);
+    manager.register(CopperGolemStatueBlock);
     manager.register(EnderChestBlock);
     manager.register(CraftingTableBlock);
     manager.register(EnchantingTableBlock);
