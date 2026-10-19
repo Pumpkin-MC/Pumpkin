@@ -22,6 +22,7 @@ pub enum AdvancementTrigger {
     Bullseye,
     CuredZombieVillager,
     TradedWithVillager,
+    UsedTotem { item_id: String },
 }
 
 impl Player {
@@ -621,6 +622,16 @@ impl Player {
                     self.trigger_advancement_criterion(
                         Advancement::ADVENTURE_TRADE_AT_WORLD_HEIGHT,
                         "trade_at_world_height",
+                    );
+                }
+            }
+            AdvancementTrigger::UsedTotem { item_id } => {
+                if item_id == "minecraft:totem_of_undying"
+                    && !self.has_advancement(Advancement::ADVENTURE_TOTEM_OF_UNDYING)
+                {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_TOTEM_OF_UNDYING,
+                        "used_totem",
                     );
                 }
             }
