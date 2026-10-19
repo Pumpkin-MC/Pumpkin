@@ -453,12 +453,15 @@ impl CommandExecutor for LootExecutor {
                 let world = context.world();
                 let block_state = world.get_block_state(&pos);
                 let block = world.get_block(&pos);
-                let key = format!("minecraft:blocks/{}", block.name);
+                let key = block.loot_table.ok_or_else(|| {
+                    ERROR_NO_BLOCK_LOOT_TABLE
+                        .create_without_context(TextComponent::text(block.name.to_string()))
+                })?;
 
                 let loot_table = context
                     .server()
                     .datapack_manager
-                    .get_loot_table(&key)
+                    .get_loot_table(key)
                     .ok_or_else(|| {
                         ERROR_NO_BLOCK_LOOT_TABLE
                             .create_without_context(TextComponent::text(block.name.to_string()))
@@ -483,7 +486,7 @@ impl CommandExecutor for LootExecutor {
                 };
                 let seed: i64 = rand::random();
                 drops = crate::world::loot::generate_loot_from_handle(&loot_table, seed, &params);
-                table_id_for_callback = Some(key);
+                table_id_for_callback = Some(key.to_string());
             }
         }
 

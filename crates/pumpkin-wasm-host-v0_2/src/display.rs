@@ -1,5 +1,8 @@
+use super::AccessorExt;
+use crate::pumpkin::plugin::display::HostItemDisplayEntityWithStore;
+
 use std::sync::Arc;
-use wasmtime::component::Resource;
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 use pumpkin_util::math::vector3::Vector3;
 
@@ -536,21 +539,6 @@ impl HostItemDisplayEntity for PluginHostState {
         }
     }
 
-    async fn set_item(
-        &mut self,
-        item_display: Resource<ItemDisplayEntity>,
-        item: Option<Resource<WitHostItemStack>>,
-    ) -> wasmtime::Result<()> {
-        let stack = if let Some(item_res_val) = item {
-            self.take(item_res_val)?.lock().await.clone()
-        } else {
-            pumpkin_data::item_stack::ItemStack::new(0, &pumpkin_data::item::Item::AIR)
-        };
-
-        self.get(&item_display)?.set_item(stack);
-        Ok(())
-    }
-
     fn get_item_display_mode(
         &mut self,
         item_display: Resource<ItemDisplayEntity>,
@@ -573,6 +561,23 @@ impl HostItemDisplayEntity for PluginHostState {
 
     fn drop(&mut self, rep: Resource<ItemDisplayEntity>) -> wasmtime::Result<()> {
         self.drop(rep)
+    }
+}
+
+impl HostItemDisplayEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn set_item(
+        accessor: &Accessor<PluginHostState, Self>,
+        item_display: Resource<ItemDisplayEntity>,
+        item: Option<Resource<WitHostItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let stack = if let Some(item_res_val) = item {
+            accessor.take_res(item_res_val)?.lock().await.clone()
+        } else {
+            pumpkin_data::item_stack::ItemStack::new(0, &pumpkin_data::item::Item::AIR)
+        };
+
+        accessor.get_res(&item_display)?.set_item(stack);
+        Ok(())
     }
 }
 

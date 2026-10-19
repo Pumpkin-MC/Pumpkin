@@ -163,7 +163,7 @@ pub struct BlockStateRule {
 
 pub struct RandomizedIntBlockStateProvider {
     pub source: Box<BlockStateProvider>,
-    pub property: String,
+    pub property: pumpkin_data::PropertyKey,
     pub values: IntProvider,
 }
 
@@ -177,26 +177,17 @@ impl RandomizedIntBlockStateProvider {
         let Some(props_source) = block.properties(base_state.id) else {
             return base_state;
         };
-        let prop_list = props_source.to_props();
-        if !prop_list.iter().any(|(k, _)| *k == self.property) {
+        let mut prop_list = props_source.to_props();
+        let Some(target_prop) = prop_list.iter_mut().find(|p| p.key() == self.property) else {
             return base_state;
-        }
+        };
         let value = self.values.get(random);
-        let val_str = value.to_string();
-        let new_props: Vec<(&str, &str)> = prop_list
-            .iter()
-            .map(|(k, v)| {
-                (
-                    *k,
-                    if *k == self.property {
-                        val_str.as_str()
-                    } else {
-                        *v
-                    },
-                )
-            })
-            .collect();
-        let new_state_id = block.from_properties(&new_props).to_state_id(block);
+        if let Ok(val_u8) = u8::try_from(value)
+            && let Some(new_prop) = pumpkin_data::Property::from_key_and_int(self.property, val_u8)
+        {
+            *target_prop = new_prop;
+        }
+        let new_state_id = block.from_properties(&prop_list).to_state_id(block);
         BlockState::from_id(new_state_id)
     }
 
@@ -248,35 +239,34 @@ impl PillarBlockStateProvider {
         random: &mut RandomGenerator,
         _pos: BlockPos,
     ) -> &'static BlockState {
-        let (axis_str, facing_str) = match random.next_bounded_i32(6) {
-            0 => ("y", "down"),
-            1 => ("y", "up"),
-            2 => ("z", "north"),
-            3 => ("z", "south"),
-            4 => ("x", "west"),
-            _ => ("x", "east"),
+        use pumpkin_data::block_properties::{Axis, Facing};
+        let (axis, facing) = match random.next_bounded_i32(6) {
+            0 => (Axis::Y, Facing::Down),
+            1 => (Axis::Y, Facing::Up),
+            2 => (Axis::Z, Facing::North),
+            3 => (Axis::Z, Facing::South),
+            4 => (Axis::X, Facing::West),
+            _ => (Axis::X, Facing::East),
         };
         let block = Block::from_id(self.state.id.to_block_id());
         if let Some(props_source) = block.properties(self.state.id) {
-            let prop_list = props_source.to_props();
+            let mut prop_list = props_source.to_props();
             let mut modified = false;
-            let mut new_props: Vec<(&str, &str)> = Vec::with_capacity(prop_list.len());
-            for (k, v) in prop_list {
-                if k == "axis" {
-                    new_props.push(("axis", axis_str));
-                    modified = true;
-                } else if k == "facing" {
-                    new_props.push(("facing", facing_str));
-                    modified = true;
-                } else if k == "horizontal_facing" && (facing_str != "down" && facing_str != "up") {
-                    new_props.push(("horizontal_facing", facing_str));
-                    modified = true;
-                } else {
-                    new_props.push((k, v));
+            for p in &mut prop_list {
+                match p {
+                    pumpkin_data::Property::Axis(a) => {
+                        *a = axis;
+                        modified = true;
+                    }
+                    pumpkin_data::Property::Facing(f) => {
+                        *f = facing;
+                        modified = true;
+                    }
+                    _ => {}
                 }
             }
             if modified {
-                let new_props_obj = block.from_properties(new_props.as_slice());
+                let new_props_obj = block.from_properties(prop_list.as_slice());
                 let new_state_id = new_props_obj.to_state_id(block);
                 return BlockState::from_id(new_state_id);
             }

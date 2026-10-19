@@ -1,8 +1,8 @@
 package pumpkin:plugin@0.2.0;
 
 interface bedrock-packets {
+  use common.{ inexpressible-host-type, nbt-tree };
   use uuid.{ uuid };
-  use common.{ nbt-tree };
   /// Transmits actor-specific animations, sounds, and state changes (such as hurt, taming, or eating).
   record s-actor-event {
     /// Runtime entity ID of the actor experiencing the event.
@@ -216,8 +216,10 @@ interface bedrock-packets {
     unknown(s32),
   }
   variant transaction-data {
-    normal(string),
-    mismatch(string),
+    /// WARNING: Could not fully translate type `NormalTransactionData` to WIT
+    normal(inexpressible-host-type),
+    /// WARNING: Could not fully translate type `MismatchTransactionData` to WIT
+    mismatch(inexpressible-host-type),
     use-item(use-item-transaction-data),
     use-item-on-entity(use-item-on-entity-transaction-data),
     release-item(release-item-transaction-data),
@@ -293,70 +295,86 @@ interface bedrock-packets {
     block-runtime-id: s32,
     extra-data: list<u8>,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.take` for details.
   record item-stack-request-action-take {
     count: u8,
     source: item-stack-request-slot-info,
     destination: item-stack-request-slot-info,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.place` for details.
   record item-stack-request-action-place {
     count: u8,
     source: item-stack-request-slot-info,
     destination: item-stack-request-slot-info,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.swap` for details.
   record item-stack-request-action-swap {
     slot1: item-stack-request-slot-info,
     slot2: item-stack-request-slot-info,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.drop` for details.
   record item-stack-request-action-drop {
     count: u8,
     source: item-stack-request-slot-info,
     randomly: bool,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.destroy` for details.
   record item-stack-request-action-destroy {
     count: u8,
     source: item-stack-request-slot-info,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.consume` for details.
   record item-stack-request-action-consume {
     count: u8,
     source: item-stack-request-slot-info,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.create` for details.
   record item-stack-request-action-create {
     result-index: u8,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.beacon-payment` for details.
   record item-stack-request-action-beacon-payment {
     primary-effect-id: s32,
     secondary-effect-id: s32,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.mine-block` for details.
   record item-stack-request-action-mine-block {
     hotbar-slot: s32,
     predicted-durability: s32,
     stack-id: s32,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.craft-recipe` for details.
   record item-stack-request-action-craft-recipe {
     recipe-id: s32,
     repetitions: u8,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.craft-recipe-auto` for details.
   record item-stack-request-action-craft-recipe-auto {
     recipe-id: s32,
     repetitions: u8,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.craft-creative` for details.
   record item-stack-request-action-craft-creative {
     creative-item-id: s32,
     repetitions: u8,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.optional` for details.
   record item-stack-request-action-optional {
     recipe-id: s32,
     filter-string-index: s32,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.grindstone` for details.
   record item-stack-request-action-grindstone {
     recipe-id: s32,
     repair-cost: s32,
     repetitions: u8,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.loom` for details.
   record item-stack-request-action-loom {
     pattern-id: string,
     repetitions: u8,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.craft-results-deprecated` for details.
   record item-stack-request-action-craft-results-deprecated {
     result-items: list<stack-request-item>,
     times-crafted: u8,
@@ -418,7 +436,7 @@ interface bedrock-packets {
     /// Raw client data JWT carrying skin parameters, device details, and locale settings.
     raw-token: list<u8>,
   }
-  record skin-animation {
+  record login-skin-animation {
     frames: f64,
     image: string,
     image-height: s32,
@@ -426,14 +444,14 @@ interface bedrock-packets {
     animation-type: s32,
     animation-expression: s32,
   }
-  record persona-piece {
+  record login-persona-piece {
     is-default: bool,
     pack-id: string,
     piece-id: string,
     piece-type: string,
     product-id: string,
   }
-  record persona-piece-tint-colour {
+  record login-persona-piece-tint-colour {
     colours: list<string>,
     piece-type: string,
   }
@@ -481,10 +499,10 @@ interface bedrock-packets {
     skin-geometry: string,
     skin-geometry-version: string,
     skin-resource-patch: string,
-    animated-image-data: list<skin-animation>,
+    animated-image-data: list<login-skin-animation>,
     skin-animation-data: string,
-    persona-pieces: list<persona-piece>,
-    piece-tint-colours: list<persona-piece-tint-colour>,
+    persona-pieces: list<login-persona-piece>,
+    piece-tint-colours: list<login-persona-piece-tint-colour>,
   }
   /// Sent by the client to update the item held or equipped in a mob or player slot.
   record s-mob-equipment {
@@ -895,7 +913,9 @@ interface bedrock-packets {
     /// Entity attributes (health, movement speed, follow range).
     attributes-list: list<synced-attribute>,
     /// Metadata dictionary (flags, name tags, scale).
-    actor-data: string,
+    /// 
+    /// WARNING: Could not fully translate type `SyncedActorDataList` to WIT
+    actor-data: inexpressible-host-type,
     /// Dynamic Molang property synchronization data.
     synced-properties: property-sync-data,
     /// Entity attachment links (e.g. passenger or leash connections).
@@ -925,7 +945,9 @@ interface bedrock-packets {
     /// Movement velocity vector.
     velocity: tuple<f64, f64, f64>,
     /// Metadata dictionary for the item entity.
-    entity-data: string,
+    /// 
+    /// WARNING: Could not fully translate type `SyncedActorDataList` to WIT
+    entity-data: inexpressible-host-type,
     /// Whether the item originated from fishing.
     is-from-fishing: bool,
   }
@@ -952,7 +974,9 @@ interface bedrock-packets {
     /// Game mode of the player.
     player-game-type: game-type,
     /// Entity metadata flags and properties.
-    entity-data: string,
+    /// 
+    /// WARNING: Could not fully translate type `SyncedActorDataList` to WIT
+    entity-data: inexpressible-host-type,
     /// Dynamic Molang property synchronization.
     synced-properties: property-sync-data,
     /// Permissions and ability layers for this player.
@@ -1232,6 +1256,7 @@ interface bedrock-packets {
     /// Tick number on which the prediction error occurred.
     tick: s64,
   }
+  /// Generated; extracted from variant arm. See `recipe-item-descriptor.item` for details.
   record recipe-item-descriptor-item {
     identifier: string,
     metadata-value: s32,
@@ -1654,6 +1679,21 @@ interface bedrock-packets {
     is-trusted: bool,
     profile-hash: string,
   }
+  record skin-animation {
+    image-width: s32,
+    image-height: s32,
+    image-data: list<u8>,
+    animation-type: s32,
+    frames: f32,
+    expression-type: s32,
+  }
+  record persona-piece {
+    piece-id: string,
+    piece-type: s32,
+    pack-id: uuid,
+    is-default: bool,
+    product-id: string,
+  }
   record piece-tint-color {
     piece-type: string,
     colors: list<s32>,
@@ -1738,7 +1778,9 @@ interface bedrock-packets {
     /// The unique runtime ID of the entity being updated
     target-runtime-id: s64,
     /// A map of entity metadata properties (e.g., flags, name tags, scale)
-    actor-data: string,
+    /// 
+    /// WARNING: Could not fully translate type `SyncedActorDataList` to WIT
+    actor-data: inexpressible-host-type,
     /// Dynamic properties synced between client and server
     synced-properties: property-sync-data,
     /// The server tick at which this update occurred

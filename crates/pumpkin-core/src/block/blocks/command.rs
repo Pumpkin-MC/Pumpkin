@@ -126,9 +126,8 @@ impl CommandBlock {
             return;
         };
 
-        if command.is_empty() {
-            command_entity.success_count.store(0, Ordering::Release);
-        } else {
+        command_entity.success_count.store(0, Ordering::Release);
+        if !command.is_empty() {
             let source = CommandSender::CommandBlock(command_entity, world).into_source(server);
 
             server

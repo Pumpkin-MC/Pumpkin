@@ -473,6 +473,13 @@ impl pumpkin_command::source::CommandSource for CommandSource {
     }
 
     fn call_result(&self, result: ReturnValue) {
+        if result.success_value()
+            && let crate::command::CommandSender::CommandBlock(block_entity, _) = &self.output
+        {
+            block_entity
+                .success_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
         self.command_result_taker.call(result);
     }
 

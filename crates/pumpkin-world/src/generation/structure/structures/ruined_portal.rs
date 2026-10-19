@@ -495,11 +495,9 @@ impl RuinedPortalPiece {
             };
 
             if chunk.get_block_state(&world_pos).to_block_id() == Block::WATER.id
-                && let Some((_, waterlogged)) = placed_entry
+                && placed_entry
                     .properties
-                    .iter()
-                    .find(|(name, _)| name == "waterlogged")
-                && waterlogged == "true"
+                    .contains(&pumpkin_data::Property::Waterlogged(true))
             {
                 if let Some(waterlogged_state) =
                     BlockStateResolver::resolve(&placed_entry, rotation, mirror)
@@ -680,22 +678,21 @@ impl RuinedPortalPiece {
     }
 
     fn maybe_add_vines(random: &mut RandomGenerator, chunk: &mut ProtoChunk, pos: Vector3<i32>) {
+        use pumpkin_data::Property;
         let state = chunk.get_block_state(&pos);
         let block_id = state.to_block_id();
         if block_id != Block::AIR.id && block_id != Block::VINE.id {
             let dir_idx = random.next_bounded_i32(4);
             let (dir_offset, vine_face) = match dir_idx {
-                0 => (Vector3::new(0, 0, -1), "south"),
-                1 => (Vector3::new(0, 0, 1), "north"),
-                2 => (Vector3::new(-1, 0, 0), "east"),
-                _ => (Vector3::new(1, 0, 0), "west"),
+                0 => (Vector3::new(0, 0, -1), Property::South(true)),
+                1 => (Vector3::new(0, 0, 1), Property::North(true)),
+                2 => (Vector3::new(-1, 0, 0), Property::East(true)),
+                _ => (Vector3::new(1, 0, 0), Property::West(true)),
             };
             let neighbor_pos = pos + dir_offset;
             if chunk.get_block_state(&neighbor_pos).to_block_id() == Block::AIR.id {
-                let entry = PaletteEntry::with_properties(
-                    "minecraft:vine".to_string(),
-                    vec![(vine_face.to_string(), "true".to_string())],
-                );
+                let entry =
+                    PaletteEntry::with_properties("minecraft:vine".to_string(), vec![vine_face]);
                 if let Some(vine_state) =
                     BlockStateResolver::resolve(&entry, Rotation::None, Mirror::None)
                 {
@@ -722,7 +719,7 @@ impl RuinedPortalPiece {
             if chunk.get_block_state(&above).to_block_id() == Block::AIR.id {
                 let entry = PaletteEntry::with_properties(
                     "minecraft:jungle_leaves".to_string(),
-                    vec![("persistent".to_string(), "true".to_string())],
+                    vec![pumpkin_data::Property::Persistent(true)],
                 );
                 if let Some(leaves_state) =
                     BlockStateResolver::resolve(&entry, Rotation::None, Mirror::None)
@@ -883,7 +880,9 @@ fn make_settings(
             mossiness: properties.mossiness,
         })
         .add_processor(StructureProcessor::ProtectedBlocks(
-            "#minecraft:features_cannot_replace".to_string(),
+            crate::generation::structure::template::processor::BlockTagFilter::Static(
+                pumpkin_data::tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE.1,
+            ),
         ))
         .add_processor(StructureProcessor::LavaSubmergedBlock);
 

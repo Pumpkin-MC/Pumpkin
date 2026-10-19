@@ -1,6 +1,10 @@
+use super::AccessorExt;
+use crate::LockIgnorePoison;
+use crate::pumpkin::plugin::block_entity::HostContainerBlockEntityWithStore;
+
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use wasmtime::component::Resource;
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 use crate::pumpkin::{
     self,
@@ -99,8 +103,7 @@ fn to_wasm_sign_text(text: &InternalText) -> SignText {
     SignText {
         messages: text
             .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .lock_ignore_poison()
             .clone()
             .map(str::into_string)
             .to_vec(),
@@ -303,22 +306,6 @@ impl HostContainerBlockEntity for PluginHostState {
         }
     }
 
-    async fn set_stack(
-        &mut self,
-        res: Resource<ContainerBlockEntity>,
-        slot: u32,
-        stack_res: Option<Resource<WitHostItemStack>>,
-    ) -> wasmtime::Result<()> {
-        let stack = match stack_res {
-            Some(res) => self.take(res)?.lock().await.clone(),
-            None => pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
-        };
-        let inventory = self.get(&res)?.inventory.clone();
-
-        inventory.set_stack(slot as usize, stack);
-        Ok(())
-    }
-
     fn remove_stack(
         &mut self,
         res: Resource<ContainerBlockEntity>,
@@ -344,6 +331,24 @@ impl HostContainerBlockEntity for PluginHostState {
     }
 }
 
+impl HostContainerBlockEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn set_stack(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<ContainerBlockEntity>,
+        slot: u32,
+        stack_res: Option<Resource<WitHostItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let inventory = accessor.get_res(&res)?.inventory.clone();
+        let stack = match stack_res {
+            Some(stack_res) => accessor.take_res(stack_res)?.lock().await.clone(),
+            None => pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
+        };
+
+        inventory.set_stack(slot as usize, stack);
+        Ok(())
+    }
+}
+
 impl HostCommandBlockEntity for PluginHostState {
     fn get_block_entity(
         &mut self,
@@ -353,12 +358,7 @@ impl HostCommandBlockEntity for PluginHostState {
     }
 
     fn last_output(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<String> {
-        Ok(self
-            .get(&res)?
-            .last_output
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone())
+        Ok(self.get(&res)?.last_output.lock_ignore_poison().clone())
     }
 
     fn track_output(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<bool> {
@@ -370,12 +370,7 @@ impl HostCommandBlockEntity for PluginHostState {
     }
 
     fn command(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<String> {
-        Ok(self
-            .get(&res)?
-            .command
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone())
+        Ok(self.get(&res)?.command.lock_ignore_poison().clone())
     }
 
     fn auto(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<bool> {
@@ -419,17 +414,8 @@ impl HostSignBlockEntity for PluginHostState {
             Ordering::Relaxed,
         );
         sign.front_text.set_color(new_text.get_color());
-        (*sign
-            .front_text
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner))
-        .clone_from(
-            &new_text
-                .messages
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        (*sign.front_text.messages.lock_ignore_poison())
+            .clone_from(&new_text.messages.lock_ignore_poison());
         Ok(())
     }
 
@@ -449,17 +435,8 @@ impl HostSignBlockEntity for PluginHostState {
             Ordering::Relaxed,
         );
         sign.back_text.set_color(new_text.get_color());
-        (*sign
-            .back_text
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner))
-        .clone_from(
-            &new_text
-                .messages
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        (*sign.back_text.messages.lock_ignore_poison())
+            .clone_from(&new_text.messages.lock_ignore_poison());
         Ok(())
     }
 
@@ -660,17 +637,8 @@ impl HostHangingSignBlockEntity for PluginHostState {
             Ordering::Relaxed,
         );
         sign.front_text.set_color(new_text.get_color());
-        (*sign
-            .front_text
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner))
-        .clone_from(
-            &new_text
-                .messages
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        (*sign.front_text.messages.lock_ignore_poison())
+            .clone_from(&new_text.messages.lock_ignore_poison());
         Ok(())
     }
 
@@ -693,17 +661,8 @@ impl HostHangingSignBlockEntity for PluginHostState {
             Ordering::Relaxed,
         );
         sign.back_text.set_color(new_text.get_color());
-        (*sign
-            .back_text
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner))
-        .clone_from(
-            &new_text
-                .messages
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        (*sign.back_text.messages.lock_ignore_poison())
+            .clone_from(&new_text.messages.lock_ignore_poison());
         Ok(())
     }
 

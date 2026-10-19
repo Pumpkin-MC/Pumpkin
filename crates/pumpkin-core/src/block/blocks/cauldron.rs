@@ -88,7 +88,7 @@ impl BlockBehaviour for CauldronBlock {
                     return BlockActionResult::Pass;
                 }
                 let state_id = Block::WATER_CAULDRON
-                    .from_properties(&[("level", "3")])
+                    .from_properties(&[pumpkin_data::Property::Level(3)])
                     .to_state_id(&Block::WATER_CAULDRON);
                 args.world
                     .set_block_state(args.position, state_id, BlockFlags::NOTIFY_ALL);
@@ -126,7 +126,7 @@ impl BlockBehaviour for CauldronBlock {
                 return BlockActionResult::Success;
             } else if item_id == Item::POWDER_SNOW_BUCKET.id {
                 let state_id = Block::POWDER_SNOW_CAULDRON
-                    .from_properties(&[("level", "3")])
+                    .from_properties(&[pumpkin_data::Property::Level(3)])
                     .to_state_id(&Block::POWDER_SNOW_CAULDRON);
                 args.world
                     .set_block_state(args.position, state_id, BlockFlags::NOTIFY_ALL);
@@ -145,7 +145,7 @@ impl BlockBehaviour for CauldronBlock {
                 return BlockActionResult::Success;
             } else if item_id == Item::POTION.id {
                 let state_id = Block::WATER_CAULDRON
-                    .from_properties(&[("level", "1")])
+                    .from_properties(&[pumpkin_data::Property::Level(1)])
                     .to_state_id(&Block::WATER_CAULDRON);
                 args.world
                     .set_block_state(args.position, state_id, BlockFlags::NOTIFY_ALL);
@@ -214,12 +214,9 @@ impl BlockBehaviour for CauldronBlock {
             let props = WaterCauldronLikeProperties::from_state_id(state_id);
             if props.level > 0 {
                 if item_id == Item::POTION.id && props.level < 3 {
-                    let next_level_str = match props.level {
-                        1 => "2",
-                        _ => "3",
-                    };
+                    let next_level = props.level + 1;
                     let new_state_id = Block::WATER_CAULDRON
-                        .from_properties(&[("level", next_level_str)])
+                        .from_properties(&[pumpkin_data::Property::Level(next_level)])
                         .to_state_id(&Block::WATER_CAULDRON);
                     args.world
                         .set_block_state(args.position, new_state_id, BlockFlags::NOTIFY_ALL);
@@ -241,12 +238,8 @@ impl BlockBehaviour for CauldronBlock {
                 if item_id == Item::GLASS_BOTTLE.id {
                     let next_level = props.level - 1;
                     if next_level > 0 {
-                        let next_level_str = match next_level {
-                            2 => "2",
-                            _ => "1",
-                        };
                         let new_state_id = Block::WATER_CAULDRON
-                            .from_properties(&[("level", next_level_str)])
+                            .from_properties(&[pumpkin_data::Property::Level(next_level)])
                             .to_state_id(&Block::WATER_CAULDRON);
                         args.world.set_block_state(
                             args.position,
@@ -287,12 +280,8 @@ impl BlockBehaviour for CauldronBlock {
                 {
                     let next_level = props.level - 1;
                     if next_level > 0 {
-                        let next_level_str = match next_level {
-                            2 => "2",
-                            _ => "1",
-                        };
                         let new_state_id = Block::WATER_CAULDRON
-                            .from_properties(&[("level", next_level_str)])
+                            .from_properties(&[pumpkin_data::Property::Level(next_level)])
                             .to_state_id(&Block::WATER_CAULDRON);
                         args.world.set_block_state(
                             args.position,
@@ -322,12 +311,8 @@ impl BlockBehaviour for CauldronBlock {
                 {
                     let next_level = props.level - 1;
                     if next_level > 0 {
-                        let next_level_str = match next_level {
-                            2 => "2",
-                            _ => "1",
-                        };
                         let new_state_id = Block::WATER_CAULDRON
-                            .from_properties(&[("level", next_level_str)])
+                            .from_properties(&[pumpkin_data::Property::Level(next_level)])
                             .to_state_id(&Block::WATER_CAULDRON);
                         args.world.set_block_state(
                             args.position,
@@ -359,12 +344,8 @@ impl BlockBehaviour for CauldronBlock {
                 {
                     let next_level = props.level - 1;
                     if next_level > 0 {
-                        let next_level_str = match next_level {
-                            2 => "2",
-                            _ => "1",
-                        };
                         let new_state_id = Block::WATER_CAULDRON
-                            .from_properties(&[("level", next_level_str)])
+                            .from_properties(&[pumpkin_data::Property::Level(next_level)])
                             .to_state_id(&Block::WATER_CAULDRON);
                         args.world.set_block_state(
                             args.position,

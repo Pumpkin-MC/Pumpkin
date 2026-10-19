@@ -1328,6 +1328,80 @@ mod tests {
         .expect("legacy reentry routing scenarios timed out");
     }
 
+    fn nested_active_context_call(
+        driver: ConcurrentStore,
+        remaining: usize,
+        blocking: bool,
+    ) -> super::StoreFuture<'static, ()> {
+        Box::pin(async move {
+            let nested_driver = driver.clone();
+            driver
+                .call_guest(move |_| {
+                    Box::pin(async move {
+                        if remaining == 0 {
+                            return Ok(());
+                        }
+                        let child = nested_driver.clone();
+                        if blocking {
+                            let runtime = tokio::runtime::Handle::current();
+                            nested_driver
+                                .spawn_blocking_in_active_context(move || {
+                                    runtime.block_on(nested_active_context_call(
+                                        child,
+                                        remaining - 1,
+                                        blocking,
+                                    ))
+                                })
+                                .await?
+                        } else {
+                            nested_driver
+                                .in_active_context(nested_active_context_call(
+                                    child,
+                                    remaining - 1,
+                                    blocking,
+                                ))
+                                .await?
+                        }
+                    })
+                })
+                .await
+        })
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn active_context_recursion_is_bounded_and_releases_admission() {
+        timeout(Duration::from_secs(10), async {
+            for blocking in [false, true] {
+                let policy = LegacySyncReentry::new();
+                let driver = legacy_store(test_store(), &policy).await;
+                let unrelated = legacy_store(test_store(), &policy).await;
+                nested_active_context_call(driver.clone(), 2, blocking)
+                    .await
+                    .expect("bounded callbacks should complete");
+                let error = nested_active_context_call(
+                    driver.clone(),
+                    MAX_SYNC_REENTRY_DEPTH + 1,
+                    blocking,
+                )
+                .await
+                .expect_err("recursive callbacks must reach the depth limit");
+                assert!(error.to_string().contains("maximum depth"));
+                unrelated
+                    .call_guest(|_| Box::pin(async { Ok(()) }))
+                    .await
+                    .expect("depth failure must release root admission");
+                for store in [driver, unrelated] {
+                    store
+                        .shutdown(|_| Box::pin(async { Ok(()) }))
+                        .await
+                        .expect("shut down store after depth failure");
+                }
+            }
+        })
+        .await
+        .expect("active-context recursion must not strand the Store driver");
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn shutdown_drains_accepted_work() {
         timeout(Duration::from_secs(10), async {

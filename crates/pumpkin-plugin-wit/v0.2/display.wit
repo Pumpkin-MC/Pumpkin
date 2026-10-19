@@ -114,7 +114,7 @@ interface display {
         get-entity: func() -> entity;
 
         get-item: func() -> option<item-stack>;
-        set-item: func(item: option<item-stack>);
+        set-item: async func(item: option<item-stack>);
 
         get-item-display-mode: func() -> item-display-mode;
         set-item-display-mode: func(mode: item-display-mode);

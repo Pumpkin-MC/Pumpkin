@@ -16,19 +16,19 @@ interface inventory {
         get-item: func(slot: u32) -> option<item-stack>;
 
         /// Sets the item in the specified slot index.
-        set-item: func(slot: u32, item: option<item-stack>);
+        set-item: async func(slot: u32, item: option<item-stack>);
 
         /// Removes and returns the item in the specified slot index.
-        remove-item: func(slot: u32) -> option<item-stack>;
+        remove-item: async func(slot: u32) -> option<item-stack>;
 
         /// Clears all items from this inventory.
-        clear: func();
+        clear: async func();
 
         /// Returns all items in this inventory as a list of slots.
         get-all-items: func() -> list<option<item-stack>>;
 
         /// Sets all items in this inventory from a list.
-        set-all-items: func(items: list<option<item-stack>>);
+        set-all-items: async func(items: list<option<item-stack>>);
 
         /// Counts the total number of items with the given ID in this inventory.
         count-item: func(item-id: string) -> u32;
@@ -45,7 +45,7 @@ interface inventory {
         /// Returns the item currently held in the specified hand.
         get-item-in-hand: func(hand: hand) -> option<item-stack>;
         /// Sets the item in the specified hand.
-        set-item-in-hand: func(hand: hand, item: option<item-stack>);
+        set-item-in-hand: async func(hand: hand, item: option<item-stack>);
 
         /// Returns the currently selected hotbar slot index (0-8).
         get-selected-slot: func() -> u8;
@@ -54,25 +54,25 @@ interface inventory {
 
         /// Armor slot accessors
         get-helmet: func() -> option<item-stack>;
-        set-helmet: func(item: option<item-stack>);
+        set-helmet: async func(item: option<item-stack>);
 
         get-chestplate: func() -> option<item-stack>;
-        set-chestplate: func(item: option<item-stack>);
+        set-chestplate: async func(item: option<item-stack>);
 
         get-leggings: func() -> option<item-stack>;
-        set-leggings: func(item: option<item-stack>);
+        set-leggings: async func(item: option<item-stack>);
 
         get-boots: func() -> option<item-stack>;
-        set-boots: func(item: option<item-stack>);
+        set-boots: async func(item: option<item-stack>);
 
         get-off-hand: func() -> option<item-stack>;
-        set-off-hand: func(item: option<item-stack>);
+        set-off-hand: async func(item: option<item-stack>);
 
         /// Clears all armor slots.
-        clear-armor: func();
+        clear-armor: async func();
         /// Clears the 36 main inventory slots.
-        clear-main: func();
+        clear-main: async func();
         /// Clears all slots (main inventory, armor, offhand).
-        clear-all: func();
+        clear-all: async func();
     }
 }

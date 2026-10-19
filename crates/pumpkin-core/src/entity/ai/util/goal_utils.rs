@@ -37,7 +37,7 @@ pub fn is_restricted(restrict: bool, mob: &dyn Mob, pos: &BlockPos) -> bool {
 /// Nothing solid to stand on.
 #[must_use]
 pub fn is_not_stable(world: &World, pos: &BlockPos) -> bool {
-    !world.get_block_state(&pos.down()).is_solid()
+    !world.get_block_state(&pos.down()).is_solid_render()
 }
 
 #[must_use]
@@ -53,7 +53,7 @@ pub fn is_water(world: &World, pos: &BlockPos) -> bool {
 /// Takes the navigation lock, so callers must not already hold it.
 #[must_use]
 pub fn has_malus(mob: &dyn Mob, context: &mut PathfindingContext, pos: &BlockPos) -> bool {
-    let path_type = context.get_path_type_from_state(Vector3::new(pos.0.x, pos.0.y, pos.0.z));
+    let path_type = context.get_land_node_type(Vector3::new(pos.0.x, pos.0.y, pos.0.z));
     let malus = mob
         .get_mob_entity()
         .navigator

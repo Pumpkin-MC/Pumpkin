@@ -984,11 +984,11 @@ mod test {
     }
 
     #[test]
-    fn spawn_and_difficulty_format_26_2() {
+    fn spawn_and_difficulty_format_26_3() {
         let temp_dir = TempDir::new().unwrap();
 
         let mut data_comp = NbtCompound::new();
-        data_comp.put_int("DataVersion", 4903);
+        data_comp.put_int("DataVersion", 5023);
         data_comp.put_int("version", 19133);
         data_comp.put_string("LevelName", "26.2 Test".to_string());
         data_comp.put_long("LastPlayed", 123456789);
@@ -1033,7 +1033,7 @@ mod test {
                 dimension_type: "minecraft:overworld".to_string(),
             },
         );
-        write_world_gen_settings(temp_dir.path(), &wgs, 4903).unwrap();
+        write_world_gen_settings(temp_dir.path(), &wgs, 5023).unwrap();
 
         let loaded = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap();
         assert_eq!(loaded.spawn_x, 42);
@@ -1058,10 +1058,10 @@ mod test {
     }
 
     #[test]
-    fn all_26_2_minecraft_data_files_written_and_read() {
+    fn all_26_3_minecraft_data_files_written_and_read() {
         let temp_dir = TempDir::new().unwrap();
         let mut level_data = LEVEL_DAT.data.clone();
-        level_data.data_version = 4903;
+        level_data.data_version = 5023;
         level_data.day_time = 24000;
         level_data.clear_weather_time = 100;
         level_data.world_gen_settings = WorldGenSettings::new(Seed(9999));

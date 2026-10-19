@@ -149,11 +149,11 @@ fn extract_datapack(
 
     for i in 0..inner_zip.len() {
         let mut file = inner_zip.by_index(i)?;
-        let name = file.name();
+        let name = file.name()?;
         if !name.starts_with("data/") {
             continue;
         }
-        let outpath = datapack_dir.join(name);
+        let outpath = datapack_dir.join(&*name);
         if file.is_dir() {
             fs::create_dir_all(&outpath)?;
         } else {

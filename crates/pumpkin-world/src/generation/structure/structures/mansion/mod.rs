@@ -298,9 +298,13 @@ impl MansionTemplatePiece {
 
             let mut placed_entry = palette.clone();
             if chunk.get_block_state(&position).to_block_id() == Block::WATER.id
-                && property(&placed_entry, "waterlogged").is_some()
+                && let Some(waterlogged) =
+                    placed_entry.properties.iter_mut().find_map(|p| match p {
+                        pumpkin_data::Property::Waterlogged(w) => Some(w),
+                        _ => None,
+                    })
             {
-                set_property(&mut placed_entry, "waterlogged", "true");
+                *waterlogged = true;
             }
             let Some(state) = BlockStateResolver::resolve(
                 &placed_entry,
@@ -357,6 +361,7 @@ impl MansionTemplatePiece {
         position: Vector3<i32>,
     ) {
         if let Some(facing) = marker.strip_prefix("Chest") {
+            use pumpkin_data::block_properties::{Facing, Property};
             let direction = match facing {
                 "West" => Direction::West,
                 "East" => Direction::East,
@@ -364,9 +369,16 @@ impl MansionTemplatePiece {
                 _ => Direction::North,
             };
             let target = self.rotation.rotate(direction);
+            let target_facing = match target {
+                Direction::West => Facing::West,
+                Direction::East => Facing::East,
+                Direction::South => Facing::South,
+                Direction::Up => Facing::Up,
+                Direction::North => Facing::North,
+            };
             let chest = PaletteEntry::with_properties(
                 "minecraft:chest".to_string(),
-                vec![("facing".to_string(), target.name().to_string())],
+                vec![Property::Facing(target_facing)],
             );
             if let Some(state) = BlockStateResolver::resolve_simple(&chest) {
                 chunk.set_block_state(position.x, position.y, position.z, state);
@@ -503,6 +515,7 @@ impl StructurePieceBase for MansionFoundationPiece {
     }
 }
 
+#[cfg(test)]
 fn transformed_palette(
     palette: &PaletteEntry,
     mirror: TemplateMirror,
@@ -520,17 +533,12 @@ fn transformed_palette(
     }
 }
 
-fn property<'a>(palette: &'a PaletteEntry, name: &str) -> Option<&'a str> {
+#[cfg(test)]
+fn property(palette: &PaletteEntry, name: &str) -> Option<&'static str> {
     palette
         .properties
         .iter()
-        .find_map(|(key, value)| (key == name).then_some(value.as_str()))
-}
-
-fn set_property(palette: &mut PaletteEntry, name: &str, value: &str) {
-    if let Some((_, current)) = palette.properties.iter_mut().find(|(key, _)| key == name) {
-        value.clone_into(current);
-    }
+        .find_map(|p| (p.key_str() == name).then_some(p.value_str()))
 }
 
 const fn transform(
@@ -565,7 +573,7 @@ mod tests {
             name.to_string(),
             properties
                 .iter()
-                .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
+                .filter_map(|(key, value)| pumpkin_data::Property::from_str_pair(key, value))
                 .collect(),
         )
     }

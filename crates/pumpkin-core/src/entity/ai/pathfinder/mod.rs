@@ -151,6 +151,13 @@ impl PathFinder {
                 evaluator.get_neighbors(&current, &mut self.neighbors_buf);
 
                 for mut neighbor in self.neighbors_buf.drain(..) {
+                    if self
+                        .all_nodes
+                        .get(&neighbor.pos.0)
+                        .is_some_and(|n| n.closed)
+                    {
+                        continue;
+                    }
                     let distance = current.distance_to_node(&neighbor);
                     neighbor.walked_dist = current.walked_dist + distance;
                     let tentative_g = current.g + distance + neighbor.cost_malus;
@@ -476,7 +483,7 @@ impl PathNavigation {
             has_delayed_recomputation: false,
             time_last_recompute: 0,
             target_pos: None,
-            reach_range: 1,
+            reach_range: 0,
             max_visited_nodes_multiplier: 1.0,
             is_stuck: false,
             required_path_length: 16.0,
@@ -655,6 +662,9 @@ impl PathNavigation {
                 .get_neighbors(&current, &mut self.neighbors_buf);
 
             for mut neighbor in self.neighbors_buf.drain(..) {
+                if closed_set.contains_key(&neighbor.pos.0) {
+                    continue;
+                }
                 let step_cost = current.distance(&neighbor);
                 neighbor.walked_dist = current.walked_dist + step_cost;
                 let tentative_g = current.g + step_cost + neighbor.cost_malus;
@@ -1075,6 +1085,13 @@ impl PathNavigation {
             }
 
             let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
+            let current_pos = entity.entity.pos.load();
+
+            self.max_distance_to_waypoint = if self.mob_width > 0.75 {
+                self.mob_width * 0.5
+            } else {
+                0.75 - self.mob_width * 0.5
+            };
 
             if let Some(next_block) = path.get_next_node_pos() {
                 let target_pos = Vector3::new(
@@ -1083,7 +1100,6 @@ impl PathNavigation {
                     f64::from(next_block.0.z) + 0.5,
                 );
 
-                let current_pos = entity.entity.pos.load();
                 let dx = target_pos.x - current_pos.x;
                 let dy = target_pos.y - current_pos.y;
                 let dz = target_pos.z - current_pos.z;
@@ -1091,20 +1107,9 @@ impl PathNavigation {
                 let horizontal_dist_sq = dx * dx + dz * dz;
                 let horizontal_dist = horizontal_dist_sq.sqrt();
 
-                self.max_distance_to_waypoint = if self.mob_width > 0.75 {
-                    self.mob_width * 0.5
-                } else {
-                    0.75 - self.mob_width * 0.5
-                };
-
-                if !on_ground
+                let drop_advance = !on_ground
                     && horizontal_dist < f64::from(self.max_distance_to_waypoint)
-                    && dy < -0.5
-                {
-                    path.advance();
-                    self.current_goal = Some(goal);
-                    return;
-                }
+                    && dy < -0.5;
 
                 let close_enough = horizontal_dist < f64::from(self.max_distance_to_waypoint)
                     && dy.abs() < NODE_REACH_Y;
@@ -1115,11 +1120,23 @@ impl PathNavigation {
                         && n.path_type != PathType::WalkableDoor
                 }) && Self::should_target_next_node_in_direction(mob_pos, path);
 
-                if close_enough || corner_cut {
+                if drop_advance || close_enough || corner_cut {
                     path.advance();
-                    self.current_goal = Some(goal);
-                    return;
                 }
+            }
+
+            if let Some(next_block) = path.get_next_node_pos() {
+                let target_pos = Vector3::new(
+                    f64::from(next_block.0.x) + 0.5,
+                    f64::from(next_block.0.y),
+                    f64::from(next_block.0.z) + 0.5,
+                );
+
+                let dx = target_pos.x - current_pos.x;
+                let dy = target_pos.y - current_pos.y;
+                let dz = target_pos.z - current_pos.z;
+
+                let horizontal_dist_sq = dx * dx + dz * dz;
 
                 let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
                 let current_yaw = entity.entity.yaw.load();

@@ -176,12 +176,12 @@ pub fn place_template_with_options(
 
         if apply_waterlogging
             && placer.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
-            && let Some((_, waterlogged)) = placed_entry
-                .properties
-                .iter_mut()
-                .find(|(name, _)| name == "waterlogged")
+            && let Some(waterlogged) = placed_entry.properties.iter_mut().find_map(|p| match p {
+                pumpkin_data::Property::Waterlogged(w) => Some(w),
+                _ => None,
+            })
         {
-            *waterlogged = "true".to_string();
+            *waterlogged = true;
             if let Some(waterlogged_state) =
                 BlockStateResolver::resolve(&placed_entry, rotation, Mirror::default())
             {

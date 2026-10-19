@@ -249,7 +249,6 @@ pub mod damage;
 pub mod fluid;
 
 #[cfg(feature = "block")]
-#[expect(clippy::unreachable)]
 #[rustfmt::skip]
 #[path = "generated/block.rs"]
 pub mod block_properties;
@@ -447,6 +446,8 @@ mod blocks;
 
 #[cfg(feature = "block")]
 pub use block_direction::{BlockDirection, FacingExt, HorizontalFacingExt};
+#[cfg(feature = "block")]
+pub use block_properties::{Property, PropertyKey};
 #[cfg(feature = "block")]
 pub use block_rotation::{Mirror, Rotation, transform_block_properties, transform_rail_shape};
 #[cfg(feature = "block")]
