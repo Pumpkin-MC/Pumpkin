@@ -324,6 +324,17 @@ impl World {
         | PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits()
         | PlayerInfoFlags::UPDATE_HAT.bits();
 
+    #[must_use]
+    pub fn is_flat(&self) -> bool {
+        // Vanilla ServerLevel.isFlat uses the Overworld generator for every dimension.
+        self.level_info
+            .load()
+            .world_gen_settings
+            .dimensions
+            .get(Dimension::OVERWORLD.minecraft_name)
+            .is_some_and(|dimension| dimension.generator.generator_type == "minecraft:flat")
+    }
+
     pub async fn get_block_state_id_async(&self, position: &BlockPos) -> BlockStateId {
         if !self.is_in_build_limit(*position) {
             return Block::AIR.default_state.id;
@@ -3209,7 +3220,7 @@ impl World {
                         .load()
                         .map_or(-1, |gamemode| gamemode as i8),
                     false,
-                    false,
+                    self.is_flat(),
                     None,
                     VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                     self.sea_level.into(),
@@ -4103,7 +4114,7 @@ impl World {
                     player.gamemode.load() as u8,
                     player.gamemode.load() as i8,
                     false,
-                    false,
+                    target_world.is_flat(),
                     Some((death_dimension, death_location)),
                     VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                     target_world.sea_level.into(),
