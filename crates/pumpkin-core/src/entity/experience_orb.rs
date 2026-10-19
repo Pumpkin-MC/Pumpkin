@@ -84,11 +84,12 @@ impl ExperienceOrbEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let half = border.new_diameter * 0.5;
+            let epsilon = f64::from(1.0e-5_f32);
             collisions.retain(|shape| {
-                shape.max.x > border.center_x - half
-                    && shape.min.x < border.center_x + half
-                    && shape.max.z > border.center_z - half
-                    && shape.min.z < border.center_z + half
+                shape.min.x >= border.center_x - half
+                    && shape.max.x - epsilon < border.center_x + half
+                    && shape.min.z >= border.center_z - half
+                    && shape.max.z - epsilon < border.center_z + half
             });
         };
         let expanded_collisions = collisions
