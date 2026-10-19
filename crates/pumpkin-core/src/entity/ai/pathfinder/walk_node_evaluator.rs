@@ -426,6 +426,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
 
         self.base.context = Some(context);
         self.base.mob_data = Some(mob_data);
+        self.base.nodes.clear();
         self.path_types_cache.clear();
         self.reusable_neighbors = [None, None, None, None];
     }
@@ -433,6 +434,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
     fn done(&mut self) {
         self.base.context = None;
         self.base.mob_data = None;
+        self.base.nodes.clear();
         self.path_types_cache.clear();
         self.reusable_neighbors = [None, None, None, None];
     }

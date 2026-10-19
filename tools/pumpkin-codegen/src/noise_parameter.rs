@@ -79,6 +79,8 @@ pub fn build() -> TokenStream {
         let lo = u64::from_be_bytes(hash[0..8].try_into().unwrap());
         let hi = u64::from_be_bytes(hash[8..16].try_into().unwrap());
 
+        let string_hash = pumpkin_util::math::java_string_hash(raw_name);
+
         let amplitudes = &parameter.amplitudes;
         let first_octave = parameter.first_octave;
 
@@ -88,7 +90,8 @@ pub fn build() -> TokenStream {
                 #first_octave,
                 &[#(#amplitudes),*],
                 #lo,
-                #hi
+                #hi,
+                #string_hash,
             );
         }]);
 
@@ -105,6 +108,7 @@ pub fn build() -> TokenStream {
             pub amplitudes: &'static [f64],
             pub lo: u64,
             pub hi: u64,
+            pub string_hash: i32,
         }
 
         impl DoublePerlinNoiseParameters {
@@ -116,8 +120,9 @@ pub fn build() -> TokenStream {
                 amplitudes: &'static [f64],
                 lo: u64,
                 hi: u64,
+                string_hash: i32,
             ) -> Self {
-                Self { id, first_octave, amplitudes, lo, hi }
+                Self { id, first_octave, amplitudes, lo, hi, string_hash }
             }
 
             pub fn id_to_parameters(id: &str) -> Option<&'static DoublePerlinNoiseParameters> {

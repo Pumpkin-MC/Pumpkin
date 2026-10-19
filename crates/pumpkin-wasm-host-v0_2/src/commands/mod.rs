@@ -1,5 +1,6 @@
-use wasmtime::component::{Access, HasSelf, Resource};
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
+use super::{AccessorExt, run_blocking};
 use crate::{
     commands::executor::{WasmCommandExecutor, WasmCommandSuggestionProvider},
     pumpkin::{
@@ -11,7 +12,6 @@ use crate::{
             },
             common::{BlockPos as WitBlockPos, Locale, Position},
             player::Player,
-            server::Server,
             text::TextComponent,
             world::World,
         },
@@ -443,27 +443,14 @@ impl pumpkin::plugin::command::HostCommandSenderWithStore<PluginHostState>
     for HasSelf<PluginHostState>
 {
     async fn has_permission(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         sender: Resource<CommandSender>,
-        server: /* borrow */ Resource<Server>,
         node: String,
     ) -> wasmtime::Result<bool> {
-        let (sender, server, plugin) = {
-            let state = host.get();
-            let sender = state.get(&sender)?.clone();
-            let server = state.get(&server)?.clone();
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
-            (sender, server, plugin)
-        };
+        let sender = accessor.get_res(&sender)?;
+        let server = accessor.server()?;
 
-        plugin
-            .store
-            .pump_blocking(&mut host, move || sender.has_permission(&server, &node))
-            .await
+        run_blocking(accessor, move || sender.has_permission(&server, &node)).await
     }
 }
 

@@ -2,14 +2,17 @@ mod state;
 
 pub use state::GameTestState;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use pumpkin_util::math::position::BlockPos;
 
 use crate::block_based::BlockBasedTest;
 use crate::error::{GameTestError, GameTestResult};
-use crate::model::GameTestRotation;
+use crate::helper::{
+    GameTestControllerState, GameTestHelper, SequenceEvent, SequenceEventKind, get_test_function,
+};
+use crate::model::{GameTestRotation, TestType};
 use crate::structure::{
     GameTestPosition, GameTestStructureTemplate, TestBlockMode, TestStructureInstance,
     clear_success_entities, encase_structure, place_structure_with_controller_rotation,
@@ -36,6 +39,7 @@ pub struct GameTestSession {
     test_z: i32,
     chunks_loaded: bool,
     started_at: Option<Instant>,
+    controller: Arc<Mutex<GameTestControllerState>>,
 }
 
 impl GameTestSession {
@@ -80,7 +84,14 @@ impl GameTestSession {
             test_z,
             chunks_loaded: false,
             started_at: None,
+            controller: Arc::new(Mutex::new(GameTestControllerState::default())),
         }
+    }
+
+    #[must_use]
+    pub const fn with_y(mut self, test_y: Option<i32>) -> Self {
+        self.test_y = test_y;
+        self
     }
 
     /// Creates the equivalent of vanilla `GameTestInfo::copyReset()`.
@@ -103,6 +114,7 @@ impl GameTestSession {
             test_z: self.test_z,
             chunks_loaded: false,
             started_at: None,
+            controller: Arc::new(Mutex::new(GameTestControllerState::default())),
         }
     }
 
@@ -205,13 +217,31 @@ impl GameTestSession {
         match self.begin_running(0).await {
             Ok(()) if self.test.max_ticks() > 0 => self.evaluate_test_tick(0).await,
             Ok(()) => self.state = GameTestState::Running { elapsed_ticks: 0 },
-            Err(error) => self.finish_failure(0, error, None).await,
+            Err(error) => {
+                let marker = assertion_marker(&error);
+                self.finish_failure(0, error, marker).await;
+            }
         }
     }
 
     async fn tick_running(&mut self, elapsed_ticks: u32) {
         let tick = elapsed_ticks.saturating_add(1);
         if tick > self.test.max_ticks() {
+            if self.test.instance_type() == TestType::Function {
+                match self.evaluate_function_tick(tick, true).await {
+                    Ok(RunningEvaluation::Passed) => {
+                        self.handle_attempt_pass(tick).await;
+                        return;
+                    }
+                    Ok(RunningEvaluation::Failed(error)) | Err(error) => {
+                        let marker = assertion_marker(&error);
+                        self.finish_failure(tick, error, marker).await;
+                        return;
+                    }
+                    Ok(RunningEvaluation::Continue) => {}
+                }
+            }
+
             self.finish_failure(
                 tick,
                 GameTestError::Timeout {
@@ -225,7 +255,7 @@ impl GameTestSession {
 
         // BlockBasedTestInstance installs onEachTick for the half-open range
         // [0, timeoutTicks), so timeoutTicks itself has no ACCEPT/FAIL/LOG check.
-        if tick == self.test.max_ticks() {
+        if self.test.instance_type() == TestType::BlockBased && tick == self.test.max_ticks() {
             self.state = GameTestState::Running {
                 elapsed_ticks: tick,
             };
@@ -236,7 +266,12 @@ impl GameTestSession {
     }
 
     async fn evaluate_test_tick(&mut self, tick: u32) {
-        match self.evaluate_running(tick).await {
+        let evaluation = match self.test.instance_type() {
+            TestType::BlockBased => self.evaluate_running(tick).await,
+            TestType::Function => self.evaluate_function_tick(tick, false).await,
+        };
+
+        match evaluation {
             Ok(RunningEvaluation::Passed) => self.handle_attempt_pass(tick).await,
             Ok(RunningEvaluation::Failed(error)) | Err(error) => {
                 let marker = assertion_marker(&error);
@@ -254,34 +289,383 @@ impl GameTestSession {
         // Vanilla starts GameTestInfo's stopwatch immediately before invoking the
         // test body, so structure placement and setup ticks are not part of run time.
         self.started_at.get_or_insert_with(Instant::now);
-
-        let start_blocks = self.test_block_positions(TestBlockMode::Start);
-        if start_blocks.is_empty() {
-            return Err(GameTestError::Assertion {
-                tick,
-                position: None,
-                message: "missing START test block".to_string(),
-            });
-        }
-        if start_blocks.len() != 1 {
-            return Err(GameTestError::Assertion {
-                tick,
-                position: None,
-                message: format!(
-                    "expected exactly one START test block, found {}",
-                    start_blocks.len()
-                ),
-            });
-        }
+        *self
+            .controller
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            GameTestControllerState::default();
 
         if let Some(placement) = &self.placement {
             // GameTestInfo.startTest marks the controller RUNNING immediately before
-            // invoking BlockBasedTestInstance.run, which triggers START.
+            // invoking GameTestInstance.run.
             self.world
                 .set_test_instance_running(placement.test_instance_pos())
                 .await?;
         }
-        self.world.trigger_test_block(&start_blocks[0]).await
+
+        match self.test.instance_type() {
+            TestType::BlockBased => {
+                let start_blocks = self.test_block_positions(TestBlockMode::Start);
+                if start_blocks.is_empty() {
+                    return Err(GameTestError::Assertion {
+                        tick,
+                        position: None,
+                        message: "missing START test block".to_string(),
+                    });
+                }
+                if start_blocks.len() != 1 {
+                    return Err(GameTestError::Assertion {
+                        tick,
+                        position: None,
+                        message: format!(
+                            "expected exactly one START test block, found {}",
+                            start_blocks.len()
+                        ),
+                    });
+                }
+
+                self.world.trigger_test_block(&start_blocks[0]).await
+            }
+            TestType::Function => {
+                let function = self
+                    .test
+                    .function()
+                    .cloned()
+                    .or_else(|| {
+                        self.test
+                            .definition()
+                            .function
+                            .as_deref()
+                            .and_then(get_test_function)
+                    })
+                    .or_else(|| get_test_function(self.test.id()))
+                    .ok_or_else(|| {
+                        let name = self
+                            .test
+                            .definition()
+                            .function
+                            .as_deref()
+                            .unwrap_or_else(|| self.test.id());
+                        GameTestError::World(format!(
+                            "Trying to access missing test function: {name}"
+                        ))
+                    })?;
+
+                let helper = self.make_helper(tick)?;
+                function.run(helper).await
+            }
+        }
+    }
+
+    fn make_helper(&self, tick: u32) -> GameTestResult<GameTestHelper> {
+        let placement = self.placement.ok_or_else(|| {
+            GameTestError::World("GameTest has no placed structure instance".to_string())
+        })?;
+        Ok(GameTestHelper::with_controller(
+            self.world.clone(),
+            placement,
+            tick,
+            self.test.max_ticks(),
+            self.controller.clone(),
+        ))
+    }
+
+    async fn evaluate_function_tick(
+        &self,
+        tick: u32,
+        fail_if_not_complete: bool,
+    ) -> GameTestResult<RunningEvaluation> {
+        let helper = self.make_helper(tick)?;
+
+        if let Some(eval) = self.check_controller_outcome() {
+            return Ok(eval);
+        }
+
+        let due_callbacks = {
+            let mut state = self
+                .controller
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut due = Vec::new();
+            let mut remaining = Vec::with_capacity(state.scheduled.len());
+            for entry in state.scheduled.drain(..) {
+                if entry.tick <= tick {
+                    due.push(entry.callback);
+                } else {
+                    remaining.push(entry);
+                }
+            }
+            state.scheduled = remaining;
+            due
+        };
+
+        for mut callback in due_callbacks {
+            if let Err(error) = callback(helper.with_tick(tick)).await {
+                self.controller
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .fail(error);
+            }
+            if let Some(eval @ RunningEvaluation::Failed(_)) = self.check_controller_outcome() {
+                return Ok(eval);
+            }
+        }
+
+        let sequence_count = self
+            .controller
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .sequences
+            .len();
+
+        for seq_idx in 0..sequence_count {
+            if let Some(eval) = self
+                .tick_sequence(seq_idx, tick, &helper, fail_if_not_complete)
+                .await
+            {
+                return Ok(eval);
+            }
+        }
+
+        if let Some(eval) = self.check_controller_outcome() {
+            return Ok(eval);
+        }
+
+        Ok(RunningEvaluation::Continue)
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "sequence event dispatch covers all SequenceEventKind variants"
+    )]
+    async fn tick_sequence(
+        &self,
+        seq_idx: usize,
+        tick: u32,
+        helper: &GameTestHelper,
+        fail_if_not_complete: bool,
+    ) -> Option<RunningEvaluation> {
+        loop {
+            let (last_tick, event) = {
+                let mut state = self
+                    .controller
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let seq = state.sequences.get_mut(seq_idx)?;
+                let event = seq.events.pop_front()?;
+                (seq.last_tick, event)
+            };
+
+            let minimum_delay = event.minimum_delay;
+            let expected_delay = event.expected_delay;
+
+            match event.kind {
+                SequenceEventKind::WaitUntil(mut callback) => {
+                    match callback(helper.with_tick(tick)).await {
+                        Ok(()) => {
+                            if let Some(failure) = self.advance_sequence_tick(
+                                seq_idx,
+                                last_tick,
+                                tick,
+                                minimum_delay,
+                                expected_delay,
+                            ) {
+                                return Some(RunningEvaluation::Failed(failure));
+                            }
+                        }
+                        Err(error) => {
+                            self.push_front_sequence_event(
+                                seq_idx,
+                                SequenceEvent {
+                                    minimum_delay,
+                                    expected_delay,
+                                    kind: SequenceEventKind::WaitUntil(callback),
+                                },
+                            );
+                            if fail_if_not_complete {
+                                return Some(RunningEvaluation::Failed(error));
+                            }
+                            return None;
+                        }
+                    }
+                }
+                SequenceEventKind::Execute(mut callback) => {
+                    if let Err(error) = callback(helper.with_tick(tick)).await {
+                        return Some(RunningEvaluation::Failed(error));
+                    }
+                    if let Some(failure) = self.advance_sequence_tick(
+                        seq_idx,
+                        last_tick,
+                        tick,
+                        minimum_delay,
+                        expected_delay,
+                    ) {
+                        return Some(RunningEvaluation::Failed(failure));
+                    }
+                }
+                SequenceEventKind::ExecuteAfter {
+                    delta,
+                    mut callback,
+                } => {
+                    if tick < last_tick.saturating_add(delta) {
+                        self.push_front_sequence_event(
+                            seq_idx,
+                            SequenceEvent {
+                                minimum_delay,
+                                expected_delay,
+                                kind: SequenceEventKind::ExecuteAfter { delta, callback },
+                            },
+                        );
+                        if fail_if_not_complete {
+                            return Some(RunningEvaluation::Failed(GameTestError::Assertion {
+                                tick,
+                                position: None,
+                                message: "sequence not completed".to_string(),
+                            }));
+                        }
+                        return None;
+                    }
+                    if let Err(error) = callback(helper.with_tick(tick)).await {
+                        return Some(RunningEvaluation::Failed(error));
+                    }
+                    if let Some(failure) = self.advance_sequence_tick(
+                        seq_idx,
+                        last_tick,
+                        tick,
+                        minimum_delay,
+                        expected_delay,
+                    ) {
+                        return Some(RunningEvaluation::Failed(failure));
+                    }
+                }
+                SequenceEventKind::ExecuteFor {
+                    delta,
+                    mut callback,
+                } => {
+                    if tick < last_tick.saturating_add(delta) {
+                        if let Err(error) = callback(helper.with_tick(tick)).await {
+                            return Some(RunningEvaluation::Failed(error));
+                        }
+                        self.push_front_sequence_event(
+                            seq_idx,
+                            SequenceEvent {
+                                minimum_delay,
+                                expected_delay,
+                                kind: SequenceEventKind::ExecuteFor { delta, callback },
+                            },
+                        );
+                        if fail_if_not_complete {
+                            return Some(RunningEvaluation::Failed(GameTestError::Assertion {
+                                tick,
+                                position: None,
+                                message: "sequence not completed".to_string(),
+                            }));
+                        }
+                        return None;
+                    }
+                    if let Some(failure) = self.advance_sequence_tick(
+                        seq_idx,
+                        last_tick,
+                        tick,
+                        minimum_delay,
+                        expected_delay,
+                    ) {
+                        return Some(RunningEvaluation::Failed(failure));
+                    }
+                }
+                SequenceEventKind::Succeed => {
+                    if let Some(failure) = self.advance_sequence_tick(
+                        seq_idx,
+                        last_tick,
+                        tick,
+                        minimum_delay,
+                        expected_delay,
+                    ) {
+                        return Some(RunningEvaluation::Failed(failure));
+                    }
+                    self.controller
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .succeed();
+                }
+                SequenceEventKind::Fail(message) => {
+                    return Some(RunningEvaluation::Failed(GameTestError::Assertion {
+                        tick,
+                        position: None,
+                        message,
+                    }));
+                }
+            }
+        }
+    }
+
+    fn advance_sequence_tick(
+        &self,
+        seq_idx: usize,
+        prev_tick: u32,
+        tick: u32,
+        minimum_delay: Option<u32>,
+        expected_delay: Option<u32>,
+    ) -> Option<GameTestError> {
+        let mut state = self
+            .controller
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(seq) = state.sequences.get_mut(seq_idx) {
+            seq.last_tick = tick;
+        }
+        drop(state);
+
+        let delay = tick.saturating_sub(prev_tick);
+        if let Some(min_delay) = minimum_delay
+            && delay < min_delay
+        {
+            return Some(GameTestError::Assertion {
+                tick,
+                position: None,
+                message: format!(
+                    "sequence step finished too soon at tick {tick}, minimum tick was {}",
+                    prev_tick.saturating_add(min_delay)
+                ),
+            });
+        }
+        if let Some(exp_delay) = expected_delay
+            && delay != exp_delay
+        {
+            return Some(GameTestError::Assertion {
+                tick,
+                position: None,
+                message: format!(
+                    "sequence step finished at tick {tick}, expected tick {}",
+                    prev_tick.saturating_add(exp_delay)
+                ),
+            });
+        }
+        None
+    }
+
+    fn push_front_sequence_event(&self, seq_idx: usize, event: SequenceEvent) {
+        let mut state = self
+            .controller
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(seq) = state.sequences.get_mut(seq_idx) {
+            seq.events.push_front(event);
+        }
+    }
+
+    fn check_controller_outcome(&self) -> Option<RunningEvaluation> {
+        let mut state = self
+            .controller
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(error) = state.error.take() {
+            return Some(RunningEvaluation::Failed(error));
+        }
+        if state.succeeded {
+            return Some(RunningEvaluation::Passed);
+        }
+        None
     }
 
     async fn evaluate_running(&self, tick: u32) -> GameTestResult<RunningEvaluation> {
