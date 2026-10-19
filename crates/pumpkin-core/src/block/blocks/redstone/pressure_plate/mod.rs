@@ -5,7 +5,7 @@ use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 
 use crate::{
-    block::{GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, OnStateReplacedArgs},
+    block::{OnEntityCollisionArgs, OnNeighborUpdateArgs, OnStateReplacedArgs},
     world::World,
 };
 
@@ -26,16 +26,11 @@ fn detection_box_at(pos: &BlockPos) -> BoundingBox {
 }
 
 pub(crate) trait PressurePlate {
-    fn get_state_for_neighbor_update_pp(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        if args.direction == BlockDirection::Down
-            && !Self::can_pressure_plate_place_at(args.world, args.position)
-        {
-            return Block::AIR.default_state.id;
+    fn on_neighbor_update_pp(&self, args: OnNeighborUpdateArgs<'_>) {
+        if !Self::can_pressure_plate_place_at(args.world, args.position) {
+            args.world
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
         }
-        args.state_id
     }
 
     fn on_entity_collision_pp(&self, args: OnEntityCollisionArgs<'_>) {

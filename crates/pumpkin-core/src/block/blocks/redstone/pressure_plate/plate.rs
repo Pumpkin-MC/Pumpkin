@@ -7,8 +7,8 @@ use pumpkin_util::math::position::BlockPos;
 use crate::{
     block::{
         BlockBehaviour, BlockMetadata, CanPlaceAtArgs, EmitsRedstonePowerArgs,
-        GetRedstonePowerArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
-        OnScheduledTickArgs, OnStateReplacedArgs,
+        GetRedstonePowerArgs, OnEntityCollisionArgs, OnNeighborUpdateArgs, OnScheduledTickArgs,
+        OnStateReplacedArgs,
     },
     world::World,
 };
@@ -62,11 +62,8 @@ impl BlockBehaviour for PressurePlateBlock {
         true
     }
 
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        self.get_state_for_neighbor_update_pp(args)
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        self.on_neighbor_update_pp(args);
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
