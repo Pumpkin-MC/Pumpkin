@@ -14,6 +14,7 @@ use pumpkin_util::math::{
 use rustc_hash::FxHashMap;
 
 use pumpkin_config::world::EntityIslandsConfig;
+use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
 use crate::entity::{EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
@@ -196,18 +197,31 @@ impl AuditedReach {
             return;
         }
         let (min, max) = (area.min_block_pos().0, area.max_block_pos().0);
-        let contact = BoundingBox::new(min.to_f64(), max.to_f64() + Vector3::new(1.0, 1.0, 1.0));
-        if !contact_may_change_blocks(world, &contact, &mut FxHashMap::default()) {
-            return;
-        }
-        for x in min.x..=max.x {
-            for y in min.y..=max.y {
-                for z in min.z..=max.z {
-                    let block = world.get_block(&BlockPos::new(x, y, z));
-                    if block.id == Block::END_GATEWAY.id {
-                        self.global = true;
-                    } else if changes_on_contact(block) {
-                        self.changes_blocks = true;
+        for x in get_section_cord(min.x)..=get_section_cord(max.x) {
+            for z in get_section_cord(min.z)..=get_section_cord(max.z) {
+                for y in get_section_cord(min.y.max(world.get_bottom_y()))
+                    ..=get_section_cord(max.y.min(world.get_top_y()))
+                {
+                    if !contact_section_may_change_blocks(world, x, y, z) {
+                        continue;
+                    }
+                    let start = Vector3::new(x, y, z) * CHUNK_WIDTH as i32;
+                    let end = start.add_raw(
+                        CHUNK_WIDTH as i32 - 1,
+                        CHUNK_WIDTH as i32 - 1,
+                        CHUNK_WIDTH as i32 - 1,
+                    );
+                    for x in min.x.max(start.x)..=max.x.min(end.x) {
+                        for y in min.y.max(start.y)..=max.y.min(end.y) {
+                            for z in min.z.max(start.z)..=max.z.min(end.z) {
+                                let block = world.get_block(&BlockPos::new(x, y, z));
+                                if block.id == Block::END_GATEWAY.id {
+                                    self.global = true;
+                                } else if changes_on_contact(block) {
+                                    self.changes_blocks = true;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -523,35 +537,39 @@ fn contact_may_change_blocks(
     for x in min[0]..=max[0] {
         for z in min[2]..=max[2] {
             for y in min[1]..=max[1] {
-                if *sections.entry((x, y, z)).or_insert_with(|| {
-                    world
-                        .level
-                        .read_chunk_sync(&Vector2::new(x, z), |chunk| {
-                            let blocks = chunk
-                                .section
-                                .block_sections
-                                .read()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner);
-                            let index = y - get_section_cord(chunk.section.min_y);
-                            usize::try_from(index)
-                                .ok()
-                                .and_then(|index| blocks.get(index))
-                                .is_none_or(|palette| {
-                                    palette.contains_matching(|state| {
-                                        let block = Block::from_state_id(state);
-                                        block.id == Block::END_GATEWAY.id
-                                            || changes_on_contact(block)
-                                    })
-                                })
-                        })
-                        .unwrap_or(true)
-                }) {
+                if *sections
+                    .entry((x, y, z))
+                    .or_insert_with(|| contact_section_may_change_blocks(world, x, y, z))
+                {
                     return true;
                 }
             }
         }
     }
     false
+}
+
+fn contact_section_may_change_blocks(world: &World, x: i32, y: i32, z: i32) -> bool {
+    world
+        .level
+        .read_chunk_sync(&Vector2::new(x, z), |chunk| {
+            let blocks = chunk
+                .section
+                .block_sections
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let index = y - get_section_cord(chunk.section.min_y);
+            usize::try_from(index)
+                .ok()
+                .and_then(|index| blocks.get(index))
+                .is_none_or(|palette| {
+                    palette.contains_matching(|state| {
+                        let block = Block::from_state_id(state);
+                        block.id == Block::END_GATEWAY.id || changes_on_contact(block)
+                    })
+                })
+        })
+        .unwrap_or(true)
 }
 
 fn grown_body(audited: &AuditedReach, extra: f64) -> BoundingBox {
