@@ -1,10 +1,10 @@
 //! Splits a tick's entities into islands that touch disjoint state. Each island ticks in list
 //! order on its own thread, which gives the same result as ticking the whole list in order.
 
-use std::{
-    collections::VecDeque,
-    sync::{Arc, atomic::Ordering::Relaxed},
-};
+use std::{collections::VecDeque, sync::atomic::Ordering::Relaxed};
+
+#[cfg(debug_assertions)]
+use std::sync::Arc;
 
 use pumpkin_data::{Block, attributes::Attributes, entity::EntityType, tag, tag::Taggable};
 use pumpkin_util::math::{
@@ -27,6 +27,8 @@ const BLOCK_UPDATE_REACH: f64 = SIGNAL_MAX as f64 + 2.0;
 
 /// Grid cell size for large boxes.
 const CELL_SIZE: f64 = 16.0;
+const SMALL_CELL_SIZE: f64 = 4.0;
+const MIN_COLUMN_DENSITY: usize = 32;
 
 /// Largest speed one `Entity.push` adds.
 const PUSH_SPEED: f64 = PUSH_STRENGTH * std::f64::consts::SQRT_2;
@@ -539,6 +541,7 @@ const fn union(a: &BoundingBox, b: &BoundingBox) -> BoundingBox {
 pub struct Islands {
     /// Node indices in list order.
     pub islands: Vec<Vec<usize>>,
+    #[cfg(debug_assertions)]
     pub island_of: Arc<IslandMap>,
 }
 
@@ -554,6 +557,7 @@ pub fn partition(
     players: &[(i32, BoundingBox)],
 ) -> Islands {
     if nodes.iter().any(|(_, reach)| reach.global) {
+        #[cfg(debug_assertions)]
         let island_of = nodes
             .iter()
             .map(|(id, _)| *id)
@@ -563,6 +567,7 @@ pub fn partition(
             .collect();
         return Islands {
             islands: vec![(0..nodes.len()).collect()],
+            #[cfg(debug_assertions)]
             island_of: Arc::new(island_of),
         };
     }
@@ -623,6 +628,7 @@ pub fn partition(
         });
         islands[island].push(slot);
     }
+    #[cfg(debug_assertions)]
     let island_of = slots
         .into_iter()
         .filter_map(|(id, slot)| {
@@ -633,6 +639,7 @@ pub fn partition(
         .collect();
     Islands {
         islands,
+        #[cfg(debug_assertions)]
         island_of: Arc::new(island_of),
     }
 }
@@ -690,10 +697,6 @@ fn overlaps(a: &BoundingBox, b: &BoundingBox) -> bool {
         && a.max.z >= b.min.z
 }
 
-fn cell_range(min: f64, max: f64) -> std::ops::RangeInclusive<i32> {
-    cells_of(min, max, CELL_SIZE)
-}
-
 fn cells_of(min: f64, max: f64, size: f64) -> std::ops::RangeInclusive<i32> {
     ((min / size).floor() as i32)..=((max / size).floor() as i32)
 }
@@ -709,6 +712,8 @@ struct Cell {
 /// Boxes bucketed by column. Slots are inserted in order from zero.
 #[derive(Default)]
 struct Grid {
+    refined: bool,
+    small_cells: FxHashMap<(i32, i32), Cell>,
     cells: FxHashMap<(i32, i32), Cell>,
     boxes: Vec<BoundingBox>,
 }
@@ -716,9 +721,33 @@ struct Grid {
 impl Grid {
     fn insert(&mut self, slot: usize, area: BoundingBox) {
         debug_assert_eq!(slot, self.boxes.len());
-        for x in cell_range(area.min.x, area.max.x) {
-            for z in cell_range(area.min.z, area.max.z) {
-                let cell = self.cells.entry((x, z)).or_insert_with(|| Cell {
+        self.boxes.push(area);
+        self.insert_cells(slot, area);
+        if !self.refined
+            && !self.cells.is_empty()
+            && self.boxes.len() / MIN_COLUMN_DENSITY >= self.cells.len()
+        {
+            // Sparse grids retain the cheaper coarse-only query path.
+            self.refined = true;
+            self.cells.clear();
+            for slot in 0..self.boxes.len() {
+                self.insert_cells(slot, self.boxes[slot]);
+            }
+        }
+    }
+
+    fn insert_cells(&mut self, slot: usize, area: BoundingBox) {
+        let (cells, size) = if self.refined
+            && area.max.x - area.min.x <= SMALL_CELL_SIZE
+            && area.max.z - area.min.z <= SMALL_CELL_SIZE
+        {
+            (&mut self.small_cells, SMALL_CELL_SIZE)
+        } else {
+            (&mut self.cells, CELL_SIZE)
+        };
+        for x in cells_of(area.min.x, area.max.x, size) {
+            for z in cells_of(area.min.z, area.max.z, size) {
+                let cell = cells.entry((x, z)).or_insert_with(|| Cell {
                     members: Vec::new(),
                     lowest_top: f64::INFINITY,
                     highest_bottom: f64::NEG_INFINITY,
@@ -729,7 +758,6 @@ impl Grid {
                 cell.highest_bottom = cell.highest_bottom.max(area.min.y);
             }
         }
-        self.boxes.push(area);
     }
 
     fn for_each_overlapping(
@@ -739,12 +767,20 @@ impl Grid {
         mut visit: impl FnMut(usize),
     ) {
         query.next();
-        for x in cell_range(area.min.x, area.max.x) {
-            for z in cell_range(area.min.z, area.max.z) {
-                if let Some(cell) = self.cells.get(&(x, z)) {
-                    for &member in &cell.members {
-                        if query.visit(member) && overlaps(area, &self.boxes[member]) {
-                            visit(member);
+        for (cells, size) in [
+            (&self.small_cells, SMALL_CELL_SIZE),
+            (&self.cells, CELL_SIZE),
+        ] {
+            if cells.is_empty() {
+                continue;
+            }
+            for x in cells_of(area.min.x, area.max.x, size) {
+                for z in cells_of(area.min.z, area.max.z, size) {
+                    if let Some(cell) = cells.get(&(x, z)) {
+                        for &member in &cell.members {
+                            if query.visit(member) && overlaps(area, &self.boxes[member]) {
+                                visit(member);
+                            }
                         }
                     }
                 }
@@ -760,33 +796,41 @@ impl Grid {
         area: &BoundingBox,
     ) {
         query.next();
-        for x in cell_range(area.min.x, area.max.x) {
-            for z in cell_range(area.min.z, area.max.z) {
-                let Some(cell) = self.cells.get_mut(&(x, z)) else {
-                    continue;
-                };
-                let (min_x, min_z) = (f64::from(x) * CELL_SIZE, f64::from(z) * CELL_SIZE);
-                // `area` spans the column and every member's height, so all members overlap it.
-                let covered = area.min.x <= min_x
-                    && area.max.x >= min_x + CELL_SIZE
-                    && area.min.z <= min_z
-                    && area.max.z >= min_z + CELL_SIZE
-                    && area.min.y <= cell.lowest_top
-                    && area.max.y >= cell.highest_bottom;
-                if covered {
-                    if cell.merged {
-                        sets.union(slot, cell.members[0]);
-                    } else {
-                        for &member in &cell.members {
+        for (cells, size) in [
+            (&mut self.small_cells, SMALL_CELL_SIZE),
+            (&mut self.cells, CELL_SIZE),
+        ] {
+            if cells.is_empty() {
+                continue;
+            }
+            for x in cells_of(area.min.x, area.max.x, size) {
+                for z in cells_of(area.min.z, area.max.z, size) {
+                    let Some(cell) = cells.get_mut(&(x, z)) else {
+                        continue;
+                    };
+                    let (min_x, min_z) = (f64::from(x) * size, f64::from(z) * size);
+                    // `area` spans the column and every member's height, so all members overlap it.
+                    let covered = area.min.x <= min_x
+                        && area.max.x >= min_x + size
+                        && area.min.z <= min_z
+                        && area.max.z >= min_z + size
+                        && area.min.y <= cell.lowest_top
+                        && area.max.y >= cell.highest_bottom;
+                    if covered {
+                        if cell.merged {
+                            sets.union(slot, cell.members[0]);
+                        } else {
+                            for &member in &cell.members {
+                                sets.union(slot, member);
+                            }
+                            cell.merged = true;
+                        }
+                        continue;
+                    }
+                    for &member in &cell.members {
+                        if query.visit(member) && overlaps(area, &self.boxes[member]) {
                             sets.union(slot, member);
                         }
-                        cell.merged = true;
-                    }
-                    continue;
-                }
-                for &member in &cell.members {
-                    if query.visit(member) && overlaps(area, &self.boxes[member]) {
-                        sets.union(slot, member);
                     }
                 }
             }
@@ -919,6 +963,159 @@ mod tests {
                 links: Vec::new(),
             },
         )
+    }
+
+    #[test]
+    fn incremental_grid_queries_match_all_inserted_boxes() {
+        let mut grid = Grid::default();
+        let mut query = Query::new(128);
+        for slot in 0..128 {
+            let min = if slot < 32 {
+                Vector3::new(
+                    f64::from(slot % 8) * 0.5 - 8.0,
+                    f64::from(slot % 3) * 16.0,
+                    f64::from(slot / 8) * 0.5 - 8.0,
+                )
+            } else {
+                Vector3::new(
+                    f64::from(slot % 19) * 4.0 - 36.0,
+                    f64::from(slot % 5) * 16.0,
+                    f64::from(slot / 19) * 4.0 - 16.0,
+                )
+            };
+            let size = if slot == 0 {
+                4.25
+            } else if slot < 32 {
+                0.25
+            } else {
+                [0.0, 0.25, 4.0, 4.25, 17.0][slot as usize % 5]
+            };
+            let mut body = BoundingBox::new(min, min + Vector3::new(size, 2.0, size));
+            if slot % 9 == 0 {
+                body.min.y = f64::NEG_INFINITY;
+                body.max.y = f64::INFINITY;
+            }
+            grid.insert(slot as usize, body);
+            for area in [body, body.expand(16.0, 0.0, 16.0)] {
+                let expected: Vec<_> = grid
+                    .boxes
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(slot, body)| overlaps(&area, body).then_some(slot))
+                    .collect();
+                let mut found = Vec::new();
+                grid.for_each_overlapping(&mut query, &area, |slot| found.push(slot));
+                found.sort_unstable();
+                assert_eq!(found, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn partition_matches_pairwise_connected_components() {
+        use rand::{RngExt, SeedableRng, rngs::StdRng};
+
+        fn bounds(random: &mut StdRng) -> BoundingBox {
+            let min = Vector3::new(
+                f64::from(random.random_range(-16..16)) * 4.0,
+                f64::from(random.random_range(-4..4)) * 16.0,
+                f64::from(random.random_range(-16..16)) * 4.0,
+            );
+            let size = [0.25, 4.0, 4.25, 16.0, 32.0][random.random_range(0..5)];
+            BoundingBox::new(min, min + Vector3::new(size, 2.0, size))
+        }
+
+        let mut random = StdRng::seed_from_u64(42);
+        for _ in 0..32 {
+            let nodes: Vec<_> = (0..64)
+                .map(|id| {
+                    let body = if id < 48 {
+                        let min = Vector3::new(
+                            f64::from(id % 6) * 0.5,
+                            f64::from(id / 24) * 16.0,
+                            f64::from(id / 6) * 0.5,
+                        );
+                        BoundingBox::new(min, min + Vector3::new(0.25, 2.0, 0.25))
+                    } else {
+                        bounds(&mut random)
+                    };
+                    let mut reads = bounds(&mut random);
+                    reads.min.y = f64::NEG_INFINITY;
+                    reads.max.y = f64::INFINITY;
+                    (
+                        id,
+                        TickReach {
+                            body,
+                            entities: body.expand(0.5, 0.5, 0.5),
+                            players: body.expand(4.0, 4.0, 4.0),
+                            block_reads: reads,
+                            block_writes: (id % 4 == 0).then(|| bounds(&mut random)),
+                            global: false,
+                            links: if id % 7 == 0 { vec![1000] } else { Vec::new() },
+                        },
+                    )
+                })
+                .collect();
+            let idle: Vec<_> = (100..104).map(|id| (id, bounds(&mut random))).collect();
+            let players: Vec<_> = (200..203).map(|id| (id, bounds(&mut random))).collect();
+            let bodies: Vec<_> = nodes
+                .iter()
+                .map(|(id, reach)| (*id, reach.body))
+                .chain(idle.iter().copied())
+                .chain(players.iter().copied())
+                .collect();
+            // The extra vertex represents an external link shared by several nodes.
+            let mut edges = vec![vec![false; bodies.len() + 1]; bodies.len() + 1];
+            for (slot, (_, reach)) in nodes.iter().enumerate() {
+                for (other, (_, body)) in bodies.iter().enumerate() {
+                    let area = if other < nodes.len() + idle.len() {
+                        &reach.entities
+                    } else {
+                        &reach.players
+                    };
+                    if overlaps(area, body) {
+                        edges[slot][other] = true;
+                        edges[other][slot] = true;
+                    }
+                }
+                if !reach.links.is_empty() {
+                    edges[slot][bodies.len()] = true;
+                    edges[bodies.len()][slot] = true;
+                }
+                if let Some(writes) = reach.block_writes {
+                    for (other, (_, reader)) in nodes.iter().enumerate() {
+                        if overlaps(&writes, &reader.block_reads) {
+                            edges[slot][other] = true;
+                            edges[other][slot] = true;
+                        }
+                    }
+                }
+            }
+            let mut visited = vec![false; edges.len()];
+            let mut expected = Vec::new();
+            for start in 0..nodes.len() {
+                if visited[start] {
+                    continue;
+                }
+                let mut pending = VecDeque::from([start]);
+                let mut component = Vec::new();
+                visited[start] = true;
+                while let Some(slot) = pending.pop_front() {
+                    if slot < nodes.len() {
+                        component.push(slot);
+                    }
+                    for (other, connected) in edges[slot].iter().enumerate() {
+                        if *connected && !visited[other] {
+                            visited[other] = true;
+                            pending.push_back(other);
+                        }
+                    }
+                }
+                component.sort_unstable();
+                expected.push(component);
+            }
+            assert_eq!(islands(&nodes, &idle, &players), expected);
+        }
     }
 
     #[test]
