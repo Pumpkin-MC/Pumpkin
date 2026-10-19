@@ -106,7 +106,7 @@ pub mod predicate;
 pub const MAX_SCOREBOARD_TAGS: usize = 1024;
 
 /// Push strength per axis in `Entity.push`.
-pub(crate) const PUSH_STRENGTH: f64 = 0.05;
+pub(crate) const PUSH_STRENGTH: f64 = 0.05f32 as f64;
 
 /// Fluid current speeds of `updateFluidHeightAndDoFluidPushing`.
 const WATER_PUSH_SPEED: f64 = 0.014;
