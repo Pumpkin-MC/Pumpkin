@@ -1911,15 +1911,27 @@ impl DataComponentCodec<Self> for TooltipStyleImpl {
 
 impl DataComponentCodec<Self> for DeathProtectionImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        seq.write_var_int(&VarInt(self.death_effects.len() as i32))?;
+        for effect in self.death_effects.iter() {
+            serialize_consume_effect(effect, seq)?;
+        }
+        Ok(())
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
-        for _ in 0..len {
-            let _ = deserialize_consume_effect(seq)?;
+        const MAX_DEATH_EFFECTS: i32 = 256;
+
+        let len = seq.get_var_int()?.0;
+        if !(0..=MAX_DEATH_EFFECTS).contains(&len) {
+            return Err(ReadingError::Message("Invalid death effect count".into()));
         }
-        Ok(Self)
+        let mut death_effects = Vec::with_capacity(len as usize);
+        for _ in 0..len {
+            death_effects.push(deserialize_consume_effect(seq)?);
+        }
+        Ok(Self {
+            death_effects: Cow::Owned(death_effects),
+        })
     }
 }
 
