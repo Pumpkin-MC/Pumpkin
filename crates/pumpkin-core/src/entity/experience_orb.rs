@@ -230,7 +230,8 @@ impl EntityBase for ExperienceOrbEntity {
         let on_ground = entity.on_ground.load(Ordering::Relaxed);
         let mut friction = Self::AIR_DRAG;
         if on_ground {
-            let block = entity.get_block_with_y_offset(0.500_001).1;
+            let pos = entity.get_pos_with_y_offset(f64::from(0.999_999_f32)).0;
+            let block = entity.world.load().get_block(&pos);
             friction *= block.slipperiness;
         }
         let mut velocity = entity.velocity.load() * f64::from(friction);
