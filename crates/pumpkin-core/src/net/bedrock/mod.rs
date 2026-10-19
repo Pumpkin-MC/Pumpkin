@@ -134,8 +134,9 @@ pub struct BedrockClient {
     pub own_motion_age: AtomicCell<i64>,
     /// `PlayerAuthInput` tick tagged on that last own-player `SetActorMotion`.
     pub own_motion_tick: AtomicU64,
-    /// Send times of unanswered `NetworkStackLatency` probes, oldest first.
-    pending_latencies: std::sync::Mutex<VecDeque<Instant>>,
+    /// Ids and send times of unanswered `NetworkStackLatency` probes, oldest first.
+    pending_latencies: std::sync::Mutex<VecDeque<(u64, Instant)>>,
+    next_latency_id: AtomicU64,
     last_latency_send: AtomicCell<Instant>,
     /// Inputs since the last teleport without reaching it. Resent past a threshold.
     pub teleport_unconfirmed_inputs: AtomicU32,
@@ -186,6 +187,7 @@ impl BedrockClient {
             own_motion_age: AtomicCell::new(i64::MIN),
             own_motion_tick: AtomicU64::new(0),
             pending_latencies: std::sync::Mutex::new(VecDeque::new()),
+            next_latency_id: AtomicU64::new(1),
             last_latency_send: AtomicCell::new(Instant::now()),
             teleport_unconfirmed_inputs: AtomicU32::new(0),
             teleport_sent_pos: AtomicCell::new(pumpkin_util::math::vector3::Vector3::default()),

@@ -1,11 +1,13 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use pumpkin_protocol::bedrock::network_stack_latency::NetworkStackLatency;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 const LATENCY_INTERVAL: Duration = Duration::from_secs(1);
 const MAX_PENDING: usize = 4;
 const LATENCY_TIMEOUT: Duration = Duration::from_secs(5);
+/// Clients have echoed the probe value as is, times 1000 (before 1.20.10) or times 10^9.
+const ECHO_SCALES: [u64; 3] = [1, 1_000, 1_000_000_000];
 
 impl BedrockClient {
     /// Probe once the client has finished loading, then once a second.
@@ -26,22 +28,19 @@ impl BedrockClient {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         while pending
             .front()
-            .is_some_and(|sent| sent.elapsed() >= LATENCY_TIMEOUT)
+            .is_some_and(|(_, sent)| sent.elapsed() >= LATENCY_TIMEOUT)
         {
             pending.pop_front();
         }
         if pending.len() >= MAX_PENDING {
             return;
         }
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_micros() as u64;
-        pending.push_back(Instant::now());
+        let id = self.next_latency_id.fetch_add(1, Ordering::Relaxed);
+        pending.push_back((id, Instant::now()));
         drop(pending);
         self.last_latency_send.store(Instant::now());
         self.try_enqueue_client_packet(&NetworkStackLatency {
-            timestamp,
+            timestamp: id,
             from_server: true,
         });
     }
@@ -52,7 +51,16 @@ impl BedrockClient {
                 .pending_latencies
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            pending.pop_front()
+            // Replies arrive in order, so older unmatched probes were lost.
+            pending
+                .iter()
+                .position(|&(id, _)| {
+                    ECHO_SCALES
+                        .iter()
+                        .any(|&scale| id.wrapping_mul(scale) == packet.timestamp)
+                })
+                .and_then(|index| pending.drain(..=index).next_back())
+                .map(|(_, sent)| sent)
         };
         if let Some(send_time) = send_time {
             let sample = (send_time.elapsed().as_millis() as u32).max(1);
