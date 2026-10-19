@@ -275,6 +275,9 @@ impl EntityBase for ExperienceOrbEntity {
         if event.cancelled {
             return false;
         }
+        if !event.damage.is_finite() || event.damage <= 0.0 {
+            return false;
+        }
 
         self.entity.velocity_dirty.store(true, Ordering::Relaxed);
         let mut health = self.health.load(Ordering::Relaxed);
