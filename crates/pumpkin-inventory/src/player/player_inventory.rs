@@ -336,6 +336,7 @@ impl PlayerInventory {
         }
 
         let mut i;
+        let start_count = stack.item_count;
 
         loop {
             i = stack.item_count;
@@ -350,7 +351,7 @@ impl PlayerInventory {
             }
         }
 
-        stack.item_count < i
+        stack.item_count < start_count
     }
 
     /// Finds the first slot containing a matching stack.
@@ -782,5 +783,30 @@ mod tests {
         assert!(inv.off_hand_item().is_empty());
         assert_eq!(inv.get_slot(0).item.id, Item::ARROW.id);
         assert_eq!(inv.get_slot(0).item_count, 10);
+    }
+
+    /// When the main inventory is completely full and only the off-hand has
+    /// partial room, `insert_stack` must still return `true` even though the
+    /// second loop iteration makes no progress.
+    #[test]
+    fn insert_stack_returns_true_on_partial_offhand_with_full_main_inventory() {
+        let inv = create_test_inventory();
+        for i in 0..PlayerInventory::MAIN_SIZE {
+            inv.set_slot(i, ItemStack::new(64, &Item::DIRT));
+        }
+        inv.set_stack_in_hand(Hand::Left, ItemStack::new(60, &Item::ARROW));
+
+        let mut pickup = ItemStack::new(10, &Item::ARROW);
+        let inserted = inv.insert_stack_anywhere(&mut pickup);
+
+        assert!(
+            inserted,
+            "insert_stack must return true when some items were placed"
+        );
+        assert_eq!(
+            pickup.item_count, 6,
+            "6 arrows should remain after filling off-hand to 64"
+        );
+        assert_eq!(inv.off_hand_item().item_count, 64);
     }
 }
