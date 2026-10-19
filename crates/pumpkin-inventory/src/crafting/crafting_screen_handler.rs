@@ -1311,7 +1311,7 @@ impl ScreenHandler for CraftingTableScreenHandler {
             if stack.is_empty() {
                 slot.set_stack_prev(ItemStack::EMPTY.clone(), stack_prev.clone());
             } else {
-                slot.mark_dirty();
+                slot.set_stack(stack.clone());
             }
             if stack.item_count == stack_prev.item_count {
                 return ItemStack::EMPTY.clone();
@@ -1839,5 +1839,29 @@ mod tests {
         assert_eq!(repaired.get_damage(), max_dmg - expected_rem);
         assert_eq!(repaired.get_enchantment_level(sharpness), 0);
         assert_eq!(repaired.get_enchantment_level(binding_curse), 1);
+    }
+
+    #[test]
+    fn quick_move_partial_fit_writes_remainder_back() {
+        let (mut handler, player_inventory, player) = test_handler();
+
+        // The grid has room for one cobblestone and the hotbar (slots 37..46) is full.
+        set_slot(&handler, 1, ItemStack::new(63, &Item::COBBLESTONE));
+        for slot in 2..=9 {
+            set_slot(&handler, slot, ItemStack::new(64, &Item::DIRT));
+        }
+        for i in 0..9 {
+            player_inventory.set_stack(i, ItemStack::new(64, &Item::DIRT));
+        }
+        // Handler slot 10 is player inventory index 9, the first main inventory slot.
+        player_inventory.set_stack(9, ItemStack::new(64, &Item::COBBLESTONE));
+
+        handler.quick_move(&player, 10);
+
+        let grid = grid_stack(&handler, 1).item_count;
+        let source = player_inventory.get_stack(9).item_count;
+        assert_eq!(grid, 64);
+        assert_eq!(source, 63);
+        assert_eq!(grid + source, 63 + 64);
     }
 }
