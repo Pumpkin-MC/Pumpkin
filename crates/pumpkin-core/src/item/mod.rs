@@ -21,6 +21,16 @@ pub trait ItemMetadata {
     fn ids() -> Box<[u16]>;
 }
 
+/// The hand holding `item`, used when the caller did not report one.
+#[must_use]
+pub fn hand_holding(player: &Player, item: &Item) -> Hand {
+    if player.inventory().held_item().item.id == item.id {
+        Hand::Right
+    } else {
+        Hand::Left
+    }
+}
+
 pub trait ItemBehaviour: Send + Sync {
     fn normal_use(&self, _item: &Item, _player: &Player) {}
 

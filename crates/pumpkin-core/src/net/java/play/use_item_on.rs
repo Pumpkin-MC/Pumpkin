@@ -102,11 +102,7 @@ impl JavaClient {
             }
         }}
 
-        let equipment_slot = if matches!(hand, Hand::Right) {
-            EquipmentSlot::MAIN_HAND
-        } else {
-            EquipmentSlot::OFF_HAND
-        };
+        let equipment_slot = EquipmentSlot::from_hand(hand);
 
         let sneaking = player.get_entity().is_sneaking();
 
