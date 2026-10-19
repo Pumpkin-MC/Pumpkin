@@ -134,7 +134,7 @@ const fn get_waxed_equivalent(id: BlockId) -> Option<BlockId> {
 mod tests {
     use pumpkin_data::{Block, BlockId};
 
-    use super::get_waxed;
+    use super::{get_waxed, get_waxed_equivalent};
 
     #[test]
     fn waxing_keeps_every_block_state() {
@@ -145,6 +145,7 @@ mod tests {
                     break;
                 };
                 let waxed_block = Block::from_state_id(waxed_state);
+                assert_eq!(Some(waxed_block.id), get_waxed_equivalent(block.id));
                 assert_eq!(
                     block.properties(state.id).map(|p| p.to_props()),
                     waxed_block.properties(waxed_state).map(|p| p.to_props()),
