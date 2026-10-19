@@ -5283,8 +5283,8 @@ impl Player {
                         let icon_z = raw_z.clamp(-128.0, 127.0) as i8;
 
                         let yaw = self.living_entity.entity.yaw.load();
-                        let icon_direction =
-                            ((((yaw * 16.0 / 360.0).round() as i32 + 8) % 16 + 16) % 16) as i8;
+                        let icon_direction = map_data
+                            .calculate_rotation(self.world().get_world_age(), f64::from(yaw));
 
                         let decoration_type = if is_off_map {
                             &pumpkin_data::map_decoration::MapDecorationType::PLAYER_OFF_MAP

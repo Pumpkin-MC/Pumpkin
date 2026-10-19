@@ -80,6 +80,27 @@ impl MapData {
         }
     }
 
+    /// Mirrors vanilla `MapItemSavedData.calculateRotation`.
+    #[must_use]
+    pub fn calculate_rotation(&self, game_time: i64, y_rot: f64) -> i8 {
+        if self.dimension == Dimension::THE_NETHER {
+            let s = (game_time / 10) as i32;
+            return ((s
+                .wrapping_mul(s)
+                .wrapping_mul(34_187_121)
+                .wrapping_add(s.wrapping_mul(121))
+                >> 15)
+                & 15) as i8;
+        }
+        let adjusted_y_rot = if y_rot < 0.0 {
+            y_rot - 8.0
+        } else {
+            y_rot + 8.0
+        };
+        // Java's (byte) cast narrows through int, wrapping instead of saturating.
+        (adjusted_y_rot * 16.0 / 360.0) as i32 as i8
+    }
+
     pub fn update(&mut self, player: &Player) {
         let world = player.world();
         let scale = 1 << self.scale;
