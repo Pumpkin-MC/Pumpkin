@@ -16,7 +16,7 @@ use rustc_hash::FxHashMap;
 use pumpkin_config::world::EntityIslandsConfig;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
-use crate::entity::{EntityBase, PUSH_STRENGTH};
+use crate::entity::{EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
 use crate::plugin::{
     api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
 };
@@ -234,20 +234,21 @@ impl EntityReach {
             return Self::Audited(reach);
         }
         let base = entity.get_entity();
-        let radius = entity.get_living_entity().map_or_else(
-            || base.velocity.load().length() + config.unaudited_reach,
-            |living| {
+        let radius = base.velocity.load().length()
+            + config.unaudited_reach
+            + entity.get_living_entity().map_or(0.0, |living| {
                 living
                     .get_attribute_value(&Attributes::FOLLOW_RANGE)
                     .max(0.0)
-                    + config.unaudited_reach
-            },
-        );
-        Self::Conservative(TickReach::conservative(
-            &base.bounding_box.load(),
-            radius,
-            links_of(entity),
-        ))
+            });
+        let mut reach =
+            TickReach::conservative(&base.bounding_box.load(), radius, links_of(entity));
+        // Blast power and chained block effects can exceed the configured margins.
+        reach.global = entity
+            .cast_any()
+            .downcast_ref::<TNTEntity>()
+            .is_some_and(TNTEntity::is_about_to_explode);
+        Self::Conservative(reach)
     }
 }
 
@@ -1133,6 +1134,80 @@ mod tests {
     fn one_sided_reach_joins_both_entities() {
         let nodes = [node(10, 0.0, 30.0), node(11, 25.0, 0.0)];
         assert_eq!(islands(&nodes, &[], &[]), [vec![0, 1]]);
+    }
+
+    #[tokio::test]
+    async fn detonating_tnt_preserves_world_tick_order() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{Entity, tnt::TNTEntity};
+        use pumpkin_nbt::compound::NbtCompound;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let tnt = TNTEntity::new(
+            Entity::new(
+                world.clone(),
+                Vector3::new(0.0, 64.0, 0.0),
+                &EntityType::TNT,
+            ),
+            TNTEntity::DEFAULT_POWER,
+            TNTEntity::DEFAULT_FUSE,
+        );
+        let config = EntityIslandsConfig::default();
+        for fuse in [2, 1, 0] {
+            let mut nbt = NbtCompound::new();
+            nbt.put_short("fuse", fuse);
+            nbt.put_float("explosion_power", 128.0);
+            tnt.read_custom_nbt(&nbt);
+            let reaches = resolve(vec![EntityReach::of(&tnt, &config)], &config);
+            let nodes = [
+                (tnt.get_entity().entity_id, reaches[0].clone()),
+                node(-1, 150.0, 0.0),
+                node(-2, 400.0, 0.0),
+            ];
+            if fuse > 1 {
+                assert_eq!(islands(&nodes, &[], &[]), [vec![0], vec![1], vec![2]]);
+            } else {
+                assert_eq!(islands(&nodes, &[], &[]), [vec![0, 1, 2]]);
+            }
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unaudited_living_motion_joins_entities_at_the_destination()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{Entity, mob::zombie::zombie::ZombieEntity};
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let zombie = ZombieEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::ZOMBIE,
+        ));
+        assert!(zombie.audited_reach().is_none());
+        let config = EntityIslandsConfig::default();
+        for speed in [0.0, -96.0, 96.0] {
+            zombie
+                .get_entity()
+                .velocity
+                .store(Vector3::new(speed, 0.0, 0.0));
+            let reaches = resolve(vec![EntityReach::of(zombie.as_ref(), &config)], &config);
+            let nodes = [
+                (zombie.get_entity().entity_id, reaches[0].clone()),
+                node(-1, 96.0, 0.0),
+                node(-2, -96.0, 0.0),
+            ];
+            if speed == 0.0 {
+                assert_eq!(islands(&nodes, &[], &[]), [vec![0], vec![1], vec![2]]);
+            } else {
+                let destination = if speed > 0.0 { 1 } else { 2 };
+                assert!(islands(&nodes, &[], &[])[0].contains(&destination));
+            }
+        }
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[test]
