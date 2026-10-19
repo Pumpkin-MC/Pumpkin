@@ -750,7 +750,11 @@ fn setup_stdin_console(server: &Arc<Server>) {
             if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
                 warn!("Console command was not terminated with a newline");
             }
-            let _ = rt.block_on(tx.send(line.trim().to_string()));
+            let command = line.trim();
+            if command.is_empty() {
+                continue;
+            }
+            let _ = rt.block_on(tx.send(command.to_string()));
         }
     });
     let server_clone = server.clone();
@@ -789,6 +793,9 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
             let readline = rl.readline("$ ");
             match readline {
                 Ok(line) => {
+                    if line.trim().is_empty() {
+                        continue;
+                    }
                     let _ = rl.add_history_entry(line.clone());
                     if tx.blocking_send(line).is_err() {
                         break;
