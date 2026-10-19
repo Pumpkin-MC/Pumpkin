@@ -48,7 +48,8 @@ fn is_entity_above_block(entity: &crate::entity::Entity, position: &BlockPos) ->
 }
 
 fn is_entity_descending(entity: &crate::entity::Entity) -> bool {
-    entity.velocity.load().y < 0.0
+    // Vanilla `Entity.isDescending` is `isShiftKeyDown`, i.e. the sneaking flag.
+    entity.is_sneaking()
 }
 
 pub(crate) fn collision_shape_for_entity(
