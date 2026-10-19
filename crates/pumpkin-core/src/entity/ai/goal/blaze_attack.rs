@@ -1,4 +1,5 @@
 use crate::entity::ai::util::RandomExt;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_protocol::java::client::play::CWorldEvent;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;
@@ -29,9 +30,13 @@ impl BlazeShootFireballGoal {
         }
     }
 
-    const fn get_follow_distance() -> f64 {
-        // TODO: use FOLLOW_RANGE
-        48.0
+    /// Vanilla `BlazeAttackGoal.getFollowDistance`. Read from the attribute so the
+    /// random follow range bonus `finalizeSpawn` rolls still applies.
+    fn get_follow_distance(blaze: &BlazeEntity) -> f64 {
+        blaze
+            .entity
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE)
     }
 }
 
@@ -109,7 +114,7 @@ impl Goal for BlazeShootFireballGoal {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .set_wanted_position(target_pos.x, target_pos.y, target_pos.z, 1.0);
-        } else if distance_sq < Self::get_follow_distance().powi(2) && has_line_of_sight {
+        } else if distance_sq < Self::get_follow_distance(&blaze).powi(2) && has_line_of_sight {
             let yd = (target_pos.y + f64::from(target_entity.entity_dimension.load().height) * 0.5)
                 - (blaze_pos.y + f64::from(entity.entity_dimension.load().height) * 0.5);
 
