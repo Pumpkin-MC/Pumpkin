@@ -33,6 +33,17 @@ impl GoalSelector {
         self.remove_goal_by_type_id(TypeId::of::<G>())
     }
 
+    /// Whether the goal of type `G` is running right now.
+    ///
+    /// Vanilla goals keep references to their siblings (e.g. `Ocelot.mobInteract` checks
+    /// `temptGoal.isRunning()`); querying the selector by type is the equivalent here.
+    #[must_use]
+    pub fn is_running<G: Goal + 'static>(&self) -> bool {
+        self.goals
+            .iter()
+            .any(|goal| goal.type_id == TypeId::of::<G>() && goal.running)
+    }
+
     pub fn remove_goal_by_type_id(&mut self, type_id: TypeId) -> Vec<PrioritizedGoal> {
         let mut stopped = Vec::new();
         let mut i = 0;

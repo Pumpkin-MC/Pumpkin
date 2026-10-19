@@ -13,14 +13,21 @@ pub enum EntityPredicate<'a> {
 }
 
 impl EntityPredicate<'_> {
+    /// Tests `entity` against this predicate.
+    ///
+    /// Takes `&dyn EntityBase` so that player-state checks (`get_player`, `is_spectator`) and
+    /// per-type overrides (`can_hit`, `is_collidable`) dispatch to the concrete mob: on a bare
+    /// `&Entity` they fall back to the trait defaults, which silently disabled every
+    /// creative/spectator filter on this path.
     #[must_use]
-    pub fn test(&self, entity: &Entity) -> bool {
+    pub fn test(&self, entity: &dyn EntityBase) -> bool {
         match self {
-            EntityPredicate::ValidEntity => entity.is_alive(),
+            EntityPredicate::ValidEntity => entity.get_entity().is_alive(),
             EntityPredicate::ValidLivingEntity => {
-                entity.is_alive() && entity.get_living_entity().is_some()
+                entity.get_entity().is_alive() && entity.get_living_entity().is_some()
             }
             EntityPredicate::NotMounted => {
+                let entity = entity.get_entity();
                 entity.is_alive() && !entity.has_passengers() && !entity.has_vehicle()
             }
             EntityPredicate::ValidInventories => {
@@ -40,7 +47,7 @@ impl EntityPredicate<'_> {
             EntityPredicate::Rides(target_entity) => {
                 let target: &Entity = target_entity;
 
-                let mut opt_vehicle_arc = entity.get_vehicle();
+                let mut opt_vehicle_arc = entity.get_entity().get_vehicle();
 
                 while let Some(vehicle_arc) = opt_vehicle_arc {
                     let vehicle_entity_base: &dyn EntityBase = &*vehicle_arc;

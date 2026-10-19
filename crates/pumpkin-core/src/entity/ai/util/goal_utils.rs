@@ -95,7 +95,7 @@ pub fn nearby_same_type(mob: &dyn Mob) -> Vec<std::sync::Arc<dyn crate::entity::
             let other_entity = other.get_entity();
             other_entity.entity_id != entity.entity_id
                 && other_entity.entity_type == entity.entity_type
-                && EntityPredicate::ExceptSpectator.test(other_entity)
+                && EntityPredicate::ExceptSpectator.test(other.as_ref())
         })
         .collect()
 }
