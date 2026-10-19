@@ -155,8 +155,7 @@ impl<R: RegionFile, D: SingleChunkDataSerializer> RegionEntry<R, D> {
                 .into_par_iter()
                 .map(|(pos, chunk)| {
                     // Loading consumes entity and block-entity NBT; keep the retry source intact.
-                    let loaded = chunk
-                        .to_bytes()
+                    let loaded = R::serialize_chunk(&*chunk)
                         .map_err(|err| {
                             ChunkReadingError::IoError(std::io::Error::other(err.to_string()))
                         })
@@ -210,8 +209,7 @@ impl<R: RegionFile, D: SingleChunkDataSerializer> RegionEntry<R, D> {
                 .map(|(index, chunk)| {
                     // A mutation during serialization must mark the chunk dirty again.
                     chunk.mark_dirty(false);
-                    let nbt = chunk
-                        .to_bytes()
+                    let nbt = R::serialize_chunk(&*chunk)
                         .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
                     let hash = xxh64(&nbt, 0);
                     if entry.hashes[index].load(Ordering::Relaxed) == hash {

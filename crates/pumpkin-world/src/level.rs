@@ -239,6 +239,33 @@ impl Level {
             biome_source.as_ref(),
             structure_overrides.as_deref(),
         ));
+        if let Some(cache) = world_gen.global_structure_cache() {
+            cache.ensure_strongholds_generated();
+        }
+
+        let target_format =
+            crate::chunk::io::converter::RegionFormat::from_config(&level_config.chunk);
+        for folder in [&level_folder.region_folder, &level_folder.entities_folder] {
+            match crate::chunk::io::converter::convert_folder(folder, &level_config.chunk, true) {
+                Ok(stats) if stats.regions_converted > 0 => {
+                    info!(
+                        "Converted {} region(s) ({} chunk(s)) in {} to {} format",
+                        stats.regions_converted,
+                        stats.chunks_converted,
+                        folder.display(),
+                        target_format.name()
+                    );
+                }
+                Ok(_) => {}
+                Err(err) => {
+                    error!(
+                        "Failed converting region files in {} to {} format: {err}",
+                        folder.display(),
+                        target_format.name()
+                    );
+                }
+            }
+        }
 
         let chunk_saver = match &level_config.chunk {
             ChunkConfig::Linear => Arc::new(ChunkSaver::Linear(ChunkFileManager::new(()))),

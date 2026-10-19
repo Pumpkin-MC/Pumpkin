@@ -6,6 +6,7 @@ use pumpkin_data::{
     },
 };
 use pumpkin_util::random::{legacy_rand::LegacyRand, xoroshiro128::XoroshiroSplitter};
+use std::sync::Arc;
 
 use crate::{
     GlobalRandomConfig,
@@ -282,7 +283,8 @@ pub struct ProtoMultiNoiseRouter {
 pub struct ProtoNoiseRouters {
     pub noise: ProtoNoiseRouter,
     pub surface_estimator: ProtoSurfaceEstimator,
-    pub multi_noise: ProtoMultiNoiseRouter,
+    /// Shared with the background stronghold ring search.
+    pub multi_noise: Arc<ProtoMultiNoiseRouter>,
 }
 
 pub struct DoublePerlinNoiseBuilder;
@@ -827,7 +829,7 @@ impl ProtoNoiseRouters {
             surface_estimator: ProtoSurfaceEstimator {
                 full_component_stack: surface_stack,
             },
-            multi_noise: ProtoMultiNoiseRouter {
+            multi_noise: Arc::new(ProtoMultiNoiseRouter {
                 full_component_stack: multi_noise_stack,
                 temperature: base.multi_noise.temperature,
                 vegetation: base.multi_noise.vegetation,
@@ -835,7 +837,7 @@ impl ProtoNoiseRouters {
                 erosion: base.multi_noise.erosion,
                 depth: base.multi_noise.depth,
                 ridges: base.multi_noise.ridges,
-            },
+            }),
         }
     }
 }
