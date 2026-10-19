@@ -6,8 +6,6 @@ use std::time::{Duration, Instant};
 const LATENCY_INTERVAL: Duration = Duration::from_secs(1);
 const MAX_PENDING: usize = 4;
 const LATENCY_TIMEOUT: Duration = Duration::from_secs(5);
-/// Clients have echoed the probe value as is, times 1000 (before 1.20.10) or times 10^9.
-const ECHO_SCALES: [u64; 3] = [1, 1_000, 1_000_000_000];
 
 impl BedrockClient {
     /// Probe once the client has finished loading, then once a second.
@@ -54,11 +52,7 @@ impl BedrockClient {
             // Replies arrive in order, so older unmatched probes were lost.
             pending
                 .iter()
-                .position(|&(id, _)| {
-                    ECHO_SCALES
-                        .iter()
-                        .any(|&scale| id.wrapping_mul(scale) == packet.timestamp)
-                })
+                .position(|&(id, _)| id == packet.timestamp)
                 .and_then(|index| pending.drain(..=index).next_back())
                 .map(|(_, sent)| sent)
         };
