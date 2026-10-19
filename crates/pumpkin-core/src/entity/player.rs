@@ -1790,6 +1790,30 @@ impl Player {
         false
     }
 
+    /// Vanilla `LivingEntity.doHurtEquipment`. Lives on `Player` because only players wear
+    /// armor that takes durability in Pumpkin so far.
+    fn do_hurt_equipment(&self, damage_type: DamageType, damage: f32, slots: &[EquipmentSlot]) {
+        if damage <= 0.0 {
+            return;
+        }
+        let durability_damage = (damage / 4.0).max(1.0) as i32;
+        for slot in slots {
+            let stack = self
+                .living_entity
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(slot);
+            if stack
+                .get_data_component::<EquippableImpl>()
+                .is_some_and(|equippable| equippable.damage_on_hurt)
+                && stack.can_be_hurt_by(damage_type)
+            {
+                self.damage_item_in_slot(slot, durability_damage);
+            }
+        }
+    }
+
     /// Checks and triggers location-based enchantments (e.g. Frost Walker) on the player's equipped armor.
     pub fn check_location_enchantments(&self, pos: Vector3<f64>, on_ground: bool) {
         if on_ground {
@@ -6901,6 +6925,23 @@ impl EntityBase for Player {
         cause: Option<&dyn EntityBase>,
     ) -> bool {
         self.damage_with_context(caller, amount, damage_type, position, source, cause)
+    }
+
+    fn hurt_armor(&self, damage_type: DamageType, damage: f32) {
+        self.do_hurt_equipment(
+            damage_type,
+            damage,
+            &[
+                EquipmentSlot::FEET,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::HEAD,
+            ],
+        );
+    }
+
+    fn hurt_helmet(&self, damage_type: DamageType, damage: f32) {
+        self.do_hurt_equipment(damage_type, damage, &[EquipmentSlot::HEAD]);
     }
 
     fn teleport(
