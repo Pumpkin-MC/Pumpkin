@@ -9,6 +9,7 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_util::Hand;
 
 pub struct ExperienceBottleItem;
 
@@ -19,7 +20,14 @@ impl ItemMetadata for ExperienceBottleItem {
 }
 
 impl ItemBehaviour for ExperienceBottleItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use_with_hand(
+        &self,
+        _item: &Item,
+        player: &Player,
+        yaw: f32,
+        pitch: f32,
+        hand: Hand,
+    ) {
         let world = player.world();
         let pos = player.position();
         world.play_sound_fine(
@@ -31,17 +39,10 @@ impl ItemBehaviour for ExperienceBottleItem {
         );
 
         let inventory = player.inventory();
-        let mut held = inventory.held_item();
-        let hand = if !held.is_empty() && held.item == &Item::EXPERIENCE_BOTTLE {
-            pumpkin_util::Hand::Right
-        } else {
-            held = inventory.off_hand_item();
-            pumpkin_util::Hand::Left
-        };
+        let mut held = inventory.get_stack_in_hand(hand);
         let entity = Entity::new(world.clone(), pos, &EntityType::EXPERIENCE_BOTTLE);
         let bottle = ExperienceBottleEntity::new_shot(entity, player.get_entity());
         bottle.set_item_stack(held.split_unless_creative(player.gamemode.load(), 1));
-        let (yaw, pitch) = player.rotation();
         bottle.thrown.set_velocity_from(pitch, yaw, -20.0, 0.7, 1.0);
         world.spawn_entity(Arc::new(bottle));
 
