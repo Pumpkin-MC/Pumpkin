@@ -3,7 +3,18 @@ use crate::entity::mob::Mob;
 use crossbeam::atomic::AtomicCell;
 use std::any::TypeId;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
-use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, TryLockError};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BorrowKind {
+    Callback,
+    Reach,
+}
+
+struct GoalSlot {
+    value: Option<PrioritizedGoal>,
+    borrowed: Option<BorrowKind>,
+}
 
 struct RegisteredGoal {
     type_id: TypeId,
@@ -11,7 +22,26 @@ struct RegisteredGoal {
     registered: AtomicBool,
     running: AtomicBool,
     controls: AtomicCell<Controls>,
-    goal: Mutex<Option<PrioritizedGoal>>,
+    goal: Mutex<GoalSlot>,
+    available: Condvar,
+}
+
+struct BorrowedGoal<'a> {
+    entry: &'a RegisteredGoal,
+    value: Option<PrioritizedGoal>,
+}
+
+impl Drop for BorrowedGoal<'_> {
+    fn drop(&mut self) {
+        let mut slot = self
+            .entry
+            .goal
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        slot.value = self.value.take();
+        slot.borrowed = None;
+        self.entry.available.notify_all();
+    }
 }
 
 impl RegisteredGoal {
@@ -19,22 +49,67 @@ impl RegisteredGoal {
         self.registered.load(Relaxed) && self.running.load(Relaxed)
     }
 
-    fn retire(&self) -> Option<PrioritizedGoal> {
-        self.registered.store(false, Relaxed);
-        self.running.store(false, Relaxed);
-        let mut slot = match self.goal.try_lock() {
-            Ok(slot) => slot,
-            Err(TryLockError::Poisoned(error)) => error.into_inner(),
-            // The executing callback owns this goal and performs its final stop on return.
-            Err(TryLockError::WouldBlock) => return None,
+    fn borrow(&self, kind: BorrowKind) -> Option<BorrowedGoal<'_>> {
+        let mut slot = if kind == BorrowKind::Reach {
+            match self.goal.try_lock() {
+                Ok(slot) => slot,
+                Err(TryLockError::Poisoned(error)) => error.into_inner(),
+                Err(TryLockError::WouldBlock) => return None,
+            }
+        } else {
+            self.goal
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
         };
-        slot.take().filter(|goal| goal.running)
+        while slot.borrowed.is_some() {
+            if kind == BorrowKind::Reach {
+                return None;
+            }
+            slot = self
+                .available
+                .wait(slot)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+        if !self.registered.load(Relaxed) {
+            return None;
+        }
+        let value = slot.value.take()?;
+        slot.borrowed = Some(kind);
+        Some(BorrowedGoal {
+            entry: self,
+            value: Some(value),
+        })
+    }
+
+    fn finish_retirement(&self, mob: &dyn Mob) {
+        let mut slot = self
+            .goal
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        loop {
+            match slot.borrowed {
+                // The gameplay callback completes its own stop after returning.
+                Some(BorrowKind::Callback) => return,
+                // Reporting must not invoke gameplay callbacks, including stop.
+                Some(BorrowKind::Reach) => {
+                    slot = self
+                        .available
+                        .wait(slot)
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                }
+                None => break,
+            }
+        }
+        let retired = slot.value.take();
+        drop(slot);
+        if let Some(mut goal) = retired {
+            goal.stop(mob);
+        }
     }
 }
 
-/// Owns live goal registrations while callbacks execute outside its mutex.
 #[derive(Default)]
-pub struct GoalSelector {
+struct GoalRegistry {
     goals_by_control: [Option<Arc<RegisteredGoal>>; 4],
     #[expect(
         clippy::rc_buffer,
@@ -42,65 +117,75 @@ pub struct GoalSelector {
     )]
     goals: Arc<Vec<Arc<RegisteredGoal>>>,
     disabled_controls: Arc<AtomicCell<Controls>>,
-    execution: Arc<Mutex<()>>,
 }
 
-impl GoalSelector {
-    pub fn add_goal<G: Goal + 'static>(&mut self, priority: u8, goal: Box<G>) {
-        let goal = PrioritizedGoal::new(TypeId::of::<G>(), priority, goal);
-        Arc::make_mut(&mut self.goals).push(Arc::new(RegisteredGoal {
-            type_id: goal.type_id,
-            priority,
-            registered: AtomicBool::new(true),
-            running: AtomicBool::new(false),
-            controls: AtomicCell::new(goal.controls()),
-            goal: Mutex::new(Some(goal)),
-        }));
-    }
-
-    pub fn remove_goal<G: Goal + 'static>(selector: &Mutex<Self>, mob: &dyn Mob) {
-        let mut stopped = Self::lock(selector).remove_goals::<G>();
-        for goal in &mut stopped {
-            goal.stop(mob);
-        }
-    }
-
-    pub fn remove_goals<G: Goal + 'static>(&mut self) -> Vec<PrioritizedGoal> {
-        self.remove_goal_by_type_id(TypeId::of::<G>())
-    }
-
-    pub fn remove_goal_by_type_id(&mut self, type_id: TypeId) -> Vec<PrioritizedGoal> {
-        let mut stopped = Vec::new();
-        Arc::make_mut(&mut self.goals).retain(|entry| {
-            if entry.type_id != type_id {
-                return true;
-            }
-            if let Some(goal) = entry.retire() {
-                stopped.push(goal);
-            }
-            false
-        });
-        self.release_retired_controls();
-        stopped
-    }
-
-    pub fn clear(&mut self) -> Vec<PrioritizedGoal> {
-        let running = self
-            .goals
-            .iter()
-            .filter_map(|entry| entry.retire())
-            .collect();
-        self.goals = Arc::default();
-        self.goals_by_control = Default::default();
-        running
-    }
-
+impl GoalRegistry {
     fn release_retired_controls(&mut self) {
         for owner in &mut self.goals_by_control {
             if owner.as_ref().is_some_and(|entry| !entry.is_running()) {
                 *owner = None;
             }
         }
+    }
+}
+
+/// Owns registrations and completes lifecycle callbacks outside the registry lock.
+#[derive(Default)]
+pub struct GoalSelector {
+    registry: Mutex<GoalRegistry>,
+    execution: Mutex<()>,
+}
+
+impl GoalSelector {
+    pub fn add_goal<G: Goal + 'static>(&self, priority: u8, goal: Box<G>) {
+        let goal = PrioritizedGoal::new(TypeId::of::<G>(), priority, goal);
+        Arc::make_mut(&mut Self::lock(self).goals).push(Arc::new(RegisteredGoal {
+            type_id: goal.type_id,
+            priority,
+            registered: AtomicBool::new(true),
+            running: AtomicBool::new(false),
+            controls: AtomicCell::new(goal.controls()),
+            goal: Mutex::new(GoalSlot {
+                value: Some(goal),
+                borrowed: None,
+            }),
+            available: Condvar::new(),
+        }));
+    }
+
+    pub fn remove_goal<G: Goal + 'static>(&self, mob: &dyn Mob) {
+        self.remove_goal_by_type_id(TypeId::of::<G>(), mob);
+    }
+
+    pub fn remove_goal_by_type_id(&self, type_id: TypeId, mob: &dyn Mob) {
+        for entry in self.retire_matching(|entry| entry.type_id == type_id) {
+            entry.finish_retirement(mob);
+        }
+    }
+
+    pub fn clear(&self, mob: &dyn Mob) {
+        for entry in self.retire_matching(|_| true) {
+            entry.finish_retirement(mob);
+        }
+    }
+
+    fn retire_matching(
+        &self,
+        mut matches: impl FnMut(&RegisteredGoal) -> bool,
+    ) -> Vec<Arc<RegisteredGoal>> {
+        let mut registry = Self::lock(self);
+        let mut retired = Vec::new();
+        Arc::make_mut(&mut registry.goals).retain(|entry| {
+            if !matches(entry) {
+                return true;
+            }
+            entry.registered.store(false, Relaxed);
+            entry.running.store(false, Relaxed);
+            retired.push(entry.clone());
+            false
+        });
+        registry.release_retired_controls();
+        retired
     }
 
     fn uses_any(controls: Controls, disabled: Controls) -> bool {
@@ -109,8 +194,9 @@ impl GoalSelector {
             .any(|control| controls.get(control) && disabled.get(control))
     }
 
-    fn lock(selector: &Mutex<Self>) -> MutexGuard<'_, Self> {
+    fn lock(selector: &Self) -> MutexGuard<'_, GoalRegistry> {
         selector
+            .registry
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
@@ -119,23 +205,28 @@ impl GoalSelector {
         clippy::rc_buffer,
         reason = "Snapshots share the growable registration list."
     )]
-    fn snapshot(selector: &Mutex<Self>) -> Arc<Vec<Arc<RegisteredGoal>>> {
+    fn snapshot(selector: &Self) -> Arc<Vec<Arc<RegisteredGoal>>> {
         Self::lock(selector).goals.clone()
     }
 
     /// Adds the reach of every registered goal; `None` if one is unaudited or busy.
-    pub fn tick_reach(selector: &Mutex<Self>, mob: &dyn Mob, reach: &mut GoalReach) -> Option<()> {
+    pub(in crate::entity) fn tick_reach(
+        selector: &Self,
+        mob: &dyn Mob,
+        reach: &mut GoalReach,
+    ) -> Option<()> {
         for entry in Self::snapshot(selector).iter() {
             if !entry.registered.load(Relaxed) {
                 continue;
             }
-            let slot = match entry.goal.try_lock() {
-                Ok(slot) => slot,
-                Err(TryLockError::Poisoned(error)) => error.into_inner(),
-                Err(TryLockError::WouldBlock) => return None,
-            };
-            let goal = slot.as_ref()?;
-            reach.add(goal.tick_reach(mob, goal.running)?);
+            let borrowed = entry.borrow(BorrowKind::Reach)?;
+            let goal = borrowed.value.as_ref()?;
+            let report = goal.tick_reach(mob, goal.running);
+            drop(borrowed);
+            if !entry.registered.load(Relaxed) {
+                return None;
+            }
+            reach.add(report?);
         }
         Some(())
     }
@@ -149,16 +240,18 @@ impl GoalSelector {
     // Retiring a borrowed goal removes its registration immediately. Only that
     // goal's stop waits for its current callback; other stops remain synchronous.
     fn call<R>(
-        selector: &Mutex<Self>,
+        selector: &Self,
         entry: &RegisteredGoal,
         mob: &dyn Mob,
         running: Option<bool>,
         callback: impl FnOnce(&mut PrioritizedGoal) -> R,
     ) -> Option<R> {
-        let mut slot = entry
-            .goal
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(mut borrowed) = entry.borrow(BorrowKind::Callback) else {
+            if !entry.registered.load(Relaxed) {
+                entry.finish_retirement(mob);
+            }
+            return None;
+        };
         let eligible = entry.registered.load(Relaxed)
             && match running {
                 Some(true) => {
@@ -175,7 +268,7 @@ impl GoalSelector {
                 None => true,
             };
         let result = if eligible {
-            slot.as_mut().map(|goal| {
+            borrowed.value.as_mut().map(|goal| {
                 if let Some(running) = running {
                     entry.running.store(running, Relaxed);
                 }
@@ -187,24 +280,15 @@ impl GoalSelector {
         } else {
             None
         };
-        drop(slot);
-        // Check after releasing the slot: concurrent retirement either took the
-        // goal itself, or left this callback responsible for the final stop.
+        drop(borrowed);
         if !entry.registered.load(Relaxed) {
-            let retired = entry
-                .goal
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .take();
-            if let Some(mut goal) = retired {
-                goal.stop(mob);
-            }
+            entry.finish_retirement(mob);
             return None;
         }
         result
     }
 
-    fn can_replace_all(selector: &Mutex<Self>, entry: &RegisteredGoal, mob: &dyn Mob) -> bool {
+    fn can_replace_all(selector: &Self, entry: &RegisteredGoal, mob: &dyn Mob) -> bool {
         for control in Controls::ITER {
             let owner = {
                 let state = Self::lock(selector);
@@ -241,12 +325,10 @@ impl GoalSelector {
     }
 
     /// Runs one selector pass. Scheduler entry points must not be called from callbacks.
-    pub fn tick(selector: &Mutex<Self>, mob: &dyn Mob) {
-        let (execution, disabled) = {
-            let state = Self::lock(selector);
-            (state.execution.clone(), state.disabled_controls.clone())
-        };
-        let _execution = execution
+    pub(in crate::entity) fn tick(selector: &Self, mob: &dyn Mob) {
+        let disabled = Self::lock(selector).disabled_controls.clone();
+        let _execution = selector
+            .execution
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let entries = Self::snapshot(selector);
@@ -306,15 +388,15 @@ impl GoalSelector {
         Self::tick_running(selector, mob, true);
     }
 
-    pub fn tick_goals(selector: &Mutex<Self>, mob: &dyn Mob, tick_all: bool) {
-        let execution = Self::lock(selector).execution.clone();
-        let _execution = execution
+    pub(in crate::entity) fn tick_goals(selector: &Self, mob: &dyn Mob, tick_all: bool) {
+        let _execution = selector
+            .execution
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         Self::tick_running(selector, mob, tick_all);
     }
 
-    fn tick_running(selector: &Mutex<Self>, mob: &dyn Mob, tick_all: bool) {
+    fn tick_running(selector: &Self, mob: &dyn Mob, tick_all: bool) {
         let entries = Self::snapshot(selector);
         for entry in entries.iter() {
             if entry.is_running() {
@@ -327,20 +409,19 @@ impl GoalSelector {
         }
     }
 
-    pub fn disable_control(&mut self, control: Controls) {
-        let mut disabled = self.disabled_controls.load();
-        disabled.set(control, true);
-        self.disabled_controls.store(disabled);
+    pub fn disable_control(&self, control: Controls) {
+        self.set_control_enabled(control, false);
     }
 
-    pub fn enable_control(&mut self, control: Controls) {
+    pub fn enable_control(&self, control: Controls) {
         self.set_control_enabled(control, true);
     }
 
-    pub fn set_control_enabled(&mut self, control: Controls, enabled: bool) {
-        let mut disabled = self.disabled_controls.load();
+    pub fn set_control_enabled(&self, control: Controls, enabled: bool) {
+        let registry = Self::lock(self);
+        let mut disabled = registry.disabled_controls.load();
         disabled.set(control, !enabled);
-        self.disabled_controls.store(disabled);
+        registry.disabled_controls.store(disabled);
     }
 }
 #[cfg(test)]
@@ -454,15 +535,7 @@ mod tests {
 
     impl Goal for RemoveWhileChecking {
         fn can_start(&mut self, mob: &dyn Mob) -> bool {
-            let mut stopped = mob
-                .get_mob_entity()
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .remove_goals::<Self>();
-            for goal in &mut stopped {
-                goal.stop(mob);
-            }
+            mob.get_mob_entity().goals_selector.remove_goal::<Self>(mob);
             true
         }
         fn start(&mut self, _mob: &dyn Mob) {
@@ -479,8 +552,6 @@ mod tests {
         fn can_start(&mut self, mob: &dyn Mob) -> bool {
             mob.get_mob_entity()
                 .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .disable_control(Controls::MOVE);
             true
         }
@@ -666,13 +737,12 @@ mod tests {
             mob.0.add_goal(0, count_goal(counts.clone()));
             mob.0.server_ai_step(&mob, &mob);
             let entry = GoalSelector::lock(&mob.0.goals_selector).goals[0].clone();
-            let slot = entry
-                .goal
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let borrowed = entry
+                .borrow(BorrowKind::Callback)
+                .ok_or("goal was not available")?;
             // Retire while the payload is borrowed, as when clear races callback entry.
             mob.0.clear_ai_goals(&mob);
-            drop(slot);
+            drop(borrowed);
 
             let mut called = false;
             GoalSelector::call(&mob.0.goals_selector, &entry, &mob, running, |_| {
@@ -692,6 +762,79 @@ mod tests {
         entered: std::sync::mpsc::Sender<()>,
         resume: Mutex<std::sync::mpsc::Receiver<()>>,
         counts: Arc<Counts>,
+    }
+
+    struct BlockingReachGoal {
+        entered: std::sync::mpsc::Sender<()>,
+        resume: Mutex<std::sync::mpsc::Receiver<()>>,
+        stopped_on: Arc<Mutex<Vec<std::thread::ThreadId>>>,
+    }
+
+    impl Goal for BlockingReachGoal {
+        fn can_start(&mut self, _mob: &dyn Mob) -> bool {
+            true
+        }
+
+        fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
+            self.entered.send(()).ok()?;
+            self.resume
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .ok()?;
+            Some(GoalReach::default())
+        }
+
+        fn stop(&mut self, _mob: &dyn Mob) {
+            self.stopped_on
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(std::thread::current().id());
+        }
+    }
+
+    #[tokio::test]
+    async fn clearing_a_reported_goal_stops_it_on_the_removing_thread()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let (world, mob) = probe(&folder);
+        let stopped_on = Arc::new(Mutex::new(Vec::new()));
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+        mob.0.add_goal(
+            0,
+            BlockingReachGoal {
+                entered: entered_tx,
+                resume: Mutex::new(resume_rx),
+                stopped_on: stopped_on.clone(),
+            },
+        );
+        mob.0.server_ai_step(&mob, &mob);
+        std::thread::scope(|scope| -> Result<(), Box<dyn std::error::Error>> {
+            let report = scope.spawn(|| {
+                GoalSelector::tick_reach(&mob.0.goals_selector, &mob, &mut GoalReach::default())
+            });
+            entered_rx.recv_timeout(std::time::Duration::from_secs(5))?;
+            let clear = scope.spawn(|| mob.0.clear_ai_goals(&mob));
+            let clear_thread = clear.thread().id();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while !GoalSelector::lock(&mob.0.goals_selector).goals.is_empty() {
+                assert!(std::time::Instant::now() < deadline, "goal was not retired");
+                std::thread::yield_now();
+            }
+            resume_tx.send(())?;
+            assert!(report.join().is_ok());
+            assert!(clear.join().is_ok());
+            assert_eq!(
+                *stopped_on
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+                [clear_thread]
+            );
+            Ok(())
+        })?;
+        world.level.shutdown().await;
+        Ok(())
     }
 
     impl Goal for BlockingGoal {

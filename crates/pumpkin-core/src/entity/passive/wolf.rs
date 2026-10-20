@@ -66,11 +66,7 @@ impl WolfEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // Goal selector (matching Vanilla registerGoals):
             // 1: SwimGoal (FloatGoal)
@@ -102,11 +98,7 @@ impl WolfEntity {
         };
 
         {
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             // Target selector (matching Vanilla registerGoals):
             // 1: OwnerHurtByTargetGoal
@@ -116,7 +108,7 @@ impl WolfEntity {
             // 3: HurtByTargetGoal (RevengeGoal)
             target_selector.add_goal(3, Box::new(RevengeGoal::new(true).alerting_others()));
             // 4: NearestAttackableTarget (Player, angry only), 8: ResetUniversalAnger
-            apply_targets(&mut target_selector, &mob_arc.mob_entity, 4, 8, true);
+            apply_targets(target_selector, &mob_arc.mob_entity, 4, 8, true);
             // 5: NonTameRandomTarget (Sheep, Rabbit, Fox)
             target_selector.add_goal(
                 5,

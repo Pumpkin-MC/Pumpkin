@@ -4360,8 +4360,6 @@ mod ai_step_tests {
         let observation = Arc::new(Mutex::new(Observation::default()));
         mob.mob
             .goals_selector
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .add_goal(0, Box::new(ObserveGoal(observation.clone())));
         let living = &mob.mob.living_entity;
         living.entity.velocity.store(Vector3::new(0.001, 0.0, 0.0));
@@ -4408,8 +4406,6 @@ mod ai_step_tests {
         let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
         mob.mob
             .goals_selector
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .add_goal(0, Box::new(JumpOnceGoal(true)));
         let living = &mob.mob.living_entity;
         let position = living.entity.pos.load();

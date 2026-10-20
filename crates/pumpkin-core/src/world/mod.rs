@@ -7978,19 +7978,13 @@ mod tests {
                 Vector3::new(0.5, 64.0, 0.5),
                 &EntityType::COW,
             ));
-            cow.mob_entity
-                .brain
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .register_memory(types::HOME.id());
-            cow.mob_entity
-                .brain
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .set(
+            cow.mob_entity.with_brain(cow.as_ref(), |brain| {
+                brain.register_memory(types::HOME.id());
+                brain.set(
                     types::HOME,
                     GlobalPos::new(&Dimension::OVERWORLD, BlockPos::new(3, 64, 4)),
                 );
+            });
             world.entities.store(Arc::new(vec![cow.clone()]));
             if unload {
                 world.remove_entities_in_chunks([Vector2::new(0, 0)]).await;
@@ -8017,12 +8011,9 @@ mod tests {
             } else {
                 cow.get_entity().remove();
             }
-            let retained_memory = cow
-                .mob_entity
-                .brain
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .has_memory_value(types::HOME.id());
+            let retained_memory = cow.mob_entity.with_brain(cow.as_ref(), |brain| {
+                brain.has_memory_value(types::HOME.id())
+            });
             assert!(!retained_memory);
             assert!(cow.get_entity().is_removed());
             assert!(world.get_entity_by_id(cow.get_entity().entity_id).is_none());

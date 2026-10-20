@@ -23,11 +23,7 @@ impl PhantomEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // TODO: PhantomCircleAroundAnchorGoal, PhantomSweepAttackGoal
             goal_selector.add_goal(

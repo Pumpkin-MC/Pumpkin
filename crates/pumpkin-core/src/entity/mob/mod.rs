@@ -115,8 +115,8 @@ impl SteeredMob<'_> {
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
-    pub goals_selector: std::sync::Mutex<GoalSelector>,
-    pub target_selector: std::sync::Mutex<GoalSelector>,
+    pub goals_selector: GoalSelector,
+    pub target_selector: GoalSelector,
     /// Move and look controls lock this while held, so never lock a control while holding it.
     pub navigator: std::sync::Mutex<Navigator>,
     pending_navigation_updates: crossbeam::queue::SegQueue<(BlockPos, Uuid, u64)>,
@@ -126,8 +126,7 @@ pub struct MobEntity {
     pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
     pub jump_control: std::sync::Mutex<JumpControl>,
     pub body_rotation_control: std::sync::Mutex<BodyRotationControl>,
-    pub brain: std::sync::Mutex<Brain>,
-    brain_built: AtomicBool,
+    brain: std::sync::Mutex<Option<Brain>>,
     brain_memory_clear_requested: AtomicBool,
     removal_cleanup_done: AtomicBool,
     pub position_target: AtomicCell<BlockPos>,
@@ -243,8 +242,8 @@ impl MobEntity {
     pub fn new(entity: Entity) -> Self {
         Self {
             living_entity: LivingEntity::new(entity),
-            goals_selector: std::sync::Mutex::new(GoalSelector::default()),
-            target_selector: std::sync::Mutex::new(GoalSelector::default()),
+            goals_selector: GoalSelector::default(),
+            target_selector: GoalSelector::default(),
             navigator: std::sync::Mutex::new(Navigator::default()),
             pending_navigation_updates: crossbeam::queue::SegQueue::new(),
             target: std::sync::Mutex::new(None),
@@ -253,8 +252,7 @@ impl MobEntity {
             move_control: std::sync::Mutex::new(Box::new(MoveControl::default())),
             jump_control: std::sync::Mutex::new(JumpControl::default()),
             body_rotation_control: std::sync::Mutex::new(BodyRotationControl::default()),
-            brain: std::sync::Mutex::new(Brain::default()),
-            brain_built: AtomicBool::new(false),
+            brain: std::sync::Mutex::new(None),
             brain_memory_clear_requested: AtomicBool::new(false),
             removal_cleanup_done: AtomicBool::new(false),
             position_target: AtomicCell::new(BlockPos::ZERO),
@@ -429,33 +427,15 @@ impl MobEntity {
             .entity
             .get_vehicle()
             .is_none_or(|vehicle| !(vehicle.as_ref() as &dyn std::any::Any).is::<BoatEntity>());
-        let mut goals = self
-            .goals_selector
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let goals = &self.goals_selector;
         goals.set_control_enabled(Controls::MOVE, no_controller);
         goals.set_control_enabled(Controls::LOOK, no_controller);
         goals.set_control_enabled(Controls::JUMP, no_controller && not_in_boat);
     }
 
     pub fn clear_ai_goals(&self, mob: &dyn Mob) {
-        let running_goals = self
-            .goals_selector
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
-        for mut goal in running_goals {
-            goal.goal.stop(mob);
-        }
-
-        let running_target_goals = self
-            .target_selector
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
-        for mut goal in running_target_goals {
-            goal.goal.stop(mob);
-        }
+        self.goals_selector.clear(mob);
+        self.target_selector.clear(mob);
     }
 
     #[must_use]
@@ -550,6 +530,9 @@ impl MobEntity {
                 Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
                 Err(std::sync::TryLockError::WouldBlock) => return,
             };
+            let Some(brain) = brain.as_mut() else {
+                return;
+            };
             if self.take_brain_memory_clear_request() {
                 brain.clear_memories();
             }
@@ -563,19 +546,22 @@ impl MobEntity {
                 .swap(false, Ordering::AcqRel)
     }
 
-    /// Locks this mob's brain, building it from `Mob::make_brain` on first use. Vanilla builds it
-    /// in the entity constructor; nothing reads it earlier, so the result is the same.
-    /// `make_brain` runs under this lock and must not lock the brain itself.
-    pub fn brain(&self, mob: &dyn Mob) -> std::sync::MutexGuard<'_, Brain> {
-        let mut brain = self
-            .brain
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !self.brain_built.load(Ordering::Acquire) {
-            *brain = mob.make_brain(&PackedMemories::empty());
-            self.brain_built.store(true, Ordering::Release);
-        }
-        brain
+    /// Accesses the species' brain, building it on first use.
+    /// Neither `make_brain` nor the callback may lock this brain again; Brain callbacks use `BrainTick`.
+    pub fn with_brain<R>(&self, mob: &dyn Mob, callback: impl FnOnce(&mut Brain) -> R) -> R {
+        let result = {
+            let mut slot = self
+                .brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let brain = slot.get_or_insert_with(|| mob.make_brain(&PackedMemories::empty()));
+            if self.take_brain_memory_clear_request() {
+                brain.clear_memories();
+            }
+            callback(brain)
+        };
+        self.process_brain_memory_clear();
+        result
     }
 
     /// Installs an already built brain, such as one restored from saved memories.
@@ -583,8 +569,7 @@ impl MobEntity {
         *self
             .brain
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = brain;
-        self.brain_built.store(true, Ordering::Release);
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(brain);
         self.process_brain_memory_clear();
     }
 
@@ -592,33 +577,25 @@ impl MobEntity {
     pub fn refresh_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
         let time = world.get_world_age();
-        {
-            let mut brain = self.brain(mob);
+        self.with_brain(mob, |brain| {
             brain.stop_all(&world, mob, time);
             let packed = brain.pack();
             *brain = mob.make_brain(&packed);
-        };
-        self.process_brain_memory_clear();
+        });
     }
 
     pub fn tick_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
         let time = world.get_world_age();
-        self.brain(mob).tick(&world, mob, time);
-        self.process_brain_memory_clear();
+        self.with_brain(mob, |brain| brain.tick(&world, mob, time));
     }
 
-    pub fn write_mob_nbt(&self, nbt: &mut NbtCompound) {
+    pub fn write_mob_nbt(&self, mob: &dyn Mob, nbt: &mut NbtCompound) {
         self.write_drop_chances(nbt);
         nbt.put_compound(
             "Brain",
-            self.brain
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .pack()
-                .into_nbt(),
+            self.with_brain(mob, |brain| brain.pack().into_nbt()),
         );
-        self.process_brain_memory_clear();
         if self.is_no_ai() {
             nbt.put_bool("NoAI", true);
         }
@@ -650,10 +627,7 @@ impl MobEntity {
     }
 
     pub fn add_goal<G: crate::entity::ai::goal::Goal + 'static>(&self, priority: u8, goal: G) {
-        self.goals_selector
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .add_goal(priority, Box::new(goal));
+        self.goals_selector.add_goal(priority, Box::new(goal));
     }
 
     pub fn add_target_goal<G: crate::entity::ai::goal::Goal + 'static>(
@@ -661,10 +635,7 @@ impl MobEntity {
         priority: u8,
         goal: G,
     ) {
-        self.target_selector
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .add_goal(priority, Box::new(goal));
+        self.target_selector.add_goal(priority, Box::new(goal));
     }
 
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
@@ -1839,7 +1810,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
-        self.get_mob_entity().write_mob_nbt(nbt);
+        self.get_mob_entity().write_mob_nbt(self, nbt);
         if let Some(ageable) = self.as_ageable() {
             ageable.write_ageable_nbt(nbt);
         }
@@ -2194,10 +2165,7 @@ mod lifecycle_tests {
         entity.clear_ai_goals(mob);
         let ran: [Arc<AtomicBool>; 3] = std::array::from_fn(|_| Arc::new(AtomicBool::new(false)));
         {
-            let mut goals = entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goals = &entity.goals_selector;
             for (control, observed) in [Controls::MOVE, Controls::LOOK, Controls::JUMP]
                 .into_iter()
                 .zip(&ran)

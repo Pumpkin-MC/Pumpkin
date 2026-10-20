@@ -33,10 +33,9 @@ pub trait BehaviorControl: Send + Sync {
     fn debug_string(&self) -> String;
 }
 
-pub struct BehaviorEntry {
-    pub priority: i32,
+pub(super) struct ActivityBehaviors {
     pub activity: pumpkin_data::environment_attribute::Activity,
-    pub behavior: Box<dyn BehaviorControl>,
+    pub behaviors: Vec<Box<dyn BehaviorControl>>,
 }
 
 #[must_use]

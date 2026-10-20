@@ -129,7 +129,7 @@ Return true from `Mob::has_audited_tick()` only after checking the species' own 
 
 #### State ownership and queries
 
-AI runs synchronously inside the entity tick. Do not launch independent Tokio or Rayon tasks that mutate it after its scheduled turn. While holding a navigator guard, do not call a helper that locks the navigator again. Brain sensors and behaviors use the supplied `BrainTick` state instead of relocking `MobEntity::brain`. Never hold synchronous guards across `.await`.
+AI runs synchronously inside the entity tick. Do not launch independent Tokio or Rayon tasks that mutate it after its scheduled turn. While holding a navigator guard, do not call a helper that locks the navigator again. Brain sensors and behaviors use the supplied `BrainTick` state; calling `MobEntity::with_brain` from them would lock the same brain again. Never hold synchronous guards across `.await`.
 
 Use the existing world entity-query APIs. When replacing a query, preserve whether it includes players, its exact filtering and its result order. Unordered iteration can change which target wins a tie. Move entities through `Entity::set_pos` and the existing pose, size and index-aware bounding-box APIs so position, bounds and spatial-index membership stay consistent.
 

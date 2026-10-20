@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -8,8 +9,8 @@ use pumpkin_data::environment_attribute::Activity;
 use crate::entity::mob::Mob;
 use crate::world::World;
 
-use activity::{ActivityData, ActivitySet};
-use behavior::{BehaviorEntry, Status};
+use activity::{ActivityData, ActivitySet, activity_slot};
+use behavior::{ActivityBehaviors, Status};
 use memory::{
     MemoryModuleId, MemoryModuleType, MemoryStatus, MemoryStore, MemoryValue, PackedMemories,
 };
@@ -21,7 +22,7 @@ pub mod memory;
 pub mod sensing;
 
 /// Memory and activity state borrowed by the current sensor or behavior.
-/// Use this state rather than locking `MobEntity::brain` from a callback.
+/// Use this state rather than calling `MobEntity::with_brain` from a callback.
 pub struct BrainTick<'a> {
     pub state: &'a mut BrainState,
     pub world: &'a Arc<World>,
@@ -59,9 +60,7 @@ type ActivityConditions = Box<[(MemoryModuleId, MemoryStatus)]>;
 pub struct Brain {
     state: BrainState,
     sensors: Vec<SensorEntry>,
-    behaviors: Vec<BehaviorEntry>,
-    /// Each priority's activities in first-registration order.
-    activity_order: Vec<(i32, Activity)>,
+    behaviors: BTreeMap<i32, Vec<ActivityBehaviors>>,
 }
 
 pub struct BrainState {
@@ -276,30 +275,21 @@ impl Brain {
             for id in behavior.required_memories() {
                 self.state.memories.register(*id);
             }
-            if !self.activity_order.contains(&(priority, data.activity)) {
-                self.activity_order.push((priority, data.activity));
-            }
-            self.behaviors.push(BehaviorEntry {
-                priority,
-                activity: data.activity,
-                behavior,
-            });
-        }
-        let order = &self.activity_order;
-        // Stable, so behaviors of one activity keep their registration order.
-        self.behaviors.sort_by_key(|entry| {
-            let activities = order
+            let activities = self.behaviors.entry(priority).or_default();
+            let group = activities
                 .iter()
-                .filter(|(priority, _)| *priority == entry.priority)
-                .count();
-            (
-                entry.priority,
-                activity_slot(entry.activity, activities),
-                order
-                    .iter()
-                    .position(|key| *key == (entry.priority, entry.activity)),
-            )
-        });
+                .position(|group| group.activity == data.activity)
+                .unwrap_or_else(|| {
+                    activities.push(ActivityBehaviors {
+                        activity: data.activity,
+                        behaviors: Vec::new(),
+                    });
+                    activities.len() - 1
+                });
+            activities[group].behaviors.push(behavior);
+            let count = activities.len();
+            activities.sort_by_key(|group| activity_slot(group.activity, count));
+        }
     }
 
     fn apply_pending_memory_clear(state: &mut BrainState, mob: &dyn Mob) {
@@ -322,11 +312,15 @@ impl Brain {
             Self::apply_pending_memory_clear(&mut self.state, mob);
         }
 
-        for entry in &mut self.behaviors {
-            if self.state.active_activities.contains(entry.activity)
-                && entry.behavior.status() == Status::Stopped
-            {
-                entry.behavior.try_start(&mut BrainTick {
+        for group in self.behaviors.values_mut().flatten() {
+            if !self.state.is_active(group.activity) {
+                continue;
+            }
+            for behavior in &mut group.behaviors {
+                if behavior.status() != Status::Stopped {
+                    continue;
+                }
+                behavior.try_start(&mut BrainTick {
                     state: &mut self.state,
                     world,
                     mob,
@@ -335,9 +329,14 @@ impl Brain {
                 Self::apply_pending_memory_clear(&mut self.state, mob);
             }
         }
-        for entry in &mut self.behaviors {
-            if entry.behavior.status() == Status::Running {
-                entry.behavior.tick_or_stop(&mut BrainTick {
+        for behavior in self
+            .behaviors
+            .values_mut()
+            .flatten()
+            .flat_map(|group| &mut group.behaviors)
+        {
+            if behavior.status() == Status::Running {
+                behavior.tick_or_stop(&mut BrainTick {
                     state: &mut self.state,
                     world,
                     mob,
@@ -349,9 +348,14 @@ impl Brain {
     }
 
     pub fn stop_all(&mut self, world: &Arc<World>, mob: &dyn Mob, time: i64) {
-        for entry in &mut self.behaviors {
-            if entry.behavior.status() == Status::Running {
-                entry.behavior.do_stop(&mut BrainTick {
+        for behavior in self
+            .behaviors
+            .values_mut()
+            .flatten()
+            .flat_map(|group| &mut group.behaviors)
+        {
+            if behavior.status() == Status::Running {
+                behavior.do_stop(&mut BrainTick {
                     state: &mut self.state,
                     world,
                     mob,
@@ -363,7 +367,7 @@ impl Brain {
     }
 
     #[must_use]
-    pub const fn is_brain_dead(&self) -> bool {
+    pub fn is_brain_dead(&self) -> bool {
         self.state.memories.is_empty() && self.sensors.is_empty() && self.behaviors.is_empty()
     }
 
@@ -387,9 +391,11 @@ impl Brain {
                 .collect(),
             behaviors: self
                 .behaviors
-                .iter()
-                .filter(|entry| entry.behavior.status() == Status::Running)
-                .map(|entry| entry.behavior.debug_string())
+                .values()
+                .flatten()
+                .flat_map(|group| &group.behaviors)
+                .filter(|behavior| behavior.status() == Status::Running)
+                .map(|behavior| behavior.debug_string())
                 .collect(),
             memories: self.state.memories.debug_lines(),
         }
@@ -421,23 +427,6 @@ impl fmt::Display for BrainDebugDump {
         Ok(())
     }
 }
-
-fn activity_slot(activity: Activity, activities: usize) -> usize {
-    let hash = activity
-        .name()
-        .encode_utf16()
-        .fold(0i32, |hash, unit| {
-            hash.wrapping_mul(31).wrapping_add(i32::from(unit))
-        })
-        .cast_unsigned();
-    let mut capacity = JAVA_HASH_MAP_CAPACITY;
-    while activities > capacity / 4 * 3 {
-        capacity *= 2;
-    }
-    (hash ^ (hash >> 16)) as usize & (capacity - 1)
-}
-
-const JAVA_HASH_MAP_CAPACITY: usize = 16;
 
 pub struct BrainProvider {
     pub memory_types: &'static [MemoryModuleId],
@@ -477,8 +466,7 @@ impl BrainProvider {
                 ..BrainState::default()
             },
             sensors: Vec::new(),
-            behaviors: Vec::new(),
-            activity_order: Vec::new(),
+            behaviors: BTreeMap::new(),
         }
     }
 }
@@ -544,8 +532,10 @@ mod tests {
     fn order(brain: &Brain) -> Vec<String> {
         brain
             .behaviors
-            .iter()
-            .map(|entry| entry.behavior.debug_string())
+            .values()
+            .flatten()
+            .flat_map(|group| &group.behaviors)
+            .map(|behavior| behavior.debug_string())
             .collect()
     }
 
@@ -694,18 +684,33 @@ mod tests {
         brain.register_memory(types::HUNTED_RECENTLY.id());
         brain.set_with_expiry(types::HUNTED_RECENTLY, true, 0);
         let switch_events = events.clone();
-        brain.add_activity(ActivityData::with_priority_start(
+        let same_group_events = events.clone();
+        brain.add_activity(ActivityData::with_pairs(
             Activity::Idle,
-            0,
-            vec![Box::new(OneShot::new("Switch", Vec::new(), move |tick| {
-                switch_events
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .push("switch");
-                tick.state.set(types::PACIFIED, true);
-                tick.state.set_active_activity_if_possible(Activity::Fight);
-                true
-            }))],
+            vec![
+                (
+                    0,
+                    Box::new(OneShot::new("Switch", Vec::new(), move |tick| {
+                        switch_events
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .push("switch");
+                        tick.state.set(types::PACIFIED, true);
+                        tick.state.set_active_activity_if_possible(Activity::Fight);
+                        true
+                    })),
+                ),
+                (
+                    0,
+                    Box::new(OneShot::new("SameGroup", Vec::new(), move |_| {
+                        same_group_events
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .push("same_group");
+                        true
+                    })),
+                ),
+            ],
         ));
         let fight_events = events.clone();
         brain.add_activity(ActivityData::with_priority_start(
@@ -746,7 +751,7 @@ mod tests {
             *events
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
-            ["switch", "fight"]
+            ["switch", "same_group", "fight"]
         );
         assert!(brain.is_active(Activity::Fight));
         assert!(!brain.has_memory_value(types::HUNTED_RECENTLY.id()));
@@ -830,6 +835,13 @@ mod tests {
             let mut brain = Brain::default();
             brain.register_memory(types::HOME.id());
             brain.register_memory(types::PACIFIED.id());
+            brain.set(
+                types::HOME,
+                memory::GlobalPos::new(
+                    &pumpkin_data::dimension::Dimension::OVERWORLD,
+                    pumpkin_util::math::position::BlockPos::new(0, 64, 0),
+                ),
+            );
             brain.add_activity(ActivityData::with_priority_start(
                 Activity::Idle,
                 0,
@@ -838,6 +850,30 @@ mod tests {
             brain.load_packed(packed);
             brain
         }
+    }
+
+    #[tokio::test]
+    async fn serialization_initializes_the_species_brain() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = ProviderMob(
+            MobEntity::new(Entity::new(
+                world.clone(),
+                Vector3::new(0.0, 64.0, 0.0),
+                &EntityType::PIGLIN,
+            )),
+            Arc::default(),
+        );
+        let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+        mob.write_custom_nbt(&mut nbt);
+        let saved = nbt
+            .get_compound("Brain")
+            .and_then(|brain| brain.get_compound("memories"))
+            .is_some_and(|memories| memories.get(types::HOME.id().name()).is_some());
+        world.level.shutdown().await;
+        assert!(saved);
+        Ok(())
     }
 
     #[tokio::test]
@@ -857,21 +893,19 @@ mod tests {
             stops.clone(),
         );
         let home = memory::GlobalPos::new(&Dimension::OVERWORLD, BlockPos::new(1, 64, 2));
-        let registered = mob
-            .0
-            .brain(&mob)
-            .check(types::HOME.id(), MemoryStatus::Registered);
-        mob.0.brain(&mob).set(types::HOME, home);
+        let registered = mob.0.with_brain(&mob, |brain| {
+            brain.check(types::HOME.id(), MemoryStatus::Registered)
+        });
+        mob.0.with_brain(&mob, |brain| brain.set(types::HOME, home));
         mob.0.tick_brain(&mob);
-        let running = mob.0.brain(&mob).debug_dump().behaviors;
+        let running = mob.0.with_brain(&mob, |brain| brain.debug_dump().behaviors);
         mob.0.refresh_brain(&mob);
-        let (kept_home, running_after) = {
-            let brain = mob.0.brain(&mob);
+        let (kept_home, running_after) = mob.0.with_brain(&mob, |brain| {
             (
                 brain.get(types::HOME) == Some(&home),
                 brain.debug_dump().behaviors,
             )
-        };
+        });
         world.level.shutdown().await;
         assert!(registered);
         assert_eq!(running, ["StopProbe"]);
@@ -914,10 +948,7 @@ mod tests {
         mob.0.tick_brain(&*mob);
         let has_memory = mob
             .0
-            .brain
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .has_memory_value(types::PACIFIED.id());
+            .with_brain(&*mob, |brain| brain.has_memory_value(types::PACIFIED.id()));
         world.level.shutdown().await;
         assert!(mob.get_entity().is_removed());
         assert!(!has_memory);

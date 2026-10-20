@@ -165,11 +165,7 @@ impl WanderingTraderEntity {
         let trader_weak = Arc::downgrade(&mob_arc);
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // Priority 0: FloatGoal
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
