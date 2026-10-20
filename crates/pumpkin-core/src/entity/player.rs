@@ -4431,10 +4431,11 @@ impl Player {
             return false;
         }
 
-        if cause
-            .or(source)
-            .and_then(|attacker| attacker.get_player())
-            .is_some_and(|attacker| !self.can_harm_player(attacker))
+        if [cause, source]
+            .into_iter()
+            .flatten()
+            .filter_map(|attacker| attacker.get_player())
+            .any(|attacker| !self.can_harm_player(attacker))
         {
             return false;
         }
