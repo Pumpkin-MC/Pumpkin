@@ -4,11 +4,13 @@ use pumpkin_data::{
     Block, BlockId, BlockState, BlockStateId, Rotation,
     block_properties::{Axis, PaleOakWoodLikeProperties},
     entity::EntityType,
+    tag::Enchantment as EnchantmentTag,
 };
 use pumpkin_util::GameMode;
 
 use crate::{
     block::{BlockBehaviour, BlockMetadata, BrokenArgs, OnPlaceArgs},
+    enchantment::EnchantmentHelper,
     entity::Entity,
 };
 
@@ -67,6 +69,12 @@ impl BlockBehaviour for InfestedBlock {
     fn broken(&self, args: BrokenArgs<'_>) {
         // TODO: ugly fix, use onStacksDropped
         if args.player.gamemode.load() == GameMode::Creative {
+            return;
+        }
+        if EnchantmentHelper::has_tag(
+            &args.player.inventory().held_item(),
+            &EnchantmentTag::MINECRAFT_PREVENTS_INFESTED_SPAWNS,
+        ) {
             return;
         }
         let entity = Entity::new(
