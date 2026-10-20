@@ -31,6 +31,8 @@ windows-sys = { version = "0.61.2", features = ["Win32_System_Console"] }
 
 [features]
 console-subscriber = ["dep:console-subscriber"]
+# Load plugins built against the v0.2 API. Off until the v0.2 ABI is finished.
+plugin-v0_2 = ["pumpkin-wasm-host/v0_2"]
 
 [lints]
 workspace = true

@@ -16,6 +16,7 @@ pub mod player_server;
 pub mod usercache;
 pub mod whitelist;
 
+#[derive(Default)]
 pub struct VanillaData {
     pub banned_ip_list: RwLock<banned_ip::BannedIpList>,
     pub banned_player_list: RwLock<banned_player::BannedPlayerList>,

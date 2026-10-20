@@ -6,12 +6,30 @@ use crate::data_component::DataComponent;
 use crate::entity_type::EntityType;
 use crate::sound::Sound;
 use crate::tag::Taggable;
-use crc_fast::CrcAlgorithm::Crc32Iscsi;
-use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use std::any::Any;
 use std::borrow::Cow;
+
+/// CRC-32C state for vanilla's data component hashes.
+#[derive(Default)]
+pub struct Digest(u32);
+
+impl Digest {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self(0)
+    }
+
+    pub fn update(&mut self, bytes: &[u8]) {
+        self.0 = crc32c::crc32c_append(self.0, bytes);
+    }
+
+    #[must_use]
+    pub const fn finalize(&self) -> u64 {
+        self.0 as u64
+    }
+}
 
 pub trait DataComponentImpl: Send + Sync {
     fn write_data(&self) -> NbtTag {
@@ -99,7 +117,7 @@ macro_rules! default_impl {
 }
 
 pub fn get_str_hash(val: &str) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     digest.update(&[12u8]);
     digest.update(&(val.len() as u32).to_le_bytes());
     let byte = val.as_bytes();
@@ -110,21 +128,21 @@ pub fn get_str_hash(val: &str) -> u32 {
 }
 
 pub fn get_i32_hash(val: i32) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     digest.update(&[8u8]);
     digest.update(&val.to_le_bytes());
     digest.finalize() as u32
 }
 
 pub fn get_f32_hash(val: f32) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     digest.update(&[7u8]);
     digest.update(&val.to_bits().to_le_bytes());
     digest.finalize() as u32
 }
 
 pub fn get_idor_hash(val: &IdOr<basic::SoundEvent>) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     digest.update(&[6u8]);
     match val {
         IdOr::Id(sound) => {
@@ -179,7 +197,7 @@ pub fn get_idor(nbt: &NbtCompound, key: &str, default: Sound) -> IdOr<basic::Sou
 }
 
 pub fn get_idset_hash<T: IDSetContent>(val: &IDSet<T>) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     match val {
         IDSet::Tag(tag) => {
             digest.update(&[1u8]);
@@ -690,7 +708,16 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::CookingFuel => Some(CookingFuelImpl::read_data(data)?.to_dyn()),
         DataComponent::Compostable => Some(CompostableImpl::read_data(data)?.to_dyn()),
         DataComponent::Waxed => Some(WaxedImpl::read_data(data)?.to_dyn()),
-        _ => None,
+        DataComponent::InteractAnimation => Some(InteractAnimationImpl::read_data(data)?.to_dyn()),
+        DataComponent::BlockTransformer => Some(BlockTransformerImpl::read_data(data)?.to_dyn()),
+        DataComponent::VillagerFood => Some(VillagerFoodImpl::read_data(data)?.to_dyn()),
+        DataComponent::MobVisibility => Some(MobVisibilityImpl::read_data(data)?.to_dyn()),
+        DataComponent::ProvidesPotteryPattern => {
+            Some(ProvidesPotteryPatternImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::SignTextFront => Some(SignTextFrontImpl::read_data(data)?.to_dyn()),
+        DataComponent::SignTextBack => Some(SignTextBackImpl::read_data(data)?.to_dyn()),
+        DataComponent::CushionColor => Some(CushionColorImpl::read_data(data)?.to_dyn()),
     }
 }
 

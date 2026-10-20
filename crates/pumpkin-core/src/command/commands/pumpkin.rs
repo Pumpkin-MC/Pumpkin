@@ -16,7 +16,6 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
-const NAMES: [&str; 3] = ["pumpkin", "version", "ver"];
 const DESCRIPTION: &str = "Display information about Pumpkin.";
 const PERMISSION: &str = "pumpkin:command.pumpkin";
 
@@ -420,13 +419,12 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         PermissionDefault::Op(PermissionLvl::Zero),
     ));
 
-    for name in NAMES {
-        dispatcher.register(
-            command(name, DESCRIPTION)
-                .requires(PERMISSION)
-                .executes(Executor),
-        );
-    }
+    dispatcher.register_with_aliases(
+        command("pumpkin", DESCRIPTION)
+            .requires(PERMISSION)
+            .executes(Executor),
+        &["version"],
+    );
 }
 
 #[cfg(test)]

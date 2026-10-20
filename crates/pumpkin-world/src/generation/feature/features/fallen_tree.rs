@@ -168,19 +168,23 @@ impl FallenTreeFeature {
             .get(random, block_pos, chunk, block_registry);
         if let Some(dir) = direction {
             let block = Block::from_state_id(state.id);
-            let axis_str = match dir {
-                BlockDirection::East | BlockDirection::West => "x",
-                BlockDirection::North | BlockDirection::South => "z",
-                _ => "y",
+            let axis = match dir {
+                BlockDirection::East | BlockDirection::West => {
+                    pumpkin_data::block_properties::Axis::X
+                }
+                BlockDirection::North | BlockDirection::South => {
+                    pumpkin_data::block_properties::Axis::Z
+                }
+                _ => pumpkin_data::block_properties::Axis::Y,
             };
             if let Some(props) = block.properties(state.id) {
-                let prop_list = props.to_props();
-                if prop_list.iter().any(|(k, _)| *k == "axis") {
-                    let new_props: Vec<(&str, &str)> = prop_list
-                        .iter()
-                        .map(|(k, v)| (*k, if *k == "axis" { axis_str } else { *v }))
-                        .collect();
-                    let new_props_obj = block.from_properties(new_props.as_slice());
+                let mut prop_list = props.to_props();
+                if let Some(target) = prop_list.iter_mut().find_map(|p| match p {
+                    pumpkin_data::Property::Axis(a) => Some(a),
+                    _ => None,
+                }) {
+                    *target = axis;
+                    let new_props_obj = block.from_properties(prop_list.as_slice());
                     let new_state_id = new_props_obj.to_state_id(block);
                     state = BlockState::from_id(new_state_id);
                 }
@@ -198,7 +202,15 @@ impl FallenTreeFeature {
         decorators: &[TreeDecorator],
     ) {
         for decorator in decorators {
-            decorator.generate(chunk, block_registry, random, &[], logs, &[]);
+            decorator.generate(
+                chunk,
+                block_registry,
+                random,
+                &[],
+                logs,
+                &[],
+                &mut Vec::new(),
+            );
         }
     }
 }

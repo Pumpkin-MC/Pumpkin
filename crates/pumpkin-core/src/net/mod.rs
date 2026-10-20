@@ -38,9 +38,9 @@ pub mod java;
 pub mod lan_broadcast;
 pub mod packet_limiter;
 pub use packet_limiter::PacketRateLimiter;
+pub mod management;
 mod proxy;
 pub mod query;
-pub mod rcon;
 
 #[derive(Deserialize, Debug)]
 pub struct GameProfile {
