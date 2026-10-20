@@ -3,6 +3,18 @@ use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::
 use super::*;
 
 #[test]
+fn weighted_plates_scale_with_entity_count() {
+    use super::weighted::signal_strength;
+
+    assert_eq!(signal_strength(0, 15), 0);
+    assert_eq!(signal_strength(1, 15), 1);
+    assert_eq!(signal_strength(7, 15), 7);
+    assert_eq!(signal_strength(20, 15), 15);
+    assert_eq!(signal_strength(1, 150), 1);
+    assert_eq!(signal_strength(75, 150), 8);
+}
+
+#[test]
 fn detection_box_is_offset_to_block_position() {
     let bounding_box = detection_box_at(&BlockPos::new(10, 64, -5));
 

@@ -21,6 +21,8 @@ use crate::{
 use super::{
     noise::perlin::DoublePerlinNoiseSampler,
     noise::router::{
+        chunk_noise_router::ChunkNoiseRouter,
+        density_volume::{DensityBuffer, DensityVolume},
         proto_noise_router::DoublePerlinNoiseBuilder,
         surface_height_sampler::SurfaceHeightEstimateSampler,
     },
@@ -33,6 +35,8 @@ pub struct MaterialRuleContext<'a> {
     pub min_y: i8,
     pub height: u16,
     pub random_deriver: &'a XoroshiroSplitter,
+    pub legacy_random_source: bool,
+    pub world_seed: u64,
     fluid_height: i32,
     pub block_pos_x: i32,
     pub block_pos_y: i32,
@@ -62,13 +66,70 @@ pub struct MaterialRuleContext<'a> {
     /// reused for the lifetime of the context. Surface rules reference very few
     /// distinct noises, so a linear scan beats hashing here.
     noise_threshold_samplers: Vec<(usize, DoublePerlinNoiseSampler)>,
+    pub vein_context: Option<&'a mut VeinContext<'a>>,
+}
+
+pub struct VeinContext<'a> {
+    pub volume: DensityVolume,
+    pub vein_toggle: DensityBuffer,
+    pub vein_ridged: DensityBuffer,
+    pub router: ChunkNoiseRouter<'a>,
+    pub ore_random_deriver: &'a XoroshiroSplitter,
+}
+
+impl VeinContext<'_> {
+    #[must_use]
+    pub fn get_density(&self, is_iron: bool, x: i32, y: i32, z: i32) -> f32 {
+        let Some(index) = self.volume.index_of_block(x, y, z) else {
+            return -1.0;
+        };
+        let ridged = self.vein_ridged[index];
+        if ridged < 0.0 {
+            return -1.0;
+        }
+        let toggle = self.vein_toggle[index];
+        if is_iron {
+            if !(-60..-8).contains(&y) {
+                return -1.0;
+            }
+            let closest_to_bound = (-8 - y).min(y - -60) as f32;
+            let edge_roundoff = (closest_to_bound.clamp(0.0, 20.0) * 0.01) - 0.2;
+            let input = -toggle - 0.4 + edge_roundoff;
+            if input >= 0.0 { 0.7 } else { -1.0 }
+        } else {
+            if !(0..50).contains(&y) {
+                return -1.0;
+            }
+            let closest_to_bound = (50 - y).min(y) as f32;
+            let edge_roundoff = (closest_to_bound.clamp(0.0, 20.0) * 0.01) - 0.2;
+            let input = toggle - 0.4 + edge_roundoff;
+            if input >= 0.0 { 0.7 } else { -1.0 }
+        }
+    }
+
+    #[must_use]
+    pub fn get_richness(&self, x: i32, y: i32, z: i32) -> f32 {
+        let Some(index) = self.volume.index_of_block(x, y, z) else {
+            return 0.0;
+        };
+        let toggle = self.vein_toggle[index];
+        toggle.abs().clamp(0.4, 0.6) - 0.3
+    }
+
+    pub fn get_filler_gap(&mut self, x: i32, y: i32, z: i32) -> f32 {
+        self.router
+            .vein_gap(&pumpkin_util::math::vector3::Vector3::new(x, y, z))
+    }
 }
 
 impl<'a> MaterialRuleContext<'a> {
+    #[expect(clippy::too_many_arguments)]
     pub const fn new(
         min_y: i8,
         height: u16,
         random_deriver: &'a XoroshiroSplitter,
+        legacy_random_source: bool,
+        world_seed: u64,
         terrain_builder: &'a SurfaceTerrainBuilder,
         surface_noise: &'a DoublePerlinNoiseSampler,
         secondary_noise: &'a DoublePerlinNoiseSampler,
@@ -85,6 +146,8 @@ impl<'a> MaterialRuleContext<'a> {
             last_unique_horizontal_pos_value: HORIZONTAL_POS - 1,
             last_est_heiht_unique_horizontal_pos_value: HORIZONTAL_POS - 1,
             random_deriver,
+            legacy_random_source,
+            world_seed,
             terrain_builder,
             fluid_height: 0,
             block_pos_x: 0,
@@ -100,20 +163,67 @@ impl<'a> MaterialRuleContext<'a> {
             sea_level,
             steep_material_condition: None,
             noise_threshold_samplers: Vec::new(),
+            vein_context: None,
+        }
+    }
+
+    pub fn try_apply_ore_vein(
+        &mut self,
+        rule: &pumpkin_data::material_rule::OreVeinMaterialRule,
+    ) -> Option<&'static pumpkin_data::BlockState> {
+        let block_y = self.block_pos_y;
+        if block_y < rule.min_y || block_y >= rule.max_y {
+            return None;
+        }
+
+        let vein_context = self.vein_context.as_deref_mut()?;
+        let density =
+            vein_context.get_density(rule.is_iron, self.block_pos_x, block_y, self.block_pos_z);
+        if density <= 0.0 {
+            return None;
+        }
+
+        let mut random =
+            vein_context
+                .ore_random_deriver
+                .split_pos(self.block_pos_x, block_y, self.block_pos_z);
+        if random.next_f32() > density {
+            return None;
+        }
+
+        let richness = vein_context.get_richness(self.block_pos_x, block_y, self.block_pos_z);
+        if random.next_f32() < richness
+            && vein_context.get_filler_gap(self.block_pos_x, block_y, self.block_pos_z) < 0.0
+        {
+            Some(if random.next_f32() < rule.raw_ore_chance {
+                rule.raw_ore_block
+            } else {
+                rule.ore_block
+            })
+        } else {
+            Some(rule.filler_block)
         }
     }
 
     fn sample_run_depth(&self) -> i32 {
-        let noise =
-            self.surface_noise
-                .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64);
-        (noise * 2.75
-            + 3.0
-            + (self
-                .random_deriver
+        let noise = f64::from(self.surface_noise.sample(
+            self.block_pos_x as f64,
+            0.0,
+            self.block_pos_z as f64,
+        ));
+        let rand_val = if self.legacy_random_source {
+            use pumpkin_util::random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand};
+            let mut root = LegacyRand::from_seed(self.world_seed);
+            let factory_seed = root.next_i64() as u64;
+            let pos_seed = hash_block_pos(self.block_pos_x, 0, self.block_pos_z) as u64;
+            let mut rand = LegacyRand::from_seed(pos_seed ^ factory_seed);
+            rand.next_f64()
+        } else {
+            self.random_deriver
                 .split_pos(self.block_pos_x, 0, self.block_pos_z)
                 .next_f64()
-                * 0.25) as f32) as i32
+        };
+        (noise * 2.75 + 3.0 + rand_val * 0.25) as i32
     }
 
     pub fn init_horizontal(&mut self, x: i32, z: i32) {
@@ -320,8 +430,10 @@ pub fn test_noise_threshold(
         .iter()
         .position(|(id, _)| *id == condition.noise.id);
     let index = cached.unwrap_or_else(|| {
-        let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+        let sampler = DoublePerlinNoiseBuilder::get_noise_sampler(
             context.random_deriver,
+            context.legacy_random_source,
+            context.world_seed,
             &condition.noise,
         );
         context
@@ -353,13 +465,8 @@ pub fn test_stone_depth(
     let depth_range = if condition.secondary_depth_range == 0 {
         0
     } else {
-        pumpkin_util::math::map(
-            context.get_secondary_depth(),
-            -1.0,
-            1.0,
-            0.0,
-            condition.secondary_depth_range as f32,
-        ) as i32
+        let sec = f64::from(context.get_secondary_depth());
+        (f64::midpoint(sec, 1.0) * f64::from(condition.secondary_depth_range)) as i32
     };
     stone_depth <= 1 + condition.offset + depth + depth_range
 }
@@ -400,11 +507,28 @@ pub fn test_vertical_gradient(
     if block_y >= false_at {
         return false;
     }
-    let splitter = context
-        .random_deriver
-        .from_lo_and_hi(condition.random_lo, condition.random_hi)
-        .next_splitter();
     let mapped = pumpkin_util::math::map(block_y as f32, true_at as f32, false_at as f32, 1.0, 0.0);
-    let mut random = splitter.split_pos(context.block_pos_x, block_y, context.block_pos_z);
-    random.next_f32() < mapped
+    if context.legacy_random_source {
+        use pumpkin_util::random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand};
+        let name_hash = match condition.random_lo {
+            13544455532117611141 => 2042456806i32, // minecraft:bedrock_floor
+            10285458612719284684 => 343340730i32,  // minecraft:bedrock_roof
+            10411719568726253007 => -112689504i32, // minecraft:deepslate
+            _ => 0i32,
+        };
+        let mut root = LegacyRand::from_seed(context.world_seed);
+        let root_seed = root.next_i64();
+        let mut derived = LegacyRand::from_seed((name_hash as i64 ^ root_seed) as u64);
+        let derived_seed = derived.next_i64() as u64;
+        let pos_seed = hash_block_pos(context.block_pos_x, block_y, context.block_pos_z) as u64;
+        let mut block_rand = LegacyRand::from_seed(pos_seed ^ derived_seed);
+        block_rand.next_f32() < mapped
+    } else {
+        let splitter = context
+            .random_deriver
+            .from_lo_and_hi(condition.random_lo, condition.random_hi)
+            .next_splitter();
+        let mut random = splitter.split_pos(context.block_pos_x, block_y, context.block_pos_z);
+        random.next_f32() < mapped
+    }
 }

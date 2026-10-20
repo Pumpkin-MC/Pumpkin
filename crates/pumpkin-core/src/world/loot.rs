@@ -1,8 +1,11 @@
 use pumpkin_data::BlockState;
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::data_component_impl::EnchantmentsImpl;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::recipes::{CookingRecipeKind, get_cooking_recipe_with_ingredient};
+use pumpkin_data::tag::Taggable;
 pub use pumpkin_util::loot_table::{
     DynamicLootCondition, DynamicLootEntry, DynamicLootPool, DynamicLootTable, LootBonusFormula,
     LootCondition, LootEntry, LootPool, LootTable,
@@ -27,6 +30,44 @@ pub struct LootContextParameters {
     /// Whether the killed entity was on fire at death time.
     /// Computed from `Entity.fire_ticks > 0`.
     pub is_on_fire: Option<bool>,
+    pub direct_attacker_weapon: Option<ItemStack>,
+}
+
+fn direct_attacker_weapon_has_enchantment(params: &LootContextParameters, tag: &str) -> bool {
+    params
+        .direct_attacker_weapon
+        .as_ref()
+        .and_then(|weapon| weapon.get_data_component::<EnchantmentsImpl>())
+        .is_some_and(|enchantments| {
+            enchantments
+                .enchantment
+                .iter()
+                .any(|(enchantment, _)| enchantment.is_tagged_with(tag) == Some(true))
+        })
+}
+
+fn smelt(stack: ItemStack) -> ItemStack {
+    let result = get_cooking_recipe_with_ingredient(stack.item, CookingRecipeKind::Smelting)
+        .and_then(|recipe| {
+            let id = recipe
+                .result
+                .id
+                .strip_prefix("minecraft:")
+                .unwrap_or(recipe.result.id);
+            Item::from_registry_key(id).map(|item| (item, recipe.result.count))
+        });
+    let Some((item, count)) = result else {
+        tracing::warn!(
+            "Couldn't smelt {} because there is no smelting recipe",
+            stack.item.registry_key
+        );
+        return stack;
+    };
+    let mut result = ItemStack::new(1, item);
+    let count = (u32::from(stack.item_count) * u32::from(count))
+        .min(u32::from(result.get_max_stack_size()));
+    result.item_count = count as u8;
+    result
 }
 
 fn check_dynamic_condition(
@@ -78,6 +119,9 @@ fn check_dynamic_condition(
             !check_dynamic_condition(cond, has_silk_touch, has_shears, fortune_level, params, rng)
         }
         DynamicLootCondition::EntityOnFire => params.is_on_fire.unwrap_or(false),
+        DynamicLootCondition::DirectAttackerWeaponEnchantment(tag) => {
+            direct_attacker_weapon_has_enchantment(params, tag)
+        }
         DynamicLootCondition::WeatherCheck {
             raining,
             thundering,
@@ -139,6 +183,13 @@ fn check_condition(
         LootCondition::AllOf(conditions) => conditions
             .iter()
             .all(|c| check_condition(*c, has_silk_touch, has_shears, fortune_level, params, rng)),
+        LootCondition::AnyOf(conditions) => conditions
+            .iter()
+            .any(|c| check_condition(*c, has_silk_touch, has_shears, fortune_level, params, rng)),
+        LootCondition::EntityOnFire => params.is_on_fire.unwrap_or(false),
+        LootCondition::DirectAttackerWeaponEnchantment(tag) => {
+            direct_attacker_weapon_has_enchantment(params, tag)
+        }
     }
 }
 
@@ -185,6 +236,7 @@ pub fn generate_loot(table: &LootTable, seed: i64) -> Vec<ItemStack> {
 }
 
 #[must_use]
+#[expect(clippy::too_many_lines)]
 pub fn generate_loot_with_context(
     table: &LootTable,
     seed: i64,
@@ -289,7 +341,18 @@ pub fn generate_loot_with_context(
                         let item_key = entry.item.strip_prefix("minecraft:").unwrap_or(entry.item);
 
                         if let Some(item) = Item::from_registry_key(item_key) {
-                            items_to_place.push(ItemStack::new(final_count as u8, item));
+                            let stack = ItemStack::new(final_count as u8, item);
+                            let smelts = entry.furnace_smelt.is_some_and(|c| {
+                                check_condition(
+                                    c,
+                                    has_silk_touch,
+                                    has_shears,
+                                    fortune_level,
+                                    params,
+                                    &mut rng,
+                                )
+                            });
+                            items_to_place.push(if smelts { smelt(stack) } else { stack });
                         }
                     }
                     break;

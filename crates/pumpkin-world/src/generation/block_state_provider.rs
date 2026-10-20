@@ -144,16 +144,15 @@ impl RuleBasedBlockStateProvider {
         pos: BlockPos,
     ) -> Option<&'static BlockState> {
         for rule in &self.rules {
-            if rule.if_true.test(block_registry, chunk, &pos) {
-                return Some(
-                    rule.then
-                        .get_with_context(block_registry, chunk, random, pos),
-                );
+            if rule.if_true.test(block_registry, chunk, &pos)
+                && let Some(state) = rule.then.get_optional(block_registry, chunk, random, pos)
+            {
+                return Some(state);
             }
         }
         self.fallback
             .as_ref()
-            .map(|f| f.get(random, pos, chunk, block_registry))
+            .and_then(|f| f.get_optional(block_registry, chunk, random, pos))
     }
 }
 
@@ -164,7 +163,7 @@ pub struct BlockStateRule {
 
 pub struct RandomizedIntBlockStateProvider {
     pub source: Box<BlockStateProvider>,
-    pub property: String,
+    pub property: pumpkin_data::PropertyKey,
     pub values: IntProvider,
 }
 
@@ -174,36 +173,22 @@ impl RandomizedIntBlockStateProvider {
         base_state: &'static BlockState,
         random: &mut RandomGenerator,
     ) -> &'static BlockState {
-        let value = self.values.get(random);
-        let val_str = value.to_string();
         let block = Block::from_id(base_state.id.to_block_id());
-        block.properties(base_state.id).map_or_else(
-            || {
-                let props = [(self.property.as_str(), val_str.as_str())];
-                let new_state_id = block.from_properties(&props).to_state_id(block);
-                BlockState::from_id(new_state_id)
-            },
-            |props_source| {
-                let mut props: Vec<(&str, &str)> = props_source
-                    .to_props()
-                    .iter()
-                    .map(|(k, v)| (*k, *v))
-                    .collect();
-                let mut found = false;
-                for (k, v) in &mut props {
-                    if *k == self.property {
-                        *v = &val_str;
-                        found = true;
-                        break;
-                    }
-                }
-                if !found {
-                    props.push((&self.property, &val_str));
-                }
-                let new_state_id = block.from_properties(&props).to_state_id(block);
-                BlockState::from_id(new_state_id)
-            },
-        )
+        let Some(props_source) = block.properties(base_state.id) else {
+            return base_state;
+        };
+        let mut prop_list = props_source.to_props();
+        let Some(target_prop) = prop_list.iter_mut().find(|p| p.key() == self.property) else {
+            return base_state;
+        };
+        let value = self.values.get(random);
+        if let Ok(val_u8) = u8::try_from(value)
+            && let Some(new_prop) = pumpkin_data::Property::from_key_and_int(self.property, val_u8)
+        {
+            *target_prop = new_prop;
+        }
+        let new_state_id = block.from_properties(&prop_list).to_state_id(block);
+        BlockState::from_id(new_state_id)
     }
 
     pub fn get_for_bonemeal(
@@ -254,20 +239,34 @@ impl PillarBlockStateProvider {
         random: &mut RandomGenerator,
         _pos: BlockPos,
     ) -> &'static BlockState {
-        let axis_str = match random.next_bounded_i32(3) {
-            0 => "x",
-            1 => "y",
-            _ => "z",
+        use pumpkin_data::block_properties::{Axis, Facing};
+        let (axis, facing) = match random.next_bounded_i32(6) {
+            0 => (Axis::Y, Facing::Down),
+            1 => (Axis::Y, Facing::Up),
+            2 => (Axis::Z, Facing::North),
+            3 => (Axis::Z, Facing::South),
+            4 => (Axis::X, Facing::West),
+            _ => (Axis::X, Facing::East),
         };
         let block = Block::from_id(self.state.id.to_block_id());
         if let Some(props_source) = block.properties(self.state.id) {
-            let prop_list = props_source.to_props();
-            if prop_list.iter().any(|(k, _)| *k == "axis") {
-                let new_props: Vec<(&str, &str)> = prop_list
-                    .iter()
-                    .map(|(k, v)| (*k, if *k == "axis" { axis_str } else { *v }))
-                    .collect();
-                let new_props_obj = block.from_properties(new_props.as_slice());
+            let mut prop_list = props_source.to_props();
+            let mut modified = false;
+            for p in &mut prop_list {
+                match p {
+                    pumpkin_data::Property::Axis(a) => {
+                        *a = axis;
+                        modified = true;
+                    }
+                    pumpkin_data::Property::Facing(f) => {
+                        *f = facing;
+                        modified = true;
+                    }
+                    _ => {}
+                }
+            }
+            if modified {
+                let new_props_obj = block.from_properties(prop_list.as_slice());
                 let new_state_id = new_props_obj.to_state_id(block);
                 return BlockState::from_id(new_state_id);
             }
@@ -303,7 +302,12 @@ impl DualNoiseBlockStateProvider {
         ) as i32;
         let mut list = Vec::with_capacity(mapped as usize);
         for i in 0..mapped {
-            let value = self.get_slow_noise(i as f64 * 54545.0, 0.0, i as f64 * 34234.0, &sampler);
+            let value = self.get_slow_noise(
+                (pos.0.x + i * 54545) as f64,
+                pos.0.y as f64,
+                (pos.0.z + i * 34234) as f64,
+                &sampler,
+            );
             list.push(NoiseBlockStateProvider::get_state_by_value(
                 &self.base.states,
                 value,
