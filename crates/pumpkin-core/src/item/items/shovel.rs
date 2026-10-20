@@ -4,7 +4,7 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::CampfireLikeProperties;
-use pumpkin_data::block_transformer::SHOVEL;
+use pumpkin_data::data_component_impl::BlockTransformerImpl;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::world::WorldEvent;
@@ -42,8 +42,11 @@ impl ItemBehaviour for ShovelItem {
         let mut changed = false;
         let mut damage = 1;
 
-        if let Some(result) =
-            SHOVEL.transform(block, world.get_block_state_id(&location), face, &get_block)
+        if let Some(transformer) = item
+            .get_data_component::<BlockTransformerImpl>()
+            .and_then(BlockTransformerImpl::get_transformer)
+            && let Some(result) =
+                transformer.transform(block, world.get_block_state_id(&location), face, &get_block)
         {
             if let Some(sound) = result.entry.sound {
                 world.play_sound(sound, SoundCategory::Blocks, &location.to_f64());

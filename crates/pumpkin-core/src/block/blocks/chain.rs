@@ -1,10 +1,21 @@
-use crate::block::{BlockBehaviour, OnPlaceArgs, PathComputationType};
+use crate::block::{BlockBehaviour, BlockMetadata, OnPlaceArgs, PathComputationType};
 use pumpkin_data::block_properties::Axis;
-use pumpkin_data::{BlockDirection, BlockState, BlockStateId};
-use pumpkin_macros::pumpkin_block;
+use pumpkin_data::{BlockDirection, BlockId, BlockState, BlockStateId};
 
-#[pumpkin_block("minecraft:iron_chain")]
 pub struct ChainBlock;
+
+impl BlockMetadata for ChainBlock {
+    fn ids() -> Box<[BlockId]> {
+        [
+            BlockId::IRON_CHAIN,
+            BlockId::WAXED_COPPER_CHAIN,
+            BlockId::WAXED_EXPOSED_COPPER_CHAIN,
+            BlockId::WAXED_WEATHERED_COPPER_CHAIN,
+            BlockId::WAXED_OXIDIZED_COPPER_CHAIN,
+        ]
+        .into()
+    }
+}
 
 impl BlockBehaviour for ChainBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
