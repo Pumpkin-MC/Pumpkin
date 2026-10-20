@@ -547,7 +547,11 @@ impl JavaClient {
     /// there would wait for the caller's own plugin chain to end.
     fn in_plugin_call(&self) -> bool {
         let player = self.player.load();
-        let Some(server) = player.as_ref().as_ref().and_then(|p| p.world().server.upgrade()) else {
+        let Some(server) = player
+            .as_ref()
+            .as_ref()
+            .and_then(|p| p.world().server.upgrade())
+        else {
             return false;
         };
         server.plugin_manager.in_plugin_call()
