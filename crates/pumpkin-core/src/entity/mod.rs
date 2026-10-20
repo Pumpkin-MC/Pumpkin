@@ -1112,6 +1112,16 @@ impl Entity {
         self.set_velocity(self.velocity.load() + velocity);
     }
 
+    /// Vanilla `Entity.push(x, y, z)`: adds an impulse to the velocity. The sync goes out on the next tick.
+    pub fn push(&self, xa: f64, ya: f64, za: f64) {
+        if !(xa.is_finite() && ya.is_finite() && za.is_finite()) {
+            return;
+        }
+        self.velocity
+            .store(self.velocity.load() + Vector3::new(xa, ya, za));
+        self.velocity_dirty.store(true, Ordering::SeqCst);
+    }
+
     pub fn set_velocity(&self, velocity: Vector3<f64>) {
         self.velocity.store(velocity);
         self.send_velocity();

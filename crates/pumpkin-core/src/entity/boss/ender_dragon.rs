@@ -604,8 +604,7 @@ impl EnderDragonEntity {
             let zd = target_pos.z - zm;
             let dd = (xd * xd + zd * zd).max(0.1);
 
-            target_entity.apply_knockback(4.0, xd / dd, zd / dd);
-            target_entity.send_velocity();
+            target_entity.push(xd / dd * 4.0, 0.2, zd / dd * 4.0);
 
             if !self
                 .phase
@@ -614,7 +613,14 @@ impl EnderDragonEntity {
                 .is_sitting()
                 && self.do_teams_allow_damage(target.as_ref())
             {
-                target.damage(self, 5.0, DamageType::MOB_ATTACK);
+                target.damage_with_context(
+                    target.as_ref(),
+                    5.0,
+                    DamageType::MOB_ATTACK,
+                    None,
+                    Some(self),
+                    Some(self),
+                );
             }
         }
     }
