@@ -4,14 +4,18 @@ use std::io::{Error, ErrorKind, Read};
 
 use crate::{MAX_PACKET_DATA_SIZE, codec::var_uint::VarUInt, serial::PacketRead};
 
+/// Sent by the client to initiate the login handshake, containing authentication tokens and device information.
 #[packet(1)]
 pub struct SLogin {
     // https://mojang.github.io/bedrock-protocol-docs/html/LoginPacket.html
     //#[serial(big_endian)]
+    /// Protocol version spoken by the connecting client.
     pub protocol_version: i32,
 
     // https://mojang.github.io/bedrock-protocol-docs/html/connectionRequest.html
+    /// Chain of JSON Web Tokens containing identity and Xbox Live authentication claims.
     pub jwt: Vec<u8>,
+    /// Raw client data JWT carrying skin parameters, device details, and locale settings.
     pub raw_token: Vec<u8>,
 }
 
@@ -97,7 +101,7 @@ mod tests {
 }
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
-pub struct SkinAnimation {
+pub struct LoginSkinAnimation {
     pub frames: f64,
     pub image: String,
     pub image_height: i32,
@@ -109,7 +113,7 @@ pub struct SkinAnimation {
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
-pub struct PersonaPiece {
+pub struct LoginPersonaPiece {
     #[serde(rename = "IsDefault")]
     pub is_default: bool,
     #[serde(rename = "PackId")]
@@ -123,7 +127,7 @@ pub struct PersonaPiece {
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
-pub struct PersonaPieceTintColour {
+pub struct LoginPersonaPieceTintColour {
     #[serde(rename = "Colors")]
     pub colours: [String; 4],
     pub piece_type: String,
@@ -217,11 +221,11 @@ pub struct ClientData {
     pub skin_resource_patch: String,
 
     #[serde(default)]
-    pub animated_image_data: Vec<SkinAnimation>,
+    pub animated_image_data: Vec<LoginSkinAnimation>,
     #[serde(default)]
     pub skin_animation_data: String,
     #[serde(default)]
-    pub persona_pieces: Vec<PersonaPiece>,
+    pub persona_pieces: Vec<LoginPersonaPiece>,
     #[serde(rename = "PieceTintColors", default)]
-    pub piece_tint_colours: Vec<PersonaPieceTintColour>,
+    pub piece_tint_colours: Vec<LoginPersonaPieceTintColour>,
 }

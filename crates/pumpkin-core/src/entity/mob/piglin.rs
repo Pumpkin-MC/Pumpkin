@@ -554,12 +554,13 @@ impl PiglinEntity {
                 .map(|(_, candidate)| candidate)
                 .find(|candidate| {
                     world
-                        .raycast(
+                        .clip(&pumpkin_world::clip::ClipContext::new(
                             eye_pos,
                             candidate.get_entity().get_eye_pos(),
-                            |block_pos, w| w.get_block_state(block_pos).is_solid(),
-                        )
-                        .is_none()
+                            pumpkin_world::clip::ClipBlock::Visual,
+                            pumpkin_world::clip::ClipFluid::None,
+                        ))
+                        .is_miss
                 })
         } else {
             None
