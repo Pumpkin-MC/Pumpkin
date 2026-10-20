@@ -11,20 +11,6 @@ impl JavaClient {
         let player_entity = &player.get_entity();
         let world = player_entity.world.load_full();
 
-        let config = &server.advanced_config.pvp;
-        if !config.enabled {
-            return;
-        }
-
-        if entity_id.0 == player.entity_id() {
-            self.try_kick(&TextComponent::translate_cross(
-                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                [],
-            ));
-            return;
-        }
-
         let player_target = world.get_player_by_id(entity_id.0);
         let target: Option<Arc<dyn EntityBase>> = player_target
             .as_ref()
@@ -39,31 +25,13 @@ impl JavaClient {
             return;
         };
 
-        let mut event = PlayerInteractEntityEvent::new(
+        let event = PlayerInteractEntityEvent::new(
             player,
             target,
             ActionType::Attack,
             None,
             player_entity.is_sneaking(),
         );
-        server.plugin_manager.fire_blocking(server, &mut event);
-        if event.cancelled {
-            return;
-        }
-
-        if let Some(player_victim) = &player_target {
-            if player_victim.living_entity.health.load() <= 0.0 {
-                return;
-            }
-            if config.protect_creative && player_victim.gamemode.load() == GameMode::Creative {
-                world.play_sound(
-                    Sound::EntityPlayerAttackNodamage,
-                    SoundCategory::Players,
-                    &player_victim.position(),
-                );
-                return;
-            }
-        }
-        player.attack(&event.target);
+        self.handle_entity_interaction(player, event, None, server);
     }
 }

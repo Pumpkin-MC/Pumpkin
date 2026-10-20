@@ -2,7 +2,6 @@
 use super::*;
 
 impl JavaClient {
-    #[expect(clippy::too_many_lines)]
     pub fn handle_interact(
         &self,
         player: &Arc<Player>,
@@ -39,95 +38,14 @@ impl JavaClient {
                 player.try_send_client_packet(&CSetCamera::new(entity_id));
                 return;
             }
-            send_cancellable_blocking! {{
-                server;
-                PlayerInteractEntityEvent::new(
-                    player,
-                    Arc::clone(&target),
-                    action,
-                    interact.target_position,
-                    sneaking,
-                );
-
-                'after: {
-                    match event.action {
-                        ActionType::Attack => {
-                            let config = &server.advanced_config.pvp;
-                            if !config.enabled {
-                                return;
-                            }
-
-                            if entity_id.0 == player.entity_id() {
-                                self.try_kick(&TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, []));
-                                return;
-                            }
-
-                            if let Some(player_victim) = &player_target {
-                                if player_victim.living_entity.health.load() <= 0.0 {
-                                    return;
-                                }
-                                if config.protect_creative
-                                    && player_victim.gamemode.load() == GameMode::Creative
-                                {
-                                    world
-                                        .play_sound(
-                                            Sound::EntityPlayerAttackNodamage,
-                                            SoundCategory::Players,
-                                            &player_victim.position(),
-                                        )
-                                        ;
-                                    return;
-                                }
-                            }
-                            player.attack(&event.target);
-                        }
-                        ActionType::Interact | ActionType::InteractAt => {
-                            if event.action == ActionType::InteractAt
-                                && let Some(pos) = interact.target_position
-                            {
-                                let mut at_event = crate::plugin::api::events::player::player_interact_at_entity::PlayerInteractAtEntityEvent::new(
-                                    player.clone(),
-                                    entity_id.0,
-                                    pos.x,
-                                    pos.y,
-                                    pos.z,
-                                    u8::from(interact.hand.map_or(0, |h| h.0) != 0),
-                                );
-                                server.plugin_manager.fire_blocking(server, &mut at_event);
-                                if at_event.cancelled {
-                                    return;
-                                }
-                            }
-                            let mut stack = player.inventory().held_item();
-
-                            let item_id = stack.item.id;
-                            let before = stack.clone();
-                            let interacted = event.target.interact(player, &mut stack);
-                            if !interacted {
-                                server
-                                    .item_registry
-                                    .use_on_entity(&mut stack, player, event.target);
-                            }
-                            if !stack.are_equal(&before) {
-                                player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
-                                if before.is_damageable() && stack.is_empty() {
-                                    player.increment_stat(
-                                        StatisticCategory::Broken,
-                                        item_id as i32,
-                                        1,
-                                    );
-                                    player.world().send_entity_status(
-                                        player.get_entity(),
-                                        equipment_break_status(&EquipmentSlot::MAIN_HAND),
-                                        None,
-                                    );
-                                }
-                            }
-                            player.inventory().set_held_item(stack);
-                        }
-                    }
-                }
-            }}
+            let event = PlayerInteractEntityEvent::new(
+                player,
+                target,
+                action,
+                interact.target_position,
+                sneaking,
+            );
+            self.handle_entity_interaction(player, event, interact.hand, server);
         } else {
             // Entity not found
             send_cancellable_blocking! {{
@@ -145,6 +63,95 @@ impl JavaClient {
                     }
                 }
             }}
+        }
+    }
+
+    pub(super) fn handle_entity_interaction(
+        &self,
+        player: &Arc<Player>,
+        mut event: PlayerInteractEntityEvent,
+        hand: Option<VarInt>,
+        server: &Arc<Server>,
+    ) {
+        server.plugin_manager.fire_blocking(server, &mut event);
+        if event.cancelled {
+            return;
+        }
+
+        let world = player.world();
+        match event.action {
+            ActionType::Attack => {
+                let config = &server.advanced_config.pvp;
+                if !config.enabled {
+                    return;
+                }
+
+                if event.target.get_entity().entity_id == player.entity_id() {
+                    self.try_kick(&TextComponent::translate_cross(
+                        translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                        translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                        [],
+                    ));
+                    return;
+                }
+
+                if let Some(player_victim) = event.target.get_player() {
+                    if player_victim.living_entity.health.load() <= 0.0 {
+                        return;
+                    }
+                    if config.protect_creative
+                        && player_victim.gamemode.load() == GameMode::Creative
+                    {
+                        world.play_sound(
+                            Sound::EntityPlayerAttackNodamage,
+                            SoundCategory::Players,
+                            &player_victim.position(),
+                        );
+                        return;
+                    }
+                }
+                player.attack(&event.target);
+            }
+            ActionType::Interact | ActionType::InteractAt => {
+                if event.action == ActionType::InteractAt
+                    && let Some(pos) = event.target_position
+                {
+                    let mut at_event = crate::plugin::api::events::player::player_interact_at_entity::PlayerInteractAtEntityEvent::new(
+                        player.clone(),
+                        event.target.get_entity().entity_id,
+                        pos.x,
+                        pos.y,
+                        pos.z,
+                        u8::from(hand.map_or(0, |h| h.0) != 0),
+                    );
+                    server.plugin_manager.fire_blocking(server, &mut at_event);
+                    if at_event.cancelled {
+                        return;
+                    }
+                }
+                let mut stack = player.inventory().held_item();
+
+                let item_id = stack.item.id;
+                let before = stack.clone();
+                let interacted = event.target.interact(player, &mut stack);
+                if !interacted {
+                    server
+                        .item_registry
+                        .use_on_entity(&mut stack, player, event.target);
+                }
+                if !stack.are_equal(&before) {
+                    player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
+                    if before.is_damageable() && stack.is_empty() {
+                        player.increment_stat(StatisticCategory::Broken, item_id as i32, 1);
+                        player.world().send_entity_status(
+                            player.get_entity(),
+                            equipment_break_status(&EquipmentSlot::MAIN_HAND),
+                            None,
+                        );
+                    }
+                }
+                player.inventory().set_held_item(stack);
+            }
         }
     }
 }
