@@ -8,7 +8,6 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
@@ -302,12 +301,16 @@ impl CreakingEntity {
     }
 
     fn is_player_disguised(player: &Player) -> bool {
+        use pumpkin_data::tag::{self, Taggable};
+
         let equipment = player.living_entity.entity_equipment.try_lock();
         if let Ok(equipment) = equipment
             && let Some(head_stack) = equipment.equipment.get(&EquipmentSlot::HEAD)
             && !head_stack.is_empty()
         {
-            return head_stack.item == &Item::CARVED_PUMPKIN;
+            return head_stack
+                .item
+                .has_tag(&tag::Item::MINECRAFT_GAZE_DISGUISE_EQUIPMENT);
         }
         false
     }

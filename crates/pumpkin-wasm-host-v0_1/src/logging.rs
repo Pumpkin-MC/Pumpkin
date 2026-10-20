@@ -2,7 +2,7 @@ use crate::pumpkin;
 use pumpkin_wasm_host_common::{logging::log_tracing, state::PluginHostState};
 
 impl pumpkin::plugin::logging::Host for PluginHostState {
-    async fn log(
+    fn log(
         &mut self,
         level: pumpkin::plugin::logging::Level,
         message: String,
@@ -17,7 +17,7 @@ impl pumpkin::plugin::logging::Host for PluginHostState {
         Ok(())
     }
 
-    async fn log_tracing(&mut self, event: Vec<u8>) -> wasmtime::Result<()> {
+    fn log_tracing(&mut self, event: Vec<u8>) -> wasmtime::Result<()> {
         log_tracing(&event);
         Ok(())
     }

@@ -19,7 +19,9 @@ use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::generation::generator::structure_finder::find_nearest_structure;
+use pumpkin_world::generation::generator::structure_finder::{
+    StructureSearch, find_nearest_structure,
+};
 use pumpkin_world::world::BlockFlags;
 
 use crate::entity::player::Player;
@@ -73,12 +75,13 @@ impl ItemBehaviour for EnderEyeItem {
         let world = player.world();
 
         let (start_pos, end_pos) = self.get_start_and_end_pos(player);
-        let checker = |pos: &BlockPos, w: &Arc<World>| {
-            w.get_block_state_id(pos) != Block::AIR.default_state.id
-        };
-        if let Some((hit_pos, _)) = world.raycast(start_pos, end_pos, checker)
-            && world.get_block(&hit_pos) == &Block::END_PORTAL_FRAME
-        {
+        let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
+            start_pos,
+            end_pos,
+            pumpkin_world::clip::ClipBlock::Outline,
+            pumpkin_world::clip::ClipFluid::None,
+        ));
+        if !hit.is_miss && world.get_block(&hit.block_pos) == &Block::END_PORTAL_FRAME {
             return;
         }
 
@@ -139,11 +142,15 @@ fn find_stronghold(world: &Arc<World>, origin: BlockPos) -> Option<BlockPos> {
 
     let strongholds = StructureSet::get("strongholds")?;
 
-    find_nearest_structure(
+    // Pending positions leave the eye unthrown and unconsumed, so the player can retry
+    match find_nearest_structure(
         origin,
         &[&strongholds.placement],
         100, // max search radius in chunks, matches vanilla default
         seed as i64,
         global_cache,
-    )
+    ) {
+        StructureSearch::Found(pos) => Some(pos),
+        StructureSearch::NotFound | StructureSearch::Pending => None,
+    }
 }
