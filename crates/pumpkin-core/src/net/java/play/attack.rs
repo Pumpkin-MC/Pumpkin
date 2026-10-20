@@ -38,6 +38,19 @@ impl JavaClient {
             ));
             return;
         };
+
+        let mut event = PlayerInteractEntityEvent::new(
+            player,
+            target,
+            ActionType::Attack,
+            None,
+            player_entity.is_sneaking(),
+        );
+        server.plugin_manager.fire_blocking(server, &mut event);
+        if event.cancelled {
+            return;
+        }
+
         if let Some(player_victim) = &player_target {
             if player_victim.living_entity.health.load() <= 0.0 {
                 return;
@@ -51,6 +64,6 @@ impl JavaClient {
                 return;
             }
         }
-        player.attack(&target);
+        player.attack(&event.target);
     }
 }
