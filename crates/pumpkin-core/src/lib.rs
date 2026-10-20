@@ -66,6 +66,11 @@ pub mod server;
 pub mod telemetry;
 pub mod world;
 
+/// Short Git commit hash embedded at build time.
+pub const GIT_HASH: &str = env!("GIT_HASH");
+/// Full Git commit hash embedded at build time.
+pub const GIT_HASH_FULL: &str = env!("GIT_HASH_FULL");
+
 pub struct LoggingConfig {
     pub color: bool,
     pub threads: bool,
