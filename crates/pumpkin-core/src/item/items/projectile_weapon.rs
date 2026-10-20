@@ -156,17 +156,42 @@ impl ProjectileWeaponItem {
             let angle = angle_offset + direction * (i.div_ceil(2) as f32) * angle_step;
             direction = -direction;
 
-            let arrow = Self::create_projectile(
-                world.clone(),
-                shooter,
-                weapon,
-                projectile,
-                is_crit,
-                is_creative,
-            );
-            arrow.set_velocity_from_rotation(pitch, yaw + angle, 0.0, power, uncertainty);
-            let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
-            world.spawn_entity(arrow_arc);
+            if projectile.item.id == Item::FIREWORK_ROCKET.id {
+                let shooter_pos = shooter.pos.load();
+                let eye_y = shooter.get_eye_y();
+                let entity = Entity::new(
+                    world.clone(),
+                    pumpkin_util::math::vector3::Vector3::new(
+                        shooter_pos.x,
+                        eye_y - 0.15,
+                        shooter_pos.z,
+                    ),
+                    &pumpkin_data::entity::EntityType::FIREWORK_ROCKET,
+                );
+                let rocket =
+                    crate::entity::projectile::firework_rocket::FireworkRocketEntity::new_shot_at_angle(
+                        entity,
+                        shooter,
+                        projectile.copy_with_count(1),
+                    );
+                rocket
+                    .entity
+                    .set_velocity_from(pitch, yaw + angle, 0.0, power, uncertainty);
+                let rocket_arc: Arc<dyn EntityBase> = Arc::new(rocket);
+                world.spawn_entity(rocket_arc);
+            } else {
+                let arrow = Self::create_projectile(
+                    world.clone(),
+                    shooter,
+                    weapon,
+                    projectile,
+                    is_crit,
+                    is_creative,
+                );
+                arrow.set_velocity_from_rotation(pitch, yaw + angle, 0.0, power, uncertainty);
+                let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
+                world.spawn_entity(arrow_arc);
+            }
         }
     }
 }

@@ -98,7 +98,7 @@ impl ItemBehaviour for CushionItem {
             &entity.pos.load(),
         );
 
-        let cushion = CushionEntity::new(entity, CushionEntity::color_from_item(item.get_item()));
+        let cushion = CushionEntity::new(entity, CushionEntity::color_from_stack(item));
         world.spawn_entity(Arc::new(cushion));
         item.decrement_unless_creative(player.gamemode.load(), 1);
         BlockActionResult::Success

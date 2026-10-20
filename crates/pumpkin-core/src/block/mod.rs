@@ -470,8 +470,7 @@ pub fn collect_loot(
     pos: &BlockPos,
     params: &LootContextParameters,
 ) -> Vec<ItemStack> {
-    let key = format!("minecraft:blocks/{}", block.name);
-    let Some(loot_table) = world.get_loot_table(&key) else {
+    let Some(loot_table) = block.loot_table.and_then(|key| world.get_loot_table(key)) else {
         return Vec::new();
     };
     // TODO: vanilla rolls from the loot table's `random_sequence`, which is seeded per world.

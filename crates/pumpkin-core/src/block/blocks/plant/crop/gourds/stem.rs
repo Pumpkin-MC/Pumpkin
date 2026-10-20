@@ -2,7 +2,7 @@ use crate::block::{
     BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
     blocks::plant::{
         PlantBlockBase,
-        crop::{CropBlockBase, get_available_moisture},
+        crop::{CropBlockBase, MIN_GROWTH_LIGHT, get_available_moisture},
     },
 };
 use pumpkin_data::{
@@ -92,7 +92,7 @@ impl BlockBehaviour for StemBlock {
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
-        if args.world.get_raw_brightness(args.position, 0) < 9 {
+        if args.world.get_raw_brightness(args.position, 0) < MIN_GROWTH_LIGHT {
             return;
         }
 
