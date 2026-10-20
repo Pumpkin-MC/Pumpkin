@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
-use crate::block::entities::{
-    BlockEntity,
-    sign::{DyeColor, Text},
-};
+use crate::block::entities::{BlockEntity, sign::Text};
+use pumpkin_data::data_component_impl::DyeImpl;
 use pumpkin_data::tag;
 use pumpkin_util::GameMode;
 
@@ -26,11 +24,12 @@ impl ItemMetadata for DyeItem {
 
 impl ItemBehaviour for DyeItem {
     fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
+        let Some(color) = item.get_data_component::<DyeImpl>().map(|d| d.color.id()) else {
+            return;
+        };
         if let Some(sheep) = entity
             .cast_any()
             .downcast_ref::<crate::entity::passive::sheep::SheepEntity>()
-            && let Some(color) =
-                crate::entity::passive::animal::get_dye_color_from_item(item.get_item())
             && !sheep.is_sheared()
             && color != sheep.get_color()
         {
@@ -46,9 +45,7 @@ impl ItemBehaviour for DyeItem {
         } else if let Some(cushion) = entity
             .cast_any()
             .downcast_ref::<crate::entity::decoration::cushion::CushionEntity>(
-        ) && let Some(color) =
-            crate::entity::passive::animal::get_dye_color_from_item(item.get_item())
-            && color != cushion.color()
+        ) && color != cushion.color()
         {
             cushion.set_color(color);
             let ent = entity.get_entity();
@@ -77,9 +74,11 @@ impl DyeItem {
         args: &UseWithItemArgs<'_>,
         block_entity: &Arc<dyn BlockEntity>,
         text: &Text,
-        color_name: &str,
     ) -> BlockActionResult {
-        let dye_color = DyeColor::by_name(color_name).unwrap_or_default();
+        let Some(dye) = args.item_stack.get_data_component::<DyeImpl>() else {
+            return BlockActionResult::PassToDefaultBlockAction;
+        };
+        let dye_color = dye.color;
         if text.get_color() == dye_color {
             return BlockActionResult::PassToDefaultBlockAction;
         }

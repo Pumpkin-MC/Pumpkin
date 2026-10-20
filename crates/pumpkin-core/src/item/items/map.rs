@@ -6,6 +6,7 @@ use pumpkin_data::data_component_impl::DataComponentImpl;
 use pumpkin_data::data_component_impl::MapIdImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::GameMode;
 use std::any::Any;
 
@@ -38,6 +39,12 @@ impl ItemBehaviour for MapItem {
             };
 
         if found {
+            player.world().play_sound(
+                Sound::UiCartographyTableTakeResult,
+                SoundCategory::Players,
+                &player.position(),
+            );
+
             let map_id = server.next_map_id();
             let _ = server.map_manager.create_map(
                 map_id,

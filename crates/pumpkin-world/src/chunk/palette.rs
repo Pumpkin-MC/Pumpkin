@@ -948,6 +948,215 @@ impl BlockPalette {
             palette,
         }
     }
+
+    pub(crate) fn write_pump_binary(&self, out: &mut Vec<u8>) {
+        use bytes::BufMut;
+
+        match self {
+            Self::Homogeneous(id) => {
+                out.put_u8(0);
+                out.put_u16(id.as_u16());
+            }
+            Self::Heterogeneous(data) => match &data.storage {
+                PaletteStorage::Indexed(indices) => {
+                    out.put_u8(1);
+                    out.put_u16(data.palette.len() as u16);
+                    for (&id, &count) in data.palette.iter().zip(&data.counts) {
+                        out.put_u16(id.as_u16());
+                        out.put_u16(count);
+                    }
+                    out.extend_from_slice(indices.as_flattened().as_flattened());
+                }
+                PaletteStorage::Dense(cube) => {
+                    out.put_u8(2);
+                    for &id in cube.as_flattened().as_flattened() {
+                        out.put_u16(id.as_u16());
+                    }
+                }
+            },
+        }
+    }
+
+    pub(crate) fn read_pump_binary(buf: &mut &[u8]) -> Result<Self, super::ChunkParsingError> {
+        use bytes::Buf;
+
+        if !buf.has_remaining() {
+            return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                "Unexpected EOF reading block palette mode".into(),
+            ));
+        }
+        match buf.get_u8() {
+            0 => {
+                if buf.remaining() < 2 {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Unexpected EOF reading homogeneous block palette".into(),
+                    ));
+                }
+                Ok(Self::Homogeneous(BlockStateId::new_or_air(buf.get_u16())))
+            }
+            1 => {
+                if buf.remaining() < 2 {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Unexpected EOF reading indexed block palette length".into(),
+                    ));
+                }
+                let palette_len = buf.get_u16() as usize;
+                if !(1..=256).contains(&palette_len)
+                    || buf.remaining() < palette_len * 4 + Self::VOLUME
+                {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Invalid indexed block palette length".into(),
+                    ));
+                }
+                let mut palette = Vec::with_capacity(palette_len);
+                let mut counts = Vec::with_capacity(palette_len);
+                let mut count_sum = 0u32;
+                for _ in 0..palette_len {
+                    palette.push(BlockStateId::new_or_air(buf.get_u16()));
+                    let c = buf.get_u16();
+                    counts.push(c);
+                    count_sum += u32::from(c);
+                }
+                if palette_len == 1 {
+                    buf.advance(Self::VOLUME);
+                    return Ok(Self::Homogeneous(palette[0]));
+                }
+                let mut indices = Box::new([[[0u8; Self::SIZE]; Self::SIZE]; Self::SIZE]);
+                let flat = indices.as_flattened_mut().as_flattened_mut();
+                flat.copy_from_slice(&buf[..Self::VOLUME]);
+                buf.advance(Self::VOLUME);
+
+                let max_idx = flat.iter().copied().max().unwrap_or(0) as usize;
+                if count_sum != Self::VOLUME as u32 || max_idx >= palette_len {
+                    counts.fill(0);
+                    for idx in flat.iter_mut() {
+                        let i = *idx as usize;
+                        if i < palette_len {
+                            counts[i] += 1;
+                        } else {
+                            *idx = 0;
+                            counts[0] += 1;
+                        }
+                    }
+                }
+                Ok(Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
+                    storage: PaletteStorage::Indexed(indices),
+                    palette,
+                    counts,
+                })))
+            }
+            2 => {
+                if buf.remaining() < Self::VOLUME * 2 {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Unexpected EOF reading dense block palette".into(),
+                    ));
+                }
+                let mut cube =
+                    Box::new([[[BlockStateId::AIR; Self::SIZE]; Self::SIZE]; Self::SIZE]);
+                for slot in cube.as_flattened_mut().as_flattened_mut() {
+                    *slot = BlockStateId::new_or_air(buf.get_u16());
+                }
+                Ok(Self::from_cube(cube))
+            }
+            mode => Err(super::ChunkParsingError::ErrorDeserializingChunk(format!(
+                "Unknown block palette mode {mode}"
+            ))),
+        }
+    }
+}
+
+impl BiomePalette {
+    pub(crate) fn write_pump_binary(&self, out: &mut Vec<u8>) {
+        use bytes::BufMut;
+
+        match self {
+            Self::Homogeneous(id) => {
+                out.put_u8(0);
+                out.put_u8(*id);
+            }
+            Self::Heterogeneous(data) => {
+                out.put_u8(1);
+                out.put_u8(data.palette.len() as u8);
+                for (&id, &count) in data.palette.iter().zip(&data.counts) {
+                    out.put_u8(id);
+                    out.put_u16(count);
+                }
+                match &data.storage {
+                    PaletteStorage::Dense(cube) => {
+                        out.extend_from_slice(cube.as_flattened().as_flattened());
+                    }
+                    PaletteStorage::Indexed(indices) => {
+                        for &idx in indices.as_flattened().as_flattened() {
+                            out.put_u8(data.palette.get(idx as usize).copied().unwrap_or(0));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn read_pump_binary(buf: &mut &[u8]) -> Result<Self, super::ChunkParsingError> {
+        use bytes::Buf;
+
+        if !buf.has_remaining() {
+            return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                "Unexpected EOF reading biome palette mode".into(),
+            ));
+        }
+        match buf.get_u8() {
+            0 => {
+                if !buf.has_remaining() {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Unexpected EOF reading homogeneous biome palette".into(),
+                    ));
+                }
+                Ok(Self::Homogeneous(buf.get_u8()))
+            }
+            1 => {
+                if !buf.has_remaining() {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Unexpected EOF reading heterogeneous biome palette length".into(),
+                    ));
+                }
+                let palette_len = buf.get_u8() as usize;
+                if !(1..=Self::VOLUME).contains(&palette_len)
+                    || buf.remaining() < palette_len * 3 + Self::VOLUME
+                {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Invalid heterogeneous biome palette length".into(),
+                    ));
+                }
+                let mut palette = Vec::with_capacity(palette_len);
+                let mut counts = Vec::with_capacity(palette_len);
+                let mut count_sum = 0u32;
+                for _ in 0..palette_len {
+                    palette.push(buf.get_u8());
+                    let c = buf.get_u16();
+                    counts.push(c);
+                    count_sum += u32::from(c);
+                }
+                let mut cube = Box::new([[[0u8; Self::SIZE]; Self::SIZE]; Self::SIZE]);
+                cube.as_flattened_mut()
+                    .as_flattened_mut()
+                    .copy_from_slice(&buf[..Self::VOLUME]);
+                buf.advance(Self::VOLUME);
+                if palette_len == 1 {
+                    return Ok(Self::Homogeneous(palette[0]));
+                }
+                if count_sum != Self::VOLUME as u32 {
+                    return Ok(Self::from_cube(cube));
+                }
+                Ok(Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
+                    storage: PaletteStorage::Dense(cube),
+                    palette,
+                    counts,
+                })))
+            }
+            mode => Err(super::ChunkParsingError::ErrorDeserializingChunk(format!(
+                "Unknown biome palette mode {mode}"
+            ))),
+        }
+    }
 }
 
 /// Represents the different types of data encoding used in Minecraft's bit-packed chunk sections.

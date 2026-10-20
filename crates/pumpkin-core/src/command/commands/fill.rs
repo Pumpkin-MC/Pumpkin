@@ -58,7 +58,7 @@ fn fill_blocks(
     target_block: &'static Block,
     mode: FillMode,
     filter: Option<&BlockPredicate>,
-    _strict: bool,
+    strict: bool,
 ) -> Result<i32, CommandSyntaxError> {
     let min_x = from.0.x.min(to.0.x);
     let min_y = from.0.y.min(to.0.y);
@@ -199,11 +199,13 @@ fn fill_blocks(
                 let batch_inputs = updates_for_chunk
                     .iter()
                     .map(|&(rx, y, rz, sid, _)| (rx, y, rz, sid));
-                chunk.set_blocks_batch(batch_inputs);
+                // One result per input, since every queued position is inside an existing section.
+                let replaced = chunk.set_blocks_batch(batch_inputs);
 
                 let chunk_changed = updates_for_chunk
                     .into_iter()
-                    .map(|(_, _, _, new_id, pos)| (pos, new_id))
+                    .zip(replaced)
+                    .map(|((_, _, _, new_id, pos), (_, _, _, old_id))| (pos, old_id, new_id))
                     .collect::<Vec<_>>();
 
                 (chunk_changed, block_entities_to_remove)
@@ -223,7 +225,23 @@ fn fill_blocks(
         return Err(ERROR_FAILED.create_without_context());
     }
 
-    world.queue_block_updates(&changed_positions);
+    // Queued before the callbacks so blocks they change, such as a golem clearing its
+    // pattern, reach clients in their final state.
+    let client_updates = changed_positions
+        .iter()
+        .map(|&(pos, _, new_id)| (pos, new_id))
+        .collect::<Vec<_>>();
+    world.queue_block_updates(&client_updates);
+
+    // Vanilla runs onPlace for every placed block unless strict sets UPDATE_SKIP_ON_PLACE.
+    if !strict {
+        for (pos, old_id, new_id) in changed_positions {
+            let new_block = Block::from_state_id(new_id);
+            if Block::from_state_id(old_id) != new_block && world.get_block(&pos) == new_block {
+                world.on_block_placed(&pos, new_block, new_id, old_id, false);
+            }
+        }
+    }
     world.flush_block_updates();
 
     source.send_feedback(
