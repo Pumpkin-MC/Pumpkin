@@ -208,7 +208,12 @@ impl Behavior for MoveToTargetSink {
             .navigator()
             .get_path()
             .cloned();
-        if self.path != new_path {
+        let unchanged = match (&self.path, &new_path) {
+            (Some(previous), Some(current)) => previous.same_snapshot(current),
+            (None, None) => true,
+            _ => false,
+        };
+        if !unchanged {
             self.path.clone_from(&new_path);
             tick.state.set_optional(types::PATH, new_path);
         }
@@ -302,15 +307,25 @@ mod tests {
         brain.tick(&world, &mob, 1);
         let walking = brain.has_memory_value(types::PATH.id()) && !navigation_done(&mob);
         let cant_reach = brain.has_memory_value(types::CANT_REACH_WALK_TARGET_SINCE.id());
+        let progress = {
+            let steered = mob.0.steered();
+            let mut navigation = steered.navigator();
+            let path = navigation.get_path_mut().ok_or("missing route")?;
+            path.advance();
+            path.get_next_node_index()
+        };
+        brain.tick(&world, &mob, 2);
+        let remembered_progress = brain.get(types::PATH).map(Path::get_next_node_index);
         mob.0
             .living_entity
             .entity
             .set_pos(Vector3::new(8.5, 64.0, 0.5));
-        brain.tick(&world, &mob, 2);
+        brain.tick(&world, &mob, 3);
         world.level.shutdown().await;
 
         assert!(walking);
         assert!(!cant_reach);
+        assert_eq!(remembered_progress, Some(progress));
         assert!(!brain.has_memory_value(types::WALK_TARGET.id()));
         assert!(!brain.has_memory_value(types::PATH.id()));
         assert!(navigation_done(&mob));
