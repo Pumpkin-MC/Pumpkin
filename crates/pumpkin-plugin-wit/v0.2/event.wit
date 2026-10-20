@@ -2259,8 +2259,6 @@ interface event {
         server-broadcast-event(server-broadcast-event-data),
         server-tick-start-event(server-tick-start-event-data),
         server-tick-end-event(server-tick-end-event-data),
-        packet-received-event(packet-received-event-data),
-        packet-sent-event(packet-sent-event-data),
         chunk-load-event(chunk-load-event-data),
         chunk-save-event(chunk-save-event-data),
         chunk-send-event(chunk-send-event-data),

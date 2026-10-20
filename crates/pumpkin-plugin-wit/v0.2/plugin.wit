@@ -6,7 +6,7 @@ package pumpkin:plugin@0.2.0;
 
 world plugin {
     use context.{context};
-    use event.{event};
+    use event.{event, packet-received-event-data, packet-sent-event-data};
     use server.{server as server-instance};
     use command.{command-sender, consumed-args, command-error, command-suggestions, suggestion-request};
     use %world.{entity, chunk-buffer, generation-phase};
@@ -109,6 +109,15 @@ world plugin {
     /// If the returned variant case differs from the dispatched case, the host
     /// treats the result as a handler error and keeps the original event.
     export handle-event: async func(event-id: u32, server: server-instance, event: event) -> event;
+
+    /// Dispatches a packet received event, like `handle-event`.
+    ///
+    /// Packet events have their own exports so the large packet variants stay
+    /// out of `event`.
+    export handle-packet-received: async func(event-id: u32, server: server-instance, event: packet-received-event-data) -> packet-received-event-data;
+
+    /// Dispatches a packet sent event, like `handle-event`.
+    export handle-packet-sent: async func(event-id: u32, server: server-instance, event: packet-sent-event-data) -> packet-sent-event-data;
 
     /// Dispatches a command execution to the plugin.
     export handle-command: async func(command-id: u32, sender: command-sender, server: server-instance, args: consumed-args) -> result<s32, command-error>;

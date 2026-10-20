@@ -68,7 +68,7 @@
 
 use crate::{
     commands::{COMMAND_HANDLERS, COMMAND_SUGGESTION_HANDLERS},
-    events::EVENT_HANDLERS,
+    events::event_handler,
     logging::WitSubscriber,
     scheduler::TASK_HANDLERS,
     text::TextComponent,
@@ -149,7 +149,7 @@ pub use enchantment::{
     EnchantmentBuilder, EnchantmentError, EnchantmentManager, RegistrableEnchantment,
 };
 pub use entity_statuses_wit::EntityStatus;
-pub use events::{EventHandler, FromIntoEvent};
+pub use events::{EventHandler, FromIntoEvent, PluginEvent};
 pub use ext::player::{PlayerCooldownExt, PlayerEnderChestExt};
 pub use game_events_wit::GameEvent;
 pub use inventory::{Inventory, PlayerInventory};
@@ -297,15 +297,33 @@ impl wit::Guest for Component {
     ///
     /// Returns the event unchanged if no handler is registered for the given id.
     async fn handle_event(event_id: u32, server: Server, event: events::Event) -> events::Event {
-        let handler = EVENT_HANDLERS
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(&event_id)
-            .cloned();
-        if let Some(handler) = handler {
-            handler.handle_erased(server, event)
-        } else {
-            event
+        match event_handler(event_id) {
+            Some(handler) => handler.handle_event(server, event),
+            None => event,
+        }
+    }
+
+    /// WIT entry point, dispatches a packet received event to the handler for `event_id`.
+    async fn handle_packet_received(
+        event_id: u32,
+        server: Server,
+        event: wit::pumpkin::plugin::event::PacketReceivedEventData,
+    ) -> wit::pumpkin::plugin::event::PacketReceivedEventData {
+        match event_handler(event_id) {
+            Some(handler) => handler.handle_packet_received(server, event),
+            None => event,
+        }
+    }
+
+    /// WIT entry point, dispatches a packet sent event to the handler for `event_id`.
+    async fn handle_packet_sent(
+        event_id: u32,
+        server: Server,
+        event: wit::pumpkin::plugin::event::PacketSentEventData,
+    ) -> wit::pumpkin::plugin::event::PacketSentEventData {
+        match event_handler(event_id) {
+            Some(handler) => handler.handle_packet_sent(server, event),
+            None => event,
         }
     }
 

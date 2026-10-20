@@ -7,12 +7,15 @@ use pumpkin_util::{
     GameMode, Hand,
     math::{position::BlockPos, vector3::Vector3},
 };
-use wasmtime::component::Resource;
+use wasmtime::component::{ComponentNamedList, Lift, Lower, Resource, TypedFunc};
 
 use crate::pumpkin;
 use pumpkin_core::{
     entity::player::Player,
-    plugin::{BoxFuture, EventHandler, Payload},
+    plugin::{
+        BoxFuture, EventHandler, Payload,
+        server::packet::{PacketReceivedEvent, PacketSentEvent},
+    },
     server::Server,
     world::World,
 };
@@ -348,6 +351,92 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
         })
     }
 }
+
+/// A guest export taking a handler id, the server and the event data.
+pub type PacketExport<D> = TypedFunc<(u32, Resource<pumpkin::plugin::server::Server>, D), (D,)>;
+
+/// A packet event, dispatched through its own guest export instead of `handle-event`.
+pub trait WasmPacketEvent: Payload + Clone + 'static {
+    type Data: Send + 'static;
+
+    fn export(plugin: &crate::Plugin) -> PacketExport<Self::Data>;
+
+    fn to_wasm(&self, state: &mut PluginHostState) -> Self::Data;
+
+    /// Releases the resources in `data` and applies its changes.
+    fn apply_wasm(&mut self, data: Self::Data, state: &mut PluginHostState);
+}
+
+impl WasmPluginEventHandler {
+    async fn dispatch_packet<E: WasmPacketEvent>(
+        &self,
+        server: Arc<Server>,
+        mut event: E,
+    ) -> wasmtime::Result<E>
+    where
+        (u32, Resource<pumpkin::plugin::server::Server>, E::Data): ComponentNamedList + Lower,
+        (E::Data,): ComponentNamedList + Lift,
+    {
+        let handler_id = self.handler_id;
+        let function = E::export(self.plugin.instance::<crate::Plugin>());
+        self.plugin
+            .store
+            .call_guest(move |mut guest| {
+                Box::pin(async move {
+                    let (data, server_res) = guest.with(|mut store| {
+                        let data = event.to_wasm(store.data_mut());
+                        match store.data_mut().add(server) {
+                            Ok(resource) => Ok((data, resource)),
+                            Err(error) => {
+                                // Unchanged data, so this only releases its resources.
+                                event.apply_wasm(data, store.data_mut());
+                                Err(error)
+                            }
+                        }
+                    })?;
+                    let (returned,) = guest.call(function, (handler_id, server_res, data)).await?;
+                    guest.with(|mut store| {
+                        event.apply_wasm(returned, store.data_mut());
+                        Ok(event)
+                    })
+                })
+            })
+            .await
+    }
+}
+
+macro_rules! packet_event_handler {
+    ($($event:ty),*) => {$(
+        impl EventHandler<$event> for WasmPluginEventHandler {
+            fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a $event) -> BoxFuture<'a, ()> {
+                Box::pin(async {
+                    if let Err(error) = self.dispatch_packet(server.clone(), event.clone()).await {
+                        tracing::error!(handler_id = self.handler_id, %error, "Wasm event handler failed");
+                    }
+                })
+            }
+
+            fn handle_blocking<'a>(
+                &'a self,
+                server: &'a Arc<Server>,
+                event: &'a mut $event,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async {
+                    match self.dispatch_packet(server.clone(), event.clone()).await {
+                        Ok(updated_event) => *event = updated_event,
+                        Err(error) => tracing::error!(
+                            handler_id = self.handler_id,
+                            %error,
+                            "Blocking Wasm event handler failed"
+                        ),
+                    }
+                })
+            }
+        }
+    )*};
+}
+
+packet_event_handler!(PacketReceivedEvent, PacketSentEvent);
 
 #[cfg(test)]
 mod tests {

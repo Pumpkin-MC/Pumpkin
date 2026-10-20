@@ -1,5 +1,8 @@
 use crate::{
-    events::{ToFromWasmEvent, cleanup_event, consume_text_component},
+    events::{
+        PacketExport, ToFromWasmEvent, WasmPacketEvent, cleanup_event, cleanup_player,
+        consume_text_component,
+    },
     generated_packets,
     player::to_wasm_java_version,
     pumpkin::plugin::event::{
@@ -31,8 +34,14 @@ use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::ConnectionState;
 use pumpkin_wasm_host_common::state::PluginHostState;
 
-impl ToFromWasmEvent for PacketReceivedEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl WasmPacketEvent for PacketReceivedEvent {
+    type Data = PacketReceivedEventData;
+
+    fn export(plugin: &crate::Plugin) -> PacketExport<Self::Data> {
+        plugin.func_handle_packet_received()
+    }
+
+    fn to_wasm(&self, state: &mut PluginHostState) -> Self::Data {
         let player_res = state
             .add(self.player.clone())
             .expect("failed to add player resource");
@@ -58,39 +67,31 @@ impl ToFromWasmEvent for PacketReceivedEvent {
             }
         };
 
-        Event::PacketReceivedEvent(PacketReceivedEventData {
+        PacketReceivedEventData {
             player: player_res,
             packet,
             packet_id: self.packet_id,
             raw_payload: self.payload.to_vec(),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::PacketReceivedEvent(data) = event {
-            self.packet_id = data.packet_id;
-            self.payload = data.raw_payload.into();
-            self.cancelled = data.cancelled;
-        }
-    }
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::PacketReceivedEvent(_) => {
-                // TODO: Implement converting from WIT variant back to raw if needed.
-                // For now, we only support cancellation.
-                panic!(
-                    "Modifying packets from WASM is not yet supported in this simple implementation."
-                );
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm(&mut self, data: Self::Data, state: &mut PluginHostState) {
+        cleanup_player(state, &data.player);
+        self.packet_id = data.packet_id;
+        self.payload = data.raw_payload.into();
+        self.cancelled = data.cancelled;
     }
 }
 
-impl ToFromWasmEvent for PacketSentEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl WasmPacketEvent for PacketSentEvent {
+    type Data = PacketSentEventData;
+
+    fn export(plugin: &crate::Plugin) -> PacketExport<Self::Data> {
+        plugin.func_handle_packet_sent()
+    }
+
+    fn to_wasm(&self, state: &mut PluginHostState) -> Self::Data {
         let player_res = state
             .add(self.player.clone())
             .expect("failed to add player resource");
@@ -106,7 +107,7 @@ impl ToFromWasmEvent for PacketSentEvent {
             }
         };
 
-        Event::PacketSentEvent(PacketSentEventData {
+        PacketSentEventData {
             player: player_res,
             packet,
             packet_id: self.packet_id,
@@ -120,29 +121,19 @@ impl ToFromWasmEvent for PacketSentEvent {
                 })
                 .collect(),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::PacketSentEvent(data) = event {
-            self.packet_id = data.packet_id;
-            self.payload = data.raw_payload.into();
-            self.extra_packets = data
-                .extra_packets
-                .into_iter()
-                .map(|packet| (packet.packet_id, packet.payload.into()))
-                .collect();
-            self.cancelled = data.cancelled;
-        }
-    }
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::PacketSentEvent(_) => {
-                panic!("Modifying packets from WASM is not yet supported.");
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm(&mut self, data: Self::Data, state: &mut PluginHostState) {
+        cleanup_player(state, &data.player);
+        self.packet_id = data.packet_id;
+        self.payload = data.raw_payload.into();
+        self.extra_packets = data
+            .extra_packets
+            .into_iter()
+            .map(|packet| (packet.packet_id, packet.payload.into()))
+            .collect();
+        self.cancelled = data.cancelled;
     }
 }
 
