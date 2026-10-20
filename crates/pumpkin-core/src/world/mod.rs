@@ -324,6 +324,17 @@ impl World {
         | PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits()
         | PlayerInfoFlags::UPDATE_HAT.bits();
 
+    #[must_use]
+    pub fn is_flat(&self) -> bool {
+        // Vanilla ServerLevel.isFlat uses the Overworld generator for every dimension.
+        self.level_info
+            .load()
+            .world_gen_settings
+            .dimensions
+            .get(Dimension::OVERWORLD.minecraft_name)
+            .is_some_and(|dimension| dimension.generator.generator_type == "minecraft:flat")
+    }
+
     pub async fn get_block_state_id_async(&self, position: &BlockPos) -> BlockStateId {
         if !self.is_in_build_limit(*position) {
             return Block::AIR.default_state.id;
@@ -3213,7 +3224,7 @@ impl World {
                         .load()
                         .map_or(-1, |gamemode| gamemode as i8),
                     false,
-                    false,
+                    self.is_flat(),
                     None,
                     VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                     self.sea_level.into(),
@@ -4107,7 +4118,7 @@ impl World {
                     player.gamemode.load() as u8,
                     player.gamemode.load() as i8,
                     false,
-                    false,
+                    target_world.is_flat(),
                     Some((death_dimension, death_location)),
                     VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                     target_world.sea_level.into(),
@@ -5102,7 +5113,6 @@ impl World {
 
     /// Everything `set_block_state` does after the chunk write: callbacks, neighbour updates,
     /// client sync, POI and lighting.
-    #[expect(clippy::too_many_lines)]
     fn on_block_state_set(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -5121,6 +5131,8 @@ impl World {
 
         if is_new_block
             && old_block.default_state.block_entity_type != u16::MAX
+            && old_block.default_state.block_entity_type
+                != new_block.default_state.block_entity_type
             && let Some(entity) = self.get_block_entity(position)
         {
             if !flags.contains(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
@@ -5140,20 +5152,10 @@ impl World {
         }
 
         if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && is_new_block {
-            self.block_registry.on_placed(
-                self,
+            self.on_block_placed(
+                position,
                 new_block,
                 block_state_id,
-                position,
-                replaced_block_state_id,
-                block_moved,
-            );
-            let new_fluid = self.get_fluid(position);
-            self.block_registry.on_placed_fluid(
-                self,
-                new_fluid,
-                block_state_id,
-                position,
                 replaced_block_state_id,
                 block_moved,
             );
@@ -5227,6 +5229,34 @@ impl World {
         }
 
         replaced_block_state_id
+    }
+
+    /// Runs the placed callbacks for a block and its fluid, like vanilla `BlockState.onPlace`.
+    pub(crate) fn on_block_placed(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        new_block: &Block,
+        block_state_id: BlockStateId,
+        replaced_block_state_id: BlockStateId,
+        moved: bool,
+    ) {
+        self.block_registry.on_placed(
+            self,
+            new_block,
+            block_state_id,
+            position,
+            replaced_block_state_id,
+            moved,
+        );
+        let new_fluid = self.get_fluid(position);
+        self.block_registry.on_placed_fluid(
+            self,
+            new_fluid,
+            block_state_id,
+            position,
+            replaced_block_state_id,
+            moved,
+        );
     }
 
     pub fn break_block(

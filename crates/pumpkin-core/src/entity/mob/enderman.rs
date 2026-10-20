@@ -12,7 +12,6 @@ use pumpkin_data::{
     damage::DamageType,
     data_component_impl::EquipmentSlot,
     entity::EntityType,
-    item::Item,
     particle::Particle,
     sound::{Sound, SoundCategory},
     tag,
@@ -334,7 +333,9 @@ impl EndermanEntity {
         if let Ok(equipment) = equipment
             && let Some(head_stack) = equipment.equipment.get(&EquipmentSlot::HEAD)
             && !head_stack.is_empty()
-            && head_stack.item == &Item::CARVED_PUMPKIN
+            && head_stack
+                .item
+                .has_tag(&tag::Item::MINECRAFT_GAZE_DISGUISE_EQUIPMENT)
         {
             return false;
         }
