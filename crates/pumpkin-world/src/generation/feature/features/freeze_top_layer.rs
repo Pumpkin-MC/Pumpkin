@@ -1,8 +1,10 @@
 use crate::generation::proto_chunk::GenerationCache;
 use crate::lighting::engine::{BlockLightProvider, LightProvider};
-use pumpkin_data::block_properties::{BlockProperties, GrassBlockLikeProperties};
+use pumpkin_data::block_properties::{
+    BlockProperties, GrassBlockLikeProperties, SnowLikeProperties,
+};
 use pumpkin_data::tag;
-use pumpkin_data::{Block, BlockId, BlockState};
+use pumpkin_data::{Block, BlockId, BlockState, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
 
@@ -56,7 +58,8 @@ impl FreezeTopLayerFeature {
                         && !below.to_state().is_air()
                         && !below_block.has_tag(tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER)
                         && (below_block.has_tag(tag::Block::MINECRAFT_SUPPORT_OVERRIDE_SNOW_LAYER)
-                            || is_top_face_full(below.to_state()))
+                            || is_top_face_full(below.to_state())
+                            || is_full_snow_layer(below))
                         && block_light_at(chunk, x, y, z) < 10
                     {
                         chunk.set_block_state(&top_vec, Block::SNOW.default_state);
@@ -112,6 +115,12 @@ fn is_top_face_full(state: &BlockState) -> bool {
                 .any(|&(x0, x1, z0, z1)| x0 <= xw[0] && xw[1] <= x1 && z0 <= zw[0] && zw[1] <= z1)
         })
     })
+}
+
+// Vanilla's `SnowLayerBlock.canSurvive` also accepts a full eight-layer snow
+// block as support, even though its collision shape is only 7/8 blocks tall.
+fn is_full_snow_layer(state: BlockStateId) -> bool {
+    state.to_block_id() == BlockId::SNOW && SnowLikeProperties::from_state_id(state).layers == 8
 }
 
 /// Block light at a world position during generation. Sections without
@@ -212,6 +221,47 @@ mod tests {
         assert!(
             top_state_id(&chunk, 3).to_state().is_air(),
             "snow must not form at block light >= 10",
+        );
+    }
+
+    #[test]
+    fn full_snow_layer_supports_snow() {
+        let mut chunk = snowy_test_chunk();
+        for x in 0..16 {
+            for z in 0..16 {
+                chunk.set_block_state(x, GROUND_Y, z, Block::STONE.default_state);
+            }
+        }
+        // A full eight-layer snow block is only 7/8 blocks tall, so the
+        // face-full check rejects it; vanilla accepts it anyway.
+        let snow_8 = SnowLikeProperties { layers: 8 }.to_state_id(&Block::SNOW);
+        chunk.set_block_state(4, GROUND_Y, 0, snow_8.to_state());
+
+        run_freeze(&mut chunk);
+
+        assert_eq!(
+            top_state_id(&chunk, 4),
+            Block::SNOW.default_state.id,
+            "snow must form on a full eight-layer snow block",
+        );
+    }
+
+    #[test]
+    fn partial_snow_layer_does_not_support_snow() {
+        let mut chunk = snowy_test_chunk();
+        for x in 0..16 {
+            for z in 0..16 {
+                chunk.set_block_state(x, GROUND_Y, z, Block::STONE.default_state);
+            }
+        }
+        let snow_4 = SnowLikeProperties { layers: 4 }.to_state_id(&Block::SNOW);
+        chunk.set_block_state(4, GROUND_Y, 0, snow_4.to_state());
+
+        run_freeze(&mut chunk);
+
+        assert!(
+            top_state_id(&chunk, 4).to_state().is_air(),
+            "snow must not form on a partial snow layer",
         );
     }
 }
