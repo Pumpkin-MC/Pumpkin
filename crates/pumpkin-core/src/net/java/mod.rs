@@ -137,6 +137,18 @@ pub struct JavaClient {
     pub packet_limiter: PacketRateLimiter,
     /// Vanilla `suspendFlushingOnServerThread`.
     suspend_flushing: Arc<AtomicBool>,
+    /// Ordered queue for packets that go through `PacketSentEvent` (translated clients).
+    /// The event is fired asynchronously from its own task, never from the caller's thread,
+    /// so a plugin host call that sends a packet cannot block on the plugin admission gate.
+    translate_queue: std::sync::OnceLock<UnboundedSender<TranslateJob>>,
+}
+
+/// Builds the outgoing packet that signals `done` once it is written.
+type MakeOutgoing = fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket;
+
+struct TranslateJob {
+    data: Bytes,
+    done: Option<(MakeOutgoing, oneshot::Sender<()>)>,
 }
 
 impl JavaClient {
@@ -176,6 +188,7 @@ impl JavaClient {
             packet_sequence: AtomicI32::new(-1),
             packet_limiter: pending.packet_limiter,
             suspend_flushing: Arc::new(AtomicBool::new(false)),
+            translate_queue: std::sync::OnceLock::new(),
         }
     }
 
@@ -477,11 +490,106 @@ impl JavaClient {
         (frame_packet(event.packet_id, &event.payload), extra)
     }
 
+    /// The ordered translation queue, when packets to this client go through
+    /// `PacketSentEvent`. Started on first use.
+    fn translator(&self) -> Option<&UnboundedSender<TranslateJob>> {
+        if let Some(queue) = self.translate_queue.get() {
+            return Some(queue);
+        }
+        if self.close_token.is_cancelled() || self.version.load() == CURRENT_MC_VERSION {
+            return None;
+        }
+        let player = self.player.load_full();
+        let player = player.as_ref().as_ref()?;
+        let server = player.world().server.upgrade()?;
+        if !server.plugin_manager.has_handlers::<PacketSentEvent>() {
+            return None;
+        }
+        let mut spawn = None;
+        let queue = self.translate_queue.get_or_init(|| {
+            let (send, recv) = tokio::sync::mpsc::unbounded_channel();
+            spawn = Some(recv);
+            send
+        });
+        if let Some(mut recv) = spawn {
+            let weak = Arc::downgrade(player);
+            let close = self.close_token.clone();
+            let _guard = self.rt_handle.enter();
+            tokio::spawn(async move {
+                loop {
+                    let job: TranslateJob = tokio::select! {
+                        () = close.cancelled() => break,
+                        job = recv.recv() => match job { Some(job) => job, None => break },
+                    };
+                    let Some(player) = weak.upgrade() else { break };
+                    let ClientPlatform::Java(client) = player.client.as_ref() else {
+                        break;
+                    };
+                    let (packet, extra) = client
+                        .translate_outgoing_async(&server, &player, job.data)
+                        .await;
+                    match job.done {
+                        None => {
+                            if let Some(packet) = packet {
+                                client.enqueue_translated(packet);
+                            }
+                        }
+                        Some((make, done)) => {
+                            match packet.and_then(|p| client.reserve_pending_bytes(p)) {
+                                Some((packet, len)) => {
+                                    client.queue_outgoing(make(packet, done), len);
+                                }
+                                None => {
+                                    let _ = done.send(());
+                                }
+                            }
+                        }
+                    }
+                    for packet in extra {
+                        client.enqueue_translated(packet);
+                    }
+                }
+            });
+        }
+        Some(queue)
+    }
+
+    async fn translate_outgoing_async(
+        &self,
+        server: &Arc<Server>,
+        player: &Arc<Player>,
+        packet_data: Bytes,
+    ) -> (Option<Bytes>, Vec<Bytes>) {
+        let mut reader = &packet_data[..];
+        let Ok(packet_id) = reader.get_var_int() else {
+            return (Some(packet_data), Vec::new());
+        };
+        let payload = packet_data.slice(packet_data.len() - reader.len()..);
+        let mut event = PacketSentEvent::new_raw(player.clone(), packet_id.0, payload);
+        server.plugin_manager.fire(server, &mut event).await;
+        let extra = event
+            .extra_packets
+            .iter()
+            .filter_map(|(id, payload)| frame_packet(*id, payload))
+            .collect();
+        if event.cancelled {
+            return (None, extra);
+        }
+        (frame_packet(event.packet_id, &event.payload), extra)
+    }
+
     pub fn try_enqueue_packet(&self, packet_data: Bytes) {
         self.try_enqueue_packet_data(packet_data);
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        if let Some(queue) = self.translator() {
+            let _ = queue.send(TranslateJob {
+                data: packet_data,
+                done: None,
+            });
+            return;
+        }
         let (packet, extra) = self.translate_outgoing(packet_data);
         if let Some(packet) = packet {
             self.enqueue_translated(packet);
@@ -570,6 +678,10 @@ impl JavaClient {
     }
 
     pub fn try_kick(&self, reason: &TextComponent) {
+        if let Some(queue) = self.translator() {
+            self.kick_translated(queue, self.serialize_disconnect(reason), reason);
+            return;
+        }
         if let Some(data) = self
             .serialize_disconnect(reason)
             .and_then(|data| self.translate_outgoing(data).0)
@@ -600,6 +712,15 @@ impl JavaClient {
     }
 
     pub async fn kick_explicit(&self, reason: &TextComponent, send_packet: bool) {
+        if let Some(queue) = self.translator() {
+            let data = if send_packet {
+                self.serialize_disconnect(reason)
+            } else {
+                None
+            };
+            self.kick_translated(queue, data, reason);
+            return;
+        }
         if send_packet && let Some(data) = self.serialize_disconnect(reason) {
             // Stalled peer: never flushes -> Close anyway.
             let _ = tokio::time::timeout(
@@ -611,6 +732,34 @@ impl JavaClient {
         let reason_text = reason.clone().get_text();
         warn!("Closing connection for {}: {reason_text}", self.id);
         self.close();
+    }
+
+    /// Translated clients: the disconnect packet waits behind the packets already queued
+    /// for translation, and the connection closes once it is flushed. The caller never
+    /// waits, because the translation may need the plugin admission gate it holds.
+    fn kick_translated(
+        &self,
+        queue: &UnboundedSender<TranslateJob>,
+        data: Option<Bytes>,
+        reason: &TextComponent,
+    ) {
+        let reason_text = reason.clone().get_text();
+        warn!("Closing connection for {}: {reason_text}", self.id);
+        let Some(data) = data else {
+            self.close();
+            return;
+        };
+        let (done, flushed) = oneshot::channel();
+        let _ = queue.send(TranslateJob {
+            data,
+            done: Some((OutgoingPacket::flushed, done)),
+        });
+        let close = self.close_token.clone();
+        self.rt_handle.spawn(async move {
+            // Stalled peer or dropped job: close anyway.
+            let _ = tokio::time::timeout(DISCONNECT_FLUSH_TIMEOUT, flushed).await;
+            close.cancel();
+        });
     }
 
     pub async fn send_packet_now(&self, packet: Bytes) {
@@ -630,6 +779,16 @@ impl JavaClient {
         packet: Bytes,
         make: fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket,
     ) {
+        if let Some(queue) = self.translator() {
+            // Not awaited: the translation task may wait for the plugin admission gate
+            // that the caller's own plugin chain holds.
+            let (completion_tx, _completion_rx) = oneshot::channel();
+            let _ = queue.send(TranslateJob {
+                data: packet,
+                done: Some((make, completion_tx)),
+            });
+            return;
+        }
         let (packet, extra) = self.translate_outgoing(packet);
         let Some((packet, packet_len)) = packet.and_then(|p| self.reserve_pending_bytes(p)) else {
             for packet in extra {
