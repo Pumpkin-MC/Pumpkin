@@ -137,18 +137,19 @@ pub struct JavaClient {
     pub packet_limiter: PacketRateLimiter,
     /// Vanilla `suspendFlushingOnServerThread`.
     suspend_flushing: Arc<AtomicBool>,
-    /// Ordered queue for packets that go through `PacketSentEvent` (translated clients).
-    /// The event is fired asynchronously from its own task, never from the caller's thread,
-    /// so a plugin host call that sends a packet cannot block on the plugin admission gate.
-    translate_queue: std::sync::OnceLock<UnboundedSender<TranslateJob>>,
+    /// Packets waiting for `PacketSentEvent`, see `translation_queue`.
+    translations: std::sync::OnceLock<UnboundedSender<PendingTranslation>>,
 }
 
-/// Builds the outgoing packet that signals `done` once it is written.
+/// Builds the outgoing packet that completes `done` once written.
 type MakeOutgoing = fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket;
 
-struct TranslateJob {
+/// A packet on its way through `PacketSentEvent`.
+struct PendingTranslation {
     data: Bytes,
-    done: Option<(MakeOutgoing, oneshot::Sender<()>)>,
+    /// Held in `pending_bytes` until the translated packet takes its place.
+    reserved: usize,
+    completion: Option<(MakeOutgoing, oneshot::Sender<()>)>,
 }
 
 impl JavaClient {
@@ -188,7 +189,7 @@ impl JavaClient {
             packet_sequence: AtomicI32::new(-1),
             packet_limiter: pending.packet_limiter,
             suspend_flushing: Arc::new(AtomicBool::new(false)),
-            translate_queue: std::sync::OnceLock::new(),
+            translations: std::sync::OnceLock::new(),
         }
     }
 
@@ -450,132 +451,125 @@ impl JavaClient {
         Some((packet_data, packet_len))
     }
 
-    /// `PacketSentEvent` for clients the multiversion plugin admitted below
-    /// `CURRENT_MC_VERSION`: it gets the 26.3 id + payload and rewrites both.
-    /// The packet is `None` when cancelled; the extra packets go right after it, as is.
-    fn translate_outgoing(&self, packet_data: Bytes) -> (Option<Bytes>, Vec<Bytes>) {
-        if self.close_token.is_cancelled() {
-            return (None, Vec::new());
-        }
-        if self.version.load() == CURRENT_MC_VERSION {
-            return (Some(packet_data), Vec::new());
-        }
-        let player = self.player.load_full();
-        let Some(player) = player.as_ref() else {
-            return (Some(packet_data), Vec::new());
-        };
-        let Some(server) = player.world().server.upgrade() else {
-            return (Some(packet_data), Vec::new());
-        };
-        if !server.plugin_manager.has_handlers::<PacketSentEvent>() {
-            return (Some(packet_data), Vec::new());
-        }
-
-        let mut reader = &packet_data[..];
-        let Ok(packet_id) = reader.get_var_int() else {
-            return (Some(packet_data), Vec::new());
-        };
-        let payload = packet_data.slice(packet_data.len() - reader.len()..);
-        let mut event = PacketSentEvent::new_raw(player.clone(), packet_id.0, payload);
-        server.plugin_manager.fire_blocking(&server, &mut event);
-
-        let extra = event
-            .extra_packets
-            .iter()
-            .filter_map(|(id, payload)| frame_packet(*id, payload))
-            .collect();
-        if event.cancelled {
-            return (None, extra);
-        }
-        (frame_packet(event.packet_id, &event.payload), extra)
-    }
-
-    /// The ordered translation queue, when packets to this client go through
-    /// `PacketSentEvent`. Started on first use.
-    fn translator(&self) -> Option<&UnboundedSender<TranslateJob>> {
-        if let Some(queue) = self.translate_queue.get() {
-            return Some(queue);
-        }
+    /// Player and server when packets to this client go through `PacketSentEvent`:
+    /// a client below `CURRENT_MC_VERSION` and a plugin listening.
+    fn translation_target(&self) -> Option<(Arc<Player>, Arc<Server>)> {
         if self.close_token.is_cancelled() || self.version.load() == CURRENT_MC_VERSION {
             return None;
         }
-        let player = self.player.load_full();
-        let player = player.as_ref().as_ref()?;
+        let player = Option::clone(&self.player.load())?;
         let server = player.world().server.upgrade()?;
-        if !server.plugin_manager.has_handlers::<PacketSentEvent>() {
-            return None;
+        server
+            .plugin_manager
+            .has_handlers::<PacketSentEvent>()
+            .then_some((player, server))
+    }
+
+    /// Per-connection FIFO that fires `PacketSentEvent` off the sender's thread.
+    /// A plugin host call that sends a packet would otherwise wait on its own plugin chain.
+    /// Once started, every packet goes through it to keep the send order.
+    fn translation_queue(&self) -> Option<&UnboundedSender<PendingTranslation>> {
+        if let Some(queue) = self.translations.get() {
+            return Some(queue);
         }
-        let mut spawn = None;
-        let queue = self.translate_queue.get_or_init(|| {
+        let (player, server) = self.translation_target()?;
+        let mut receiver = None;
+        let queue = self.translations.get_or_init(|| {
             let (send, recv) = tokio::sync::mpsc::unbounded_channel();
-            spawn = Some(recv);
+            receiver = Some(recv);
             send
         });
-        if let Some(mut recv) = spawn {
-            let weak = Arc::downgrade(player);
-            let close = self.close_token.clone();
-            let _guard = self.rt_handle.enter();
-            tokio::spawn(async move {
-                loop {
-                    let job: TranslateJob = tokio::select! {
-                        () = close.cancelled() => break,
-                        job = recv.recv() => match job { Some(job) => job, None => break },
-                    };
-                    let Some(player) = weak.upgrade() else { break };
-                    let ClientPlatform::Java(client) = player.client.as_ref() else {
-                        break;
-                    };
-                    let (packet, extra) = client
-                        .translate_outgoing_async(&server, &player, job.data)
-                        .await;
-                    match job.done {
-                        None => {
-                            if let Some(packet) = packet {
-                                client.enqueue_translated(packet);
-                            }
-                        }
-                        Some((make, done)) => {
-                            match packet.and_then(|p| client.reserve_pending_bytes(p)) {
-                                Some((packet, len)) => {
-                                    client.queue_outgoing(make(packet, done), len);
-                                }
-                                None => {
-                                    let _ = done.send(());
-                                }
-                            }
-                        }
-                    }
-                    for packet in extra {
-                        client.enqueue_translated(packet);
-                    }
-                }
-            });
+        if let Some(receiver) = receiver {
+            self.tasks.spawn_on(
+                run_translations(
+                    Arc::downgrade(&player),
+                    server,
+                    receiver,
+                    self.close_token.clone(),
+                ),
+                &self.rt_handle,
+            );
         }
         Some(queue)
     }
 
-    async fn translate_outgoing_async(
+    /// Counts the untranslated packet against `MAX_PENDING_BYTES` while it waits.
+    fn defer_translation(
         &self,
-        server: &Arc<Server>,
-        player: &Arc<Player>,
-        packet_data: Bytes,
-    ) -> (Option<Bytes>, Vec<Bytes>) {
-        let mut reader = &packet_data[..];
-        let Ok(packet_id) = reader.get_var_int() else {
-            return (Some(packet_data), Vec::new());
+        queue: &UnboundedSender<PendingTranslation>,
+        data: Bytes,
+        completion: Option<(MakeOutgoing, oneshot::Sender<()>)>,
+    ) -> bool {
+        let Some((data, reserved)) = self.reserve_pending_bytes(data) else {
+            return false;
         };
-        let payload = packet_data.slice(packet_data.len() - reader.len()..);
-        let mut event = PacketSentEvent::new_raw(player.clone(), packet_id.0, payload);
-        server.plugin_manager.fire(server, &mut event).await;
-        let extra = event
-            .extra_packets
-            .iter()
-            .filter_map(|(id, payload)| frame_packet(*id, payload))
-            .collect();
-        if event.cancelled {
-            return (None, extra);
+        let pending = PendingTranslation {
+            data,
+            reserved,
+            completion,
+        };
+        if queue.send(pending).is_err() {
+            decrement_pending_bytes(&self.pending_bytes, reserved);
+            return false;
         }
-        (frame_packet(event.packet_id, &event.payload), extra)
+        true
+    }
+
+    /// Queues a translation result: the packet (`None` when cancelled), then the extras.
+    fn queue_translated(
+        &self,
+        packet: Option<Bytes>,
+        extra: Vec<Bytes>,
+        completion: Option<(MakeOutgoing, oneshot::Sender<()>)>,
+    ) {
+        match (
+            packet.and_then(|p| self.reserve_pending_bytes(p)),
+            completion,
+        ) {
+            (Some((packet, len)), Some((make, done))) => {
+                self.queue_outgoing(make(packet, done), len);
+            }
+            (Some((packet, len)), None) => {
+                self.queue_outgoing(OutgoingPacket::normal(packet), len);
+            }
+            // Nothing to wait for.
+            (None, Some((_, done))) => {
+                let _ = done.send(());
+            }
+            (None, None) => {}
+        }
+        for packet in extra {
+            self.enqueue_translated(packet);
+        }
+    }
+
+    /// Whether the caller runs inside a plugin call. Waiting for a translation
+    /// there would wait for the caller's own plugin chain to end.
+    fn in_plugin_call(&self) -> bool {
+        let player = self.player.load();
+        let Some(server) = player.as_ref().as_ref().and_then(|p| p.world().server.upgrade()) else {
+            return false;
+        };
+        server.plugin_manager.in_plugin_call()
+    }
+
+    /// Translated clients: the disconnect goes through the translation queue and the
+    /// connection closes once it is flushed. The caller does not wait.
+    fn kick_deferred(&self, queue: &UnboundedSender<PendingTranslation>, data: Option<Bytes>) {
+        let (done, flushed) = oneshot::channel();
+        let queued = data.is_some_and(|data| {
+            self.defer_translation(queue, data, Some((OutgoingPacket::flushed, done)))
+        });
+        if !queued {
+            self.close();
+            return;
+        }
+        let close = self.close_token.clone();
+        self.rt_handle.spawn(async move {
+            // Stalled peer: never flushes -> Close anyway.
+            let _ = tokio::time::timeout(DISCONNECT_FLUSH_TIMEOUT, flushed).await;
+            close.cancel();
+        });
     }
 
     pub fn try_enqueue_packet(&self, packet_data: Bytes) {
@@ -583,19 +577,10 @@ impl JavaClient {
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
-        if let Some(queue) = self.translator() {
-            let _ = queue.send(TranslateJob {
-                data: packet_data,
-                done: None,
-            });
-            return;
-        }
-        let (packet, extra) = self.translate_outgoing(packet_data);
-        if let Some(packet) = packet {
-            self.enqueue_translated(packet);
-        }
-        for packet in extra {
-            self.enqueue_translated(packet);
+        if let Some(queue) = self.translation_queue() {
+            self.defer_translation(queue, packet_data, None);
+        } else {
+            self.enqueue_translated(packet_data);
         }
     }
 
@@ -678,14 +663,16 @@ impl JavaClient {
     }
 
     pub fn try_kick(&self, reason: &TextComponent) {
-        if let Some(queue) = self.translator() {
-            self.kick_translated(queue, self.serialize_disconnect(reason), reason);
+        if let Some(queue) = self.translation_queue() {
+            warn!(
+                "Closing connection for {}: {}",
+                self.id,
+                reason.clone().get_text()
+            );
+            self.kick_deferred(queue, self.serialize_disconnect(reason));
             return;
         }
-        if let Some(data) = self
-            .serialize_disconnect(reason)
-            .and_then(|data| self.translate_outgoing(data).0)
-        {
+        if let Some(data) = self.serialize_disconnect(reason) {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
             // The writer drains and flushes it after `close()`
@@ -712,13 +699,16 @@ impl JavaClient {
     }
 
     pub async fn kick_explicit(&self, reason: &TextComponent, send_packet: bool) {
-        if let Some(queue) = self.translator() {
-            let data = if send_packet {
-                self.serialize_disconnect(reason)
-            } else {
-                None
-            };
-            self.kick_translated(queue, data, reason);
+        if send_packet
+            && self.in_plugin_call()
+            && let Some(queue) = self.translation_queue()
+        {
+            warn!(
+                "Closing connection for {}: {}",
+                self.id,
+                reason.clone().get_text()
+            );
+            self.kick_deferred(queue, self.serialize_disconnect(reason));
             return;
         }
         if send_packet && let Some(data) = self.serialize_disconnect(reason) {
@@ -732,34 +722,6 @@ impl JavaClient {
         let reason_text = reason.clone().get_text();
         warn!("Closing connection for {}: {reason_text}", self.id);
         self.close();
-    }
-
-    /// Translated clients: the disconnect packet waits behind the packets already queued
-    /// for translation, and the connection closes once it is flushed. The caller never
-    /// waits, because the translation may need the plugin admission gate it holds.
-    fn kick_translated(
-        &self,
-        queue: &UnboundedSender<TranslateJob>,
-        data: Option<Bytes>,
-        reason: &TextComponent,
-    ) {
-        let reason_text = reason.clone().get_text();
-        warn!("Closing connection for {}: {reason_text}", self.id);
-        let Some(data) = data else {
-            self.close();
-            return;
-        };
-        let (done, flushed) = oneshot::channel();
-        let _ = queue.send(TranslateJob {
-            data,
-            done: Some((OutgoingPacket::flushed, done)),
-        });
-        let close = self.close_token.clone();
-        self.rt_handle.spawn(async move {
-            // Stalled peer or dropped job: close anyway.
-            let _ = tokio::time::timeout(DISCONNECT_FLUSH_TIMEOUT, flushed).await;
-            close.cancel();
-        });
     }
 
     pub async fn send_packet_now(&self, packet: Bytes) {
@@ -779,30 +741,20 @@ impl JavaClient {
         packet: Bytes,
         make: fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket,
     ) {
-        if let Some(queue) = self.translator() {
-            // Not awaited: the translation task may wait for the plugin admission gate
-            // that the caller's own plugin chain holds.
-            let (completion_tx, _completion_rx) = oneshot::channel();
-            let _ = queue.send(TranslateJob {
-                data: packet,
-                done: Some((make, completion_tx)),
-            });
-            return;
-        }
-        let (packet, extra) = self.translate_outgoing(packet);
-        let Some((packet, packet_len)) = packet.and_then(|p| self.reserve_pending_bytes(p)) else {
-            for packet in extra {
-                self.enqueue_translated(packet);
-            }
-            return;
-        };
-
         let (completion_tx, completion_rx) = oneshot::channel();
-        if !self.queue_outgoing(make(packet, completion_tx), packet_len) {
-            return;
-        }
-        for packet in extra {
-            self.enqueue_translated(packet);
+        if let Some(queue) = self.translation_queue() {
+            if !self.defer_translation(queue, packet, Some((make, completion_tx)))
+                || self.in_plugin_call()
+            {
+                return;
+            }
+        } else {
+            let Some((packet, packet_len)) = self.reserve_pending_bytes(packet) else {
+                return;
+            };
+            if !self.queue_outgoing(make(packet, completion_tx), packet_len) {
+                return;
+            }
         }
 
         if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
@@ -1321,6 +1273,62 @@ impl JavaClient {
 }
 
 /// Packet id + payload as one frame body.
+/// Fires `PacketSentEvent` for each queued packet in order and queues the result.
+async fn run_translations(
+    player: std::sync::Weak<Player>,
+    server: Arc<Server>,
+    mut queue: UnboundedReceiver<PendingTranslation>,
+    close: CancellationToken,
+) {
+    loop {
+        // Nothing is translated after close
+        let pending = tokio::select! {
+            biased;
+            () = close.cancelled() => break,
+            pending = queue.recv() => match pending {
+                Some(pending) => pending,
+                None => break,
+            },
+        };
+        let Some(player) = player.upgrade() else {
+            break;
+        };
+        let ClientPlatform::Java(client) = player.client.as_ref() else {
+            break;
+        };
+        let (packet, extra) = fire_packet_sent(&server, &player, pending.data).await;
+        decrement_pending_bytes(&client.pending_bytes, pending.reserved);
+        client.queue_translated(packet, extra, pending.completion);
+    }
+}
+
+/// `PacketSentEvent` for clients the multiversion plugin admitted below
+/// `CURRENT_MC_VERSION`: it gets the 26.3 id + payload and rewrites both.
+/// The packet is `None` when cancelled; the extra packets go right after it, as is.
+async fn fire_packet_sent(
+    server: &Arc<Server>,
+    player: &Arc<Player>,
+    packet_data: Bytes,
+) -> (Option<Bytes>, Vec<Bytes>) {
+    let mut reader = &packet_data[..];
+    let Ok(packet_id) = reader.get_var_int() else {
+        return (Some(packet_data), Vec::new());
+    };
+    let payload = packet_data.slice(packet_data.len() - reader.len()..);
+    let mut event = PacketSentEvent::new_raw(player.clone(), packet_id.0, payload);
+    server.plugin_manager.fire(server, &mut event).await;
+
+    let extra = event
+        .extra_packets
+        .iter()
+        .filter_map(|(id, payload)| frame_packet(*id, payload))
+        .collect();
+    if event.cancelled {
+        return (None, extra);
+    }
+    (frame_packet(event.packet_id, &event.payload), extra)
+}
+
 fn frame_packet(packet_id: i32, payload: &[u8]) -> Option<Bytes> {
     let mut framed = Vec::with_capacity(5 + payload.len());
     framed.write_var_int(&VarInt(packet_id)).ok()?;

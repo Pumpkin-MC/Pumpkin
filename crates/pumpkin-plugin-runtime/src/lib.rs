@@ -11,6 +11,12 @@ pub use lifecycle::{DriverError, DriverJoin, DriverState};
 pub use policy::{LegacySyncReentry, StorePolicy};
 pub use spawn::{RuntimeSpawner, SpawnError, SpawnFuture};
 
+/// Whether the caller runs inside a plugin call's synchronous chain.
+#[must_use]
+pub fn in_plugin_call() -> bool {
+    chain::ReentryContext::current().is_some()
+}
+
 #[cfg(test)]
 pub(crate) use chain::MAX_SYNC_REENTRY_DEPTH;
 

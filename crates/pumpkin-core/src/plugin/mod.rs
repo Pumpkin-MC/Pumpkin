@@ -414,6 +414,14 @@ impl PluginManager {
         }
     }
 
+    /// Whether the caller runs inside a plugin call. Assumes so while the loaders are being changed.
+    #[must_use]
+    pub fn in_plugin_call(&self) -> bool {
+        self.loaders.try_read().map_or(true, |loaders| {
+            loaders.iter().any(|loader| loader.in_plugin_call())
+        })
+    }
+
     /// Get a clone of the loaders for context use
     #[must_use]
     pub async fn get_loaders(&self) -> Vec<Arc<dyn PluginLoader>> {
