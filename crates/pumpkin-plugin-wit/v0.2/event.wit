@@ -248,6 +248,8 @@ interface event {
     record block-burn-event-data {
         igniting-block: string,
         block: string,
+        block-pos: block-pos,
+        target-world: %world,
         cancelled: bool
     }
 

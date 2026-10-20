@@ -115,25 +115,15 @@ pub trait Animal: Mob {
 
 #[must_use]
 pub fn get_dye_color_from_item(item: &pumpkin_data::item::Item) -> Option<u8> {
-    match item.registry_key {
-        "white_dye" => Some(0),
-        "orange_dye" => Some(1),
-        "magenta_dye" => Some(2),
-        "light_blue_dye" => Some(3),
-        "yellow_dye" => Some(4),
-        "lime_dye" => Some(5),
-        "pink_dye" => Some(6),
-        "gray_dye" => Some(7),
-        "light_gray_dye" => Some(8),
-        "cyan_dye" => Some(9),
-        "purple_dye" => Some(10),
-        "blue_dye" => Some(11),
-        "brown_dye" => Some(12),
-        "green_dye" => Some(13),
-        "red_dye" => Some(14),
-        "black_dye" => Some(15),
-        _ => None,
+    use pumpkin_data::data_component::DataComponent;
+    use pumpkin_data::data_component_impl::{DyeImpl, get};
+
+    for (id, component) in item.components {
+        if *id == DataComponent::Dye {
+            return Some(get::<DyeImpl>(*component).color.id());
+        }
     }
+    None
 }
 
 #[must_use]

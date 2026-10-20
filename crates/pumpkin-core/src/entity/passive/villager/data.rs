@@ -6,14 +6,16 @@ use serde::Serialize;
 pub const BREEDING_FOOD_THRESHOLD: i32 = 12;
 
 #[must_use]
-pub const fn get_food_points(item: &Item) -> i32 {
-    match item.id {
-        id if id == Item::BREAD.id => 4,
-        id if id == Item::POTATO.id => 1,
-        id if id == Item::CARROT.id => 1,
-        id if id == Item::BEETROOT.id => 1,
-        _ => 0,
+pub fn get_food_points(item: &Item) -> i32 {
+    use pumpkin_data::data_component::DataComponent;
+    use pumpkin_data::data_component_impl::{VillagerFoodImpl, get};
+
+    for (id, component) in item.components {
+        if *id == DataComponent::VillagerFood {
+            return get::<VillagerFoodImpl>(*component).nutrition;
+        }
     }
+    0
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]

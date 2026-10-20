@@ -36,12 +36,16 @@ impl WeightedRandomFeature {
             roll -= entry.weight;
             if roll < 0 {
                 if let Some(feature) = entry.feature.get() {
+                    let sub_name = match entry.feature {
+                        PlacedFeatureWrapper::Named(name) => name,
+                        PlacedFeatureWrapper::Direct(_) => feature_name,
+                    };
                     return feature.generate(
                         chunk,
                         block_registry,
                         min_y,
                         height,
-                        feature_name,
+                        sub_name,
                         random,
                         pos,
                     );

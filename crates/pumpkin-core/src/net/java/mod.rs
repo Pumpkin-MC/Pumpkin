@@ -1130,7 +1130,7 @@ impl JavaClient {
                 );
             }
             id if id == SSpectateEntity::PACKET_ID => {
-                self.handle_spectate_entity(player, server, &SSpectateEntity::read(&mut payload)?);
+                self.handle_spectate_entity(player, &SSpectateEntity::read(&mut payload)?);
             }
             id if id == SSetCommandMinecart::PACKET_ID => {
                 self.handle_set_command_minecart(player, &SSetCommandMinecart::read(&mut payload)?);
