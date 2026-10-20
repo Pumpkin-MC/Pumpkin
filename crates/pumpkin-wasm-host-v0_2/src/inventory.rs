@@ -1,6 +1,9 @@
+use super::AccessorExt;
+use crate::pumpkin::plugin::inventory::{HostInventoryWithStore, HostPlayerInventoryWithStore};
+
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use wasmtime::component::Resource;
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 use crate::pumpkin::plugin::{
     common::Hand as WitHand,
@@ -26,7 +29,7 @@ const fn from_wasm_hand(hand: WitHand) -> pumpkin_util::Hand {
 impl InventoryHost for PluginHostState {}
 
 impl HostInventory for PluginHostState {
-    async fn get_size(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<u32> {
+    fn get_size(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<u32> {
         let provider = self.get(&res)?;
         let size = match provider {
             InventoryProvider::Generic(inv) => inv.size() as u32,
@@ -36,7 +39,7 @@ impl HostInventory for PluginHostState {
         Ok(size)
     }
 
-    async fn is_empty(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<bool> {
+    fn is_empty(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<bool> {
         let provider = self.get(&res)?;
         let empty = match provider {
             InventoryProvider::Generic(inv) => inv.is_empty(),
@@ -52,7 +55,7 @@ impl HostInventory for PluginHostState {
         Ok(empty)
     }
 
-    async fn get_item(
+    fn get_item(
         &mut self,
         res: Resource<WitInventory>,
         slot: u32,
@@ -88,145 +91,21 @@ impl HostInventory for PluginHostState {
         }
     }
 
-    async fn set_item(
-        &mut self,
-        res: Resource<WitInventory>,
-        slot: u32,
-        item: Option<Resource<WitHostItemStack>>,
-    ) -> wasmtime::Result<()> {
-        let stack = if let Some(stack_res) = item {
-            self.take(stack_res)?.lock().await.clone()
-        } else {
-            pumpkin_data::item_stack::ItemStack::EMPTY.clone()
-        };
-
-        let provider = self.get(&res)?;
-        match provider {
-            InventoryProvider::Generic(inv) => {
-                inv.set_stack(slot as usize, stack);
-            }
-            InventoryProvider::PlayerMain(player) => {
-                if slot < 36 {
-                    player.inventory().set_stack(slot as usize, stack.clone());
-                    let stack_serializer = ItemStackSerializer::from(stack);
-                    let packet = CSetContainerSlot::new(0, 0, slot as i16, &stack_serializer);
-                    player.send_client_packet(&packet).await;
-                }
-            }
-            InventoryProvider::PlayerEnderChest(player) => {
-                if slot < 27 {
-                    player
-                        .ender_chest_inventory()
-                        .set_stack(slot as usize, stack);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    async fn remove_item(
-        &mut self,
-        res: Resource<WitInventory>,
-        slot: u32,
-    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let provider = self.get(&res)?;
-        let old_stack = match provider {
-            InventoryProvider::Generic(inv) => {
-                let s = inv.remove_stack(slot as usize);
-                if s.is_empty() { None } else { Some(s) }
-            }
-            InventoryProvider::PlayerMain(player) => {
-                if slot < 36 {
-                    let s = player.inventory().get_stack(slot as usize);
-                    player.inventory().set_stack(
-                        slot as usize,
-                        pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
-                    );
-                    let empty_serializer = ItemStackSerializer::from(
-                        pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
-                    );
-                    let packet = CSetContainerSlot::new(0, 0, slot as i16, &empty_serializer);
-                    player.send_client_packet(&packet).await;
-                    if s.is_empty() { None } else { Some(s) }
-                } else {
-                    None
-                }
-            }
-            InventoryProvider::PlayerEnderChest(player) => {
-                if slot < 27 {
-                    let s = player.ender_chest_inventory().get_stack(slot as usize);
-                    player.ender_chest_inventory().set_stack(
-                        slot as usize,
-                        pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
-                    );
-                    if s.is_empty() { None } else { Some(s) }
-                } else {
-                    None
-                }
-            }
-        };
-
-        if let Some(stack) = old_stack {
-            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn clear(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<()> {
-        let provider = self.get(&res)?;
-        match provider {
-            InventoryProvider::Generic(inv) => {
-                inv.clear();
-            }
-            InventoryProvider::PlayerMain(player) => {
-                for slot in 0..36 {
-                    player
-                        .inventory()
-                        .set_stack(slot, pumpkin_data::item_stack::ItemStack::EMPTY.clone());
-                    let empty_serializer = ItemStackSerializer::from(
-                        pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
-                    );
-                    let packet = CSetContainerSlot::new(0, 0, slot as i16, &empty_serializer);
-                    player.send_client_packet(&packet).await;
-                }
-            }
-            InventoryProvider::PlayerEnderChest(player) => {
-                player.ender_chest_inventory().clear();
-            }
-        }
-        Ok(())
-    }
-
     // Fixme: this method causes an unnecessary amount of resource table lookups
-    async fn get_all_items(
+    fn get_all_items(
         &mut self,
         res: Resource<WitInventory>,
     ) -> wasmtime::Result<Vec<Option<Resource<WitHostItemStack>>>> {
-        let size = self.get_size(Resource::new_borrow(res.rep())).await?;
+        let size = self.get_size(Resource::new_borrow(res.rep()))?;
         let mut items = Vec::with_capacity(size as usize);
         for slot in 0..size {
-            let item = self.get_item(Resource::new_borrow(res.rep()), slot).await?;
+            let item = self.get_item(Resource::new_borrow(res.rep()), slot)?;
             items.push(item);
         }
         Ok(items)
     }
 
-    // Fixme: this method causes an unnecessary amount of resource table lookups
-    async fn set_all_items(
-        &mut self,
-        res: Resource<WitInventory>,
-        items: Vec<Option<Resource<WitHostItemStack>>>,
-    ) -> wasmtime::Result<()> {
-        let size = self.get_size(Resource::new_borrow(res.rep())).await?;
-        for (slot, item) in items.into_iter().take(size as usize).enumerate() {
-            self.set_item(Resource::new_borrow(res.rep()), slot as u32, item)
-                .await?;
-        }
-        Ok(())
-    }
-
-    async fn count_item(
+    fn count_item(
         &mut self,
         res: Resource<WitInventory>,
         item_id: String,
@@ -266,22 +145,155 @@ impl HostInventory for PluginHostState {
         Ok(total)
     }
 
-    async fn contains_item(
+    fn contains_item(
         &mut self,
         res: Resource<WitInventory>,
         item_id: String,
     ) -> wasmtime::Result<bool> {
-        let count = self.count_item(res, item_id).await?;
+        let count = self.count_item(res, item_id)?;
         Ok(count > 0)
     }
 
-    async fn drop(&mut self, rep: Resource<WitInventory>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<WitInventory>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
 }
 
+impl HostInventoryWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn set_item(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<WitInventory>,
+        slot: u32,
+        item: Option<Resource<WitHostItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let stack = if let Some(stack_res) = item {
+            accessor.take_res(stack_res)?.lock().await.clone()
+        } else {
+            pumpkin_data::item_stack::ItemStack::EMPTY.clone()
+        };
+
+        let provider = accessor.get_res(&res)?;
+        match provider {
+            InventoryProvider::Generic(inv) => {
+                inv.set_stack(slot as usize, stack);
+            }
+            InventoryProvider::PlayerMain(player) => {
+                if slot < 36 {
+                    player.inventory().set_stack(slot as usize, stack.clone());
+                    let stack_serializer = ItemStackSerializer::from(stack);
+                    let packet = CSetContainerSlot::new(0, 0, slot as i16, &stack_serializer);
+                    player.send_client_packet(&packet).await;
+                }
+            }
+            InventoryProvider::PlayerEnderChest(player) => {
+                if slot < 27 {
+                    player
+                        .ender_chest_inventory()
+                        .set_stack(slot as usize, stack);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn remove_item(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<WitInventory>,
+        slot: u32,
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let provider = accessor.get_res(&res)?;
+        let old_stack = match provider {
+            InventoryProvider::Generic(inv) => {
+                let s = inv.remove_stack(slot as usize);
+                if s.is_empty() { None } else { Some(s) }
+            }
+            InventoryProvider::PlayerMain(player) => {
+                if slot < 36 {
+                    let s = player.inventory().get_stack(slot as usize);
+                    player.inventory().set_stack(
+                        slot as usize,
+                        pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
+                    );
+                    let empty_serializer = ItemStackSerializer::from(
+                        pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
+                    );
+                    let packet = CSetContainerSlot::new(0, 0, slot as i16, &empty_serializer);
+                    player.send_client_packet(&packet).await;
+                    if s.is_empty() { None } else { Some(s) }
+                } else {
+                    None
+                }
+            }
+            InventoryProvider::PlayerEnderChest(player) => {
+                if slot < 27 {
+                    let s = player.ender_chest_inventory().get_stack(slot as usize);
+                    player.ender_chest_inventory().set_stack(
+                        slot as usize,
+                        pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
+                    );
+                    if s.is_empty() { None } else { Some(s) }
+                } else {
+                    None
+                }
+            }
+        };
+
+        if let Some(stack) = old_stack {
+            Ok(Some(accessor.add_res(Arc::new(Mutex::new(stack)))?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn clear(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<WitInventory>,
+    ) -> wasmtime::Result<()> {
+        let provider = accessor.get_res(&res)?;
+        match provider {
+            InventoryProvider::Generic(inv) => {
+                inv.clear();
+            }
+            InventoryProvider::PlayerMain(player) => {
+                for slot in 0..36 {
+                    player
+                        .inventory()
+                        .set_stack(slot, pumpkin_data::item_stack::ItemStack::EMPTY.clone());
+                    let empty_serializer = ItemStackSerializer::from(
+                        pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
+                    );
+                    let packet = CSetContainerSlot::new(0, 0, slot as i16, &empty_serializer);
+                    player.send_client_packet(&packet).await;
+                }
+            }
+            InventoryProvider::PlayerEnderChest(player) => {
+                player.ender_chest_inventory().clear();
+            }
+        }
+        Ok(())
+    }
+
+    // Fixme: this method causes an unnecessary amount of resource table lookups
+    async fn set_all_items(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<WitInventory>,
+        items: Vec<Option<Resource<WitHostItemStack>>>,
+    ) -> wasmtime::Result<()> {
+        let size =
+            accessor.with(|mut host| host.get().get_size(Resource::new_borrow(res.rep())))?;
+        let mut items = items.into_iter();
+        for (slot, item) in items.by_ref().take(size as usize).enumerate() {
+            Self::set_item(accessor, Resource::new_borrow(res.rep()), slot as u32, item).await?;
+        }
+        for extra in items.flatten() {
+            accessor.take_res(extra)?;
+        }
+        Ok(())
+    }
+}
+
 impl HostPlayerInventory for PluginHostState {
-    async fn as_inventory(
+    fn as_inventory(
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Resource<WitInventory>> {
@@ -289,7 +301,7 @@ impl HostPlayerInventory for PluginHostState {
         self.add(InventoryProvider::PlayerMain(player))
     }
 
-    async fn get_item_in_hand(
+    fn get_item_in_hand(
         &mut self,
         res: Resource<WitPlayerInventory>,
         hand: WitHand,
@@ -304,18 +316,106 @@ impl HostPlayerInventory for PluginHostState {
         }
     }
 
-    async fn set_item_in_hand(
+    fn get_selected_slot(&mut self, res: Resource<WitPlayerInventory>) -> wasmtime::Result<u8> {
+        let player = self.get(&res)?;
+        Ok(player.inventory().get_selected_slot())
+    }
+
+    fn set_selected_slot(
         &mut self,
+        res: Resource<WitPlayerInventory>,
+        slot: u8,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&res)?;
+        if slot < 9 {
+            player.inventory().set_selected_slot(slot);
+        }
+        Ok(())
+    }
+
+    fn get_helmet(
+        &mut self,
+        res: Resource<WitPlayerInventory>,
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let player = self.get(&res)?;
+        let stack = player.inventory().get_slot(39);
+        if stack.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
+        }
+    }
+
+    fn get_chestplate(
+        &mut self,
+        res: Resource<WitPlayerInventory>,
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let player = self.get(&res)?;
+        let stack = player.inventory().get_slot(38);
+        if stack.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
+        }
+    }
+
+    fn get_leggings(
+        &mut self,
+        res: Resource<WitPlayerInventory>,
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let player = self.get(&res)?;
+        let stack = player.inventory().get_slot(37);
+        if stack.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
+        }
+    }
+
+    fn get_boots(
+        &mut self,
+        res: Resource<WitPlayerInventory>,
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let player = self.get(&res)?;
+        let stack = player.inventory().get_slot(36);
+        if stack.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
+        }
+    }
+
+    fn get_off_hand(
+        &mut self,
+        res: Resource<WitPlayerInventory>,
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let player = self.get(&res)?;
+        let stack = player.inventory().get_slot(40);
+        if stack.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
+        }
+    }
+
+    fn drop(&mut self, rep: Resource<WitPlayerInventory>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+}
+
+impl HostPlayerInventoryWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn set_item_in_hand(
+        accessor: &Accessor<PluginHostState, Self>,
         res: Resource<WitPlayerInventory>,
         hand: WitHand,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let stack = if let Some(stack_res) = item {
-            self.take(stack_res)?.lock().await.clone()
+            accessor.take_res(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
-        let player = self.get(&res)?;
+        let player = accessor.get_res(&res)?;
 
         let hand = from_wasm_hand(hand);
         let slot = match hand {
@@ -333,50 +433,17 @@ impl HostPlayerInventory for PluginHostState {
         Ok(())
     }
 
-    async fn get_selected_slot(
-        &mut self,
-        res: Resource<WitPlayerInventory>,
-    ) -> wasmtime::Result<u8> {
-        let player = self.get(&res)?;
-        Ok(player.inventory().get_selected_slot())
-    }
-
-    async fn set_selected_slot(
-        &mut self,
-        res: Resource<WitPlayerInventory>,
-        slot: u8,
-    ) -> wasmtime::Result<()> {
-        let player = self.get(&res)?;
-        if slot < 9 {
-            player.inventory().set_selected_slot(slot);
-        }
-        Ok(())
-    }
-
-    async fn get_helmet(
-        &mut self,
-        res: Resource<WitPlayerInventory>,
-    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get(&res)?;
-        let stack = player.inventory().get_slot(39);
-        if stack.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
-        }
-    }
-
     async fn set_helmet(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let stack = if let Some(stack_res) = item {
-            self.take(stack_res)?.lock().await.clone()
+            accessor.take_res(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
-        let player = self.get(&res)?;
+        let player = accessor.get_res(&res)?;
         player.inventory().set_slot(39, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 5, &stack_serializer);
@@ -384,30 +451,17 @@ impl HostPlayerInventory for PluginHostState {
         Ok(())
     }
 
-    async fn get_chestplate(
-        &mut self,
-        res: Resource<WitPlayerInventory>,
-    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get(&res)?;
-        let stack = player.inventory().get_slot(38);
-        if stack.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
-        }
-    }
-
     async fn set_chestplate(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let stack = if let Some(stack_res) = item {
-            self.take(stack_res)?.lock().await.clone()
+            accessor.take_res(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
-        let player = self.get(&res)?;
+        let player = accessor.get_res(&res)?;
         player.inventory().set_slot(38, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 6, &stack_serializer);
@@ -415,30 +469,17 @@ impl HostPlayerInventory for PluginHostState {
         Ok(())
     }
 
-    async fn get_leggings(
-        &mut self,
-        res: Resource<WitPlayerInventory>,
-    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get(&res)?;
-        let stack = player.inventory().get_slot(37);
-        if stack.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
-        }
-    }
-
     async fn set_leggings(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let stack = if let Some(stack_res) = item {
-            self.take(stack_res)?.lock().await.clone()
+            accessor.take_res(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
-        let player = self.get(&res)?;
+        let player = accessor.get_res(&res)?;
         player.inventory().set_slot(37, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 7, &stack_serializer);
@@ -446,30 +487,17 @@ impl HostPlayerInventory for PluginHostState {
         Ok(())
     }
 
-    async fn get_boots(
-        &mut self,
-        res: Resource<WitPlayerInventory>,
-    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get(&res)?;
-        let stack = player.inventory().get_slot(36);
-        if stack.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
-        }
-    }
-
     async fn set_boots(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let stack = if let Some(stack_res) = item {
-            self.take(stack_res)?.lock().await.clone()
+            accessor.take_res(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
-        let player = self.get(&res)?;
+        let player = accessor.get_res(&res)?;
         player.inventory().set_slot(36, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 8, &stack_serializer);
@@ -477,30 +505,17 @@ impl HostPlayerInventory for PluginHostState {
         Ok(())
     }
 
-    async fn get_off_hand(
-        &mut self,
-        res: Resource<WitPlayerInventory>,
-    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get(&res)?;
-        let stack = player.inventory().get_slot(40);
-        if stack.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
-        }
-    }
-
     async fn set_off_hand(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let stack = if let Some(stack_res) = item {
-            self.take(stack_res)?.lock().await.clone()
+            accessor.take_res(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
-        let player = self.get(&res)?;
+        let player = accessor.get_res(&res)?;
         player.inventory().set_slot(40, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 45, &stack_serializer);
@@ -509,33 +524,36 @@ impl HostPlayerInventory for PluginHostState {
     }
 
     // Fixme: this method causes an unnecessary amount of resource table lookups
-    async fn clear_armor(&mut self, res: Resource<WitPlayerInventory>) -> wasmtime::Result<()> {
-        self.set_helmet(Resource::new_borrow(res.rep()), None)
-            .await?;
-        self.set_chestplate(Resource::new_borrow(res.rep()), None)
-            .await?;
-        self.set_leggings(Resource::new_borrow(res.rep()), None)
-            .await?;
-        self.set_boots(Resource::new_borrow(res.rep()), None)
-            .await?;
+    async fn clear_armor(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<WitPlayerInventory>,
+    ) -> wasmtime::Result<()> {
+        Self::set_helmet(accessor, Resource::new_borrow(res.rep()), None).await?;
+        Self::set_chestplate(accessor, Resource::new_borrow(res.rep()), None).await?;
+        Self::set_leggings(accessor, Resource::new_borrow(res.rep()), None).await?;
+        Self::set_boots(accessor, Resource::new_borrow(res.rep()), None).await?;
         Ok(())
     }
 
-    async fn clear_main(&mut self, res: Resource<WitPlayerInventory>) -> wasmtime::Result<()> {
-        let inv = self.as_inventory(res).await?;
-        self.clear(inv).await
+    async fn clear_main(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<WitPlayerInventory>,
+    ) -> wasmtime::Result<()> {
+        let inv = accessor.with(|mut host| host.get().as_inventory(res))?;
+        let rep = inv.rep();
+        Self::clear(accessor, Resource::new_borrow(rep)).await?;
+        accessor.take_res::<WitInventory>(Resource::new_own(rep))?;
+        Ok(())
     }
 
     // Fixme: this method causes an unnecessary amount of resource table lookups
-    async fn clear_all(&mut self, res: Resource<WitPlayerInventory>) -> wasmtime::Result<()> {
-        self.clear_main(Resource::new_borrow(res.rep())).await?;
-        self.clear_armor(Resource::new_borrow(res.rep())).await?;
-        self.set_off_hand(Resource::new_borrow(res.rep()), None)
-            .await?;
+    async fn clear_all(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<WitPlayerInventory>,
+    ) -> wasmtime::Result<()> {
+        Self::clear_main(accessor, Resource::new_borrow(res.rep())).await?;
+        Self::clear_armor(accessor, Resource::new_borrow(res.rep())).await?;
+        Self::set_off_hand(accessor, Resource::new_borrow(res.rep()), None).await?;
         Ok(())
-    }
-
-    async fn drop(&mut self, rep: Resource<WitPlayerInventory>) -> wasmtime::Result<()> {
-        self.drop(rep)
     }
 }

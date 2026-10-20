@@ -35,45 +35,6 @@ use crate::entity::{
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
 
-fn get_dye_color_from_item(item: &Item) -> Option<u8> {
-    let key = item.registry_key;
-    if key.contains("white") {
-        Some(0)
-    } else if key.contains("orange") {
-        Some(1)
-    } else if key.contains("magenta") {
-        Some(2)
-    } else if key.contains("light_blue") {
-        Some(3)
-    } else if key.contains("yellow") {
-        Some(4)
-    } else if key.contains("lime") {
-        Some(5)
-    } else if key.contains("pink") {
-        Some(6)
-    } else if key.contains("light_gray") {
-        Some(8)
-    } else if key.contains("gray") {
-        Some(7)
-    } else if key.contains("cyan") {
-        Some(9)
-    } else if key.contains("purple") {
-        Some(10)
-    } else if key.contains("blue") {
-        Some(11)
-    } else if key.contains("brown") {
-        Some(12)
-    } else if key.contains("green") {
-        Some(13)
-    } else if key.contains("red") {
-        Some(14)
-    } else if key.contains("black") {
-        Some(15)
-    } else {
-        None
-    }
-}
-
 pub struct CatEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
@@ -399,10 +360,11 @@ impl Mob for CatEntity {
                 if item.has_tag(&tag::Item::MINECRAFT_CAT_COLLAR_DYES)
                     || item.has_tag(&tag::Item::C_DYES)
                 {
-                    if let Some(color) = get_dye_color_from_item(item)
-                        && color != self.get_collar_color()
+                    if let Some(dye) = item_stack
+                        .get_data_component::<pumpkin_data::data_component_impl::DyeImpl>()
+                        && dye.color.id() != self.get_collar_color()
                     {
-                        self.set_collar_color(color);
+                        self.set_collar_color(dye.color.id());
                         item_stack.decrement_unless_creative(player.gamemode.load(), 1);
                         return true;
                     }
@@ -448,5 +410,9 @@ impl Mob for CatEntity {
         }
 
         self.mob_entity.mob_interact(player, item_stack)
+    }
+
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        !self.is_tame() && self.get_entity().age.load(Ordering::Relaxed) > 2400
     }
 }

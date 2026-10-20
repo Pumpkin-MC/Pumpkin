@@ -42,7 +42,7 @@ use crate::ProtoChunk;
 pub use block_state_resolver::BlockStateResolver;
 pub use cache::{
     TemplateCache, all_embedded_datapack_names, all_pool_names, all_structure_names,
-    all_template_names, get_template, global_cache, template_bytes,
+    all_template_names, get_template, global_cache,
 };
 pub use processor::{
     StructureProcessor, clear_dynamic_processors, load_processor_list,
@@ -176,12 +176,12 @@ pub fn place_template_with_options(
 
         if apply_waterlogging
             && placer.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
-            && let Some((_, waterlogged)) = placed_entry
-                .properties
-                .iter_mut()
-                .find(|(name, _)| name == "waterlogged")
+            && let Some(waterlogged) = placed_entry.properties.iter_mut().find_map(|p| match p {
+                pumpkin_data::Property::Waterlogged(w) => Some(w),
+                _ => None,
+            })
         {
-            *waterlogged = "true".to_string();
+            *waterlogged = true;
             if let Some(waterlogged_state) =
                 BlockStateResolver::resolve(&placed_entry, rotation, Mirror::default())
             {
