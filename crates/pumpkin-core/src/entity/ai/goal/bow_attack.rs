@@ -96,6 +96,7 @@ impl BowAttackGoal {
         // Vanilla scales base damage with power and world difficulty
         let difficulty = world.level_info.load().difficulty as i32;
         arrow.set_base_damage_from_mob(Self::ARROW_SPEED, difficulty);
+        let arrow = mob.get_arrow(arrow);
 
         arrow.set_base_damage(crate::enchantment::EnchantmentHelper::modify_damage(
             &bow_item,

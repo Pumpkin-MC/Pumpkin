@@ -343,10 +343,11 @@ impl Mob for WolfEntity {
             }
 
             if self.is_owned_by(&player.gameprofile.id) {
-                if let Some(color) = super::animal::get_dye_color_from_item(item)
-                    && color != self.get_collar_color()
+                if let Some(dye) =
+                    item_stack.get_data_component::<pumpkin_data::data_component_impl::DyeImpl>()
+                    && dye.color.id() != self.get_collar_color()
                 {
-                    self.set_collar_color(color);
+                    self.set_collar_color(dye.color.id());
                     item_stack.decrement_unless_creative(player.gamemode.load(), 1);
                     return true;
                 }
