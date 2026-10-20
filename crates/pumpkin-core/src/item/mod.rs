@@ -66,6 +66,11 @@ pub trait ItemBehaviour: Send + Sync {
     fn use_on_entity(&self, _item: &mut ItemStack, _player: &Player, _entity: Arc<dyn EntityBase>) {
     }
 
+    /// Updates the hand stack after the item was placed as a block.
+    fn on_placed_as_block(&self, stack: &mut ItemStack, player: &Player) {
+        stack.decrement_unless_creative(player.gamemode.load(), 1);
+    }
+
     fn on_stopped_using(&self, _stack: &ItemStack, _player: &Player) {}
 
     fn on_spear_jab(&self, _stack: &ItemStack, _player: &Player) {}
