@@ -4431,8 +4431,9 @@ impl Player {
             return false;
         }
 
-        if source
-            .and_then(|source| source.get_player())
+        if cause
+            .or(source)
+            .and_then(|attacker| attacker.get_player())
             .is_some_and(|attacker| !self.can_harm_player(attacker))
         {
             return false;

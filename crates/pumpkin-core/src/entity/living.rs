@@ -2879,7 +2879,7 @@ impl LivingEntity {
         if !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_RESISTANCE)
             && let Some(effect) = self.get_effect(&StatusEffect::RESISTANCE)
         {
-            let absorb_value = (effect.amplifier + 1) * 5;
+            let absorb_value = (i32::from(effect.amplifier) + 1) * 5;
             let absorb = 25 - absorb_value;
             let v = damage * absorb as f32;
             let old_damage = damage;
