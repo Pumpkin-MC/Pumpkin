@@ -1129,6 +1129,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             (slot as i32).into(),
             &ItemStackSerializer::from(stack),
         ));
+        player.sync_inventory_to_client();
 
         Ok(())
     }

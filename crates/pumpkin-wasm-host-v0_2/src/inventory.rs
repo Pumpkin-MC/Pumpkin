@@ -184,6 +184,7 @@ impl HostInventoryWithStore<PluginHostState> for HasSelf<PluginHostState> {
                         (slot as i32).into(),
                         &ItemStackSerializer::from(stack),
                     ));
+                    player.sync_inventory_to_client();
                 }
             }
             InventoryProvider::PlayerEnderChest(player) => {
@@ -221,6 +222,7 @@ impl HostInventoryWithStore<PluginHostState> for HasSelf<PluginHostState> {
                             pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
                         ),
                     ));
+                    player.sync_inventory_to_client();
                     if s.is_empty() { None } else { Some(s) }
                 } else {
                     None
@@ -268,6 +270,7 @@ impl HostInventoryWithStore<PluginHostState> for HasSelf<PluginHostState> {
                         ),
                     ));
                 }
+                player.sync_inventory_to_client();
             }
             InventoryProvider::PlayerEnderChest(player) => {
                 player.ender_chest_inventory().clear();

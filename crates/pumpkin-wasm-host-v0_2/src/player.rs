@@ -2684,6 +2684,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             (slot as i32).into(),
             &ItemStackSerializer::from(stack),
         ));
+        player.sync_inventory_to_client();
 
         Ok(())
     }
