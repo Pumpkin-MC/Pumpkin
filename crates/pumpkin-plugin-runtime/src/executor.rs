@@ -15,7 +15,7 @@ use futures::{StreamExt, stream::FuturesUnordered};
 use tokio::sync::{Mutex, mpsc, oneshot};
 use wasmtime::{
     AsContext, AsContextMut, Store, StoreContextMut,
-    component::{Accessor, AccessorTask, ComponentNamedList, Func, Lift, Lower, TypedFunc},
+    component::{Accessor, ComponentNamedList, Func, Lift, Lower, TypedFunc},
 };
 
 use crate::{
@@ -371,17 +371,6 @@ pub struct StoreDataMut<'a, T> {
 impl<T> StoreDataMut<'_, T> {
     pub const fn data_mut(&mut self) -> &mut T {
         self.data
-    }
-}
-
-struct ConcurrentGuestTask<T>(Box<dyn GuestStoreJob<T>>);
-
-impl<T> AccessorTask<T> for ConcurrentGuestTask<T>
-where
-    T: Send + 'static,
-{
-    fn run(self, accessor: &Accessor<T>) -> impl Future<Output = wasmtime::Result<()>> + Send {
-        self.0.run_concurrent(accessor)
     }
 }
 
@@ -1311,7 +1300,7 @@ async fn run_concurrent_driver<T>(
                                     job.run_concurrent(accessor).await?;
                                 }
                                 StoreMessage::GuestCall(job) => {
-                                    active_calls.push(accessor.spawn(ConcurrentGuestTask(job))?);
+                                    active_calls.push(accessor.spawn(async move |accessor| job.run_concurrent(accessor).await)?);
                                 }
                                 StoreMessage::Shutdown {
                                     job,
@@ -1348,7 +1337,7 @@ async fn run_concurrent_driver<T>(
                         job.run_concurrent(accessor).await?;
                     }
                     StoreMessage::GuestCall(job) => {
-                        active_calls.push(accessor.spawn(ConcurrentGuestTask(job))?);
+                        active_calls.push(accessor.spawn(async move |accessor| job.run_concurrent(accessor).await)?);
                     }
                     StoreMessage::Shutdown {
                         job,

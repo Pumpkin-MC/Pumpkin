@@ -153,22 +153,6 @@ mod tests {
         }
     }
 
-    struct BackgroundTask {
-        started: Arc<Notify>,
-        release: Arc<Notify>,
-    }
-
-    impl wasmtime::component::AccessorTask<TestHostState> for BackgroundTask {
-        async fn run(
-            self,
-            _accessor: &wasmtime::component::Accessor<TestHostState>,
-        ) -> wasmtime::Result<()> {
-            self.started.notify_one();
-            self.release.notified().await;
-            Ok(())
-        }
-    }
-
     const MODES: [StoreMode; 2] = [StoreMode::Sequential, StoreMode::Concurrent];
 
     fn test_engine(mode: StoreMode) -> Engine {
@@ -578,9 +562,10 @@ mod tests {
         store
             .call_guest(move |scope| {
                 let accessor = scope.accessor().expect("concurrent store scope");
-                let spawned = accessor.spawn(BackgroundTask {
-                    started: task_started,
-                    release: task_release,
+                let spawned = accessor.spawn(async move |_accessor| {
+                    task_started.notify_one();
+                    task_release.notified().await;
+                    Ok(())
                 });
                 Box::pin(async move {
                     spawned?;
