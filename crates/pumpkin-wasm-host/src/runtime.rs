@@ -77,10 +77,10 @@ fn socket_policy_for_permissions(
     }
 }
 
-/// Wasmtime only lets a host import re-enter its own guest while concurrency support is off, and
-/// only runs async components and WASI 0.3 with it on. So each API version gets the engine that
-/// matches how its host imports are written: v0.1 imports call back into the guest, v0.2 imports
-/// are concurrent.
+/// Wasmtime only lets a host import call back into the guest of the store it is running on while
+/// concurrency support is off, and only runs async components and WASI 0.3 while it is on. Each API
+/// version gets the engine that suits its host imports: v0.1 imports call back into the guest,
+/// v0.2 imports are concurrent.
 pub struct PluginRuntime {
     engine_v0_1: Engine,
     #[cfg(feature = "v0_2")]

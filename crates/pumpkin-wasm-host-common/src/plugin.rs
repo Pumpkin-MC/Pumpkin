@@ -13,7 +13,7 @@ pub enum PluginInitError {
     UnknownApiVersion(),
     #[error("Plugin is built against an unsupported version of the API: {0}")]
     UnsupportedApiVersion(String),
-    #[error("Plugin imports `{0}` from WASI 0.3, but only WASI 0.2 is supported")]
+    #[error("Plugin API 0.1 supports WASI 0.2 only, but the plugin imports `{0}`")]
     UnsupportedWasi(String),
     #[error("Plugin was built against a different iteration of the API: {0}")]
     ApiMismatch(wasmtime::Error),

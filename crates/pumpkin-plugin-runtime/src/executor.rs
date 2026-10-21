@@ -340,9 +340,9 @@ where
         result
     }
 
-    /// Like [`Self::call`] for an export whose generated `TypedFunc` borrows its arguments, which
-    /// keeps it from being moved into a `'static` job. The function is re-typed here with owned
-    /// arguments.
+    /// Like [`Self::call`], for exports whose generated `TypedFunc` borrows its arguments and so
+    /// cannot be moved into a `'static` job. Takes the untyped `Func` and re-types it here with
+    /// owned arguments.
     pub async fn call_func<Params, Return>(
         &mut self,
         function: Func,
@@ -811,7 +811,7 @@ where
     fn ensure_sequential(&self) -> wasmtime::Result<()> {
         if self.shared.mode == StoreMode::Concurrent {
             return Err(wasmtime::Error::msg(
-                "Pumping reentrant callbacks needs a sequential Wasm plugin store",
+                "Reentrant callbacks can only be pumped on a sequential Wasm plugin store",
             ));
         }
         Ok(())
