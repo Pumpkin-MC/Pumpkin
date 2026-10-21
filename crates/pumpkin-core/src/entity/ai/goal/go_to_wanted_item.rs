@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use pumpkin_util::math::position::BlockPos;
 
@@ -14,7 +14,7 @@ const MAX_COOLDOWN_BEFORE_RETRYING: i32 = 40;
 /// Walks an admiring piglin to the nearest item it wants.
 pub struct GoToWantedItemGoal {
     goal_control: Controls,
-    piglin: Arc<PiglinEntity>,
+    piglin: Weak<PiglinEntity>,
     speed: f64,
     last_target_block: Option<BlockPos>,
     remaining_cooldown: i32,
@@ -22,7 +22,7 @@ pub struct GoToWantedItemGoal {
 
 impl GoToWantedItemGoal {
     #[must_use]
-    pub fn new(piglin: Arc<PiglinEntity>, speed: f64) -> Self {
+    pub fn new(piglin: Weak<PiglinEntity>, speed: f64) -> Self {
         Self {
             goal_control: Controls::MOVE | Controls::LOOK,
             piglin,
@@ -33,16 +33,17 @@ impl GoToWantedItemGoal {
     }
 
     fn wanted_item_in_walking_range(&self) -> Option<Arc<dyn EntityBase>> {
-        if !self.piglin.mob_entity.can_pick_up_loot()
-            || !PiglinAi::is_not_holding_loved_item_in_off_hand(&self.piglin)
+        let piglin = self.piglin.upgrade()?;
+        if !piglin.mob_entity.can_pick_up_loot()
+            || !PiglinAi::is_not_holding_loved_item_in_off_hand(&piglin)
         {
             return None;
         }
 
-        let entity = &self.piglin.mob_entity.living_entity.entity;
+        let entity = &piglin.mob_entity.living_entity.entity;
         let pos = entity.pos.load();
         let world = entity.world.load();
-        self.piglin.nearest_wanted_item().filter(|item| {
+        piglin.nearest_wanted_item().filter(|item| {
             let item_pos = item.get_entity().pos.load();
             let max = PiglinAi::MAX_DISTANCE_TO_WALK_TO_ITEM;
             let block = item_pos.to_block_pos();
@@ -113,17 +114,23 @@ impl GoToWantedItemGoal {
 
 impl Goal for GoToWantedItemGoal {
     fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        self.piglin.is_admiring()
+        self.piglin
+            .upgrade()
+            .is_some_and(|piglin| piglin.is_admiring())
     }
 
     fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
-        self.piglin.is_admiring()
+        self.piglin
+            .upgrade()
+            .is_some_and(|piglin| piglin.is_admiring())
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
         self.go_to_wanted_item(mob);
-        self.piglin.stop_admiring_if_item_too_far_away();
-        self.piglin.stop_admiring_if_tired_of_trying_to_reach_item();
+        if let Some(piglin) = self.piglin.upgrade() {
+            piglin.stop_admiring_if_item_too_far_away();
+            piglin.stop_admiring_if_tired_of_trying_to_reach_item();
+        }
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
