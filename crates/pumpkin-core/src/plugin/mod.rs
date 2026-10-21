@@ -539,13 +539,14 @@ impl PluginManager {
             return (false, start_time.elapsed(), false);
         };
 
-        let result = rl.readline(&prompt).is_ok_and(|line| {
+        // Only an answer is a decision; EOF or an interrupt leaves nothing to remember
+        let (result, cacheable) = rl.readline(&prompt).map_or((false, false), |line| {
             let input = line.trim().to_lowercase();
-            input == "y" || input == "yes"
+            (input == "y" || input == "yes", true)
         });
         wrapper.return_readline(rl);
 
-        (result, start_time.elapsed(), true)
+        (result, start_time.elapsed(), cacheable)
     }
 
     /// Spawn initialization for a single plugin
